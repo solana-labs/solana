@@ -43,10 +43,36 @@ struct Allocation {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum FundType {
-    Distribution,
-    Fees,
-    SolForFees,
+pub enum FundingSource {
+    FeePayer,
+    StakeAccount,
+    SystemAccount,
+}
+
+pub struct FundingSources(Vec<FundingSource>);
+
+impl std::fmt::Debug for FundingSources {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (i, source) in self.0.iter().enumerate() {
+            if i > 0 {
+                write!(f, "/")?;
+            }
+            write!(f, "{:?}", source)?;
+        }
+        Ok(())
+    }
+}
+
+impl PartialEq for FundingSources {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl From<Vec<FundingSource>> for FundingSources {
+    fn from(sources_vec: Vec<FundingSource>) -> Self {
+        Self(sources_vec)
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -61,10 +87,8 @@ pub enum Error {
     TransportError(#[from] TransportError),
     #[error("Missing lockup authority")]
     MissingLockupAuthority,
-    #[error("insufficient funds for {0:?} ({1} SOL)")]
-    InsufficientFunds(FundType, f64),
-    #[error("insufficient funds for {0:?} ({1} SOL) and {2:?} ({3} SOL)")]
-    InsufficientFundsForMultiple(FundType, f64, FundType, f64),
+    #[error("insufficient funds in {0:?}, requires {1} SOL")]
+    InsufficientFunds(FundingSources, f64),
 }
 
 fn merge_allocations(allocations: &[Allocation]) -> Vec<Allocation> {
@@ -474,32 +498,30 @@ async fn check_payer_balances(
         let staker_balance = client.get_balance(distribution_source).await?;
         if staker_balance < allocation_lamports {
             return Err(Error::InsufficientFunds(
-                FundType::Distribution,
+                vec![FundingSource::StakeAccount].into(),
                 lamports_to_sol(allocation_lamports),
             ));
         }
         if args.fee_payer.pubkey() == sol_for_fees_source {
             let balance = client.get_balance(args.fee_payer.pubkey()).await?;
             if balance < fees + total_sol_for_fees {
-                return Err(Error::InsufficientFundsForMultiple(
-                    FundType::SolForFees,
-                    lamports_to_sol(total_sol_for_fees),
-                    FundType::Fees,
-                    lamports_to_sol(fees),
+                return Err(Error::InsufficientFunds(
+                    vec![FundingSource::SystemAccount, FundingSource::FeePayer].into(),
+                    lamports_to_sol(fees + total_sol_for_fees),
                 ));
             }
         } else {
             let fee_payer_balance = client.get_balance(args.fee_payer.pubkey()).await?;
             if fee_payer_balance < fees {
                 return Err(Error::InsufficientFunds(
-                    FundType::Fees,
+                    vec![FundingSource::FeePayer].into(),
                     lamports_to_sol(fees),
                 ));
             }
             let sol_for_fees_balance = client.get_balance(sol_for_fees_source).await?;
             if sol_for_fees_balance < total_sol_for_fees {
                 return Err(Error::InsufficientFunds(
-                    FundType::SolForFees,
+                    vec![FundingSource::SystemAccount].into(),
                     lamports_to_sol(total_sol_for_fees),
                 ));
             }
@@ -507,25 +529,23 @@ async fn check_payer_balances(
     } else if args.fee_payer.pubkey() == distribution_source {
         let balance = client.get_balance(args.fee_payer.pubkey()).await?;
         if balance < fees + allocation_lamports {
-            return Err(Error::InsufficientFundsForMultiple(
-                FundType::Distribution,
-                lamports_to_sol(allocation_lamports),
-                FundType::Fees,
-                lamports_to_sol(fees),
+            return Err(Error::InsufficientFunds(
+                vec![FundingSource::SystemAccount, FundingSource::FeePayer].into(),
+                lamports_to_sol(fees + allocation_lamports),
             ));
         }
     } else {
         let fee_payer_balance = client.get_balance(args.fee_payer.pubkey()).await?;
         if fee_payer_balance < fees {
             return Err(Error::InsufficientFunds(
-                FundType::Fees,
+                vec![FundingSource::FeePayer].into(),
                 lamports_to_sol(fees),
             ));
         }
         let sender_balance = client.get_balance(distribution_source).await?;
         if sender_balance < allocation_lamports {
             return Err(Error::InsufficientFunds(
-                FundType::Distribution,
+                vec![FundingSource::SystemAccount].into(),
                 lamports_to_sol(allocation_lamports),
             ));
         }
@@ -1107,12 +1127,12 @@ mod tests {
             let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
                 .await
                 .unwrap_err();
-            if let Error::InsufficientFundsForMultiple(type0, amount0, type1, amount1) = err_result
-            {
-                assert_eq!(type0, FundType::Distribution);
-                assert!((amount0 - 1000.0).abs() < f64::EPSILON);
-                assert_eq!(type1, FundType::Fees);
-                assert!((amount1 - 0.00001).abs() < f64::EPSILON);
+            if let Error::InsufficientFunds(sources, amount) = err_result {
+                assert_eq!(
+                    sources,
+                    vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
+                );
+                assert!((amount - (1000.0 + 0.00001)).abs() < f64::EPSILON);
             } else {
                 panic!("check_payer_balances should have errored");
             }
@@ -1148,12 +1168,12 @@ mod tests {
             let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
                 .await
                 .unwrap_err();
-            if let Error::InsufficientFundsForMultiple(type0, amount0, type1, amount1) = err_result
-            {
-                assert_eq!(type0, FundType::Distribution);
-                assert!((amount0 - 1000.0).abs() < f64::EPSILON);
-                assert_eq!(type1, FundType::Fees);
-                assert!((amount1 - 0.00001).abs() < f64::EPSILON);
+            if let Error::InsufficientFunds(sources, amount) = err_result {
+                assert_eq!(
+                    sources,
+                    vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
+                );
+                assert!((amount - (1000.0 + 0.00001)).abs() < f64::EPSILON);
             } else {
                 panic!("check_payer_balances should have errored");
             }
@@ -1172,9 +1192,9 @@ mod tests {
             let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
                 .await
                 .unwrap_err();
-            if let Error::InsufficientFunds(type0, amount0) = err_result {
-                assert_eq!(type0, FundType::Distribution);
-                assert!((amount0 - 1000.0).abs() < f64::EPSILON);
+            if let Error::InsufficientFunds(sources, amount) = err_result {
+                assert_eq!(sources, vec![FundingSource::SystemAccount].into());
+                assert!((amount - 1000.0).abs() < f64::EPSILON);
             } else {
                 panic!("check_payer_balances should have errored");
             }
@@ -1187,9 +1207,9 @@ mod tests {
             let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
                 .await
                 .unwrap_err();
-            if let Error::InsufficientFunds(type0, amount0) = err_result {
-                assert_eq!(type0, FundType::Fees);
-                assert!((amount0 - 0.00001).abs() < f64::EPSILON);
+            if let Error::InsufficientFunds(sources, amount) = err_result {
+                assert_eq!(sources, vec![FundingSource::FeePayer].into());
+                assert!((amount - 0.00001).abs() < f64::EPSILON);
             } else {
                 panic!("check_payer_balances should have errored");
             }
@@ -1248,9 +1268,9 @@ mod tests {
                 check_payer_balances(1, &expensive_allocations, &mut banks_client, &args)
                     .await
                     .unwrap_err();
-            if let Error::InsufficientFunds(type0, amount0) = err_result {
-                assert_eq!(type0, FundType::Distribution);
-                assert!((amount0 - (5000.0 - sol_for_fees)).abs() < f64::EPSILON);
+            if let Error::InsufficientFunds(sources, amount) = err_result {
+                assert_eq!(sources, vec![FundingSource::StakeAccount].into());
+                assert!((amount - (5000.0 - sol_for_fees)).abs() < f64::EPSILON);
             } else {
                 panic!("check_payer_balances should have errored");
             }
@@ -1265,12 +1285,12 @@ mod tests {
             let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
                 .await
                 .unwrap_err();
-            if let Error::InsufficientFundsForMultiple(type0, amount0, type1, amount1) = err_result
-            {
-                assert_eq!(type0, FundType::SolForFees);
-                assert!((amount0 - sol_for_fees).abs() < f64::EPSILON);
-                assert_eq!(type1, FundType::Fees);
-                assert!((amount1 - 0.00001).abs() < f64::EPSILON);
+            if let Error::InsufficientFunds(sources, amount) = err_result {
+                assert_eq!(
+                    sources,
+                    vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
+                );
+                assert!((amount - (sol_for_fees + 0.00001)).abs() < f64::EPSILON);
             } else {
                 panic!("check_payer_balances should have errored");
             }
@@ -1306,12 +1326,12 @@ mod tests {
             let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
                 .await
                 .unwrap_err();
-            if let Error::InsufficientFundsForMultiple(type0, amount0, type1, amount1) = err_result
-            {
-                assert_eq!(type0, FundType::SolForFees);
-                assert!((amount0 - sol_for_fees).abs() < f64::EPSILON);
-                assert_eq!(type1, FundType::Fees);
-                assert!((amount1 - 0.00001).abs() < f64::EPSILON);
+            if let Error::InsufficientFunds(sources, amount) = err_result {
+                assert_eq!(
+                    sources,
+                    vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
+                );
+                assert!((amount - (sol_for_fees + 0.00001)).abs() < f64::EPSILON);
             } else {
                 panic!("check_payer_balances should have errored");
             }
@@ -1330,9 +1350,9 @@ mod tests {
             let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
                 .await
                 .unwrap_err();
-            if let Error::InsufficientFunds(type0, amount0) = err_result {
-                assert_eq!(type0, FundType::SolForFees);
-                assert!((amount0 - sol_for_fees).abs() < f64::EPSILON);
+            if let Error::InsufficientFunds(sources, amount) = err_result {
+                assert_eq!(sources, vec![FundingSource::SystemAccount].into());
+                assert!((amount - sol_for_fees).abs() < f64::EPSILON);
             } else {
                 panic!("check_payer_balances should have errored");
             }
@@ -1345,9 +1365,9 @@ mod tests {
             let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
                 .await
                 .unwrap_err();
-            if let Error::InsufficientFunds(type0, amount0) = err_result {
-                assert_eq!(type0, FundType::Fees);
-                assert!((amount0 - 0.00001).abs() < f64::EPSILON);
+            if let Error::InsufficientFunds(sources, amount) = err_result {
+                assert_eq!(sources, vec![FundingSource::FeePayer].into());
+                assert!((amount - 0.00001).abs() < f64::EPSILON);
             } else {
                 panic!("check_payer_balances should have errored");
             }
