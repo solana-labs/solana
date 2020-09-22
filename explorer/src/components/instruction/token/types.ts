@@ -124,7 +124,7 @@ const ThawAccount = object({
   signers: optional(array(Pubkey)),
 });
 
-const Transfer2 = object({
+const TransferChecked = object({
   source: Pubkey,
   mint: Pubkey,
   destination: Pubkey,
@@ -134,7 +134,7 @@ const Transfer2 = object({
   tokenAmount: TokenAmountUi,
 });
 
-const Approve2 = object({
+const ApproveChecked = object({
   source: Pubkey,
   mint: Pubkey,
   delegate: Pubkey,
@@ -144,7 +144,7 @@ const Approve2 = object({
   tokenAmount: TokenAmountUi,
 });
 
-const MintTo2 = object({
+const MintToChecked = object({
   account: Pubkey,
   mint: Pubkey,
   mintAuthority: Pubkey,
@@ -153,7 +153,7 @@ const MintTo2 = object({
   tokenAmount: TokenAmountUi,
 });
 
-const Burn2 = object({
+const BurnChecked = object({
   account: Pubkey,
   mint: Pubkey,
   authority: optional(Pubkey),
@@ -195,10 +195,10 @@ export const IX_STRUCTS = {
   closeAccount: CloseAccount,
   freezeAccount: FreezeAccount,
   thawAccount: ThawAccount,
-  transfer2: Transfer2,
-  approve2: Approve2,
-  mintTo2: MintTo2,
-  burn2: Burn2,
+  transfer2: TransferChecked,
+  approve2: ApproveChecked,
+  mintTo2: MintToChecked,
+  burn2: BurnChecked,
 };
 
 export const IX_TITLES = {
@@ -214,8 +214,8 @@ export const IX_TITLES = {
   closeAccount: "Close Account",
   freezeAccount: "Freeze Account",
   thawAccount: "Thaw Account",
-  transfer2: "Transfer 2",
-  approve2: "Approve 2",
-  mintTo2: "Mint To 2",
-  burn2: "Burn 2",
+  transfer2: "Transfer Checked",
+  approve2: "Approve Checked",
+  mintTo2: "Mint To Checked",
+  burn2: "Burn Checked",
 };
