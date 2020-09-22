@@ -136,7 +136,12 @@ pub struct Blockstore {
     transaction_status_index_cf: LedgerColumn<cf::TransactionStatusIndex>,
     active_transaction_status_index: RwLock<u64>,
     rewards_cf: LedgerColumn<cf::Rewards>,
+<<<<<<< HEAD
     _blocktime_cf: LedgerColumn<cf::Blocktime>,
+=======
+    blocktime_cf: LedgerColumn<cf::Blocktime>,
+    perf_samples_cf: LedgerColumn<cf::PerfSamples>,
+>>>>>>> 65a6bfad0... Add blockstore column to store performance sampling data (#12251)
     last_root: Arc<RwLock<Slot>>,
     insert_shreds_lock: Arc<Mutex<()>>,
     pub new_shreds_signals: Vec<SyncSender<bool>>,
@@ -292,9 +297,14 @@ impl Blockstore {
         let address_signatures_cf = db.column();
         let transaction_status_index_cf = db.column();
         let rewards_cf = db.column();
+<<<<<<< HEAD
         // This column is created (but never populated) in order to maintain compatibility with
         // newer versions of Blockstore.
         let _blocktime_cf = db.column();
+=======
+        let blocktime_cf = db.column();
+        let perf_samples_cf = db.column();
+>>>>>>> 65a6bfad0... Add blockstore column to store performance sampling data (#12251)
 
         let db = Arc::new(db);
 
@@ -339,7 +349,12 @@ impl Blockstore {
             transaction_status_index_cf,
             active_transaction_status_index: RwLock::new(active_transaction_status_index),
             rewards_cf,
+<<<<<<< HEAD
             _blocktime_cf,
+=======
+            blocktime_cf,
+            perf_samples_cf,
+>>>>>>> 65a6bfad0... Add blockstore column to store performance sampling data (#12251)
             new_shreds_signals: vec![],
             completed_slots_senders: vec![],
             insert_shreds_lock: Arc::new(Mutex::new(())),
@@ -2314,6 +2329,22 @@ impl Blockstore {
                 timestamps
             })
             .collect())
+    }
+
+    pub fn get_recent_perf_samples(&self, num: usize) -> Result<Vec<(Slot, PerfSample)>> {
+        Ok(self
+            .db
+            .iter::<cf::PerfSamples>(IteratorMode::End)?
+            .take(num)
+            .map(|(slot, data)| {
+                let perf_sample = deserialize(&data).unwrap();
+                (slot, perf_sample)
+            })
+            .collect())
+    }
+
+    pub fn write_perf_sample(&self, index: Slot, perf_sample: &PerfSample) -> Result<()> {
+        self.perf_samples_cf.put(index, perf_sample)
     }
 
     /// Returns the entry vector for the slot starting with `shred_start_index`
@@ -6891,6 +6922,38 @@ pub mod tests {
                 assert_eq!(m.meta.as_ref().unwrap().fee, x as u64);
             }
             assert_eq!(map[4].meta, None);
+        }
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_write_get_perf_samples() {
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let num_entries: usize = 10;
+            let mut perf_samples: Vec<(Slot, PerfSample)> = vec![];
+            for x in 1..num_entries + 1 {
+                perf_samples.push((
+                    x as u64 * 50,
+                    PerfSample {
+                        num_transactions: 1000 + x as u64,
+                        num_slots: 50,
+                        sample_period_secs: 20,
+                    },
+                ));
+            }
+            for (slot, sample) in perf_samples.iter() {
+                blockstore.write_perf_sample(*slot, sample).unwrap();
+            }
+            for x in 0..num_entries {
+                let mut expected_samples = perf_samples[num_entries - 1 - x..].to_vec();
+                expected_samples.sort_by(|a, b| b.0.cmp(&a.0));
+                assert_eq!(
+                    blockstore.get_recent_perf_samples(x + 1).unwrap(),
+                    expected_samples
+                );
+            }
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }

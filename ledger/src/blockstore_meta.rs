@@ -243,6 +243,13 @@ pub struct AddressSignatureMeta {
     pub writeable: bool,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+pub struct PerfSample {
+    pub num_transactions: u64,
+    pub num_slots: u64,
+    pub sample_period_secs: u16,
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
