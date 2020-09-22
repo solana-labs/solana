@@ -26,14 +26,14 @@ fn process_instruction(
         return Err(ProgramError::InvalidAccountData);
     }
 
-    let instruction = instructions::get_instruction(
+    let instruction = instructions::load_instruction_at(
         secp_instruction_index as usize,
         &instruction_accounts.try_borrow_data()?,
     )
     .map_err(|_| ProgramError::InvalidAccountData)?;
 
     let current_instruction =
-        instructions::get_current_instruction(&instruction_accounts.try_borrow_data()?);
+        instructions::load_current_index(&instruction_accounts.try_borrow_data()?);
     let my_index = instruction_data[1] as u16;
     assert_eq!(current_instruction, my_index);
 

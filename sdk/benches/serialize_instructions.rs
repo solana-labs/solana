@@ -47,7 +47,7 @@ fn bench_manual_instruction_deserialize(b: &mut Bencher) {
     let serialized = message.serialize_instructions();
     b.iter(|| {
         for i in 0..instructions.len() {
-            test::black_box(instructions::get_instruction(i, &serialized).unwrap());
+            test::black_box(instructions::load_instruction_at(i, &serialized).unwrap());
         }
     });
 }
@@ -58,6 +58,6 @@ fn bench_manual_instruction_deserialize_single(b: &mut Bencher) {
     let message = Message::new(&instructions, None);
     let serialized = message.serialize_instructions();
     b.iter(|| {
-        test::black_box(instructions::get_instruction(3, &serialized).unwrap());
+        test::black_box(instructions::load_instruction_at(3, &serialized).unwrap());
     });
 }
