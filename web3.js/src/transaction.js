@@ -10,6 +10,7 @@ import {PublicKey} from './publickey';
 import {Account} from './account';
 import * as shortvec from './util/shortvec-encoding';
 import type {Blockhash} from './blockhash';
+import * as SDK from '@solana/wasm';
 
 /**
  * @typedef {string} TransactionSignature
@@ -406,7 +407,7 @@ export class Transaction {
    */
   sign(...signers: Array<Account>) {
     if (signers.length === 0) {
-      throw new Error('No signers');
+      throw new Error('No signers ----');
     }
 
     const seen = new Set();
@@ -428,7 +429,7 @@ export class Transaction {
     this.partialSign(...signers);
   }
 
-  /**
+    /**
    * Partially sign a transaction with the specified accounts. All accounts must
    * correspond to a public key that was previously provided to `setSigners`.
    *
@@ -448,7 +449,10 @@ export class Transaction {
 
     const signData = message.serialize();
     signers.forEach(signer => {
-      const signature = nacl.sign.detached(signData, signer.secretKey);
+      const signature = SDK.getWASM().signED25519(
+        signer.publicKey.toBuffer(), 
+        signer.secretKey, 
+        signData);
       this.addSignature(signer.publicKey, signature);
     });
   }

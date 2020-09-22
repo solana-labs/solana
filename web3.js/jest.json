@@ -1,5 +1,6 @@
 {
   "collectCoverage": true,
+  "testEnvironment": "./jest-environment.js",
   "collectCoverageFrom": ["src/**"],
   "coverageReporters": ["json", "lcov", "text-summary", "html"]
 }

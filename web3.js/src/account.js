@@ -1,6 +1,6 @@
 // @flow
 import nacl from 'tweetnacl';
-import type {KeyPair} from 'tweetnacl';
+import * as SDK from '@solana/wasm';
 
 import {toBuffer} from './util/to-buffer';
 import {PublicKey} from './publickey';
@@ -9,7 +9,7 @@ import {PublicKey} from './publickey';
  * An account key pair (public and secret keys).
  */
 export class Account {
-  _keypair: KeyPair;
+  _keypair;
 
   /**
    * Create a new Account object
@@ -23,7 +23,7 @@ export class Account {
     if (secretKey) {
       this._keypair = nacl.sign.keyPair.fromSecretKey(toBuffer(secretKey));
     } else {
-      this._keypair = nacl.sign.keyPair();
+      this._keypair = SDK.getWASM().generateKeyPair();
     }
   }
 

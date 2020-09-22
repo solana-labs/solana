@@ -20,7 +20,6 @@
     "access": "public"
   },
   "main": "lib/index.cjs.js",
-  "module": "lib/index.esm.js",
   "types": "lib/index.d.ts",
   "bin": {
     "solana-bpf-sdk-install": "bin/bpf-sdk-install.sh",
@@ -45,6 +44,7 @@
     "clean": "rimraf ./coverage ./lib",
     "codecov": "set -ex; npm run test:cover; cat ./coverage/lcov.info | codecov",
     "dev": "cross-env NODE_ENV=development rollup -c",
+    "dev:watch": "cross-env NODE_ENV=development rollup -c --watch",
     "doc": "set -ex; esdoc; node -p '\"\\nDocumentation coverage: \" + require(\"./doc/coverage.json\").coverage'",
     "defs": "set -ex; flow check-contents < module.flow.js; tsc module.d.ts",
     "doc:watch": "watch 'npm run doc' . --wait=1 --ignoreDirectoryPattern=/doc/",
@@ -84,6 +84,7 @@
     "node-fetch": "^2.2.0",
     "npm-run-all": "^4.1.5",
     "rpc-websockets": "^7.4.2",
+    "solana-wasm": "file:./../wasm",
     "superstruct": "^0.8.3",
     "tweetnacl": "^1.0.0",
     "ws": "^7.0.0"

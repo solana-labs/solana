@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/react";
 import { clusterApiUrl, Connection } from "@solana/web3.js";
 import { useQuery } from "../utils/url";
 import { useHistory, useLocation } from "react-router-dom";
+import { waitReady as waitForSolana } from "@solana/web3.js";
 
 export enum ClusterStatus {
   Connected,
@@ -174,6 +175,8 @@ async function updateCluster(
   });
 
   try {
+    // NOTE: discuss where is the best place to add this...
+    await waitForSolana();
     const connection = new Connection(clusterUrl(cluster, customUrl));
     const firstAvailableBlock = await connection.getFirstAvailableBlock();
     dispatch({

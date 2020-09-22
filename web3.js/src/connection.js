@@ -513,6 +513,7 @@ function createRpcRequest(url): RpcRequest {
       let waitTime = 500;
       for (;;) {
         res = await fetch(url, options);
+        // res = await (self.fetch ? self.fetch(url, options) : fetch(url, options));
         if (res.status !== 429 /* Too many requests */) {
           break;
         }

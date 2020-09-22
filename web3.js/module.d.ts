@@ -2,6 +2,8 @@ declare module '@solana/web3.js' {
   import {Buffer} from 'buffer';
   import * as BufferLayout from 'buffer-layout';
 
+  export function waitReady(): Promise<void>;
+
   // === src/publickey.js ===
   export type PublicKeyNonce = [PublicKey, number];
   export class PublicKey {

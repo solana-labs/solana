@@ -34,6 +34,8 @@ export {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 export {sendAndConfirmRawTransaction} from './util/send-and-confirm-raw-transaction';
 export {clusterApiUrl} from './util/cluster';
 
+export { waitReady } from '@solana/wasm';
+
 /**
  * There are 1-billion lamports in one SOL
  */

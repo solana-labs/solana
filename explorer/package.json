@@ -27,6 +27,7 @@
     "chai": "^4.2.0",
     "chart.js": "^2.9.3",
     "classnames": "2.2.6",
+    "customize-cra": "^1.0.0",
     "humanize-duration-ts": "^2.1.1",
     "node-sass": "^4.14.1",
     "prettier": "^2.1.2",

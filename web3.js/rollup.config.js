@@ -94,6 +94,7 @@ function generateConfig(configType) {
         '@babel/runtime/helpers/toConsumableArray',
         '@babel/runtime/helpers/typeof',
         '@babel/runtime/regenerator',
+        '@solana/wasm',
         'bn.js',
         'bs58',
         'buffer-layout',
@@ -113,4 +114,8 @@ function generateConfig(configType) {
   return config;
 }
 
-export default [generateConfig('node'), generateConfig('browser')];
+export default [
+  generateConfig('node'),
+  // TODO: enable
+  // generateConfig('browser')
+];
