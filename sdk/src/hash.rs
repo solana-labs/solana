@@ -88,6 +88,17 @@ impl Hash {
     pub fn to_bytes(self) -> [u8; HASH_BYTES] {
         self.0
     }
+
+    /// New random hash value for tests and benchmarks.
+    #[cfg(not(feature = "program"))]
+    pub fn new_rand<R: ?Sized>(rng: &mut R) -> Self
+    where
+        R: rand::Rng,
+    {
+        let mut buf = [0u8; HASH_BYTES];
+        rng.fill(&mut buf);
+        Hash::new(&buf)
+    }
 }
 
 /// Return a Sha256 hash for the given data.
