@@ -65,7 +65,7 @@ use solana_transaction_status::{
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use spl_token_v2_0::{
-    pack::Pack,
+    solana_sdk::program_pack::Pack,
     state::{Account as TokenAccount, Mint},
 };
 use std::{
@@ -2569,8 +2569,9 @@ pub mod tests {
         vote_state::{Vote, VoteInit, MAX_LOCKOUT_HISTORY},
     };
     use spl_token_v2_0::{
-        option::COption, solana_sdk::pubkey::Pubkey as SplTokenPubkey,
-        state::AccountState as TokenAccountState, state::Mint,
+        solana_sdk::{program_option::COption, pubkey::Pubkey as SplTokenPubkey},
+        state::AccountState as TokenAccountState,
+        state::Mint,
     };
     use std::{collections::HashMap, time::Duration};
 
@@ -5002,20 +5003,17 @@ pub mod tests {
         let mint = SplTokenPubkey::new(&[2; 32]);
         let owner = SplTokenPubkey::new(&[3; 32]);
         let delegate = SplTokenPubkey::new(&[4; 32]);
-        TokenAccount::unpack_unchecked_mut(&mut account_data, &mut |account: &mut TokenAccount| {
-            *account = TokenAccount {
-                mint,
-                owner,
-                delegate: COption::Some(delegate),
-                amount: 420,
-                state: TokenAccountState::Initialized,
-                is_native: COption::None,
-                delegated_amount: 30,
-                close_authority: COption::Some(owner),
-            };
-            Ok(())
-        })
-        .unwrap();
+        let token_account = TokenAccount {
+            mint,
+            owner,
+            delegate: COption::Some(delegate),
+            amount: 420,
+            state: TokenAccountState::Initialized,
+            is_native: COption::None,
+            delegated_amount: 30,
+            close_authority: COption::Some(owner),
+        };
+        TokenAccount::pack(token_account, &mut account_data).unwrap();
         let token_account = Account {
             lamports: 111,
             data: account_data.to_vec(),
@@ -5027,17 +5025,14 @@ pub mod tests {
 
         // Add the mint
         let mut mint_data = vec![0; Mint::get_packed_len()];
-        Mint::unpack_unchecked_mut(&mut mint_data, &mut |mint: &mut Mint| {
-            *mint = Mint {
-                mint_authority: COption::Some(owner),
-                supply: 500,
-                decimals: 2,
-                is_initialized: true,
-                freeze_authority: COption::Some(owner),
-            };
-            Ok(())
-        })
-        .unwrap();
+        let mint_state = Mint {
+            mint_authority: COption::Some(owner),
+            supply: 500,
+            decimals: 2,
+            is_initialized: true,
+            freeze_authority: COption::Some(owner),
+        };
+        Mint::pack(mint_state, &mut mint_data).unwrap();
         let mint_account = Account {
             lamports: 111,
             data: mint_data.to_vec(),
@@ -5102,20 +5097,17 @@ pub mod tests {
         // Add another token account with the same owner and delegate but different mint
         let mut account_data = vec![0; TokenAccount::get_packed_len()];
         let new_mint = SplTokenPubkey::new(&[5; 32]);
-        TokenAccount::unpack_unchecked_mut(&mut account_data, &mut |account: &mut TokenAccount| {
-            *account = TokenAccount {
-                mint: new_mint,
-                owner,
-                delegate: COption::Some(delegate),
-                amount: 42,
-                state: TokenAccountState::Initialized,
-                is_native: COption::None,
-                delegated_amount: 30,
-                close_authority: COption::Some(owner),
-            };
-            Ok(())
-        })
-        .unwrap();
+        let token_account = TokenAccount {
+            mint: new_mint,
+            owner,
+            delegate: COption::Some(delegate),
+            amount: 42,
+            state: TokenAccountState::Initialized,
+            is_native: COption::None,
+            delegated_amount: 30,
+            close_authority: COption::Some(owner),
+        };
+        TokenAccount::pack(token_account, &mut account_data).unwrap();
         let token_account = Account {
             lamports: 111,
             data: account_data.to_vec(),
@@ -5327,17 +5319,14 @@ pub mod tests {
 
         // Add new_mint, and another token account on new_mint with different balance
         let mut mint_data = vec![0; Mint::get_packed_len()];
-        Mint::unpack_unchecked_mut(&mut mint_data, &mut |mint: &mut Mint| {
-            *mint = Mint {
-                mint_authority: COption::Some(owner),
-                supply: 500,
-                decimals: 2,
-                is_initialized: true,
-                freeze_authority: COption::Some(owner),
-            };
-            Ok(())
-        })
-        .unwrap();
+        let mint_state = Mint {
+            mint_authority: COption::Some(owner),
+            supply: 500,
+            decimals: 2,
+            is_initialized: true,
+            freeze_authority: COption::Some(owner),
+        };
+        Mint::pack(mint_state, &mut mint_data).unwrap();
         let mint_account = Account {
             lamports: 111,
             data: mint_data.to_vec(),
@@ -5349,20 +5338,17 @@ pub mod tests {
             &mint_account,
         );
         let mut account_data = vec![0; TokenAccount::get_packed_len()];
-        TokenAccount::unpack_unchecked_mut(&mut account_data, &mut |account: &mut TokenAccount| {
-            *account = TokenAccount {
-                mint: new_mint,
-                owner,
-                delegate: COption::Some(delegate),
-                amount: 10,
-                state: TokenAccountState::Initialized,
-                is_native: COption::None,
-                delegated_amount: 30,
-                close_authority: COption::Some(owner),
-            };
-            Ok(())
-        })
-        .unwrap();
+        let token_account = TokenAccount {
+            mint: new_mint,
+            owner,
+            delegate: COption::Some(delegate),
+            amount: 10,
+            state: TokenAccountState::Initialized,
+            is_native: COption::None,
+            delegated_amount: 30,
+            close_authority: COption::Some(owner),
+        };
+        TokenAccount::pack(token_account, &mut account_data).unwrap();
         let token_account = Account {
             lamports: 111,
             data: account_data.to_vec(),
@@ -5413,20 +5399,17 @@ pub mod tests {
         let mint = SplTokenPubkey::new(&[2; 32]);
         let owner = SplTokenPubkey::new(&[3; 32]);
         let delegate = SplTokenPubkey::new(&[4; 32]);
-        TokenAccount::unpack_unchecked_mut(&mut account_data, &mut |account: &mut TokenAccount| {
-            *account = TokenAccount {
-                mint,
-                owner,
-                delegate: COption::Some(delegate),
-                amount: 420,
-                state: TokenAccountState::Initialized,
-                is_native: COption::Some(10),
-                delegated_amount: 30,
-                close_authority: COption::Some(owner),
-            };
-            Ok(())
-        })
-        .unwrap();
+        let token_account = TokenAccount {
+            mint,
+            owner,
+            delegate: COption::Some(delegate),
+            amount: 420,
+            state: TokenAccountState::Initialized,
+            is_native: COption::Some(10),
+            delegated_amount: 30,
+            close_authority: COption::Some(owner),
+        };
+        TokenAccount::pack(token_account, &mut account_data).unwrap();
         let token_account = Account {
             lamports: 111,
             data: account_data.to_vec(),
@@ -5438,17 +5421,14 @@ pub mod tests {
 
         // Add the mint
         let mut mint_data = vec![0; Mint::get_packed_len()];
-        Mint::unpack_unchecked_mut(&mut mint_data, &mut |mint: &mut Mint| {
-            *mint = Mint {
-                mint_authority: COption::Some(owner),
-                supply: 500,
-                decimals: 2,
-                is_initialized: true,
-                freeze_authority: COption::Some(owner),
-            };
-            Ok(())
-        })
-        .unwrap();
+        let mint_state = Mint {
+            mint_authority: COption::Some(owner),
+            supply: 500,
+            decimals: 2,
+            is_initialized: true,
+            freeze_authority: COption::Some(owner),
+        };
+        Mint::pack(mint_state, &mut mint_data).unwrap();
         let mint_account = Account {
             lamports: 111,
             data: mint_data.to_vec(),
