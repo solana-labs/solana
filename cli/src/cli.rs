@@ -1489,7 +1489,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             follow,
         } => process_catchup(&rpc_client, config, node_pubkey, node_json_rpc_url, *follow),
         CliCommand::ClusterDate => process_cluster_date(&rpc_client, config),
-        CliCommand::ClusterVersion => process_cluster_version(&rpc_client),
+        CliCommand::ClusterVersion => process_cluster_version(&rpc_client, config),
         CliCommand::CreateAddressWithSeed {
             from_pubkey,
             seed,
