@@ -2,7 +2,7 @@ use crate::{
     checks::{check_account_for_fee_with_commitment, check_unique_pubkeys},
     cli::{
         log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
-        DefaultSigner, ProcessResult, SignerIndex,
+        ProcessResult,
     },
     cli_output::{CliStakeHistory, CliStakeHistoryEntry, CliStakeState, CliStakeType},
     nonce::check_nonce_account,
@@ -14,6 +14,7 @@ use solana_clap_utils::{
     fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
     input_parsers::*,
     input_validators::*,
+    keypair::{DefaultSigner, SignerIndex},
     nonce::*,
     offline::*,
     ArgConstant,
