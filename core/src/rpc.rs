@@ -33,7 +33,10 @@ use solana_client::{
     rpc_response::*,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
-use solana_ledger::{blockstore::Blockstore, blockstore_db::BlockstoreError, get_tmp_ledger_path};
+use solana_ledger::{
+    blockstore::Blockstore, blockstore_db::BlockstoreError, blockstore_meta::PerfSample,
+    get_tmp_ledger_path,
+};
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::{
     accounts::AccountAddressFilter,
@@ -79,6 +82,7 @@ use std::{
 use tokio::runtime;
 
 pub const MAX_REQUEST_PAYLOAD_SIZE: usize = 50 * (1 << 10); // 50kB
+pub const PERFORMANCE_SAMPLES_LIMIT: usize = 720;
 
 fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
     let context = RpcResponseContext { slot: bank.slot() };
@@ -1496,6 +1500,13 @@ pub trait RpcSol {
     #[rpc(meta, name = "getClusterNodes")]
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>>;
 
+    #[rpc(meta, name = "getRecentPerformanceSamples")]
+    fn get_recent_performance_samples(
+        &self,
+        meta: Self::Metadata,
+        limit: Option<usize>,
+    ) -> Result<Vec<(Slot, PerfSample)>>;
+
     #[rpc(meta, name = "getEpochInfo")]
     fn get_epoch_info(
         &self,
@@ -1883,6 +1894,30 @@ impl RpcSol for RpcSolImpl {
         debug!("get_balance rpc request received: {:?}", pubkey_str);
         let pubkey = verify_pubkey(pubkey_str)?;
         Ok(meta.get_balance(&pubkey, commitment))
+    }
+
+    fn get_recent_performance_samples(
+        &self,
+        meta: Self::Metadata,
+        limit: Option<usize>,
+    ) -> Result<Vec<(Slot, PerfSample)>> {
+        debug!("get_recent_performance_samples request received");
+
+        let limit = limit.unwrap_or(PERFORMANCE_SAMPLES_LIMIT);
+
+        if limit > PERFORMANCE_SAMPLES_LIMIT {
+            return Err(Error::invalid_params(format!(
+                "Invalid limit; max {}",
+                PERFORMANCE_SAMPLES_LIMIT
+            )));
+        }
+
+        meta.blockstore
+            .get_recent_perf_samples(limit)
+            .map_err(|err| {
+                warn!("get_recent_performance_samples failed: {:?}", err);
+                Error::invalid_request()
+            })
     }
 
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>> {
@@ -2670,6 +2705,16 @@ pub mod tests {
             &socketaddr!("127.0.0.1:1234"),
         ));
 
+        let sample1 = PerfSample {
+            num_slots: 1,
+            num_transactions: 4,
+            sample_period_secs: 60,
+        };
+
+        blockstore
+            .write_perf_sample(0, &sample1)
+            .expect("write to blockstore");
+
         let (meta, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig {
                 enable_rpc_transaction_history: true,
@@ -2794,6 +2839,63 @@ pub mod tests {
 
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_get_recent_performance_samples() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getRecentPerformanceSamples"}"#;
+
+        let res = io.handle_request_sync(&req, meta);
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": [
+                [
+                    0,
+                    {
+                        "num_slots": 1,
+                        "num_transactions": 4,
+                        "sample_period_secs": 60
+                    }
+                ]
+            ],
+        });
+
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_get_recent_performance_samples_invalid_limit() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req =
+            r#"{"jsonrpc":"2.0","id":1,"method":"getRecentPerformanceSamples","params":[10000]}"#;
+
+        let res = io.handle_request_sync(&req, meta);
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "error": {
+                "code": -32602,
+                "message": "Invalid limit; max 720"
+            },
+            "id": 1
+        });
+
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
         assert_eq!(expected, result);
     }
 
