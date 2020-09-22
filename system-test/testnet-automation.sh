@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
+NDEBUG="${NDEBUG-1}"
+export NDEBUG
+
 # shellcheck disable=SC1090
 # shellcheck disable=SC1091
 source "$(dirname "$0")"/automation_utils.sh
@@ -124,6 +127,10 @@ function launch_testnet() {
   declare -g version_args
   get_net_launch_software_version_launch_args "$CHANNEL" "solana-release" version_args
 
+  if [[ -z $NDEBUG ]]; then
+    maybeDebug=--debug
+  fi
+
   declare maybeWarpSlot
   if [[ -n "$WARP_SLOT" ]]; then
     maybeWarpSlot="--warp-slot $WARP_SLOT"
@@ -141,7 +148,7 @@ function launch_testnet() {
 
   # shellcheck disable=SC2068
   # shellcheck disable=SC2086
-  "${REPO_ROOT}"/net/net.sh start $version_args \
+  "${REPO_ROOT}"/net/net.sh start $version_args $maybeDebug \
     -c idle=$NUMBER_OF_CLIENT_NODES $maybeStartAllowBootFailures \
     --gpu-mode $startGpuMode $maybeWarpSlot $maybeAsyncNodeInit $maybeExtraPrimordialStakes \
     $GENESIS_OPTIONS

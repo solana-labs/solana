@@ -31,10 +31,23 @@ check_sanity() {
 }
 
 # Fetch new software and upload it to the bootstrap validator
-declare -g sw_version_args
-get_net_launch_software_version_launch_args "$UPGRADE_CHANNEL" "upgrade-release" sw_version_args
-# shellcheck disable=2086 # $sw_version_args holds two args. Don't quote!
-"$NET_SH" upgrade $sw_version_args
+(
+  declare -g sw_version_args
+  get_net_launch_software_version_launch_args "$UPGRADE_CHANNEL" "upgrade-release" sw_version_args
+  if [[ -n $LOCAL_BUILD_BRANCH || -n $LOCAL_BUILD_REVISION ]]; then
+    unset LOCAL_BUILD_BRANCH
+    unset LOCAL_BUILD_REVISION
+  fi
+  if [[ -n $UPGRADE_LOCAL_BUILD_BRANCH ]]; then
+    export LOCAL_BUILD_BRANCH="$UPGRADE_LOCAL_BUILD_BRANCH"
+  fi
+  if [[ -n $UPGRADE_LOCAL_BUILD_REVISION ]]; then
+    export LOCAL_BUILD_REVISION="$UPGRADE_LOCAL_BUILD_REVISION"
+  fi
+
+  # shellcheck disable=2086 # $sw_version_args holds two args. Don't quote!
+  "$NET_SH" upgrade $sw_version_args
+)
 
 # Wait initial delay, if any
 sleep_if_positive "$UPGRADE_INITIAL_DELAY"
