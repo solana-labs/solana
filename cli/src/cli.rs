@@ -16,8 +16,14 @@ use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
 use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_clap_utils::{
-    self, commitment::commitment_arg_with_default, input_parsers::*, input_validators::*,
-    keypair::signer_from_path, nonce::*, offline::*, ArgConstant,
+    self,
+    commitment::commitment_arg_with_default,
+    fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
+    input_parsers::*,
+    input_validators::*,
+    keypair::signer_from_path,
+    nonce::*,
+    offline::*,
 };
 use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
@@ -117,23 +123,6 @@ pub(crate) fn generate_unique_signers(
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 pub const DEFAULT_RPC_TIMEOUT_SECONDS: &str = "30";
-
-pub const FEE_PAYER_ARG: ArgConstant<'static> = ArgConstant {
-    name: "fee_payer",
-    long: "fee-payer",
-    help: "Specify the fee-payer account. This may be a keypair file, the ASK keyword \n\
-           or the pubkey of an offline signer, provided an appropriate --signer argument \n\
-           is also passed. Defaults to the client keypair.",
-};
-
-pub fn fee_payer_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name(FEE_PAYER_ARG.name)
-        .long(FEE_PAYER_ARG.long)
-        .takes_value(true)
-        .value_name("KEYPAIR")
-        .validator(is_valid_signer)
-        .help(FEE_PAYER_ARG.help)
-}
 
 #[derive(Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
