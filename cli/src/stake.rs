@@ -947,7 +947,7 @@ pub fn process_create_stake_account(
     let mut tx = Transaction::new_unsigned(message);
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx, &config)
+        return_signers(&tx, &config.output_format)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
@@ -1002,7 +1002,7 @@ pub fn process_stake_authorize(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx, &config)
+        return_signers(&tx, &config.output_format)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -1064,7 +1064,7 @@ pub fn process_deactivate_stake_account(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx, &config)
+        return_signers(&tx, &config.output_format)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -1135,7 +1135,7 @@ pub fn process_withdraw_stake(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx, &config)
+        return_signers(&tx, &config.output_format)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -1277,7 +1277,7 @@ pub fn process_split_stake(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx, &config)
+        return_signers(&tx, &config.output_format)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -1378,7 +1378,7 @@ pub fn process_merge_stake(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx, &config)
+        return_signers(&tx, &config.output_format)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -1443,7 +1443,7 @@ pub fn process_stake_set_lockup(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx, &config)
+        return_signers(&tx, &config.output_format)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
@@ -1704,7 +1704,7 @@ pub fn process_delegate_stake(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx, &config)
+        return_signers(&tx, &config.output_format)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {

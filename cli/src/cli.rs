@@ -1045,7 +1045,7 @@ pub fn get_blockhash_and_fee_calculator(
     })
 }
 
-pub fn return_signers(tx: &Transaction, config: &CliConfig) -> ProcessResult {
+pub fn return_signers(tx: &Transaction, output_format: &OutputFormat) -> ProcessResult {
     let verify_results = tx.verify_with_results();
     let mut signers = Vec::new();
     let mut absent = Vec::new();
@@ -1071,7 +1071,7 @@ pub fn return_signers(tx: &Transaction, config: &CliConfig) -> ProcessResult {
         bad_sig,
     };
 
-    Ok(config.output_format.formatted_string(&cli_command))
+    Ok(output_format.formatted_string(&cli_command))
 }
 
 pub fn parse_create_address_with_seed(
@@ -1712,7 +1712,7 @@ fn process_transfer(
 
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers(&tx, &config)
+        return_signers(&tx, &config.output_format)
     } else {
         if let Some(nonce_account) = &nonce_account {
 <<<<<<< HEAD
@@ -4029,8 +4029,6 @@ mod tests {
             }
         }
 
-        let mut config = CliConfig::default();
-        config.output_format = OutputFormat::JsonCompact;
         let present: Box<dyn Signer> = Box::new(keypair_from_seed(&[2u8; 32]).unwrap());
         let absent: Box<dyn Signer> = Box::new(NullSigner::new(&Pubkey::new(&[3u8; 32])));
         let bad: Box<dyn Signer> = Box::new(BadSigner::new(Pubkey::new(&[4u8; 32])));
@@ -4049,7 +4047,7 @@ mod tests {
         let signers = vec![present.as_ref(), absent.as_ref(), bad.as_ref()];
         let blockhash = Hash::new(&[7u8; 32]);
         tx.try_partial_sign(&signers, blockhash).unwrap();
-        let res = return_signers(&tx, &config).unwrap();
+        let res = return_signers(&tx, &OutputFormat::JsonCompact).unwrap();
         let sign_only = parse_sign_only_reply_string(&res);
         assert_eq!(sign_only.blockhash, blockhash);
         assert_eq!(sign_only.present_signers[0].0, present.pubkey());
