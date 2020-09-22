@@ -359,7 +359,7 @@ pub fn make_accounts_hashes_message(
 }
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "CnN1gW2K2TRydGc84eYnQJwdTADPjQf6LJLZ4RP1QeoH")]
+#[frozen_abi(digest = "3ZHQscZ9SgxKh45idzHv3hiagyyPRtDgeySmJn171PTi")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 enum Protocol {
@@ -573,7 +573,7 @@ impl ClusterInfo {
                     }
                     let ip_addr = node.gossip.ip();
                     Some(format!(
-                        "{:15} {:2}| {:5} | {:44} |{:^15}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
+                        "{:15} {:2}| {:5} | {:44} |{:^9}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
                         if ContactInfo::is_valid_address(&node.gossip) {
                             ip_addr.to_string()
                         } else {
@@ -605,8 +605,8 @@ impl ClusterInfo {
 
         format!(
             "IP Address        |Age(ms)| Node identifier                              \
-             | Version       |Gossip| TPU  |TPUfwd| TVU  |TVUfwd|Repair|ServeR| RPC  |PubSub|ShredVer\n\
-             ------------------+-------+----------------------------------------------+---------------+\
+             | Version |Gossip| TPU  |TPUfwd| TVU  |TVUfwd|Repair|ServeR| RPC  |PubSub|ShredVer\n\
+             ------------------+-------+----------------------------------------------+---------+\
              ------+------+------+------+------+------+------+------+------+--------\n\
              {}\
              Nodes: {}{}{}",
@@ -894,7 +894,8 @@ impl ClusterInfo {
     }
 
     pub fn get_node_version(&self, pubkey: &Pubkey) -> Option<solana_version::Version> {
-        self.gossip
+        let version = self
+            .gossip
             .read()
             .unwrap()
             .crds
@@ -902,7 +903,21 @@ impl ClusterInfo {
             .get(&CrdsValueLabel::Version(*pubkey))
             .map(|x| x.value.version())
             .flatten()
-            .map(|version| version.version.clone())
+            .map(|version| version.version.clone());
+
+        if version.is_none() {
+            self.gossip
+                .read()
+                .unwrap()
+                .crds
+                .table
+                .get(&CrdsValueLabel::LegacyVersion(*pubkey))
+                .map(|x| x.value.legacy_version())
+                .flatten()
+                .map(|version| version.version.clone().into())
+        } else {
+            version
+        }
     }
 
     /// all validators that have a valid rpc port regardless of `shred_version`.

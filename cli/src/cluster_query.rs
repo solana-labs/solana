@@ -17,7 +17,7 @@ use solana_client::{
     pubsub_client::PubsubClient,
     rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
     rpc_config::{RpcLargestAccountsConfig, RpcLargestAccountsFilter},
-    rpc_response::{RpcVersionInfo, SlotInfo},
+    rpc_response::SlotInfo,
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
@@ -1314,12 +1314,9 @@ pub fn process_show_validators(
     for contact_info in rpc_client.get_cluster_nodes()? {
         node_version.insert(
             contact_info.pubkey,
-            RpcVersionInfo {
-                solana_core: contact_info
-                    .version
-                    .unwrap_or_else(|| unknown_version.clone()),
-            }
-            .to_string(),
+            contact_info
+                .version
+                .unwrap_or_else(|| unknown_version.clone()),
         );
     }
 
