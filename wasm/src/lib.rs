@@ -14,7 +14,7 @@ cfg_if::cfg_if! {
 			console::log_1(&info.into());
 		}
 	} else {
-		fn console_log(info: &str) {}
+		fn console_log(_info: &str) {}
 	}
 }
 
@@ -26,9 +26,10 @@ pub fn setup() {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct Pair{
-	publicKey: Vec<u8>,
-	secretKey: Vec<u8>
+	public_key: Vec<u8>,
+	secret_key: Vec<u8>
 }
 
 /// Generates key pair for use with ED25519 from ed25519_dalek
@@ -39,16 +40,31 @@ pub fn generate_keypair() -> Result<JsValue, JsValue> {
 	let mut csprng = OsRng{};
 	let keypair = Keypair::generate(&mut csprng);
 	// use all 64bit for secret key to maintain compatibility with tweetnacl
-	let secretKey = keypair.to_bytes().to_vec();
-	let publicKey = keypair.public.as_bytes().to_vec();
+	let secret_key = keypair.to_bytes().to_vec();
+	let public_key = keypair.public.as_bytes().to_vec();
 
-	let result = Pair{ publicKey, secretKey};
+	let result = Pair{ public_key, secret_key};
 	Ok(JsValue::from_serde(&result).unwrap())
+}
+
+/// Create key pair from secret key for use with ED25519 from ed25519_dalek
+/// * secretkey: UIntArray with 64 element
+///
+/// * returned struct has two fields public and secret.
+#[wasm_bindgen(js_name = fromSecretKey)]
+pub fn from_secret_key(secretkey: &[u8]) -> Result<JsValue, JsValue> {
+	// use 64bit for secret key to maintain compatibility with tweetnacl
+	let keypair = Keypair::from_bytes(&secretkey).unwrap();
+	let secret_key = keypair.to_bytes().to_vec();
+	let public_key = keypair.public.as_bytes().to_vec();
+
+	let result = Pair{ public_key, secret_key};
+	return Ok(JsValue::from_serde(&result).unwrap());
 }
 
 /// Sign a message using ED25519 from ed25519_dalek
 /// * pubkey: UIntArray with 32 element
-/// * private: UIntArray with 64 element
+/// * private: UIntArray with 32 or 64 element
 /// * message: Arbitrary length UIntArray
 ///
 /// * returned vector is the signature consisting of 64 bytes.
