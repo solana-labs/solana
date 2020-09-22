@@ -96,15 +96,38 @@ function TokenInstruction(props: InfoProps) {
   }, [fetchAccountInfo, mintAddress]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const decimals = mintInfo?.decimals;
-  const attributes = [];
-  for (let key in props.info) {
-    const value = props.info[key];
+  const attributes: JSX.Element[] = [];
+
+  buildAttributes(attributes, props.info, decimals);
+
+  return (
+    <InstructionCard
+      ix={props.ix}
+      index={props.index}
+      result={props.result}
+      title={props.title}
+    >
+      {attributes}
+    </InstructionCard>
+  );
+}
+
+function buildAttributes(
+  attributes: JSX.Element[],
+  info: any,
+  decimals: number | undefined
+) {
+  for (let key in info) {
+    const value = info[key];
     if (value === undefined) continue;
 
     let tag;
     let labelSuffix = "";
     if (value instanceof PublicKey) {
       tag = <Address pubkey={value} alignRight link />;
+    } else if (key === "tokenAmount") {
+      buildAttributes(attributes, info.tokenAmount, decimals);
+      continue;
     } else if (key === "amount") {
       let amount;
       if (decimals === undefined) {
@@ -130,15 +153,4 @@ function TokenInstruction(props: InfoProps) {
       </tr>
     );
   }
-
-  return (
-    <InstructionCard
-      ix={props.ix}
-      index={props.index}
-      result={props.result}
-      title={props.title}
-    >
-      {attributes}
-    </InstructionCard>
-  );
 }
