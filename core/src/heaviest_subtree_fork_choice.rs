@@ -491,6 +491,44 @@ impl HeaviestSubtreeForkChoice {
         );
     }
 
+    fn heaviest_slot_on_same_voted_fork(&self, tower: &Tower) -> Option<Slot> {
+        tower
+            .last_voted_slot()
+            .map(|last_voted_slot| {
+                let heaviest_slot_on_same_voted_fork = self.best_slot(last_voted_slot);
+                if heaviest_slot_on_same_voted_fork.is_none() {
+                    if !tower.is_stray_last_vote() {
+                        // Unless last vote is stray, self.bast_slot(last_voted_slot) must return
+                        // Some(_), justifying to panic! here.
+                        // Also, adjust_lockouts_after_replay() correctly makes last_voted_slot None,
+                        // if all saved votes are ancestors of replayed_root_slot. So this code shouldn't be
+                        // touched in that case as well.
+                        // In other words, except being stray, all other slots have been voted on while this
+                        // validator has been running, so we must be able to fetch best_slots for all of
+                        // them.
+                        panic!(
+                            "a bank at last_voted_slot({}) is a frozen bank so must have been\
+                            added to heaviest_subtree_fork_choice at time of freezing",
+                            last_voted_slot,
+                        )
+                    } else {
+                        // fork_infos doesn't have corresponding data for the stray restored last vote,
+                        // meaning some inconsistency between saved tower and ledger.
+                        // (newer snapshot, or only a saved tower is moved over to new setup?)
+                        return None;
+                    }
+                }
+                let heaviest_slot_on_same_voted_fork = heaviest_slot_on_same_voted_fork.unwrap();
+
+                if heaviest_slot_on_same_voted_fork == last_voted_slot {
+                    None
+                } else {
+                    Some(heaviest_slot_on_same_voted_fork)
+                }
+            })
+            .unwrap_or(None)
+    }
+
     #[cfg(test)]
     fn set_stake_voted_at(&mut self, slot: Slot, stake_voted_at: u64) {
         self.fork_infos.get_mut(&slot).unwrap().stake_voted_at = stake_voted_at;
@@ -550,26 +588,17 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
         _ancestors: &HashMap<u64, HashSet<u64>>,
         bank_forks: &RwLock<BankForks>,
     ) -> (Arc<Bank>, Option<Arc<Bank>>) {
-        let last_voted_slot = tower.last_voted_slot();
-        let heaviest_slot_on_same_voted_fork = last_voted_slot.map(|last_voted_slot| {
-            let heaviest_slot_on_same_voted_fork =
-                self.best_slot(last_voted_slot).expect("a bank at last_voted_slot is a frozen bank so must have been added to heaviest_subtree_fork_choice at time of freezing");
-            if heaviest_slot_on_same_voted_fork == last_voted_slot {
-                None
-            } else {
-                Some(heaviest_slot_on_same_voted_fork)
-            }
-        }).unwrap_or(None);
-        let heaviest_slot = self.best_overall_slot();
         let r_bank_forks = bank_forks.read().unwrap();
+
         (
-            r_bank_forks.get(heaviest_slot).unwrap().clone(),
-            heaviest_slot_on_same_voted_fork.map(|heaviest_slot_on_same_voted_fork| {
-                r_bank_forks
-                    .get(heaviest_slot_on_same_voted_fork)
-                    .unwrap()
-                    .clone()
-            }),
+            r_bank_forks.get(self.best_overall_slot()).unwrap().clone(),
+            self.heaviest_slot_on_same_voted_fork(tower)
+                .map(|heaviest_slot_on_same_voted_fork| {
+                    r_bank_forks
+                        .get(heaviest_slot_on_same_voted_fork)
+                        .unwrap()
+                        .clone()
+                }),
         )
     }
 }
@@ -611,6 +640,7 @@ mod test {
     use super::*;
     use crate::consensus::test::VoteSimulator;
     use solana_runtime::{bank::Bank, bank_utils};
+    use solana_sdk::{hash::Hash, slot_history::SlotHistory};
     use std::{collections::HashSet, ops::Range};
     use trees::tr;
 
@@ -1488,6 +1518,48 @@ mod test {
 
         // Zero no longer exists, set reachable from 0 is empty
         assert!(heaviest_subtree_fork_choice.subtree_diff(0, 6).is_empty());
+    }
+
+    #[test]
+    fn test_stray_restored_slot() {
+        let forks = tr(0) / (tr(1) / tr(2));
+        let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_tree(forks);
+
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.record_vote(1, Hash::default());
+
+        assert_eq!(tower.is_stray_last_vote(), false);
+        assert_eq!(
+            heaviest_subtree_fork_choice.heaviest_slot_on_same_voted_fork(&tower),
+            Some(2)
+        );
+
+        // Make slot 1 (existing in bank_forks) a restored stray slot
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(0);
+        // Work around TooOldSlotHistory
+        slot_history.add(999);
+        tower = tower
+            .adjust_lockouts_after_replay(0, &slot_history)
+            .unwrap();
+
+        assert_eq!(tower.is_stray_last_vote(), true);
+        assert_eq!(
+            heaviest_subtree_fork_choice.heaviest_slot_on_same_voted_fork(&tower),
+            Some(2)
+        );
+
+        // Make slot 3 (NOT existing in bank_forks) a restored stray slot
+        tower.record_vote(3, Hash::default());
+        tower = tower
+            .adjust_lockouts_after_replay(0, &slot_history)
+            .unwrap();
+
+        assert_eq!(tower.is_stray_last_vote(), true);
+        assert_eq!(
+            heaviest_subtree_fork_choice.heaviest_slot_on_same_voted_fork(&tower),
+            None
+        );
     }
 
     fn setup_forks() -> HeaviestSubtreeForkChoice {

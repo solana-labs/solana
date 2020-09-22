@@ -78,7 +78,7 @@ pub fn signer_from_path(
         KeypairUrl::Filepath(path) => match read_keypair_file(&path) {
             Err(e) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("could not find keypair file: {} error: {}", path, e),
+                format!("could not read keypair file \"{}\". Run \"solana-keygen new\" to create a keypair file: {}", path, e),
             )
             .into()),
             Ok(file) => Ok(Box::new(file)),
@@ -149,7 +149,7 @@ pub fn resolve_signer_from_path(
         KeypairUrl::Filepath(path) => match read_keypair_file(&path) {
             Err(e) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("could not find keypair file: {} error: {}", path, e),
+                format!("could not read keypair file \"{}\". Run \"solana-keygen new\" to create a keypair file: {}", path, e),
             )
             .into()),
             Ok(_) => Ok(Some(path.to_string())),

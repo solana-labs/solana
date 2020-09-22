@@ -130,77 +130,6 @@ greater security. If so, you will need to move SOL to hot accounts using our
 When a user wants to deposit SOL into your exchange, instruct them to send a
 transfer to the appropriate deposit address.
 
-## Validating User-supplied Account Addresses for Withdrawals in SOL
-
-As withdrawals are irreversible, it may be a good practice to validate the
-account address before authorizing withdrawals into user-supplied accounts
-to prevent accidental user's fund loss.
-
-For a normal account in Solana, its address is simply a Base58-encoded
-actual 256-bit public key of ed25519. Because not all bit pattern is a valid
-public key for the ed25519, it's possible to make sure user-supplied
-account addresses are at least something that may be a correct ed25519 public
-key.
-
-### Java
-
-You can check Solana's normal account address validity by first decoding
-Base58 string and ensuring the decoded bytes are valid ed25519 public keys
-like this:
-
-The following code sample assumes you're using the Maven.
-
-`pom.xml`:
-
-```xml
-<repositories>
-  ...
-  <repository>
-    <id>spring</id>
-    <url>https://repo.spring.io/libs-release/</url>
-  </repository>
-</repositories>
-
-...
-
-<dependencies>
-  ...
-  <dependency>
-      <groupId>io.github.novacrypto</groupId>
-      <artifactId>Base58</artifactId>
-      <version>0.1.3</version>
-  </dependency>
-  <dependency>
-      <groupId>cafe.cryptography</groupId>
-      <artifactId>curve25519-elisabeth</artifactId>
-      <version>0.1.0</version>
-  </dependency>
-<dependencies>
-```
-
-```java
-import io.github.novacrypto.base58.Base58;
-import cafe.cryptography.curve25519.CompressedEdwardsY;
-
-public class PubkeyValidator
-{
-    public static boolean verifyPubkey(String userProvidedPubkey)
-    {
-        try {
-            return _verifyPubkeyInternal(userProvidedPubkey);
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    public static boolean _verifyPubkeyInternal(String maybePubkey) throws Exception
-    {
-        byte[] bytes = Base58.base58Decode(maybePubkey);
-        return !(new CompressedEdwardsY(bytes)).decompress().isSmallOrder();
-    }
-}
-```
-
 ### Poll for Blocks
 
 The easiest way to track all the deposit accounts for your exchange is to poll
@@ -488,10 +417,222 @@ You can also doublecheck whether a particular blockhash is still valid by sendin
 request with the blockhash as a parameter. If the response value is null, the
 blockhash is expired, and the withdrawal transaction should never succeed.
 
+### Validating User-supplied Account Addresses for Withdrawals
+
+As withdrawals are irreversible, it may be a good practice to validate a
+user-supplied account address before authorizing a withdrawal in order to
+prevent accidental loss of user funds.
+
+The address of a normal account in Solana is a Base58-encoded string of a
+256-bit ed25519 public key. Not all bit patterns are valid public keys for the
+ed25519 curve, so it is possible to ensure user-supplied account addresses are
+at least correct ed25519 public keys.
+
+#### Java
+
+Here is a Java example of validating a user-supplied address as a valid ed25519
+public key:
+
+The following code sample assumes you're using the Maven.
+
+`pom.xml`:
+
+```xml
+<repositories>
+  ...
+  <repository>
+    <id>spring</id>
+    <url>https://repo.spring.io/libs-release/</url>
+  </repository>
+</repositories>
+
+...
+
+<dependencies>
+  ...
+  <dependency>
+      <groupId>io.github.novacrypto</groupId>
+      <artifactId>Base58</artifactId>
+      <version>0.1.3</version>
+  </dependency>
+  <dependency>
+      <groupId>cafe.cryptography</groupId>
+      <artifactId>curve25519-elisabeth</artifactId>
+      <version>0.1.0</version>
+  </dependency>
+<dependencies>
+```
+
+```java
+import io.github.novacrypto.base58.Base58;
+import cafe.cryptography.curve25519.CompressedEdwardsY;
+
+public class PubkeyValidator
+{
+    public static boolean verifyPubkey(String userProvidedPubkey)
+    {
+        try {
+            return _verifyPubkeyInternal(userProvidedPubkey);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public static boolean _verifyPubkeyInternal(String maybePubkey) throws Exception
+    {
+        byte[] bytes = Base58.base58Decode(maybePubkey);
+        return !(new CompressedEdwardsY(bytes)).decompress().isSmallOrder();
+    }
+}
+```
+
+## Supporting the SPL Token Standard
+
+[SPL Token](https://spl.solana.com/token) is the standard for wrapped/synthetic
+token creation and exchange on the Solana blockchain.
+
+The SPL Token workflow is similar to that of native SOL tokens, but there are a
+few differences which will be discussed in this section.
+
+### Token Mints
+
+Each *type* of SPL Token is declared by creating a *mint* account.  This account
+stores metadata describing token features like the supply, number of decimals, and
+various authorities with control over the mint.  Each SPL Token account references
+its associated mint and may only interact with SPL Tokens of that type.
+
+### Installing the `spl-token` CLI Tool
+
+SPL Token accounts are queried and modified using the `spl-token` command line
+utility. The examples provided in this section depend upon having it installed
+on the local system.
+
+`spl-token` is distributed from Rust [crates.io](https://crates.io) via the Rust
+`cargo` command line utility. The latest version of `cargo` can be installed
+using a handy one-liner for your platform at [rustup.rs](https://rustup.rs). Once
+`cargo` is installed, `spl-token` can be obtained with the following command:
+
+```
+cargo install spl-token-cli
+```
+
+You can then check the installed version to verify
+
+```
+spl-token --version
+```
+
+Which should result in something like
+
+```text
+spl-token-cli 2.0.1
+```
+
+### Account Creation
+
+SPL Token accounts carry additional requirements that native System Program
+accounts do not:
+
+1. SPL Token accounts are not implicitly created, so must be created explicitly
+before an SPL Token balance can be deposited
+1. SPL Token accounts must remain [rent-exempt](https://docs.solana.com/apps/rent#rent-exemption)
+for the duration of their existence and therefore require a small amount of
+native SOL tokens be deposited at account creation. For SPL Token v2 accounts,
+this amount is 0.00203928 SOL (2,039,280 lamports).
+
+#### Command Line
+To create an SPL Token account with the following properties:
+1. At a random address
+1. Associated with the given mint
+1. Owned by the funding account's keypair
+
+```
+spl-token create-account <TOKEN_MINT_ADDRESS>
+```
+
+#### Example
+```
+$ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir
+Creating account 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
+Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5XxyJwS73Vi5WsZL88D7
+```
+
+### Checking an Account's Balance
+
+#### Command Line
+```
+spl-token balance <TOKEN_ACCOUNT_ADDRESS>
+```
+
+#### Example
+```
+$ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
+0
+```
+
+### Token Transfers
+
+For SPL Token transfers to succeed, a few prerequisite conditions must be met:
+1. The recipient account must exist before the transfer is executed. As described
+in [account creation](#account-creation), SPL Token accounts are *not* explicitly
+created.
+1. Both the sender and recipient accounts must belong to the same mint.  SPL Token
+accounts can only hold one type of SPL token.
+
+#### Command Line
+```
+spl-token transfer <SENDER_ACCOUNT_PUBKEY> <AMOUNT> <RECIPIENT_ACCOUNT_PUBKEY>
+```
+
+#### Example
+```
+$ spl-token transfer 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN 1 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
+Transfer 1 tokens
+  Sender: 6B199xxzw3PkAm25hGJpjj3Wj3WNYNHzDAnt1tEqg5BN
+  Recipient: 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
+Signature: 3R6tsog17QM8KfzbcbdP4aoMfwgo6hBggJDVy7dZPVmH2xbCWjEj31JKD53NzMrf25ChFjY7Uv2dfCDq4mGFFyAj
+```
+
+### Depositing
+Since each `(user, mint)` pair requires a separate account on chain, it is
+recommended that an exchange create batches of token accounts in advance and assign them
+to users on request. These accounts should all be owned by exchange-controlled
+keypairs.
+
+Monitoring for deposit transactions should follow the [block polling](#poll-for-blocks)
+method described above. Each new block should be scanned for successful transactions
+issuing SPL Token [Transfer](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L92)
+or [Transfer2](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L252)
+instructions referencing user accounts, then querying the
+[token account balance](https://docs.solana.com/apps/jsonrpc-api#gettokenaccountbalance)
+updates.
+
+[Considerations](https://github.com/solana-labs/solana/issues/12318) are being
+made to exend the `preBalance` and `postBalance` transaction status metadata
+fields to include SPL Token balance transfers.
+
+### Withdrawing
+The withdrawal address a user provides must point to an initialized SPL Token account
+of the correct mint. Before executing a withdrawal [transfer](#token-transfers),
+it is recommended that the exchange check the address as
+[described above](#validating-user-supplied-account-addresses-for-withdrawals)
+as well as query the account to verify its existence and that it belongs to the
+correct mint.
+
+### Other Considerations
+
+#### Freeze Authority
+For regulatory compliance reasons, an SPL Token issuing entity may optionally
+choose to hold "Freeze Authority" over all accounts created in association with
+ its mint.  This allows them to [freeze](https://spl.solana.com/token#freezing-accounts)
+the assets in a given account at will, rendering the account unusable until thawed.
+If this feature is in use, the freeze authority's pubkey will be registered in
+the SPL Token's mint account.
+
 ## Testing the Integration
 
 Be sure to test your complete workflow on Solana devnet and testnet
 [clusters](../clusters.md) before moving to production on mainnet-beta. Devnet
 is the most open and flexible, and ideal for initial development, while testnet
-offers more realistic cluster configuration. Devnet features a token faucet, but
-you will need to request some testnet SOL to get going on testnet.
+offers more realistic cluster configuration. Both devnet and testnet support a faucet,
+run `solana airdrop 10` to obtain some devnet or testnet SOL for developement and testing.

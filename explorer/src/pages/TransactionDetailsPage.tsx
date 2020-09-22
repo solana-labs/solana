@@ -20,6 +20,7 @@ import { StakeDetailsCard } from "components/instruction/stake/StakeDetailsCard"
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { TableCardBody } from "components/common/TableCardBody";
+import { Slot } from "components/common/Slot";
 import { displayTimestamp } from "utils/date";
 import { InfoTooltip } from "components/common/InfoTooltip";
 import { Address } from "components/common/Address";
@@ -246,7 +247,9 @@ function StatusCard({
 
         <tr>
           <td>Block</td>
-          <td className="text-lg-right">{info.slot}</td>
+          <td className="text-lg-right">
+            <Slot slot={info.slot} />
+          </td>
         </tr>
 
         {blockhash && (

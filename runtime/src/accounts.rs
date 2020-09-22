@@ -115,6 +115,15 @@ impl Accounts {
         false
     }
 
+    fn construct_instructions_account(message: &Message) -> Account {
+        let mut account = Account::default();
+        account.data = message.serialize_instructions();
+
+        // add room for current instruction index.
+        account.data.resize(account.data.len() + 2, 0);
+        account
+    }
+
     fn load_tx_accounts(
         &self,
         storage: &AccountStorage,
@@ -134,15 +143,23 @@ impl Accounts {
             // If a fee can pay for execution then the program will be scheduled
             let mut payer_index = None;
             let mut tx_rent: TransactionRent = 0;
-            let mut accounts: Vec<_> = message
-                .account_keys
-                .iter()
-                .enumerate()
-                .map(|(i, key)| {
-                    if Self::is_non_loader_key(message, key, i) {
-                        if payer_index.is_none() {
-                            payer_index = Some(i);
+            let mut accounts = Vec::with_capacity(message.account_keys.len());
+            for (i, key) in message.account_keys.iter().enumerate() {
+                let account = if Self::is_non_loader_key(message, key, i) {
+                    if payer_index.is_none() {
+                        payer_index = Some(i);
+                    }
+
+                    if solana_sdk::sysvar::instructions::is_enabled(
+                        self.epoch,
+                        self.accounts_db.cluster_type.unwrap(),
+                    ) && solana_sdk::sysvar::instructions::check_id(key)
+                    {
+                        if message.is_writable(i) {
+                            return Err(TransactionError::InvalidAccountIndex);
                         }
+                        Self::construct_instructions_account(message)
+                    } else {
                         let (account, rent) =
                             AccountsDB::load(storage, ancestors, accounts_index, key)
                                 .map(|(mut account, _)| {
@@ -158,12 +175,14 @@ impl Accounts {
 
                         tx_rent += rent;
                         account
-                    } else {
-                        // Fill in an empty account for the program slots.
-                        Account::default()
                     }
-                })
-                .collect();
+                } else {
+                    // Fill in an empty account for the program slots.
+                    Account::default()
+                };
+                accounts.push(account);
+            }
+            debug_assert_eq!(accounts.len(), message.account_keys.len());
 
             if let Some(payer_index) = payer_index {
                 if payer_index != 0 {
@@ -1792,5 +1811,48 @@ mod tests {
         }
         info!("done..cleaning..");
         accounts.accounts_db.clean_accounts();
+    }
+
+    fn load_accounts_no_store(
+        accounts: &Accounts,
+        tx: Transaction,
+    ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
+        let rent_collector = RentCollector::default();
+        let fee_calculator = FeeCalculator::new(10);
+        let mut hash_queue = BlockhashQueue::new(100);
+        hash_queue.register_hash(&tx.message().recent_blockhash, &fee_calculator);
+
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        let mut error_counters = ErrorCounters::default();
+        accounts.load_accounts(
+            &ancestors,
+            &[tx],
+            None,
+            vec![(Ok(()), Some(HashAgeKind::Extant))],
+            &hash_queue,
+            &mut error_counters,
+            &rent_collector,
+        )
+    }
+
+    #[test]
+    fn test_instructions() {
+        solana_logger::setup();
+        let accounts = Accounts::new(Vec::new(), &ClusterType::Development);
+
+        let instructions_key = solana_sdk::sysvar::instructions::id();
+        let keypair = Keypair::new();
+        let instructions = vec![CompiledInstruction::new(1, &(), vec![0, 1])];
+        let tx = Transaction::new_with_compiled_instructions(
+            &[&keypair],
+            &[Pubkey::new_rand(), instructions_key],
+            Hash::default(),
+            vec![native_loader::id()],
+            instructions,
+        );
+
+        let loaded_accounts = load_accounts_no_store(&accounts, tx);
+        assert_eq!(loaded_accounts.len(), 1);
+        assert!(loaded_accounts[0].0.is_err());
     }
 }

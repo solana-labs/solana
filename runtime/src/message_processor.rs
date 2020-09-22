@@ -10,6 +10,7 @@ use solana_sdk::{
         ComputeBudget, ComputeMeter, ErasedProcessInstruction, ErasedProcessInstructionWithContext,
         Executor, InvokeContext, Logger, ProcessInstruction, ProcessInstructionWithContext,
     },
+    genesis_config::ClusterType,
     instruction::{CompiledInstruction, InstructionError},
     message::Message,
     native_loader,
@@ -656,6 +657,7 @@ impl MessageProcessor {
     /// This method calls the instruction's program entrypoint method and verifies that the result of
     /// the call does not violate the bank's accounting rules.
     /// The accounts are committed back to the bank only if this function returns Ok(_).
+    #[allow(clippy::too_many_arguments)]
     fn execute_instruction(
         &self,
         message: &Message,
@@ -665,7 +667,25 @@ impl MessageProcessor {
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
+        instruction_index: usize,
+        cluster_type: ClusterType,
+        epoch: Epoch,
     ) -> Result<(), InstructionError> {
+        // Fixup the special instructions key if present
+        // before the account pre-values are taken care of
+        if solana_sdk::sysvar::instructions::is_enabled(epoch, cluster_type) {
+            for (i, key) in message.account_keys.iter().enumerate() {
+                if solana_sdk::sysvar::instructions::check_id(key) {
+                    let mut mut_account_ref = accounts[i].borrow_mut();
+                    solana_sdk::sysvar::instructions::store_current_index(
+                        &mut mut_account_ref.data,
+                        instruction_index as u16,
+                    );
+                    break;
+                }
+            }
+        }
+
         let pre_accounts = Self::create_pre_accounts(message, instruction, accounts);
         let mut invoke_context = ThisInvokeContext::new(
             instruction.program_id(&message.account_keys),
@@ -702,6 +722,8 @@ impl MessageProcessor {
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
+        cluster_type: ClusterType,
+        epoch: Epoch,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             self.execute_instruction(
@@ -712,6 +734,9 @@ impl MessageProcessor {
                 rent_collector,
                 log_collector.clone(),
                 executors.clone(),
+                instruction_index,
+                cluster_type,
+                epoch,
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
@@ -1304,6 +1329,8 @@ mod tests {
             &rent_collector,
             None,
             executors.clone(),
+            ClusterType::Development,
+            0,
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 100);
@@ -1325,6 +1352,8 @@ mod tests {
             &rent_collector,
             None,
             executors.clone(),
+            ClusterType::Development,
+            0,
         );
         assert_eq!(
             result,
@@ -1350,6 +1379,8 @@ mod tests {
             &rent_collector,
             None,
             executors,
+            ClusterType::Development,
+            0,
         );
         assert_eq!(
             result,
@@ -1458,6 +1489,8 @@ mod tests {
             &rent_collector,
             None,
             executors.clone(),
+            ClusterType::Development,
+            0,
         );
         assert_eq!(
             result,
@@ -1483,6 +1516,8 @@ mod tests {
             &rent_collector,
             None,
             executors.clone(),
+            ClusterType::Development,
+            0,
         );
         assert_eq!(result, Ok(()));
 
@@ -1505,6 +1540,8 @@ mod tests {
             &rent_collector,
             None,
             executors,
+            ClusterType::Development,
+            0,
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);

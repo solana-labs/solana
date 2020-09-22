@@ -9,7 +9,7 @@ use solana_client::{
 use solana_core::{
     broadcast_stage::BroadcastStageType,
     cluster_info::VALIDATOR_PORT_RANGE,
-    consensus::{SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
+    consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
     gossip_service::discover_cluster,
     validator::ValidatorConfig,
 };
@@ -1370,18 +1370,19 @@ fn test_no_voting() {
 }
 
 #[test]
-fn test_optimistic_confirmation_violation() {
+#[serial]
+fn test_optimistic_confirmation_violation_with_no_tower() {
     solana_logger::setup();
     let mut buf = BufferRedirect::stderr().unwrap();
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
-    let node_stakes = vec![50, 51];
+    let node_stakes = vec![51, 50];
     let validator_keys: Vec<_> = iter::repeat_with(|| (Arc::new(Keypair::new()), true))
         .take(node_stakes.len())
         .collect();
     let config = ClusterConfig {
         cluster_lamports: 100_000,
-        node_stakes: vec![51, 50],
+        node_stakes: node_stakes.clone(),
         validator_configs: vec![ValidatorConfig::default(); node_stakes.len()],
         validator_keys: Some(validator_keys),
         slots_per_epoch,
@@ -1415,7 +1416,9 @@ fn test_optimistic_confirmation_violation() {
 
     // Mark fork as dead on the heavier validator, this should make the fork effectively
     // dead, even though it was optimistically confirmed. The smaller validator should
-    // jump over to the new fork
+    // create and jump over to a new fork
+    // Also, remove saved tower to intentionally make the restarted validator to violate the
+    // optimistic confirmation
     {
         let blockstore = Blockstore::open_with_access_type(
             &exited_validator_info.info.ledger_path,
@@ -1433,6 +1436,12 @@ fn test_optimistic_confirmation_violation() {
             prev_voted_slot
         );
         blockstore.set_dead_slot(prev_voted_slot).unwrap();
+
+        std::fs::remove_file(Tower::get_filename(
+            &exited_validator_info.info.ledger_path,
+            &entry_point_id,
+        ))
+        .unwrap();
     }
     cluster.restart_node(&entry_point_id, exited_validator_info);
 
@@ -1463,6 +1472,220 @@ fn test_optimistic_confirmation_violation() {
     let mut output = String::new();
     buf.read_to_string(&mut output).unwrap();
     assert!(output.contains(&expected_log));
+}
+
+#[test]
+#[serial]
+#[ignore]
+fn test_no_optimistic_confirmation_violation_with_tower() {
+    solana_logger::setup();
+    let mut buf = BufferRedirect::stderr().unwrap();
+
+    // First set up the cluster with 2 nodes
+    let slots_per_epoch = 2048;
+    let node_stakes = vec![51, 50];
+    let validator_keys: Vec<_> = iter::repeat_with(|| (Arc::new(Keypair::new()), true))
+        .take(node_stakes.len())
+        .collect();
+    let config = ClusterConfig {
+        cluster_lamports: 100_000,
+        node_stakes: node_stakes.clone(),
+        validator_configs: vec![ValidatorConfig::default(); node_stakes.len()],
+        validator_keys: Some(validator_keys),
+        slots_per_epoch,
+        stakers_slot_offset: slots_per_epoch,
+        skip_warmup_slots: true,
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&config);
+    let entry_point_id = cluster.entry_point_info.id;
+    // Let the nodes run for a while. Wait for validators to vote on slot `S`
+    // so that the vote on `S-1` is definitely in gossip and optimistic confirmation is
+    // detected on slot `S-1` for sure, then stop the heavier of the two
+    // validators
+    let client = cluster.get_validator_client(&entry_point_id).unwrap();
+    let mut prev_voted_slot = 0;
+    loop {
+        let last_voted_slot = client
+            .get_slot_with_commitment(CommitmentConfig::recent())
+            .unwrap();
+        if last_voted_slot > 50 {
+            if prev_voted_slot == 0 {
+                prev_voted_slot = last_voted_slot;
+            } else {
+                break;
+            }
+        }
+        sleep(Duration::from_millis(100));
+    }
+
+    let exited_validator_info = cluster.exit_node(&entry_point_id);
+
+    // Mark fork as dead on the heavier validator, this should make the fork effectively
+    // dead, even though it was optimistically confirmed. The smaller validator should
+    // create and jump over to a new fork
+    {
+        let blockstore = Blockstore::open_with_access_type(
+            &exited_validator_info.info.ledger_path,
+            AccessType::PrimaryOnly,
+            None,
+        )
+        .unwrap_or_else(|e| {
+            panic!(
+                "Failed to open ledger at {:?}, err: {}",
+                exited_validator_info.info.ledger_path, e
+            );
+        });
+        info!(
+            "Setting slot: {} on main fork as dead, should cause fork",
+            prev_voted_slot
+        );
+        blockstore.set_dead_slot(prev_voted_slot).unwrap();
+    }
+    cluster.restart_node(&entry_point_id, exited_validator_info);
+
+    cluster.check_no_new_roots(400, "test_no_optimistic_confirmation_violation_with_tower");
+
+    // Check to see that validator didn't detected optimistic confirmation for
+    // `prev_voted_slot` failed
+    let expected_log = format!("Optimistic slot {} was not rooted", prev_voted_slot);
+    let mut output = String::new();
+    buf.read_to_string(&mut output).unwrap();
+    assert!(!output.contains(&expected_log));
+}
+
+#[test]
+#[serial]
+fn test_validator_saves_tower() {
+    solana_logger::setup();
+
+    let validator_config = ValidatorConfig {
+        require_tower: true,
+        ..ValidatorConfig::default()
+    };
+    let validator_identity_keypair = Arc::new(Keypair::new());
+    let validator_id = validator_identity_keypair.pubkey();
+    let config = ClusterConfig {
+        cluster_lamports: 10_000,
+        node_stakes: vec![100],
+        validator_configs: vec![validator_config],
+        validator_keys: Some(vec![(validator_identity_keypair.clone(), true)]),
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&config);
+
+    let validator_client = cluster.get_validator_client(&validator_id).unwrap();
+
+    let ledger_path = cluster
+        .validators
+        .get(&validator_id)
+        .unwrap()
+        .info
+        .ledger_path
+        .clone();
+
+    // Wait for some votes to be generated
+    let mut last_replayed_root;
+    loop {
+        if let Ok(slot) = validator_client.get_slot_with_commitment(CommitmentConfig::recent()) {
+            trace!("current slot: {}", slot);
+            if slot > 2 {
+                // this will be the root next time a validator starts
+                last_replayed_root = slot;
+                break;
+            }
+        }
+        sleep(Duration::from_millis(10));
+    }
+
+    // Stop validator and check saved tower
+    let validator_info = cluster.exit_node(&validator_id);
+    let tower1 = Tower::restore(&ledger_path, &validator_id).unwrap();
+    trace!("tower1: {:?}", tower1);
+    assert_eq!(tower1.root(), Some(0));
+
+    // Restart the validator and wait for a new root
+    cluster.restart_node(&validator_id, validator_info);
+    let validator_client = cluster.get_validator_client(&validator_id).unwrap();
+
+    // Wait for the first root
+    loop {
+        if let Ok(root) = validator_client.get_slot_with_commitment(CommitmentConfig::root()) {
+            trace!("current root: {}", root);
+            if root > last_replayed_root + 1 {
+                last_replayed_root = root;
+                break;
+            }
+        }
+        sleep(Duration::from_millis(50));
+    }
+
+    // Stop validator, and check saved tower
+    let recent_slot = validator_client
+        .get_slot_with_commitment(CommitmentConfig::recent())
+        .unwrap();
+    let validator_info = cluster.exit_node(&validator_id);
+    let tower2 = Tower::restore(&ledger_path, &validator_id).unwrap();
+    trace!("tower2: {:?}", tower2);
+    assert_eq!(tower2.root(), Some(last_replayed_root));
+    last_replayed_root = recent_slot;
+
+    // Rollback saved tower to `tower1` to simulate a validator starting from a newer snapshot
+    // without having to wait for that snapshot to be generated in this test
+    tower1.save(&validator_identity_keypair).unwrap();
+
+    cluster.restart_node(&validator_id, validator_info);
+    let validator_client = cluster.get_validator_client(&validator_id).unwrap();
+
+    // Wait for a new root, demonstrating the validator was able to make progress from the older `tower1`
+    loop {
+        if let Ok(root) = validator_client.get_slot_with_commitment(CommitmentConfig::root()) {
+            trace!(
+                "current root: {}, last_replayed_root: {}",
+                root,
+                last_replayed_root
+            );
+            if root > last_replayed_root {
+                break;
+            }
+        }
+        sleep(Duration::from_millis(50));
+    }
+
+    // Check the new root is reflected in the saved tower state
+    let mut validator_info = cluster.exit_node(&validator_id);
+    let tower3 = Tower::restore(&ledger_path, &validator_id).unwrap();
+    trace!("tower3: {:?}", tower3);
+    assert!(tower3.root().unwrap() > last_replayed_root);
+
+    // Remove the tower file entirely and allow the validator to start without a tower.  It will
+    // rebuild tower from its vote account contents
+    fs::remove_file(Tower::get_filename(&ledger_path, &validator_id)).unwrap();
+    validator_info.config.require_tower = false;
+
+    cluster.restart_node(&validator_id, validator_info);
+    let validator_client = cluster.get_validator_client(&validator_id).unwrap();
+
+    // Wait for a couple more slots to pass so another vote occurs
+    let current_slot = validator_client
+        .get_slot_with_commitment(CommitmentConfig::recent())
+        .unwrap();
+    loop {
+        if let Ok(slot) = validator_client.get_slot_with_commitment(CommitmentConfig::recent()) {
+            trace!("current_slot: {}, slot: {}", current_slot, slot);
+            if slot > current_slot + 1 {
+                break;
+            }
+        }
+        sleep(Duration::from_millis(50));
+    }
+
+    cluster.close_preserve_ledgers();
+
+    let tower4 = Tower::restore(&ledger_path, &validator_id).unwrap();
+    trace!("tower4: {:?}", tower4);
+    // should tower4 advance 1 slot compared to tower3????
+    assert_eq!(tower4.root(), tower3.root().map(|s| s + 1));
 }
 
 fn wait_for_next_snapshot(
