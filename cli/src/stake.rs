@@ -6,7 +6,7 @@ use crate::{
     },
     cli_output::{CliStakeHistory, CliStakeHistoryEntry, CliStakeState, CliStakeType},
     nonce::check_nonce_account,
-    offline::{blockhash_query::BlockhashQuery, return_signers},
+    offline::return_signers,
     spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
 };
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
@@ -20,7 +20,8 @@ use solana_clap_utils::{
     ArgConstant,
 };
 use solana_client::{
-    nonce_utils, rpc_client::RpcClient, rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
+    blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
+    rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
@@ -1770,10 +1771,8 @@ pub fn process_delegate_stake(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        cli::{app, parse_command},
-        offline::blockhash_query,
-    };
+    use crate::cli::{app, parse_command};
+    use solana_client::blockhash_query;
     use solana_sdk::{
         hash::Hash,
         signature::{

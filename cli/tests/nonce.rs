@@ -1,14 +1,15 @@
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     cli_output::OutputFormat,
-    offline::{
-        blockhash_query::{self, BlockhashQuery},
-        parse_sign_only_reply_string,
-    },
+    offline::parse_sign_only_reply_string,
     spend_utils::SpendAmount,
     test_utils::{check_ready, check_recent_balance},
 };
-use solana_client::{nonce_utils, rpc_client::RpcClient};
+use solana_client::{
+    blockhash_query::{self, BlockhashQuery},
+    nonce_utils,
+    rpc_client::RpcClient,
+};
 use solana_core::contact_info::ContactInfo;
 use solana_core::test_validator::{TestValidator, TestValidatorOptions};
 use solana_faucet::faucet::run_local_faucet;

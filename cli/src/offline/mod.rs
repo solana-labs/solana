@@ -1,11 +1,7 @@
-pub mod blockhash_query;
-
 use crate::cli_output::{CliSignOnlyData, OutputFormat};
 use serde_json::Value;
 use solana_clap_utils::keypair::presigner_from_pubkey_sigs;
-use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
-    fee_calculator::FeeCalculator,
     hash::Hash,
     pubkey::Pubkey,
     signature::{Presigner, Signature},
