@@ -72,6 +72,7 @@ fn main() {
             "dup_accounts",
             "error_handling",
             "external_spend",
+            "instruction_introspection",
             "invoke",
             "invoked",
             "iter",

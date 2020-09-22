@@ -576,7 +576,7 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_128bit", 543),
             ("solana_bpf_rust_alloc", 19082),
             ("solana_bpf_rust_dep_crate", 2),
-            ("solana_bpf_rust_external_spend", 473),
+            ("solana_bpf_rust_external_spend", 485),
             ("solana_bpf_rust_iter", 723),
             ("solana_bpf_rust_many_args", 231),
             ("solana_bpf_rust_noop", 2217),
@@ -668,4 +668,72 @@ impl InstructionMeter for TestInstructionMeter {
     fn get_remaining(&self) -> u64 {
         u64::MAX
     }
+}
+
+#[cfg(any(feature = "bpf_rust"))]
+#[test]
+fn test_program_bpf_instruction_introspection() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50_000);
+    let mut bank = Bank::new(&genesis_config);
+
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin_loader(&name, id, entrypoint);
+    let bank = Arc::new(bank);
+    let bank_client = BankClient::new_shared(&bank);
+
+    let program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_instruction_introspection",
+    );
+
+    // Passing transaction
+    let account_metas = vec![AccountMeta::new_readonly(
+        solana_sdk::sysvar::instructions::id(),
+        false,
+    )];
+    let instruction0 = Instruction::new(program_id, &[0u8, 0u8], account_metas.clone());
+    let instruction1 = Instruction::new(program_id, &[0u8, 1u8], account_metas.clone());
+    let instruction2 = Instruction::new(program_id, &[0u8, 2u8], account_metas);
+    let message = Message::new(
+        &[instruction0, instruction1, instruction2],
+        Some(&mint_keypair.pubkey()),
+    );
+    let result = bank_client.send_and_confirm_message(&[&mint_keypair], message);
+    println!("result: {:?}", result);
+    assert!(result.is_ok());
+
+    // writable special instructions11111 key, should not be allowed
+    let account_metas = vec![AccountMeta::new(
+        solana_sdk::sysvar::instructions::id(),
+        false,
+    )];
+    let instruction = Instruction::new(program_id, &0u8, account_metas);
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::InvalidAccountIndex
+    );
+
+    // No accounts, should error
+    let instruction = Instruction::new(program_id, &0u8, vec![]);
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::InstructionError(
+            0,
+            solana_sdk::instruction::InstructionError::NotEnoughAccountKeys
+        )
+    );
+    assert!(bank
+        .get_account(&solana_sdk::sysvar::instructions::id())
+        .is_none());
 }
