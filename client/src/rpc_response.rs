@@ -121,6 +121,7 @@ pub enum ReceivedSignatureResult {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct RpcContactInfo {
     /// Pubkey of the node as a base-58 string
     pub pubkey: String,
@@ -132,6 +133,8 @@ pub struct RpcContactInfo {
     pub rpc: Option<SocketAddr>,
     /// Software version
     pub version: Option<String>,
+    /// First 4 bytes of the FeatureSet identifier
+    pub feature_set: Option<u32>,
 }
 
 /// Map of leader base58 identity pubkeys to the slot indices relative to the first epoch slot
@@ -142,6 +145,8 @@ pub type RpcLeaderSchedule = HashMap<String, Vec<usize>>;
 pub struct RpcVersionInfo {
     /// The current version of solana-core
     pub solana_core: String,
+    /// first 4 bytes of the FeatureSet identifier
+    pub feature_set: Option<u32>,
 }
 
 impl fmt::Debug for RpcVersionInfo {
