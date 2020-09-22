@@ -42,7 +42,6 @@ use solana_sdk::{
     clock::{Epoch, Slot, DEFAULT_TICKS_PER_SECOND},
     commitment_config::CommitmentConfig,
     decode_error::DecodeError,
-    fee_calculator::FeeCalculator,
     hash::Hash,
     instruction::InstructionError,
     loader_instruction,
@@ -880,22 +879,6 @@ pub fn parse_command(
 }
 
 pub type ProcessResult = Result<String, Box<dyn std::error::Error>>;
-
-pub fn get_blockhash_and_fee_calculator(
-    rpc_client: &RpcClient,
-    sign_only: bool,
-    blockhash: Option<Hash>,
-) -> Result<(Hash, FeeCalculator), Box<dyn std::error::Error>> {
-    Ok(if let Some(blockhash) = blockhash {
-        if sign_only {
-            (blockhash, FeeCalculator::default())
-        } else {
-            (blockhash, rpc_client.get_recent_blockhash()?.1)
-        }
-    } else {
-        rpc_client.get_recent_blockhash()?
-    })
-}
 
 pub fn parse_create_address_with_seed(
     matches: &ArgMatches<'_>,
