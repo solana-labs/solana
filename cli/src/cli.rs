@@ -4,7 +4,7 @@ use crate::{
     cluster_query::*,
     display::{new_spinner_progress_bar, println_name_value, println_transaction},
     nonce::*,
-    offline::{blockhash_query::BlockhashQuery, return_signers},
+    offline::return_signers,
     spend_utils::*,
     stake::*,
     validator_info::*,
@@ -26,6 +26,7 @@ use solana_clap_utils::{
     offline::*,
 };
 use solana_client::{
+    blockhash_query::BlockhashQuery,
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     nonce_utils,
     rpc_client::RpcClient,
@@ -2224,9 +2225,8 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::offline::*;
     use serde_json::Value;
-    use solana_client::mock_sender::SIGNATURE;
+    use solana_client::{blockhash_query, mock_sender::SIGNATURE};
     use solana_sdk::{
         pubkey::Pubkey,
         signature::{keypair_from_seed, read_keypair_file, write_keypair_file, Presigner},

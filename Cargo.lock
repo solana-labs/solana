@@ -3585,6 +3585,7 @@ dependencies = [
  "assert_matches",
  "bincode",
  "bs58",
+ "clap",
  "indicatif",
  "jsonrpc-core",
  "jsonrpc-http-server",
