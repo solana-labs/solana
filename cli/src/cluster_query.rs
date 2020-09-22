@@ -15,7 +15,7 @@ use solana_client::{
     pubsub_client::PubsubClient,
     rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
     rpc_config::{RpcLargestAccountsConfig, RpcLargestAccountsFilter},
-    rpc_response::SlotInfo,
+    rpc_response::{RpcVersionInfo, SlotInfo},
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
@@ -622,9 +622,14 @@ pub fn process_cluster_date(rpc_client: &RpcClient, config: &CliConfig) -> Proce
     }
 }
 
-pub fn process_cluster_version(rpc_client: &RpcClient) -> ProcessResult {
+pub fn process_cluster_version(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
     let remote_version = rpc_client.get_version()?;
-    Ok(remote_version.solana_core)
+
+    if config.verbose {
+        Ok(format!("{:?}", remote_version))
+    } else {
+        Ok(remote_version.to_string())
+    }
 }
 
 pub fn process_fees(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
@@ -1312,9 +1317,12 @@ pub fn process_show_validators(
     for contact_info in rpc_client.get_cluster_nodes()? {
         node_version.insert(
             contact_info.pubkey,
-            contact_info
-                .version
-                .unwrap_or_else(|| unknown_version.clone()),
+            RpcVersionInfo {
+                solana_core: contact_info
+                    .version
+                    .unwrap_or_else(|| unknown_version.clone()),
+            }
+            .to_string(),
         );
     }
 
