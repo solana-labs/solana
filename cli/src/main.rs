@@ -5,13 +5,15 @@ use clap::{
 use console::style;
 
 use solana_clap_utils::{
-    commitment::COMMITMENT_ARG, input_parsers::commitment_of, input_validators::is_url,
-    keypair::SKIP_SEED_PHRASE_VALIDATION_ARG, DisplayError,
+    commitment::COMMITMENT_ARG,
+    input_parsers::commitment_of,
+    input_validators::is_url,
+    keypair::{CliSigners, DefaultSigner, SKIP_SEED_PHRASE_VALIDATION_ARG},
+    DisplayError,
 };
 use solana_cli::{
     cli::{
-        app, parse_command, process_command, CliCommandInfo, CliConfig, CliSigners, DefaultSigner,
-        DEFAULT_RPC_TIMEOUT_SECONDS,
+        app, parse_command, process_command, CliCommandInfo, CliConfig, DEFAULT_RPC_TIMEOUT_SECONDS,
     },
     cli_output::OutputFormat,
     display::{println_name_value, println_name_value_or},

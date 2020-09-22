@@ -1,5 +1,5 @@
 use crate::{
-    cli::{CliCommand, CliCommandInfo, CliConfig, CliError, DefaultSigner, ProcessResult},
+    cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
     cli_output::{CliValidatorInfo, CliValidatorInfoVec},
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
@@ -13,6 +13,7 @@ use solana_account_decoder::validator_info::{
 use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_pubkey, is_url},
+    keypair::DefaultSigner,
 };
 use solana_client::rpc_client::RpcClient;
 use solana_config_program::{config_instruction, get_config_data, ConfigKeys, ConfigState};

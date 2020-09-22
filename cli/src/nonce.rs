@@ -2,13 +2,18 @@ use crate::{
     checks::{check_account_for_fee_with_commitment, check_unique_pubkeys},
     cli::{
         log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
-        DefaultSigner, ProcessResult, SignerIndex,
+        ProcessResult,
     },
     cli_output::CliNonceAccount,
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
-use solana_clap_utils::{input_parsers::*, input_validators::*, nonce::*};
+use solana_clap_utils::{
+    input_parsers::*,
+    input_validators::*,
+    keypair::{DefaultSigner, SignerIndex},
+    nonce::*,
+};
 use solana_client::{nonce_utils::*, rpc_client::RpcClient};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
