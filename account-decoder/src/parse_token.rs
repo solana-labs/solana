@@ -4,9 +4,7 @@ use crate::{
 };
 use solana_sdk::pubkey::Pubkey;
 use spl_token_v2_0::{
-    option::COption,
-    pack::Pack,
-    solana_sdk::pubkey::Pubkey as SplTokenPubkey,
+    solana_sdk::{program_option::COption, program_pack::Pack, pubkey::Pubkey as SplTokenPubkey},
     state::{Account, AccountState, Mint, Multisig},
 };
 use std::str::FromStr;
@@ -202,16 +200,14 @@ mod test {
         let mint_pubkey = SplTokenPubkey::new(&[2; 32]);
         let owner_pubkey = SplTokenPubkey::new(&[3; 32]);
         let mut account_data = vec![0; Account::get_packed_len()];
-        Account::unpack_unchecked_mut(&mut account_data, &mut |account: &mut Account| {
-            account.mint = mint_pubkey;
-            account.owner = owner_pubkey;
-            account.amount = 42;
-            account.state = AccountState::Initialized;
-            account.is_native = COption::None;
-            account.close_authority = COption::Some(owner_pubkey);
-            Ok(())
-        })
-        .unwrap();
+        let mut account = Account::unpack_unchecked(&account_data).unwrap();
+        account.mint = mint_pubkey;
+        account.owner = owner_pubkey;
+        account.amount = 42;
+        account.state = AccountState::Initialized;
+        account.is_native = COption::None;
+        account.close_authority = COption::Some(owner_pubkey);
+        Account::pack(account, &mut account_data).unwrap();
 
         assert!(parse_token(&account_data, None).is_err());
         assert_eq!(
@@ -234,15 +230,13 @@ mod test {
         );
 
         let mut mint_data = vec![0; Mint::get_packed_len()];
-        Mint::unpack_unchecked_mut(&mut mint_data, &mut |mint: &mut Mint| {
-            mint.mint_authority = COption::Some(owner_pubkey);
-            mint.supply = 42;
-            mint.decimals = 3;
-            mint.is_initialized = true;
-            mint.freeze_authority = COption::Some(owner_pubkey);
-            Ok(())
-        })
-        .unwrap();
+        let mut mint = Mint::unpack_unchecked(&mint_data).unwrap();
+        mint.mint_authority = COption::Some(owner_pubkey);
+        mint.supply = 42;
+        mint.decimals = 3;
+        mint.is_initialized = true;
+        mint.freeze_authority = COption::Some(owner_pubkey);
+        Mint::pack(mint, &mut mint_data).unwrap();
 
         assert_eq!(
             parse_token(&mint_data, None).unwrap(),
@@ -263,14 +257,13 @@ mod test {
         signers[0] = signer1;
         signers[1] = signer2;
         signers[2] = signer3;
-        Multisig::unpack_unchecked_mut(&mut multisig_data, &mut |multisig: &mut Multisig| {
-            multisig.m = 2;
-            multisig.n = 3;
-            multisig.is_initialized = true;
-            multisig.signers = signers;
-            Ok(())
-        })
-        .unwrap();
+        let mut multisig = Multisig::unpack_unchecked(&multisig_data).unwrap();
+        multisig.m = 2;
+        multisig.n = 3;
+        multisig.is_initialized = true;
+        multisig.signers = signers;
+        Multisig::pack(multisig, &mut multisig_data).unwrap();
+
         assert_eq!(
             parse_token(&multisig_data, None).unwrap(),
             TokenAccountType::Multisig(UiMultisig {
@@ -293,11 +286,9 @@ mod test {
     fn test_get_token_account_mint() {
         let mint_pubkey = SplTokenPubkey::new(&[2; 32]);
         let mut account_data = vec![0; Account::get_packed_len()];
-        Account::unpack_unchecked_mut(&mut account_data, &mut |account: &mut Account| {
-            account.mint = mint_pubkey;
-            Ok(())
-        })
-        .unwrap();
+        let mut account = Account::unpack_unchecked(&account_data).unwrap();
+        account.mint = mint_pubkey;
+        Account::pack(account, &mut account_data).unwrap();
 
         let expected_mint_pubkey = Pubkey::new(&[2; 32]);
         assert_eq!(
