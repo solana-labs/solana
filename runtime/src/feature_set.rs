@@ -1,8 +1,38 @@
+use lazy_static::lazy_static;
 use solana_sdk::{
     hash::{Hash, Hasher},
     pubkey::Pubkey,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+
+pub mod instructions_sysvar_enabled {
+    solana_sdk::declare_id!("EnvhHCLvg55P7PDtbvR1NwuTuAeodqpusV3MR5QEK8gs");
+}
+
+pub mod secp256k1_program_enabled {
+    solana_sdk::declare_id!("E3PHP7w8kB7np3CTQ1qQ2tW3KCtjRSXBQgW9vM2mWv2Y");
+}
+
+lazy_static! {
+    pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
+        (instructions_sysvar_enabled::id(), "instructions sysvar"),
+        (secp256k1_program_enabled::id(), "secp256k1 program")
+        /*************** ADD NEW FEATURES HERE ***************/
+    ]
+    .iter()
+    .cloned()
+    .collect();
+
+    static ref ID: Hash = {
+        let mut hasher = Hasher::default();
+        let mut feature_ids = FEATURE_NAMES.keys().collect::<Vec<_>>();
+        feature_ids.sort();
+        for feature in feature_ids {
+            hasher.hash(feature.as_ref());
+        }
+        hasher.result()
+    };
+}
 
 /// The `FeatureSet` struct tracks the set of available and currently active runtime features
 #[derive(AbiExample)]
@@ -26,34 +56,19 @@ impl FeatureSet {
 impl Default for FeatureSet {
     // By default all features are disabled
     fn default() -> Self {
-        let features: [Pubkey; 0] = [];
-
         Self {
-            id: {
-                let mut hasher = Hasher::default();
-                for feature in features.iter() {
-                    hasher.hash(feature.as_ref());
-                }
-                hasher.result()
-            },
+            id: *ID,
             active: HashSet::new(),
-            inactive: features.iter().cloned().collect(),
+            inactive: FEATURE_NAMES.keys().cloned().collect(),
         }
     }
 }
 
 impl FeatureSet {
-    // New `FeatureSet` with all features enabled
-    pub fn new_enabled() -> Self {
-        let default = Self::default();
-
+    pub fn enabled() -> Self {
         Self {
-            id: default.id,
-            active: default
-                .active
-                .intersection(&default.inactive)
-                .cloned()
-                .collect::<HashSet<_>>(),
+            id: *ID,
+            active: FEATURE_NAMES.keys().cloned().collect(),
             inactive: HashSet::new(),
         }
     }

@@ -30,10 +30,9 @@ use solana_runtime::{
 };
 use solana_sdk::{
     clock::{
-        Epoch, Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
+        Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
         MAX_TRANSACTION_FORWARDING_DELAY_GPU,
     },
-    genesis_config::ClusterType,
     poh_config::PohConfig,
     pubkey::Pubkey,
     timing::{duration_as_ms, timestamp},
@@ -737,8 +736,7 @@ impl BankingStage {
     fn transactions_from_packets(
         msgs: &Packets,
         transaction_indexes: &[usize],
-        cluster_type: ClusterType,
-        epoch: Epoch,
+        secp256k1_program_enabled: bool,
     ) -> (Vec<Transaction>, Vec<usize>) {
         let packets = Packets::new(
             transaction_indexes
@@ -748,25 +746,24 @@ impl BankingStage {
         );
 
         let transactions = Self::deserialize_transactions(&packets);
-        let maybe_secp_verified_transactions: Vec<_> =
-            if solana_sdk::secp256k1::is_enabled(cluster_type, epoch) {
-                transactions
-                    .into_iter()
-                    .map(|tx| {
-                        if let Some(tx) = tx {
-                            if tx.verify_precompiles().is_ok() {
-                                Some(tx)
-                            } else {
-                                None
-                            }
+        let maybe_secp_verified_transactions: Vec<_> = if secp256k1_program_enabled {
+            transactions
+                .into_iter()
+                .map(|tx| {
+                    if let Some(tx) = tx {
+                        if tx.verify_precompiles().is_ok() {
+                            Some(tx)
                         } else {
                             None
                         }
-                    })
-                    .collect()
-            } else {
-                transactions
-            };
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        } else {
+            transactions
+        };
 
         Self::filter_transaction_indexes(maybe_secp_verified_transactions, &transaction_indexes)
     }
@@ -820,8 +817,7 @@ impl BankingStage {
         let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
             msgs,
             &packet_indexes,
-            bank.cluster_type(),
-            bank.epoch(),
+            bank.secp256k1_program_enabled(),
         );
         debug!(
             "bank: {} filtered transactions {}",
@@ -874,8 +870,7 @@ impl BankingStage {
         let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
             msgs,
             &transaction_indexes,
-            bank.cluster_type(),
-            bank.epoch(),
+            bank.secp256k1_program_enabled(),
         );
 
         let tx_count = transaction_to_packet_indexes.len();

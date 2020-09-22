@@ -1,27 +1,5 @@
-use crate::clock::{Epoch, GENESIS_EPOCH};
-use crate::fee_calculator::FeeConfig;
-use crate::genesis_config::ClusterType;
 use digest::Digest;
 use serde_derive::{Deserialize, Serialize};
-
-pub fn get_fee_config(cluster_type: ClusterType, epoch: Epoch) -> Option<FeeConfig> {
-    Some(FeeConfig {
-        is_secp256k1_enabled: is_enabled(cluster_type, epoch),
-    })
-}
-
-pub fn is_enabled_epoch(cluster_type: ClusterType) -> Epoch {
-    match cluster_type {
-        ClusterType::Development => GENESIS_EPOCH,
-        ClusterType::Testnet => u64::MAX,
-        ClusterType::MainnetBeta => u64::MAX,
-        ClusterType::Devnet => u64::MAX,
-    }
-}
-
-pub fn is_enabled(cluster_type: ClusterType, epoch: Epoch) -> bool {
-    epoch >= is_enabled_epoch(cluster_type)
-}
 
 #[derive(Debug)]
 pub enum Secp256k1Error {

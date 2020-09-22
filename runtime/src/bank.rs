@@ -10,11 +10,11 @@ use crate::{
     accounts_db::{ErrorCounters, SnapshotStorages},
     accounts_index::Ancestors,
     blockhash_queue::BlockhashQueue,
-    builtins::get_builtins,
+    builtins::*,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     instruction_recorder::InstructionRecorder,
     feature::Feature,
-    feature_set::{FeatureSet},
+    feature_set::{self, FeatureSet},
     log_collector::LogCollector,
     message_processor::{Executors, MessageProcessor},
     nonce_utils,
@@ -43,7 +43,7 @@ use solana_sdk::{
     },
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
-    fee_calculator::{FeeCalculator, FeeRateGovernor},
+    fee_calculator::{FeeCalculator, FeeConfig, FeeRateGovernor},
     genesis_config::{ClusterType, GenesisConfig},
     hard_forks::HardForks,
     hash::{extend_and_hash, hashv, Hash},
@@ -1594,6 +1594,7 @@ impl Bank {
             &self.blockhash_queue.read().unwrap(),
             error_counters,
             &self.rent_collector,
+            &self.feature_set,
         )
     }
     fn check_age(
@@ -2032,8 +2033,7 @@ impl Bank {
                         log_collector.clone(),
                         executors.clone(),
                         instruction_recorders.as_deref(),
-                        self.cluster_type(),
-                        self.epoch(),
+                        &self.feature_set,
                     );
 
                     Self::compile_recorded_instructions(
@@ -2114,6 +2114,11 @@ impl Bank {
     ) -> Vec<Result<()>> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         let mut fees = 0;
+
+        let fee_config = FeeConfig {
+            secp256k1_program_enabled: self.secp256k1_program_enabled(),
+        };
+
         let results = OrderedIterator::new(txs, iteration_order)
             .zip(executed.iter())
             .map(|((_, tx), (res, hash_age_kind))| {
@@ -2130,10 +2135,7 @@ impl Bank {
                 };
                 let fee_calculator = fee_calculator.ok_or(TransactionError::BlockhashNotFound)?;
 
-                let fee = fee_calculator.calculate_fee(
-                    tx.message(),
-                    solana_sdk::secp256k1::get_fee_config(self.cluster_type(), self.epoch()),
-                );
+                let fee = fee_calculator.calculate_fee_with_config(tx.message(), &fee_config);
 
                 let message = tx.message();
                 match *res {
@@ -3461,15 +3463,16 @@ impl Bank {
         consumed_budget.saturating_sub(budget_recovery_delta)
     }
 
+    pub fn secp256k1_program_enabled(&self) -> bool {
+        self.feature_set
+            .active(&feature_set::secp256k1_program_enabled::id())
+    }
+
     // This is called from snapshot restore AND for each epoch boundary
     // The entire code path herein must be idempotent
     fn apply_feature_activations(&mut self, init_finish_or_warp: bool, initiate_callback: bool) {
-        let new_feature_activations = self.compute_active_feature_set();
-        for feature_id in new_feature_activations {
-            info!("New feature activated: {}", feature_id);
-        }
-
-        self.ensure_builtins(init_finish_or_warp);
+        let new_feature_activations = self.compute_active_feature_set(!init_finish_or_warp);
+        self.ensure_builtins(init_finish_or_warp, &new_feature_activations);
         self.reinvoke_entered_epoch_callback(initiate_callback);
         self.recheck_cross_program_support();
         self.recheck_compute_budget();
@@ -3478,7 +3481,7 @@ impl Bank {
     }
 
     // Compute the active feature set based on the current bank state, and return the set of newly activated features
-    fn compute_active_feature_set(&mut self) -> HashSet<Pubkey> {
+    fn compute_active_feature_set(&mut self, allow_new_activations: bool) -> HashSet<Pubkey> {
         let mut active = self.feature_set.active.clone();
         let mut inactive = HashSet::new();
         let mut newly_activated = HashSet::new();
@@ -3489,14 +3492,17 @@ impl Bank {
                 if let Some(mut feature) = Feature::from_account(&account) {
                     match feature.activated_at {
                         None => {
-                            // Feature has been requested, activate it now
-                            feature.activated_at = Some(slot);
-                            if feature.to_account(&mut account).is_some() {
-                                self.store_account(feature_id, &account);
+                            if allow_new_activations {
+                                // Feature has been requested, activate it now
+                                feature.activated_at = Some(slot);
+                                if feature.to_account(&mut account).is_some() {
+                                    self.store_account(feature_id, &account);
+                                }
+                                newly_activated.insert(*feature_id);
+                                active.insert(*feature_id);
+                                info!("Feature {} activated at slot {}", feature_id, slot);
+                                continue;
                             }
-                            newly_activated.insert(*feature_id);
-                            active.insert(*feature_id);
-                            continue;
                         }
                         Some(activation_slot) => {
                             if slot >= activation_slot {
@@ -3519,10 +3525,18 @@ impl Bank {
         newly_activated
     }
 
-    fn ensure_builtins(&mut self, init_or_warp: bool) {
-        for (program, start_epoch) in get_builtins(self.cluster_type()) {
+    fn ensure_builtins(&mut self, init_or_warp: bool, new_feature_activations: &HashSet<Pubkey>) {
+        for (program, start_epoch) in get_cluster_builtins(self.cluster_type()) {
             let should_populate = init_or_warp && self.epoch() >= start_epoch
                 || !init_or_warp && self.epoch() == start_epoch;
+            if should_populate {
+                self.add_builtin(&program.name, program.id, program.entrypoint);
+            }
+        }
+
+        for (program, feature) in get_feature_builtins() {
+            let should_populate = init_or_warp && self.feature_set.active(&feature)
+                || !init_or_warp && new_feature_activations.contains(&feature);
             if should_populate {
                 self.add_builtin(&program.name, program.id, program.entrypoint);
             }
@@ -8518,7 +8532,7 @@ mod tests {
             .collect::<Vec<_>>();
         consumed_budgets.sort();
         // consumed_budgets represents the count of alive accounts in the three slots 0,1,2
-        assert_eq!(consumed_budgets, vec![0, 1, 10]);
+        assert_eq!(consumed_budgets, vec![0, 1, 9]);
     }
 
     #[test]

@@ -11,16 +11,6 @@ crate::declare_sysvar_id!("Sysvar1nstructions1111111111111111111111111", Instruc
 
 impl Sysvar for Instructions {}
 
-#[cfg(not(feature = "program"))]
-use crate::clock::Epoch;
-#[cfg(not(feature = "program"))]
-use crate::genesis_config::ClusterType;
-
-#[cfg(not(feature = "program"))]
-pub fn is_enabled(_epoch: Epoch, cluster_type: ClusterType) -> bool {
-    cluster_type == ClusterType::Development
-}
-
 pub fn load_current_index(data: &[u8]) -> u16 {
     let mut instr_fixed_data = [0u8; 2];
     let len = data.len();

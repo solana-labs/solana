@@ -17,8 +17,6 @@ use solana_perf::cuda_runtime::PinnedVec;
 use solana_perf::perf_libs;
 use solana_perf::recycler::Recycler;
 use solana_rayon_threadlimit::get_thread_count;
-use solana_sdk::clock::Epoch;
-use solana_sdk::genesis_config::ClusterType;
 use solana_sdk::hash::Hash;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
@@ -329,8 +327,7 @@ pub trait EntrySlice {
         &self,
         start_hash: &Hash,
         recyclers: VerifyRecyclers,
-        cluster_type: ClusterType,
-        epoch: Epoch,
+        secp256k1_program_enabled: bool,
     ) -> EntryVerificationState;
     fn verify(&self, start_hash: &Hash) -> bool;
     /// Checks that each entry tick has the correct number of hashes. Entry slices do not
@@ -339,18 +336,13 @@ pub trait EntrySlice {
     fn verify_tick_hash_count(&self, tick_hash_count: &mut u64, hashes_per_tick: u64) -> bool;
     /// Counts tick entries
     fn tick_count(&self) -> u64;
-    fn verify_transaction_signatures(&self, cluster_type: ClusterType, epoch: Epoch) -> bool;
+    fn verify_transaction_signatures(&self, secp256k1_program_enabled: bool) -> bool;
 }
 
 impl EntrySlice for [Entry] {
     fn verify(&self, start_hash: &Hash) -> bool {
-        self.start_verify(
-            start_hash,
-            VerifyRecyclers::default(),
-            ClusterType::Development,
-            0,
-        )
-        .finish_verify(self)
+        self.start_verify(start_hash, VerifyRecyclers::default(), true)
+            .finish_verify(self)
     }
 
     fn verify_cpu_generic(&self, start_hash: &Hash) -> EntryVerificationState {
@@ -497,14 +489,14 @@ impl EntrySlice for [Entry] {
         }
     }
 
-    fn verify_transaction_signatures(&self, cluster_type: ClusterType, epoch: Epoch) -> bool {
+    fn verify_transaction_signatures(&self, secp256k1_program_enabled: bool) -> bool {
         PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
                 self.par_iter().all(|e| {
                     e.transactions.par_iter().all(|transaction| {
                         let sig_verify = transaction.verify().is_ok();
                         if sig_verify
-                            && solana_sdk::secp256k1::is_enabled(cluster_type, epoch)
+                            && secp256k1_program_enabled
                             && transaction.verify_precompiles().is_err()
                         {
                             return false;
@@ -520,11 +512,10 @@ impl EntrySlice for [Entry] {
         &self,
         start_hash: &Hash,
         recyclers: VerifyRecyclers,
-        cluster_type: ClusterType,
-        epoch: Epoch,
+        secp256k1_program_enabled: bool,
     ) -> EntryVerificationState {
         let start = Instant::now();
-        let res = self.verify_transaction_signatures(cluster_type, epoch);
+        let res = self.verify_transaction_signatures(secp256k1_program_enabled);
         let transaction_duration_us = timing::duration_as_us(&start.elapsed());
         if !res {
             return EntryVerificationState {
