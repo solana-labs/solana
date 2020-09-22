@@ -7,8 +7,8 @@ import * as serviceWorker from './serviceWorker';
 import * as solanaWasm from './../../../';
 
 solanaWasm.waitReady().then(instance => {
-    const keyPair = instance.GenerateKeyPair();
-    const signature = instance.SignED25519(keyPair.public, keyPair.secret, new TextEncoder().encode('message to encode'));
+    const keyPair = instance.generateKeyPair();
+    const signature = instance.signED25519(keyPair.public, keyPair.secret, new TextEncoder().encode('message to encode'));
     console.log(signature);
 });
 
