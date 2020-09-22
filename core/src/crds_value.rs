@@ -75,6 +75,7 @@ pub enum CrdsData {
     SnapshotHashes(SnapshotHash),
     AccountsHashes(SnapshotHash),
     EpochSlots(EpochSlotsIndex, EpochSlots),
+    LegacyVersion(LegacyVersion),
     Version(Version),
 }
 
@@ -102,6 +103,7 @@ impl Sanitize for CrdsData {
                 }
                 val.sanitize()
             }
+            CrdsData::LegacyVersion(version) => version.sanitize(),
             CrdsData::Version(version) => version.sanitize(),
         }
     }
@@ -209,6 +211,23 @@ impl Vote {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
+pub struct LegacyVersion {
+    pub from: Pubkey,
+    pub wallclock: u64,
+    pub version: solana_version::LegacyVersion,
+}
+
+impl Sanitize for LegacyVersion {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        if self.wallclock >= MAX_WALLCLOCK {
+            return Err(SanitizeError::ValueOutOfBounds);
+        }
+        self.from.sanitize()?;
+        self.version.sanitize()
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
 pub struct Version {
     pub from: Pubkey,
     pub wallclock: u64,
@@ -245,6 +264,7 @@ pub enum CrdsValueLabel {
     SnapshotHashes(Pubkey),
     EpochSlots(EpochSlotsIndex, Pubkey),
     AccountsHashes(Pubkey),
+    LegacyVersion(Pubkey),
     Version(Pubkey),
 }
 
@@ -257,6 +277,7 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::SnapshotHashes(_) => write!(f, "SnapshotHash({})", self.pubkey()),
             CrdsValueLabel::EpochSlots(ix, _) => write!(f, "EpochSlots({}, {})", ix, self.pubkey()),
             CrdsValueLabel::AccountsHashes(_) => write!(f, "AccountsHashes({})", self.pubkey()),
+            CrdsValueLabel::LegacyVersion(_) => write!(f, "LegacyVersion({})", self.pubkey()),
             CrdsValueLabel::Version(_) => write!(f, "Version({})", self.pubkey()),
         }
     }
@@ -271,6 +292,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::SnapshotHashes(p) => *p,
             CrdsValueLabel::EpochSlots(_, p) => *p,
             CrdsValueLabel::AccountsHashes(p) => *p,
+            CrdsValueLabel::LegacyVersion(p) => *p,
             CrdsValueLabel::Version(p) => *p,
         }
     }
@@ -300,6 +322,7 @@ impl CrdsValue {
             CrdsData::SnapshotHashes(hash) => hash.wallclock,
             CrdsData::AccountsHashes(hash) => hash.wallclock,
             CrdsData::EpochSlots(_, p) => p.wallclock,
+            CrdsData::LegacyVersion(version) => version.wallclock,
             CrdsData::Version(version) => version.wallclock,
         }
     }
@@ -311,6 +334,7 @@ impl CrdsValue {
             CrdsData::SnapshotHashes(hash) => hash.from,
             CrdsData::AccountsHashes(hash) => hash.from,
             CrdsData::EpochSlots(_, p) => p.from,
+            CrdsData::LegacyVersion(version) => version.from,
             CrdsData::Version(version) => version.from,
         }
     }
@@ -322,6 +346,7 @@ impl CrdsValue {
             CrdsData::SnapshotHashes(_) => CrdsValueLabel::SnapshotHashes(self.pubkey()),
             CrdsData::AccountsHashes(_) => CrdsValueLabel::AccountsHashes(self.pubkey()),
             CrdsData::EpochSlots(ix, _) => CrdsValueLabel::EpochSlots(*ix, self.pubkey()),
+            CrdsData::LegacyVersion(_) => CrdsValueLabel::LegacyVersion(self.pubkey()),
             CrdsData::Version(_) => CrdsValueLabel::Version(self.pubkey()),
         }
     }
@@ -373,6 +398,13 @@ impl CrdsValue {
         }
     }
 
+    pub fn legacy_version(&self) -> Option<&LegacyVersion> {
+        match &self.data {
+            CrdsData::LegacyVersion(legacy_version) => Some(legacy_version),
+            _ => None,
+        }
+    }
+
     pub fn version(&self) -> Option<&Version> {
         match &self.data {
             CrdsData::Version(version) => Some(version),
@@ -387,6 +419,7 @@ impl CrdsValue {
             CrdsValueLabel::LowestSlot(*key),
             CrdsValueLabel::SnapshotHashes(*key),
             CrdsValueLabel::AccountsHashes(*key),
+            CrdsValueLabel::LegacyVersion(*key),
             CrdsValueLabel::Version(*key),
         ];
         labels.extend((0..MAX_VOTES).map(|ix| CrdsValueLabel::Vote(ix, *key)));
@@ -438,7 +471,7 @@ mod test {
 
     #[test]
     fn test_labels() {
-        let mut hits = [false; 5 + MAX_VOTES as usize + MAX_EPOCH_SLOTS as usize];
+        let mut hits = [false; 6 + MAX_VOTES as usize + MAX_EPOCH_SLOTS as usize];
         // this method should cover all the possible labels
         for v in &CrdsValue::record_labels(&Pubkey::default()) {
             match v {
@@ -446,10 +479,11 @@ mod test {
                 CrdsValueLabel::LowestSlot(_) => hits[1] = true,
                 CrdsValueLabel::SnapshotHashes(_) => hits[2] = true,
                 CrdsValueLabel::AccountsHashes(_) => hits[3] = true,
-                CrdsValueLabel::Version(_) => hits[4] = true,
-                CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 5] = true,
+                CrdsValueLabel::LegacyVersion(_) => hits[4] = true,
+                CrdsValueLabel::Version(_) => hits[5] = true,
+                CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 6] = true,
                 CrdsValueLabel::EpochSlots(ix, _) => {
-                    hits[*ix as usize + MAX_VOTES as usize + 5] = true
+                    hits[*ix as usize + MAX_VOTES as usize + 6] = true
                 }
             }
         }

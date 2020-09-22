@@ -3,17 +3,40 @@
 extern crate serde_derive;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::sanitize::Sanitize;
-use std::fmt;
-
+use std::{convert::TryInto, fmt};
 #[macro_use]
 extern crate solana_sdk_macro_frozen_abi;
 
+// Older version structure used by 1.3.12 and earlier releases
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
-pub struct Version {
+pub struct LegacyVersion {
     major: u16,
     minor: u16,
     patch: u16,
     commit: Option<u32>, // first 4 bytes of the sha1 commit hash
+}
+
+impl Sanitize for LegacyVersion {}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, AbiExample)]
+pub struct Version {
+    pub major: u16,
+    pub minor: u16,
+    pub patch: u16,
+    pub commit: Option<u32>, // first 4 bytes of the sha1 commit hash
+    pub feature_set: u32,    // first 4 bytes of the FeatureSet identifier
+}
+
+impl From<LegacyVersion> for Version {
+    fn from(legacy_version: LegacyVersion) -> Self {
+        Self {
+            major: legacy_version.major,
+            minor: legacy_version.minor,
+            patch: legacy_version.patch,
+            commit: legacy_version.commit,
+            feature_set: 0,
+        }
+    }
 }
 
 fn compute_commit(sha1: Option<&'static str>) -> Option<u32> {
@@ -27,27 +50,42 @@ fn compute_commit(sha1: Option<&'static str>) -> Option<u32> {
 
 impl Default for Version {
     fn default() -> Self {
+        let feature_set = u32::from_le_bytes(
+            solana_runtime::feature_set::FeatureSet::default()
+                .id
+                .as_ref()[..4]
+                .try_into()
+                .unwrap(),
+        );
         Self {
             major: env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap(),
             minor: env!("CARGO_PKG_VERSION_MINOR").parse().unwrap(),
             patch: env!("CARGO_PKG_VERSION_PATCH").parse().unwrap(),
             commit: compute_commit(option_env!("CI_COMMIT")),
+            feature_set,
         }
     }
 }
 
 impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}.{}", self.major, self.minor, self.patch,)
+    }
+}
+
+impl fmt::Debug for Version {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{}.{}.{} {}",
+            "{}.{}.{} (src:{}; feat:{})",
             self.major,
             self.minor,
             self.patch,
             match self.commit {
                 None => "devbuild".to_string(),
                 Some(commit) => format!("{:08x}", commit),
-            }
+            },
+            self.feature_set,
         )
     }
 }
