@@ -25,6 +25,65 @@ use std::{
     sync::Arc,
 };
 
+pub type CliSigners = Vec<Box<dyn Signer>>;
+pub type SignerIndex = usize;
+pub struct CliSignerInfo {
+    pub signers: CliSigners,
+}
+
+impl CliSignerInfo {
+    pub fn index_of(&self, pubkey: Option<Pubkey>) -> Option<usize> {
+        if let Some(pubkey) = pubkey {
+            self.signers
+                .iter()
+                .position(|signer| signer.pubkey() == pubkey)
+        } else {
+            Some(0)
+        }
+    }
+}
+
+pub struct DefaultSigner {
+    pub arg_name: String,
+    pub path: String,
+}
+
+impl DefaultSigner {
+    pub fn generate_unique_signers(
+        &self,
+        bulk_signers: Vec<Option<Box<dyn Signer>>>,
+        matches: &ArgMatches<'_>,
+        wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    ) -> Result<CliSignerInfo, Box<dyn error::Error>> {
+        let mut unique_signers = vec![];
+
+        // Determine if the default signer is needed
+        if bulk_signers.iter().any(|signer| signer.is_none()) {
+            let default_signer = self.signer_from_path(matches, wallet_manager)?;
+            unique_signers.push(default_signer);
+        }
+
+        for signer in bulk_signers.into_iter() {
+            if let Some(signer) = signer {
+                if !unique_signers.iter().any(|s| s == &signer) {
+                    unique_signers.push(signer);
+                }
+            }
+        }
+        Ok(CliSignerInfo {
+            signers: unique_signers,
+        })
+    }
+
+    pub fn signer_from_path(
+        &self,
+        matches: &ArgMatches,
+        wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    ) -> Result<Box<dyn Signer>, Box<dyn std::error::Error>> {
+        signer_from_path(matches, &self.path, &self.arg_name, wallet_manager)
+    }
+}
+
 pub enum KeypairUrl {
     Ask,
     Filepath(String),

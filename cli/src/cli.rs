@@ -21,7 +21,7 @@ use solana_clap_utils::{
     fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
     input_parsers::*,
     input_validators::*,
-    keypair::signer_from_path,
+    keypair::*,
     nonce::*,
     offline::*,
 };
@@ -74,65 +74,6 @@ use std::{
 };
 use thiserror::Error;
 use url::Url;
-
-pub type CliSigners = Vec<Box<dyn Signer>>;
-pub type SignerIndex = usize;
-pub struct CliSignerInfo {
-    pub signers: CliSigners,
-}
-
-impl CliSignerInfo {
-    pub(crate) fn index_of(&self, pubkey: Option<Pubkey>) -> Option<usize> {
-        if let Some(pubkey) = pubkey {
-            self.signers
-                .iter()
-                .position(|signer| signer.pubkey() == pubkey)
-        } else {
-            Some(0)
-        }
-    }
-}
-
-pub struct DefaultSigner {
-    pub arg_name: String,
-    pub path: String,
-}
-
-impl DefaultSigner {
-    pub fn generate_unique_signers(
-        &self,
-        bulk_signers: Vec<Option<Box<dyn Signer>>>,
-        matches: &ArgMatches<'_>,
-        wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
-    ) -> Result<CliSignerInfo, Box<dyn error::Error>> {
-        let mut unique_signers = vec![];
-
-        // Determine if the default signer is needed
-        if bulk_signers.iter().any(|signer| signer.is_none()) {
-            let default_signer = self.signer_from_path(matches, wallet_manager)?;
-            unique_signers.push(default_signer);
-        }
-
-        for signer in bulk_signers.into_iter() {
-            if let Some(signer) = signer {
-                if !unique_signers.iter().any(|s| s == &signer) {
-                    unique_signers.push(signer);
-                }
-            }
-        }
-        Ok(CliSignerInfo {
-            signers: unique_signers,
-        })
-    }
-
-    pub fn signer_from_path(
-        &self,
-        matches: &ArgMatches,
-        wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
-    ) -> Result<Box<dyn Signer>, Box<dyn std::error::Error>> {
-        signer_from_path(matches, &self.path, &self.arg_name, wallet_manager)
-    }
-}
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 pub const DEFAULT_RPC_TIMEOUT_SECONDS: &str = "30";
