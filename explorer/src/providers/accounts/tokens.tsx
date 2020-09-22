@@ -1,11 +1,11 @@
 import React from "react";
-import * as Sentry from "@sentry/react";
 import { Connection, PublicKey } from "@solana/web3.js";
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
 import { TokenAccountInfo } from "validators/accounts/token";
 import { useCluster, Cluster } from "../cluster";
 import { coerce } from "superstruct";
+import { reportError } from "utils/sentry";
 
 export type TokenInfoWithPubkey = {
   info: TokenAccountInfo;
@@ -75,7 +75,7 @@ async function fetchAccountTokens(
     status = FetchStatus.Fetched;
   } catch (error) {
     if (cluster !== Cluster.Custom) {
-      Sentry.captureException(error, { tags: { url } });
+      reportError(error, { url });
     }
     status = FetchStatus.FetchFailed;
   }

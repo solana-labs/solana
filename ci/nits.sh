@@ -26,6 +26,7 @@ declare print_free_tree=(
   ':runtime/src/**.rs'
   ':sdk/bpf/rust/rust-utils/**.rs'
   ':sdk/**.rs'
+  ':^sdk/src/program_option.rs'
   ':^sdk/src/program_stubs.rs'
   ':programs/**.rs'
   ':^**bin**.rs'

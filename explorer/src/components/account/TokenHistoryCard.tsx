@@ -17,6 +17,7 @@ import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { Signature } from "components/common/Signature";
 import { Address } from "components/common/Address";
+import { Slot } from "components/common/Slot";
 import { useTransactionDetails } from "providers/transactions";
 import { useFetchTransactionDetails } from "providers/transactions/details";
 import { coerce } from "superstruct";
@@ -25,6 +26,7 @@ import {
   TokenInstructionType,
   IX_TITLES,
 } from "components/instruction/token/types";
+import { reportError } from "utils/sentry";
 
 export function TokenHistoryCard({ pubkey }: { pubkey: PublicKey }) {
   const address = pubkey.toBase58();
@@ -36,6 +38,12 @@ export function TokenHistoryCard({ pubkey }: { pubkey: PublicKey }) {
 
   const tokens = ownedTokens.data?.tokens;
   if (tokens === undefined || tokens.length === 0) return null;
+
+  if (tokens.length > 25) {
+    return (
+      <ErrorCard text="Token transaction history is not available for accounts with over 25 token accounts" />
+    );
+  }
 
   return <TokenHistoryTable tokens={tokens} />;
 }
@@ -188,6 +196,21 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
   );
 }
 
+function instructionTypeName(
+  ix: ParsedInstruction,
+  tx: ConfirmedSignatureInfo
+): string {
+  try {
+    const parsed = coerce(ix.parsed, ParsedInfo);
+    const { type: rawType } = parsed;
+    const type = coerce(rawType, TokenInstructionType);
+    return IX_TITLES[type];
+  } catch (err) {
+    reportError(err, { signature: tx.signature });
+    return "Unknown";
+  }
+}
+
 function TokenTransactionRow({
   mint,
   tx,
@@ -213,10 +236,7 @@ function TokenTransactionRow({
       return (
         <>
           {tokenInstructions.map((ix, index) => {
-            const parsed = coerce(ix.parsed, ParsedInfo);
-            const { type: rawType } = parsed;
-            const type = coerce(rawType, TokenInstructionType);
-            const typeName = IX_TITLES[type];
+            const typeName = instructionTypeName(ix, tx);
 
             let statusText;
             let statusClass;
@@ -230,8 +250,8 @@ function TokenTransactionRow({
 
             return (
               <tr key={index}>
-                <td className="w-1 text-monospace">
-                  {tx.slot.toLocaleString("en-US")}
+                <td className="w-1">
+                  <Slot slot={tx.slot} />
                 </td>
 
                 <td>
@@ -269,7 +289,9 @@ function TokenTransactionRow({
 
   return (
     <tr key={tx.signature}>
-      <td className="w-1 text-monospace">{tx.slot.toLocaleString("en-US")}</td>
+      <td className="w-1">
+        <Slot slot={tx.slot} />
+      </td>
 
       <td>
         <span className={`badge badge-soft-${statusClass}`}>{statusText}</span>

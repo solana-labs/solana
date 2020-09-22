@@ -6,8 +6,9 @@ use crate::{
     cluster_info::{ClusterInfo, Node},
     cluster_info_vote_listener::VoteTracker,
     completed_data_sets_service::CompletedDataSetsService,
+    consensus::{reconcile_blockstore_roots_with_tower, Tower, TowerError},
     contact_info::ContactInfo,
-    gossip_service::{discover_cluster, GossipService},
+    gossip_service::GossipService,
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     poh_service::PohService,
     rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
@@ -31,7 +32,6 @@ use solana_ledger::{
     blockstore::{Blockstore, BlockstoreSignals, CompletedSlotsReceiver, PurgeType},
     blockstore_db::BlockstoreRecoveryMode,
     blockstore_processor::{self, TransactionStatusSender},
-    create_new_tmp_ledger,
     leader_schedule::FixedSchedule,
     leader_schedule_cache::LeaderScheduleCache,
 };
@@ -66,7 +66,7 @@ use std::{
     time::Duration,
 };
 
-pub const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
+const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 
 #[derive(Clone, Debug)]
 pub struct ValidatorConfig {
@@ -95,6 +95,9 @@ pub struct ValidatorConfig {
     pub accounts_hash_interval_slots: u64,
     pub max_genesis_archive_unpacked_size: u64,
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
+    pub poh_verify: bool, // Perform PoH verification during blockstore processing at boo
+    pub cuda: bool,
+    pub require_tower: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -125,6 +128,9 @@ impl Default for ValidatorConfig {
             accounts_hash_interval_slots: std::u64::MAX,
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             wal_recovery_mode: None,
+            poh_verify: true,
+            cuda: false,
+            require_tower: false,
         }
     }
 }
@@ -175,18 +181,16 @@ pub struct Validator {
 }
 
 impl Validator {
-    #[allow(clippy::cognitive_complexity)]
     pub fn new(
         mut node: Node,
-        keypair: &Arc<Keypair>,
+        identity_keypair: &Arc<Keypair>,
         ledger_path: &Path,
         vote_account: &Pubkey,
         mut authorized_voter_keypairs: Vec<Arc<Keypair>>,
-        entrypoint_info_option: Option<&ContactInfo>,
-        poh_verify: bool,
+        cluster_entrypoint: Option<&ContactInfo>,
         config: &ValidatorConfig,
     ) -> Self {
-        let id = keypair.pubkey();
+        let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
 
         warn!("identity: {}", id);
@@ -202,7 +206,7 @@ impl Validator {
         }
         report_target_features();
 
-        info!("entrypoint: {:?}", entrypoint_info_option);
+        info!("entrypoint: {:?}", cluster_entrypoint);
 
         if solana_perf::perf_libs::api().is_some() {
             info!("Initializing sigverify, this could take a while...");
@@ -211,6 +215,14 @@ impl Validator {
         }
         sigverify::init();
         info!("Done.");
+
+        if !ledger_path.is_dir() {
+            error!(
+                "ledger directory does not exist or is not accessible: {:?}",
+                ledger_path
+            );
+            process::exit(1);
+        }
 
         if let Some(shred_version) = config.expected_shred_version {
             if let Some(wait_for_supermajority_slot) = config.wait_for_supermajority {
@@ -253,7 +265,15 @@ impl Validator {
                 cache_block_time_sender,
                 cache_block_time_service,
             },
-        ) = new_banks_from_ledger(config, ledger_path, poh_verify, &exit);
+            tower,
+        ) = new_banks_from_ledger(
+            &id,
+            vote_account,
+            config,
+            ledger_path,
+            config.poh_verify,
+            &exit,
+        );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let bank = bank_forks.working_bank();
@@ -285,7 +305,10 @@ impl Validator {
             }
         }
 
-        let cluster_info = Arc::new(ClusterInfo::new(node.info.clone(), keypair.clone()));
+        let cluster_info = Arc::new(ClusterInfo::new(
+            node.info.clone(),
+            identity_keypair.clone(),
+        ));
         let mut block_commitment_cache = BlockCommitmentCache::default();
         block_commitment_cache.initialize_slots(bank.slot());
         let block_commitment_cache = Arc::new(RwLock::new(block_commitment_cache));
@@ -411,8 +434,8 @@ impl Validator {
 
         // Insert the entrypoint info, should only be None if this node
         // is the bootstrap validator
-        if let Some(entrypoint_info) = entrypoint_info_option {
-            cluster_info.set_entrypoint(entrypoint_info.clone());
+        if let Some(cluster_entrypoint) = cluster_entrypoint {
+            cluster_info.set_entrypoint(cluster_entrypoint.clone());
         }
 
         let (snapshot_packager_service, snapshot_package_sender) =
@@ -475,6 +498,7 @@ impl Validator {
             ledger_signal_receiver,
             &subscriptions,
             &poh_recorder,
+            tower,
             &leader_schedule_cache,
             &exit,
             completed_slots_receiver,
@@ -613,8 +637,81 @@ impl Validator {
     }
 }
 
+fn active_vote_account_exists_in_bank(bank: &Arc<Bank>, vote_account: &Pubkey) -> bool {
+    if let Some(account) = &bank.get_account(vote_account) {
+        if let Some(vote_state) = VoteState::from(&account) {
+            return !vote_state.votes.is_empty();
+        }
+    }
+    false
+}
+
+fn post_process_restored_tower(
+    restored_tower: crate::consensus::Result<Tower>,
+    validator_identity: &Pubkey,
+    vote_account: &Pubkey,
+    config: &ValidatorConfig,
+    ledger_path: &Path,
+    bank_forks: &BankForks,
+) -> Tower {
+    restored_tower
+        .and_then(|tower| {
+            let root_bank = bank_forks.root_bank();
+            let slot_history = root_bank.get_slot_history();
+            tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history)
+        })
+        .unwrap_or_else(|err| {
+            let voting_has_been_active =
+                active_vote_account_exists_in_bank(&bank_forks.working_bank(), &vote_account);
+            let saved_tower_is_missing = if let TowerError::IOError(io_err) = &err {
+                io_err.kind() == std::io::ErrorKind::NotFound
+            } else {
+                false
+            };
+            if !saved_tower_is_missing {
+                datapoint_error!(
+                    "tower_error",
+                    (
+                        "error",
+                        format!("Unable to restore tower: {}", err),
+                        String
+                    ),
+                );
+            }
+            if config.require_tower && voting_has_been_active {
+                error!("Requested mandatory tower restore failed: {}", err);
+                error!(
+                    "And there is an existing vote_account containing actual votes. \
+                       Aborting due to possible conflicting duplicate votes"
+                );
+                process::exit(1);
+            }
+            if saved_tower_is_missing && !voting_has_been_active {
+                // Currently, don't protect against spoofed snapshots with no tower at all
+                info!(
+                    "Ignoring expected failed tower restore because this is the initial \
+                      validator start with the vote account..."
+                );
+            } else {
+                error!(
+                    "Rebuilding a new tower from the latest vote account due to failed tower restore: {}",
+                    err
+                );
+            }
+
+            Tower::new_from_bankforks(
+                &bank_forks,
+                &ledger_path,
+                &validator_identity,
+                &vote_account,
+            )
+        })
+}
+
 #[allow(clippy::type_complexity)]
 fn new_banks_from_ledger(
+    validator_identity: &Pubkey,
+    vote_account: &Pubkey,
     config: &ValidatorConfig,
     ledger_path: &Path,
     poh_verify: bool,
@@ -628,6 +725,7 @@ fn new_banks_from_ledger(
     LeaderScheduleCache,
     Option<(Slot, Hash)>,
     TransactionHistoryServices,
+    Tower,
 ) {
     info!("loading ledger from {:?}...", ledger_path);
     let genesis_config = open_genesis_config(ledger_path, config.max_genesis_archive_unpacked_size);
@@ -658,6 +756,14 @@ fn new_banks_from_ledger(
     } = Blockstore::open_with_signal(ledger_path, config.wal_recovery_mode.clone())
         .expect("Failed to open ledger database");
     blockstore.set_no_compaction(config.no_rocksdb_compaction);
+
+    let restored_tower = Tower::restore(ledger_path, &validator_identity);
+    if let Ok(tower) = &restored_tower {
+        reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap_or_else(|err| {
+            error!("Failed to reconcile blockstore with tower: {:?}", err);
+            std::process::exit(1);
+        });
+    }
 
     let process_options = blockstore_processor::ProcessOptions {
         poh_verify,
@@ -690,6 +796,17 @@ fn new_banks_from_ledger(
         process::exit(1);
     });
 
+    let tower = post_process_restored_tower(
+        restored_tower,
+        &validator_identity,
+        &vote_account,
+        &config,
+        &ledger_path,
+        &bank_forks,
+    );
+
+    info!("Tower state: {:?}", tower);
+
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
 
     bank_forks.set_snapshot_config(config.snapshot_config.clone());
@@ -704,6 +821,7 @@ fn new_banks_from_ledger(
         leader_schedule_cache,
         snapshot_hash,
         transaction_history_services,
+        tower,
     )
 }
 
@@ -855,97 +973,6 @@ fn wait_for_supermajority(
     false
 }
 
-pub struct TestValidator {
-    pub server: Validator,
-    pub leader_data: ContactInfo,
-    pub alice: Keypair,
-    pub ledger_path: PathBuf,
-    pub genesis_hash: Hash,
-    pub vote_pubkey: Pubkey,
-}
-
-pub struct TestValidatorOptions {
-    pub fees: u64,
-    pub bootstrap_validator_lamports: u64,
-    pub mint_lamports: u64,
-}
-
-impl Default for TestValidatorOptions {
-    fn default() -> Self {
-        use solana_ledger::genesis_utils::BOOTSTRAP_VALIDATOR_LAMPORTS;
-        TestValidatorOptions {
-            fees: 0,
-            bootstrap_validator_lamports: BOOTSTRAP_VALIDATOR_LAMPORTS,
-            mint_lamports: 1_000_000,
-        }
-    }
-}
-
-impl TestValidator {
-    pub fn run() -> Self {
-        Self::run_with_options(TestValidatorOptions::default())
-    }
-
-    pub fn run_with_options(options: TestValidatorOptions) -> Self {
-        use solana_ledger::genesis_utils::{
-            create_genesis_config_with_leader_ex, GenesisConfigInfo,
-        };
-        use solana_sdk::fee_calculator::FeeRateGovernor;
-
-        let TestValidatorOptions {
-            fees,
-            bootstrap_validator_lamports,
-            mint_lamports,
-        } = options;
-        let node_keypair = Arc::new(Keypair::new());
-        let node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
-        let contact_info = node.info.clone();
-
-        let GenesisConfigInfo {
-            mut genesis_config,
-            mint_keypair,
-            voting_keypair,
-        } = create_genesis_config_with_leader_ex(
-            mint_lamports,
-            &contact_info.id,
-            &Keypair::new(),
-            &Pubkey::new_rand(),
-            42,
-            bootstrap_validator_lamports,
-        );
-        genesis_config.rent.lamports_per_byte_year = 1;
-        genesis_config.rent.exemption_threshold = 1.0;
-        genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
-
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
-
-        let config = ValidatorConfig {
-            rpc_addrs: Some((node.info.rpc, node.info.rpc_pubsub, node.info.rpc_banks)),
-            ..ValidatorConfig::default()
-        };
-        let vote_pubkey = voting_keypair.pubkey();
-        let node = Validator::new(
-            node,
-            &node_keypair,
-            &ledger_path,
-            &voting_keypair.pubkey(),
-            vec![Arc::new(voting_keypair)],
-            None,
-            true,
-            &config,
-        );
-        discover_cluster(&contact_info.gossip, 1).expect("Node startup failed");
-        TestValidator {
-            server: node,
-            leader_data: contact_info,
-            alice: mint_keypair,
-            ledger_path,
-            genesis_hash: blockhash,
-            vote_pubkey,
-        }
-    }
-}
-
 fn report_target_features() {
     warn!(
         "CUDA is {}abled",
@@ -1068,7 +1095,7 @@ fn cleanup_accounts_path(account_path: &std::path::Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_ledger::genesis_utils::create_genesis_config_with_leader;
+    use solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader};
     use std::fs::remove_dir_all;
 
     #[test]
@@ -1100,7 +1127,6 @@ mod tests {
             &voting_keypair.pubkey(),
             vec![voting_keypair.clone()],
             Some(&leader_node.info),
-            true,
             &config,
         );
         validator.close().unwrap();
@@ -1175,7 +1201,6 @@ mod tests {
                     &vote_account_keypair.pubkey(),
                     vec![Arc::new(vote_account_keypair)],
                     Some(&leader_node.info),
-                    true,
                     &config,
                 )
             })

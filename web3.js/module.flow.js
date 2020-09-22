@@ -178,6 +178,12 @@ declare module '@solana/web3.js' {
     space: number,
   };
 
+  declare export type StakeActivationData = {
+    state: 'active' | 'inactive' | 'activating' | 'deactivating',
+    active: number,
+    inactive: number,
+  };
+
   declare export type ParsedMessageAccount = {
     pubkey: PublicKey,
     signer: boolean,
@@ -328,6 +334,11 @@ declare module '@solana/web3.js' {
     ): Promise<
       RpcResponseAndContext<AccountInfo<Buffer | ParsedAccountData> | null>,
     >;
+    getStakeActivation(
+      publicKey: PublicKey,
+      commitment?: Commitment,
+      epoch?: number,
+    ): Promise<StakeActivationData>;
     getProgramAccounts(
       programId: PublicKey,
       commitment: ?Commitment,

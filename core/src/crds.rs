@@ -24,22 +24,24 @@
 //! A value is updated to a new version if the labels match, and the value
 //! wallclock is later, or the value hash is greater.
 
-use crate::crds_gossip_pull::CrdsFilter;
+use crate::crds_shards::CrdsShards;
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use bincode::serialize;
-use indexmap::map::IndexMap;
+use indexmap::map::{Entry, IndexMap};
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
 use std::collections::HashMap;
+use std::ops::Index;
+
+const CRDS_SHARDS_BITS: u32 = 8;
 
 #[derive(Clone)]
 pub struct Crds {
     /// Stores the map of labels and values
     pub table: IndexMap<CrdsValueLabel, VersionedCrdsValue>,
     pub num_inserts: usize,
-
-    pub masks: IndexMap<CrdsValueLabel, u64>,
+    pub shards: CrdsShards,
 }
 
 #[derive(PartialEq, Debug)]
@@ -89,7 +91,7 @@ impl Default for Crds {
         Crds {
             table: IndexMap::new(),
             num_inserts: 0,
-            masks: IndexMap::new(),
+            shards: CrdsShards::new(CRDS_SHARDS_BITS),
         }
     }
 }
@@ -123,23 +125,28 @@ impl Crds {
         new_value: VersionedCrdsValue,
     ) -> Result<Option<VersionedCrdsValue>, CrdsError> {
         let label = new_value.value.label();
-        let wallclock = new_value.value.wallclock();
-        let do_insert = self
-            .table
-            .get(&label)
-            .map(|current| new_value > *current)
-            .unwrap_or(true);
-        if do_insert {
-            self.masks.insert(
-                label.clone(),
-                CrdsFilter::hash_as_u64(&new_value.value_hash),
-            );
-            let old = self.table.insert(label, new_value);
-            self.num_inserts += 1;
-            Ok(old)
-        } else {
-            trace!("INSERT FAILED data: {} new.wallclock: {}", label, wallclock,);
-            Err(CrdsError::InsertFailed)
+        match self.table.entry(label) {
+            Entry::Vacant(entry) => {
+                assert!(self.shards.insert(entry.index(), &new_value));
+                entry.insert(new_value);
+                self.num_inserts += 1;
+                Ok(None)
+            }
+            Entry::Occupied(mut entry) if *entry.get() < new_value => {
+                let index = entry.index();
+                assert!(self.shards.remove(index, entry.get()));
+                assert!(self.shards.insert(index, &new_value));
+                self.num_inserts += 1;
+                Ok(Some(entry.insert(new_value)))
+            }
+            _ => {
+                trace!(
+                    "INSERT FAILED data: {} new.wallclock: {}",
+                    new_value.value.label(),
+                    new_value.value.wallclock(),
+                );
+                Err(CrdsError::InsertFailed)
+            }
         }
     }
     pub fn insert(
@@ -200,8 +207,16 @@ impl Crds {
     }
 
     pub fn remove(&mut self, key: &CrdsValueLabel) {
-        self.table.swap_remove(key);
-        self.masks.swap_remove(key);
+        if let Some((index, _, value)) = self.table.swap_remove_full(key) {
+            assert!(self.shards.remove(index, &value));
+            // The previously last element in the table is now moved to the
+            // 'index' position. Shards need to be updated accordingly.
+            if index < self.table.len() {
+                let value = self.table.index(index);
+                assert!(self.shards.remove(self.table.len(), value));
+                assert!(self.shards.insert(index, value));
+            }
+        }
     }
 }
 
@@ -210,6 +225,7 @@ mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
     use crate::crds_value::CrdsData;
+    use rand::{thread_rng, Rng};
 
     #[test]
     fn test_insert() {
@@ -327,6 +343,45 @@ mod test {
         set.insert(val.pubkey(), 2);
         assert!(crds.find_old_labels(2, &set).is_empty());
         assert_eq!(crds.find_old_labels(3, &set), vec![val.label()]);
+    }
+
+    #[test]
+    fn test_crds_shards() {
+        fn check_crds_shards(crds: &Crds) {
+            crds.shards
+                .check(&crds.table.values().cloned().collect::<Vec<_>>());
+        }
+
+        let mut crds = Crds::default();
+        let pubkeys: Vec<_> = std::iter::repeat_with(Pubkey::new_rand).take(256).collect();
+        let mut rng = thread_rng();
+        let mut num_inserts = 0;
+        for _ in 0..4096 {
+            let pubkey = pubkeys[rng.gen_range(0, pubkeys.len())];
+            let value = VersionedCrdsValue::new(
+                rng.gen(), // local_timestamp
+                CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
+                    &pubkey,
+                    rng.gen(), // now
+                ))),
+            );
+            if crds.insert_versioned(value).is_ok() {
+                check_crds_shards(&crds);
+                num_inserts += 1;
+            }
+        }
+        assert_eq!(num_inserts, crds.num_inserts);
+        assert!(num_inserts > 700);
+        assert!(crds.table.len() > 200);
+        assert!(num_inserts > crds.table.len());
+        check_crds_shards(&crds);
+        // Remove values one by one and assert that shards stay valid.
+        while !crds.table.is_empty() {
+            let index = rng.gen_range(0, crds.table.len());
+            let key = crds.table.get_index(index).unwrap().0.clone();
+            crds.remove(&key);
+            check_crds_shards(&crds);
+        }
     }
 
     #[test]

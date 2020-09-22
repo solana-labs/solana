@@ -1823,6 +1823,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-instruction-introspection"
+version = "1.4.0"
+dependencies = [
+ "solana-sdk",
+]
+
+[[package]]
 name = "solana-bpf-rust-invoke"
 version = "1.4.0"
 dependencies = [

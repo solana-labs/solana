@@ -219,6 +219,7 @@ impl ReplayStage {
         cluster_info: Arc<ClusterInfo>,
         ledger_signal_receiver: Receiver<bool>,
         poh_recorder: Arc<Mutex<PohRecorder>>,
+        mut tower: Tower,
         vote_tracker: Arc<VoteTracker>,
         cluster_slots: Arc<ClusterSlots>,
         retransmit_slots_sender: RetransmitSlotsSender,
@@ -255,53 +256,16 @@ impl ReplayStage {
                 let mut all_pubkeys = PubkeyReferences::default();
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
-                let mut progress = ProgressMap::default();
-                let mut frozen_banks: Vec<_> = bank_forks
-                    .read()
-                    .unwrap()
-                    .frozen_banks()
-                    .values()
-                    .cloned()
-                    .collect();
-
-                frozen_banks.sort_by_key(|bank| bank.slot());
-
-                // Initialize progress map with any root banks
-                for bank in &frozen_banks {
-                    let prev_leader_slot = progress.get_bank_prev_leader_slot(bank);
-                    progress.insert(
-                        bank.slot(),
-                        ForkProgress::new_from_bank(
-                            bank,
-                            &my_pubkey,
-                            &vote_account,
-                            prev_leader_slot,
-                            0,
-                            0,
-                        ),
-                    );
-                }
-                let root_bank = bank_forks.read().unwrap().root_bank().clone();
-                let root = root_bank.slot();
-                let unlock_heaviest_subtree_fork_choice_slot =
-                    Self::get_unlock_heaviest_subtree_fork_choice(root_bank.cluster_type());
-                let mut heaviest_subtree_fork_choice =
-                    HeaviestSubtreeForkChoice::new_from_frozen_banks(root, &frozen_banks);
+                let (
+                    mut progress,
+                    mut heaviest_subtree_fork_choice,
+                    unlock_heaviest_subtree_fork_choice_slot,
+                ) = Self::initialize_progress_and_fork_choice_with_locked_bank_forks(
+                    &bank_forks,
+                    &my_pubkey,
+                    &vote_account,
+                );
                 let mut bank_weight_fork_choice = BankWeightForkChoice::default();
-                let heaviest_bank = if root > unlock_heaviest_subtree_fork_choice_slot {
-                    bank_forks
-                        .read()
-                        .unwrap()
-                        .get(heaviest_subtree_fork_choice.best_overall_slot())
-                        .expect(
-                            "The best overall slot must be one of `frozen_banks` which all
-                    exist in bank_forks",
-                        )
-                        .clone()
-                } else {
-                    Tower::find_heaviest_bank(&bank_forks, &my_pubkey).unwrap_or(root_bank)
-                };
-                let mut tower = Tower::new(&my_pubkey, &vote_account, root, &heaviest_bank);
                 let mut current_leader = None;
                 let mut last_reset = Hash::default();
                 let mut partition_exists = false;
@@ -650,6 +614,65 @@ impl ReplayStage {
                 .get(&heaviest_slot)
                 .map(|ancestors| ancestors.contains(&last_voted_slot))
                 .unwrap_or(true)
+    }
+
+    fn initialize_progress_and_fork_choice_with_locked_bank_forks(
+        bank_forks: &RwLock<BankForks>,
+        my_pubkey: &Pubkey,
+        vote_account: &Pubkey,
+    ) -> (ProgressMap, HeaviestSubtreeForkChoice, Slot) {
+        let (root_bank, frozen_banks) = {
+            let bank_forks = bank_forks.read().unwrap();
+            (
+                bank_forks.root_bank().clone(),
+                bank_forks.frozen_banks().values().cloned().collect(),
+            )
+        };
+
+        Self::initialize_progress_and_fork_choice(
+            &root_bank,
+            frozen_banks,
+            &my_pubkey,
+            &vote_account,
+        )
+    }
+
+    pub(crate) fn initialize_progress_and_fork_choice(
+        root_bank: &Arc<Bank>,
+        mut frozen_banks: Vec<Arc<Bank>>,
+        my_pubkey: &Pubkey,
+        vote_account: &Pubkey,
+    ) -> (ProgressMap, HeaviestSubtreeForkChoice, Slot) {
+        let mut progress = ProgressMap::default();
+
+        frozen_banks.sort_by_key(|bank| bank.slot());
+
+        // Initialize progress map with any root banks
+        for bank in &frozen_banks {
+            let prev_leader_slot = progress.get_bank_prev_leader_slot(bank);
+            progress.insert(
+                bank.slot(),
+                ForkProgress::new_from_bank(
+                    bank,
+                    &my_pubkey,
+                    &vote_account,
+                    prev_leader_slot,
+                    0,
+                    0,
+                ),
+            );
+        }
+        let root = root_bank.slot();
+        let unlock_heaviest_subtree_fork_choice_slot =
+            Self::get_unlock_heaviest_subtree_fork_choice(root_bank.cluster_type());
+        let heaviest_subtree_fork_choice =
+            HeaviestSubtreeForkChoice::new_from_frozen_banks(root, &frozen_banks);
+
+        (
+            progress,
+            heaviest_subtree_fork_choice,
+            unlock_heaviest_subtree_fork_choice_slot,
+        )
     }
 
     fn report_memory(
@@ -1015,7 +1038,15 @@ impl ReplayStage {
         }
         trace!("handle votable bank {}", bank.slot());
         let (vote, tower_index) = tower.new_vote_from_bank(bank, vote_account_pubkey);
-        if let Some(new_root) = tower.record_bank_vote(vote) {
+        let new_root = tower.record_bank_vote(vote);
+        let last_vote = tower.last_vote_and_timestamp();
+
+        if let Err(err) = tower.save(&cluster_info.keypair) {
+            error!("Unable to save tower: {:?}", err);
+            std::process::exit(1);
+        }
+
+        if let Some(new_root) = new_root {
             // get the root bank before squash
             let root_bank = bank_forks
                 .read()
@@ -1075,7 +1106,7 @@ impl ReplayStage {
             bank,
             vote_account_pubkey,
             authorized_voter_keypairs,
-            tower.last_vote_and_timestamp(),
+            last_vote,
             tower_index,
             switch_fork_decision,
         );

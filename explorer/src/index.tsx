@@ -12,10 +12,12 @@ import { AccountsProvider } from "./providers/accounts";
 import { StatsProvider } from "providers/stats";
 import { MintsProvider } from "providers/mints";
 
-Sentry.init({
-  dsn:
-    "https://5efdc15b4828434fbe949b5daed472be@o434108.ingest.sentry.io/5390542",
-});
+if (process.env.NODE_ENV === "production") {
+  Sentry.init({
+    dsn:
+      "https://5efdc15b4828434fbe949b5daed472be@o434108.ingest.sentry.io/5390542",
+  });
+}
 
 ReactDOM.render(
   <Router>

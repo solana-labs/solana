@@ -63,7 +63,7 @@ impl SlotHistory {
     }
 
     pub fn check(&self, slot: Slot) -> Check {
-        if slot >= self.next_slot {
+        if slot > self.newest() {
             Check::Future
         } else if slot < self.oldest() {
             Check::TooOld
@@ -76,6 +76,10 @@ impl SlotHistory {
 
     pub fn oldest(&self) -> Slot {
         self.next_slot.saturating_sub(MAX_ENTRIES)
+    }
+
+    pub fn newest(&self) -> Slot {
+        self.next_slot - 1
     }
 }
 

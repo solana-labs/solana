@@ -32,6 +32,8 @@ pub mod native_token;
 pub mod nonce;
 pub mod packet;
 pub mod poh_config;
+pub mod program_option;
+pub mod program_pack;
 pub mod program_utils;
 pub mod pubkey;
 pub mod rent;
@@ -81,6 +83,7 @@ pub mod log;
 pub mod program;
 pub mod program_error;
 pub mod program_stubs;
+pub mod serialize_utils;
 
 // Modules not usable by on-chain programs
 #[cfg(not(feature = "program"))]
