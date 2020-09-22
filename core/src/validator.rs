@@ -163,11 +163,7 @@ pub struct Validator {
     rpc_service: Option<(JsonRpcService, PubSubService, RpcBanksService)>,
     transaction_status_service: Option<TransactionStatusService>,
     rewards_recorder_service: Option<RewardsRecorderService>,
-<<<<<<< HEAD
-=======
-    cache_block_time_service: Option<CacheBlockTimeService>,
     sample_performance_service: Option<SamplePerformanceService>,
->>>>>>> 65a6bfad0... Add blockstore column to store performance sampling data (#12251)
     gossip_service: GossipService,
     serve_repair_service: ServeRepairService,
     completed_data_sets_service: CompletedDataSetsService,
@@ -551,11 +547,7 @@ impl Validator {
             rpc_service,
             transaction_status_service,
             rewards_recorder_service,
-<<<<<<< HEAD
-=======
-            cache_block_time_service,
             sample_performance_service,
->>>>>>> 65a6bfad0... Add blockstore column to store performance sampling data (#12251)
             snapshot_packager_service,
             completed_data_sets_service,
             tpu,
@@ -620,17 +612,10 @@ impl Validator {
             rewards_recorder_service.join()?;
         }
 
-<<<<<<< HEAD
-=======
-        if let Some(cache_block_time_service) = self.cache_block_time_service {
-            cache_block_time_service.join()?;
-        }
-
         if let Some(sample_performance_service) = self.sample_performance_service {
             sample_performance_service.join()?;
         }
 
->>>>>>> 65a6bfad0... Add blockstore column to store performance sampling data (#12251)
         if let Some(s) = self.snapshot_packager_service {
             s.join()?;
         }
