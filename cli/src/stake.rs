@@ -1,12 +1,12 @@
 use crate::{
     checks::{check_account_for_fee_with_commitment, check_unique_pubkeys},
     cli::{
-        generate_unique_signers, log_instruction_custom_error, return_signers, CliCommand,
-        CliCommandInfo, CliConfig, CliError, ProcessResult, SignerIndex,
+        generate_unique_signers, log_instruction_custom_error, CliCommand, CliCommandInfo,
+        CliConfig, CliError, ProcessResult, SignerIndex,
     },
     cli_output::{CliStakeHistory, CliStakeHistoryEntry, CliStakeState, CliStakeType},
     nonce::check_nonce_account,
-    offline::blockhash_query::BlockhashQuery,
+    offline::{blockhash_query::BlockhashQuery, return_signers},
     spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
 };
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
