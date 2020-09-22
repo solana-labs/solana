@@ -19,6 +19,7 @@ use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_budget_program::budget_instruction::{self, BudgetError};
 use solana_clap_utils::{
 <<<<<<< HEAD
+<<<<<<< HEAD
     commitment::{commitment_arg_with_default, COMMITMENT_ARG},
     input_parsers::*,
     input_validators::*,
@@ -33,6 +34,16 @@ use solana_clap_utils::{
 =======
     keypair::signer_from_path, nonce::*, offline::*, ArgConstant,
 >>>>>>> 6cf74d116... Move CLI offline args to clap-utils
+=======
+    self,
+    commitment::commitment_arg_with_default,
+    fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
+    input_parsers::*,
+    input_validators::*,
+    keypair::signer_from_path,
+    nonce::*,
+    offline::*,
+>>>>>>> 89cab4701... Move CLI fee payer arg into clap-utils
 };
 use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
@@ -130,6 +141,7 @@ pub(crate) fn generate_unique_signers(
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
+<<<<<<< HEAD
 pub const FEE_PAYER_ARG: ArgConstant<'static> = ArgConstant {
     name: "fee_payer",
     long: "fee-payer",
@@ -168,6 +180,8 @@ pub struct PayCommand {
 
 =======
 >>>>>>> 3fb842863... Move CLI nonce args to clap-utils
+=======
+>>>>>>> 89cab4701... Move CLI fee payer arg into clap-utils
 #[derive(Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum CliCommand {
