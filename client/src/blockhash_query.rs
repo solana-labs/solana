@@ -1,3 +1,4 @@
+<<<<<<< HEAD:cli/src/offline/blockhash_query.rs
 use super::*;
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -7,16 +8,25 @@ use super::*;
 use solana_clap_utils::nonce::*;
 >>>>>>> 3fb842863... Move CLI nonce args to clap-utils
 =======
+=======
+use crate::{nonce_utils, rpc_client::RpcClient};
+>>>>>>> ba353c2b1... Move CLI blockhash_query module into client crate:client/src/blockhash_query.rs
 use clap::ArgMatches;
 use solana_clap_utils::{
     input_parsers::{pubkey_of, value_of},
     nonce::*,
     offline::*,
 };
+<<<<<<< HEAD:cli/src/offline/blockhash_query.rs
 >>>>>>> 6cf74d116... Move CLI offline args to clap-utils
 use solana_client::nonce_utils;
 use solana_sdk::commitment_config::CommitmentConfig;
 >>>>>>> a6533c3a2... Move CLI nonce account helpers in client
+=======
+use solana_sdk::{
+    commitment_config::CommitmentConfig, fee_calculator::FeeCalculator, hash::Hash, pubkey::Pubkey,
+};
+>>>>>>> ba353c2b1... Move CLI blockhash_query module into client crate:client/src/blockhash_query.rs
 
 #[derive(Debug, PartialEq)]
 pub enum Source {
@@ -134,17 +144,15 @@ impl Default for BlockhashQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::offline::blockhash_query::{self, BlockhashQuery};
-    use clap::App;
-    use serde_json::{self, json, Value};
-    use solana_account_decoder::{UiAccount, UiAccountEncoding};
-    use solana_client::{
+    use crate::{
+        blockhash_query,
         rpc_request::RpcRequest,
         rpc_response::{Response, RpcFeeCalculator, RpcResponseContext},
     };
-    use solana_sdk::{
-        account::Account, fee_calculator::FeeCalculator, hash::hash, nonce, system_program,
-    };
+    use clap::App;
+    use serde_json::{self, json, Value};
+    use solana_account_decoder::{UiAccount, UiAccountEncoding};
+    use solana_sdk::{account::Account, hash::hash, nonce, system_program};
     use std::collections::HashMap;
 
     #[test]

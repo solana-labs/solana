@@ -1,11 +1,18 @@
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
-    offline::{blockhash_query::BlockhashQuery, *},
     spend_utils::SpendAmount,
     test_utils::check_balance,
 };
+<<<<<<< HEAD
 use solana_client::rpc_client::RpcClient;
 use solana_core::validator::TestValidator;
+=======
+use solana_client::{
+    blockhash_query::{self, BlockhashQuery},
+    rpc_client::RpcClient,
+};
+use solana_core::test_validator::TestValidator;
+>>>>>>> ba353c2b1... Move CLI blockhash_query module into client crate
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     account_utils::StateMut,
