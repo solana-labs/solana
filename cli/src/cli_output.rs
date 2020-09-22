@@ -300,7 +300,7 @@ impl fmt::Display for CliValidators {
 
             writeln!(
                 f,
-                "{} {:<44}  {:<44}  {:>3}%   {:>8}  {:>10}  {:>10}  {:>17}  {}",
+                "{} {:<44}  {:<44}  {:>3}%   {:>8}  {:>10}  {:>10}  {:>8}  {}",
                 if delinquent {
                     WARNING.to_string()
                 } else {
@@ -359,7 +359,7 @@ impl fmt::Display for CliValidators {
         for (version, info) in self.stake_by_version.iter() {
             writeln!(
                 f,
-                "{:<16} - {:3} current validators ({:>5.2}%){}",
+                "{:<8} - {:3} current validators ({:>5.2}%){}",
                 version,
                 info.current_validators,
                 100. * info.current_active_stake as f64 / self.total_active_stake as f64,
@@ -380,7 +380,7 @@ impl fmt::Display for CliValidators {
             f,
             "{}",
             style(format!(
-                "  {:<44}  {:<38}  {}  {}  {}  {:>10}  {:^17}  {}",
+                "  {:<44}  {:<38}  {}  {}  {}  {:>10}  {:^8}  {}",
                 "Identity Pubkey",
                 "Vote Account Pubkey",
                 "Commission",
