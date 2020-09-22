@@ -62,9 +62,13 @@ pub fn get_programs(operating_mode: OperatingMode, epoch: Epoch) -> Option<Vec<(
             }
         }
         OperatingMode::Stable => {
-            if epoch == std::u64::MAX - 1 {
-                // The epoch of std::u64::MAX - 1 is a placeholder and is expected to be reduced in
-                // a future hard fork.
+            if epoch == 0 {
+                // In fact, mainnet-beta enabled bpf_loader at epoch 34, but pretend we're enabling it
+                // at epoch 0 only for the sake of the upgrade test because it must warp and warping
+                // is broken in many ways around scheduled program activations in this branch (v1.2).
+                // This way, we can avoid backporting the large and conflict-laden pr:
+                // https://github.com/solana-labs/solana/pull/11736
+                // For actual live cluster, this condition never evaluates to true because of using == not >= or the like
                 Some(vec![solana_bpf_loader_program!()])
             } else if epoch == std::u64::MAX {
                 // The epoch of std::u64::MAX is a placeholder and is expected to be reduced in a
@@ -159,7 +163,7 @@ mod tests {
     #[test]
     fn test_softlaunch_programs() {
         assert_eq!(get_programs(OperatingMode::Stable, 1), None);
-        assert!(get_programs(OperatingMode::Stable, std::u64::MAX - 1).is_some());
+        assert!(get_programs(OperatingMode::Stable, 0).is_some());
         assert!(get_programs(OperatingMode::Stable, std::u64::MAX).is_some());
     }
 }
