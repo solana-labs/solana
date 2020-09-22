@@ -1,12 +1,13 @@
-use super::*;
+use crate::{nonce_utils, rpc_client::RpcClient};
 use clap::ArgMatches;
 use solana_clap_utils::{
     input_parsers::{pubkey_of, value_of},
     nonce::*,
     offline::*,
 };
-use solana_client::nonce_utils;
-use solana_sdk::commitment_config::CommitmentConfig;
+use solana_sdk::{
+    commitment_config::CommitmentConfig, fee_calculator::FeeCalculator, hash::Hash, pubkey::Pubkey,
+};
 
 #[derive(Debug, PartialEq)]
 pub enum Source {
@@ -115,17 +116,15 @@ impl Default for BlockhashQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::offline::blockhash_query::{self, BlockhashQuery};
-    use clap::App;
-    use serde_json::{self, json, Value};
-    use solana_account_decoder::{UiAccount, UiAccountEncoding};
-    use solana_client::{
+    use crate::{
+        blockhash_query,
         rpc_request::RpcRequest,
         rpc_response::{Response, RpcFeeCalculator, RpcResponseContext},
     };
-    use solana_sdk::{
-        account::Account, fee_calculator::FeeCalculator, hash::hash, nonce, system_program,
-    };
+    use clap::App;
+    use serde_json::{self, json, Value};
+    use solana_account_decoder::{UiAccount, UiAccountEncoding};
+    use solana_sdk::{account::Account, hash::hash, nonce, system_program};
     use std::collections::HashMap;
 
     #[test]
