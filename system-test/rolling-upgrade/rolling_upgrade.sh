@@ -34,21 +34,20 @@ check_sanity() {
 (
   declare -g sw_version_args
   get_net_launch_software_version_launch_args "$UPGRADE_CHANNEL" "upgrade-release" sw_version_args
-  if [[ $UPGRADE_CHANNEL == "local" ]]; then
-    if [[ -n $LOCAL_BUILD_BRANCH || -n $LOCAL_BUILD_REVISION ]]; then
-      unset LOCAL_BUILD_BRANCH
-      unset LOCAL_BUILD_REVISION
-    fi
-    if [[ -n $UPGRADE_LOCAL_BUILD_BRANCH ]]; then
-      export LOCAL_BUILD_BRANCH="$UPGRADE_LOCAL_BUILD_BRANCH"
-    fi
-    if [[ -n $UPGRADE_LOCAL_BUILD_REVISION ]]; then
-      export LOCAL_BUILD_REVISION="$UPGRADE_LOCAL_BUILD_REVISION"
-    fi
-  else
-    if [[ -n $LOCAL_BUILD_BRANCH || -n $LOCAL_BUILD_REVISION ]]; then
+
+  # Override LOCAL_BUILD_* to build custom version to upgrade
+  if [[ -n $LOCAL_BUILD_BRANCH || -n $LOCAL_BUILD_REVISION ]]; then
+    unset LOCAL_BUILD_BRANCH
+    unset LOCAL_BUILD_REVISION
+    if [[ $UPGRADE_CHANNEL != "local" ]]; then
       echo "Conflicting options: $UPGRADE_CHANNEL, $LOCAL_BUILD_BRANCH, $LOCAL_BUILD_REVISION"
     fi
+  fi
+  if [[ -n $UPGRADE_LOCAL_BUILD_BRANCH ]]; then
+    export LOCAL_BUILD_BRANCH="$UPGRADE_LOCAL_BUILD_BRANCH"
+  fi
+  if [[ -n $UPGRADE_LOCAL_BUILD_REVISION ]]; then
+    export LOCAL_BUILD_REVISION="$UPGRADE_LOCAL_BUILD_REVISION"
   fi
 
   # shellcheck disable=2086 # $sw_version_args holds two args. Don't quote!
