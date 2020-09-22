@@ -67,7 +67,7 @@ pub fn check_account_for_multiple_fees_with_commitment(
 pub fn calculate_fee(fee_calculator: &FeeCalculator, messages: &[&Message]) -> u64 {
     messages
         .iter()
-        .map(|message| fee_calculator.calculate_fee(message, None))
+        .map(|message| fee_calculator.calculate_fee(message))
         .sum()
 }
 

@@ -1,18 +1,21 @@
 use crate::{
     bank::{Builtin, Entrypoint},
-    system_instruction_processor,
+    feature_set, system_instruction_processor,
 };
 use solana_sdk::{
     clock::{Epoch, GENESIS_EPOCH},
     genesis_config::ClusterType,
+    pubkey::Pubkey,
     system_program,
 };
 
 use log::*;
 
-/// The entire set of available builtin programs that should be active at the given cluster_type
-pub fn get_builtins(cluster_type: ClusterType) -> Vec<(Builtin, Epoch)> {
-    trace!("get_builtins: {:?}", cluster_type);
+/// Builtin programs that should be active for the given cluster_type
+///
+/// Old style.  Use `get_feature_builtins()` instead
+pub fn get_cluster_builtins(cluster_type: ClusterType) -> Vec<(Builtin, Epoch)> {
+    trace!("get_cluster_builtins: {:?}", cluster_type);
     let mut builtins = vec![];
 
     builtins.extend(
@@ -46,8 +49,8 @@ pub fn get_builtins(cluster_type: ClusterType) -> Vec<(Builtin, Epoch)> {
     // repurpose Testnet for test_get_builtins because the Development is overloaded...
     #[cfg(test)]
     if cluster_type == ClusterType::Testnet {
+        use solana_sdk::account::KeyedAccount;
         use solana_sdk::instruction::InstructionError;
-        use solana_sdk::{account::KeyedAccount, pubkey::Pubkey};
         use std::str::FromStr;
         fn mock_ix_processor(
             _pubkey: &Pubkey,
@@ -57,35 +60,33 @@ pub fn get_builtins(cluster_type: ClusterType) -> Vec<(Builtin, Epoch)> {
             Err(InstructionError::Custom(42))
         }
         let program_id = Pubkey::from_str("7saCc6X5a2syoYANA5oUUnPZLcLMfKoSjiDhFU5fbpoK").unwrap();
-        builtins.extend(vec![(
+        builtins.push((
             Builtin::new("mock", program_id, Entrypoint::Program(mock_ix_processor)),
             2,
-        )]);
+        ));
     }
 
-    let secp256k1_builtin = Builtin::new(
-        "secp256k1_program",
-        solana_sdk::secp256k1_program::id(),
-        Entrypoint::Program(solana_secp256k1_program::process_instruction),
-    );
-    let secp_epoch = solana_sdk::secp256k1::is_enabled_epoch(cluster_type);
-    builtins.push((secp256k1_builtin, secp_epoch));
-
     builtins
+}
+
+/// Builtin programs that are activated dynamically by feature
+pub fn get_feature_builtins() -> Vec<(Builtin, Pubkey)> {
+    vec![(
+        Builtin::new(
+            "secp256k1_program",
+            solana_sdk::secp256k1_program::id(),
+            Entrypoint::Program(solana_secp256k1_program::process_instruction),
+        ),
+        feature_set::secp256k1_program_enabled::id(),
+    )]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::bank::Bank;
-    use solana_sdk::{
-        genesis_config::{create_genesis_config, ClusterType},
-        pubkey::Pubkey,
-    };
-
-    use std::collections::HashSet;
-    use std::str::FromStr;
-    use std::sync::Arc;
+    use solana_sdk::genesis_config::create_genesis_config;
+    use std::{collections::HashSet, str::FromStr, sync::Arc};
 
     fn do_test_uniqueness(builtins: Vec<(Builtin, Epoch)>) {
         let mut unique_ids = HashSet::new();
@@ -101,10 +102,10 @@ mod tests {
 
     #[test]
     fn test_uniqueness() {
-        do_test_uniqueness(get_builtins(ClusterType::Development));
-        do_test_uniqueness(get_builtins(ClusterType::Devnet));
-        do_test_uniqueness(get_builtins(ClusterType::Testnet));
-        do_test_uniqueness(get_builtins(ClusterType::MainnetBeta));
+        do_test_uniqueness(get_cluster_builtins(ClusterType::Development));
+        do_test_uniqueness(get_cluster_builtins(ClusterType::Devnet));
+        do_test_uniqueness(get_cluster_builtins(ClusterType::Testnet));
+        do_test_uniqueness(get_cluster_builtins(ClusterType::MainnetBeta));
     }
 
     #[test]

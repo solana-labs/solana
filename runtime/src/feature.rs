@@ -17,14 +17,17 @@ solana_sdk::declare_id!("Feature111111111111111111111111111111111111");
 /// 2. When the next epoch is entered the runtime will check for new activation requests and
 ///    active them.  When this occurs, the activation slot is recorded in the feature account
 ///
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Feature {
     pub activated_at: Option<Slot>,
 }
 
 impl Feature {
     pub fn size_of() -> usize {
-        bincode::serialized_size(&Self::default()).unwrap() as usize
+        bincode::serialized_size(&Self {
+            activated_at: Some(Slot::MAX),
+        })
+        .unwrap() as usize
     }
     pub fn from_account(account: &Account) -> Option<Self> {
         if account.owner != id() {

@@ -1,6 +1,7 @@
 use crate::{
     instruction_recorder::InstructionRecorder, log_collector::LogCollector,
     native_loader::NativeLoader, rent_collector::RentCollector,
+    feature_set::{self, FeatureSet},
 };
 use log::*;
 use serde::{Deserialize, Serialize};
@@ -11,7 +12,6 @@ use solana_sdk::{
         ComputeBudget, ComputeMeter, ErasedProcessInstruction, ErasedProcessInstructionWithContext,
         Executor, InvokeContext, Logger, ProcessInstruction, ProcessInstructionWithContext,
     },
-    genesis_config::ClusterType,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     message::Message,
     native_loader,
@@ -678,12 +678,11 @@ impl MessageProcessor {
         executors: Rc<RefCell<Executors>>,
         instruction_recorder: Option<InstructionRecorder>,
         instruction_index: usize,
-        cluster_type: ClusterType,
-        epoch: Epoch,
+        feature_set: &FeatureSet,
     ) -> Result<(), InstructionError> {
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
-        if solana_sdk::sysvar::instructions::is_enabled(epoch, cluster_type) {
+        if feature_set.active(&feature_set::instructions_sysvar_enabled::id()) {
             for (i, key) in message.account_keys.iter().enumerate() {
                 if solana_sdk::sysvar::instructions::check_id(key) {
                     let mut mut_account_ref = accounts[i].borrow_mut();
@@ -735,8 +734,7 @@ impl MessageProcessor {
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
         instruction_recorders: Option<&[InstructionRecorder]>,
-        cluster_type: ClusterType,
-        epoch: Epoch,
+        feature_set: &FeatureSet,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let instruction_recorder = instruction_recorders
@@ -752,8 +750,7 @@ impl MessageProcessor {
                 executors.clone(),
                 instruction_recorder,
                 instruction_index,
-                cluster_type,
-                epoch,
+                feature_set,
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
@@ -1348,8 +1345,7 @@ mod tests {
             None,
             executors.clone(),
             None,
-            ClusterType::Development,
-            0,
+            &FeatureSet::default(),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 100);
@@ -1372,8 +1368,7 @@ mod tests {
             None,
             executors.clone(),
             None,
-            ClusterType::Development,
-            0,
+            &FeatureSet::default(),
         );
         assert_eq!(
             result,
@@ -1400,8 +1395,7 @@ mod tests {
             None,
             executors,
             None,
-            ClusterType::Development,
-            0,
+            &FeatureSet::default(),
         );
         assert_eq!(
             result,
@@ -1511,8 +1505,7 @@ mod tests {
             None,
             executors.clone(),
             None,
-            ClusterType::Development,
-            0,
+            &FeatureSet::default(),
         );
         assert_eq!(
             result,
@@ -1539,8 +1532,7 @@ mod tests {
             None,
             executors.clone(),
             None,
-            ClusterType::Development,
-            0,
+            &FeatureSet::default(),
         );
         assert_eq!(result, Ok(()));
 
@@ -1564,8 +1556,7 @@ mod tests {
             None,
             executors,
             None,
-            ClusterType::Development,
-            0,
+            &FeatureSet::default(),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);

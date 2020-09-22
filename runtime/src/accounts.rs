@@ -6,6 +6,7 @@ use crate::{
     append_vec::StoredAccount,
     bank::{HashAgeKind, TransactionProcessResult},
     blockhash_queue::BlockhashQueue,
+    feature_set::{self, FeatureSet},
     nonce_utils,
     rent_collector::RentCollector,
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
@@ -17,7 +18,7 @@ use rayon::slice::ParallelSliceMut;
 use solana_sdk::{
     account::Account,
     clock::{Epoch, Slot},
-    fee_calculator::FeeCalculator,
+    fee_calculator::{FeeCalculator, FeeConfig},
     genesis_config::ClusterType,
     hash::Hash,
     message::Message,
@@ -72,11 +73,10 @@ pub enum AccountAddressFilter {
 impl Accounts {
     pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
         Self {
-            slot: 0,
-            epoch: 0,
             accounts_db: Arc::new(AccountsDB::new(paths, cluster_type)),
             account_locks: Mutex::new(HashSet::new()),
             readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
+            ..Self::default()
         }
     }
 
@@ -94,11 +94,10 @@ impl Accounts {
 
     pub(crate) fn new_empty(accounts_db: AccountsDB) -> Self {
         Self {
-            slot: 0,
-            epoch: 0,
             accounts_db: Arc::new(accounts_db),
             account_locks: Mutex::new(HashSet::new()),
             readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
+            ..Self::default()
         }
     }
 
@@ -133,6 +132,7 @@ impl Accounts {
         fee: u64,
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
+        feature_set: &FeatureSet,
     ) -> Result<(TransactionAccounts, TransactionRent)> {
         // Copy all the accounts
         let message = tx.message();
@@ -150,10 +150,8 @@ impl Accounts {
                         payer_index = Some(i);
                     }
 
-                    if solana_sdk::sysvar::instructions::is_enabled(
-                        self.epoch,
-                        self.accounts_db.cluster_type.unwrap(),
-                    ) && solana_sdk::sysvar::instructions::check_id(key)
+                    if solana_sdk::sysvar::instructions::check_id(key)
+                        && feature_set.active(&feature_set::instructions_sysvar_enabled::id())
                     {
                         if message.is_writable(i) {
                             return Err(TransactionError::InvalidAccountIndex);
@@ -300,11 +298,17 @@ impl Accounts {
         hash_queue: &BlockhashQueue,
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
+        feature_set: &FeatureSet,
     ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
         //PERF: hold the lock to scan for the references, but not to clone the accounts
         //TODO: two locks usually leads to deadlocks, should this be one structure?
         let accounts_index = self.accounts_db.accounts_index.read().unwrap();
         let storage = self.accounts_db.storage.read().unwrap();
+
+        let fee_config = FeeConfig {
+            secp256k1_program_enabled: feature_set
+                .active(&feature_set::secp256k1_program_enabled::id()),
+        };
         OrderedIterator::new(txs, txs_iteration_order)
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
@@ -318,13 +322,7 @@ impl Accounts {
                             .cloned(),
                     };
                     let fee = if let Some(fee_calculator) = fee_calculator {
-                        fee_calculator.calculate_fee(
-                            tx.message(),
-                            solana_sdk::secp256k1::get_fee_config(
-                                self.accounts_db.cluster_type.unwrap(),
-                                self.epoch,
-                            ),
-                        )
+                        fee_calculator.calculate_fee_with_config(tx.message(), &fee_config)
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), hash_age_kind);
                     };
@@ -337,6 +335,7 @@ impl Accounts {
                         fee,
                         error_counters,
                         rent_collector,
+                        feature_set,
                     );
                     let (accounts, rents) = match load_res {
                         Ok((a, r)) => (a, r),
@@ -888,6 +887,7 @@ mod tests {
             &hash_queue,
             error_counters,
             rent_collector,
+            &FeatureSet::default(),
         )
     }
 
@@ -1024,7 +1024,7 @@ mod tests {
         );
 
         let fee_calculator = FeeCalculator::new(10);
-        assert_eq!(fee_calculator.calculate_fee(tx.message(), None), 10);
+        assert_eq!(fee_calculator.calculate_fee(tx.message()), 10);
 
         let loaded_accounts =
             load_accounts_with_fee(tx, &accounts, &fee_calculator, &mut error_counters);
@@ -1832,6 +1832,7 @@ mod tests {
             &hash_queue,
             &mut error_counters,
             &rent_collector,
+            &FeatureSet::default(),
         )
     }
 

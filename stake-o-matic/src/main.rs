@@ -430,7 +430,7 @@ fn transact(
     info!("{} transactions to send", transactions.len());
 
     let required_fee = transactions.iter().fold(0, |fee, (transaction, _)| {
-        fee + fee_calculator.calculate_fee(&transaction.message, None)
+        fee + fee_calculator.calculate_fee(&transaction.message)
     });
     info!("Required fee: {} SOL", lamports_to_sol(required_fee));
     if required_fee > authorized_staker_balance {
