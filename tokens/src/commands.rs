@@ -266,9 +266,7 @@ async fn distribute_allocations(
             }
         };
     }
-    if args.dry_run {
-        check_payer_balances(num_signatures, allocations, client, args).await?;
-    }
+    check_payer_balances(num_signatures, allocations, client, args).await?;
     Ok(())
 }
 
