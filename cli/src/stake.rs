@@ -1,8 +1,8 @@
 use crate::{
     checks::{check_account_for_fee_with_commitment, check_unique_pubkeys},
     cli::{
-        fee_payer_arg, generate_unique_signers, log_instruction_custom_error, return_signers,
-        CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult, SignerIndex, FEE_PAYER_ARG,
+        generate_unique_signers, log_instruction_custom_error, return_signers, CliCommand,
+        CliCommandInfo, CliConfig, CliError, ProcessResult, SignerIndex,
     },
     cli_output::{CliStakeHistory, CliStakeHistoryEntry, CliStakeState, CliStakeType},
     nonce::check_nonce_account,
@@ -10,7 +10,14 @@ use crate::{
     spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
 };
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
-use solana_clap_utils::{input_parsers::*, input_validators::*, nonce::*, offline::*, ArgConstant};
+use solana_clap_utils::{
+    fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
+    input_parsers::*,
+    input_validators::*,
+    nonce::*,
+    offline::*,
+    ArgConstant,
+};
 use solana_client::{
     nonce_utils, rpc_client::RpcClient, rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
 };
