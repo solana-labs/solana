@@ -166,7 +166,7 @@ fn distribution_instructions(
     }
 
     let stake_args = args.stake_args.as_ref().unwrap();
-    let sol_for_fees = stake_args.sol_for_fees;
+    let unlocked_sol = stake_args.unlocked_sol;
     let sender_pubkey = args.sender_keypair.pubkey();
     let stake_authority = stake_args.stake_authority.pubkey();
     let withdraw_authority = stake_args.withdraw_authority.pubkey();
@@ -174,7 +174,7 @@ fn distribution_instructions(
     let mut instructions = stake_instruction::split(
         &stake_args.stake_account_address,
         &stake_authority,
-        sol_to_lamports(allocation.amount - sol_for_fees),
+        sol_to_lamports(allocation.amount - unlocked_sol),
         &new_stake_account_address,
     );
 
@@ -218,7 +218,7 @@ fn distribution_instructions(
     instructions.push(system_instruction::transfer(
         &sender_pubkey,
         &recipient,
-        sol_to_lamports(sol_for_fees),
+        sol_to_lamports(unlocked_sol),
     ));
 
     instructions
@@ -479,14 +479,14 @@ async fn check_payer_balances(
         .checked_mul(num_signatures as u64)
         .unwrap();
 
-    let (distribution_source, sol_for_fees_source) = if let Some(stake_args) = &args.stake_args {
-        let total_sol_for_fees = allocations.len() as f64 * stake_args.sol_for_fees;
-        undistributed_tokens -= total_sol_for_fees;
+    let (distribution_source, unlocked_sol_source) = if let Some(stake_args) = &args.stake_args {
+        let total_unlocked_sol = allocations.len() as f64 * stake_args.unlocked_sol;
+        undistributed_tokens -= total_unlocked_sol;
         (
             stake_args.stake_account_address,
             Some((
                 args.sender_keypair.pubkey(),
-                sol_to_lamports(total_sol_for_fees),
+                sol_to_lamports(total_unlocked_sol),
             )),
         )
     } else {
@@ -494,7 +494,7 @@ async fn check_payer_balances(
     };
     let allocation_lamports = sol_to_lamports(undistributed_tokens);
 
-    if let Some((sol_for_fees_source, total_sol_for_fees)) = sol_for_fees_source {
+    if let Some((unlocked_sol_source, total_unlocked_sol)) = unlocked_sol_source {
         let staker_balance = client.get_balance(distribution_source).await?;
         if staker_balance < allocation_lamports {
             return Err(Error::InsufficientFunds(
@@ -502,12 +502,12 @@ async fn check_payer_balances(
                 lamports_to_sol(allocation_lamports),
             ));
         }
-        if args.fee_payer.pubkey() == sol_for_fees_source {
+        if args.fee_payer.pubkey() == unlocked_sol_source {
             let balance = client.get_balance(args.fee_payer.pubkey()).await?;
-            if balance < fees + total_sol_for_fees {
+            if balance < fees + total_unlocked_sol {
                 return Err(Error::InsufficientFunds(
                     vec![FundingSource::SystemAccount, FundingSource::FeePayer].into(),
-                    lamports_to_sol(fees + total_sol_for_fees),
+                    lamports_to_sol(fees + total_unlocked_sol),
                 ));
             }
         } else {
@@ -518,11 +518,11 @@ async fn check_payer_balances(
                     lamports_to_sol(fees),
                 ));
             }
-            let sol_for_fees_balance = client.get_balance(sol_for_fees_source).await?;
-            if sol_for_fees_balance < total_sol_for_fees {
+            let unlocked_sol_balance = client.get_balance(unlocked_sol_source).await?;
+            if unlocked_sol_balance < total_unlocked_sol {
                 return Err(Error::InsufficientFunds(
                     vec![FundingSource::SystemAccount].into(),
-                    lamports_to_sol(total_sol_for_fees),
+                    lamports_to_sol(total_unlocked_sol),
                 ));
             }
         }
@@ -769,7 +769,7 @@ pub async fn test_process_distribute_stake_with_client(
         stake_authority: Box::new(stake_authority),
         withdraw_authority: Box::new(withdraw_authority),
         lockup_authority: None,
-        sol_for_fees: 1.0,
+        unlocked_sol: 1.0,
     };
     let args = DistributeTokensArgs {
         fee_payer: Box::new(fee_payer),
@@ -1039,7 +1039,7 @@ mod tests {
             stake_authority: Box::new(Keypair::new()),
             withdraw_authority: Box::new(Keypair::new()),
             lockup_authority: Some(Box::new(lockup_authority)),
-            sol_for_fees: 1.0,
+            unlocked_sol: 1.0,
         };
         let args = DistributeTokensArgs {
             fee_payer: Box::new(Keypair::new()),
@@ -1281,7 +1281,7 @@ mod tests {
 
     async fn initialize_stake_account(
         stake_account_amount: f64,
-        sol_for_fees: f64,
+        unlocked_sol: f64,
         sender_keypair: &Keypair,
         banks_client: &mut BanksClient,
     ) -> StakeArgs {
@@ -1316,7 +1316,7 @@ mod tests {
             stake_authority: Box::new(stake_authority),
             withdraw_authority: Box::new(withdraw_authority),
             lockup_authority: None,
-            sol_for_fees,
+            unlocked_sol,
         }
     }
 
@@ -1336,10 +1336,10 @@ mod tests {
             write_keypair_file(&sender_keypair, &sender_keypair_file).unwrap();
 
             let allocation_amount = 1000.0;
-            let sol_for_fees = 1.0;
+            let unlocked_sol = 1.0;
             let stake_args = initialize_stake_account(
                 allocation_amount,
-                sol_for_fees,
+                unlocked_sol,
                 &sender_keypair,
                 &mut banks_client,
             )
@@ -1370,7 +1370,7 @@ mod tests {
             if let Error::InsufficientFunds(sources, amount) = err_result {
                 assert_eq!(sources, vec![FundingSource::StakeAccount].into());
                 assert!(
-                    (amount - (expensive_allocation_amount - sol_for_fees)).abs() < f64::EPSILON
+                    (amount - (expensive_allocation_amount - unlocked_sol)).abs() < f64::EPSILON
                 );
             } else {
                 panic!("check_payer_balances should have errored");
@@ -1396,7 +1396,7 @@ mod tests {
                     sources,
                     vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
                 );
-                assert!((amount - (sol_for_fees + fees_in_sol)).abs() < f64::EPSILON);
+                assert!((amount - (unlocked_sol + fees_in_sol)).abs() < f64::EPSILON);
             } else {
                 panic!("check_payer_balances should have errored");
             }
@@ -1412,7 +1412,7 @@ mod tests {
             .unwrap();
             let transaction = transfer(
                 &mut banks_client,
-                sol_to_lamports(sol_for_fees),
+                sol_to_lamports(unlocked_sol),
                 &sender_keypair,
                 &partially_funded_payer.pubkey(),
             )
@@ -1437,7 +1437,7 @@ mod tests {
                     sources,
                     vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
                 );
-                assert!((amount - (sol_for_fees + fees_in_sol)).abs() < f64::EPSILON);
+                assert!((amount - (unlocked_sol + fees_in_sol)).abs() < f64::EPSILON);
             } else {
                 panic!("check_payer_balances should have errored");
             }
@@ -1460,10 +1460,10 @@ mod tests {
             write_keypair_file(&sender_keypair, &sender_keypair_file).unwrap();
 
             let allocation_amount = 1000.0;
-            let sol_for_fees = 1.0;
+            let unlocked_sol = 1.0;
             let stake_args = initialize_stake_account(
                 allocation_amount,
-                sol_for_fees,
+                unlocked_sol,
                 &sender_keypair,
                 &mut banks_client,
             )
@@ -1474,7 +1474,7 @@ mod tests {
             write_keypair_file(&funded_payer, &funded_payer_keypair_file).unwrap();
             let transaction = transfer(
                 &mut banks_client,
-                sol_to_lamports(sol_for_fees),
+                sol_to_lamports(unlocked_sol),
                 &sender_keypair,
                 &funded_payer.pubkey(),
             )
@@ -1511,7 +1511,7 @@ mod tests {
                 .unwrap_err();
             if let Error::InsufficientFunds(sources, amount) = err_result {
                 assert_eq!(sources, vec![FundingSource::SystemAccount].into());
-                assert!((amount - sol_for_fees).abs() < f64::EPSILON);
+                assert!((amount - unlocked_sol).abs() < f64::EPSILON);
             } else {
                 panic!("check_payer_balances should have errored");
             }
