@@ -2,16 +2,23 @@ use crate::{
     checks::{check_account_for_fee, check_unique_pubkeys},
     cli::{
         log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
-        DefaultSigner, ProcessResult, SignerIndex,
+        ProcessResult,
     },
     cli_output::{CliEpochVotingHistory, CliLockout, CliVoteAccount},
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{
+<<<<<<< HEAD
     commitment::{commitment_arg, COMMITMENT_ARG},
     input_parsers::*,
     input_validators::*,
+=======
+    commitment::commitment_arg,
+    input_parsers::*,
+    input_validators::*,
+    keypair::{DefaultSigner, SignerIndex},
+>>>>>>> 0c58123b4... Move CLI Signer utils into clap-utils
 };
 use solana_client::rpc_client::RpcClient;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;

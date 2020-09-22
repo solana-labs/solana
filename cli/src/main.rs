@@ -2,15 +2,22 @@ use clap::{crate_description, crate_name, AppSettings, Arg, ArgGroup, ArgMatches
 use console::style;
 
 use solana_clap_utils::{
+<<<<<<< HEAD
     input_validators::is_url, keypair::SKIP_SEED_PHRASE_VALIDATION_ARG, DisplayError,
+=======
+    commitment::COMMITMENT_ARG,
+    input_parsers::commitment_of,
+    input_validators::is_url,
+    keypair::{CliSigners, DefaultSigner, SKIP_SEED_PHRASE_VALIDATION_ARG},
+    DisplayError,
+>>>>>>> 0c58123b4... Move CLI Signer utils into clap-utils
 };
 use solana_cli::{
 <<<<<<< HEAD
     cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliSigners},
 =======
     cli::{
-        app, parse_command, process_command, CliCommandInfo, CliConfig, CliSigners, DefaultSigner,
-        DEFAULT_RPC_TIMEOUT_SECONDS,
+        app, parse_command, process_command, CliCommandInfo, CliConfig, DEFAULT_RPC_TIMEOUT_SECONDS,
     },
 >>>>>>> 9a60353fa... CLI: Encapsulate default signer attributes
     cli_output::OutputFormat,

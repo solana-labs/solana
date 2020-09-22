@@ -1,11 +1,12 @@
 use crate::{
-    cli::{CliCommand, CliCommandInfo, CliConfig, CliError, DefaultSigner, ProcessResult},
+    cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
     cli_output::*,
     display::{new_spinner_progress_bar, println_name_value},
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
 use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
+<<<<<<< HEAD
 <<<<<<< HEAD
 use solana_clap_utils::{
     commitment::{commitment_arg, COMMITMENT_ARG},
@@ -16,6 +17,11 @@ use solana_clap_utils::{
 =======
 use solana_clap_utils::{commitment::commitment_arg, input_parsers::*, input_validators::*};
 >>>>>>> 9a60353fa... CLI: Encapsulate default signer attributes
+=======
+use solana_clap_utils::{
+    commitment::commitment_arg, input_parsers::*, input_validators::*, keypair::DefaultSigner,
+};
+>>>>>>> 0c58123b4... Move CLI Signer utils into clap-utils
 use solana_client::{
     pubsub_client::{PubsubClient, SlotInfoMessage},
     rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
