@@ -8,6 +8,11 @@ import {Transaction} from '../src/transaction';
 import {StakeProgram} from '../src/stake-program';
 import {SystemProgram} from '../src/system-program';
 import {Message} from '../src/message';
+import { waitReady } from './../src/index';
+
+beforeAll(async () => {
+  await waitReady();
+});
 
 describe('compileMessage', () => {
   test('accountKeys are ordered', () => {
@@ -174,11 +179,18 @@ test('partialSign', () => {
 });
 
 describe('dedupe', () => {
-  const payer = new Account();
-  const duplicate1 = payer;
-  const duplicate2 = payer;
-  const recentBlockhash = new Account().publicKey.toBase58();
-  const programId = new Account().publicKey;
+  let payer;
+  let duplicate1;
+  let duplicate2;
+  let recentBlockhash;
+  let programId;
+  beforeAll(() => {
+    payer = new Account();
+    duplicate1 = payer;
+    duplicate2 = payer;
+    recentBlockhash = new Account().publicKey.toBase58();
+    programId = new Account().publicKey;
+  });
 
   test('setSigners', () => {
     const transaction = new Transaction({recentBlockhash}).add({

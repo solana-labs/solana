@@ -5,6 +5,11 @@ import {Connection} from '../src';
 import {url} from './url';
 import {mockRpcEnabled} from './__mocks__/node-fetch';
 import {sleep} from '../src/util/sleep';
+import { waitReady } from './../src/index';
+
+beforeAll(async () => {
+  await waitReady();
+});
 
 describe('websocket', () => {
   if (mockRpcEnabled) {

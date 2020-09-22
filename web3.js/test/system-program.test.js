@@ -15,6 +15,11 @@ import {NONCE_ACCOUNT_LENGTH} from '../src/nonce-account';
 import {mockRpcEnabled} from './__mocks__/node-fetch';
 import {sleep} from '../src/util/sleep';
 import {url} from './url';
+import { waitReady } from './../src/index';
+
+beforeAll(async () => {
+  await waitReady();
+});
 
 if (!mockRpcEnabled) {
   // Testing max commitment level takes around 20s to complete

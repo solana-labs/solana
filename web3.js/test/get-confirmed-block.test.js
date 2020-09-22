@@ -2,6 +2,11 @@
 import {Account} from '../src/account';
 import {SystemProgram} from '../src/system-program';
 import {Transaction} from '../src/transaction';
+import { waitReady } from './../src/index';
+
+beforeAll(async () => {
+  await waitReady();
+});
 
 test('verify getConfirmedBlock', () => {
   const account0 = new Account();

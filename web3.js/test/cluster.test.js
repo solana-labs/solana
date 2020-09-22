@@ -1,6 +1,12 @@
 // @flow
 import {clusterApiUrl} from '../src/util/cluster';
 
+import { waitReady } from './../src/index';
+
+beforeAll(async () => {
+  await waitReady();
+});
+
 test('invalid', () => {
   expect(() => {
     // $FlowExpectedError

@@ -10,6 +10,11 @@ import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {mockGetRecentBlockhash} from './mockrpc/get-recent-blockhash';
 import {url} from './url';
 import {mockConfirmTransaction} from './mockrpc/confirm-transaction';
+import { waitReady } from './../src/index';
+
+beforeAll(async () => {
+  await waitReady();
+});
 
 if (!mockRpcEnabled) {
   // The default of 5 seconds is too slow for live testing sometimes

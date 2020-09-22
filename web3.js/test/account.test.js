@@ -1,5 +1,10 @@
 // @flow
 import {Account} from '../src/account';
+import { waitReady } from './../src/index';
+
+beforeAll(async () => {
+  await waitReady();
+});
 
 test('generate new account', () => {
   const account = new Account();

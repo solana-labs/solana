@@ -19,55 +19,23 @@ if (!mockRpcEnabled) {
   jest.setTimeout(120000);
 }
 
-const NUM_RETRIES = 100; /* allow some number of retries */
+import { waitReady } from './../src/index';
 
-test('load BPF C program', async () => {
-  if (mockRpcEnabled) {
-    console.log('non-live test skipped');
-    return;
-  }
-
-  const data = await fs.readFile('test/fixtures/noop-c/noop.so');
-
-  const connection = new Connection(url, 'recent');
-  const {feeCalculator} = await connection.getRecentBlockhash();
-  const fees =
-    feeCalculator.lamportsPerSignature *
-    (BpfLoader.getMinNumSignatures(data.length) + NUM_RETRIES);
-  const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
-    data.length,
-  );
-  const from = await newAccountWithLamports(connection, fees + balanceNeeded);
-
-  const program = new Account();
-  await BpfLoader.load(connection, from, program, data, BPF_LOADER_PROGRAM_ID);
-  const transaction = new Transaction().add({
-    keys: [{pubkey: from.publicKey, isSigner: true, isWritable: true}],
-    programId: program.publicKey,
-  });
-  await sendAndConfirmTransaction(connection, transaction, [from], {
-    commitment: 'single',
-    skipPreflight: true,
-  });
+beforeAll(async () => {
+  await waitReady();
 });
 
-describe('load BPF Rust program', () => {
-  if (mockRpcEnabled) {
-    console.log('non-live test skipped');
-    return;
-  }
+  const NUM_RETRIES = 100; /* allow some number of retries */
 
-  const connection = new Connection(url, 'recent');
+  test('load BPF C program', async () => {
+    if (mockRpcEnabled) {
+      console.log('non-live test skipped');
+      return;
+    }
 
-  let program: Account;
-  let signature: string;
-  let payerAccount: Account;
+    const data = await fs.readFile('test/fixtures/noop-c/noop.so');
 
-  beforeAll(async () => {
-    const data = await fs.readFile(
-      'test/fixtures/noop-rust/solana_bpf_rust_noop.so',
-    );
-
+    const connection = new Connection(url, 'recent');
     const {feeCalculator} = await connection.getRecentBlockhash();
     const fees =
       feeCalculator.lamportsPerSignature *
@@ -75,125 +43,163 @@ describe('load BPF Rust program', () => {
     const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
       data.length,
     );
+    const from = await newAccountWithLamports(connection, fees + balanceNeeded);
 
-    payerAccount = await newAccountWithLamports(
-      connection,
-      fees + balanceNeeded,
-    );
-
-    program = new Account();
-    await BpfLoader.load(
-      connection,
-      payerAccount,
-      program,
-      data,
-      BPF_LOADER_PROGRAM_ID,
-    );
-
+    const program = new Account();
+    await BpfLoader.load(connection, from, program, data, BPF_LOADER_PROGRAM_ID);
     const transaction = new Transaction().add({
-      keys: [
-        {pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
-      ],
+      keys: [{pubkey: from.publicKey, isSigner: true, isWritable: true}],
       programId: program.publicKey,
     });
-
-    signature = await sendAndConfirmTransaction(
-      connection,
-      transaction,
-      [payerAccount],
-      {
-        skipPreflight: true,
-      },
-    );
+    await sendAndConfirmTransaction(connection, transaction, [from], {
+      commitment: 'single',
+      skipPreflight: true,
+    });
   });
 
-  test('get confirmed transaction', async () => {
-    const parsedTx = await connection.getParsedConfirmedTransaction(signature);
-    if (parsedTx === null) {
-      expect(parsedTx).not.toBeNull();
+  describe('load BPF Rust program', () => {
+    if (mockRpcEnabled) {
+      console.log('non-live test skipped');
       return;
     }
-    const {signatures, message} = parsedTx.transaction;
-    expect(signatures[0]).toEqual(signature);
-    const ix = message.instructions[0];
-    if (ix.parsed) {
-      expect('parsed' in ix).toBe(false);
-    } else {
-      expect(ix.programId.equals(program.publicKey)).toBe(true);
-      expect(ix.data).toEqual('');
-    }
-  });
 
-  test('simulate transaction', async () => {
-    const simulatedTransaction = new Transaction().add({
-      keys: [
-        {pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
-      ],
-      programId: program.publicKey,
+    const connection = new Connection(url, 'recent');
+
+    let program: Account;
+    let signature: string;
+    let payerAccount: Account;
+
+    beforeAll(async () => {
+      const data = await fs.readFile(
+        'test/fixtures/noop-rust/solana_bpf_rust_noop.so',
+      );
+
+      const {feeCalculator} = await connection.getRecentBlockhash();
+      const fees =
+        feeCalculator.lamportsPerSignature *
+        (BpfLoader.getMinNumSignatures(data.length) + NUM_RETRIES);
+      const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
+        data.length,
+      );
+
+      payerAccount = await newAccountWithLamports(
+        connection,
+        fees + balanceNeeded,
+      );
+
+      program = new Account();
+      await BpfLoader.load(
+        connection,
+        payerAccount,
+        program,
+        data,
+        BPF_LOADER_PROGRAM_ID,
+      );
+
+      const transaction = new Transaction().add({
+        keys: [
+          {pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
+        ],
+        programId: program.publicKey,
+      });
+
+      signature = await sendAndConfirmTransaction(
+        connection,
+        transaction,
+        [payerAccount],
+        {
+          skipPreflight: true,
+        },
+      );
     });
 
-    const {err, logs} = (
-      await connection.simulateTransaction(simulatedTransaction, [payerAccount])
-    ).value;
-    expect(err).toBeNull();
-
-    if (logs === null) {
-      expect(logs).not.toBeNull();
-      return;
-    }
-
-    expect(logs.length).toBeGreaterThanOrEqual(2);
-    expect(logs[0]).toEqual(`Call BPF program ${program.publicKey.toBase58()}`);
-    expect(logs[logs.length - 1]).toEqual(
-      `BPF program ${program.publicKey.toBase58()} success`,
-    );
-  });
-
-  test('simulate transaction without signature verification', async () => {
-    const simulatedTransaction = new Transaction().add({
-      keys: [
-        {pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
-      ],
-      programId: program.publicKey,
+    test('get confirmed transaction', async () => {
+      const parsedTx = await connection.getParsedConfirmedTransaction(signature);
+      if (parsedTx === null) {
+        expect(parsedTx).not.toBeNull();
+        return;
+      }
+      const {signatures, message} = parsedTx.transaction;
+      expect(signatures[0]).toEqual(signature);
+      const ix = message.instructions[0];
+      if (ix.parsed) {
+        expect('parsed' in ix).toBe(false);
+      } else {
+        expect(ix.programId.equals(program.publicKey)).toBe(true);
+        expect(ix.data).toEqual('');
+      }
     });
 
-    simulatedTransaction.setSigners(payerAccount.publicKey);
-    const {err, logs} = (
-      await connection.simulateTransaction(simulatedTransaction)
-    ).value;
-    expect(err).toBeNull();
+    test('simulate transaction', async () => {
+      const simulatedTransaction = new Transaction().add({
+        keys: [
+          {pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
+        ],
+        programId: program.publicKey,
+      });
 
-    if (logs === null) {
-      expect(logs).not.toBeNull();
-      return;
-    }
+      const {err, logs} = (
+        await connection.simulateTransaction(simulatedTransaction, [payerAccount])
+      ).value;
+      expect(err).toBeNull();
 
-    expect(logs.length).toBeGreaterThanOrEqual(2);
-    expect(logs[0]).toEqual(`Call BPF program ${program.publicKey.toBase58()}`);
-    expect(logs[logs.length - 1]).toEqual(
-      `BPF program ${program.publicKey.toBase58()} success`,
-    );
-  });
+      if (logs === null) {
+        expect(logs).not.toBeNull();
+        return;
+      }
 
-  test('simulate transaction with bad programId', async () => {
-    const simulatedTransaction = new Transaction().add({
-      keys: [
-        {pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
-      ],
-      programId: new Account().publicKey,
+      expect(logs.length).toBeGreaterThanOrEqual(2);
+      expect(logs[0]).toEqual(`Call BPF program ${program.publicKey.toBase58()}`);
+      expect(logs[logs.length - 1]).toEqual(
+        `BPF program ${program.publicKey.toBase58()} success`,
+      );
     });
 
-    simulatedTransaction.setSigners(payerAccount.publicKey);
-    const {err, logs} = (
-      await connection.simulateTransaction(simulatedTransaction)
-    ).value;
-    expect(err).toEqual('ProgramAccountNotFound');
+    test('simulate transaction without signature verification', async () => {
+      const simulatedTransaction = new Transaction().add({
+        keys: [
+          {pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
+        ],
+        programId: program.publicKey,
+      });
 
-    if (logs === null) {
-      expect(logs).not.toBeNull();
-      return;
-    }
+      simulatedTransaction.setSigners(payerAccount.publicKey);
+      const {err, logs} = (
+        await connection.simulateTransaction(simulatedTransaction)
+      ).value;
+      expect(err).toBeNull();
 
-    expect(logs.length).toEqual(0);
+      if (logs === null) {
+        expect(logs).not.toBeNull();
+        return;
+      }
+
+      expect(logs.length).toBeGreaterThanOrEqual(2);
+      expect(logs[0]).toEqual(`Call BPF program ${program.publicKey.toBase58()}`);
+      expect(logs[logs.length - 1]).toEqual(
+        `BPF program ${program.publicKey.toBase58()} success`,
+      );
+    });
+
+    test('simulate transaction with bad programId', async () => {
+      const simulatedTransaction = new Transaction().add({
+        keys: [
+          {pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
+        ],
+        programId: new Account().publicKey,
+      });
+
+      simulatedTransaction.setSigners(payerAccount.publicKey);
+      const {err, logs} = (
+        await connection.simulateTransaction(simulatedTransaction)
+      ).value;
+      expect(err).toEqual('ProgramAccountNotFound');
+
+      if (logs === null) {
+        expect(logs).not.toBeNull();
+        return;
+      }
+
+      expect(logs.length).toEqual(0);
+    });
   });
-});

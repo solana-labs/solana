@@ -21,9 +21,16 @@ import type {TransactionSignature} from '../src/transaction';
 import type {SignatureStatus, TransactionError} from '../src/connection';
 import {mockConfirmTransaction} from './mockrpc/confirm-transaction';
 import {mockRpcSocket} from './__mocks__/rpc-websockets';
+import { SymbolDisplayPartKind } from 'typescript';
+import { waitReady } from './../src/index';
 
 // Testing tokens and blockhash cache each take around 30s to complete
 jest.setTimeout(40000);
+
+beforeAll(async () => {
+
+  await waitReady();
+});
 
 const errorMessage = 'Invalid';
 const errorResponse = {

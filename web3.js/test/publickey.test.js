@@ -2,6 +2,11 @@
 import BN from 'bn.js';
 
 import {PublicKey} from '../src/publickey';
+import { waitReady } from './../src/index';
+
+beforeAll(async () => {
+    await waitReady();
+});
 
 test('invalid', () => {
   expect(() => {

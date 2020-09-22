@@ -16,6 +16,11 @@ import {
 } from '../src';
 import {mockRpcEnabled} from './__mocks__/node-fetch';
 import {url} from './url';
+import { waitReady } from './../src/index';
+
+beforeAll(async () => {
+  await waitReady();
+});
 
 if (!mockRpcEnabled) {
   // Testing max commitment level takes around 20s to complete

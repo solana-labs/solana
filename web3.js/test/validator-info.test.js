@@ -3,6 +3,11 @@ import nacl from 'tweetnacl';
 
 import {PublicKey} from '../src/publickey';
 import {ValidatorInfo} from '../src/validator-info';
+import { waitReady } from './../src/index';
+
+beforeAll(async () => {
+  await waitReady();
+});
 
 test('from config account data', () => {
   const keypair = nacl.sign.keyPair.fromSeed(

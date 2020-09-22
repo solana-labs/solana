@@ -6,6 +6,11 @@ function checkDecodedArray(array: Array<number>, expectedValue: number) {
   expect(decodeLength(array)).toEqual(expectedValue);
   expect(array.length).toEqual(0);
 }
+import { waitReady } from './../src/index';
+
+beforeAll(async () => {
+  await waitReady();
+});
 
 test('shortvec decodeLength', () => {
   let array = [];
