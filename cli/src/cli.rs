@@ -18,8 +18,14 @@ use serde_json::{self, json, Value};
 use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_budget_program::budget_instruction::{self, BudgetError};
 use solana_clap_utils::{
-    self, commitment::commitment_arg_with_default, input_parsers::*, input_validators::*,
-    keypair::signer_from_path, nonce::*, offline::*, ArgConstant,
+    self,
+    commitment::commitment_arg_with_default,
+    fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
+    input_parsers::*,
+    input_validators::*,
+    keypair::signer_from_path,
+    nonce::*,
+    offline::*,
 };
 use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
@@ -120,6 +126,7 @@ pub(crate) fn generate_unique_signers(
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 pub const DEFAULT_RPC_TIMEOUT_SECONDS: &str = "30";
 
+<<<<<<< HEAD
 pub const FEE_PAYER_ARG: ArgConstant<'static> = ArgConstant {
     name: "fee_payer",
     long: "fee-payer",
@@ -158,6 +165,8 @@ pub struct PayCommand {
 
 =======
 >>>>>>> 3fb842863... Move CLI nonce args to clap-utils
+=======
+>>>>>>> 89cab4701... Move CLI fee payer arg into clap-utils
 #[derive(Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum CliCommand {
