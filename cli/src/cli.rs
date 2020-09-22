@@ -96,7 +96,7 @@ use url::Url;
 
 pub type CliSigners = Vec<Box<dyn Signer>>;
 pub type SignerIndex = usize;
-pub(crate) struct CliSignerInfo {
+pub struct CliSignerInfo {
     pub signers: CliSigners,
 }
 
@@ -112,31 +112,45 @@ impl CliSignerInfo {
     }
 }
 
-pub(crate) fn generate_unique_signers(
-    bulk_signers: Vec<Option<Box<dyn Signer>>>,
-    matches: &ArgMatches<'_>,
-    default_signer_path: &str,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
-) -> Result<CliSignerInfo, Box<dyn error::Error>> {
-    let mut unique_signers = vec![];
+pub struct DefaultSigner {
+    pub arg_name: String,
+    pub path: String,
+}
 
-    // Determine if the default signer is needed
-    if bulk_signers.iter().any(|signer| signer.is_none()) {
-        let default_signer =
-            signer_from_path(matches, default_signer_path, "keypair", wallet_manager)?;
-        unique_signers.push(default_signer);
-    }
+impl DefaultSigner {
+    pub fn generate_unique_signers(
+        &self,
+        bulk_signers: Vec<Option<Box<dyn Signer>>>,
+        matches: &ArgMatches<'_>,
+        wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    ) -> Result<CliSignerInfo, Box<dyn error::Error>> {
+        let mut unique_signers = vec![];
 
-    for signer in bulk_signers.into_iter() {
-        if let Some(signer) = signer {
-            if !unique_signers.iter().any(|s| s == &signer) {
-                unique_signers.push(signer);
+        // Determine if the default signer is needed
+        if bulk_signers.iter().any(|signer| signer.is_none()) {
+            let default_signer = self.signer_from_path(matches, wallet_manager)?;
+            unique_signers.push(default_signer);
+        }
+
+        for signer in bulk_signers.into_iter() {
+            if let Some(signer) = signer {
+                if !unique_signers.iter().any(|s| s == &signer) {
+                    unique_signers.push(signer);
+                }
             }
         }
+        Ok(CliSignerInfo {
+            signers: unique_signers,
+        })
     }
-    Ok(CliSignerInfo {
-        signers: unique_signers,
-    })
+
+    pub fn signer_from_path(
+        &self,
+        matches: &ArgMatches,
+        wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    ) -> Result<Box<dyn Signer>, Box<dyn std::error::Error>> {
+        signer_from_path(matches, &self.path, &self.arg_name, wallet_manager)
+    }
 }
 
 const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
@@ -618,7 +632,7 @@ impl Default for CliConfig<'_> {
 
 pub fn parse_command(
     matches: &ArgMatches<'_>,
-    default_signer_path: &str,
+    default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
@@ -633,7 +647,7 @@ pub fn parse_command(
             signers: vec![],
         }),
         ("create-address-with-seed", Some(matches)) => {
-            parse_create_address_with_seed(matches, default_signer_path, wallet_manager)
+            parse_create_address_with_seed(matches, default_signer, wallet_manager)
         }
         ("fees", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::Fees,
@@ -655,7 +669,7 @@ pub fn parse_command(
             command: CliCommand::LeaderSchedule,
             signers: vec![],
         }),
-        ("ping", Some(matches)) => parse_cluster_ping(matches, default_signer_path, wallet_manager),
+        ("ping", Some(matches)) => parse_cluster_ping(matches, default_signer, wallet_manager),
         ("live-slots", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::LiveSlots,
             signers: vec![],
@@ -672,20 +686,19 @@ pub fn parse_command(
         }
         // Nonce Commands
         ("authorize-nonce-account", Some(matches)) => {
-            parse_authorize_nonce_account(matches, default_signer_path, wallet_manager)
+            parse_authorize_nonce_account(matches, default_signer, wallet_manager)
         }
         ("create-nonce-account", Some(matches)) => {
-            parse_nonce_create_account(matches, default_signer_path, wallet_manager)
+            parse_nonce_create_account(matches, default_signer, wallet_manager)
         }
         ("nonce", Some(matches)) => parse_get_nonce(matches, wallet_manager),
-        ("new-nonce", Some(matches)) => {
-            parse_new_nonce(matches, default_signer_path, wallet_manager)
-        }
+        ("new-nonce", Some(matches)) => parse_new_nonce(matches, default_signer, wallet_manager),
         ("nonce-account", Some(matches)) => parse_show_nonce_account(matches, wallet_manager),
         ("withdraw-from-nonce-account", Some(matches)) => {
-            parse_withdraw_from_nonce_account(matches, default_signer_path, wallet_manager)
+            parse_withdraw_from_nonce_account(matches, default_signer, wallet_manager)
         }
         // Program Deployment
+<<<<<<< HEAD
         ("deploy", Some(matches)) => Ok(CliCommandInfo {
             command: CliCommand::Deploy(matches.value_of("program_location").unwrap().to_string()),
             signers: vec![signer_from_path(
@@ -695,76 +708,91 @@ pub fn parse_command(
                 wallet_manager,
             )?],
         }),
+=======
+        ("deploy", Some(matches)) => {
+            let (address_signer, _address) = signer_of(matches, "address_signer", wallet_manager)?;
+            let mut signers = vec![default_signer.signer_from_path(matches, wallet_manager)?];
+            let address = address_signer.map(|signer| {
+                signers.push(signer);
+                1
+            });
+            let use_deprecated_loader = matches.is_present("use_deprecated_loader");
+
+            Ok(CliCommandInfo {
+                command: CliCommand::Deploy {
+                    program_location: matches.value_of("program_location").unwrap().to_string(),
+                    address,
+                    use_deprecated_loader,
+                },
+                signers,
+            })
+        }
+>>>>>>> 9a60353fa... CLI: Encapsulate default signer attributes
         // Stake Commands
         ("create-stake-account", Some(matches)) => {
-            parse_stake_create_account(matches, default_signer_path, wallet_manager)
+            parse_stake_create_account(matches, default_signer, wallet_manager)
         }
         ("delegate-stake", Some(matches)) => {
-            parse_stake_delegate_stake(matches, default_signer_path, wallet_manager)
+            parse_stake_delegate_stake(matches, default_signer, wallet_manager)
         }
         ("withdraw-stake", Some(matches)) => {
-            parse_stake_withdraw_stake(matches, default_signer_path, wallet_manager)
+            parse_stake_withdraw_stake(matches, default_signer, wallet_manager)
         }
         ("deactivate-stake", Some(matches)) => {
-            parse_stake_deactivate_stake(matches, default_signer_path, wallet_manager)
+            parse_stake_deactivate_stake(matches, default_signer, wallet_manager)
         }
         ("split-stake", Some(matches)) => {
-            parse_split_stake(matches, default_signer_path, wallet_manager)
+            parse_split_stake(matches, default_signer, wallet_manager)
         }
         ("merge-stake", Some(matches)) => {
-            parse_merge_stake(matches, default_signer_path, wallet_manager)
+            parse_merge_stake(matches, default_signer, wallet_manager)
         }
         ("stake-authorize", Some(matches)) => {
-            parse_stake_authorize(matches, default_signer_path, wallet_manager)
+            parse_stake_authorize(matches, default_signer, wallet_manager)
         }
         ("stake-set-lockup", Some(matches)) => {
-            parse_stake_set_lockup(matches, default_signer_path, wallet_manager)
+            parse_stake_set_lockup(matches, default_signer, wallet_manager)
         }
         ("stake-account", Some(matches)) => parse_show_stake_account(matches, wallet_manager),
         ("stake-history", Some(matches)) => parse_show_stake_history(matches),
         // Validator Info Commands
         ("validator-info", Some(matches)) => match matches.subcommand() {
             ("publish", Some(matches)) => {
-                parse_validator_info_command(matches, default_signer_path, wallet_manager)
+                parse_validator_info_command(matches, default_signer, wallet_manager)
             }
             ("get", Some(matches)) => parse_get_validator_info_command(matches),
             _ => unreachable!(),
         },
         // Vote Commands
         ("create-vote-account", Some(matches)) => {
-            parse_create_vote_account(matches, default_signer_path, wallet_manager)
+            parse_create_vote_account(matches, default_signer, wallet_manager)
         }
         ("vote-update-validator", Some(matches)) => {
-            parse_vote_update_validator(matches, default_signer_path, wallet_manager)
+            parse_vote_update_validator(matches, default_signer, wallet_manager)
         }
         ("vote-update-commission", Some(matches)) => {
-            parse_vote_update_commission(matches, default_signer_path, wallet_manager)
+            parse_vote_update_commission(matches, default_signer, wallet_manager)
         }
         ("vote-authorize-voter", Some(matches)) => parse_vote_authorize(
             matches,
-            default_signer_path,
+            default_signer,
             wallet_manager,
             VoteAuthorize::Voter,
         ),
         ("vote-authorize-withdrawer", Some(matches)) => parse_vote_authorize(
             matches,
-            default_signer_path,
+            default_signer,
             wallet_manager,
             VoteAuthorize::Withdrawer,
         ),
         ("vote-account", Some(matches)) => parse_vote_get_account_command(matches, wallet_manager),
         ("withdraw-from-vote-account", Some(matches)) => {
-            parse_withdraw_from_vote_account(matches, default_signer_path, wallet_manager)
+            parse_withdraw_from_vote_account(matches, default_signer, wallet_manager)
         }
         // Wallet Commands
         ("address", Some(matches)) => Ok(CliCommandInfo {
             command: CliCommand::Address,
-            signers: vec![signer_from_path(
-                matches,
-                default_signer_path,
-                "keypair",
-                wallet_manager,
-            )?],
+            signers: vec![default_signer.signer_from_path(matches, wallet_manager)?],
         }),
         ("airdrop", Some(matches)) => {
             let faucet_port = matches
@@ -792,12 +820,7 @@ pub fn parse_command(
             let signers = if pubkey.is_some() {
                 vec![]
             } else {
-                vec![signer_from_path(
-                    matches,
-                    default_signer_path,
-                    "keypair",
-                    wallet_manager,
-                )?]
+                vec![default_signer.signer_from_path(matches, wallet_manager)?]
             };
             let lamports = lamports_of_sol(matches, "amount").unwrap();
             Ok(CliCommandInfo {
@@ -816,12 +839,7 @@ pub fn parse_command(
             let signers = if pubkey.is_some() {
                 vec![]
             } else {
-                vec![signer_from_path(
-                    matches,
-                    default_signer_path,
-                    "keypair",
-                    wallet_manager,
-                )?]
+                vec![default_signer.signer_from_path(matches, wallet_manager)?]
             };
             Ok(CliCommandInfo {
                 command: CliCommand::Balance {
@@ -993,12 +1011,8 @@ pub fn parse_command(
                 bulk_signers.push(nonce_authority);
             }
 
-            let signer_info = generate_unique_signers(
-                bulk_signers,
-                matches,
-                default_signer_path,
-                wallet_manager,
-            )?;
+            let signer_info =
+                default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
 
             Ok(CliCommandInfo {
                 command: CliCommand::Transfer {
@@ -1047,19 +1061,14 @@ pub fn get_blockhash_and_fee_calculator(
 
 pub fn parse_create_address_with_seed(
     matches: &ArgMatches<'_>,
-    default_signer_path: &str,
+    default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let from_pubkey = pubkey_of_signer(matches, "from", wallet_manager)?;
     let signers = if from_pubkey.is_some() {
         vec![]
     } else {
-        vec![signer_from_path(
-            matches,
-            default_signer_path,
-            "keypair",
-            wallet_manager,
-        )?]
+        vec![default_signer.signer_from_path(matches, wallet_manager)?]
     };
 
     let program_id = match matches.value_of("program_id").unwrap() {
@@ -2811,13 +2820,19 @@ mod tests {
         let default_keypair_file = make_tmp_path("keypair_file");
         write_keypair_file(&default_keypair, &default_keypair_file).unwrap();
 
-        let signer_info =
-            generate_unique_signers(vec![], &matches, &default_keypair_file, &mut None).unwrap();
+        let default_signer = DefaultSigner {
+            arg_name: "keypair".to_string(),
+            path: default_keypair_file,
+        };
+
+        let signer_info = default_signer
+            .generate_unique_signers(vec![], &matches, &mut None)
+            .unwrap();
         assert_eq!(signer_info.signers.len(), 0);
 
-        let signer_info =
-            generate_unique_signers(vec![None, None], &matches, &default_keypair_file, &mut None)
-                .unwrap();
+        let signer_info = default_signer
+            .generate_unique_signers(vec![None, None], &matches, &mut None)
+            .unwrap();
         assert_eq!(signer_info.signers.len(), 1);
         assert_eq!(signer_info.index_of(None), Some(0));
         assert_eq!(signer_info.index_of(Some(Pubkey::new_rand())), None);
@@ -2827,8 +2842,9 @@ mod tests {
         let keypair0_clone = keypair_from_seed(&[1u8; 32]).unwrap();
         let keypair0_clone_pubkey = keypair0.pubkey();
         let signers = vec![None, Some(keypair0.into()), Some(keypair0_clone.into())];
-        let signer_info =
-            generate_unique_signers(signers, &matches, &default_keypair_file, &mut None).unwrap();
+        let signer_info = default_signer
+            .generate_unique_signers(signers, &matches, &mut None)
+            .unwrap();
         assert_eq!(signer_info.signers.len(), 2);
         assert_eq!(signer_info.index_of(None), Some(0));
         assert_eq!(signer_info.index_of(Some(keypair0_pubkey)), Some(1));
@@ -2838,8 +2854,9 @@ mod tests {
         let keypair0_pubkey = keypair0.pubkey();
         let keypair0_clone = keypair_from_seed(&[1u8; 32]).unwrap();
         let signers = vec![Some(keypair0.into()), Some(keypair0_clone.into())];
-        let signer_info =
-            generate_unique_signers(signers, &matches, &default_keypair_file, &mut None).unwrap();
+        let signer_info = default_signer
+            .generate_unique_signers(signers, &matches, &mut None)
+            .unwrap();
         assert_eq!(signer_info.signers.len(), 1);
         assert_eq!(signer_info.index_of(Some(keypair0_pubkey)), Some(0));
 
@@ -2859,8 +2876,9 @@ mod tests {
             Some(presigner1.into()),
             Some(keypair1.into()),
         ];
-        let signer_info =
-            generate_unique_signers(signers, &matches, &default_keypair_file, &mut None).unwrap();
+        let signer_info = default_signer
+            .generate_unique_signers(signers, &matches, &mut None)
+            .unwrap();
         assert_eq!(signer_info.signers.len(), 2);
         assert_eq!(signer_info.index_of(Some(keypair0_pubkey)), Some(0));
         assert_eq!(signer_info.index_of(Some(keypair1_pubkey)), Some(1));
@@ -2881,13 +2899,21 @@ mod tests {
         let witness1_string = format!("{}", witness1);
         let dt = Utc.ymd(2018, 9, 19).and_hms(17, 30, 59);
 
+        let default_keypair = Keypair::new();
+        let keypair_file = make_tmp_path("keypair_file");
+        write_keypair_file(&default_keypair, &keypair_file).unwrap();
+        let keypair = read_keypair_file(&keypair_file).unwrap();
+        let default_signer = DefaultSigner {
+            path: keypair_file.clone(),
+            arg_name: "".to_string(),
+        };
         // Test Airdrop Subcommand
         let test_airdrop =
             test_commands
                 .clone()
                 .get_matches_from(vec!["test", "airdrop", "50", &pubkey_string]);
         assert_eq!(
-            parse_command(&test_airdrop, "", &mut None).unwrap(),
+            parse_command(&test_airdrop, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Airdrop {
                     faucet_host: None,
@@ -2900,17 +2926,13 @@ mod tests {
         );
 
         // Test Balance Subcommand, incl pubkey and keypair-file inputs
-        let default_keypair = Keypair::new();
-        let keypair_file = make_tmp_path("keypair_file");
-        write_keypair_file(&default_keypair, &keypair_file).unwrap();
-        let keypair = read_keypair_file(&keypair_file).unwrap();
         let test_balance = test_commands.clone().get_matches_from(vec![
             "test",
             "balance",
             &keypair.pubkey().to_string(),
         ]);
         assert_eq!(
-            parse_command(&test_balance, "", &mut None).unwrap(),
+            parse_command(&test_balance, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Balance {
                     pubkey: Some(keypair.pubkey()),
@@ -2927,7 +2949,7 @@ mod tests {
             "--lamports",
         ]);
         assert_eq!(
-            parse_command(&test_balance, "", &mut None).unwrap(),
+            parse_command(&test_balance, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Balance {
                     pubkey: Some(keypair.pubkey()),
@@ -2942,7 +2964,7 @@ mod tests {
                 .clone()
                 .get_matches_from(vec!["test", "balance", "--lamports"]);
         assert_eq!(
-            parse_command(&test_balance, &keypair_file, &mut None).unwrap(),
+            parse_command(&test_balance, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Balance {
                     pubkey: None,
@@ -2974,7 +2996,7 @@ mod tests {
                 .clone()
                 .get_matches_from(vec!["test", "confirm", &signature_string]);
         assert_eq!(
-            parse_command(&test_confirm, "", &mut None).unwrap(),
+            parse_command(&test_confirm, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Confirm(signature),
                 signers: vec![],
@@ -2983,7 +3005,7 @@ mod tests {
         let test_bad_signature = test_commands
             .clone()
             .get_matches_from(vec!["test", "confirm", "deadbeef"]);
-        assert!(parse_command(&test_bad_signature, "", &mut None).is_err());
+        assert!(parse_command(&test_bad_signature, &default_signer, &mut None).is_err());
 
         // Test CreateAddressWithSeed
         let from_pubkey = Some(Pubkey::new_rand());
@@ -3002,7 +3024,7 @@ mod tests {
                 &from_str,
             ]);
             assert_eq!(
-                parse_command(&test_create_address_with_seed, "", &mut None).unwrap(),
+                parse_command(&test_create_address_with_seed, &default_signer, &mut None).unwrap(),
                 CliCommandInfo {
                     command: CliCommand::CreateAddressWithSeed {
                         from_pubkey,
@@ -3020,7 +3042,7 @@ mod tests {
             "STAKE",
         ]);
         assert_eq!(
-            parse_command(&test_create_address_with_seed, &keypair_file, &mut None).unwrap(),
+            parse_command(&test_create_address_with_seed, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::CreateAddressWithSeed {
                     from_pubkey: None,
@@ -3037,20 +3059,47 @@ mod tests {
                 .clone()
                 .get_matches_from(vec!["test", "deploy", "/Users/test/program.o"]);
         assert_eq!(
-            parse_command(&test_deploy, &keypair_file, &mut None).unwrap(),
+            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Deploy("/Users/test/program.o".to_string()),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
 
+<<<<<<< HEAD
+=======
+        let custom_address = Keypair::new();
+        let custom_address_file = make_tmp_path("custom_address_file");
+        write_keypair_file(&custom_address, &custom_address_file).unwrap();
+        let test_deploy = test_commands.clone().get_matches_from(vec![
+            "test",
+            "deploy",
+            "/Users/test/program.o",
+            &custom_address_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Deploy {
+                    program_location: "/Users/test/program.o".to_string(),
+                    address: Some(1),
+                    use_deprecated_loader: false,
+                },
+                signers: vec![
+                    read_keypair_file(&keypair_file).unwrap().into(),
+                    read_keypair_file(&custom_address_file).unwrap().into(),
+                ],
+            }
+        );
+
+>>>>>>> 9a60353fa... CLI: Encapsulate default signer attributes
         // Test ResolveSigner Subcommand, KeypairUrl::Filepath
         let test_resolve_signer =
             test_commands
                 .clone()
                 .get_matches_from(vec!["test", "resolve-signer", &keypair_file]);
         assert_eq!(
-            parse_command(&test_resolve_signer, "", &mut None).unwrap(),
+            parse_command(&test_resolve_signer, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::ResolveSigner(Some(keypair_file.clone())),
                 signers: vec![],
@@ -3062,7 +3111,7 @@ mod tests {
                 .clone()
                 .get_matches_from(vec!["test", "resolve-signer", &pubkey_string]);
         assert_eq!(
-            parse_command(&test_resolve_signer, "", &mut None).unwrap(),
+            parse_command(&test_resolve_signer, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::ResolveSigner(Some(pubkey.to_string())),
                 signers: vec![],
@@ -3788,6 +3837,10 @@ mod tests {
         let default_keypair = Keypair::new();
         let default_keypair_file = make_tmp_path("keypair_file");
         write_keypair_file(&default_keypair, &default_keypair_file).unwrap();
+        let default_signer = DefaultSigner {
+            path: default_keypair_file.clone(),
+            arg_name: "".to_string(),
+        };
 
         //Test Transfer Subcommand, SOL
         let from_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
@@ -3800,7 +3853,7 @@ mod tests {
             .clone()
             .get_matches_from(vec!["test", "transfer", &to_string, "42"]);
         assert_eq!(
-            parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
+            parse_command(&test_transfer, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
                     amount: SpendAmount::Some(42_000_000_000),
@@ -3822,7 +3875,7 @@ mod tests {
             .clone()
             .get_matches_from(vec!["test", "transfer", &to_string, "ALL"]);
         assert_eq!(
-            parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
+            parse_command(&test_transfer, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
                     amount: SpendAmount::All,
@@ -3848,7 +3901,7 @@ mod tests {
             "42",
         ]);
         assert_eq!(
-            parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
+            parse_command(&test_transfer, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
                     amount: SpendAmount::Some(42_000_000_000),
@@ -3878,7 +3931,7 @@ mod tests {
             "--sign-only",
         ]);
         assert_eq!(
-            parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
+            parse_command(&test_transfer, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
                     amount: SpendAmount::Some(42_000_000_000),
@@ -3913,7 +3966,7 @@ mod tests {
             &blockhash_string,
         ]);
         assert_eq!(
-            parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
+            parse_command(&test_transfer, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
                     amount: SpendAmount::Some(42_000_000_000),
@@ -3952,7 +4005,7 @@ mod tests {
             &nonce_authority_file,
         ]);
         assert_eq!(
-            parse_command(&test_transfer, &default_keypair_file, &mut None).unwrap(),
+            parse_command(&test_transfer, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::Transfer {
                     amount: SpendAmount::Some(42_000_000_000),

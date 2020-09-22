@@ -5,7 +5,14 @@ use solana_clap_utils::{
     input_validators::is_url, keypair::SKIP_SEED_PHRASE_VALIDATION_ARG, DisplayError,
 };
 use solana_cli::{
+<<<<<<< HEAD
     cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliSigners},
+=======
+    cli::{
+        app, parse_command, process_command, CliCommandInfo, CliConfig, CliSigners, DefaultSigner,
+        DEFAULT_RPC_TIMEOUT_SECONDS,
+    },
+>>>>>>> 9a60353fa... CLI: Encapsulate default signer attributes
     cli_output::OutputFormat,
     display::{println_name_value, println_name_value_or},
 };
@@ -119,13 +126,19 @@ pub fn parse_args<'a>(
         matches.value_of("json_rpc_url").unwrap_or(""),
         &config.json_rpc_url,
     );
+    let default_signer_arg_name = "keypair".to_string();
     let (_, default_signer_path) = CliConfig::compute_keypair_path_setting(
-        matches.value_of("keypair").unwrap_or(""),
+        matches.value_of(&default_signer_arg_name).unwrap_or(""),
         &config.keypair_path,
     );
 
+    let default_signer = DefaultSigner {
+        arg_name: default_signer_arg_name,
+        path: default_signer_path.clone(),
+    };
+
     let CliCommandInfo { command, signers } =
-        parse_command(&matches, &default_signer_path, &mut wallet_manager)?;
+        parse_command(&matches, &default_signer, &mut wallet_manager)?;
 
     let output_format = matches
         .value_of("output_format")
