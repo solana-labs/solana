@@ -1076,11 +1076,38 @@ mod tests {
         format!("{}/tmp/{}-{}", out_dir, name, pubkey.to_string())
     }
 
+    fn initialize_check_payer_balances_inputs(
+        allocation_amount: f64,
+        sender_keypair_file: &str,
+        fee_payer: &str,
+        stake_args: Option<StakeArgs>,
+    ) -> (Vec<Allocation>, DistributeTokensArgs) {
+        let recipient = Pubkey::new_rand();
+        let allocations = vec![Allocation {
+            recipient: recipient.to_string(),
+            amount: allocation_amount,
+            lockup_date: "".to_string(),
+        }];
+        let args = DistributeTokensArgs {
+            sender_keypair: read_keypair_file(sender_keypair_file).unwrap().into(),
+            fee_payer: read_keypair_file(fee_payer).unwrap().into(),
+            dry_run: false,
+            input_csv: "".to_string(),
+            transaction_db: "".to_string(),
+            output_path: None,
+            stake_args,
+            transfer_amount: None,
+        };
+        (allocations, args)
+    }
+
     #[test]
-    fn test_check_payer_balances() {
+    fn test_check_payer_balances_distribute_tokens_single_payer() {
+        let fees = 10_000;
+        let fees_in_sol = lamports_to_sol(fees);
         let (mut genesis_config, sender_keypair) =
             create_genesis_config(sol_to_lamports(9_000_000.0));
-        genesis_config.fee_rate_governor = FeeRateGovernor::new(10_000, 0);
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
         Runtime::new().unwrap().block_on(async {
             let transport = start_local_server(&bank_forks).await;
@@ -1089,30 +1116,20 @@ mod tests {
             let sender_keypair_file = tmp_file_path("keypair_file", &sender_keypair.pubkey());
             write_keypair_file(&sender_keypair, &sender_keypair_file).unwrap();
 
-            let recipient = Pubkey::new_rand();
-            let allocations = vec![Allocation {
-                recipient: recipient.to_string(),
-                amount: 1000.0,
-                lockup_date: "".to_string(),
-            }];
+            let allocation_amount = 1000.0;
 
-            // Test distribute tokens with fully funded single payer
-            let mut args = DistributeTokensArgs {
-                sender_keypair: read_keypair_file(&sender_keypair_file).unwrap().into(),
-                fee_payer: read_keypair_file(&sender_keypair_file).unwrap().into(),
-                dry_run: false,
-                input_csv: "".to_string(),
-                transaction_db: "".to_string(),
-                output_path: None,
-                stake_args: None,
-                transfer_amount: None,
-            };
-
+            // Fully funded payer
+            let (allocations, mut args) = initialize_check_payer_balances_inputs(
+                allocation_amount,
+                &sender_keypair_file,
+                &sender_keypair_file,
+                None,
+            );
             check_payer_balances(1, &allocations, &mut banks_client, &args)
                 .await
                 .unwrap();
 
-            // Test distribute tokens with unfunded single payer
+            // Unfunded payer
             let unfunded_payer = Keypair::new();
             let unfunded_payer_keypair_file =
                 tmp_file_path("keypair_file", &unfunded_payer.pubkey());
@@ -1132,12 +1149,12 @@ mod tests {
                     sources,
                     vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
                 );
-                assert!((amount - (1000.0 + 0.00001)).abs() < f64::EPSILON);
+                assert!((amount - (allocation_amount + fees_in_sol)).abs() < f64::EPSILON);
             } else {
                 panic!("check_payer_balances should have errored");
             }
 
-            // Test distribute tokens with single payer funded enough for distribution only
+            // Payer funded enough for distribution only
             let partially_funded_payer = Keypair::new();
             let partially_funded_payer_keypair_file =
                 tmp_file_path("keypair_file", &partially_funded_payer.pubkey());
@@ -1148,7 +1165,7 @@ mod tests {
             .unwrap();
             let transaction = transfer(
                 &mut banks_client,
-                sol_to_lamports(1000.0),
+                sol_to_lamports(allocation_amount),
                 &sender_keypair,
                 &partially_funded_payer.pubkey(),
             )
@@ -1173,95 +1190,177 @@ mod tests {
                     sources,
                     vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
                 );
-                assert!((amount - (1000.0 + 0.00001)).abs() < f64::EPSILON);
+                assert!((amount - (allocation_amount + fees_in_sol)).abs() < f64::EPSILON);
             } else {
                 panic!("check_payer_balances should have errored");
             }
+        });
+    }
 
-            // Test distribute tokens using separate sender and fee_payer
-            args.sender_keypair = read_keypair_file(&sender_keypair_file).unwrap().into();
-            check_payer_balances(1, &allocations, &mut banks_client, &args)
-                .await
-                .unwrap();
+    #[test]
+    fn test_check_payer_balances_distribute_tokens_separate_payers() {
+        let fees = 10_000;
+        let fees_in_sol = lamports_to_sol(fees);
+        let (mut genesis_config, sender_keypair) =
+            create_genesis_config(sol_to_lamports(9_000_000.0));
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
+        Runtime::new().unwrap().block_on(async {
+            let transport = start_local_server(&bank_forks).await;
+            let mut banks_client = start_client(transport).await.unwrap();
 
-            // Test distribute tokens with unfunded sender
-            args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
-                .unwrap()
-                .into();
-            args.fee_payer = read_keypair_file(&sender_keypair_file).unwrap().into();
-            let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
-                .await
-                .unwrap_err();
-            if let Error::InsufficientFunds(sources, amount) = err_result {
-                assert_eq!(sources, vec![FundingSource::SystemAccount].into());
-                assert!((amount - 1000.0).abs() < f64::EPSILON);
-            } else {
-                panic!("check_payer_balances should have errored");
-            }
+            let sender_keypair_file = tmp_file_path("keypair_file", &sender_keypair.pubkey());
+            write_keypair_file(&sender_keypair, &sender_keypair_file).unwrap();
 
-            // Test distribute tokens with unfunded fee payer
-            args.sender_keypair = read_keypair_file(&sender_keypair_file).unwrap().into();
-            args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
-                .unwrap()
-                .into();
-            let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
-                .await
-                .unwrap_err();
-            if let Error::InsufficientFunds(sources, amount) = err_result {
-                assert_eq!(sources, vec![FundingSource::FeePayer].into());
-                assert!((amount - 0.00001).abs() < f64::EPSILON);
-            } else {
-                panic!("check_payer_balances should have errored");
-            }
+            let allocation_amount = 1000.0;
 
-            // Create stake account to test distribute-stakes
-            let stake_account_keypair = Keypair::new();
-            let stake_account_address = stake_account_keypair.pubkey();
-            let stake_authority = Keypair::new();
-            let withdraw_authority = Keypair::new();
-
-            let authorized = Authorized {
-                staker: stake_authority.pubkey(),
-                withdrawer: withdraw_authority.pubkey(),
-            };
-            let lockup = Lockup::default();
-            let instructions = stake_instruction::create_account(
-                &sender_keypair.pubkey(),
-                &stake_account_address,
-                &authorized,
-                &lockup,
-                sol_to_lamports(3000.0),
-            );
-            let message = Message::new(&instructions, Some(&sender_keypair.pubkey()));
-            let signers = [&sender_keypair, &stake_account_keypair];
-            let blockhash = banks_client.get_recent_blockhash().await.unwrap();
-            let transaction = Transaction::new(&signers, message, blockhash);
+            let funded_payer = Keypair::new();
+            let funded_payer_keypair_file = tmp_file_path("keypair_file", &funded_payer.pubkey());
+            write_keypair_file(&funded_payer, &funded_payer_keypair_file).unwrap();
+            let transaction = transfer(
+                &mut banks_client,
+                sol_to_lamports(allocation_amount),
+                &sender_keypair,
+                &funded_payer.pubkey(),
+            )
+            .await
+            .unwrap();
             banks_client
                 .process_transaction_with_commitment(transaction, CommitmentLevel::Recent)
                 .await
                 .unwrap();
 
-            let sol_for_fees = 1.0;
-
-            // Test distribute stakes with fully funded single payer and stake-account
-            let stake_args = StakeArgs {
-                stake_account_address,
-                stake_authority: Box::new(stake_authority),
-                withdraw_authority: Box::new(withdraw_authority),
-                lockup_authority: None,
-                sol_for_fees,
-            };
-            args.sender_keypair = read_keypair_file(&sender_keypair_file).unwrap().into();
-            args.fee_payer = read_keypair_file(&sender_keypair_file).unwrap().into();
-            args.stake_args = Some(stake_args);
+            // Fully funded payers
+            let (allocations, mut args) = initialize_check_payer_balances_inputs(
+                allocation_amount,
+                &funded_payer_keypair_file,
+                &sender_keypair_file,
+                None,
+            );
             check_payer_balances(1, &allocations, &mut banks_client, &args)
                 .await
                 .unwrap();
 
-            // Test distribute stakes with insufficient stake-account
+            // Unfunded sender
+            let unfunded_payer = Keypair::new();
+            let unfunded_payer_keypair_file =
+                tmp_file_path("keypair_file", &unfunded_payer.pubkey());
+            write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
+            args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
+                .unwrap()
+                .into();
+            args.fee_payer = read_keypair_file(&sender_keypair_file).unwrap().into();
+
+            let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
+                .await
+                .unwrap_err();
+            if let Error::InsufficientFunds(sources, amount) = err_result {
+                assert_eq!(sources, vec![FundingSource::SystemAccount].into());
+                assert!((amount - allocation_amount).abs() < f64::EPSILON);
+            } else {
+                panic!("check_payer_balances should have errored");
+            }
+
+            // Unfunded fee payer
+            args.sender_keypair = read_keypair_file(&sender_keypair_file).unwrap().into();
+            args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
+                .unwrap()
+                .into();
+
+            let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
+                .await
+                .unwrap_err();
+            if let Error::InsufficientFunds(sources, amount) = err_result {
+                assert_eq!(sources, vec![FundingSource::FeePayer].into());
+                assert!((amount - fees_in_sol).abs() < f64::EPSILON);
+            } else {
+                panic!("check_payer_balances should have errored");
+            }
+        });
+    }
+
+    async fn initialize_stake_account(
+        stake_account_amount: f64,
+        sol_for_fees: f64,
+        sender_keypair: &Keypair,
+        banks_client: &mut BanksClient,
+    ) -> StakeArgs {
+        let stake_account_keypair = Keypair::new();
+        let stake_account_address = stake_account_keypair.pubkey();
+        let stake_authority = Keypair::new();
+        let withdraw_authority = Keypair::new();
+
+        let authorized = Authorized {
+            staker: stake_authority.pubkey(),
+            withdrawer: withdraw_authority.pubkey(),
+        };
+        let lockup = Lockup::default();
+        let instructions = stake_instruction::create_account(
+            &sender_keypair.pubkey(),
+            &stake_account_address,
+            &authorized,
+            &lockup,
+            sol_to_lamports(stake_account_amount),
+        );
+        let message = Message::new(&instructions, Some(&sender_keypair.pubkey()));
+        let signers = [sender_keypair, &stake_account_keypair];
+        let blockhash = banks_client.get_recent_blockhash().await.unwrap();
+        let transaction = Transaction::new(&signers, message, blockhash);
+        banks_client
+            .process_transaction_with_commitment(transaction, CommitmentLevel::Recent)
+            .await
+            .unwrap();
+
+        StakeArgs {
+            stake_account_address,
+            stake_authority: Box::new(stake_authority),
+            withdraw_authority: Box::new(withdraw_authority),
+            lockup_authority: None,
+            sol_for_fees,
+        }
+    }
+
+    #[test]
+    fn test_check_payer_balances_distribute_stakes_single_payer() {
+        let fees = 10_000;
+        let fees_in_sol = lamports_to_sol(fees);
+        let (mut genesis_config, sender_keypair) =
+            create_genesis_config(sol_to_lamports(9_000_000.0));
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
+        Runtime::new().unwrap().block_on(async {
+            let transport = start_local_server(&bank_forks).await;
+            let mut banks_client = start_client(transport).await.unwrap();
+
+            let sender_keypair_file = tmp_file_path("keypair_file", &sender_keypair.pubkey());
+            write_keypair_file(&sender_keypair, &sender_keypair_file).unwrap();
+
+            let allocation_amount = 1000.0;
+            let sol_for_fees = 1.0;
+            let stake_args = initialize_stake_account(
+                allocation_amount,
+                sol_for_fees,
+                &sender_keypair,
+                &mut banks_client,
+            )
+            .await;
+
+            // Fully funded payer & stake account
+            let (allocations, mut args) = initialize_check_payer_balances_inputs(
+                allocation_amount,
+                &sender_keypair_file,
+                &sender_keypair_file,
+                Some(stake_args),
+            );
+            check_payer_balances(1, &allocations, &mut banks_client, &args)
+                .await
+                .unwrap();
+
+            // Underfunded stake-account
+            let expensive_allocation_amount = 5000.0;
             let expensive_allocations = vec![Allocation {
-                recipient: recipient.to_string(),
-                amount: 5000.0,
+                recipient: Pubkey::new_rand().to_string(),
+                amount: expensive_allocation_amount,
                 lockup_date: "".to_string(),
             }];
             let err_result =
@@ -1270,18 +1369,25 @@ mod tests {
                     .unwrap_err();
             if let Error::InsufficientFunds(sources, amount) = err_result {
                 assert_eq!(sources, vec![FundingSource::StakeAccount].into());
-                assert!((amount - (5000.0 - sol_for_fees)).abs() < f64::EPSILON);
+                assert!(
+                    (amount - (expensive_allocation_amount - sol_for_fees)).abs() < f64::EPSILON
+                );
             } else {
                 panic!("check_payer_balances should have errored");
             }
 
-            // Test distribute stakes with unfunded single payer
+            // Unfunded payer
+            let unfunded_payer = Keypair::new();
+            let unfunded_payer_keypair_file =
+                tmp_file_path("keypair_file", &unfunded_payer.pubkey());
+            write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
             args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
                 .unwrap()
                 .into();
             args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
                 .unwrap()
                 .into();
+
             let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
                 .await
                 .unwrap_err();
@@ -1290,12 +1396,12 @@ mod tests {
                     sources,
                     vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
                 );
-                assert!((amount - (sol_for_fees + 0.00001)).abs() < f64::EPSILON);
+                assert!((amount - (sol_for_fees + fees_in_sol)).abs() < f64::EPSILON);
             } else {
                 panic!("check_payer_balances should have errored");
             }
 
-            // Test distribute stakes with single payer funded enough for sol-for-fees only
+            // Payer funded enough for distribution only
             let partially_funded_payer = Keypair::new();
             let partially_funded_payer_keypair_file =
                 tmp_file_path("keypair_file", &partially_funded_payer.pubkey());
@@ -1306,7 +1412,7 @@ mod tests {
             .unwrap();
             let transaction = transfer(
                 &mut banks_client,
-                sol_to_lamports(1.0),
+                sol_to_lamports(sol_for_fees),
                 &sender_keypair,
                 &partially_funded_payer.pubkey(),
             )
@@ -1331,22 +1437,75 @@ mod tests {
                     sources,
                     vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
                 );
-                assert!((amount - (sol_for_fees + 0.00001)).abs() < f64::EPSILON);
+                assert!((amount - (sol_for_fees + fees_in_sol)).abs() < f64::EPSILON);
             } else {
                 panic!("check_payer_balances should have errored");
             }
+        });
+    }
 
-            // Test distribute stakes using separate sender and fee_payer
-            args.sender_keypair = read_keypair_file(&sender_keypair_file).unwrap().into();
+    #[test]
+    fn test_check_payer_balances_distribute_stakes_separate_payers() {
+        let fees = 10_000;
+        let fees_in_sol = lamports_to_sol(fees);
+        let (mut genesis_config, sender_keypair) =
+            create_genesis_config(sol_to_lamports(9_000_000.0));
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
+        Runtime::new().unwrap().block_on(async {
+            let transport = start_local_server(&bank_forks).await;
+            let mut banks_client = start_client(transport).await.unwrap();
+
+            let sender_keypair_file = tmp_file_path("keypair_file", &sender_keypair.pubkey());
+            write_keypair_file(&sender_keypair, &sender_keypair_file).unwrap();
+
+            let allocation_amount = 1000.0;
+            let sol_for_fees = 1.0;
+            let stake_args = initialize_stake_account(
+                allocation_amount,
+                sol_for_fees,
+                &sender_keypair,
+                &mut banks_client,
+            )
+            .await;
+
+            let funded_payer = Keypair::new();
+            let funded_payer_keypair_file = tmp_file_path("keypair_file", &funded_payer.pubkey());
+            write_keypair_file(&funded_payer, &funded_payer_keypair_file).unwrap();
+            let transaction = transfer(
+                &mut banks_client,
+                sol_to_lamports(sol_for_fees),
+                &sender_keypair,
+                &funded_payer.pubkey(),
+            )
+            .await
+            .unwrap();
+            banks_client
+                .process_transaction_with_commitment(transaction, CommitmentLevel::Recent)
+                .await
+                .unwrap();
+
+            // Fully funded payers
+            let (allocations, mut args) = initialize_check_payer_balances_inputs(
+                allocation_amount,
+                &funded_payer_keypair_file,
+                &sender_keypair_file,
+                Some(stake_args),
+            );
             check_payer_balances(1, &allocations, &mut banks_client, &args)
                 .await
                 .unwrap();
 
-            // Test distribute stakes with unfunded sender
+            // Unfunded sender
+            let unfunded_payer = Keypair::new();
+            let unfunded_payer_keypair_file =
+                tmp_file_path("keypair_file", &unfunded_payer.pubkey());
+            write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
             args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
                 .unwrap()
                 .into();
             args.fee_payer = read_keypair_file(&sender_keypair_file).unwrap().into();
+
             let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
                 .await
                 .unwrap_err();
@@ -1357,17 +1516,18 @@ mod tests {
                 panic!("check_payer_balances should have errored");
             }
 
-            // Test distribute tokens with unfunded fee payer
+            // Unfunded fee payer
             args.sender_keypair = read_keypair_file(&sender_keypair_file).unwrap().into();
             args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
                 .unwrap()
                 .into();
+
             let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
                 .await
                 .unwrap_err();
             if let Error::InsufficientFunds(sources, amount) = err_result {
                 assert_eq!(sources, vec![FundingSource::FeePayer].into());
-                assert!((amount - 0.00001).abs() < f64::EPSILON);
+                assert!((amount - fees_in_sol).abs() < f64::EPSILON);
             } else {
                 panic!("check_payer_balances should have errored");
             }
