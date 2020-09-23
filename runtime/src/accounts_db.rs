@@ -1327,14 +1327,14 @@ impl AccountsDB {
 
         let mut remove_storages_elapsed = Measure::start("remove_storages_elapsed");
         for slot in non_roots {
-            let slot_removed_storages = storage.0.remove(&slot);
-            total_removed_storage_entries +=
-                slot_removed_storages.as_ref().map(|x| x.len()).unwrap_or(0);
-            total_removed_bytes += slot_removed_storages
-                .as_ref()
-                .map(|x| x.values().map(|i| i.accounts.capacity()).sum())
-                .unwrap_or(0);
-            all_removed_slot_storages.push(slot_removed_storages);
+            if let Some(slot_removed_storages) = storage.0.remove(&slot) {
+                total_removed_storage_entries += slot_removed_storages.len();
+                total_removed_bytes += slot_removed_storages
+                    .values()
+                    .map(|i| i.accounts.capacity())
+                    .sum::<u64>();
+                all_removed_slot_storages.push(slot_removed_storages);
+            }
         }
         remove_storages_elapsed.stop();
         drop(storage);
