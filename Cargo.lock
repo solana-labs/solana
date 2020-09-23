@@ -2132,20 +2132,9 @@ dependencies = [
 
 [[package]]
 name = "num-derive"
-version = "0.2.5"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eafd0b45c5537c3ba526f79d3e75120036502bebacbb3f3220914067ce39dbf2"
-dependencies = [
- "proc-macro2 0.4.30",
- "quote 0.6.13",
- "syn 0.15.44",
-]
-
-[[package]]
-name = "num-derive"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c8b15b261814f992e33760b1fca9fe8b693d8a65299f20c9901688636cfb746"
+checksum = "6f09b9841adb6b5e1f89ef7087ea636e0fd94b2851f887c1e3eb5d5f8228fab3"
 dependencies = [
  "proc-macro2 1.0.19",
  "quote 1.0.6",
@@ -3417,7 +3406,7 @@ dependencies = [
  "clap",
  "itertools 0.9.0",
  "log 0.4.8",
- "num-derive 0.3.0",
+ "num-derive",
  "num-traits",
  "rand 0.7.3",
  "rayon",
@@ -3483,7 +3472,7 @@ version = "1.4.0"
 dependencies = [
  "bincode",
  "byteorder",
- "num-derive 0.3.0",
+ "num-derive",
  "num-traits",
  "rand 0.7.3",
  "rustversion",
@@ -3500,7 +3489,7 @@ dependencies = [
  "bincode",
  "chrono",
  "log 0.4.8",
- "num-derive 0.3.0",
+ "num-derive",
  "num-traits",
  "serde",
  "serde_derive",
@@ -3804,7 +3793,7 @@ version = "1.4.0"
 dependencies = [
  "bincode",
  "log 0.4.8",
- "num-derive 0.3.0",
+ "num-derive",
  "num-traits",
  "serde",
  "serde_derive",
@@ -4175,7 +4164,7 @@ name = "solana-ownable"
 version = "1.4.0"
 dependencies = [
  "bincode",
- "num-derive 0.3.0",
+ "num-derive",
  "num-traits",
  "solana-runtime",
  "solana-sdk 1.4.0",
@@ -4259,7 +4248,7 @@ dependencies = [
  "dialoguer",
  "hidapi",
  "log 0.4.8",
- "num-derive 0.3.0",
+ "num-derive",
  "num-traits",
  "parking_lot 0.10.2",
  "semver",
@@ -4289,7 +4278,7 @@ dependencies = [
  "libloading 0.6.2",
  "log 0.4.8",
  "memmap",
- "num-derive 0.3.0",
+ "num-derive",
  "num-traits",
  "num_cpus",
  "rand 0.7.3",
@@ -4344,7 +4333,7 @@ dependencies = [
  "itertools 0.9.0",
  "log 0.4.8",
  "memmap",
- "num-derive 0.3.0",
+ "num-derive",
  "num-traits",
  "pbkdf2",
  "rand 0.7.3",
@@ -4383,7 +4372,7 @@ dependencies = [
  "libsecp256k1",
  "log 0.4.8",
  "memmap",
- "num-derive 0.3.0",
+ "num-derive",
  "num-traits",
  "pbkdf2",
  "rand 0.7.3",
@@ -4529,7 +4518,7 @@ version = "1.4.0"
 dependencies = [
  "bincode",
  "log 0.4.8",
- "num-derive 0.3.0",
+ "num-derive",
  "num-traits",
  "rustc_version",
  "serde",
@@ -4705,7 +4694,7 @@ version = "1.4.0"
 dependencies = [
  "bincode",
  "chrono",
- "num-derive 0.2.5",
+ "num-derive",
  "num-traits",
  "serde",
  "serde_derive",
@@ -4721,7 +4710,7 @@ version = "1.4.0"
 dependencies = [
  "bincode",
  "log 0.4.8",
- "num-derive 0.3.0",
+ "num-derive",
  "num-traits",
  "rustc_version",
  "serde",
@@ -4809,7 +4798,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c27a47fea402cc7f6d33274310565222ec3213f2df5ba7877e625b17286423b"
 dependencies = [
  "arrayref",
- "num-derive 0.3.0",
+ "num-derive",
  "num-traits",
  "num_enum",
  "remove_dir_all",
