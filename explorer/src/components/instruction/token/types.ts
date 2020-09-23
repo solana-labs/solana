@@ -12,7 +12,8 @@ import {
 } from "superstruct";
 import { Pubkey } from "validators/pubkey";
 
-const TokenAmountUi = object({
+export type TokenAmountUi = StructType<typeof TokenAmountUi>;
+export const TokenAmountUi = object({
   amount: string(),
   decimals: number(),
   uiAmount: number(),
@@ -112,7 +113,7 @@ const FreezeAccount = object({
   account: Pubkey,
   mint: Pubkey,
   freezeAuthority: optional(Pubkey),
-  multisigOwner: optional(Pubkey),
+  multisigFreezeAuthority: optional(Pubkey),
   signers: optional(array(Pubkey)),
 });
 
@@ -120,7 +121,7 @@ const ThawAccount = object({
   account: Pubkey,
   mint: Pubkey,
   freezeAuthority: optional(Pubkey),
-  multisigOwner: optional(Pubkey),
+  multisigFreezeAuthority: optional(Pubkey),
   signers: optional(array(Pubkey)),
 });
 
@@ -214,8 +215,8 @@ export const IX_TITLES = {
   closeAccount: "Close Account",
   freezeAccount: "Freeze Account",
   thawAccount: "Thaw Account",
-  transfer2: "Transfer Checked",
-  approve2: "Approve Checked",
-  mintTo2: "Mint To Checked",
-  burn2: "Burn Checked",
+  transfer2: "Transfer (Checked)",
+  approve2: "Approve (Checked)",
+  mintTo2: "Mint To (Checked)",
+  burn2: "Burn (Checked)",
 };

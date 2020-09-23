@@ -10,7 +10,7 @@ import {
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
-import { IX_STRUCTS, TokenInstructionType, IX_TITLES } from "./types";
+import { IX_STRUCTS, TokenInstructionType, IX_TITLES, TokenAmountUi } from "./types";
 import { ParsedInfo } from "validators";
 import {
   useTokenAccountInfo,
@@ -95,39 +95,26 @@ function TokenInstruction(props: InfoProps) {
     }
   }, [fetchAccountInfo, mintAddress]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const decimals = mintInfo?.decimals;
+  let decimals = mintInfo?.decimals;
   const attributes: JSX.Element[] = [];
 
-  buildAttributes(attributes, props.info, decimals);
+  if ("tokenAmount" in props.info) {
+    decimals = props.info.tokenAmount.decimals;
+  }
 
-  return (
-    <InstructionCard
-      ix={props.ix}
-      index={props.index}
-      result={props.result}
-      title={props.title}
-    >
-      {attributes}
-    </InstructionCard>
-  );
-}
-
-function buildAttributes(
-  attributes: JSX.Element[],
-  info: any,
-  decimals: number | undefined
-) {
-  for (let key in info) {
-    const value = info[key];
+  for (let key in props.info) {
+    let value = props.info[key];
     if (value === undefined) continue;
+
+    if (key === "tokenAmount") {
+      key = "amount";
+      value = (value as TokenAmountUi).amount;
+    }
 
     let tag;
     let labelSuffix = "";
     if (value instanceof PublicKey) {
       tag = <Address pubkey={value} alignRight link />;
-    } else if (key === "tokenAmount") {
-      buildAttributes(attributes, info.tokenAmount, decimals);
-      continue;
     } else if (key === "amount") {
       let amount;
       if (decimals === undefined) {
@@ -153,4 +140,15 @@ function buildAttributes(
       </tr>
     );
   }
+
+  return (
+    <InstructionCard
+      ix={props.ix}
+      index={props.index}
+      result={props.result}
+      title={props.title}
+    >
+      {attributes}
+    </InstructionCard>
+  );
 }
