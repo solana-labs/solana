@@ -3572,7 +3572,12 @@ dependencies = [
  "solana-logger 1.3.14",
  "solana-net-utils",
  "solana-remote-wallet",
+<<<<<<< HEAD
  "solana-sdk 1.3.14",
+=======
+ "solana-runtime",
+ "solana-sdk 1.4.0",
+>>>>>>> 93ed0ab2b... Add feature management commands
  "solana-stake-program",
  "solana-transaction-status",
  "solana-version",
