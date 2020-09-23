@@ -166,7 +166,9 @@ export function useFetchAccountHistory() {
           limit: 25,
         });
       } else {
-        fetchAccountHistory(dispatch, pubkey, cluster, url, { limit: 25 });
+        fetchAccountHistory(dispatch, pubkey, cluster, url, { 
+          limit: before?.data?.fetched.length || 25 
+        });
       }
     },
     [state, dispatch, cluster, url]
