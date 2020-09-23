@@ -230,9 +230,39 @@ async fn distribute_allocations(
     allocations: &[Allocation],
     args: &DistributeTokensArgs,
 ) -> Result<(), Error> {
-    let mut num_signatures = 0;
-    for allocation in allocations {
-        let new_stake_account_keypair = Keypair::new();
+    let (messages, stake_extras): (Vec<Message>, Vec<(Keypair, Option<DateTime<Utc>>)>) =
+        allocations
+            .iter()
+            .map(|allocation| {
+                let new_stake_account_keypair = Keypair::new();
+                let lockup_date = if allocation.lockup_date == "" {
+                    None
+                } else {
+                    Some(allocation.lockup_date.parse::<DateTime<Utc>>().unwrap())
+                };
+
+                println!("{:<44}  {:>24.9}", allocation.recipient, allocation.amount);
+                let instructions = distribution_instructions(
+                    allocation,
+                    &new_stake_account_keypair.pubkey(),
+                    args,
+                    lockup_date,
+                );
+                let fee_payer_pubkey = args.fee_payer.pubkey();
+                let message = Message::new(&instructions, Some(&fee_payer_pubkey));
+                (message, (new_stake_account_keypair, lockup_date))
+            })
+            .unzip();
+
+    let num_signatures = messages
+        .iter()
+        .map(|message| message.header.num_required_signatures as usize)
+        .sum();
+    check_payer_balances(num_signatures, allocations, client, args).await?;
+
+    for ((allocation, message), (new_stake_account_keypair, lockup_date)) in
+        allocations.iter().zip(messages).zip(stake_extras)
+    {
         let new_stake_account_address = new_stake_account_keypair.pubkey();
 
         let mut signers = vec![&*args.fee_payer, &*args.sender_keypair];
@@ -249,19 +279,6 @@ async fn distribute_allocations(
             }
         }
         let signers = unique_signers(signers);
-        num_signatures += signers.len();
-
-        let lockup_date = if allocation.lockup_date == "" {
-            None
-        } else {
-            Some(allocation.lockup_date.parse::<DateTime<Utc>>().unwrap())
-        };
-
-        println!("{:<44}  {:>24.9}", allocation.recipient, allocation.amount);
-        let instructions =
-            distribution_instructions(allocation, &new_stake_account_address, args, lockup_date);
-        let fee_payer_pubkey = args.fee_payer.pubkey();
-        let message = Message::new(&instructions, Some(&fee_payer_pubkey));
         let result: transport::Result<(Transaction, u64)> = {
             if args.dry_run {
                 Ok((Transaction::new_unsigned(message), std::u64::MAX))
@@ -290,7 +307,6 @@ async fn distribute_allocations(
             }
         };
     }
-    check_payer_balances(num_signatures, allocations, client, args).await?;
     Ok(())
 }
 
