@@ -135,10 +135,7 @@ pub async fn upload_confirmed_blocks(
                         break;
                     }
 
-                    let _ = match blockstore.get_confirmed_block(
-                        *slot,
-                        Some(solana_transaction_status::UiTransactionEncoding::Base64),
-                    ) {
+                    let _ = match blockstore.get_confirmed_block(*slot) {
                         Ok(confirmed_block) => sender.send((*slot, Some(confirmed_block))),
                         Err(err) => {
                             warn!(

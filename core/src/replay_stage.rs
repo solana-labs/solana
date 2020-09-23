@@ -1992,7 +1992,7 @@ pub(crate) mod tests {
         system_transaction,
         transaction::TransactionError,
     };
-    use solana_transaction_status::{EncodedTransaction, TransactionWithStatusMeta};
+    use solana_transaction_status::TransactionWithStatusMeta;
     use solana_vote_program::{
         vote_state::{VoteState, VoteStateVersions},
         vote_transaction,
@@ -2732,36 +2732,26 @@ pub(crate) mod tests {
                 blockstore.clone(),
             );
 
-            let confirmed_block = blockstore.get_confirmed_block(slot, None).unwrap();
+            let confirmed_block = blockstore.get_confirmed_block(slot).unwrap();
             assert_eq!(confirmed_block.transactions.len(), 3);
 
             for TransactionWithStatusMeta { transaction, meta } in
                 confirmed_block.transactions.into_iter()
             {
-                if let EncodedTransaction::Json(transaction) = transaction {
-                    if transaction.signatures[0] == signatures[0].to_string() {
-                        let meta = meta.unwrap();
-                        assert_eq!(meta.err, None);
-                        assert_eq!(meta.status, Ok(()));
-                    } else if transaction.signatures[0] == signatures[1].to_string() {
-                        let meta = meta.unwrap();
-                        assert_eq!(
-                            meta.err,
-                            Some(TransactionError::InstructionError(
-                                0,
-                                InstructionError::Custom(1)
-                            ))
-                        );
-                        assert_eq!(
-                            meta.status,
-                            Err(TransactionError::InstructionError(
-                                0,
-                                InstructionError::Custom(1)
-                            ))
-                        );
-                    } else {
-                        assert_eq!(meta, None);
-                    }
+                if transaction.signatures[0] == signatures[0] {
+                    let meta = meta.unwrap();
+                    assert_eq!(meta.status, Ok(()));
+                } else if transaction.signatures[0] == signatures[1] {
+                    let meta = meta.unwrap();
+                    assert_eq!(
+                        meta.status,
+                        Err(TransactionError::InstructionError(
+                            0,
+                            InstructionError::Custom(1)
+                        ))
+                    );
+                } else {
+                    assert_eq!(meta, None);
                 }
             }
         }

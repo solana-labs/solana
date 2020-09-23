@@ -58,7 +58,7 @@ use solana_sdk::{
 };
 use solana_stake_program::stake_state::StakeState;
 use solana_transaction_status::{
-    ConfirmedBlock, ConfirmedTransaction, TransactionStatus, UiTransactionEncoding,
+    EncodedConfirmedBlock, EncodedConfirmedTransaction, TransactionStatus, UiTransactionEncoding,
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use spl_token_v2_0::{
@@ -608,7 +608,7 @@ impl JsonRpcRequestProcessor {
         &self,
         slot: Slot,
         encoding: Option<UiTransactionEncoding>,
-    ) -> Result<Option<ConfirmedBlock>> {
+    ) -> Result<Option<EncodedConfirmedBlock>> {
         let encoding = encoding.unwrap_or(UiTransactionEncoding::Json);
         if self.config.enable_rpc_transaction_history
             && slot
@@ -618,17 +618,20 @@ impl JsonRpcRequestProcessor {
                     .unwrap()
                     .highest_confirmed_root()
         {
-            let result = self.blockstore.get_confirmed_block(slot, Some(encoding));
+            let result = self.blockstore.get_confirmed_block(slot);
             if result.is_err() {
                 if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                     return Ok(self
                         .runtime_handle
-                        .block_on(bigtable_ledger_storage.get_confirmed_block(slot, encoding))
-                        .ok());
+                        .block_on(bigtable_ledger_storage.get_confirmed_block(slot))
+                        .ok()
+                        .map(|confirmed_block| confirmed_block.encode(encoding)));
                 }
             }
             self.check_slot_cleaned_up(&result, slot)?;
-            Ok(result.ok())
+            Ok(result
+                .ok()
+                .map(|confirmed_block| confirmed_block.encode(encoding)))
         } else {
             Err(RpcCustomError::BlockNotAvailable { slot }.into())
         }
@@ -804,12 +807,12 @@ impl JsonRpcRequestProcessor {
         &self,
         signature: Signature,
         encoding: Option<UiTransactionEncoding>,
-    ) -> Option<ConfirmedTransaction> {
+    ) -> Option<EncodedConfirmedTransaction> {
         let encoding = encoding.unwrap_or(UiTransactionEncoding::Json);
         if self.config.enable_rpc_transaction_history {
             match self
                 .blockstore
-                .get_confirmed_transaction(signature, Some(encoding))
+                .get_confirmed_transaction(signature)
                 .unwrap_or(None)
             {
                 Some(confirmed_transaction) => {
@@ -820,18 +823,16 @@ impl JsonRpcRequestProcessor {
                             .unwrap()
                             .highest_confirmed_root()
                     {
-                        return Some(confirmed_transaction);
+                        return Some(confirmed_transaction.encode(encoding));
                     }
                 }
                 None => {
                     if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                         return self
                             .runtime_handle
-                            .block_on(
-                                bigtable_ledger_storage
-                                    .get_confirmed_transaction(&signature, encoding),
-                            )
-                            .unwrap_or(None);
+                            .block_on(bigtable_ledger_storage.get_confirmed_transaction(&signature))
+                            .unwrap_or(None)
+                            .map(|confirmed| confirmed.encode(encoding));
                     }
                 }
             }
@@ -1649,7 +1650,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         slot: Slot,
         encoding: Option<UiTransactionEncoding>,
-    ) -> Result<Option<ConfirmedBlock>>;
+    ) -> Result<Option<EncodedConfirmedBlock>>;
 
     #[rpc(meta, name = "getBlockTime")]
     fn get_block_time(&self, meta: Self::Metadata, slot: Slot) -> Result<Option<UnixTimestamp>>;
@@ -1668,7 +1669,7 @@ pub trait RpcSol {
         meta: Self::Metadata,
         signature_str: String,
         encoding: Option<UiTransactionEncoding>,
-    ) -> Result<Option<ConfirmedTransaction>>;
+    ) -> Result<Option<EncodedConfirmedTransaction>>;
 
     #[rpc(meta, name = "getConfirmedSignaturesForAddress")]
     fn get_confirmed_signatures_for_address(
@@ -2273,7 +2274,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         slot: Slot,
         encoding: Option<UiTransactionEncoding>,
-    ) -> Result<Option<ConfirmedBlock>> {
+    ) -> Result<Option<EncodedConfirmedBlock>> {
         debug!("get_confirmed_block rpc request received: {:?}", slot);
         meta.get_confirmed_block(slot, encoding)
     }
@@ -2300,7 +2301,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         signature_str: String,
         encoding: Option<UiTransactionEncoding>,
-    ) -> Result<Option<ConfirmedTransaction>> {
+    ) -> Result<Option<EncodedConfirmedTransaction>> {
         debug!(
             "get_confirmed_transaction rpc request received: {:?}",
             signature_str
@@ -2528,7 +2529,9 @@ pub mod tests {
         timing::slot_duration_from_slots_per_year,
         transaction::{self, TransactionError},
     };
-    use solana_transaction_status::{EncodedTransaction, TransactionWithStatusMeta, UiMessage};
+    use solana_transaction_status::{
+        EncodedTransaction, EncodedTransactionWithStatusMeta, UiMessage,
+    };
     use solana_vote_program::{
         vote_instruction,
         vote_state::{Vote, VoteInit, MAX_LOCKOUT_HISTORY},
@@ -4429,12 +4432,12 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let confirmed_block: Option<ConfirmedBlock> =
+        let confirmed_block: Option<EncodedConfirmedBlock> =
             serde_json::from_value(result["result"].clone()).unwrap();
         let confirmed_block = confirmed_block.unwrap();
         assert_eq!(confirmed_block.transactions.len(), 3);
 
-        for TransactionWithStatusMeta { transaction, meta } in
+        for EncodedTransactionWithStatusMeta { transaction, meta } in
             confirmed_block.transactions.into_iter()
         {
             if let EncodedTransaction::Json(transaction) = transaction {
@@ -4473,12 +4476,12 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta);
         let result: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let confirmed_block: Option<ConfirmedBlock> =
+        let confirmed_block: Option<EncodedConfirmedBlock> =
             serde_json::from_value(result["result"].clone()).unwrap();
         let confirmed_block = confirmed_block.unwrap();
         assert_eq!(confirmed_block.transactions.len(), 3);
 
-        for TransactionWithStatusMeta { transaction, meta } in
+        for EncodedTransactionWithStatusMeta { transaction, meta } in
             confirmed_block.transactions.into_iter()
         {
             if let EncodedTransaction::LegacyBinary(transaction) = transaction {
