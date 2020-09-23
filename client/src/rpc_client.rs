@@ -517,14 +517,14 @@ impl RpcClient {
             data_slice: None,
         };
         let pubkeys: Vec<_> = pubkeys.iter().map(|pubkey| pubkey.to_string()).collect();
-        let response = self.send(RpcRequest::GetMultipleAccounts, json!([[pubkeys], config]))?;
+        let response = self.send(RpcRequest::GetMultipleAccounts, json!([pubkeys, config]))?;
         let Response {
             context,
             value: accounts,
-        } = serde_json::from_value::<Response<Option<UiAccount>>>(response)?;
+        } = serde_json::from_value::<Response<Vec<Option<UiAccount>>>>(response)?;
         let accounts: Vec<Option<Account>> = accounts
-            .iter()
-            .map(|rpc_account| rpc_account.decode())
+            .into_iter()
+            .map(|rpc_account| rpc_account.map(|a| a.decode()).flatten())
             .collect();
         Ok(Response {
             context,
