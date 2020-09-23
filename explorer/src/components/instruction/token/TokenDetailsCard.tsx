@@ -10,7 +10,12 @@ import {
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
-import { IX_STRUCTS, TokenInstructionType, IX_TITLES } from "./types";
+import {
+  IX_STRUCTS,
+  TokenInstructionType,
+  IX_TITLES,
+  TokenAmountUi,
+} from "./types";
 import { ParsedInfo } from "validators";
 import {
   useTokenAccountInfo,
@@ -98,10 +103,13 @@ function TokenInstruction(props: InfoProps) {
     }
   }, [fetchAccountInfo, mintAddress]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const decimals = mintInfo?.decimals;
-  const attributes = [];
-
+  const attributes: JSX.Element[] = [];
+  let decimals = mintInfo?.decimals;
   let tokenSymbol = "";
+
+  if ("tokenAmount" in props.info) {
+    decimals = props.info.tokenAmount.decimals;
+  }
 
   if (mintAddress) {
     const tokenDetails = TokenRegistry.get(mintAddress, cluster);
@@ -121,8 +129,13 @@ function TokenInstruction(props: InfoProps) {
   }
 
   for (let key in props.info) {
-    const value = props.info[key];
+    let value = props.info[key];
     if (value === undefined) continue;
+
+    if (key === "tokenAmount") {
+      key = "amount";
+      value = (value as TokenAmountUi).amount;
+    }
 
     let tag;
     let labelSuffix = "";
