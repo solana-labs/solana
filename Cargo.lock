@@ -4325,17 +4325,10 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha2",
-<<<<<<< HEAD
- "solana-crate-features 1.3.4",
- "solana-logger 1.3.4",
- "solana-sdk-macro 1.3.4",
- "solana-sdk-macro-frozen-abi 1.3.5",
-=======
  "solana-crate-features 1.3.12",
  "solana-logger 1.3.12",
  "solana-sdk-macro 1.3.12",
  "solana-sdk-macro-frozen-abi 1.3.12",
->>>>>>> e1a212fb7... Bump spl-token (#12395)
  "thiserror",
 ]
 
@@ -4406,15 +4399,9 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk-macro-frozen-abi"
-<<<<<<< HEAD
-version = "1.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a9b012fab0634311c8b6176ee1d6874a39f7b0bad8b647fe2cf36f687151728"
-=======
 version = "1.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d64fed6f7a226c02c48b539cae879c0eef9f64be08986b248d8ad4cec4328945"
->>>>>>> e1a212fb7... Bump spl-token (#12395)
 dependencies = [
  "lazy_static",
  "proc-macro2 1.0.19",
