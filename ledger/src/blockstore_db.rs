@@ -69,6 +69,8 @@ pub enum BlockstoreError {
     UnpackError(#[from] UnpackError),
     UnableToSetOpenFileDescriptorLimit,
     TransactionStatusSlotMismatch,
+    EmptyEpochStakes,
+    NoVoteTimestampsInRange,
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 

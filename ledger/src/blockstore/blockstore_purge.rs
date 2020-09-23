@@ -233,7 +233,7 @@ impl Blockstore {
                 .compact_range(from_slot, to_slot)
                 .unwrap_or(false)
             && self
-                ._blocktime_cf
+                .blocktime_cf
                 .compact_range(from_slot, to_slot)
                 .unwrap_or(false)
             && self
