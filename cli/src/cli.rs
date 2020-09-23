@@ -1,5 +1,6 @@
 use crate::{
-    checks::*, cluster_query::*, nonce::*, spend_utils::*, stake::*, validator_info::*, vote::*,
+    checks::*, cluster_query::*, feature::*, nonce::*, spend_utils::*, stake::*, validator_info::*,
+    vote::*,
 };
 use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
@@ -91,6 +92,7 @@ pub enum CliCommand {
         seed: String,
         program_id: Pubkey,
     },
+    Feature(FeatureCliCommand),
     Fees,
     FirstAvailableBlock,
     GetBlock {
@@ -521,6 +523,11 @@ pub fn parse_command(
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
+        // Feature subcommand
+        ("feature", Some(matches)) => {
+            feature_parse_subcommand(matches, default_signer, wallet_manager)
+        }
+
         // Cluster Query Commands
         ("catchup", Some(matches)) => parse_catchup(matches, wallet_manager),
         ("cluster-date", Some(_matches)) => Ok(CliCommandInfo {
@@ -1338,6 +1345,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             program_id,
         } => process_create_address_with_seed(config, from_pubkey.as_ref(), &seed, &program_id),
         CliCommand::Fees => process_fees(&rpc_client, config),
+        CliCommand::Feature(feature_subcommand) => {
+            process_feature_subcommand(&rpc_client, config, feature_subcommand)
+        }
         CliCommand::FirstAvailableBlock => process_first_available_block(&rpc_client),
         CliCommand::GetBlock { slot } => process_get_block(&rpc_client, config, *slot),
         CliCommand::GetBlockTime { slot } => process_get_block_time(&rpc_client, config, *slot),
@@ -1954,6 +1964,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         .cluster_query_subcommands()
         .nonce_subcommands()
         .stake_subcommands()
+        .feature_subcommands()
         .subcommand(
             SubCommand::with_name("airdrop")
                 .about("Request lamports")
