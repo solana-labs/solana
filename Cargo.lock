@@ -3591,6 +3591,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "solana-clap-utils",
  "solana-client",
  "solana-sdk 1.4.0",
  "solana-stake-program",
