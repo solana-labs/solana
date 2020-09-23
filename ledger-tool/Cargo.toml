@@ -20,7 +20,7 @@ regex = "1"
 serde_json = "1.0.56"
 serde_yaml = "0.8.13"
 solana-clap-utils = { path = "../clap-utils", version = "1.4.0" }
-solana-cli = { path = "../cli", version = "1.4.0" }
+solana-cli-output = { path = "../cli-output", version = "1.4.0" }
 solana-ledger = { path = "../ledger", version = "1.4.0" }
 solana-logger = { path = "../logger", version = "1.4.0" }
 solana-measure = { path = "../measure", version = "1.4.0" }

@@ -10,6 +10,7 @@ members = [
     "banks-server",
     "clap-utils",
     "cli-config",
+    "cli-output",
     "client",
     "core",
     "dos",

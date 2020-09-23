@@ -15,7 +15,7 @@ serde_yaml = "0.8.13"
 solana-clap-utils = { path = "../clap-utils", version = "1.4.0" }
 solana-client = { path = "../client", version = "1.4.0" }
 solana-cli-config = { path = "../cli-config", version = "1.4.0" }
-solana-cli = { path = "../cli", version = "1.4.0" }
+solana-cli-output = { path = "../cli-output", version = "1.4.0" }
 solana-logger = { path = "../logger", version = "1.4.0" }
 solana-metrics = { path = "../metrics", version = "1.4.0" }
 solana-notifier = { path = "../notifier", version = "1.4.0" }

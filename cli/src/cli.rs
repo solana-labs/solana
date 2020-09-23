@@ -1,14 +1,6 @@
 use crate::{
-    checks::*,
-    cli_output::{CliAccount, CliSignature, OutputFormat},
-    cluster_query::*,
-    display::{new_spinner_progress_bar, println_name_value, println_transaction},
-    nonce::*,
-    offline::return_signers,
-    spend_utils::*,
-    stake::*,
-    validator_info::*,
-    vote::*,
+    checks::*, cluster_query::*, nonce::*, offline::return_signers, spend_utils::*, stake::*,
+    validator_info::*, vote::*,
 };
 use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
@@ -24,6 +16,12 @@ use solana_clap_utils::{
     keypair::*,
     nonce::*,
     offline::*,
+};
+use solana_cli_output::{
+    display::{
+        build_balance_message, new_spinner_progress_bar, println_name_value, println_transaction,
+    },
+    CliAccount, CliSignature, OutputFormat,
 };
 use solana_client::{
     blockhash_query::BlockhashQuery,
@@ -47,7 +45,6 @@ use solana_sdk::{
     instruction::InstructionError,
     loader_instruction,
     message::Message,
-    native_token::lamports_to_sol,
     pubkey::{Pubkey, MAX_SEED_LEN},
     signature::{Keypair, Signature, Signer, SignerError},
     signers::Signers,
@@ -1937,28 +1934,6 @@ where
             };
             Ok(config.output_format.formatted_string(&signature))
         }
-    }
-}
-
-pub(crate) fn build_balance_message(
-    lamports: u64,
-    use_lamports_unit: bool,
-    show_unit: bool,
-) -> String {
-    if use_lamports_unit {
-        let ess = if lamports == 1 { "" } else { "s" };
-        let unit = if show_unit {
-            format!(" lamport{}", ess)
-        } else {
-            "".to_string()
-        };
-        format!("{:?}{}", lamports, unit)
-    } else {
-        let sol = lamports_to_sol(lamports);
-        let sol_str = format!("{:.9}", sol);
-        let pretty_sol = sol_str.trim_end_matches('0').trim_end_matches('.');
-        let unit = if show_unit { " SOL" } else { "" };
-        format!("{}{}", pretty_sol, unit)
     }
 }
 
