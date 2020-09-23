@@ -6,7 +6,7 @@ use solana_clap_utils::{
     input_parsers::pubkeys_of,
     input_validators::{is_pubkey_or_keypair, is_url},
 };
-use solana_cli::display::{format_labeled_address, write_transaction};
+use solana_cli_output::display::{format_labeled_address, write_transaction};
 use solana_client::{
     client_error::Result as ClientResult, rpc_client::RpcClient, rpc_response::RpcVoteAccountStatus,
 };
