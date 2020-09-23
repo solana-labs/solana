@@ -11,6 +11,7 @@ use solana_remote_wallet::{
     remote_wallet::{maybe_wallet_manager, RemoteWalletError, RemoteWalletManager},
 };
 use solana_sdk::{
+    hash::Hash,
     pubkey::Pubkey,
     signature::{
         keypair_from_seed, keypair_from_seed_phrase_and_passphrase, read_keypair,
@@ -25,6 +26,22 @@ use std::{
     sync::Arc,
 };
 
+pub struct SignOnly {
+    pub blockhash: Hash,
+    pub present_signers: Vec<(Pubkey, Signature)>,
+    pub absent_signers: Vec<Pubkey>,
+    pub bad_signers: Vec<Pubkey>,
+}
+
+impl SignOnly {
+    pub fn has_all_signers(&self) -> bool {
+        self.absent_signers.is_empty() && self.bad_signers.is_empty()
+    }
+
+    pub fn presigner_of(&self, pubkey: &Pubkey) -> Option<Presigner> {
+        presigner_from_pubkey_sigs(pubkey, &self.present_signers)
+    }
+}
 pub type CliSigners = Vec<Box<dyn Signer>>;
 pub type SignerIndex = usize;
 pub struct CliSignerInfo {

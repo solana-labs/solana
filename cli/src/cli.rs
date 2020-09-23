@@ -1,6 +1,5 @@
 use crate::{
-    checks::*, cluster_query::*, nonce::*, offline::return_signers, spend_utils::*, stake::*,
-    validator_info::*, vote::*,
+    checks::*, cluster_query::*, nonce::*, spend_utils::*, stake::*, validator_info::*, vote::*,
 };
 use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
@@ -21,7 +20,7 @@ use solana_cli_output::{
     display::{
         build_balance_message, new_spinner_progress_bar, println_name_value, println_transaction,
     },
-    CliAccount, CliSignature, OutputFormat,
+    return_signers, CliAccount, CliSignature, OutputFormat,
 };
 use solana_client::{
     blockhash_query::BlockhashQuery,
