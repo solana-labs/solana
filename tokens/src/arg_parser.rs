@@ -156,9 +156,9 @@ where
                         .help("Stake Account Address"),
                 )
                 .arg(
-                    Arg::with_name("sol_for_fees")
+                    Arg::with_name("unlocked_sol")
                         .default_value("1.0")
-                        .long("sol-for-fees")
+                        .long("unlocked-sol")
                         .takes_value(true)
                         .value_name("SOL_AMOUNT")
                         .help("Amount of SOL to put in system account to pay for fees"),
@@ -208,7 +208,7 @@ where
                         .required(true)
                         .takes_value(true)
                         .value_name("FILE")
-                        .help("Bids CSV file"),
+                        .help("Allocations CSV file"),
                 ),
         )
         .subcommand(
@@ -327,7 +327,7 @@ fn parse_distribute_stake_args(
 
     let stake_args = StakeArgs {
         stake_account_address,
-        sol_for_fees: value_t_or_exit!(matches, "sol_for_fees", f64),
+        unlocked_sol: value_t_or_exit!(matches, "unlocked_sol", f64),
         stake_authority,
         withdraw_authority,
         lockup_authority,
