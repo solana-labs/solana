@@ -1,8 +1,12 @@
+<<<<<<< HEAD:cli/src/cli_output.rs
 use crate::{cli::build_balance_message, display::writeln_name_value};
+=======
+use crate::display::{build_balance_message, format_labeled_address, writeln_name_value};
+>>>>>>> 325a7e9f8... Move CLI cli_output module to its own crate:cli-output/src/cli_output.rs
 use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
 use console::{style, Emoji};
 use inflector::cases::titlecase::to_title_case;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use solana_client::rpc_response::{
     RpcAccountBalance, RpcKeyedAccount, RpcSupply, RpcVoteAccountInfo,

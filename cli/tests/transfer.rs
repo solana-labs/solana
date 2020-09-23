@@ -1,10 +1,10 @@
 use solana_cli::test_utils::check_balance;
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
-    cli_output::OutputFormat,
     offline::parse_sign_only_reply_string,
     spend_utils::SpendAmount,
 };
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 use solana_client::rpc_client::RpcClient;
@@ -12,6 +12,9 @@ use solana_core::validator::{TestValidator, TestValidatorOptions};
 =======
 use solana_client::{nonce_utils, rpc_client::RpcClient};
 =======
+=======
+use solana_cli_output::OutputFormat;
+>>>>>>> 325a7e9f8... Move CLI cli_output module to its own crate
 use solana_client::{
     blockhash_query::{self, BlockhashQuery},
     nonce_utils,

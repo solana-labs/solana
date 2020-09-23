@@ -26,6 +26,7 @@ pretty-hex = "0.1.1"
 reqwest = { version = "0.10.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde = "1.0.110"
 serde_derive = "1.0.103"
+<<<<<<< HEAD
 serde_json = "1.0.53"
 solana-account-decoder = { path = "../account-decoder", version = "1.2.30" }
 solana-budget-program = { path = "../programs/budget", version = "1.2.30" }
@@ -44,6 +45,26 @@ solana-version = { path = "../version", version = "1.2.30" }
 solana-vote-program = { path = "../programs/vote", version = "1.2.30" }
 solana-vote-signer = { path = "../vote-signer", version = "1.2.30" }
 thiserror = "1.0.19"
+=======
+serde_json = "1.0.56"
+solana-account-decoder = { path = "../account-decoder", version = "1.4.0" }
+solana-clap-utils = { path = "../clap-utils", version = "1.4.0" }
+solana-cli-config = { path = "../cli-config", version = "1.4.0" }
+solana-cli-output = { path = "../cli-output", version = "1.4.0" }
+solana-client = { path = "../client", version = "1.4.0" }
+solana-config-program = { path = "../programs/config", version = "1.4.0" }
+solana-faucet = { path = "../faucet", version = "1.4.0" }
+solana-logger = { path = "../logger", version = "1.4.0" }
+solana-net-utils = { path = "../net-utils", version = "1.4.0" }
+solana-remote-wallet = { path = "../remote-wallet", version = "1.4.0" }
+solana-sdk = { path = "../sdk", version = "1.4.0" }
+solana-stake-program = { path = "../programs/stake", version = "1.4.0" }
+solana-transaction-status = { path = "../transaction-status", version = "1.4.0" }
+solana-version = { path = "../version", version = "1.4.0" }
+solana-vote-program = { path = "../programs/vote", version = "1.4.0" }
+solana-vote-signer = { path = "../vote-signer", version = "1.4.0" }
+thiserror = "1.0.20"
+>>>>>>> 325a7e9f8... Move CLI cli_output module to its own crate
 url = "2.1.1"
 
 [dev-dependencies]

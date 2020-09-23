@@ -76,6 +76,53 @@ fn output_slot_rewards(
     Ok(())
 }
 
+<<<<<<< HEAD
+=======
+fn output_entry(
+    blockstore: &Blockstore,
+    method: &LedgerOutputMethod,
+    slot: Slot,
+    entry_index: usize,
+    entry: &Entry,
+) {
+    match method {
+        LedgerOutputMethod::Print => {
+            println!(
+                "  Entry {} - num_hashes: {}, hashes: {}, transactions: {}",
+                entry_index,
+                entry.num_hashes,
+                entry.hash,
+                entry.transactions.len()
+            );
+            for (transactions_index, transaction) in entry.transactions.iter().enumerate() {
+                println!("    Transaction {}", transactions_index);
+                let transaction_status = blockstore
+                    .read_transaction_status((transaction.signatures[0], slot))
+                    .unwrap_or_else(|err| {
+                        eprintln!(
+                            "Failed to read transaction status for {} at slot {}: {}",
+                            transaction.signatures[0], slot, err
+                        );
+                        None
+                    })
+                    .map(|transaction_status| transaction_status.into());
+
+                solana_cli_output::display::println_transaction(
+                    &transaction,
+                    &transaction_status,
+                    "      ",
+                );
+            }
+        }
+        LedgerOutputMethod::Json => {
+            // Note: transaction status is not output in JSON yet
+            serde_json::to_writer(stdout(), &entry).expect("serialize entry");
+            stdout().write_all(b",\n").expect("newline");
+        }
+    }
+}
+
+>>>>>>> 325a7e9f8... Move CLI cli_output module to its own crate
 fn output_slot(
     blockstore: &Blockstore,
     slot: Slot,

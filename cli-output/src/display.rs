@@ -1,4 +1,3 @@
-use crate::cli::SettingType;
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
 use solana_sdk::{
@@ -7,6 +6,24 @@ use solana_sdk::{
 };
 use solana_transaction_status::UiTransactionStatusMeta;
 use std::{fmt, io};
+
+pub fn build_balance_message(lamports: u64, use_lamports_unit: bool, show_unit: bool) -> String {
+    if use_lamports_unit {
+        let ess = if lamports == 1 { "" } else { "s" };
+        let unit = if show_unit {
+            format!(" lamport{}", ess)
+        } else {
+            "".to_string()
+        };
+        format!("{:?}{}", lamports, unit)
+    } else {
+        let sol = lamports_to_sol(lamports);
+        let sol_str = format!("{:.9}", sol);
+        let pretty_sol = sol_str.trim_end_matches('0').trim_end_matches('.');
+        let unit = if show_unit { " SOL" } else { "" };
+        format!("{}{}", pretty_sol, unit)
+    }
+}
 
 // Pretty print a "name value"
 pub fn println_name_value(name: &str, value: &str) {
@@ -27,6 +44,7 @@ pub fn writeln_name_value(f: &mut fmt::Formatter, name: &str, value: &str) -> fm
     writeln!(f, "{} {}", style(name).bold(), styled_value)
 }
 
+<<<<<<< HEAD:cli/src/display.rs
 pub fn println_name_value_or(name: &str, value: &str, setting_type: SettingType) {
     let description = match setting_type {
         SettingType::Explicit => "",
@@ -40,6 +58,19 @@ pub fn println_name_value_or(name: &str, value: &str, setting_type: SettingType)
         style(value),
         style(description).italic(),
     );
+=======
+pub fn format_labeled_address(pubkey: &str, address_labels: &HashMap<String, String>) -> String {
+    let label = address_labels.get(pubkey);
+    match label {
+        Some(label) => format!(
+            "{:.31} ({:.4}..{})",
+            label,
+            pubkey,
+            pubkey.split_at(pubkey.len() - 4).1
+        ),
+        None => pubkey.to_string(),
+    }
+>>>>>>> 325a7e9f8... Move CLI cli_output module to its own crate:cli-output/src/display.rs
 }
 
 pub fn println_signers(

@@ -3488,6 +3488,7 @@ dependencies = [
  "solana-budget-program",
  "solana-clap-utils",
  "solana-cli-config",
+ "solana-cli-output",
  "solana-client",
  "solana-config-program",
  "solana-core",
@@ -3516,6 +3517,25 @@ dependencies = [
  "serde_derive",
  "serde_yaml",
  "url 2.1.1",
+]
+
+[[package]]
+name = "solana-cli-output"
+version = "1.4.0"
+dependencies = [
+ "Inflector",
+ "chrono",
+ "console",
+ "humantime 2.0.1",
+ "indicatif",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "solana-client",
+ "solana-sdk 1.4.0",
+ "solana-stake-program",
+ "solana-transaction-status",
+ "solana-vote-program",
 ]
 
 [[package]]
@@ -3933,7 +3953,7 @@ dependencies = [
  "serde_yaml",
  "signal-hook",
  "solana-clap-utils",
- "solana-cli",
+ "solana-cli-output",
  "solana-ledger",
  "solana-logger 1.2.30",
  "solana-measure",
@@ -4381,6 +4401,7 @@ dependencies = [
  "serde_yaml",
  "solana-clap-utils",
  "solana-cli-config",
+ "solana-cli-output",
  "solana-client",
  "solana-logger 1.2.30",
  "solana-metrics",
@@ -4610,8 +4631,8 @@ dependencies = [
  "humantime 2.0.1",
  "log 0.4.8",
  "solana-clap-utils",
- "solana-cli",
  "solana-cli-config",
+ "solana-cli-output",
  "solana-client",
  "solana-logger 1.2.30",
  "solana-metrics",

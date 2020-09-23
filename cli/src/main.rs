@@ -12,6 +12,7 @@ use solana_clap_utils::{
     DisplayError,
 >>>>>>> 0c58123b4... Move CLI Signer utils into clap-utils
 };
+<<<<<<< HEAD
 use solana_cli::{
 <<<<<<< HEAD
     cli::{app, parse_command, process_command, CliCommandInfo, CliConfig, CliSigners},
@@ -24,8 +25,32 @@ use solana_cli::{
     display::{println_name_value, println_name_value_or},
 };
 use solana_cli_config::{Config, CONFIG_FILE};
+=======
+use solana_cli::cli::{
+    app, parse_command, process_command, CliCommandInfo, CliConfig, SettingType,
+    DEFAULT_RPC_TIMEOUT_SECONDS,
+};
+use solana_cli_config::{Config, CONFIG_FILE};
+use solana_cli_output::{display::println_name_value, OutputFormat};
+use solana_client::rpc_config::RpcSendTransactionConfig;
+>>>>>>> 325a7e9f8... Move CLI cli_output module to its own crate
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use std::{error, sync::Arc};
+
+pub fn println_name_value_or(name: &str, value: &str, setting_type: SettingType) {
+    let description = match setting_type {
+        SettingType::Explicit => "",
+        SettingType::Computed => "(computed)",
+        SettingType::SystemDefault => "(default)",
+    };
+
+    println!(
+        "{} {} {}",
+        style(name).bold(),
+        style(value),
+        style(description).italic(),
+    );
+}
 
 fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error>> {
     let parse_args = match matches.subcommand() {

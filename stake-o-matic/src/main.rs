@@ -4,6 +4,10 @@ use solana_clap_utils::{
     input_parsers::{keypair_of, pubkey_of},
     input_validators::{is_keypair, is_pubkey_or_keypair, is_url},
 };
+<<<<<<< HEAD
+=======
+use solana_cli_output::display::format_labeled_address;
+>>>>>>> 325a7e9f8... Move CLI cli_output module to its own crate
 use solana_client::{
     client_error, rpc_client::RpcClient, rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
     rpc_response::RpcVoteAccountInfo,

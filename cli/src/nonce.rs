@@ -4,7 +4,6 @@ use crate::{
         log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
         ProcessResult,
     },
-    cli_output::CliNonceAccount,
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
 use clap::{App, Arg, ArgMatches, SubCommand};
@@ -14,6 +13,7 @@ use solana_clap_utils::{
     keypair::{DefaultSigner, SignerIndex},
     nonce::*,
 };
+use solana_cli_output::CliNonceAccount;
 use solana_client::{nonce_utils::*, rpc_client::RpcClient};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
