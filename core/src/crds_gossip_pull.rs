@@ -647,7 +647,6 @@ mod test {
     }
 
     #[test]
-<<<<<<< HEAD
     fn test_pulls_only_from_allowed() {
         let mut crds = Crds::default();
         let stakes = HashMap::new();
@@ -707,17 +706,10 @@ mod test {
     }
 
     #[test]
-    fn test_crds_filter_get_crds_filter() {
-        let mut filters =
-            CrdsFilter::new_complete_set(/*num_items=*/ 9672788, /*max_bytes=*/ 8196);
-        assert_eq!(filters.len(), 1024);
-        let mut bytes = [0u8; HASH_BYTES];
-=======
     fn test_crds_filter_set_get() {
         let mut crds_filter_set =
             CrdsFilterSet::new(/*num_items=*/ 9672788, /*max_bytes=*/ 8196);
         assert_eq!(crds_filter_set.0.len(), 1024);
->>>>>>> 114c211b6... adds new CrdsFilterSet type for Vec<CrdsFilter> (#12029)
         let mut rng = thread_rng();
         for _ in 0..100 {
             let mut bytes = [0u8; HASH_BYTES];
