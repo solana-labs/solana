@@ -10,7 +10,12 @@ import {
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
-import { IX_STRUCTS, TokenInstructionType, IX_TITLES, TokenAmountUi } from "./types";
+import {
+  IX_STRUCTS,
+  TokenInstructionType,
+  IX_TITLES,
+  TokenAmountUi,
+} from "./types";
 import { ParsedInfo } from "validators";
 import {
   useTokenAccountInfo,
