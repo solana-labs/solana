@@ -441,9 +441,10 @@ address backwards in time from the provided signature or most recent confirmed b
 #### Parameters:
 * `<string>` - account address as base-58 encoded string
 * `<object>` - (optional) Configuration object containing the following fields:
+  * `limit: <number>` - (optional) maximum transaction signatures to return (between 1 and 1,000, default: 1,000).
   * `before: <string>` - (optional) start searching backwards from this transaction signature.
                          If not provided the search starts from the top of the highest max confirmed block.
-  * `limit: <number>` - (optional) maximum transaction signatures to return (between 1 and 1,000, default: 1,000).
+  * `until: <string>` - (optional) search until this transaction signature, if found before limit reached.
 
 #### Results:
 The result field will be an array of transaction signature information, ordered
