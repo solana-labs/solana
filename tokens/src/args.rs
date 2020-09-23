@@ -12,7 +12,7 @@ pub struct DistributeTokensArgs {
 }
 
 pub struct StakeArgs {
-    pub sol_for_fees: f64,
+    pub unlocked_sol: f64,
     pub stake_account_address: Pubkey,
     pub stake_authority: Box<dyn Signer>,
     pub withdraw_authority: Box<dyn Signer>,
