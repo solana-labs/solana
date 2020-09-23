@@ -4,7 +4,7 @@ use solana_account_decoder::parse_token::token_amount_to_ui_amount;
 use solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey};
 use spl_token_v2_0::{
     instruction::{AuthorityType, TokenInstruction},
-    option::COption,
+    solana_sdk::program_option::COption,
 };
 
 pub fn parse_token(
@@ -314,7 +314,7 @@ pub fn parse_token(
                 info: value,
             })
         }
-        TokenInstruction::Transfer2 { amount, decimals } => {
+        TokenInstruction::TransferChecked { amount, decimals } => {
             if instruction.accounts.len() < 4 {
                 return Err(ParseInstructionError::InstructionKeyMismatch(
                     ParsableProgram::SplToken,
@@ -336,11 +336,11 @@ pub fn parse_token(
                 "multisigAuthority",
             );
             Ok(ParsedInstructionEnum {
-                instruction_type: "transfer2".to_string(),
+                instruction_type: "transferChecked".to_string(),
                 info: value,
             })
         }
-        TokenInstruction::Approve2 { amount, decimals } => {
+        TokenInstruction::ApproveChecked { amount, decimals } => {
             if instruction.accounts.len() < 4 {
                 return Err(ParseInstructionError::InstructionKeyMismatch(
                     ParsableProgram::SplToken,
@@ -362,11 +362,11 @@ pub fn parse_token(
                 "multisigOwner",
             );
             Ok(ParsedInstructionEnum {
-                instruction_type: "approve2".to_string(),
+                instruction_type: "approveChecked".to_string(),
                 info: value,
             })
         }
-        TokenInstruction::MintTo2 { amount, decimals } => {
+        TokenInstruction::MintToChecked { amount, decimals } => {
             if instruction.accounts.len() < 3 {
                 return Err(ParseInstructionError::InstructionKeyMismatch(
                     ParsableProgram::SplToken,
@@ -387,11 +387,11 @@ pub fn parse_token(
                 "multisigMintAuthority",
             );
             Ok(ParsedInstructionEnum {
-                instruction_type: "mintTo2".to_string(),
+                instruction_type: "mintToChecked".to_string(),
                 info: value,
             })
         }
-        TokenInstruction::Burn2 { amount, decimals } => {
+        TokenInstruction::BurnChecked { amount, decimals } => {
             if instruction.accounts.len() < 3 {
                 return Err(ParseInstructionError::InstructionKeyMismatch(
                     ParsableProgram::SplToken,
@@ -412,7 +412,7 @@ pub fn parse_token(
                 "multisigAuthority",
             );
             Ok(ParsedInstructionEnum {
-                instruction_type: "burn2".to_string(),
+                instruction_type: "burnChecked".to_string(),
                 info: value,
             })
         }
@@ -888,8 +888,8 @@ mod test {
             }
         );
 
-        // Test Transfer2, incl multisig
-        let transfer_ix = transfer2(
+        // Test TransferChecked, incl multisig
+        let transfer_ix = transfer_checked(
             &spl_token_v2_0::id(),
             &convert_pubkey(keys[0]),
             &convert_pubkey(keys[1]),
@@ -905,7 +905,7 @@ mod test {
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
             ParsedInstructionEnum {
-                instruction_type: "transfer2".to_string(),
+                instruction_type: "transferChecked".to_string(),
                 info: json!({
                    "source": keys[1].to_string(),
                    "destination": keys[2].to_string(),
@@ -920,7 +920,7 @@ mod test {
             }
         );
 
-        let transfer_ix = transfer2(
+        let transfer_ix = transfer_checked(
             &spl_token_v2_0::id(),
             &convert_pubkey(keys[2]),
             &convert_pubkey(keys[3]),
@@ -936,7 +936,7 @@ mod test {
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
             ParsedInstructionEnum {
-                instruction_type: "transfer2".to_string(),
+                instruction_type: "transferChecked".to_string(),
                 info: json!({
                    "source": keys[2].to_string(),
                    "destination": keys[3].to_string(),
@@ -953,7 +953,7 @@ mod test {
         );
 
         // Test Approve2, incl multisig
-        let approve_ix = approve2(
+        let approve_ix = approve_checked(
             &spl_token_v2_0::id(),
             &convert_pubkey(keys[1]),
             &convert_pubkey(keys[2]),
@@ -969,7 +969,7 @@ mod test {
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
             ParsedInstructionEnum {
-                instruction_type: "approve2".to_string(),
+                instruction_type: "approveChecked".to_string(),
                 info: json!({
                    "source": keys[1].to_string(),
                    "mint": keys[2].to_string(),
@@ -984,7 +984,7 @@ mod test {
             }
         );
 
-        let approve_ix = approve2(
+        let approve_ix = approve_checked(
             &spl_token_v2_0::id(),
             &convert_pubkey(keys[2]),
             &convert_pubkey(keys[3]),
@@ -1000,7 +1000,7 @@ mod test {
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
             ParsedInstructionEnum {
-                instruction_type: "approve2".to_string(),
+                instruction_type: "approveChecked".to_string(),
                 info: json!({
                     "source": keys[2].to_string(),
                     "mint": keys[3].to_string(),
@@ -1017,7 +1017,7 @@ mod test {
         );
 
         // Test MintTo2
-        let mint_to_ix = mint_to2(
+        let mint_to_ix = mint_to_checked(
             &spl_token_v2_0::id(),
             &convert_pubkey(keys[1]),
             &convert_pubkey(keys[2]),
@@ -1032,7 +1032,7 @@ mod test {
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
             ParsedInstructionEnum {
-                instruction_type: "mintTo2".to_string(),
+                instruction_type: "mintToChecked".to_string(),
                 info: json!({
                    "mint": keys[1].to_string(),
                    "account": keys[2].to_string(),
@@ -1047,7 +1047,7 @@ mod test {
         );
 
         // Test Burn2
-        let burn_ix = burn2(
+        let burn_ix = burn_checked(
             &spl_token_v2_0::id(),
             &convert_pubkey(keys[1]),
             &convert_pubkey(keys[2]),
@@ -1062,7 +1062,7 @@ mod test {
         assert_eq!(
             parse_token(&compiled_instruction, &keys).unwrap(),
             ParsedInstructionEnum {
-                instruction_type: "burn2".to_string(),
+                instruction_type: "burnChecked".to_string(),
                 info: json!({
                    "account": keys[1].to_string(),
                    "mint": keys[2].to_string(),
@@ -1330,8 +1330,8 @@ mod test {
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
         assert!(parse_token(&compiled_instruction, &keys).is_err());
 
-        // Test Transfer2, incl multisig
-        let transfer_ix = transfer2(
+        // Test TransferChecked, incl multisig
+        let transfer_ix = transfer_checked(
             &spl_token_v2_0::id(),
             &convert_pubkey(keys[1]),
             &convert_pubkey(keys[2]),
@@ -1349,7 +1349,7 @@ mod test {
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
         assert!(parse_token(&compiled_instruction, &keys).is_err());
 
-        let transfer_ix = transfer2(
+        let transfer_ix = transfer_checked(
             &spl_token_v2_0::id(),
             &convert_pubkey(keys[2]),
             &convert_pubkey(keys[3]),
@@ -1367,8 +1367,8 @@ mod test {
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 3].to_vec();
         assert!(parse_token(&compiled_instruction, &keys).is_err());
 
-        // Test Approve2, incl multisig
-        let approve_ix = approve2(
+        // Test ApproveChecked, incl multisig
+        let approve_ix = approve_checked(
             &spl_token_v2_0::id(),
             &convert_pubkey(keys[1]),
             &convert_pubkey(keys[2]),
@@ -1386,7 +1386,7 @@ mod test {
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
         assert!(parse_token(&compiled_instruction, &keys).is_err());
 
-        let approve_ix = approve2(
+        let approve_ix = approve_checked(
             &spl_token_v2_0::id(),
             &convert_pubkey(keys[2]),
             &convert_pubkey(keys[3]),
@@ -1404,8 +1404,8 @@ mod test {
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 3].to_vec();
         assert!(parse_token(&compiled_instruction, &keys).is_err());
 
-        // Test MintTo2
-        let mint_to_ix = mint_to2(
+        // Test MintToChecked
+        let mint_to_ix = mint_to_checked(
             &spl_token_v2_0::id(),
             &convert_pubkey(keys[1]),
             &convert_pubkey(keys[2]),
@@ -1422,8 +1422,8 @@ mod test {
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
         assert!(parse_token(&compiled_instruction, &keys).is_err());
 
-        // Test Burn2
-        let burn_ix = burn2(
+        // Test BurnChecked
+        let burn_ix = burn_checked(
             &spl_token_v2_0::id(),
             &convert_pubkey(keys[1]),
             &convert_pubkey(keys[2]),

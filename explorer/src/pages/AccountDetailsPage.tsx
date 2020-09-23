@@ -143,6 +143,7 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
 
 function InfoSection({ account }: { account: Account }) {
   const data = account?.details?.data;
+
   if (data && data.program === "stake") {
     let stakeAccountType, stakeAccount;
     if ("accountType" in data.parsed) {
@@ -157,6 +158,7 @@ function InfoSection({ account }: { account: Account }) {
       <StakeAccountSection
         account={account}
         stakeAccount={stakeAccount}
+        activation={data.activation}
         stakeAccountType={stakeAccountType}
       />
     );

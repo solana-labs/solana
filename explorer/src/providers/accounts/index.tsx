@@ -1,6 +1,11 @@
 import React from "react";
 import { StakeAccount as StakeAccountWasm } from "solana-sdk-wasm";
-import { PublicKey, Connection, StakeProgram } from "@solana/web3.js";
+import {
+  PublicKey,
+  Connection,
+  StakeProgram,
+  StakeActivationData,
+} from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
 import { HistoryProvider } from "./history";
 import { TokensProvider, TOKEN_PROGRAM_ID } from "./tokens";
@@ -20,6 +25,7 @@ export { useAccountHistory } from "./history";
 export type StakeProgramData = {
   program: "stake";
   parsed: StakeAccount | StakeAccountWasm;
+  activation?: StakeActivationData;
 };
 
 export type TokenProgramData = {
@@ -85,9 +91,8 @@ async function fetchAccountInfo(
   let data;
   let fetchStatus;
   try {
-    const result = (
-      await new Connection(url, "single").getParsedAccountInfo(pubkey)
-    ).value;
+    const connection = new Connection(url, "single");
+    const result = (await connection.getParsedAccountInfo(pubkey)).value;
 
     let lamports, details;
     if (result === null) {
@@ -104,17 +109,26 @@ async function fetchAccountInfo(
       let data: ProgramData | undefined;
       if (result.owner.equals(StakeProgram.programId)) {
         try {
-          let parsed;
+          let parsed: StakeAccount | StakeAccountWasm;
+          let isDelegated: boolean = false;
           if ("parsed" in result.data) {
             const info = coerce(result.data.parsed, ParsedInfo);
             parsed = coerce(info, StakeAccount);
+            isDelegated = parsed.type === "delegated";
           } else {
             const wasm = await import("solana-sdk-wasm");
             parsed = wasm.StakeAccount.fromAccountData(result.data);
+            isDelegated = (parsed.accountType as any) === "delegated";
           }
+
+          const activation = isDelegated
+            ? await connection.getStakeActivation(pubkey)
+            : undefined;
+
           data = {
             program: "stake",
             parsed,
+            activation,
           };
         } catch (err) {
           reportError(err, { url, address: pubkey.toBase58() });

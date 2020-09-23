@@ -11,17 +11,20 @@ import {
   StakeAccountType,
 } from "validators/accounts/stake";
 import BN from "bn.js";
+import { StakeActivationData } from "@solana/web3.js";
 
 const MAX_EPOCH = new BN(2).pow(new BN(64)).sub(new BN(1));
 
 export function StakeAccountSection({
   account,
   stakeAccount,
+  activation,
   stakeAccountType,
 }: {
   account: Account;
   stakeAccount: StakeAccountInfo | StakeAccountWasm;
   stakeAccountType: StakeAccountType;
+  activation?: StakeActivationData;
 }) {
   return (
     <>
@@ -35,6 +38,7 @@ export function StakeAccountSection({
         <>
           <DelegationCard
             stakeAccount={stakeAccount}
+            activation={activation}
             stakeAccountType={stakeAccountType}
           />
           <AuthoritiesCard meta={stakeAccount.meta} />
@@ -129,17 +133,22 @@ function OverviewCard({
 function DelegationCard({
   stakeAccount,
   stakeAccountType,
+  activation,
 }: {
   stakeAccount: StakeAccountInfo | StakeAccountWasm;
   stakeAccountType: StakeAccountType;
+  activation?: StakeActivationData;
 }) {
   const displayStatus = () => {
-    // TODO check epoch
     let status = TYPE_NAMES[stakeAccountType];
+    let activationState = "";
     if (stakeAccountType !== "delegated") {
       status = "Not delegated";
+    } else {
+      activationState = activation ? `(${activation.state})` : "";
     }
-    return status;
+
+    return [status, activationState].join(" ");
   };
 
   let voterPubkey, activationEpoch, deactivationEpoch;
@@ -189,6 +198,24 @@ function DelegationCard({
                 {lamportsToSolString(stake.delegation.stake)}
               </td>
             </tr>
+
+            {activation && (
+              <>
+                <tr>
+                  <td>Active Stake (SOL)</td>
+                  <td className="text-lg-right">
+                    {lamportsToSolString(activation.active)}
+                  </td>
+                </tr>
+
+                <tr>
+                  <td>Inactive Stake (SOL)</td>
+                  <td className="text-lg-right">
+                    {lamportsToSolString(activation.inactive)}
+                  </td>
+                </tr>
+              </>
+            )}
 
             {voterPubkey && (
               <tr>
