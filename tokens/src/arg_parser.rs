@@ -208,7 +208,7 @@ where
                         .required(true)
                         .takes_value(true)
                         .value_name("FILE")
-                        .help("Bids CSV file"),
+                        .help("Allocations CSV file"),
                 ),
         )
         .subcommand(

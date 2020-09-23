@@ -29,12 +29,6 @@ use std::{
 };
 use tokio::time::delay_for;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct Bid {
-    accepted_amount_dollars: f64,
-    primary_address: String,
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 struct Allocation {
     recipient: String,
