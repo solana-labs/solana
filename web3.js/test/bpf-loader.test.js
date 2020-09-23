@@ -62,18 +62,19 @@ describe('load BPF Rust program', () => {
   let program: Account;
   let signature: string;
   let payerAccount: Account;
+  let programData: Buffer;
 
   beforeAll(async () => {
-    const data = await fs.readFile(
+    programData = await fs.readFile(
       'test/fixtures/noop-rust/solana_bpf_rust_noop.so',
     );
 
     const {feeCalculator} = await connection.getRecentBlockhash();
     const fees =
       feeCalculator.lamportsPerSignature *
-      (BpfLoader.getMinNumSignatures(data.length) + NUM_RETRIES);
+      (BpfLoader.getMinNumSignatures(programData.length) + NUM_RETRIES);
     const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
-      data.length,
+      programData.length,
     );
 
     payerAccount = await newAccountWithLamports(
@@ -81,12 +82,30 @@ describe('load BPF Rust program', () => {
       fees + balanceNeeded,
     );
 
-    program = new Account();
+    // Create program account with low balance
+    program = await newAccountWithLamports(connection, balanceNeeded - 1);
+
+    // First load will fail part way due to lack of funds
+    const insufficientPayerAccount = await newAccountWithLamports(
+      connection,
+      2 * feeCalculator.lamportsPerSignature * 8,
+    );
+
+    const failedLoad = BpfLoader.load(
+      connection,
+      insufficientPayerAccount,
+      program,
+      programData,
+      BPF_LOADER_PROGRAM_ID,
+    );
+    await expect(failedLoad).rejects.toThrow('Transaction was not confirmed');
+
+    // Second load will succeed
     await BpfLoader.load(
       connection,
       payerAccount,
       program,
-      data,
+      programData,
       BPF_LOADER_PROGRAM_ID,
     );
 
@@ -195,5 +214,17 @@ describe('load BPF Rust program', () => {
     }
 
     expect(logs.length).toEqual(0);
+  });
+
+  test('reload program', async () => {
+    expect(
+      await BpfLoader.load(
+        connection,
+        payerAccount,
+        program,
+        programData,
+        BPF_LOADER_PROGRAM_ID,
+      ),
+    ).toBe(false);
   });
 });

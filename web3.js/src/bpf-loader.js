@@ -31,6 +31,7 @@ export class BpfLoader {
    * @param program Account to load the program into
    * @param elf The entire ELF containing the BPF program
    * @param loaderProgramId The program id of the BPF loader to use
+   * @return true if program was loaded successfully, false if program was already loaded
    */
   static load(
     connection: Connection,
@@ -38,7 +39,7 @@ export class BpfLoader {
     program: Account,
     elf: Buffer | Uint8Array | Array<number>,
     loaderProgramId: PublicKey,
-  ): Promise<void> {
+  ): Promise<boolean> {
     return Loader.load(connection, payer, program, loaderProgramId, elf);
   }
 }
