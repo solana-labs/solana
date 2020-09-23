@@ -105,17 +105,24 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
         for (i, (slot, _t)) in slice.iter().rev().enumerate() {
             if *slot >= max
                 && (ancestors.map_or(false, |ancestors| ancestors.contains_key(slot))
-                    || (self.is_root(*slot)
-                        && max_root
-                            .as_ref()
-                            .map(|max_root| slot <= max_root)
-                            .unwrap_or(true)))
+                    || (self.is_slot_rooted_and_le_max(*slot, max_root)))
             {
                 rv = Some((slice.len() - 1) - i);
                 max = *slot;
             }
         }
         rv
+    }
+
+    // Checks that the given slot is both:
+    // 1) Rooted
+    // 2) Less than or equal to an optionally specified `max_root`
+    fn is_slot_rooted_and_le_max(&self, slot: Slot, max_root: Option<Slot>) -> bool {
+        self.is_root(slot)
+            && max_root
+                .as_ref()
+                .map(|max_root| slot <= *max_root)
+                .unwrap_or(true)
     }
 
     /// Get an account
@@ -293,11 +300,11 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
         self.previous_uncleaned_roots.remove(&slot);
     }
 
-    pub fn reset_uncleaned_roots(&mut self, max_cleaned_slot: Option<Slot>) -> HashSet<Slot> {
+    pub fn reset_uncleaned_roots(&mut self, max_clean_root: Option<Slot>) -> HashSet<Slot> {
         let mut cleaned_roots = HashSet::new();
         self.uncleaned_roots.retain(|root| {
-            let is_cleaned = max_cleaned_slot
-                .map(|max_cleaned_slot| *root <= max_cleaned_slot)
+            let is_cleaned = max_clean_root
+                .map(|max_clean_root| *root <= max_clean_root)
                 .unwrap_or(true);
             if is_cleaned {
                 cleaned_roots.insert(*root);

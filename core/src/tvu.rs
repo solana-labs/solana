@@ -27,7 +27,7 @@ use solana_ledger::{
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_runtime::{
-    accounts_background_service::{AccountsBackgroundService, SnapshotItems},
+    accounts_background_service::{AccountsBackgroundService, SnapshotRequestHandler},
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
     snapshot_package::AccountsPackageSender,
@@ -190,13 +190,13 @@ impl Tvu {
             snapshot_interval_slots,
         );
 
-        let (snapshot_request_sender, snapshot_items) = {
+        let (snapshot_request_sender, snapshot_request_handler) = {
             snapshot_config
                 .map(|snapshot_config| {
                     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
                     (
                         Some(snapshot_request_sender),
-                        Some(SnapshotItems {
+                        Some(SnapshotRequestHandler {
                             snapshot_config,
                             snapshot_request_receiver,
                             accounts_package_sender: accounts_hash_sender,
@@ -246,7 +246,7 @@ impl Tvu {
         });
 
         let accounts_background_service =
-            AccountsBackgroundService::new(bank_forks.clone(), &exit, snapshot_items);
+            AccountsBackgroundService::new(bank_forks.clone(), &exit, snapshot_request_handler);
 
         Tvu {
             fetch_stage,

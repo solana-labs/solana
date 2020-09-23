@@ -43,7 +43,7 @@ mod tests {
         snapshot_packager_service::SnapshotPackagerService,
     };
     use solana_runtime::{
-        accounts_background_service::AccountsBackgroundService,
+        accounts_background_service::SnapshotRequestHandler,
         bank::{Bank, BankSlotDelta},
         bank_forks::{BankForks, CompressionType, SnapshotConfig},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
@@ -188,6 +188,11 @@ mod tests {
         let (s, snapshot_request_receiver) = unbounded();
         let (accounts_package_sender, _r) = channel();
         let snapshot_request_sender = Some(s);
+        let snapshot_request_handler = SnapshotRequestHandler {
+            snapshot_config: snapshot_test_config.snapshot_config.clone(),
+            snapshot_request_receiver,
+            accounts_package_sender,
+        };
         for slot in 0..last_slot {
             let mut bank = Bank::new_from_parent(&bank_forks[slot], &Pubkey::default(), slot + 1);
             f(&mut bank, &mint_keypair);
@@ -198,11 +203,7 @@ mod tests {
             if slot % set_root_interval == 0 || slot == last_slot - 1 {
                 // set_root should send a snapshot request
                 bank_forks.set_root(bank.slot(), &snapshot_request_sender, None);
-                AccountsBackgroundService::process_snapshot_requests(
-                    &snapshot_test_config.snapshot_config,
-                    &snapshot_request_receiver,
-                    &accounts_package_sender,
-                );
+                snapshot_request_handler.handle_snapshot_requests();
             }
         }
 
