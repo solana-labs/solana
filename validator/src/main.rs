@@ -784,6 +784,12 @@ pub fn main() {
                 .help("Use CUDA"),
         )
         .arg(
+            Arg::with_name("require_tower")
+                .long("require-tower")
+                .takes_value(false)
+                .hidden(true)
+        )
+        .arg(
             Arg::with_name("expected_genesis_hash")
                 .long("expected-genesis-hash")
                 .value_name("HASH")
