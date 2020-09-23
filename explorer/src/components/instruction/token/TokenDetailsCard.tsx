@@ -19,6 +19,8 @@ import {
 } from "providers/accounts";
 import { normalizeTokenAmount } from "utils";
 import { reportError } from "utils/sentry";
+import { useCluster } from "providers/cluster";
+import { TokenRegistry } from "tokenRegistry";
 
 type DetailsProps = {
   tx: ParsedTransaction;
@@ -81,6 +83,7 @@ function TokenInstruction(props: InfoProps) {
   const tokenInfo = useTokenAccountInfo(tokenAddress);
   const mintAddress = infoMintAddress || tokenInfo?.mint.toBase58();
   const mintInfo = useMintAccountInfo(mintAddress);
+  const { cluster } = useCluster();
   const fetchAccountInfo = useFetchAccountInfo();
 
   React.useEffect(() => {
@@ -97,6 +100,26 @@ function TokenInstruction(props: InfoProps) {
 
   const decimals = mintInfo?.decimals;
   const attributes = [];
+
+  let tokenSymbol = "";
+
+  if (mintAddress) {
+    const tokenDetails = TokenRegistry.get(mintAddress, cluster);
+
+    if (tokenDetails && "symbol" in tokenDetails) {
+      tokenSymbol = tokenDetails.symbol;
+    }
+
+    attributes.push(
+      <tr key={mintAddress}>
+        <td>Token</td>
+        <td className="text-lg-right">
+          <Address pubkey={new PublicKey(mintAddress)} alignRight link />
+        </td>
+      </tr>
+    );
+  }
+
   for (let key in props.info) {
     const value = props.info[key];
     if (value === undefined) continue;
@@ -116,7 +139,11 @@ function TokenInstruction(props: InfoProps) {
           maximumFractionDigits: decimals,
         }).format(normalizeTokenAmount(value, decimals));
       }
-      tag = <>{amount}</>;
+      tag = (
+        <>
+          {amount} {tokenSymbol}
+        </>
+      );
     } else {
       tag = <>{value}</>;
     }
