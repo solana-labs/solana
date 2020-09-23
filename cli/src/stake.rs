@@ -5,7 +5,6 @@ use crate::{
         ProcessResult,
     },
     nonce::check_nonce_account,
-    offline::return_signers,
     spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
 };
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
@@ -18,7 +17,9 @@ use solana_clap_utils::{
     offline::*,
     ArgConstant,
 };
-use solana_cli_output::{CliStakeHistory, CliStakeHistoryEntry, CliStakeState, CliStakeType};
+use solana_cli_output::{
+    return_signers, CliStakeHistory, CliStakeHistoryEntry, CliStakeState, CliStakeType,
+};
 use solana_client::{
     blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
     rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
