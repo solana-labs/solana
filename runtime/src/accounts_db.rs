@@ -966,12 +966,12 @@ impl AccountsDB {
                 write_versions.push(*write_version);
             }
             start.stop();
-            find_alive_elapsed = start.as_ms();
+            find_alive_elapsed = start.as_us();
 
             let mut start = Measure::start("create_and_insert_store_elapsed");
             let shrunken_store = self.create_and_insert_store(slot, aligned_total);
             start.stop();
-            create_and_insert_store_elapsed = start.as_ms();
+            create_and_insert_store_elapsed = start.as_us();
 
             // here, we're writing back alive_accounts. That should be an atomic operation
             // without use of rather wide locks in this whole function, because we're
@@ -985,17 +985,17 @@ impl AccountsDB {
                 write_versions.into_iter(),
             );
             start.stop();
-            store_accounts_elapsed = start.as_ms();
+            store_accounts_elapsed = start.as_us();
 
             let mut start = Measure::start("update_index_elapsed");
             let reclaims = self.update_index(slot, infos, &accounts);
             start.stop();
-            update_index_elapsed = start.as_ms();
+            update_index_elapsed = start.as_us();
 
             let mut start = Measure::start("update_index_elapsed");
             self.handle_reclaims_maybe_cleanup(&reclaims);
             start.stop();
-            handle_reclaims_elapsed = start.as_ms();
+            handle_reclaims_elapsed = start.as_us();
 
             let mut start = Measure::start("write_storage_elapsed");
             let mut storage = self.storage.write().unwrap();
@@ -1008,7 +1008,7 @@ impl AccountsDB {
                 });
             }
             start.stop();
-            write_storage_elapsed = start.as_ms();
+            write_storage_elapsed = start.as_us();
         }
         rewrite_elapsed.stop();
 
@@ -1018,8 +1018,8 @@ impl AccountsDB {
 
         datapoint_info!(
             "do_shrink_slot_time",
-            ("storage_read_elapsed", storage_read_elapsed.as_ms(), i64),
-            ("index_read_elapsed", index_read_elapsed.as_ms(), i64),
+            ("storage_read_elapsed", storage_read_elapsed.as_us(), i64),
+            ("index_read_elapsed", index_read_elapsed.as_us(), i64),
             ("find_alive_elapsed", find_alive_elapsed, i64),
             (
                 "create_and_insert_store_elapsed",
@@ -1030,10 +1030,10 @@ impl AccountsDB {
             ("update_index_elapsed", update_index_elapsed, i64),
             ("handle_reclaims_elapsed", handle_reclaims_elapsed, i64),
             ("write_storage_elapsed", write_storage_elapsed, i64),
-            ("rewrite_elapsed", rewrite_elapsed.as_ms(), i64),
+            ("rewrite_elapsed", rewrite_elapsed.as_us(), i64),
             (
                 "drop_storage_entries_elapsed",
-                drop_storage_entries_elapsed.as_ms(),
+                drop_storage_entries_elapsed.as_us(),
                 i64
             ),
         );
@@ -1349,15 +1349,15 @@ impl AccountsDB {
 
         datapoint_info!(
             "purge_slots_time",
-            ("storage_lock_elapsed", storage_lock_elapsed.as_ms(), i64),
+            ("storage_lock_elapsed", storage_lock_elapsed.as_us(), i64),
             (
                 "remove_storages_elapsed",
-                remove_storages_elapsed.as_ms(),
+                remove_storages_elapsed.as_us(),
                 i64
             ),
             (
                 "drop_storage_entries_elapsed",
-                drop_storage_entries_elapsed.as_ms(),
+                drop_storage_entries_elapsed.as_us(),
                 i64
             ),
             ("num_slots_removed", num_slots_removed, i64),
