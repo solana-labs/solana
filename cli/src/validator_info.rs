@@ -1,6 +1,5 @@
 use crate::{
     cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
-    cli_output::{CliValidatorInfo, CliValidatorInfoVec},
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
 use bincode::deserialize;
@@ -15,6 +14,7 @@ use solana_clap_utils::{
     input_validators::{is_pubkey, is_url},
     keypair::DefaultSigner,
 };
+use solana_cli_output::{CliValidatorInfo, CliValidatorInfoVec};
 use solana_client::rpc_client::RpcClient;
 use solana_config_program::{config_instruction, get_config_data, ConfigKeys, ConfigState};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;

@@ -11,17 +11,30 @@ use solana_clap_utils::{
     keypair::{CliSigners, DefaultSigner, SKIP_SEED_PHRASE_VALIDATION_ARG},
     DisplayError,
 };
-use solana_cli::{
-    cli::{
-        app, parse_command, process_command, CliCommandInfo, CliConfig, DEFAULT_RPC_TIMEOUT_SECONDS,
-    },
-    cli_output::OutputFormat,
-    display::{println_name_value, println_name_value_or},
+use solana_cli::cli::{
+    app, parse_command, process_command, CliCommandInfo, CliConfig, SettingType,
+    DEFAULT_RPC_TIMEOUT_SECONDS,
 };
 use solana_cli_config::{Config, CONFIG_FILE};
+use solana_cli_output::{display::println_name_value, OutputFormat};
 use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use std::{collections::HashMap, error, path::PathBuf, sync::Arc, time::Duration};
+
+pub fn println_name_value_or(name: &str, value: &str, setting_type: SettingType) {
+    let description = match setting_type {
+        SettingType::Explicit => "",
+        SettingType::Computed => "(computed)",
+        SettingType::SystemDefault => "(default)",
+    };
+
+    println!(
+        "{} {} {}",
+        style(name).bold(),
+        style(value),
+        style(description).italic(),
+    );
+}
 
 fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error>> {
     let parse_args = match matches.subcommand() {
