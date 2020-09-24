@@ -175,7 +175,9 @@ all_test_steps() {
   - command: "ci/live-cluster-sanity.sh"
     name: "live-cluster-sanity"
     timeout_in_minutes: 20
-    artifact_paths: "*-validator.log"
+    artifact_paths:
+      - "*-validator.log"
+      - "*-sys-tuner.log"
     agents:
       - "queue=gce-deploy"
 EOF

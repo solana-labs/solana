@@ -31,7 +31,14 @@ _ ./net/scp.sh \
   "$instance_ip:."
 
 test_with_live_cluster() {
-  ./net/ssh.sh "$instance_ip" ./remote-live-cluster-sanity.sh "$@"
+  cluster_label="$1"
+
+  _ ./net/ssh.sh "$instance_ip" ./remote-live-cluster-sanity.sh "$@"
+
+  # good it existed successfully; let's collect logs for profit!
+  for log in $(./net/ssh.sh ls -l '*.log'); do
+    _ ./net/scp.sh "$instance_ip:$log" .
+  done
 }
 
 # UPDATE docs/src/clusters.md TOO!!

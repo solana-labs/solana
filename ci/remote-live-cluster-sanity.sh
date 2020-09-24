@@ -27,6 +27,10 @@ shift
 echo "--- Starting validator $cluster_label"
 
 validator_log="$cluster_label-validator.log"
+sys_tuner_log="$cluster_label-sys-tuner.log"
+sudo ./solana-sys-tuner --user $(whoami) > "$sys_tuner_log" &
+sys_tuner_pid=$!
+
 ./solana-validator  \
     --no-untrusted-rpc \
     --ledger cluster-sanity/ledger \
@@ -38,7 +42,6 @@ validator_log="$cluster_label-validator.log"
     --rpc-bind-address localhost \
     --snapshot-interval-slots 0 \
     "$@" &> "$validator_log" &
-
 validator_pid=$!
 tail -F "$validator_log" > cluster-sanity/log-tail 2> /dev/null &
 tail_pid=$!
@@ -85,7 +88,7 @@ curl \
   -d '{"jsonrpc":"2.0","id":1, "method":"validatorExit"}' \
   http://localhost:8899
 
-(sleep 3 && kill "$tail_pid") &
-(sleep 30 && kill -KILL "$validator_pid" "$tail_pid") &
+(sleep 3 && kill "$tail_pid" && sudo kill "$sys_tuner_pid") &
 kill_pid=$!
-wait "$validator_pid" "$tail_pid" "$kill_pid"
+
+wait "$validator_pid" "$sys_tuner_pid" "$tail_pid" "$kill_pid"
