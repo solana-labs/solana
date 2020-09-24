@@ -85,7 +85,8 @@ solana config set --url https://api.testnet.solana.com
 
 ##### Example `solana-validator` command-line
 
-[comment]: <> (UPDATE ci/live-cluster-sanity.sh TOO!!)
+[comment]: # (UPDATE ci/live-cluster-sanity.sh TOO!!)
+
 ```bash
 $ solana-validator \
     --entrypoint entrypoint.testnet.solana.com:8001 \
@@ -141,7 +142,8 @@ solana config set --url https://api.mainnet-beta.solana.com
 
 ##### Example `solana-validator` command-line
 
-[comment]: <> (UPDATE ci/live-cluster-sanity.sh TOO!!)
+[comment]: # (UPDATE ci/live-cluster-sanity.sh TOO!!)
+
 ```bash
 $ solana-validator \
     --entrypoint entrypoint.mainnet-beta.solana.com:8001 \
