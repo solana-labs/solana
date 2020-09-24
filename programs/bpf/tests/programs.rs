@@ -23,7 +23,6 @@ use solana_sdk::{
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, MAX_PROCESSING_AGE},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     message::Message,
     pubkey::Pubkey,
@@ -657,6 +656,7 @@ fn assert_instruction_count() {
 struct MockInvokeContext {
     pub key: Pubkey,
     pub logger: MockLogger,
+    pub compute_budget: ComputeBudget,
     pub compute_meter: MockComputeMeter,
 }
 impl InvokeContext for MockInvokeContext {
@@ -681,11 +681,8 @@ impl InvokeContext for MockInvokeContext {
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
         Rc::new(RefCell::new(self.logger.clone()))
     }
-    fn is_cross_program_supported(&self) -> bool {
-        true
-    }
-    fn get_compute_budget(&self) -> ComputeBudget {
-        ComputeBudget::default()
+    fn get_compute_budget(&self) -> &ComputeBudget {
+        &self.compute_budget
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
         Rc::new(RefCell::new(self.compute_meter.clone()))
@@ -695,6 +692,9 @@ impl InvokeContext for MockInvokeContext {
         None
     }
     fn record_instruction(&self, _instruction: &Instruction) {}
+    fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
+        true
+    }
 }
 
 #[derive(Debug, Default, Clone)]

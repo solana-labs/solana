@@ -1,5 +1,5 @@
 use crate::{
-    feature_set::{self, FeatureSet},
+    feature_set::{compute_budget_config2, instructions_sysvar_enabled, FeatureSet},
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     native_loader::NativeLoader,
@@ -206,11 +206,11 @@ pub struct ThisInvokeContext {
     pre_accounts: Vec<PreAccount>,
     programs: Vec<(Pubkey, ProcessInstruction)>,
     logger: Rc<RefCell<dyn Logger>>,
-    is_cross_program_supported: bool,
     compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     executors: Rc<RefCell<Executors>>,
     instruction_recorder: Option<InstructionRecorder>,
+    feature_set: Arc<FeatureSet>,
 }
 impl ThisInvokeContext {
     pub fn new(
@@ -219,10 +219,10 @@ impl ThisInvokeContext {
         pre_accounts: Vec<PreAccount>,
         programs: Vec<(Pubkey, ProcessInstruction)>,
         log_collector: Option<Rc<LogCollector>>,
-        is_cross_program_supported: bool,
         compute_budget: ComputeBudget,
         executors: Rc<RefCell<Executors>>,
         instruction_recorder: Option<InstructionRecorder>,
+        feature_set: Arc<FeatureSet>,
     ) -> Self {
         let mut program_ids = Vec::with_capacity(compute_budget.max_invoke_depth);
         program_ids.push(*program_id);
@@ -232,13 +232,13 @@ impl ThisInvokeContext {
             pre_accounts,
             programs,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
-            is_cross_program_supported,
             compute_budget,
             compute_meter: Rc::new(RefCell::new(ThisComputeMeter {
                 remaining: compute_budget.max_units,
             })),
             executors,
             instruction_recorder,
+            feature_set,
         }
     }
 }
@@ -286,11 +286,8 @@ impl InvokeContext for ThisInvokeContext {
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
         self.logger.clone()
     }
-    fn is_cross_program_supported(&self) -> bool {
-        self.is_cross_program_supported
-    }
-    fn get_compute_budget(&self) -> ComputeBudget {
-        self.compute_budget
+    fn get_compute_budget(&self) -> &ComputeBudget {
+        &self.compute_budget
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
         self.compute_meter.clone()
@@ -305,6 +302,9 @@ impl InvokeContext for ThisInvokeContext {
         if let Some(recorder) = &self.instruction_recorder {
             recorder.record_instruction(instruction.clone());
         }
+    }
+    fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
+        self.feature_set.is_active(feature_id)
     }
 }
 pub struct ThisLogger {
@@ -330,10 +330,6 @@ pub struct MessageProcessor {
     loaders: Vec<(Pubkey, ProcessInstructionWithContext)>,
     #[serde(skip)]
     native_loader: NativeLoader,
-    #[serde(skip)]
-    is_cross_program_supported: bool,
-    #[serde(skip)]
-    compute_budget: ComputeBudget,
 }
 
 impl std::fmt::Debug for MessageProcessor {
@@ -343,8 +339,6 @@ impl std::fmt::Debug for MessageProcessor {
             programs: Vec<String>,
             loaders: Vec<String>,
             native_loader: &'a NativeLoader,
-            is_cross_program_supported: bool,
-            compute_budget: ComputeBudget,
         }
         // rustc doesn't compile due to bug without this work around
         // https://github.com/rust-lang/rust/issues/50280
@@ -367,8 +361,6 @@ impl std::fmt::Debug for MessageProcessor {
                 })
                 .collect::<Vec<_>>(),
             native_loader: &self.native_loader,
-            is_cross_program_supported: self.is_cross_program_supported,
-            compute_budget: self.compute_budget,
         };
 
         write!(f, "{:?}", processor)
@@ -381,8 +373,6 @@ impl Default for MessageProcessor {
             programs: vec![],
             loaders: vec![],
             native_loader: NativeLoader::default(),
-            is_cross_program_supported: true,
-            compute_budget: ComputeBudget::default(),
         }
     }
 }
@@ -392,7 +382,6 @@ impl Clone for MessageProcessor {
             programs: self.programs.clone(),
             loaders: self.loaders.clone(),
             native_loader: NativeLoader::default(),
-            ..*self
         }
     }
 }
@@ -426,17 +415,20 @@ impl MessageProcessor {
         }
     }
 
-    pub fn set_cross_program_support(&mut self, is_supported: bool) {
-        self.is_cross_program_supported = is_supported;
-    }
-
-    pub fn set_compute_budget(&mut self, compute_budget: ComputeBudget) {
-        self.compute_budget = compute_budget;
-    }
-
-    #[cfg(test)]
-    pub fn get_cross_program_support(&mut self) -> bool {
-        self.is_cross_program_supported
+    fn get_compute_budget(feature_set: &FeatureSet) -> ComputeBudget {
+        if feature_set.is_active(&compute_budget_config2::id()) {
+            ComputeBudget::default()
+        } else {
+            // Original
+            ComputeBudget {
+                max_units: 100_000,
+                log_units: 0,
+                log_64_units: 0,
+                create_program_address_units: 0,
+                invoke_units: 0,
+                max_invoke_depth: 2,
+            }
+        }
     }
 
     /// Create the KeyedAccounts that will be passed to the program
@@ -527,10 +519,6 @@ impl MessageProcessor {
         accounts: &[Rc<RefCell<Account>>],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
-        if !self.is_cross_program_supported {
-            return Err(InstructionError::ReentrancyNotAllowed);
-        }
-
         let instruction = &message.instructions[0];
 
         // Verify the calling program hasn't misbehaved
@@ -681,11 +669,11 @@ impl MessageProcessor {
         executors: Rc<RefCell<Executors>>,
         instruction_recorder: Option<InstructionRecorder>,
         instruction_index: usize,
-        feature_set: &FeatureSet,
+        feature_set: Arc<FeatureSet>,
     ) -> Result<(), InstructionError> {
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
-        if feature_set.is_active(&feature_set::instructions_sysvar_enabled::id()) {
+        if feature_set.is_active(&instructions_sysvar_enabled::id()) {
             for (i, key) in message.account_keys.iter().enumerate() {
                 if solana_sdk::sysvar::instructions::check_id(key) {
                     let mut mut_account_ref = accounts[i].borrow_mut();
@@ -705,10 +693,10 @@ impl MessageProcessor {
             pre_accounts,
             self.programs.clone(), // get rid of clone
             log_collector,
-            self.is_cross_program_supported,
-            self.compute_budget,
+            Self::get_compute_budget(&feature_set),
             executors,
             instruction_recorder,
+            feature_set,
         );
         let keyed_accounts =
             Self::create_keyed_accounts(message, instruction, executable_accounts, accounts)?;
@@ -737,7 +725,7 @@ impl MessageProcessor {
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
         instruction_recorders: Option<&[InstructionRecorder]>,
-        feature_set: &FeatureSet,
+        feature_set: Arc<FeatureSet>,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let instruction_recorder = instruction_recorders
@@ -753,7 +741,7 @@ impl MessageProcessor {
                 executors.clone(),
                 instruction_recorder,
                 instruction_index,
-                feature_set,
+                feature_set.clone(),
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
@@ -798,10 +786,10 @@ mod tests {
             pre_accounts,
             vec![],
             None,
-            true,
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
             None,
+            Arc::new(FeatureSet::default()),
         );
 
         // Check call depth increases and has a limit
@@ -1338,7 +1326,7 @@ mod tests {
             None,
             executors.clone(),
             None,
-            &FeatureSet::default(),
+            Arc::new(FeatureSet::default()),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 100);
@@ -1361,7 +1349,7 @@ mod tests {
             None,
             executors.clone(),
             None,
-            &FeatureSet::default(),
+            Arc::new(FeatureSet::default()),
         );
         assert_eq!(
             result,
@@ -1388,7 +1376,7 @@ mod tests {
             None,
             executors,
             None,
-            &FeatureSet::default(),
+            Arc::new(FeatureSet::default()),
         );
         assert_eq!(
             result,
@@ -1498,7 +1486,7 @@ mod tests {
             None,
             executors.clone(),
             None,
-            &FeatureSet::default(),
+            Arc::new(FeatureSet::default()),
         );
         assert_eq!(
             result,
@@ -1525,7 +1513,7 @@ mod tests {
             None,
             executors.clone(),
             None,
-            &FeatureSet::default(),
+            Arc::new(FeatureSet::default()),
         );
         assert_eq!(result, Ok(()));
 
@@ -1549,7 +1537,7 @@ mod tests {
             None,
             executors,
             None,
-            &FeatureSet::default(),
+            Arc::new(FeatureSet::default()),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);
@@ -1623,10 +1611,10 @@ mod tests {
             vec![owned_preaccount, not_owned_preaccount],
             vec![],
             None,
-            true,
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
             None,
+            Arc::new(FeatureSet::default()),
         );
         let metas = vec![
             AccountMeta::new(owned_key, false),

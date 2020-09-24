@@ -18,9 +18,7 @@ use crate::{
     log_collector::LogCollector,
     message_processor::{Executors, MessageProcessor},
     nonce_utils,
-    process_instruction::{
-        ComputeBudget, Executor, ProcessInstruction, ProcessInstructionWithContext,
-    },
+    process_instruction::{Executor, ProcessInstruction, ProcessInstructionWithContext},
     rent_collector::RentCollector,
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
@@ -1476,15 +1474,6 @@ impl Bank {
         debug!("Added native program {} under {:?}", name, program_id);
     }
 
-    pub fn set_cross_program_support(&mut self, is_supported: bool) {
-        self.message_processor
-            .set_cross_program_support(is_supported);
-    }
-
-    pub fn set_compute_budget(&mut self, budget: ComputeBudget) {
-        self.message_processor.set_compute_budget(budget);
-    }
-
     pub fn set_rent_burn_percentage(&mut self, burn_percent: u8) {
         self.rent_collector.rent.burn_percent = burn_percent;
     }
@@ -2155,7 +2144,7 @@ impl Bank {
                         log_collector.clone(),
                         executors.clone(),
                         instruction_recorders.as_deref(),
-                        &self.feature_set,
+                        self.feature_set.clone(),
                     );
 
                     Self::compile_recorded_instructions(
@@ -3610,8 +3599,6 @@ impl Bank {
         }
 
         self.ensure_feature_builtins(init_finish_or_warp, &new_feature_activations);
-        self.recheck_cross_program_support();
-        self.recheck_compute_budget();
         self.reconfigure_token2_native_mint();
         self.ensure_no_storage_rewards_pool();
     }
@@ -3673,35 +3660,6 @@ impl Bank {
                 self.add_builtin(&builtin.name, builtin.id, builtin.entrypoint);
             }
         }
-    }
-
-    fn recheck_cross_program_support(&mut self) {
-        if ClusterType::MainnetBeta == self.cluster_type() {
-            self.set_cross_program_support(self.epoch() >= 63);
-        } else {
-            self.set_cross_program_support(true);
-        }
-    }
-
-    fn recheck_compute_budget(&mut self) {
-        let compute_budget = if ClusterType::MainnetBeta == self.cluster_type() {
-            if self.epoch() >= u64::MAX - 1 {
-                ComputeBudget::default()
-            } else {
-                // Original
-                ComputeBudget {
-                    max_units: 100_000,
-                    log_units: 0,
-                    log_64_units: 0,
-                    create_program_address_units: 0,
-                    invoke_units: 0,
-                    max_invoke_depth: 2,
-                }
-            }
-        } else {
-            ComputeBudget::default()
-        };
-        self.set_compute_budget(compute_budget);
     }
 
     fn apply_spl_token_v2_multisig_fix(&mut self) {
@@ -8699,19 +8657,6 @@ mod tests {
             Err(TransactionError::ClusterMaintenance)
         );
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 496); // no transaction fee charged
-    }
-
-    #[test]
-    fn test_finish_init() {
-        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
-        let mut bank = Bank::new(&genesis_config);
-        bank.message_processor = MessageProcessor::default();
-        bank.message_processor.set_cross_program_support(false);
-
-        // simulate bank is just after deserialized from snapshot
-        bank.finish_init(&genesis_config, None);
-
-        assert_eq!(bank.message_processor.get_cross_program_support(), true);
     }
 
     #[test]

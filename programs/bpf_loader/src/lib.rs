@@ -271,6 +271,7 @@ mod tests {
     use super::*;
     use rand::Rng;
     use solana_runtime::{
+        feature_set::FeatureSet,
         message_processor::{Executors, ThisInvokeContext},
         process_instruction::{ComputeBudget, Logger, ProcessInstruction},
     };
@@ -313,6 +314,7 @@ mod tests {
     pub struct MockInvokeContext {
         pub key: Pubkey,
         pub logger: MockLogger,
+        pub compute_budget: ComputeBudget,
         pub compute_meter: MockComputeMeter,
     }
     impl Default for MockInvokeContext {
@@ -320,6 +322,7 @@ mod tests {
             MockInvokeContext {
                 key: Pubkey::default(),
                 logger: MockLogger::default(),
+                compute_budget: ComputeBudget::default(),
                 compute_meter: MockComputeMeter {
                     remaining: std::u64::MAX,
                 },
@@ -348,11 +351,8 @@ mod tests {
         fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
             Rc::new(RefCell::new(self.logger.clone()))
         }
-        fn is_cross_program_supported(&self) -> bool {
-            true
-        }
-        fn get_compute_budget(&self) -> ComputeBudget {
-            ComputeBudget::default()
+        fn get_compute_budget(&self) -> &ComputeBudget {
+            &self.compute_budget
         }
         fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
             Rc::new(RefCell::new(self.compute_meter.clone()))
@@ -362,6 +362,9 @@ mod tests {
             None
         }
         fn record_instruction(&self, _instruction: &Instruction) {}
+        fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
+            true
+        }
     }
 
     struct TestInstructionMeter {
@@ -579,7 +582,6 @@ mod tests {
             vec![],
             vec![],
             None,
-            true,
             ComputeBudget {
                 max_units: 1,
                 log_units: 100,
@@ -590,6 +592,7 @@ mod tests {
             },
             Rc::new(RefCell::new(Executors::default())),
             None,
+            Arc::new(FeatureSet::default()),
         );
         assert_eq!(
             Err(InstructionError::Custom(194969602)),

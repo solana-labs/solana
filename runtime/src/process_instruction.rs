@@ -56,10 +56,8 @@ pub trait InvokeContext {
     fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)];
     /// Get this invocation's logger
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>>;
-    /// Are cross program invocations supported
-    fn is_cross_program_supported(&self) -> bool;
     /// Get this invocation's compute budget
-    fn get_compute_budget(&self) -> ComputeBudget;
+    fn get_compute_budget(&self) -> &ComputeBudget;
     /// Get this invocation's compute meter
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>>;
     /// Loaders may need to do work in order to execute a program.  Cache
@@ -69,6 +67,8 @@ pub trait InvokeContext {
     fn get_executor(&mut self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>>;
     /// Record invoked instruction
     fn record_instruction(&self, instruction: &Instruction);
+    /// Get the bank's active feature set
+    fn is_feature_active(&self, feature_id: &Pubkey) -> bool;
 }
 
 #[derive(Clone, Copy, Debug)]
