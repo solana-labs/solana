@@ -179,9 +179,6 @@ impl LocalCluster {
             _ => (),
         }
 
-        genesis_config.inflation =
-            solana_genesis_programs::get_inflation(genesis_config.cluster_type, 0).unwrap();
-
         genesis_config
             .native_instruction_processors
             .extend_from_slice(&config.native_instruction_processors);
