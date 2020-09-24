@@ -6,6 +6,7 @@ version = "1.4.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
+publish = false
 
 [dependencies]
 clap = "2.33.1"
