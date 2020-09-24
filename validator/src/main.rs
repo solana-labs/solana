@@ -1128,6 +1128,15 @@ pub fn main() {
                        May be specified multiple times. If unspecified any snapshot hash will be accepted"),
         )
         .arg(
+            Arg::with_name("debug_key")
+                .long("debug-key")
+                .validator(is_pubkey)
+                .value_name("PUBKEY")
+                .multiple(true)
+                .takes_value(true)
+                .help("Log when transactions are processed which reference a given key."),
+        )
+        .arg(
             Arg::with_name("no_untrusted_rpc")
                 .long("no-untrusted-rpc")
                 .takes_value(false)
@@ -1264,6 +1273,16 @@ pub fn main() {
         exit(1);
     });
 
+    let debug_keys: Option<Arc<HashSet<_>>> = if matches.is_present("debug_key") {
+        Some(Arc::new(
+            values_t_or_exit!(matches, "debug_key", Pubkey)
+                .into_iter()
+                .collect(),
+        ))
+    } else {
+        None
+    };
+
     let trusted_validators = validators_set(
         &identity_keypair.pubkey(),
         &matches,
@@ -1339,6 +1358,7 @@ pub fn main() {
         no_rocksdb_compaction,
         wal_recovery_mode,
         poh_verify: !matches.is_present("skip_poh_verify"),
+        debug_keys,
         ..ValidatorConfig::default()
     };
 

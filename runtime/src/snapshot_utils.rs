@@ -20,6 +20,8 @@ use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
 };
+use std::collections::HashSet;
+use std::sync::Arc;
 use std::{
     cmp::Ordering,
     fmt,
@@ -571,6 +573,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     snapshot_tar: P,
     compression: CompressionType,
     genesis_config: &GenesisConfig,
+    debug_keys: Option<Arc<HashSet<Pubkey>>>,
 ) -> Result<Bank> {
     // Untar the snapshot into a temp directory under `snapshot_config.snapshot_path()`
     let unpack_dir = tempfile::tempdir_in(snapshot_path)?;
@@ -591,6 +594,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         &unpacked_snapshots_dir,
         unpacked_accounts_dir,
         genesis_config,
+        debug_keys,
     )?;
 
     if !bank.verify_snapshot_bank() {
@@ -748,6 +752,7 @@ fn rebuild_bank_from_snapshots<P>(
     unpacked_snapshots_dir: &PathBuf,
     append_vecs_path: P,
     genesis_config: &GenesisConfig,
+    debug_keys: Option<Arc<HashSet<Pubkey>>>,
 ) -> Result<Bank>
 where
     P: AsRef<Path>,
@@ -779,6 +784,7 @@ where
                 account_paths,
                 genesis_config,
                 frozen_account_pubkeys,
+                debug_keys,
             ),
         }?)
     })?;

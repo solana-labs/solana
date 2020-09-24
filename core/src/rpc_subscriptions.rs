@@ -17,6 +17,7 @@ use solana_client::{
         RpcResponseContext, RpcSignatureResult, SlotInfo,
     },
 };
+use solana_measure::measure::Measure;
 use solana_runtime::{
     bank::Bank,
     bank_forks::BankForks,
@@ -445,7 +446,7 @@ impl RpcSubscriptions {
         account_subscriptions: Arc<RpcAccountSubscriptions>,
         notifier: &RpcNotifier,
         commitment_slots: &CommitmentSlots,
-    ) {
+    ) -> HashSet<SubscriptionId> {
         let subscriptions = account_subscriptions.read().unwrap();
         check_commitment_and_notify(
             &subscriptions,
@@ -455,7 +456,7 @@ impl RpcSubscriptions {
             Bank::get_account_modified_slot,
             filter_account_result,
             notifier,
-        );
+        )
     }
 
     fn check_program(
@@ -464,7 +465,7 @@ impl RpcSubscriptions {
         program_subscriptions: Arc<RpcProgramSubscriptions>,
         notifier: &RpcNotifier,
         commitment_slots: &CommitmentSlots,
-    ) {
+    ) -> HashSet<SubscriptionId> {
         let subscriptions = program_subscriptions.read().unwrap();
         check_commitment_and_notify(
             &subscriptions,
@@ -474,7 +475,7 @@ impl RpcSubscriptions {
             Bank::get_program_accounts_modified_since_parent,
             filter_program_results,
             notifier,
-        );
+        )
     }
 
     fn check_signature(
@@ -483,7 +484,7 @@ impl RpcSubscriptions {
         signature_subscriptions: Arc<RpcSignatureSubscriptions>,
         notifier: &RpcNotifier,
         commitment_slots: &CommitmentSlots,
-    ) {
+    ) -> HashSet<SubscriptionId> {
         let mut subscriptions = signature_subscriptions.write().unwrap();
         let notified_ids = check_commitment_and_notify(
             &subscriptions,
@@ -500,6 +501,7 @@ impl RpcSubscriptions {
                 subscriptions.remove(&signature);
             }
         }
+        notified_ids
     }
 
     pub fn add_account_subscription(
@@ -777,6 +779,7 @@ impl RpcSubscriptions {
             match notification_receiver.recv_timeout(Duration::from_millis(RECEIVE_DELAY_MILLIS)) {
                 Ok(notification_entry) => match notification_entry {
                     NotificationEntry::Slot(slot_info) => {
+                        debug!("slot notify: {:?}", slot_info);
                         let subscriptions = subscriptions.slot_subscriptions.read().unwrap();
                         for (_, sink) in subscriptions.iter() {
                             notifier.notify(slot_info, sink);
@@ -786,6 +789,7 @@ impl RpcSubscriptions {
                     // unlike `NotificationEntry::Gossip`, which also accounts for slots seen
                     // in VoteState's from bank states built in ReplayStage.
                     NotificationEntry::Vote(ref vote_info) => {
+                        debug!("vote notify: {:?}", vote_info);
                         let subscriptions = subscriptions.vote_subscriptions.read().unwrap();
                         for (_, sink) in subscriptions.iter() {
                             notifier.notify(
@@ -799,9 +803,12 @@ impl RpcSubscriptions {
                         }
                     }
                     NotificationEntry::Root(root) => {
-                        let subscriptions = subscriptions.root_subscriptions.read().unwrap();
-                        for (_, sink) in subscriptions.iter() {
-                            notifier.notify(root, sink);
+                        debug!("root notify: {:?}", root);
+                        {
+                            let subscriptions = subscriptions.root_subscriptions.read().unwrap();
+                            for (_, sink) in subscriptions.iter() {
+                                notifier.notify(root, sink);
+                            }
                         }
 
                         // Prune old pending notifications
@@ -818,6 +825,7 @@ impl RpcSubscriptions {
                             &bank_forks,
                             &commitment_slots,
                             &notifier,
+                            "bank",
                         )
                     }
                     NotificationEntry::Frozen(slot) => {
@@ -903,6 +911,7 @@ impl RpcSubscriptions {
             bank_forks,
             &commitment_slots,
             &notifier,
+            "gossip",
         );
     }
 
@@ -913,46 +922,76 @@ impl RpcSubscriptions {
         bank_forks: &Arc<RwLock<BankForks>>,
         commitment_slots: &CommitmentSlots,
         notifier: &RpcNotifier,
+        source: &'static str,
     ) {
+        let mut accounts_time = Measure::start("accounts");
         let pubkeys: Vec<_> = {
             let subs = account_subscriptions.read().unwrap();
             subs.keys().cloned().collect()
         };
+        let mut num_pubkeys_notified = 0;
         for pubkey in &pubkeys {
-            Self::check_account(
+            num_pubkeys_notified += Self::check_account(
                 pubkey,
                 bank_forks,
                 account_subscriptions.clone(),
                 &notifier,
                 &commitment_slots,
-            );
+            )
+            .len();
         }
+        accounts_time.stop();
 
+        let mut programs_time = Measure::start("programs");
         let programs: Vec<_> = {
             let subs = program_subscriptions.read().unwrap();
             subs.keys().cloned().collect()
         };
+        let mut num_programs_notified = 0;
         for program_id in &programs {
-            Self::check_program(
+            num_programs_notified += Self::check_program(
                 program_id,
                 bank_forks,
                 program_subscriptions.clone(),
                 &notifier,
                 &commitment_slots,
-            );
+            )
+            .len();
         }
+        programs_time.stop();
 
+        let mut signatures_time = Measure::start("signatures");
         let signatures: Vec<_> = {
             let subs = signature_subscriptions.read().unwrap();
             subs.keys().cloned().collect()
         };
+        let mut num_signatures_notified = 0;
         for signature in &signatures {
-            Self::check_signature(
+            num_signatures_notified += Self::check_signature(
                 signature,
                 bank_forks,
                 signature_subscriptions.clone(),
                 &notifier,
                 &commitment_slots,
+            )
+            .len();
+        }
+        signatures_time.stop();
+        let total_notified = num_pubkeys_notified + num_programs_notified + num_signatures_notified;
+        let total_ms = accounts_time.as_ms() + programs_time.as_ms() + signatures_time.as_ms();
+        if total_notified > 0 || total_ms > 10 {
+            debug!(
+                "notified({}): accounts: {} / {} ({}) programs: {} / {} ({}) signatures: {} / {} ({})",
+                source,
+                pubkeys.len(),
+                num_pubkeys_notified,
+                accounts_time,
+                programs.len(),
+                num_programs_notified,
+                programs_time,
+                signatures.len(),
+                num_signatures_notified,
+                signatures_time,
             );
         }
     }

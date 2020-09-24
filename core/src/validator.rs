@@ -99,6 +99,7 @@ pub struct ValidatorConfig {
     pub poh_verify: bool, // Perform PoH verification during blockstore processing at boo
     pub cuda: bool,
     pub require_tower: bool,
+    pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
 }
 
 impl Default for ValidatorConfig {
@@ -132,6 +133,7 @@ impl Default for ValidatorConfig {
             poh_verify: true,
             cuda: false,
             require_tower: false,
+            debug_keys: None,
         }
     }
 }
@@ -788,6 +790,7 @@ fn new_banks_from_ledger(
         dev_halt_at_slot: config.dev_halt_at_slot,
         new_hard_forks: config.new_hard_forks.clone(),
         frozen_accounts: config.frozen_accounts.clone(),
+        debug_keys: config.debug_keys.clone(),
         ..blockstore_processor::ProcessOptions::default()
     };
 
