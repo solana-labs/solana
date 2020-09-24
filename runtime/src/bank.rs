@@ -10,7 +10,7 @@ use crate::{
     accounts_db::{ErrorCounters, SnapshotStorages},
     accounts_index::Ancestors,
     blockhash_queue::BlockhashQueue,
-    builtins::*,
+    builtins,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     feature::Feature,
     feature_set::{self, FeatureSet},
@@ -137,6 +137,7 @@ pub enum Entrypoint {
     Program(ProcessInstruction),
     Loader(ProcessInstructionWithContext),
 }
+#[derive(Clone)]
 pub struct Builtin {
     pub name: String,
     pub id: Pubkey,
@@ -184,6 +185,15 @@ impl CowCachedExecutors {
         }
         self.executors.write()
     }
+}
+
+#[derive(Clone)]
+pub struct Builtins {
+    /// Builtin programs that are always available
+    pub genesis_builtins: Vec<Builtin>,
+
+    /// Builtin programs activated dynamically by feature
+    pub feature_builtins: Vec<(Builtin, Pubkey)>,
 }
 
 const MAX_CACHED_EXECUTORS: usize = 100; // 10 MB assuming programs are around 100k
@@ -326,9 +336,6 @@ impl StatusCacheRc {
         sc.append(slot_deltas);
     }
 }
-
-pub type EnteredEpochCallback = Box<dyn Fn(&mut Bank, bool) + Sync + Send>;
-type WrappedEnteredEpochCallback = Arc<RwLock<Option<EnteredEpochCallback>>>;
 
 pub type TransactionProcessResult = (Result<()>, Option<HashAgeKind>);
 pub struct TransactionResults {
@@ -559,9 +566,8 @@ pub struct Bank {
     /// The Message processor
     message_processor: MessageProcessor,
 
-    /// Callback to be notified when a bank enters a new Epoch
-    /// (used to adjust cluster features over time)
-    entered_epoch_callback: WrappedEnteredEpochCallback,
+    /// Builtin programs activated dynamically by feature
+    feature_builtins: Arc<Vec<(Builtin, Pubkey)>>,
 
     /// Last time when the cluster info vote listener has synced with this bank
     pub last_vote_sync: AtomicU64,
@@ -594,7 +600,7 @@ impl Default for BlockhashQueue {
 
 impl Bank {
     pub fn new(genesis_config: &GenesisConfig) -> Self {
-        Self::new_with_paths(&genesis_config, Vec::new(), &[], None)
+        Self::new_with_paths(&genesis_config, Vec::new(), &[], None, None)
     }
 
     pub fn new_with_paths(
@@ -602,6 +608,7 @@ impl Bank {
         paths: Vec<PathBuf>,
         frozen_account_pubkeys: &[Pubkey],
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
+        additional_builtins: Option<&Builtins>,
     ) -> Self {
         let mut bank = Self::default();
         bank.transaction_debug_keys = debug_keys;
@@ -610,7 +617,7 @@ impl Bank {
 
         bank.rc.accounts = Arc::new(Accounts::new(paths, &genesis_config.cluster_type));
         bank.process_genesis_config(genesis_config);
-        bank.finish_init(genesis_config);
+        bank.finish_init(genesis_config, additional_builtins);
 
         // Freeze accounts after process_genesis_config creates the initial append vecs
         Arc::get_mut(&mut Arc::get_mut(&mut bank.rc.accounts).unwrap().accounts_db)
@@ -697,7 +704,7 @@ impl Bank {
             tick_height: AtomicU64::new(parent.tick_height.load(Relaxed)),
             signature_count: AtomicU64::new(0),
             message_processor: parent.message_processor.clone(),
-            entered_epoch_callback: parent.entered_epoch_callback.clone(),
+            feature_builtins: parent.feature_builtins.clone(),
             hard_forks: parent.hard_forks.clone(),
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Relaxed)),
             rewards: None,
@@ -725,7 +732,7 @@ impl Bank {
 
         // Following code may touch AccountsDB, requiring proper ancestors
         if parent.epoch() < new.epoch() {
-            new.apply_feature_activations(false, false);
+            new.apply_feature_activations(false);
         }
 
         new.update_slot_hashes();
@@ -747,7 +754,7 @@ impl Bank {
     /// * Freezes the new bank, assuming that the user will `Bank::new_from_parent` from this bank
     pub fn warp_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
         let mut new = Bank::new_from_parent(parent, collector_id, slot);
-        new.apply_feature_activations(true, true);
+        new.apply_feature_activations(true);
         new.update_epoch_stakes(new.epoch_schedule().get_epoch(slot));
         new.tick_height.store(new.max_tick_height(), Relaxed);
         new.freeze();
@@ -761,6 +768,7 @@ impl Bank {
         genesis_config: &GenesisConfig,
         fields: BankFieldsToDeserialize,
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
+        additional_builtins: Option<&Builtins>,
     ) -> Self {
         fn new<T: Default>() -> T {
             T::default()
@@ -803,7 +811,7 @@ impl Bank {
             epoch_stakes: fields.epoch_stakes,
             is_delta: AtomicBool::new(fields.is_delta),
             message_processor: new(),
-            entered_epoch_callback: new(),
+            feature_builtins: new(),
             last_vote_sync: new(),
             rewards: new(),
             skip_drop: new(),
@@ -816,7 +824,7 @@ impl Bank {
             transaction_debug_keys: debug_keys,
             feature_set: new(),
         };
-        bank.finish_init(genesis_config);
+        bank.finish_init(genesis_config, additional_builtins);
 
         // Sanity assertions between bank snapshot and genesis config
         // Consider removing from serializable bank state
@@ -2967,19 +2975,29 @@ impl Bank {
         self.rc.accounts.clone()
     }
 
-    pub fn set_bank_rc(&mut self, bank_rc: BankRc, status_cache_rc: StatusCacheRc) {
-        self.rc = bank_rc;
-        self.src = status_cache_rc;
-    }
-
-    pub fn finish_init(&mut self, genesis_config: &GenesisConfig) {
+    fn finish_init(
+        &mut self,
+        genesis_config: &GenesisConfig,
+        additional_builtins: Option<&Builtins>,
+    ) {
         self.rewards_pool_pubkeys =
             Arc::new(genesis_config.rewards_pools.keys().cloned().collect());
-        self.apply_feature_activations(true, false);
-    }
 
-    pub fn set_parent(&mut self, parent: &Arc<Bank>) {
-        self.rc.parent = RwLock::new(Some(parent.clone()));
+        let mut builtins = builtins::get();
+        if let Some(additional_builtins) = additional_builtins {
+            builtins
+                .genesis_builtins
+                .extend_from_slice(&additional_builtins.genesis_builtins);
+            builtins
+                .feature_builtins
+                .extend_from_slice(&additional_builtins.feature_builtins);
+        }
+        for builtin in builtins.genesis_builtins {
+            self.add_builtin(&builtin.name, builtin.id, builtin.entrypoint);
+        }
+        self.feature_builtins = Arc::new(builtins.feature_builtins);
+
+        self.apply_feature_activations(true);
     }
 
     pub fn set_inflation(&self, inflation: Inflation) {
@@ -2988,19 +3006,6 @@ impl Bank {
 
     pub fn hard_forks(&self) -> Arc<RwLock<HardForks>> {
         self.hard_forks.clone()
-    }
-
-    pub fn initiate_entered_epoch_callback(
-        &mut self,
-        entered_epoch_callback: EnteredEpochCallback,
-    ) {
-        {
-            let mut callback_w = self.entered_epoch_callback.write().unwrap();
-            assert!(callback_w.is_none(), "Already callback has been initiated");
-            *callback_w = Some(entered_epoch_callback);
-        }
-        // immediately fire the callback as initial invocation
-        self.reinvoke_entered_epoch_callback(true);
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
@@ -3558,7 +3563,7 @@ impl Bank {
 
     // This is called from snapshot restore AND for each epoch boundary
     // The entire code path herein must be idempotent
-    fn apply_feature_activations(&mut self, init_finish_or_warp: bool, initiate_callback: bool) {
+    fn apply_feature_activations(&mut self, init_finish_or_warp: bool) {
         let new_feature_activations = self.compute_active_feature_set(!init_finish_or_warp);
 
         if new_feature_activations.contains(&feature_set::pico_inflation::id()) {
@@ -3571,8 +3576,7 @@ impl Bank {
             self.apply_spl_token_v2_multisig_fix();
         }
 
-        self.ensure_builtins(init_finish_or_warp, &new_feature_activations);
-        self.reinvoke_entered_epoch_callback(initiate_callback);
+        self.ensure_feature_builtins(init_finish_or_warp, &new_feature_activations);
         self.recheck_cross_program_support();
         self.recheck_compute_budget();
         self.reconfigure_token2_native_mint();
@@ -3623,29 +3627,18 @@ impl Bank {
         newly_activated
     }
 
-    fn ensure_builtins(&mut self, init_or_warp: bool, new_feature_activations: &HashSet<Pubkey>) {
-        for (program, start_epoch) in get_cluster_builtins(self.cluster_type()) {
-            let should_populate = init_or_warp && self.epoch() >= start_epoch
-                || !init_or_warp && self.epoch() == start_epoch;
-            if should_populate {
-                self.add_builtin(&program.name, program.id, program.entrypoint);
-            }
-        }
-
-        for (program, feature) in get_feature_builtins() {
+    fn ensure_feature_builtins(
+        &mut self,
+        init_or_warp: bool,
+        new_feature_activations: &HashSet<Pubkey>,
+    ) {
+        let feature_builtins = self.feature_builtins.clone();
+        for (builtin, feature) in feature_builtins.iter() {
             let should_populate = init_or_warp && self.feature_set.is_active(&feature)
                 || !init_or_warp && new_feature_activations.contains(&feature);
             if should_populate {
-                self.add_builtin(&program.name, program.id, program.entrypoint);
+                self.add_builtin(&builtin.name, builtin.id, builtin.entrypoint);
             }
-        }
-    }
-
-    fn reinvoke_entered_epoch_callback(&mut self, initiate: bool) {
-        if let Some(entered_epoch_callback) =
-            self.entered_epoch_callback.clone().read().unwrap().as_ref()
-        {
-            entered_epoch_callback(self, initiate)
         }
     }
 
@@ -3769,22 +3762,6 @@ impl Bank {
                 .is_active(&feature_set::consistent_recent_blockhashes_sysvar::id()),
         }
     }
-
-    // only used for testing
-    pub fn builtin_loader_ids(&self) -> Vec<Pubkey> {
-        self.message_processor.builtin_loader_ids()
-    }
-
-    // only used for testing
-    pub fn builtin_program_ids(&self) -> Vec<Pubkey> {
-        self.message_processor.builtin_program_ids()
-    }
-
-    // only used for testing
-    pub fn reset_callback_and_message_processor(&mut self) {
-        self.entered_epoch_callback = WrappedEnteredEpochCallback::default();
-        self.message_processor = MessageProcessor::default();
-    }
 }
 
 impl Drop for Bank {
@@ -3845,7 +3822,7 @@ mod tests {
         vote_instruction,
         vote_state::{self, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
     };
-    use std::{result, sync::atomic::Ordering::SeqCst, time::Duration};
+    use std::{result, time::Duration};
 
     #[test]
     fn test_hash_age_kind_is_durable_nonce() {
@@ -6944,45 +6921,6 @@ mod tests {
     }
 
     #[test]
-    fn test_bank_entered_epoch_callback() {
-        let (genesis_config, _) = create_genesis_config(500);
-        let mut bank0 = Arc::new(Bank::new(&genesis_config));
-        let callback_count = Arc::new(AtomicU64::new(0));
-
-        Arc::get_mut(&mut bank0)
-            .unwrap()
-            .initiate_entered_epoch_callback({
-                let callback_count = callback_count.clone();
-                Box::new(move |_, _| {
-                    callback_count.fetch_add(1, SeqCst);
-                })
-            });
-
-        // set_entered_eepoc_callbak fires the initial call
-        assert_eq!(callback_count.load(SeqCst), 1);
-
-        let _bank1 =
-            Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0) - 1);
-        // No callback called while within epoch 0
-        assert_eq!(callback_count.load(SeqCst), 1);
-
-        let _bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0));
-        // Callback called as bank1 is in epoch 1
-        assert_eq!(callback_count.load(SeqCst), 2);
-
-        callback_count.store(0, SeqCst);
-        let _bank1 = Bank::new_from_parent(
-            &bank0,
-            &Pubkey::default(),
-            std::u64::MAX / bank0.ticks_per_slot - 1,
-        );
-        // If the new bank jumps ahead multiple epochs the callback is still only called once.
-        // This was done to keep the callback implementation simpler as new bank will never jump
-        // cross multiple epochs in a real deployment.
-        assert_eq!(callback_count.load(SeqCst), 1);
-    }
-
-    #[test]
     fn test_is_delta_true() {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let bank = Arc::new(Bank::new(&genesis_config));
@@ -8406,7 +8344,6 @@ mod tests {
                     })
                     .collect()
             } else {
-                use std::collections::HashSet;
                 let mut inserted = HashSet::new();
                 (0..num_keys)
                     .map(|_| {
@@ -8740,7 +8677,7 @@ mod tests {
         bank.message_processor.set_cross_program_support(false);
 
         // simulate bank is just after deserialized from snapshot
-        bank.finish_init(&genesis_config);
+        bank.finish_init(&genesis_config, None);
 
         assert_eq!(bank.message_processor.get_cross_program_support(), true);
     }

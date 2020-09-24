@@ -2,6 +2,7 @@
 
 use crate::{
     broadcast_stage::BroadcastStageType,
+    builtins,
     cache_block_time_service::{CacheBlockTimeSender, CacheBlockTimeService},
     cluster_info::{ClusterInfo, Node},
     cluster_info_vote_listener::VoteTracker,
@@ -791,6 +792,7 @@ fn new_banks_from_ledger(
         new_hard_forks: config.new_hard_forks.clone(),
         frozen_accounts: config.frozen_accounts.clone(),
         debug_keys: config.debug_keys.clone(),
+        additional_builtins: Some(builtins::get(genesis_config.cluster_type)),
         ..blockstore_processor::ProcessOptions::default()
     };
 

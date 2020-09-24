@@ -1,5 +1,5 @@
 use crate::{
-    bank::{Bank, BankSlotDelta},
+    bank::{Bank, BankSlotDelta, Builtins},
     bank_forks::CompressionType,
     hardened_unpack::{unpack_snapshot, UnpackError},
     serde_snapshot::{
@@ -574,6 +574,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     compression: CompressionType,
     genesis_config: &GenesisConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
+    additional_builtins: Option<&Builtins>,
 ) -> Result<Bank> {
     // Untar the snapshot into a temp directory under `snapshot_config.snapshot_path()`
     let unpack_dir = tempfile::tempdir_in(snapshot_path)?;
@@ -595,6 +596,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         unpacked_accounts_dir,
         genesis_config,
         debug_keys,
+        additional_builtins,
     )?;
 
     if !bank.verify_snapshot_bank() {
@@ -753,6 +755,7 @@ fn rebuild_bank_from_snapshots<P>(
     append_vecs_path: P,
     genesis_config: &GenesisConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
+    additional_builtins: Option<&Builtins>,
 ) -> Result<Bank>
 where
     P: AsRef<Path>,
@@ -785,6 +788,7 @@ where
                 genesis_config,
                 frozen_account_pubkeys,
                 debug_keys,
+                additional_builtins,
             ),
         }?)
     })?;

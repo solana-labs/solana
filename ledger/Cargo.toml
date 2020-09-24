@@ -32,7 +32,6 @@ serde = "1.0.112"
 serde_bytes = "0.11.4"
 sha2 = "0.8.2"
 solana-transaction-status = { path = "../transaction-status", version = "1.4.0" }
-solana-genesis-programs = { path = "../genesis-programs", version = "1.4.0" }
 solana-logger = { path = "../logger", version = "1.4.0" }
 solana-measure = { path = "../measure", version = "1.4.0" }
 solana-merkle-tree = { path = "../merkle-tree", version = "1.4.0" }

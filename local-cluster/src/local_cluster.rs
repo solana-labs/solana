@@ -13,7 +13,8 @@ use solana_core::{
 };
 use solana_ledger::create_new_tmp_ledger;
 use solana_runtime::genesis_utils::{
-    create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
+    create_genesis_config_with_vote_accounts_and_cluster_type, GenesisConfigInfo,
+    ValidatorVoteKeypairs,
 };
 use solana_sdk::{
     client::SyncClient,
@@ -155,10 +156,11 @@ impl LocalCluster {
             mut genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_config_with_vote_accounts(
+        } = create_genesis_config_with_vote_accounts_and_cluster_type(
             config.cluster_lamports,
             &keys_in_genesis,
             stakes_in_genesis,
+            config.cluster_type,
         );
         genesis_config.ticks_per_slot = config.ticks_per_slot;
         genesis_config.epoch_schedule = EpochSchedule::custom(
@@ -166,19 +168,7 @@ impl LocalCluster {
             config.stakers_slot_offset,
             !config.skip_warmup_slots,
         );
-        genesis_config.cluster_type = config.cluster_type;
         genesis_config.poh_config = config.poh_config.clone();
-
-        match genesis_config.cluster_type {
-            ClusterType::MainnetBeta | ClusterType::Testnet => {
-                genesis_config.native_instruction_processors =
-                    solana_genesis_programs::get_native_programs_for_genesis(
-                        genesis_config.cluster_type,
-                    )
-            }
-            _ => (),
-        }
-
         genesis_config
             .native_instruction_processors
             .extend_from_slice(&config.native_instruction_processors);
