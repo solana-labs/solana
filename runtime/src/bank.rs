@@ -14,7 +14,7 @@ use crate::{
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
-    message_processor::{Executors, MessageProcessor},
+    message_processor::{Executors, MessageProcessor, ProcessMessageArgs},
     nonce_utils,
     rent_collector::RentCollector,
     stakes::Stakes,
@@ -2014,17 +2014,18 @@ impl Bank {
                     } else {
                         None
                     };
-                    let process_result = self.message_processor.process_message(
-                        tx.message(),
-                        &loader_refcells,
-                        &account_refcells,
-                        &self.rent_collector,
-                        log_collector.clone(),
-                        executors.clone(),
-                        instruction_recorders.as_mut(),
-                        self.cluster_type(),
-                        self.epoch(),
-                    );
+                    let process_result =
+                        self.message_processor.process_message(ProcessMessageArgs {
+                            message: tx.message(),
+                            loaders: &loader_refcells,
+                            accounts: &account_refcells,
+                            rent_collector: &self.rent_collector,
+                            log_collector: log_collector.clone(),
+                            executors: executors.clone(),
+                            instruction_recorders: instruction_recorders.as_mut(),
+                            cluster_type: self.cluster_type(),
+                            epoch: self.epoch(),
+                        });
 
                     Self::compile_recorded_instructions(
                         &mut inner_instructions,

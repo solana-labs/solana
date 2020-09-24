@@ -403,6 +403,19 @@ impl ::solana_sdk::abi_example::AbiExample for MessageProcessor {
     }
 }
 
+// Args for MessageProcessor::process_message
+pub(crate) struct ProcessMessageArgs<'a> {
+    pub(crate) message: &'a Message,
+    pub(crate) loaders: &'a [Vec<(Pubkey, RefCell<Account>)>],
+    pub(crate) accounts: &'a [Rc<RefCell<Account>>],
+    pub(crate) rent_collector: &'a RentCollector,
+    pub(crate) log_collector: Option<Rc<LogCollector>>,
+    pub(crate) executors: Rc<RefCell<Executors>>,
+    pub(crate) instruction_recorders: Option<&'a mut Vec<InstructionRecorder>>,
+    pub(crate) cluster_type: ClusterType,
+    pub(crate) epoch: Epoch,
+}
+
 impl MessageProcessor {
     /// Add a static entrypoint to intercept instructions before the dynamic loader.
     pub fn add_program(&mut self, program_id: Pubkey, process_instruction: ProcessInstruction) {
@@ -725,19 +738,19 @@ impl MessageProcessor {
     /// Process a message.
     /// This method calls each instruction in the message over the set of loaded Accounts
     /// The accounts are committed back to the bank only if every instruction succeeds
-    #[allow(clippy::too_many_arguments)]
-    pub fn process_message(
-        &self,
-        message: &Message,
-        loaders: &[Vec<(Pubkey, RefCell<Account>)>],
-        accounts: &[Rc<RefCell<Account>>],
-        rent_collector: &RentCollector,
-        log_collector: Option<Rc<LogCollector>>,
-        executors: Rc<RefCell<Executors>>,
-        mut instruction_recorders: Option<&mut Vec<InstructionRecorder>>,
-        cluster_type: ClusterType,
-        epoch: Epoch,
-    ) -> Result<(), TransactionError> {
+    pub(crate) fn process_message(&self, args: ProcessMessageArgs) -> Result<(), TransactionError> {
+        let ProcessMessageArgs {
+            message,
+            loaders,
+            accounts,
+            rent_collector,
+            log_collector,
+            executors,
+            mut instruction_recorders,
+            cluster_type,
+            epoch,
+        } = args;
+
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let instruction_recorder = instruction_recorders.as_mut().map(|recorders| {
                 let instruction_recorder = InstructionRecorder::default();
@@ -1342,17 +1355,17 @@ mod tests {
             Some(&from_pubkey),
         );
 
-        let result = message_processor.process_message(
-            &message,
-            &loaders,
-            &accounts,
-            &rent_collector,
-            None,
-            executors.clone(),
-            None,
-            ClusterType::Development,
-            0,
-        );
+        let result = message_processor.process_message(ProcessMessageArgs {
+            message: &message,
+            loaders: &loaders,
+            accounts: &accounts,
+            rent_collector: &rent_collector,
+            log_collector: None,
+            executors: executors.clone(),
+            instruction_recorders: None,
+            cluster_type: ClusterType::Development,
+            epoch: 0,
+        });
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 100);
         assert_eq!(accounts[1].borrow().lamports, 0);
@@ -1366,17 +1379,17 @@ mod tests {
             Some(&from_pubkey),
         );
 
-        let result = message_processor.process_message(
-            &message,
-            &loaders,
-            &accounts,
-            &rent_collector,
-            None,
-            executors.clone(),
-            None,
-            ClusterType::Development,
-            0,
-        );
+        let result = message_processor.process_message(ProcessMessageArgs {
+            message: &message,
+            loaders: &loaders,
+            accounts: &accounts,
+            rent_collector: &rent_collector,
+            log_collector: None,
+            executors: executors.clone(),
+            instruction_recorders: None,
+            cluster_type: ClusterType::Development,
+            epoch: 0,
+        });
         assert_eq!(
             result,
             Err(TransactionError::InstructionError(
@@ -1394,17 +1407,17 @@ mod tests {
             Some(&from_pubkey),
         );
 
-        let result = message_processor.process_message(
-            &message,
-            &loaders,
-            &accounts,
-            &rent_collector,
-            None,
+        let result = message_processor.process_message(ProcessMessageArgs {
+            message: &message,
+            loaders: &loaders,
+            accounts: &accounts,
+            rent_collector: &rent_collector,
+            log_collector: None,
             executors,
-            None,
-            ClusterType::Development,
-            0,
-        );
+            instruction_recorders: None,
+            cluster_type: ClusterType::Development,
+            epoch: 0,
+        });
         assert_eq!(
             result,
             Err(TransactionError::InstructionError(
@@ -1505,17 +1518,17 @@ mod tests {
             )],
             Some(&from_pubkey),
         );
-        let result = message_processor.process_message(
-            &message,
-            &loaders,
-            &accounts,
-            &rent_collector,
-            None,
-            executors.clone(),
-            None,
-            ClusterType::Development,
-            0,
-        );
+        let result = message_processor.process_message(ProcessMessageArgs {
+            message: &message,
+            loaders: &loaders,
+            accounts: &accounts,
+            rent_collector: &rent_collector,
+            log_collector: None,
+            executors: executors.clone(),
+            instruction_recorders: None,
+            cluster_type: ClusterType::Development,
+            epoch: 0,
+        });
         assert_eq!(
             result,
             Err(TransactionError::InstructionError(
@@ -1533,17 +1546,17 @@ mod tests {
             )],
             Some(&from_pubkey),
         );
-        let result = message_processor.process_message(
-            &message,
-            &loaders,
-            &accounts,
-            &rent_collector,
-            None,
-            executors.clone(),
-            None,
-            ClusterType::Development,
-            0,
-        );
+        let result = message_processor.process_message(ProcessMessageArgs {
+            message: &message,
+            loaders: &loaders,
+            accounts: &accounts,
+            rent_collector: &rent_collector,
+            log_collector: None,
+            executors: executors.clone(),
+            instruction_recorders: None,
+            cluster_type: ClusterType::Development,
+            epoch: 0,
+        });
         assert_eq!(result, Ok(()));
 
         // Do work on the same account but at different location in keyed_accounts[]
@@ -1558,17 +1571,17 @@ mod tests {
             )],
             Some(&from_pubkey),
         );
-        let result = message_processor.process_message(
-            &message,
-            &loaders,
-            &accounts,
-            &rent_collector,
-            None,
+        let result = message_processor.process_message(ProcessMessageArgs {
+            message: &message,
+            loaders: &loaders,
+            accounts: &accounts,
+            rent_collector: &rent_collector,
+            log_collector: None,
             executors,
-            None,
-            ClusterType::Development,
-            0,
-        );
+            instruction_recorders: None,
+            cluster_type: ClusterType::Development,
+            epoch: 0,
+        });
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);
         assert_eq!(accounts[1].borrow().lamports, 20);
