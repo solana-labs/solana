@@ -5,8 +5,13 @@ cd "$(dirname "$0")/.."
 source ci/_
 source ci/rust-version.sh stable
 
-escaped_branch=$(echo "$BUILDKITE_BRANCH" | tr -c "[:alnum:]" - | sed -r "s#(^-*|-*head-*|-*$)##g")
-instance_prefix="testnet-live-sanity-$escaped_branch"
+if [[ -n $CI ]]; then
+  escaped_branch=$(echo "$BUILDKITE_BRANCH" | tr -c "[:alnum:]" - | sed -r "s#(^-*|-*head-*|-*$)##g")
+  instance_prefix="testnet-live-sanity-$escaped_branch"
+else
+  instance_prefix="testnet-live-sanity-$(whoami)" --self-destruct-hours 1
+fi
+
 # ensure to delete leftover cluster
 ./net/gce.sh delete -p "$instance_prefix" || true
 # only bootstrap, no normal validator
@@ -14,12 +19,8 @@ instance_prefix="testnet-live-sanity-$escaped_branch"
 instance_ip=$(./net/gce.sh info | grep bootstrap-validator | awk '{print $3}')
 
 on_trap() {
-  if [[ -z $instance_deleted ]]; then
-    (
-      set +e
-      _ ./net/gce.sh delete -p "$instance_prefix"
-    )
-  fi
+  set +e
+  _ ./net/gce.sh delete -p "$instance_prefix"
 }
 trap on_trap INT TERM EXIT
 
@@ -115,7 +116,7 @@ test_with_live_cluster() {
 
   (sleep 3 && kill "$tail_pid") &
   kill_pid=$!
-  wait "$ssh_pid" "$tail_pid" "$kill_pid"
+  timeout 30 wait "$ssh_pid" "$tail_pid" "$kill_pid"
 }
 
 # UPDATE docs/src/clusters.md TOO!!
@@ -138,5 +139,3 @@ test_with_live_cluster "testnet" \
     --trusted-validator 9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv \
     --expected-genesis-hash 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY \
     # for your pain-less copy-paste
-
-./net/gce.sh delete -p "$instance_prefix" && instance_deleted=yes
