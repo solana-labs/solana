@@ -3,6 +3,10 @@ use crate::{
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     native_loader::NativeLoader,
+    process_instruction::{
+        ComputeBudget, ComputeMeter, ErasedProcessInstruction, ErasedProcessInstructionWithContext,
+        Executor, InvokeContext, Logger, ProcessInstruction, ProcessInstructionWithContext,
+    },
     rent_collector::RentCollector,
 };
 use log::*;
@@ -10,10 +14,6 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::{create_keyed_readonly_accounts, Account, KeyedAccount},
     clock::Epoch,
-    entrypoint_native::{
-        ComputeBudget, ComputeMeter, ErasedProcessInstruction, ErasedProcessInstructionWithContext,
-        Executor, InvokeContext, Logger, ProcessInstruction, ProcessInstructionWithContext,
-    },
     instruction::{CompiledInstruction, Instruction, InstructionError},
     message::Message,
     native_loader,
@@ -1694,7 +1694,7 @@ mod tests {
             _pubkey: &Pubkey,
             _ka: &[KeyedAccount],
             _data: &[u8],
-            _context: &mut dyn solana_sdk::entrypoint_native::InvokeContext,
+            _context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
         }

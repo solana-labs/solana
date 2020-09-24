@@ -6,14 +6,16 @@ use solana_rbpf::{
     memory_region::{translate_addr, MemoryRegion},
     vm::{EbpfVm, SyscallObject},
 };
-use solana_runtime::message_processor::MessageProcessor;
+use solana_runtime::{
+    message_processor::MessageProcessor,
+    process_instruction::{ComputeMeter, InvokeContext, Logger},
+};
 use solana_sdk::{
     account::Account,
     account::KeyedAccount,
     account_info::AccountInfo,
     bpf_loader, bpf_loader_deprecated,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-    entrypoint_native::{ComputeMeter, InvokeContext, Logger},
     instruction::{AccountMeta, Instruction, InstructionError},
     message::Message,
     program_error::ProgramError,
