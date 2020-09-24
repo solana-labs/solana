@@ -33,10 +33,7 @@ use solana_client::{
     rpc_response::*,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
-use solana_ledger::{
-    blockstore::Blockstore, blockstore_db::BlockstoreError, blockstore_meta::PerfSample,
-    get_tmp_ledger_path,
-};
+use solana_ledger::{blockstore::Blockstore, blockstore_db::BlockstoreError, get_tmp_ledger_path};
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::{
     accounts::AccountAddressFilter,
@@ -1506,7 +1503,7 @@ pub trait RpcSol {
         &self,
         meta: Self::Metadata,
         limit: Option<usize>,
-    ) -> Result<Vec<(Slot, PerfSample)>>;
+    ) -> Result<Vec<RpcPerfSample>>;
 
     #[rpc(meta, name = "getEpochInfo")]
     fn get_epoch_info(
@@ -1901,7 +1898,7 @@ impl RpcSol for RpcSolImpl {
         &self,
         meta: Self::Metadata,
         limit: Option<usize>,
-    ) -> Result<Vec<(Slot, PerfSample)>> {
+    ) -> Result<Vec<RpcPerfSample>> {
         debug!("get_recent_performance_samples request received");
 
         let limit = limit.unwrap_or(PERFORMANCE_SAMPLES_LIMIT);
@@ -1913,12 +1910,21 @@ impl RpcSol for RpcSolImpl {
             )));
         }
 
-        meta.blockstore
+        Ok(meta
+            .blockstore
             .get_recent_perf_samples(limit)
             .map_err(|err| {
                 warn!("get_recent_performance_samples failed: {:?}", err);
                 Error::invalid_request()
+            })?
+            .iter()
+            .map(|(slot, sample)| RpcPerfSample {
+                slot: *slot,
+                num_transactions: sample.num_transactions,
+                num_slots: sample.num_slots,
+                sample_period_secs: sample.sample_period_secs,
             })
+            .collect())
     }
 
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>> {
@@ -2547,6 +2553,7 @@ pub mod tests {
     use solana_client::rpc_filter::{Memcmp, MemcmpEncodedBytes};
     use solana_ledger::{
         blockstore::entries_to_test_shreds,
+        blockstore_meta::PerfSample,
         blockstore_processor::fill_blockstore_slot_with_ticks,
         entry::next_entry_mut,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
@@ -2861,14 +2868,12 @@ pub mod tests {
             "jsonrpc": "2.0",
             "id": 1,
             "result": [
-                [
-                    0,
-                    {
-                        "num_slots": 1,
-                        "num_transactions": 4,
-                        "sample_period_secs": 60
-                    }
-                ]
+                {
+                    "slot": 0,
+                    "numSlots": 1,
+                    "numTransactions": 4,
+                    "samplePeriodSecs": 60
+                }
             ],
         });
 
