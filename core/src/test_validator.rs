@@ -69,6 +69,7 @@ impl TestValidator {
             &Pubkey::new_rand(),
             42,
             bootstrap_validator_lamports,
+            solana_sdk::genesis_config::ClusterType::Development,
         );
         genesis_config
             .native_instruction_processors

@@ -54,6 +54,20 @@ pub fn create_genesis_config_with_vote_accounts(
     voting_keypairs: &[impl Borrow<ValidatorVoteKeypairs>],
     stakes: Vec<u64>,
 ) -> GenesisConfigInfo {
+    create_genesis_config_with_vote_accounts_and_cluster_type(
+        mint_lamports,
+        voting_keypairs,
+        stakes,
+        ClusterType::Development,
+    )
+}
+
+pub fn create_genesis_config_with_vote_accounts_and_cluster_type(
+    mint_lamports: u64,
+    voting_keypairs: &[impl Borrow<ValidatorVoteKeypairs>],
+    stakes: Vec<u64>,
+    cluster_type: ClusterType,
+) -> GenesisConfigInfo {
     assert!(!voting_keypairs.is_empty());
     assert_eq!(voting_keypairs.len(), stakes.len());
 
@@ -64,6 +78,7 @@ pub fn create_genesis_config_with_vote_accounts(
         &voting_keypairs[0].borrow().stake_keypair.pubkey(),
         stakes[0],
         BOOTSTRAP_VALIDATOR_LAMPORTS,
+        cluster_type,
     );
 
     for (validator_voting_keypairs, stake) in voting_keypairs[1..].iter().zip(&stakes[1..]) {
@@ -105,24 +120,23 @@ pub fn create_genesis_config_with_leader(
         &Pubkey::new_rand(),
         bootstrap_validator_stake_lamports,
         BOOTSTRAP_VALIDATOR_LAMPORTS,
+        ClusterType::Development,
     )
 }
 
-pub fn add_feature_accounts(genesis_config: &mut GenesisConfig) {
-    if genesis_config.cluster_type == ClusterType::Development {
-        // Activate all features at genesis in development mode
-        for feature_id in FeatureSet::default().inactive {
-            let feature = Feature {
-                activated_at: Some(0),
-            };
-            genesis_config.accounts.insert(
-                feature_id,
-                feature.create_account(std::cmp::max(
-                    genesis_config.rent.minimum_balance(Feature::size_of()),
-                    1,
-                )),
-            );
-        }
+pub fn activate_all_features(genesis_config: &mut GenesisConfig) {
+    // Activate all features at genesis in development mode
+    for feature_id in FeatureSet::default().inactive {
+        let feature = Feature {
+            activated_at: Some(0),
+        };
+        genesis_config.accounts.insert(
+            feature_id,
+            feature.create_account(std::cmp::max(
+                genesis_config.rent.minimum_balance(Feature::size_of()),
+                1,
+            )),
+        );
     }
 }
 
@@ -133,6 +147,7 @@ pub fn create_genesis_config_with_leader_ex(
     bootstrap_validator_staking_pubkey: &Pubkey,
     bootstrap_validator_stake_lamports: u64,
     bootstrap_validator_lamports: u64,
+    cluster_type: ClusterType,
 ) -> GenesisConfigInfo {
     let mint_keypair = Keypair::new();
     let bootstrap_validator_vote_account = vote_state::create_account(
@@ -179,11 +194,14 @@ pub fn create_genesis_config_with_leader_ex(
         accounts,
         fee_rate_governor,
         rent,
+        cluster_type,
         ..GenesisConfig::default()
     };
 
     solana_stake_program::add_genesis_accounts(&mut genesis_config);
-    add_feature_accounts(&mut genesis_config);
+    if genesis_config.cluster_type == ClusterType::Development {
+        activate_all_features(&mut genesis_config);
+    }
 
     GenesisConfigInfo {
         genesis_config,
