@@ -3651,14 +3651,12 @@ impl Bank {
     }
 
     fn fix_recent_blockhashes_sysvar_delay(&self) -> bool {
-        let activation_slot = match self.cluster_type() {
-            ClusterType::Development => 0,
-            ClusterType::Devnet => 0,
-            ClusterType::Testnet => 27_740_256, // Epoch 76
-            ClusterType::MainnetBeta => Slot::MAX / 2,
-        };
-
-        self.slot() >= activation_slot
+        match self.cluster_type() {
+            ClusterType::Development | ClusterType::Devnet | ClusterType::Testnet => true,
+            ClusterType::MainnetBeta => self
+                .feature_set
+                .is_active(&feature_set::consistent_recent_blockhashes_sysvar::id()),
+        }
     }
 
     // only used for testing
