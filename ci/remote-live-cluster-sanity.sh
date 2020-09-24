@@ -3,8 +3,8 @@
 handle_error() {
   action=$1
   set +e
-  kill "$ssh_pid" "$tail_pid"
-  wait "$ssh_pid" "$tail_pid"
+  kill "$validator_pid" "$tail_pid"
+  wait "$validator_pid" "$tail_pid"
   echo "--- Error: validator failed to $action"
   exit 1
 }
@@ -57,6 +57,7 @@ done
 
 echo "--- Monitoring validator $cluster_label"
 
+# shellcheck disable=SC2012
 snapshot_slot=$(ls -t cluster-sanity/ledger/snapshot* |
   head -n 1 |
   grep -o 'snapshot-[0-9]*-' |
