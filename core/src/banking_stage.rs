@@ -1092,7 +1092,7 @@ mod tests {
         system_transaction,
         transaction::TransactionError,
     };
-    use solana_transaction_status::{EncodedTransaction, TransactionWithStatusMeta};
+    use solana_transaction_status::TransactionWithStatusMeta;
     use std::{sync::atomic::Ordering, thread::sleep};
 
     #[test]
@@ -2038,36 +2038,26 @@ mod tests {
 
             transaction_status_service.join().unwrap();
 
-            let confirmed_block = blockstore.get_confirmed_block(bank.slot(), None).unwrap();
+            let confirmed_block = blockstore.get_confirmed_block(bank.slot()).unwrap();
             assert_eq!(confirmed_block.transactions.len(), 3);
 
             for TransactionWithStatusMeta { transaction, meta } in
                 confirmed_block.transactions.into_iter()
             {
-                if let EncodedTransaction::Json(transaction) = transaction {
-                    if transaction.signatures[0] == success_signature.to_string() {
-                        let meta = meta.unwrap();
-                        assert_eq!(meta.err, None);
-                        assert_eq!(meta.status, Ok(()));
-                    } else if transaction.signatures[0] == ix_error_signature.to_string() {
-                        let meta = meta.unwrap();
-                        assert_eq!(
-                            meta.err,
-                            Some(TransactionError::InstructionError(
-                                0,
-                                InstructionError::Custom(1)
-                            ))
-                        );
-                        assert_eq!(
-                            meta.status,
-                            Err(TransactionError::InstructionError(
-                                0,
-                                InstructionError::Custom(1)
-                            ))
-                        );
-                    } else {
-                        assert_eq!(meta, None);
-                    }
+                if transaction.signatures[0] == success_signature {
+                    let meta = meta.unwrap();
+                    assert_eq!(meta.status, Ok(()));
+                } else if transaction.signatures[0] == ix_error_signature {
+                    let meta = meta.unwrap();
+                    assert_eq!(
+                        meta.status,
+                        Err(TransactionError::InstructionError(
+                            0,
+                            InstructionError::Custom(1)
+                        ))
+                    );
+                } else {
+                    assert_eq!(meta, None);
                 }
             }
         }

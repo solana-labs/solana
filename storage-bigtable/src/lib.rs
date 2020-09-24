@@ -8,14 +8,10 @@ use solana_sdk::{
     transaction::{Transaction, TransactionError},
 };
 use solana_transaction_status::{
-    ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature,
-    EncodedTransaction, Rewards, TransactionStatus, TransactionWithStatusMeta,
-    UiTransactionEncoding, UiTransactionStatusMeta,
+    ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Rewards,
+    TransactionStatus, TransactionStatusMeta, TransactionWithStatusMeta,
 };
-use std::{
-    collections::HashMap,
-    convert::{TryFrom, TryInto},
-};
+use std::collections::HashMap;
 use thiserror::Error;
 
 #[macro_use]
@@ -91,35 +87,8 @@ struct StoredConfirmedBlock {
     block_time: Option<UnixTimestamp>,
 }
 
-impl StoredConfirmedBlock {
-    fn into_confirmed_block(self, encoding: UiTransactionEncoding) -> ConfirmedBlock {
-        let StoredConfirmedBlock {
-            previous_blockhash,
-            blockhash,
-            parent_slot,
-            transactions,
-            rewards,
-            block_time,
-        } = self;
-
-        ConfirmedBlock {
-            previous_blockhash,
-            blockhash,
-            parent_slot,
-            transactions: transactions
-                .into_iter()
-                .map(|transaction| transaction.into_transaction_with_status_meta(encoding))
-                .collect(),
-            rewards,
-            block_time,
-        }
-    }
-}
-
-impl TryFrom<ConfirmedBlock> for StoredConfirmedBlock {
-    type Error = Error;
-
-    fn try_from(confirmed_block: ConfirmedBlock) -> Result<Self> {
+impl From<ConfirmedBlock> for StoredConfirmedBlock {
+    fn from(confirmed_block: ConfirmedBlock) -> Self {
         let ConfirmedBlock {
             previous_blockhash,
             blockhash,
@@ -129,19 +98,36 @@ impl TryFrom<ConfirmedBlock> for StoredConfirmedBlock {
             block_time,
         } = confirmed_block;
 
-        let mut encoded_transactions = vec![];
-        for transaction in transactions.into_iter() {
-            encoded_transactions.push(transaction.try_into()?);
-        }
-
-        Ok(Self {
+        Self {
             previous_blockhash,
             blockhash,
             parent_slot,
-            transactions: encoded_transactions,
+            transactions: transactions.into_iter().map(|tx| tx.into()).collect(),
             rewards,
             block_time,
-        })
+        }
+    }
+}
+
+impl From<StoredConfirmedBlock> for ConfirmedBlock {
+    fn from(confirmed_block: StoredConfirmedBlock) -> Self {
+        let StoredConfirmedBlock {
+            previous_blockhash,
+            blockhash,
+            parent_slot,
+            transactions,
+            rewards,
+            block_time,
+        } = confirmed_block;
+
+        Self {
+            previous_blockhash,
+            blockhash,
+            parent_slot,
+            transactions: transactions.into_iter().map(|tx| tx.into()).collect(),
+            rewards,
+            block_time,
+        }
     }
 }
 
@@ -151,31 +137,21 @@ struct StoredConfirmedBlockTransaction {
     meta: Option<StoredConfirmedBlockTransactionStatusMeta>,
 }
 
-impl StoredConfirmedBlockTransaction {
-    fn into_transaction_with_status_meta(
-        self,
-        encoding: UiTransactionEncoding,
-    ) -> TransactionWithStatusMeta {
-        let StoredConfirmedBlockTransaction { transaction, meta } = self;
-        TransactionWithStatusMeta {
-            transaction: EncodedTransaction::encode(transaction, encoding),
-            meta: meta.map(|meta| meta.into()),
+impl From<TransactionWithStatusMeta> for StoredConfirmedBlockTransaction {
+    fn from(value: TransactionWithStatusMeta) -> Self {
+        Self {
+            transaction: value.transaction,
+            meta: value.meta.map(|meta| meta.into()),
         }
     }
 }
 
-impl TryFrom<TransactionWithStatusMeta> for StoredConfirmedBlockTransaction {
-    type Error = Error;
-
-    fn try_from(value: TransactionWithStatusMeta) -> Result<Self> {
-        let TransactionWithStatusMeta { transaction, meta } = value;
-
-        Ok(Self {
-            transaction: transaction
-                .decode()
-                .ok_or(Error::UnsupportedTransactionEncoding)?,
-            meta: meta.map(|meta| meta.into()),
-        })
+impl From<StoredConfirmedBlockTransaction> for TransactionWithStatusMeta {
+    fn from(value: StoredConfirmedBlockTransaction) -> Self {
+        Self {
+            transaction: value.transaction,
+            meta: value.meta.map(|meta| meta.into()),
+        }
     }
 }
 
@@ -187,7 +163,7 @@ struct StoredConfirmedBlockTransactionStatusMeta {
     post_balances: Vec<u64>,
 }
 
-impl From<StoredConfirmedBlockTransactionStatusMeta> for UiTransactionStatusMeta {
+impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
     fn from(value: StoredConfirmedBlockTransactionStatusMeta) -> Self {
         let StoredConfirmedBlockTransactionStatusMeta {
             err,
@@ -200,7 +176,6 @@ impl From<StoredConfirmedBlockTransactionStatusMeta> for UiTransactionStatusMeta
             Some(err) => Err(err.clone()),
         };
         Self {
-            err,
             status,
             fee,
             pre_balances,
@@ -209,17 +184,17 @@ impl From<StoredConfirmedBlockTransactionStatusMeta> for UiTransactionStatusMeta
     }
 }
 
-impl From<UiTransactionStatusMeta> for StoredConfirmedBlockTransactionStatusMeta {
-    fn from(value: UiTransactionStatusMeta) -> Self {
-        let UiTransactionStatusMeta {
-            err,
+impl From<TransactionStatusMeta> for StoredConfirmedBlockTransactionStatusMeta {
+    fn from(value: TransactionStatusMeta) -> Self {
+        let TransactionStatusMeta {
+            status,
             fee,
             pre_balances,
             post_balances,
             ..
         } = value;
         Self {
-            err,
+            err: status.err(),
             fee,
             pre_balances,
             post_balances,
@@ -296,16 +271,12 @@ impl LedgerStorage {
     }
 
     /// Fetch the confirmed block from the desired slot
-    pub async fn get_confirmed_block(
-        &self,
-        slot: Slot,
-        encoding: UiTransactionEncoding,
-    ) -> Result<ConfirmedBlock> {
+    pub async fn get_confirmed_block(&self, slot: Slot) -> Result<ConfirmedBlock> {
         let mut bigtable = self.connection.client();
         let block = bigtable
             .get_bincode_cell::<StoredConfirmedBlock>("blocks", slot_to_key(slot))
             .await?;
-        Ok(block.into_confirmed_block(encoding))
+        Ok(block.into())
     }
 
     pub async fn get_signature_status(&self, signature: &Signature) -> Result<TransactionStatus> {
@@ -320,7 +291,6 @@ impl LedgerStorage {
     pub async fn get_confirmed_transaction(
         &self,
         signature: &Signature,
-        encoding: UiTransactionEncoding,
     ) -> Result<Option<ConfirmedTransaction>> {
         let mut bigtable = self.connection.client();
 
@@ -348,8 +318,7 @@ impl LedgerStorage {
                 } else {
                     Ok(Some(ConfirmedTransaction {
                         slot,
-                        transaction: bucket_block_transaction
-                            .into_transaction_with_status_meta(encoding),
+                        transaction: bucket_block_transaction.into(),
                     }))
                 }
             }
@@ -467,22 +436,16 @@ impl LedgerStorage {
     ) -> Result<()> {
         let mut bytes_written = 0;
 
-        let mut by_addr: HashMap<Pubkey, Vec<TransactionByAddrInfo>> = HashMap::new();
+        let mut by_addr: HashMap<&Pubkey, Vec<TransactionByAddrInfo>> = HashMap::new();
 
         let mut tx_cells = vec![];
         for (index, transaction_with_meta) in confirmed_block.transactions.iter().enumerate() {
-            let err = transaction_with_meta
-                .meta
-                .as_ref()
-                .and_then(|meta| meta.err.clone());
+            let TransactionWithStatusMeta { meta, transaction } = transaction_with_meta;
+            let err = meta.as_ref().and_then(|meta| meta.status.clone().err());
             let index = index as u32;
-            let transaction = transaction_with_meta
-                .transaction
-                .decode()
-                .expect("transaction decode failed");
             let signature = transaction.signatures[0];
 
-            for address in transaction.message.account_keys {
+            for address in &transaction.message.account_keys {
                 if !is_sysvar_id(&address) {
                     by_addr
                         .entry(address)
@@ -539,7 +502,7 @@ impl LedgerStorage {
         // Store the block itself last, after all other metadata about the block has been
         // successfully stored.  This avoids partial uploaded blocks from becoming visible to
         // `get_confirmed_block()` and `get_confirmed_blocks()`
-        let blocks_cells = [(slot_to_key(slot), confirmed_block.try_into()?)];
+        let blocks_cells = [(slot_to_key(slot), confirmed_block.into())];
         bytes_written += self
             .connection
             .put_bincode_cells_with_retry::<StoredConfirmedBlock>("blocks", &blocks_cells)

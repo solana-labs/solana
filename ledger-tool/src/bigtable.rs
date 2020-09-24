@@ -7,7 +7,7 @@ use solana_clap_utils::{
 use solana_cli_output::display::println_transaction;
 use solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType};
 use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
-use solana_transaction_status::UiTransactionEncoding;
+use solana_transaction_status::ConfirmedBlock;
 use std::{
     path::Path,
     process::exit,
@@ -51,9 +51,7 @@ async fn block(slot: Slot) -> Result<(), Box<dyn std::error::Error>> {
         .await
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
-    let block = bigtable
-        .get_confirmed_block(slot, UiTransactionEncoding::Base64)
-        .await?;
+    let block = bigtable.get_confirmed_block(slot).await?;
 
     println!("Slot: {}", slot);
     println!("Parent Slot: {}", block.parent_slot);
@@ -65,11 +63,11 @@ async fn block(slot: Slot) -> Result<(), Box<dyn std::error::Error>> {
     if !block.rewards.is_empty() {
         println!("Rewards: {:?}", block.rewards);
     }
-    for (index, transaction_with_meta) in block.transactions.iter().enumerate() {
+    for (index, transaction_with_meta) in block.transactions.into_iter().enumerate() {
         println!("Transaction {}:", index);
         println_transaction(
-            &transaction_with_meta.transaction.decode().unwrap(),
-            &transaction_with_meta.meta,
+            &transaction_with_meta.transaction,
+            &transaction_with_meta.meta.map(|meta| meta.into()),
             "  ",
         );
     }
@@ -96,22 +94,15 @@ async fn confirm(signature: &Signature, verbose: bool) -> Result<(), Box<dyn std
     let transaction_status = bigtable.get_signature_status(signature).await?;
 
     if verbose {
-        match bigtable
-            .get_confirmed_transaction(signature, UiTransactionEncoding::Base64)
-            .await
-        {
+        match bigtable.get_confirmed_transaction(signature).await {
             Ok(Some(confirmed_transaction)) => {
                 println!(
                     "\nTransaction executed in slot {}:",
                     confirmed_transaction.slot
                 );
                 println_transaction(
-                    &confirmed_transaction
-                        .transaction
-                        .transaction
-                        .decode()
-                        .expect("Successful decode"),
-                    &confirmed_transaction.transaction.meta,
+                    &confirmed_transaction.transaction.transaction,
+                    &confirmed_transaction.transaction.meta.map(|m| m.into()),
                     "  ",
                 );
             }
@@ -138,7 +129,7 @@ pub async fn transaction_history(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new(true).await?;
 
-    let mut loaded_block: Option<(Slot, solana_transaction_status::ConfirmedBlock)> = None;
+    let mut loaded_block: Option<(Slot, ConfirmedBlock)> = None;
     while limit > 0 {
         let results = bigtable
             .get_confirmed_signatures_for_address(
@@ -188,11 +179,8 @@ pub async fn transaction_history(
                                 }
                                 Some(transaction_with_meta) => {
                                     println_transaction(
-                                        &transaction_with_meta
-                                            .transaction
-                                            .decode()
-                                            .expect("Successful decode"),
-                                        &transaction_with_meta.meta,
+                                        &transaction_with_meta.transaction,
+                                        &transaction_with_meta.meta.clone().map(|m| m.into()),
                                         "  ",
                                     );
                                 }
@@ -200,10 +188,7 @@ pub async fn transaction_history(
                             break;
                         }
                     }
-                    match bigtable
-                        .get_confirmed_block(result.slot, UiTransactionEncoding::Base64)
-                        .await
-                    {
+                    match bigtable.get_confirmed_block(result.slot).await {
                         Err(err) => {
                             println!("  Unable to get confirmed transaction details: {}", err);
                             break;

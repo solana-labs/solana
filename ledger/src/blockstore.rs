@@ -37,9 +37,8 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_transaction_status::{
-    ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature,
-    EncodedTransaction, Rewards, TransactionStatusMeta, TransactionWithStatusMeta,
-    UiTransactionEncoding, UiTransactionStatusMeta,
+    ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Rewards,
+    TransactionStatusMeta, TransactionWithStatusMeta,
 };
 use solana_vote_program::vote_instruction::VoteInstruction;
 use std::{
@@ -1646,11 +1645,7 @@ impl Blockstore {
         Ok(root_iterator.next().unwrap_or_default())
     }
 
-    pub fn get_confirmed_block(
-        &self,
-        slot: Slot,
-        encoding: Option<UiTransactionEncoding>,
-    ) -> Result<ConfirmedBlock> {
+    pub fn get_confirmed_block(&self, slot: Slot) -> Result<ConfirmedBlock> {
         datapoint_info!(
             "blockstore-rpc-api",
             ("method", "get_confirmed_block".to_string(), String)
@@ -1661,7 +1656,6 @@ impl Blockstore {
         if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
             return Err(BlockstoreError::SlotCleanedUp);
         }
-        let encoding = encoding.unwrap_or(UiTransactionEncoding::Json);
         if self.is_root(slot) {
             let slot_meta_cf = self.db.column::<cf::SlotMeta>();
             let slot_meta = match slot_meta_cf.get(slot)? {
@@ -1697,11 +1691,8 @@ impl Blockstore {
                     previous_blockhash: previous_blockhash.to_string(),
                     blockhash: blockhash.to_string(),
                     parent_slot: slot_meta.parent_slot,
-                    transactions: self.map_transactions_to_statuses(
-                        slot,
-                        encoding,
-                        slot_transaction_iterator,
-                    ),
+                    transactions: self
+                        .map_transactions_to_statuses(slot, slot_transaction_iterator),
                     rewards,
                     block_time,
                 };
@@ -1714,19 +1705,16 @@ impl Blockstore {
     fn map_transactions_to_statuses<'a>(
         &self,
         slot: Slot,
-        encoding: UiTransactionEncoding,
         iterator: impl Iterator<Item = Transaction> + 'a,
     ) -> Vec<TransactionWithStatusMeta> {
         iterator
             .map(|transaction| {
                 let signature = transaction.signatures[0];
-                let encoded_transaction = EncodedTransaction::encode(transaction, encoding);
                 TransactionWithStatusMeta {
-                    transaction: encoded_transaction,
+                    transaction,
                     meta: self
                         .read_transaction_status((signature, slot))
-                        .expect("Expect database get to succeed")
-                        .map(UiTransactionStatusMeta::from),
+                        .expect("Expect database get to succeed"),
                 }
             })
             .collect()
@@ -1902,7 +1890,6 @@ impl Blockstore {
     pub fn get_confirmed_transaction(
         &self,
         signature: Signature,
-        encoding: Option<UiTransactionEncoding>,
     ) -> Result<Option<ConfirmedTransaction>> {
         datapoint_info!(
             "blockstore-rpc-api",
@@ -1912,13 +1899,11 @@ impl Blockstore {
             let transaction = self
                 .find_transaction_in_slot(slot, signature)?
                 .ok_or(BlockstoreError::TransactionStatusSlotMismatch)?; // Should not happen
-            let encoding = encoding.unwrap_or(UiTransactionEncoding::Json);
-            let encoded_transaction = EncodedTransaction::encode(transaction, encoding);
             Ok(Some(ConfirmedTransaction {
                 slot,
                 transaction: TransactionWithStatusMeta {
-                    transaction: encoded_transaction,
-                    meta: Some(status.into()),
+                    transaction,
+                    meta: Some(status),
                 },
             }))
         } else {
@@ -2019,27 +2004,23 @@ impl Blockstore {
                 match transaction_status {
                     None => return Ok(vec![]),
                     Some((slot, _)) => {
-                        let confirmed_block = self
-                            .get_confirmed_block(slot, Some(UiTransactionEncoding::Base64))
-                            .map_err(|err| {
-                                BlockstoreError::IO(IOError::new(
-                                    ErrorKind::Other,
-                                    format!("Unable to get confirmed block: {}", err),
-                                ))
-                            })?;
+                        let confirmed_block = self.get_confirmed_block(slot).map_err(|err| {
+                            BlockstoreError::IO(IOError::new(
+                                ErrorKind::Other,
+                                format!("Unable to get confirmed block: {}", err),
+                            ))
+                        })?;
 
                         // Load all signatures for the block
                         let mut slot_signatures: Vec<_> = confirmed_block
                             .transactions
-                            .iter()
+                            .into_iter()
                             .filter_map(|transaction_with_meta| {
-                                if let Some(transaction) =
-                                    transaction_with_meta.transaction.decode()
-                                {
-                                    transaction.signatures.into_iter().next()
-                                } else {
-                                    None
-                                }
+                                transaction_with_meta
+                                    .transaction
+                                    .signatures
+                                    .into_iter()
+                                    .next()
                             })
                             .collect();
 
@@ -2073,27 +2054,23 @@ impl Blockstore {
                 match transaction_status {
                     None => (0, HashSet::new()),
                     Some((slot, _)) => {
-                        let confirmed_block = self
-                            .get_confirmed_block(slot, Some(UiTransactionEncoding::Base64))
-                            .map_err(|err| {
-                                BlockstoreError::IO(IOError::new(
-                                    ErrorKind::Other,
-                                    format!("Unable to get confirmed block: {}", err),
-                                ))
-                            })?;
+                        let confirmed_block = self.get_confirmed_block(slot).map_err(|err| {
+                            BlockstoreError::IO(IOError::new(
+                                ErrorKind::Other,
+                                format!("Unable to get confirmed block: {}", err),
+                            ))
+                        })?;
 
                         // Load all signatures for the block
                         let mut slot_signatures: Vec<_> = confirmed_block
                             .transactions
-                            .iter()
+                            .into_iter()
                             .filter_map(|transaction_with_meta| {
-                                if let Some(transaction) =
-                                    transaction_with_meta.transaction.decode()
-                                {
-                                    transaction.signatures.into_iter().next()
-                                } else {
-                                    None
-                                }
+                                transaction_with_meta
+                                    .transaction
+                                    .signatures
+                                    .into_iter()
+                                    .next()
                             })
                             .collect();
 
@@ -5672,7 +5649,7 @@ pub mod tests {
             .put_meta_bytes(slot - 1, &serialize(&parent_meta).unwrap())
             .unwrap();
 
-        let expected_transactions: Vec<(Transaction, Option<UiTransactionStatusMeta>)> = entries
+        let expected_transactions: Vec<TransactionWithStatusMeta> = entries
             .iter()
             .cloned()
             .filter(|entry| !entry.is_tick())
@@ -5709,37 +5686,27 @@ pub mod tests {
                         },
                     )
                     .unwrap();
-                (
+                TransactionWithStatusMeta {
                     transaction,
-                    Some(
-                        TransactionStatusMeta {
-                            status: Ok(()),
-                            fee: 42,
-                            pre_balances,
-                            post_balances,
-                        }
-                        .into(),
-                    ),
-                )
+                    meta: Some(TransactionStatusMeta {
+                        status: Ok(()),
+                        fee: 42,
+                        pre_balances,
+                        post_balances,
+                    }),
+                }
             })
             .collect();
 
         // Even if marked as root, a slot that is empty of entries should return an error
-        let confirmed_block_err = ledger.get_confirmed_block(slot - 1, None).unwrap_err();
+        let confirmed_block_err = ledger.get_confirmed_block(slot - 1).unwrap_err();
         assert_matches!(confirmed_block_err, BlockstoreError::SlotNotRooted);
 
-        let confirmed_block = ledger.get_confirmed_block(slot, None).unwrap();
+        let confirmed_block = ledger.get_confirmed_block(slot).unwrap();
         assert_eq!(confirmed_block.transactions.len(), 100);
 
         let expected_block = ConfirmedBlock {
-            transactions: expected_transactions
-                .iter()
-                .cloned()
-                .map(|(tx, meta)| TransactionWithStatusMeta {
-                    transaction: EncodedTransaction::encode(tx, UiTransactionEncoding::Json),
-                    meta,
-                })
-                .collect(),
+            transactions: expected_transactions.clone(),
             parent_slot: slot - 1,
             blockhash: blockhash.to_string(),
             previous_blockhash: Hash::default().to_string(),
@@ -5750,18 +5717,11 @@ pub mod tests {
         // root, but empty of entries. This is special handling for snapshot root slots.
         assert_eq!(confirmed_block, expected_block);
 
-        let confirmed_block = ledger.get_confirmed_block(slot + 1, None).unwrap();
+        let confirmed_block = ledger.get_confirmed_block(slot + 1).unwrap();
         assert_eq!(confirmed_block.transactions.len(), 100);
 
         let mut expected_block = ConfirmedBlock {
-            transactions: expected_transactions
-                .iter()
-                .cloned()
-                .map(|(tx, meta)| TransactionWithStatusMeta {
-                    transaction: EncodedTransaction::encode(tx, UiTransactionEncoding::Json),
-                    meta,
-                })
-                .collect(),
+            transactions: expected_transactions,
             parent_slot: slot,
             blockhash: blockhash.to_string(),
             previous_blockhash: blockhash.to_string(),
@@ -5770,7 +5730,7 @@ pub mod tests {
         };
         assert_eq!(confirmed_block, expected_block);
 
-        let not_root = ledger.get_confirmed_block(slot + 2, None).unwrap_err();
+        let not_root = ledger.get_confirmed_block(slot + 2).unwrap_err();
         assert_matches!(not_root, BlockstoreError::SlotNotRooted);
 
         // Test block_time returns, if available
@@ -5778,7 +5738,7 @@ pub mod tests {
         ledger.blocktime_cf.put(slot + 1, &timestamp).unwrap();
         expected_block.block_time = Some(timestamp);
 
-        let confirmed_block = ledger.get_confirmed_block(slot + 1, None).unwrap();
+        let confirmed_block = ledger.get_confirmed_block(slot + 1).unwrap();
         assert_eq!(confirmed_block, expected_block);
 
         drop(ledger);
@@ -6434,7 +6394,7 @@ pub mod tests {
         blockstore.insert_shreds(shreds, None, false).unwrap();
         blockstore.set_roots(&[slot - 1, slot]).unwrap();
 
-        let expected_transactions: Vec<(Transaction, Option<UiTransactionStatusMeta>)> = entries
+        let expected_transactions: Vec<TransactionWithStatusMeta> = entries
             .iter()
             .cloned()
             .filter(|entry| !entry.is_tick())
@@ -6459,48 +6419,32 @@ pub mod tests {
                         },
                     )
                     .unwrap();
-                (
+                TransactionWithStatusMeta {
                     transaction,
-                    Some(
-                        TransactionStatusMeta {
-                            status: Ok(()),
-                            fee: 42,
-                            pre_balances,
-                            post_balances,
-                        }
-                        .into(),
-                    ),
-                )
+                    meta: Some(TransactionStatusMeta {
+                        status: Ok(()),
+                        fee: 42,
+                        pre_balances,
+                        post_balances,
+                    }),
+                }
             })
             .collect();
 
-        for (transaction, status) in expected_transactions.clone() {
-            let signature = transaction.signatures[0];
-            let encoded_transaction =
-                EncodedTransaction::encode(transaction, UiTransactionEncoding::Json);
-            let expected_transaction = ConfirmedTransaction {
-                slot,
-                transaction: TransactionWithStatusMeta {
-                    transaction: encoded_transaction,
-                    meta: status,
-                },
-            };
+        for transaction in expected_transactions.clone() {
+            let signature = transaction.transaction.signatures[0];
             assert_eq!(
-                blockstore
-                    .get_confirmed_transaction(signature, None)
-                    .unwrap(),
-                Some(expected_transaction)
+                blockstore.get_confirmed_transaction(signature).unwrap(),
+                Some(ConfirmedTransaction { slot, transaction })
             );
         }
 
         blockstore.run_purge(0, 2, PurgeType::PrimaryIndex).unwrap();
         *blockstore.lowest_cleanup_slot.write().unwrap() = slot;
-        for (transaction, _) in expected_transactions {
+        for TransactionWithStatusMeta { transaction, .. } in expected_transactions {
             let signature = transaction.signatures[0];
             assert_eq!(
-                blockstore
-                    .get_confirmed_transaction(signature, None)
-                    .unwrap(),
+                blockstore.get_confirmed_transaction(signature).unwrap(),
                 None,
             );
         }
@@ -6513,7 +6457,7 @@ pub mod tests {
         blockstore.set_roots(&[0]).unwrap();
         assert_eq!(
             blockstore
-                .get_confirmed_transaction(Signature::default(), None)
+                .get_confirmed_transaction(Signature::default())
                 .unwrap(),
             None
         );
@@ -6935,11 +6879,7 @@ pub mod tests {
                 vec![CompiledInstruction::new(1, &(), vec![0])],
             ));
 
-            let map = blockstore.map_transactions_to_statuses(
-                slot,
-                UiTransactionEncoding::Json,
-                transactions.into_iter(),
-            );
+            let map = blockstore.map_transactions_to_statuses(slot, transactions.into_iter());
             assert_eq!(map.len(), 5);
             for (x, m) in map.iter().take(4).enumerate() {
                 assert_eq!(m.meta.as_ref().unwrap().fee, x as u64);
