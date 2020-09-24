@@ -6,9 +6,9 @@ import {
   useDashboardInfo,
   usePerformanceInfo,
   useSetActive,
-} from "providers/stats/solanaBeach";
+} from "providers/stats/solanaClusterStats";
 import { slotsToHumanString } from "utils";
-import { useCluster, Cluster } from "providers/cluster";
+import { useCluster } from "providers/cluster";
 import { TpsCard } from "components/TpsCard";
 
 export function ClusterStatsPage() {
@@ -32,27 +32,20 @@ export function ClusterStatsPage() {
 function StatsCardBody() {
   const dashboardInfo = useDashboardInfo();
   const performanceInfo = usePerformanceInfo();
-  const setSocketActive = useSetActive();
+  const setActive = useSetActive();
   const { cluster } = useCluster();
 
   React.useEffect(() => {
-    setSocketActive(true);
-    return () => setSocketActive(false);
-  }, [setSocketActive, cluster]);
+    setActive(true);
+    return () => setActive(false);
+  }, [setActive, cluster]);
 
-  const statsAvailable =
-    cluster === Cluster.MainnetBeta || cluster === Cluster.Testnet;
-  if (!statsAvailable) {
-    return (
-      <div className="card-body text-center">
-        <div className="text-muted">
-          Stats are not available for this cluster
-        </div>
-      </div>
-    );
-  }
-
-  if (!dashboardInfo || !performanceInfo) {
+  if (
+    !dashboardInfo ||
+    !performanceInfo ||
+    performanceInfo.loading ||
+    dashboardInfo.loading
+  ) {
     return (
       <div className="card-body text-center">
         <span className="spinner-grow spinner-grow-sm mr-2"></span>

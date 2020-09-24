@@ -4,12 +4,11 @@ import CountUp from "react-countup";
 import {
   usePerformanceInfo,
   PERF_UPDATE_SEC,
-  PerformanceInfo,
-} from "providers/stats/solanaBeach";
+} from "providers/stats/solanaClusterStats";
 import classNames from "classnames";
 import { TableCardBody } from "components/common/TableCardBody";
-import { useCluster, Cluster } from "providers/cluster";
 import { ChartOptions, ChartTooltipModel } from "chart.js";
+import { PerformanceInfo } from "providers/stats/solanaPerformanceInfo";
 
 export function TpsCard() {
   return (
@@ -24,21 +23,8 @@ export function TpsCard() {
 
 function TpsCardBody() {
   const performanceInfo = usePerformanceInfo();
-  const { cluster } = useCluster();
 
-  const statsAvailable =
-    cluster === Cluster.MainnetBeta || cluster === Cluster.Testnet;
-  if (!statsAvailable) {
-    return (
-      <div className="card-body text-center">
-        <div className="text-muted">
-          Stats are not available for this cluster
-        </div>
-      </div>
-    );
-  }
-
-  if (!performanceInfo) {
+  if (!performanceInfo || performanceInfo.loading) {
     return (
       <div className="card-body text-center">
         <span className="spinner-grow spinner-grow-sm mr-2"></span>
@@ -54,15 +40,15 @@ type Series = "short" | "medium" | "long";
 const SERIES: Series[] = ["short", "medium", "long"];
 const SERIES_INFO = {
   short: {
-    label: (index: number) => Math.floor(index / 4),
+    label: (index: number) => index,
     interval: "30m",
   },
   medium: {
-    label: (index: number) => index,
+    label: (index: number) => index * 4,
     interval: "2h",
   },
   long: {
-    label: (index: number) => 3 * index,
+    label: (index: number) => index * 12,
     interval: "6h",
   },
 };
