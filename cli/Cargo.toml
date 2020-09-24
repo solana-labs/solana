@@ -30,6 +30,7 @@ serde_json = "1.0.56"
 solana-account-decoder = { path = "../account-decoder", version = "1.4.0" }
 solana-clap-utils = { path = "../clap-utils", version = "1.4.0" }
 solana-cli-config = { path = "../cli-config", version = "1.4.0" }
+solana-cli-output = { path = "../cli-output", version = "1.4.0" }
 solana-client = { path = "../client", version = "1.4.0" }
 solana-config-program = { path = "../programs/config", version = "1.4.0" }
 solana-faucet = { path = "../faucet", version = "1.4.0" }

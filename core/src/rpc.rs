@@ -33,7 +33,10 @@ use solana_client::{
     rpc_response::*,
 };
 use solana_faucet::faucet::request_airdrop_transaction;
-use solana_ledger::{blockstore::Blockstore, blockstore_db::BlockstoreError, get_tmp_ledger_path};
+use solana_ledger::{
+    blockstore::Blockstore, blockstore_db::BlockstoreError, blockstore_meta::PerfSample,
+    get_tmp_ledger_path,
+};
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::{
     accounts::AccountAddressFilter,
@@ -62,7 +65,7 @@ use solana_transaction_status::{
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use spl_token_v2_0::{
-    pack::Pack,
+    solana_sdk::program_pack::Pack,
     state::{Account as TokenAccount, Mint},
 };
 use std::{
@@ -79,6 +82,7 @@ use std::{
 use tokio::runtime;
 
 pub const MAX_REQUEST_PAYLOAD_SIZE: usize = 50 * (1 << 10); // 50kB
+pub const PERFORMANCE_SAMPLES_LIMIT: usize = 720;
 
 fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
     let context = RpcResponseContext { slot: bank.slot() };
@@ -1496,6 +1500,13 @@ pub trait RpcSol {
     #[rpc(meta, name = "getClusterNodes")]
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>>;
 
+    #[rpc(meta, name = "getRecentPerformanceSamples")]
+    fn get_recent_performance_samples(
+        &self,
+        meta: Self::Metadata,
+        limit: Option<usize>,
+    ) -> Result<Vec<(Slot, PerfSample)>>;
+
     #[rpc(meta, name = "getEpochInfo")]
     fn get_epoch_info(
         &self,
@@ -1883,6 +1894,30 @@ impl RpcSol for RpcSolImpl {
         debug!("get_balance rpc request received: {:?}", pubkey_str);
         let pubkey = verify_pubkey(pubkey_str)?;
         Ok(meta.get_balance(&pubkey, commitment))
+    }
+
+    fn get_recent_performance_samples(
+        &self,
+        meta: Self::Metadata,
+        limit: Option<usize>,
+    ) -> Result<Vec<(Slot, PerfSample)>> {
+        debug!("get_recent_performance_samples request received");
+
+        let limit = limit.unwrap_or(PERFORMANCE_SAMPLES_LIMIT);
+
+        if limit > PERFORMANCE_SAMPLES_LIMIT {
+            return Err(Error::invalid_params(format!(
+                "Invalid limit; max {}",
+                PERFORMANCE_SAMPLES_LIMIT
+            )));
+        }
+
+        meta.blockstore
+            .get_recent_perf_samples(limit)
+            .map_err(|err| {
+                warn!("get_recent_performance_samples failed: {:?}", err);
+                Error::invalid_request()
+            })
     }
 
     fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>> {
@@ -2534,8 +2569,9 @@ pub mod tests {
         vote_state::{Vote, VoteInit, MAX_LOCKOUT_HISTORY},
     };
     use spl_token_v2_0::{
-        option::COption, solana_sdk::pubkey::Pubkey as SplTokenPubkey,
-        state::AccountState as TokenAccountState, state::Mint,
+        solana_sdk::{program_option::COption, pubkey::Pubkey as SplTokenPubkey},
+        state::AccountState as TokenAccountState,
+        state::Mint,
     };
     use std::{collections::HashMap, time::Duration};
 
@@ -2670,6 +2706,16 @@ pub mod tests {
             &socketaddr!("127.0.0.1:1234"),
         ));
 
+        let sample1 = PerfSample {
+            num_slots: 1,
+            num_transactions: 4,
+            sample_period_secs: 60,
+        };
+
+        blockstore
+            .write_perf_sample(0, &sample1)
+            .expect("write to blockstore");
+
         let (meta, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig {
                 enable_rpc_transaction_history: true,
@@ -2794,6 +2840,63 @@ pub mod tests {
 
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_get_recent_performance_samples() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getRecentPerformanceSamples"}"#;
+
+        let res = io.handle_request_sync(&req, meta);
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": [
+                [
+                    0,
+                    {
+                        "num_slots": 1,
+                        "num_transactions": 4,
+                        "sample_period_secs": 60
+                    }
+                ]
+            ],
+        });
+
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_get_recent_performance_samples_invalid_limit() {
+        let bob_pubkey = Pubkey::new_rand();
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+
+        let req =
+            r#"{"jsonrpc":"2.0","id":1,"method":"getRecentPerformanceSamples","params":[10000]}"#;
+
+        let res = io.handle_request_sync(&req, meta);
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "error": {
+                "code": -32602,
+                "message": "Invalid limit; max 720"
+            },
+            "id": 1
+        });
+
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
         assert_eq!(expected, result);
     }
 
@@ -4900,20 +5003,17 @@ pub mod tests {
         let mint = SplTokenPubkey::new(&[2; 32]);
         let owner = SplTokenPubkey::new(&[3; 32]);
         let delegate = SplTokenPubkey::new(&[4; 32]);
-        TokenAccount::unpack_unchecked_mut(&mut account_data, &mut |account: &mut TokenAccount| {
-            *account = TokenAccount {
-                mint,
-                owner,
-                delegate: COption::Some(delegate),
-                amount: 420,
-                state: TokenAccountState::Initialized,
-                is_native: COption::None,
-                delegated_amount: 30,
-                close_authority: COption::Some(owner),
-            };
-            Ok(())
-        })
-        .unwrap();
+        let token_account = TokenAccount {
+            mint,
+            owner,
+            delegate: COption::Some(delegate),
+            amount: 420,
+            state: TokenAccountState::Initialized,
+            is_native: COption::None,
+            delegated_amount: 30,
+            close_authority: COption::Some(owner),
+        };
+        TokenAccount::pack(token_account, &mut account_data).unwrap();
         let token_account = Account {
             lamports: 111,
             data: account_data.to_vec(),
@@ -4925,17 +5025,14 @@ pub mod tests {
 
         // Add the mint
         let mut mint_data = vec![0; Mint::get_packed_len()];
-        Mint::unpack_unchecked_mut(&mut mint_data, &mut |mint: &mut Mint| {
-            *mint = Mint {
-                mint_authority: COption::Some(owner),
-                supply: 500,
-                decimals: 2,
-                is_initialized: true,
-                freeze_authority: COption::Some(owner),
-            };
-            Ok(())
-        })
-        .unwrap();
+        let mint_state = Mint {
+            mint_authority: COption::Some(owner),
+            supply: 500,
+            decimals: 2,
+            is_initialized: true,
+            freeze_authority: COption::Some(owner),
+        };
+        Mint::pack(mint_state, &mut mint_data).unwrap();
         let mint_account = Account {
             lamports: 111,
             data: mint_data.to_vec(),
@@ -5000,20 +5097,17 @@ pub mod tests {
         // Add another token account with the same owner and delegate but different mint
         let mut account_data = vec![0; TokenAccount::get_packed_len()];
         let new_mint = SplTokenPubkey::new(&[5; 32]);
-        TokenAccount::unpack_unchecked_mut(&mut account_data, &mut |account: &mut TokenAccount| {
-            *account = TokenAccount {
-                mint: new_mint,
-                owner,
-                delegate: COption::Some(delegate),
-                amount: 42,
-                state: TokenAccountState::Initialized,
-                is_native: COption::None,
-                delegated_amount: 30,
-                close_authority: COption::Some(owner),
-            };
-            Ok(())
-        })
-        .unwrap();
+        let token_account = TokenAccount {
+            mint: new_mint,
+            owner,
+            delegate: COption::Some(delegate),
+            amount: 42,
+            state: TokenAccountState::Initialized,
+            is_native: COption::None,
+            delegated_amount: 30,
+            close_authority: COption::Some(owner),
+        };
+        TokenAccount::pack(token_account, &mut account_data).unwrap();
         let token_account = Account {
             lamports: 111,
             data: account_data.to_vec(),
@@ -5225,17 +5319,14 @@ pub mod tests {
 
         // Add new_mint, and another token account on new_mint with different balance
         let mut mint_data = vec![0; Mint::get_packed_len()];
-        Mint::unpack_unchecked_mut(&mut mint_data, &mut |mint: &mut Mint| {
-            *mint = Mint {
-                mint_authority: COption::Some(owner),
-                supply: 500,
-                decimals: 2,
-                is_initialized: true,
-                freeze_authority: COption::Some(owner),
-            };
-            Ok(())
-        })
-        .unwrap();
+        let mint_state = Mint {
+            mint_authority: COption::Some(owner),
+            supply: 500,
+            decimals: 2,
+            is_initialized: true,
+            freeze_authority: COption::Some(owner),
+        };
+        Mint::pack(mint_state, &mut mint_data).unwrap();
         let mint_account = Account {
             lamports: 111,
             data: mint_data.to_vec(),
@@ -5247,20 +5338,17 @@ pub mod tests {
             &mint_account,
         );
         let mut account_data = vec![0; TokenAccount::get_packed_len()];
-        TokenAccount::unpack_unchecked_mut(&mut account_data, &mut |account: &mut TokenAccount| {
-            *account = TokenAccount {
-                mint: new_mint,
-                owner,
-                delegate: COption::Some(delegate),
-                amount: 10,
-                state: TokenAccountState::Initialized,
-                is_native: COption::None,
-                delegated_amount: 30,
-                close_authority: COption::Some(owner),
-            };
-            Ok(())
-        })
-        .unwrap();
+        let token_account = TokenAccount {
+            mint: new_mint,
+            owner,
+            delegate: COption::Some(delegate),
+            amount: 10,
+            state: TokenAccountState::Initialized,
+            is_native: COption::None,
+            delegated_amount: 30,
+            close_authority: COption::Some(owner),
+        };
+        TokenAccount::pack(token_account, &mut account_data).unwrap();
         let token_account = Account {
             lamports: 111,
             data: account_data.to_vec(),
@@ -5311,20 +5399,17 @@ pub mod tests {
         let mint = SplTokenPubkey::new(&[2; 32]);
         let owner = SplTokenPubkey::new(&[3; 32]);
         let delegate = SplTokenPubkey::new(&[4; 32]);
-        TokenAccount::unpack_unchecked_mut(&mut account_data, &mut |account: &mut TokenAccount| {
-            *account = TokenAccount {
-                mint,
-                owner,
-                delegate: COption::Some(delegate),
-                amount: 420,
-                state: TokenAccountState::Initialized,
-                is_native: COption::Some(10),
-                delegated_amount: 30,
-                close_authority: COption::Some(owner),
-            };
-            Ok(())
-        })
-        .unwrap();
+        let token_account = TokenAccount {
+            mint,
+            owner,
+            delegate: COption::Some(delegate),
+            amount: 420,
+            state: TokenAccountState::Initialized,
+            is_native: COption::Some(10),
+            delegated_amount: 30,
+            close_authority: COption::Some(owner),
+        };
+        TokenAccount::pack(token_account, &mut account_data).unwrap();
         let token_account = Account {
             lamports: 111,
             data: account_data.to_vec(),
@@ -5336,17 +5421,14 @@ pub mod tests {
 
         // Add the mint
         let mut mint_data = vec![0; Mint::get_packed_len()];
-        Mint::unpack_unchecked_mut(&mut mint_data, &mut |mint: &mut Mint| {
-            *mint = Mint {
-                mint_authority: COption::Some(owner),
-                supply: 500,
-                decimals: 2,
-                is_initialized: true,
-                freeze_authority: COption::Some(owner),
-            };
-            Ok(())
-        })
-        .unwrap();
+        let mint_state = Mint {
+            mint_authority: COption::Some(owner),
+            supply: 500,
+            decimals: 2,
+            is_initialized: true,
+            freeze_authority: COption::Some(owner),
+        };
+        Mint::pack(mint_state, &mut mint_data).unwrap();
         let mint_account = Account {
             lamports: 111,
             data: mint_data.to_vec(),

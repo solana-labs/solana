@@ -969,7 +969,7 @@ declare module '@solana/web3.js' {
       program: Account,
       programId: PublicKey,
       data: Buffer | Uint8Array | Array<number>,
-    ): Promise<PublicKey>;
+    ): Promise<boolean>;
   }
 
   // === src/bpf-loader.js ===
@@ -982,7 +982,7 @@ declare module '@solana/web3.js' {
       program: Account,
       elfBytes: Buffer | Uint8Array | Array<number>,
       loaderProgramId: PublicKey,
-    ): Promise<PublicKey>;
+    ): Promise<boolean>;
   }
 
   // === src/bpf-loader-deprecated.js ===

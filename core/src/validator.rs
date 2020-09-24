@@ -16,6 +16,7 @@ use crate::{
     rpc_pubsub_service::PubSubService,
     rpc_service::JsonRpcService,
     rpc_subscriptions::RpcSubscriptions,
+    sample_performance_service::SamplePerformanceService,
     serve_repair::ServeRepair,
     serve_repair_service::ServeRepairService,
     sigverify,
@@ -98,6 +99,7 @@ pub struct ValidatorConfig {
     pub poh_verify: bool, // Perform PoH verification during blockstore processing at boo
     pub cuda: bool,
     pub require_tower: bool,
+    pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
 }
 
 impl Default for ValidatorConfig {
@@ -131,6 +133,7 @@ impl Default for ValidatorConfig {
             poh_verify: true,
             cuda: false,
             require_tower: false,
+            debug_keys: None,
         }
     }
 }
@@ -169,6 +172,7 @@ pub struct Validator {
     transaction_status_service: Option<TransactionStatusService>,
     rewards_recorder_service: Option<RewardsRecorderService>,
     cache_block_time_service: Option<CacheBlockTimeService>,
+    sample_performance_service: Option<SamplePerformanceService>,
     gossip_service: GossipService,
     serve_repair_service: ServeRepairService,
     completed_data_sets_service: CompletedDataSetsService,
@@ -278,6 +282,17 @@ impl Validator {
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let bank = bank_forks.working_bank();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
+
+        let sample_performance_service =
+            if config.rpc_addrs.is_some() && config.rpc_config.enable_rpc_transaction_history {
+                Some(SamplePerformanceService::new(
+                    &bank_forks,
+                    &blockstore,
+                    &exit,
+                ))
+            } else {
+                None
+            };
 
         info!("Starting validator with working bank slot {}", bank.slot());
         {
@@ -554,6 +569,7 @@ impl Validator {
             transaction_status_service,
             rewards_recorder_service,
             cache_block_time_service,
+            sample_performance_service,
             snapshot_packager_service,
             completed_data_sets_service,
             tpu,
@@ -620,6 +636,10 @@ impl Validator {
 
         if let Some(cache_block_time_service) = self.cache_block_time_service {
             cache_block_time_service.join()?;
+        }
+
+        if let Some(sample_performance_service) = self.sample_performance_service {
+            sample_performance_service.join()?;
         }
 
         if let Some(s) = self.snapshot_packager_service {
@@ -770,6 +790,7 @@ fn new_banks_from_ledger(
         dev_halt_at_slot: config.dev_halt_at_slot,
         new_hard_forks: config.new_hard_forks.clone(),
         frozen_accounts: config.frozen_accounts.clone(),
+        debug_keys: config.debug_keys.clone(),
         ..blockstore_processor::ProcessOptions::default()
     };
 

@@ -12,6 +12,13 @@ import {
 } from "superstruct";
 import { Pubkey } from "validators/pubkey";
 
+export type TokenAmountUi = StructType<typeof TokenAmountUi>;
+export const TokenAmountUi = object({
+  amount: string(),
+  decimals: number(),
+  uiAmount: number(),
+});
+
 const InitializeMint = pick({
   mint: Pubkey,
   decimals: number(),
@@ -102,6 +109,60 @@ const CloseAccount = object({
   signers: optional(array(Pubkey)),
 });
 
+const FreezeAccount = object({
+  account: Pubkey,
+  mint: Pubkey,
+  freezeAuthority: optional(Pubkey),
+  multisigFreezeAuthority: optional(Pubkey),
+  signers: optional(array(Pubkey)),
+});
+
+const ThawAccount = object({
+  account: Pubkey,
+  mint: Pubkey,
+  freezeAuthority: optional(Pubkey),
+  multisigFreezeAuthority: optional(Pubkey),
+  signers: optional(array(Pubkey)),
+});
+
+const TransferChecked = object({
+  source: Pubkey,
+  mint: Pubkey,
+  destination: Pubkey,
+  authority: optional(Pubkey),
+  multisigAuthority: optional(Pubkey),
+  signers: optional(array(Pubkey)),
+  tokenAmount: TokenAmountUi,
+});
+
+const ApproveChecked = object({
+  source: Pubkey,
+  mint: Pubkey,
+  delegate: Pubkey,
+  owner: optional(Pubkey),
+  multisigOwner: optional(Pubkey),
+  signers: optional(array(Pubkey)),
+  tokenAmount: TokenAmountUi,
+});
+
+const MintToChecked = object({
+  account: Pubkey,
+  mint: Pubkey,
+  mintAuthority: Pubkey,
+  multisigMintAuthority: optional(Pubkey),
+  signers: optional(array(Pubkey)),
+  tokenAmount: TokenAmountUi,
+});
+
+const BurnChecked = object({
+  account: Pubkey,
+  mint: Pubkey,
+  authority: optional(Pubkey),
+  multisigAuthority: optional(Pubkey),
+  signers: optional(array(Pubkey)),
+  tokenAmount: TokenAmountUi,
+});
+
 export type TokenInstructionType = StructType<typeof TokenInstructionType>;
 export const TokenInstructionType = enums([
   "initializeMint",
@@ -114,6 +175,12 @@ export const TokenInstructionType = enums([
   "mintTo",
   "burn",
   "closeAccount",
+  "freezeAccount",
+  "thawAccount",
+  "transfer2",
+  "approve2",
+  "mintTo2",
+  "burn2",
 ]);
 
 export const IX_STRUCTS = {
@@ -127,6 +194,12 @@ export const IX_STRUCTS = {
   mintTo: MintTo,
   burn: Burn,
   closeAccount: CloseAccount,
+  freezeAccount: FreezeAccount,
+  thawAccount: ThawAccount,
+  transfer2: TransferChecked,
+  approve2: ApproveChecked,
+  mintTo2: MintToChecked,
+  burn2: BurnChecked,
 };
 
 export const IX_TITLES = {
@@ -140,4 +213,10 @@ export const IX_TITLES = {
   mintTo: "Mint To",
   burn: "Burn",
   closeAccount: "Close Account",
+  freezeAccount: "Freeze Account",
+  thawAccount: "Thaw Account",
+  transfer2: "Transfer (Checked)",
+  approve2: "Approve (Checked)",
+  mintTo2: "Mint To (Checked)",
+  burn2: "Burn (Checked)",
 };

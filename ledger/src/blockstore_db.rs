@@ -52,6 +52,8 @@ const TRANSACTION_STATUS_INDEX_CF: &str = "transaction_status_index";
 const REWARDS_CF: &str = "rewards";
 /// Column family for Blocktime
 const BLOCKTIME_CF: &str = "blocktime";
+/// Column family for Performance Samples
+const PERF_SAMPLES_CF: &str = "perf_samples";
 
 #[derive(Error, Debug)]
 pub enum BlockstoreError {
@@ -140,6 +142,10 @@ pub mod columns {
     #[derive(Debug)]
     /// The blocktime column
     pub struct Blocktime;
+
+    #[derive(Debug)]
+    /// The performance samples column
+    pub struct PerfSamples;
 }
 
 pub enum AccessType {
@@ -200,7 +206,7 @@ impl Rocks {
     ) -> Result<Rocks> {
         use columns::{
             AddressSignatures, Blocktime, DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans,
-            Rewards, Root, ShredCode, ShredData, SlotMeta, TransactionStatus,
+            PerfSamples, Rewards, Root, ShredCode, ShredData, SlotMeta, TransactionStatus,
             TransactionStatusIndex,
         };
 
@@ -236,6 +242,8 @@ impl Rocks {
         let rewards_cf_descriptor = ColumnFamilyDescriptor::new(Rewards::NAME, get_cf_options());
         let blocktime_cf_descriptor =
             ColumnFamilyDescriptor::new(Blocktime::NAME, get_cf_options());
+        let perf_samples_cf_descriptor =
+            ColumnFamilyDescriptor::new(PerfSamples::NAME, get_cf_options());
 
         let cfs = vec![
             (SlotMeta::NAME, meta_cf_descriptor),
@@ -255,6 +263,7 @@ impl Rocks {
             ),
             (Rewards::NAME, rewards_cf_descriptor),
             (Blocktime::NAME, blocktime_cf_descriptor),
+            (PerfSamples::NAME, perf_samples_cf_descriptor),
         ];
 
         // Open the database
@@ -293,7 +302,7 @@ impl Rocks {
     fn columns(&self) -> Vec<&'static str> {
         use columns::{
             AddressSignatures, Blocktime, DeadSlots, DuplicateSlots, ErasureMeta, Index, Orphans,
-            Rewards, Root, ShredCode, ShredData, SlotMeta, TransactionStatus,
+            PerfSamples, Rewards, Root, ShredCode, ShredData, SlotMeta, TransactionStatus,
             TransactionStatusIndex,
         };
 
@@ -312,6 +321,7 @@ impl Rocks {
             TransactionStatusIndex::NAME,
             Rewards::NAME,
             Blocktime::NAME,
+            PerfSamples::NAME,
         ]
     }
 
@@ -543,6 +553,14 @@ impl ColumnName for columns::Blocktime {
 }
 impl TypedColumn for columns::Blocktime {
     type Type = UnixTimestamp;
+}
+
+impl SlotColumn for columns::PerfSamples {}
+impl ColumnName for columns::PerfSamples {
+    const NAME: &'static str = PERF_SAMPLES_CF;
+}
+impl TypedColumn for columns::PerfSamples {
+    type Type = blockstore_meta::PerfSample;
 }
 
 impl Column for columns::ShredCode {

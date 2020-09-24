@@ -856,9 +856,10 @@ impl AccountsDB {
         trace!("shrink_stale_slot: slot: {}", slot);
 
         let mut stored_accounts = vec![];
+        let mut storage_read_elapsed = Measure::start("storage_read_elapsed");
         {
-            let storage = self.storage.read().unwrap();
-            if let Some(stores) = storage.0.get(&slot) {
+            let slot_storages = self.storage.read().unwrap().0.get(&slot).cloned();
+            if let Some(stores) = slot_storages {
                 let mut alive_count = 0;
                 let mut stored_count = 0;
                 for store in stores.values() {
@@ -897,7 +898,9 @@ impl AccountsDB {
                 }
             }
         }
+        storage_read_elapsed.stop();
 
+        let mut index_read_elapsed = Measure::start("index_read_elapsed");
         let alive_accounts: Vec<_> = {
             let accounts_index = self.accounts_index.read().unwrap();
             stored_accounts
@@ -921,6 +924,7 @@ impl AccountsDB {
                 )
                 .collect()
         };
+        index_read_elapsed.stop();
 
         let alive_total: u64 = alive_accounts
             .iter()
@@ -941,7 +945,16 @@ impl AccountsDB {
             aligned_total
         );
 
+        let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
+        let mut dead_storages = vec![];
+        let mut find_alive_elapsed = 0;
+        let mut create_and_insert_store_elapsed = 0;
+        let mut store_accounts_elapsed = 0;
+        let mut update_index_elapsed = 0;
+        let mut handle_reclaims_elapsed = 0;
+        let mut write_storage_elapsed = 0;
         if aligned_total > 0 {
+            let mut start = Measure::start("find_alive_elapsed");
             let mut accounts = Vec::with_capacity(alive_accounts.len());
             let mut hashes = Vec::with_capacity(alive_accounts.len());
             let mut write_versions = Vec::with_capacity(alive_accounts.len());
@@ -952,12 +965,18 @@ impl AccountsDB {
                 hashes.push(*account_hash);
                 write_versions.push(*write_version);
             }
+            start.stop();
+            find_alive_elapsed = start.as_us();
 
+            let mut start = Measure::start("create_and_insert_store_elapsed");
             let shrunken_store = self.create_and_insert_store(slot, aligned_total);
+            start.stop();
+            create_and_insert_store_elapsed = start.as_us();
 
             // here, we're writing back alive_accounts. That should be an atomic operation
             // without use of rather wide locks in this whole function, because we're
             // mutating rooted slots; There should be no writers to them.
+            let mut start = Measure::start("store_accounts_elapsed");
             let infos = self.store_accounts_to(
                 slot,
                 &accounts,
@@ -965,16 +984,59 @@ impl AccountsDB {
                 |_| shrunken_store.clone(),
                 write_versions.into_iter(),
             );
+            start.stop();
+            store_accounts_elapsed = start.as_us();
+
+            let mut start = Measure::start("update_index_elapsed");
             let reclaims = self.update_index(slot, infos, &accounts);
+            start.stop();
+            update_index_elapsed = start.as_us();
 
+            let mut start = Measure::start("update_index_elapsed");
             self.handle_reclaims_maybe_cleanup(&reclaims);
+            start.stop();
+            handle_reclaims_elapsed = start.as_us();
 
+            let mut start = Measure::start("write_storage_elapsed");
             let mut storage = self.storage.write().unwrap();
             if let Some(slot_storage) = storage.0.get_mut(&slot) {
-                slot_storage.retain(|_key, store| store.count() > 0);
+                slot_storage.retain(|_key, store| {
+                    if store.count() == 0 {
+                        dead_storages.push(store.clone());
+                    }
+                    store.count() > 0
+                });
             }
+            start.stop();
+            write_storage_elapsed = start.as_us();
         }
+        rewrite_elapsed.stop();
 
+        let mut drop_storage_entries_elapsed = Measure::start("drop_storage_entries_elapsed");
+        drop(dead_storages);
+        drop_storage_entries_elapsed.stop();
+
+        datapoint_info!(
+            "do_shrink_slot_time",
+            ("storage_read_elapsed", storage_read_elapsed.as_us(), i64),
+            ("index_read_elapsed", index_read_elapsed.as_us(), i64),
+            ("find_alive_elapsed", find_alive_elapsed, i64),
+            (
+                "create_and_insert_store_elapsed",
+                create_and_insert_store_elapsed,
+                i64
+            ),
+            ("store_accounts_elapsed", store_accounts_elapsed, i64),
+            ("update_index_elapsed", update_index_elapsed, i64),
+            ("handle_reclaims_elapsed", handle_reclaims_elapsed, i64),
+            ("write_storage_elapsed", write_storage_elapsed, i64),
+            ("rewrite_elapsed", rewrite_elapsed.as_us(), i64),
+            (
+                "drop_storage_entries_elapsed",
+                drop_storage_entries_elapsed.as_us(),
+                i64
+            ),
+        );
         alive_accounts.len()
     }
 
@@ -1255,10 +1317,57 @@ impl AccountsDB {
             .filter(|slot| !accounts_index.is_root(**slot))
             .collect();
         drop(accounts_index);
+        let mut storage_lock_elapsed = Measure::start("storage_lock_elapsed");
         let mut storage = self.storage.write().unwrap();
+        storage_lock_elapsed.stop();
+
+        let mut all_removed_slot_storages = vec![];
+        let mut total_removed_storage_entries = 0;
+        let mut total_removed_bytes = 0;
+
+        let mut remove_storages_elapsed = Measure::start("remove_storages_elapsed");
         for slot in non_roots {
-            storage.0.remove(&slot);
+            if let Some(slot_removed_storages) = storage.0.remove(&slot) {
+                total_removed_storage_entries += slot_removed_storages.len();
+                total_removed_bytes += slot_removed_storages
+                    .values()
+                    .map(|i| i.accounts.capacity())
+                    .sum::<u64>();
+                all_removed_slot_storages.push(slot_removed_storages);
+            }
         }
+        remove_storages_elapsed.stop();
+        drop(storage);
+
+        let num_slots_removed = all_removed_slot_storages.len();
+
+        let mut drop_storage_entries_elapsed = Measure::start("drop_storage_entries_elapsed");
+        // Backing mmaps for removed storages entries explicitly dropped here outside
+        // of any locks
+        drop(all_removed_slot_storages);
+        drop_storage_entries_elapsed.stop();
+
+        datapoint_info!(
+            "purge_slots_time",
+            ("storage_lock_elapsed", storage_lock_elapsed.as_us(), i64),
+            (
+                "remove_storages_elapsed",
+                remove_storages_elapsed.as_us(),
+                i64
+            ),
+            (
+                "drop_storage_entries_elapsed",
+                drop_storage_entries_elapsed.as_us(),
+                i64
+            ),
+            ("num_slots_removed", num_slots_removed, i64),
+            (
+                "total_removed_storage_entries",
+                total_removed_storage_entries,
+                i64
+            ),
+            ("total_removed_bytes", total_removed_bytes, i64),
+        );
     }
 
     pub fn remove_unrooted_slot(&self, remove_slot: Slot) {

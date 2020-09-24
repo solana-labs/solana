@@ -7,7 +7,7 @@ use solana_sdk::{
     transaction::{Result, TransactionError},
 };
 use solana_transaction_status::ConfirmedTransactionStatusWithSignature;
-use std::{collections::HashMap, net::SocketAddr};
+use std::{collections::HashMap, fmt, net::SocketAddr};
 
 pub type RpcResult<T> = client_error::Result<Response<T>>;
 
@@ -137,11 +137,28 @@ pub struct RpcContactInfo {
 /// Map of leader base58 identity pubkeys to the slot indices relative to the first epoch slot
 pub type RpcLeaderSchedule = HashMap<String, Vec<usize>>;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct RpcVersionInfo {
     /// The current version of solana-core
     pub solana_core: String,
+}
+
+impl fmt::Debug for RpcVersionInfo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.solana_core)
+    }
+}
+
+impl fmt::Display for RpcVersionInfo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(version) = self.solana_core.split_whitespace().next() {
+            // Display just the semver if possible
+            write!(f, "{}", version)
+        } else {
+            write!(f, "{}", self.solana_core)
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

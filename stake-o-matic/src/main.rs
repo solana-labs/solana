@@ -4,7 +4,7 @@ use solana_clap_utils::{
     input_parsers::{keypair_of, pubkey_of},
     input_validators::{is_amount, is_keypair, is_pubkey_or_keypair, is_url, is_valid_percentage},
 };
-use solana_cli::display::format_labeled_address;
+use solana_cli_output::display::format_labeled_address;
 use solana_client::{
     client_error, rpc_client::RpcClient, rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
     rpc_response::RpcVoteAccountInfo,

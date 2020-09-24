@@ -10,7 +10,12 @@ import {
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
-import { IX_STRUCTS, TokenInstructionType, IX_TITLES } from "./types";
+import {
+  IX_STRUCTS,
+  TokenInstructionType,
+  IX_TITLES,
+  TokenAmountUi,
+} from "./types";
 import { ParsedInfo } from "validators";
 import {
   useTokenAccountInfo,
@@ -19,6 +24,8 @@ import {
 } from "providers/accounts";
 import { normalizeTokenAmount } from "utils";
 import { reportError } from "utils/sentry";
+import { useCluster } from "providers/cluster";
+import { TokenRegistry } from "tokenRegistry";
 
 type DetailsProps = {
   tx: ParsedTransaction;
@@ -81,6 +88,7 @@ function TokenInstruction(props: InfoProps) {
   const tokenInfo = useTokenAccountInfo(tokenAddress);
   const mintAddress = infoMintAddress || tokenInfo?.mint.toBase58();
   const mintInfo = useMintAccountInfo(mintAddress);
+  const { cluster } = useCluster();
   const fetchAccountInfo = useFetchAccountInfo();
 
   React.useEffect(() => {
@@ -95,11 +103,39 @@ function TokenInstruction(props: InfoProps) {
     }
   }, [fetchAccountInfo, mintAddress]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const decimals = mintInfo?.decimals;
-  const attributes = [];
+  const attributes: JSX.Element[] = [];
+  let decimals = mintInfo?.decimals;
+  let tokenSymbol = "";
+
+  if ("tokenAmount" in props.info) {
+    decimals = props.info.tokenAmount.decimals;
+  }
+
+  if (mintAddress) {
+    const tokenDetails = TokenRegistry.get(mintAddress, cluster);
+
+    if (tokenDetails && "symbol" in tokenDetails) {
+      tokenSymbol = tokenDetails.symbol;
+    }
+
+    attributes.push(
+      <tr key={mintAddress}>
+        <td>Token</td>
+        <td className="text-lg-right">
+          <Address pubkey={new PublicKey(mintAddress)} alignRight link />
+        </td>
+      </tr>
+    );
+  }
+
   for (let key in props.info) {
-    const value = props.info[key];
+    let value = props.info[key];
     if (value === undefined) continue;
+
+    if (key === "tokenAmount") {
+      key = "amount";
+      value = (value as TokenAmountUi).amount;
+    }
 
     let tag;
     let labelSuffix = "";
@@ -116,7 +152,11 @@ function TokenInstruction(props: InfoProps) {
           maximumFractionDigits: decimals,
         }).format(normalizeTokenAmount(value, decimals));
       }
-      tag = <>{amount}</>;
+      tag = (
+        <>
+          {amount} {tokenSymbol}
+        </>
+      );
     } else {
       tag = <>{value}</>;
     }

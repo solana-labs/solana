@@ -65,6 +65,7 @@ pub fn load(
                     &archive_filename,
                     compression,
                     genesis_config,
+                    process_options.debug_keys.clone(),
                 )
                 .expect("Load from snapshot failed");
 

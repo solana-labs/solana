@@ -29,7 +29,7 @@ use {
         pubkey::Pubkey,
     },
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         io::{BufReader, BufWriter, Read, Write},
         path::{Path, PathBuf},
         result::Result,
@@ -124,6 +124,7 @@ pub(crate) fn bank_from_stream<R, P>(
     account_paths: &[PathBuf],
     genesis_config: &GenesisConfig,
     frozen_account_pubkeys: &[Pubkey],
+    debug_keys: Option<Arc<HashSet<Pubkey>>>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -140,6 +141,7 @@ where
                 frozen_account_pubkeys,
                 account_paths,
                 append_vecs_path,
+                debug_keys,
             )?;
             Ok(bank)
         }};
@@ -224,6 +226,7 @@ fn reconstruct_bank_from_fields<E, P>(
     frozen_account_pubkeys: &[Pubkey],
     account_paths: &[PathBuf],
     append_vecs_path: P,
+    debug_keys: Option<Arc<HashSet<Pubkey>>>,
 ) -> Result<Bank, Error>
 where
     E: Into<AccountStorageEntry>,
@@ -238,7 +241,7 @@ where
     accounts_db.freeze_accounts(&bank_fields.ancestors, frozen_account_pubkeys);
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
-    let bank = Bank::new_from_fields(bank_rc, genesis_config, bank_fields);
+    let bank = Bank::new_from_fields(bank_rc, genesis_config, bank_fields, debug_keys);
 
     Ok(bank)
 }
