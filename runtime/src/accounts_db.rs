@@ -4243,23 +4243,27 @@ pub mod tests {
         accounts.store(current_slot, &[(&pubkey1, &account2)]);
         accounts.store(current_slot, &[(&pubkey1, &account2)]);
         assert_eq!(1, accounts.alive_account_count_in_store(current_slot));
-        assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
+        // Stores to same pubkey, same slot only count once towards the
+        // ref count
+        assert_eq!(2, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.add_root(current_slot);
 
         // C: Yet more update to trigger lazy clean of step A
         current_slot += 1;
-        assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
+        assert_eq!(2, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.store(current_slot, &[(&pubkey1, &account3)]);
-        assert_eq!(4, accounts.ref_count_for_pubkey(&pubkey1));
+        assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.add_root(current_slot);
 
         // D: Make pubkey1 0-lamport; also triggers clean of step B
         current_slot += 1;
-        assert_eq!(4, accounts.ref_count_for_pubkey(&pubkey1));
+        assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.store(current_slot, &[(&pubkey1, &zero_lamport_account)]);
         accounts.process_dead_slots(None);
         assert_eq!(
-            3, /* == 4 - 2 + 1 */
+            // Removed one reference from the dead slot (reference only counted once
+            // even though there were two stores to the pubkey in that slot)
+            3, /* == 3 - 1 + 1 */
             accounts.ref_count_for_pubkey(&pubkey1)
         );
         accounts.add_root(current_slot);
