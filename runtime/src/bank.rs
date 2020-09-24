@@ -3530,11 +3530,7 @@ impl Bank {
             inactive.insert(*feature_id);
         }
 
-        self.feature_set = Arc::new(FeatureSet {
-            id: self.feature_set.id,
-            active,
-            inactive,
-        });
+        self.feature_set = Arc::new(FeatureSet { active, inactive });
         newly_activated
     }
 

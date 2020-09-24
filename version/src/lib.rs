@@ -51,9 +51,7 @@ fn compute_commit(sha1: Option<&'static str>) -> Option<u32> {
 impl Default for Version {
     fn default() -> Self {
         let feature_set = u32::from_le_bytes(
-            solana_runtime::feature_set::FeatureSet::default()
-                .id
-                .as_ref()[..4]
+            solana_runtime::feature_set::ID.as_ref()[..4]
                 .try_into()
                 .unwrap(),
         );
