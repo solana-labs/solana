@@ -7,49 +7,13 @@ extern crate solana_exchange_program;
 #[macro_use]
 extern crate solana_vest_program;
 
-use log::*;
 use solana_runtime::bank::{Bank, EnteredEpochCallback};
 use solana_sdk::{
     clock::{Epoch, GENESIS_EPOCH},
     entrypoint_native::{ErasedProcessInstructionWithContext, ProcessInstructionWithContext},
     genesis_config::ClusterType,
-    inflation::Inflation,
     pubkey::Pubkey,
 };
-
-pub fn get_inflation(cluster_type: ClusterType, epoch: Epoch) -> Option<Inflation> {
-    match cluster_type {
-        ClusterType::Development => match epoch {
-            0 => Some(Inflation::default()),
-            _ => None,
-        },
-        ClusterType::Devnet => match epoch {
-            0 => Some(Inflation::default()),
-            _ => None,
-        },
-        ClusterType::Testnet => match epoch {
-            // No inflation at epoch 0
-            0 => Some(Inflation::new_disabled()),
-            // testnet enabled inflation at epoch 44:
-            // https://github.com/solana-labs/solana/commit/d8e885f4259e6c7db420cce513cb34ebf961073d
-            44 => Some(Inflation::default()),
-            // Completely disable inflation prior to ship the inflation fix at epoch 68
-            68 => Some(Inflation::new_disabled()),
-            // Enable again after the inflation fix has landed:
-            // https://github.com/solana-labs/solana/commit/7cc2a6801bed29a816ef509cfc26a6f2522e46ff
-            74 => Some(Inflation::default()),
-            _ => None,
-        },
-        ClusterType::MainnetBeta => match epoch {
-            // No inflation at epoch 0
-            0 => Some(Inflation::new_disabled()),
-            // Inflation starts The epoch of Epoch::MAX is a placeholder and is
-            // expected to be reduced in a future hard fork.
-            Epoch::MAX => Some(Inflation::default()),
-            _ => None,
-        },
-    }
-}
 
 enum Program {
     Native((String, Pubkey)),
@@ -144,10 +108,6 @@ pub fn get_entered_epoch_callback(cluster_type: ClusterType) -> EnteredEpochCall
         // In other words, this callback initializes some skip(serde) fields, regardless
         // frozen or not
 
-        if let Some(inflation) = get_inflation(cluster_type, bank.epoch()) {
-            info!("Entering new epoch with inflation {:?}", inflation);
-            bank.set_inflation(inflation);
-        }
         for (program, start_epoch) in get_programs(cluster_type) {
             let should_populate =
                 initial && bank.epoch() >= start_epoch || !initial && bank.epoch() == start_epoch;
@@ -207,15 +167,6 @@ mod tests {
     }
 
     #[test]
-    fn test_development_inflation() {
-        assert_eq!(
-            get_inflation(ClusterType::Development, 0).unwrap(),
-            Inflation::default()
-        );
-        assert_eq!(get_inflation(ClusterType::Development, 1), None);
-    }
-
-    #[test]
     fn test_development_programs() {
         assert_eq!(get_programs(ClusterType::Development).len(), 5);
     }
@@ -227,20 +178,6 @@ mod tests {
             3
         );
     }
-
-    #[test]
-    fn test_softlaunch_inflation() {
-        assert_eq!(
-            get_inflation(ClusterType::MainnetBeta, 0).unwrap(),
-            Inflation::new_disabled()
-        );
-        assert_eq!(get_inflation(ClusterType::MainnetBeta, 1), None);
-        assert_eq!(
-            get_inflation(ClusterType::MainnetBeta, std::u64::MAX).unwrap(),
-            Inflation::default()
-        );
-    }
-
     #[test]
     fn test_softlaunch_programs() {
         assert!(!get_programs(ClusterType::MainnetBeta).is_empty());

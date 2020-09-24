@@ -464,13 +464,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let native_instruction_processors =
         solana_genesis_programs::get_native_programs_for_genesis(cluster_type);
-    let inflation = solana_genesis_programs::get_inflation(cluster_type, 0).unwrap();
 
     let mut genesis_config = GenesisConfig {
         native_instruction_processors,
         ticks_per_slot,
         epoch_schedule,
-        inflation,
         fee_rate_governor,
         rent,
         poh_config,
