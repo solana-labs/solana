@@ -38,7 +38,7 @@ for Cargo_toml in $Cargo_tomls; do
   crate_name=$(grep -m 1 '^name = ' "$Cargo_toml" | cut -f 3 -d ' ' | tr -d \")
 
   if grep -q "^publish = false" "$Cargo_toml"; then
-    echo "$crate_name is is marked as unpublishable"
+    echo "$crate_name is marked as unpublishable"
     continue
   fi
 

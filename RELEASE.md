@@ -152,5 +152,5 @@ appearing.  To check for progress:
 [Crates.io](https://crates.io/crates/solana) should have an updated Solana version.  This can take 2-3 hours, and sometimes fails in the `solana-secondary` job.
 If this happens and the error is non-fatal, click "Retry" on the "publish crate" job
 
-### Update software on devnet.solana.com/testnet.solama.com/mainnet-beta.solana.com
+### Update software on devnet.solana.com/testnet.solana.com/mainnet-beta.solana.com
 See the documentation at https://github.com/solana-labs/cluster-ops/
