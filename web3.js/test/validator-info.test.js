@@ -1,6 +1,4 @@
-// @flow
-import nacl from 'tweetnacl';
-
+import { ed25519 } from '@solana/wasm';
 import {PublicKey} from '../src/publickey';
 import {ValidatorInfo} from '../src/validator-info';
 import { waitReady } from './../src/index';
@@ -10,7 +8,7 @@ beforeAll(async () => {
 });
 
 test('from config account data', () => {
-  const keypair = nacl.sign.keyPair.fromSeed(
+  const keypair = ed25519.keypair.fromSeed(
     Uint8Array.from(Array(32).fill(8)),
   );
 

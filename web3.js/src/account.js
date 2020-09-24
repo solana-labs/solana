@@ -1,6 +1,5 @@
 // @flow
-import nacl from 'tweetnacl';
-import * as SDK from '@solana/wasm';
+import { ed25519 } from '@solana/wasm';
 
 import {toBuffer} from './util/to-buffer';
 import {PublicKey} from './publickey';
@@ -21,9 +20,9 @@ export class Account {
    */
   constructor(secretKey?: Buffer | Uint8Array | Array<number>) {
     if (secretKey) {
-      this._keypair = nacl.sign.keyPair.fromSecretKey(toBuffer(secretKey));
+      this._keypair = ed25519.keypair.fromSecretKey(toBuffer(secretKey));
     } else {
-      this._keypair = SDK.getWASM().generateKeyPair();
+      this._keypair = ed25519.keypair.generate();
     }
   }
 
@@ -38,6 +37,6 @@ export class Account {
    * The **unencrypted** secret key for this account
    */
   get secretKey(): Buffer {
-    return this._keypair.secretKey;
+    return Uint8Array.from(this._keypair.secretKey);
   }
 }

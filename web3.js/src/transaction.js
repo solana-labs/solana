@@ -1,7 +1,6 @@
 // @flow
 
 import invariant from 'assert';
-import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 
 import type {CompiledInstruction} from './message';
@@ -10,7 +9,7 @@ import {PublicKey} from './publickey';
 import {Account} from './account';
 import * as shortvec from './util/shortvec-encoding';
 import type {Blockhash} from './blockhash';
-import * as SDK from '@solana/wasm';
+import { ed25519 } from '@solana/wasm';
 
 /**
  * @typedef {string} TransactionSignature
@@ -449,7 +448,7 @@ export class Transaction {
 
     const signData = message.serialize();
     signers.forEach(signer => {
-      const signature = SDK.getWASM().signED25519(
+      const signature = ed25519.sign(
         signer.publicKey.toBuffer(), 
         signer.secretKey, 
         signData);
@@ -492,7 +491,7 @@ export class Transaction {
         }
       } else {
         if (
-          !nacl.sign.detached.verify(signData, signature, publicKey.toBuffer())
+          !ed25519.verify(publicKey.toBuffer(), signature, signData)
         ) {
           return false;
         }

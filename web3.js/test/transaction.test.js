@@ -1,6 +1,5 @@
 // @flow
 import bs58 from 'bs58';
-import nacl from 'tweetnacl';
 
 import {Account} from '../src/account';
 import {PublicKey} from '../src/publickey';
@@ -9,6 +8,7 @@ import {StakeProgram} from '../src/stake-program';
 import {SystemProgram} from '../src/system-program';
 import {Message} from '../src/message';
 import { waitReady } from './../src/index';
+import { ed25519 } from '@solana/wasm';
 
 beforeAll(async () => {
   await waitReady();
@@ -353,7 +353,7 @@ test('use nonce', () => {
 });
 
 test('parse wire format and serialize', () => {
-  const keypair = nacl.sign.keyPair.fromSeed(
+  const keypair = ed25519.keypair.fromSeed(
     Uint8Array.from(Array(32).fill(8)),
   );
   const sender = new Account(Buffer.from(keypair.secretKey)); // Arbitrary known account
@@ -416,7 +416,7 @@ test('populate transaction', () => {
 });
 
 test('serialize unsigned transaction', () => {
-  const keypair = nacl.sign.keyPair.fromSeed(
+  const keypair = ed25519.keypair.fromSeed(
     Uint8Array.from(Array(32).fill(8)),
   );
   const sender = new Account(Buffer.from(keypair.secretKey)); // Arbitrary known account
@@ -481,7 +481,7 @@ test('serialize unsigned transaction', () => {
 });
 
 test('externally signed stake delegate', () => {
-  const from_keypair = nacl.sign.keyPair.fromSeed(
+  const from_keypair = ed25519.keypair.fromSeed(
     Uint8Array.from(Array(32).fill(1)),
   );
   const authority = new Account(Buffer.from(from_keypair.secretKey));
@@ -497,7 +497,7 @@ test('externally signed stake delegate', () => {
   tx.recentBlockhash = bs58.encode(recentBlockhash);
   tx.setSigners(from.publicKey);
   const tx_bytes = tx.serializeMessage();
-  const signature = nacl.sign.detached(tx_bytes, from.secretKey);
+  const signature = ed25519.sign(from.publicKey, from.secretKey, tx_bytes);
   tx.addSignature(from.publicKey, signature);
   expect(tx.verifySignatures()).toBe(true);
 });

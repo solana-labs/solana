@@ -103,7 +103,6 @@ function generateConfig(configType) {
         'node-fetch',
         'rpc-websockets',
         'superstruct',
-        'tweetnacl',
         'url',
       ];
       break;
