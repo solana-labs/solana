@@ -165,12 +165,57 @@ pub struct ConfirmedBlock {
     pub block_time: Option<UnixTimestamp>,
 }
 
+impl ConfirmedBlock {
+    pub fn encode(self, encoding: UiTransactionEncoding) -> EncodedConfirmedBlock {
+        EncodedConfirmedBlock {
+            previous_blockhash: self.previous_blockhash,
+            blockhash: self.blockhash,
+            parent_slot: self.parent_slot,
+            transactions: self
+                .transactions
+                .into_iter()
+                .map(|tx| tx.encode(encoding))
+                .collect(),
+            rewards: self.rewards,
+            block_time: self.block_time,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EncodedConfirmedBlock {
+    pub previous_blockhash: String,
+    pub blockhash: String,
+    pub parent_slot: Slot,
+    pub transactions: Vec<EncodedTransactionWithStatusMeta>,
+    pub rewards: Rewards,
+    pub block_time: Option<UnixTimestamp>,
+}
+
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfirmedTransaction {
     pub slot: Slot,
     #[serde(flatten)]
     pub transaction: TransactionWithStatusMeta,
+}
+
+impl ConfirmedTransaction {
+    pub fn encode(self, encoding: UiTransactionEncoding) -> EncodedConfirmedTransaction {
+        EncodedConfirmedTransaction {
+            slot: self.slot,
+            transaction: self.transaction.encode(encoding),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EncodedConfirmedTransaction {
+    pub slot: Slot,
+    #[serde(flatten)]
+    pub transaction: EncodedTransactionWithStatusMeta,
 }
 
 /// A duplicate representation of a Transaction for pretty JSON serialization
@@ -207,9 +252,25 @@ pub struct UiParsedMessage {
     pub instructions: Vec<UiInstruction>,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionWithStatusMeta {
+    pub transaction: Transaction,
+    pub meta: Option<TransactionStatusMeta>,
+}
+
+impl TransactionWithStatusMeta {
+    fn encode(self, encoding: UiTransactionEncoding) -> EncodedTransactionWithStatusMeta {
+        EncodedTransactionWithStatusMeta {
+            transaction: EncodedTransaction::encode(self.transaction, encoding),
+            meta: self.meta.map(|meta| meta.into()),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EncodedTransactionWithStatusMeta {
     pub transaction: EncodedTransaction,
     pub meta: Option<UiTransactionStatusMeta>,
 }
