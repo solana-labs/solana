@@ -36,7 +36,7 @@ fn bench_has_duplicates(bencher: &mut Bencher) {
 #[bench]
 fn test_accounts_create(bencher: &mut Bencher) {
     let (genesis_config, _) = create_genesis_config(10_000);
-    let bank0 = Bank::new_with_paths(&genesis_config, vec![PathBuf::from("bench_a0")], &[]);
+    let bank0 = Bank::new_with_paths(&genesis_config, vec![PathBuf::from("bench_a0")], &[], None);
     bencher.iter(|| {
         let mut pubkeys: Vec<Pubkey> = vec![];
         deposit_many(&bank0, &mut pubkeys, 1000);
@@ -50,6 +50,7 @@ fn test_accounts_squash(bencher: &mut Bencher) {
         &genesis_config,
         vec![PathBuf::from("bench_a1")],
         &[],
+        None,
     ));
     let mut pubkeys: Vec<Pubkey> = vec![];
     deposit_many(&bank1, &mut pubkeys, 250_000);
