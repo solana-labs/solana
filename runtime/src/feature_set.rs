@@ -14,6 +14,7 @@ pub mod secp256k1_program_enabled {
 }
 
 lazy_static! {
+    /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
         (instructions_sysvar_enabled::id(), "instructions sysvar"),
         (secp256k1_program_enabled::id(), "secp256k1 program")
@@ -23,7 +24,8 @@ lazy_static! {
     .cloned()
     .collect();
 
-    static ref ID: Hash = {
+    /// Unique identifier of the current software's feature set
+    pub static ref ID: Hash = {
         let mut hasher = Hasher::default();
         let mut feature_ids = FEATURE_NAMES.keys().collect::<Vec<_>>();
         feature_ids.sort();
@@ -34,16 +36,10 @@ lazy_static! {
     };
 }
 
-/// The `FeatureSet` struct tracks the set of available and currently active runtime features
+/// `FeatureSet` holds the set of currently active/inactive runtime features
 #[derive(AbiExample)]
 pub struct FeatureSet {
-    /// Unique identifier of this feature set
-    pub id: Hash,
-
-    /// Features that are currently active
     pub active: HashSet<Pubkey>,
-
-    /// Features that are currently inactive
     pub inactive: HashSet<Pubkey>,
 }
 
@@ -54,10 +50,9 @@ impl FeatureSet {
 }
 
 impl Default for FeatureSet {
-    // By default all features are disabled
     fn default() -> Self {
+        // All features disabled
         Self {
-            id: *ID,
             active: HashSet::new(),
             inactive: FEATURE_NAMES.keys().cloned().collect(),
         }
@@ -67,7 +62,6 @@ impl Default for FeatureSet {
 impl FeatureSet {
     pub fn enabled() -> Self {
         Self {
-            id: *ID,
             active: FEATURE_NAMES.keys().cloned().collect(),
             inactive: HashSet::new(),
         }
