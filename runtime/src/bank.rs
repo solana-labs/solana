@@ -3465,7 +3465,7 @@ impl Bank {
 
     pub fn secp256k1_program_enabled(&self) -> bool {
         self.feature_set
-            .active(&feature_set::secp256k1_program_enabled::id())
+            .is_active(&feature_set::secp256k1_program_enabled::id())
     }
 
     // This is called from snapshot restore AND for each epoch boundary
@@ -3531,7 +3531,7 @@ impl Bank {
         }
 
         for (program, feature) in get_feature_builtins() {
-            let should_populate = init_or_warp && self.feature_set.active(&feature)
+            let should_populate = init_or_warp && self.feature_set.is_active(&feature)
                 || !init_or_warp && new_feature_activations.contains(&feature);
             if should_populate {
                 self.add_builtin(&program.name, program.id, program.entrypoint);
@@ -9009,13 +9009,13 @@ mod tests {
 
         let new_activations = bank.compute_active_feature_set(true);
         assert!(new_activations.is_empty());
-        assert!(!bank.feature_set.active(&test_feature));
+        assert!(!bank.feature_set.is_active(&test_feature));
 
         // Depositing into the `test_feature` account should do nothing
         bank.deposit(&test_feature, 42);
         let new_activations = bank.compute_active_feature_set(true);
         assert!(new_activations.is_empty());
-        assert!(!bank.feature_set.active(&test_feature));
+        assert!(!bank.feature_set.is_active(&test_feature));
 
         // Request `test_feature` activation
         let feature = Feature::default();
@@ -9025,7 +9025,7 @@ mod tests {
         // Run `compute_active_feature_set` disallowing new activations
         let new_activations = bank.compute_active_feature_set(false);
         assert!(new_activations.is_empty());
-        assert!(!bank.feature_set.active(&test_feature));
+        assert!(!bank.feature_set.is_active(&test_feature));
         let feature = Feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
             .expect("from_account");
         assert_eq!(feature.activated_at, None);
@@ -9033,19 +9033,19 @@ mod tests {
         // Run `compute_active_feature_set` allowing new activations
         let new_activations = bank.compute_active_feature_set(true);
         assert_eq!(new_activations.len(), 1);
-        assert!(bank.feature_set.active(&test_feature));
+        assert!(bank.feature_set.is_active(&test_feature));
         let feature = Feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
             .expect("from_account");
         assert_eq!(feature.activated_at, Some(1));
 
         // Reset the bank's feature set
         bank.feature_set = Arc::new(feature_set);
-        assert!(!bank.feature_set.active(&test_feature));
+        assert!(!bank.feature_set.is_active(&test_feature));
 
         // Running `compute_active_feature_set` will not cause new activations, but
         // `test_feature` is now be active
         let new_activations = bank.compute_active_feature_set(true);
         assert!(new_activations.is_empty());
-        assert!(bank.feature_set.active(&test_feature));
+        assert!(bank.feature_set.is_active(&test_feature));
     }
 }

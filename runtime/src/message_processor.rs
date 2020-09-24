@@ -685,7 +685,7 @@ impl MessageProcessor {
     ) -> Result<(), InstructionError> {
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
-        if feature_set.active(&feature_set::instructions_sysvar_enabled::id()) {
+        if feature_set.is_active(&feature_set::instructions_sysvar_enabled::id()) {
             for (i, key) in message.account_keys.iter().enumerate() {
                 if solana_sdk::sysvar::instructions::check_id(key) {
                     let mut mut_account_ref = accounts[i].borrow_mut();
