@@ -510,6 +510,10 @@ impl AccountsDB {
         new
     }
 
+    pub fn file_size(&self) -> u64 {
+        self.file_size
+    }
+
     #[cfg(test)]
     pub fn new_single() -> Self {
         AccountsDB {
@@ -1975,7 +1979,7 @@ impl AccountsDB {
         );
         scan.stop();
         let mut merge = Measure::start("merge");
-        let mut account_maps = accumulator.pop().unwrap();
+        let mut account_maps = HashMap::new();
         while let Some(maps) = accumulator.pop() {
             AccountsDB::merge(&mut account_maps, &maps);
         }

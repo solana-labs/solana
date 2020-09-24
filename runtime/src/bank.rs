@@ -3258,8 +3258,10 @@ impl Bank {
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(&self) -> bool {
-        self.clean_accounts(None);
-        self.shrink_all_slots();
+        if self.slot() > 0 {
+            self.clean_accounts(Some(self.slot() - 1));
+            self.shrink_all_slots();
+        }
         // Order and short-circuiting is significant; verify_hash requires a valid bank hash
         self.verify_bank_hash() && self.verify_hash()
     }
@@ -6471,7 +6473,6 @@ mod tests {
         let pubkey = Pubkey::new_rand();
         let (genesis_config, mint_keypair) = create_genesis_config(2_000);
         let bank = Bank::new(&genesis_config);
-
         bank.transfer(1_000, &mint_keypair, &pubkey).unwrap();
         bank.freeze();
         bank.update_accounts_hash();
@@ -9186,5 +9187,81 @@ mod tests {
         // Account is now empty, and the account lamports were burnt
         assert_eq!(bank.get_balance(&inline_spl_token_v2_0::id()), 0);
         assert_eq!(bank.capitalization(), original_capitalization - 100);
+    }
+
+    fn setup_bank_with_removable_zero_lamport_account() -> Arc<Bank> {
+        let (genesis_config, _mint_keypair) = create_genesis_config(2000);
+        let bank0 = Bank::new(&genesis_config);
+        bank0.freeze();
+
+        let bank1 = Arc::new(Bank::new_from_parent(
+            &Arc::new(bank0),
+            &Pubkey::default(),
+            1,
+        ));
+
+        let zero_lamport_pubkey = Pubkey::new_rand();
+
+        bank1.add_account_and_update_capitalization(
+            &zero_lamport_pubkey,
+            &Account::new(0, 0, &Pubkey::default()),
+        );
+        // Store another account in a separate AppendVec than `zero_lamport_pubkey`
+        // (guaranteed because of large file size). We need this to ensure slot is
+        // not cleaned up after clean is called, so that the bank hash still exists
+        // when we call rehash() later in this test.
+        let large_account_pubkey = Pubkey::new_rand();
+        bank1.add_account_and_update_capitalization(
+            &large_account_pubkey,
+            &Account::new(
+                1000,
+                bank1.rc.accounts.accounts_db.file_size() as usize,
+                &Pubkey::default(),
+            ),
+        );
+
+        bank1.freeze();
+        let bank1_hash = bank1.hash();
+
+        let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
+        bank2.freeze();
+
+        // Set a root so clean will happen on this slot
+        bank1.squash();
+
+        // All accounts other than `zero_lamport_pubkey` should be updated, which
+        // means clean should be able to delete the `zero_lamport_pubkey`
+        bank2.squash();
+
+        // Bank 1 hash should not change
+        bank1.rehash();
+        let new_bank1_hash = bank1.hash();
+        assert_eq!(bank1_hash, new_bank1_hash);
+
+        bank1
+    }
+
+    #[test]
+    fn test_clean_zero_lamport_account_different_hash() {
+        let bank1 = setup_bank_with_removable_zero_lamport_account();
+        let old_hash = bank1.hash();
+
+        // `zero_lamport_pubkey` should have been deleted, hashes will not match
+        bank1.clean_accounts(None);
+        bank1.rehash();
+        let new_bank1_hash = bank1.hash();
+        assert_ne!(old_hash, new_bank1_hash);
+    }
+
+    #[test]
+    fn test_clean_zero_lamport_account_same_hash() {
+        let bank1 = setup_bank_with_removable_zero_lamport_account();
+        let old_hash = bank1.hash();
+
+        // `zero_lamport_pubkey` will not be deleted, hashes will match
+        bank1.clean_accounts(Some(1));
+        bank1.rehash();
+        let new_bank1_hash = bank1.hash();
+        assert_eq!(old_hash, new_bank1_hash);
     }
 }
