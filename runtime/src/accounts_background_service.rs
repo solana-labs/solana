@@ -51,15 +51,20 @@ impl SnapshotRequestHandler {
                     status_cache_slot_deltas,
                 } = snapshot_request;
 
+                let mut shrink_time = Measure::start("shrink_time");
                 snapshot_root_bank.process_stale_slot_with_budget(0, SHRUNKEN_ACCOUNT_PER_INTERVAL);
+                shrink_time.stop();
+
+                let mut clean_time = Measure::start("clean_time");
                 // Don't clean the slot we're snapshotting because it may have zero-lamport
                 // accounts that were included in the bank delta hash when the bank was frozen,
                 // and if we clean them here, the newly created snapshot's hash may not match
                 // the frozen hash.
                 snapshot_root_bank.clean_accounts(Some(snapshot_root_bank.slot() - 1));
+                clean_time.stop();
 
                 // Generate an accounts package
-                let mut snapshot_time = Measure::start("total-snapshot-ms");
+                let mut snapshot_time = Measure::start("snapshot_time");
                 let r = snapshot_utils::snapshot_bank(
                     &snapshot_root_bank,
                     status_cache_slot_deltas,
@@ -76,11 +81,24 @@ impl SnapshotRequestHandler {
                         r
                     );
                 }
+                snapshot_time.stop();
 
                 // Cleanup outdated snapshots
+                let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
                 snapshot_utils::purge_old_snapshots(&self.snapshot_config.snapshot_path);
-                snapshot_time.stop();
-                inc_new_counter_info!("total-snapshot-ms", snapshot_time.as_ms() as usize);
+                purge_old_snapshots_time.stop();
+
+                datapoint_info!(
+                    "handle_snapshot_requests-timing",
+                    ("shrink_time", shrink_time.as_us(), i64),
+                    ("clean_time", clean_time.as_us(), i64),
+                    ("snapshot_time", snapshot_time.as_us(), i64),
+                    (
+                        "purge_old_snapshots_time",
+                        purge_old_snapshots_time.as_us(),
+                        i64
+                    )
+                );
                 snapshot_root_bank
             })
     }
