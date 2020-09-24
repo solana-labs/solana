@@ -75,7 +75,7 @@ export function SolanaClusterStatsProvider({ children }: Props) {
   React.useEffect(() => {
     if (!active || !url) return;
 
-    let connection = new Connection(url);
+    const connection = new Connection(url);
 
     const getPerformanceSamples = async () => {
       try {

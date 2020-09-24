@@ -43,7 +43,7 @@ export function dashboardInfoReducer(
       return sample.samplePeriodSecs / sample.numSlots;
     });
 
-    let avgBlockTime_1h =
+    const avgBlockTime_1h =
       samples.reduce((sum: number, cur: number) => {
         return sum + cur;
       }, 0) / 60;

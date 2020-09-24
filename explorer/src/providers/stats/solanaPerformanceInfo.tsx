@@ -47,7 +47,7 @@ export function performanceInfoReducer(
     const long = downsampleByFactor(medium, 3);
     short = round(short.slice(0, 30)).reverse();
 
-    let perfHistory = {
+    const perfHistory = {
       short: short,
       medium: round(medium.slice(0, 30)).reverse(),
       long: round(long.slice(0, 30)).reverse(),
