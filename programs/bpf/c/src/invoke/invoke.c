@@ -251,9 +251,9 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_assert(SUCCESS ==
                sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
 
+    // Signer privilege escalation will always fail the whole transaction
     instruction.accounts[0].is_signer = true;
-    sol_assert(SUCCESS !=
-               sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+    sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
     break;
   }
   case TEST_PRIVILEGE_ESCALATION_WRITABLE: {
@@ -267,9 +267,9 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_assert(SUCCESS ==
                sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
 
+    // Writable privilege escalation will always fail the whole transaction
     instruction.accounts[0].is_writable = true;
-    sol_assert(SUCCESS !=
-               sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+    sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
     break;
   }
   default:

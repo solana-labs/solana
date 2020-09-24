@@ -1020,6 +1020,7 @@ fn call<'a>(
         ro_regions,
     )?;
     verify_instruction(syscall, &instruction, &signers)?;
+    invoke_context.record_instruction(&instruction);
     let message = Message::new(&[instruction], None);
     let callee_program_id_index = message.instructions[0].program_id_index as usize;
     let callee_program_id = message.account_keys[callee_program_id_index];

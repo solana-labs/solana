@@ -275,6 +275,7 @@ mod tests {
         account::Account,
         entrypoint_native::{ComputeBudget, Logger, ProcessInstruction},
         instruction::CompiledInstruction,
+        instruction::Instruction,
         message::Message,
         rent::Rent,
     };
@@ -360,6 +361,7 @@ mod tests {
         fn get_executor(&mut self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
             None
         }
+        fn record_instruction(&self, _instruction: &Instruction) {}
     }
 
     struct TestInstructionMeter {
@@ -587,6 +589,7 @@ mod tests {
                 max_invoke_depth: 2,
             },
             Rc::new(RefCell::new(Executors::default())),
+            None,
         );
         assert_eq!(
             Err(InstructionError::Custom(194969602)),
