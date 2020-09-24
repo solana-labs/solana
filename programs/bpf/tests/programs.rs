@@ -18,7 +18,7 @@ use solana_sdk::{
     account::{Account, KeyedAccount},
     bpf_loader, bpf_loader_deprecated,
     client::SyncClient,
-    clock::DEFAULT_SLOTS_PER_EPOCH,
+    clock::{DEFAULT_SLOTS_PER_EPOCH, MAX_PROCESSING_AGE},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     entrypoint_native::{
         ComputeBudget, ComputeMeter, Executor, InvokeContext, Logger, ProcessInstruction,
@@ -28,7 +28,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     sysvar::{clock, fees, rent, rewards, slot_hashes, stake_history},
-    transaction::TransactionError,
+    transaction::{Transaction, TransactionError},
 };
 use std::{cell::RefCell, env, fs::File, io::Read, path::PathBuf, rc::Rc, sync::Arc};
 
@@ -96,6 +96,26 @@ fn run_program(
     );
     deserialize_parameters(&bpf_loader::id(), parameter_accounts, &parameter_bytes).unwrap();
     Ok(vm.get_total_instruction_count())
+}
+
+fn process_transaction_and_record_inner(
+    bank: &Bank,
+    tx: Transaction,
+) -> (Result<(), TransactionError>, Vec<Vec<CompiledInstruction>>) {
+    let signature = tx.signatures.get(0).unwrap().clone();
+    let txs = vec![tx];
+    let tx_batch = bank.prepare_batch(&txs, None);
+    let (mut results, _, mut inner) =
+        bank.load_execute_and_commit_transactions(&tx_batch, MAX_PROCESSING_AGE, false, true);
+    let inner_instructions = inner.swap_remove(0);
+    let result = results
+        .fee_collection_results
+        .swap_remove(0)
+        .and_then(|_| bank.get_signature_status(&signature).unwrap());
+    (
+        result,
+        inner_instructions.expect("cpi recording should be enabled"),
+    )
 }
 
 #[test]
@@ -482,61 +502,91 @@ fn test_program_bpf_invoke() {
             account_metas.clone(),
         );
         let message = Message::new(&[instruction], Some(&mint_pubkey));
-        assert!(bank_client
-            .send_and_confirm_message(
-                &[
-                    &mint_keypair,
-                    &argument_keypair,
-                    &invoked_argument_keypair,
-                    &from_keypair
-                ],
-                message,
-            )
-            .is_ok());
+        let tx = Transaction::new(
+            &[
+                &mint_keypair,
+                &argument_keypair,
+                &invoked_argument_keypair,
+                &from_keypair,
+            ],
+            message.clone(),
+            bank.last_blockhash(),
+        );
+        let (result, inner_instructions) = process_transaction_and_record_inner(&bank, tx);
+        assert!(result.is_ok());
+        let invoked_programs: Vec<Pubkey> = inner_instructions[0]
+            .iter()
+            .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
+            .collect();
+        assert_eq!(
+            invoked_programs,
+            vec![
+                solana_sdk::system_program::id(),
+                solana_sdk::system_program::id(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+            ]
+        );
 
         // failure cases
 
         let instruction = Instruction::new(
             invoke_program_id,
-            &TEST_PRIVILEGE_ESCALATION_SIGNER,
+            &[TEST_PRIVILEGE_ESCALATION_SIGNER, nonce1, nonce2, nonce3],
             account_metas.clone(),
         );
         let message = Message::new(&[instruction], Some(&mint_pubkey));
+        let tx = Transaction::new(
+            &[
+                &mint_keypair,
+                &argument_keypair,
+                &invoked_argument_keypair,
+                &from_keypair,
+            ],
+            message.clone(),
+            bank.last_blockhash(),
+        );
+
+        let (result, inner_instructions) = process_transaction_and_record_inner(&bank, tx);
+        let invoked_programs: Vec<Pubkey> = inner_instructions[0]
+            .iter()
+            .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
+            .collect();
+        assert_eq!(invoked_programs, vec![invoked_program_id.clone()]);
         assert_eq!(
-            bank_client
-                .send_and_confirm_message(
-                    &[
-                        &mint_keypair,
-                        &argument_keypair,
-                        &invoked_argument_keypair,
-                        &from_keypair
-                    ],
-                    message,
-                )
-                .unwrap_err()
-                .unwrap(),
+            result.unwrap_err(),
             TransactionError::InstructionError(0, InstructionError::Custom(194969602))
         );
 
         let instruction = Instruction::new(
             invoke_program_id,
-            &TEST_PRIVILEGE_ESCALATION_WRITABLE,
+            &[TEST_PRIVILEGE_ESCALATION_WRITABLE, nonce1, nonce2, nonce3],
             account_metas.clone(),
         );
         let message = Message::new(&[instruction], Some(&mint_pubkey));
+        let tx = Transaction::new(
+            &[
+                &mint_keypair,
+                &argument_keypair,
+                &invoked_argument_keypair,
+                &from_keypair,
+            ],
+            message.clone(),
+            bank.last_blockhash(),
+        );
+        let (result, inner_instructions) = process_transaction_and_record_inner(&bank, tx);
+        let invoked_programs: Vec<Pubkey> = inner_instructions[0]
+            .iter()
+            .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
+            .collect();
+        assert_eq!(invoked_programs, vec![invoked_program_id.clone()]);
         assert_eq!(
-            bank_client
-                .send_and_confirm_message(
-                    &[
-                        &mint_keypair,
-                        &argument_keypair,
-                        &invoked_argument_keypair,
-                        &from_keypair
-                    ],
-                    message,
-                )
-                .unwrap_err()
-                .unwrap(),
+            result.unwrap_err(),
             TransactionError::InstructionError(0, InstructionError::Custom(194969602))
         );
 
@@ -639,6 +689,7 @@ impl InvokeContext for MockInvokeContext {
     fn get_executor(&mut self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         None
     }
+    fn record_instruction(&self, _instruction: &Instruction) {}
 }
 
 #[derive(Debug, Default, Clone)]

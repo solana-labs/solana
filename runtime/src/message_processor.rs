@@ -1,5 +1,6 @@
 use crate::{
-    log_collector::LogCollector, native_loader::NativeLoader, rent_collector::RentCollector,
+    instruction_recorder::InstructionRecorder, log_collector::LogCollector,
+    native_loader::NativeLoader, rent_collector::RentCollector,
 };
 use log::*;
 use serde::{Deserialize, Serialize};
@@ -11,7 +12,7 @@ use solana_sdk::{
         Executor, InvokeContext, Logger, ProcessInstruction, ProcessInstructionWithContext,
     },
     genesis_config::ClusterType,
-    instruction::{CompiledInstruction, InstructionError},
+    instruction::{CompiledInstruction, Instruction, InstructionError},
     message::Message,
     native_loader,
     pubkey::Pubkey,
@@ -206,6 +207,7 @@ pub struct ThisInvokeContext {
     compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     executors: Rc<RefCell<Executors>>,
+    instruction_recorder: Option<InstructionRecorder>,
 }
 impl ThisInvokeContext {
     pub fn new(
@@ -217,6 +219,7 @@ impl ThisInvokeContext {
         is_cross_program_supported: bool,
         compute_budget: ComputeBudget,
         executors: Rc<RefCell<Executors>>,
+        instruction_recorder: Option<InstructionRecorder>,
     ) -> Self {
         let mut program_ids = Vec::with_capacity(compute_budget.max_invoke_depth);
         program_ids.push(*program_id);
@@ -232,6 +235,7 @@ impl ThisInvokeContext {
                 remaining: compute_budget.max_units,
             })),
             executors,
+            instruction_recorder,
         }
     }
 }
@@ -293,6 +297,11 @@ impl InvokeContext for ThisInvokeContext {
     }
     fn get_executor(&mut self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         self.executors.borrow().get(&pubkey)
+    }
+    fn record_instruction(&self, instruction: &Instruction) {
+        if let Some(recorder) = &self.instruction_recorder {
+            recorder.record_instruction(instruction.clone());
+        }
     }
 }
 pub struct ThisLogger {
@@ -667,6 +676,7 @@ impl MessageProcessor {
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
+        instruction_recorder: Option<InstructionRecorder>,
         instruction_index: usize,
         cluster_type: ClusterType,
         epoch: Epoch,
@@ -696,6 +706,7 @@ impl MessageProcessor {
             self.is_cross_program_supported,
             self.compute_budget,
             executors,
+            instruction_recorder,
         );
         let keyed_accounts =
             Self::create_keyed_accounts(message, instruction, executable_accounts, accounts)?;
@@ -714,6 +725,7 @@ impl MessageProcessor {
     /// Process a message.
     /// This method calls each instruction in the message over the set of loaded Accounts
     /// The accounts are committed back to the bank only if every instruction succeeds
+    #[allow(clippy::too_many_arguments)]
     pub fn process_message(
         &self,
         message: &Message,
@@ -722,10 +734,16 @@ impl MessageProcessor {
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
+        mut instruction_recorders: Option<&mut Vec<InstructionRecorder>>,
         cluster_type: ClusterType,
         epoch: Epoch,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
+            let instruction_recorder = instruction_recorders.as_mut().map(|recorders| {
+                let instruction_recorder = InstructionRecorder::default();
+                recorders.push(instruction_recorder.clone());
+                instruction_recorder
+            });
             self.execute_instruction(
                 message,
                 instruction,
@@ -734,6 +752,7 @@ impl MessageProcessor {
                 rent_collector,
                 log_collector.clone(),
                 executors.clone(),
+                instruction_recorder,
                 instruction_index,
                 cluster_type,
                 epoch,
@@ -794,6 +813,7 @@ mod tests {
             true,
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
+            None,
         );
 
         // Check call depth increases and has a limit
@@ -1329,6 +1349,7 @@ mod tests {
             &rent_collector,
             None,
             executors.clone(),
+            None,
             ClusterType::Development,
             0,
         );
@@ -1352,6 +1373,7 @@ mod tests {
             &rent_collector,
             None,
             executors.clone(),
+            None,
             ClusterType::Development,
             0,
         );
@@ -1379,6 +1401,7 @@ mod tests {
             &rent_collector,
             None,
             executors,
+            None,
             ClusterType::Development,
             0,
         );
@@ -1489,6 +1512,7 @@ mod tests {
             &rent_collector,
             None,
             executors.clone(),
+            None,
             ClusterType::Development,
             0,
         );
@@ -1516,6 +1540,7 @@ mod tests {
             &rent_collector,
             None,
             executors.clone(),
+            None,
             ClusterType::Development,
             0,
         );
@@ -1540,6 +1565,7 @@ mod tests {
             &rent_collector,
             None,
             executors,
+            None,
             ClusterType::Development,
             0,
         );
@@ -1618,6 +1644,7 @@ mod tests {
             true,
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
+            None,
         );
         let metas = vec![
             AccountMeta::new(owned_key, false),

@@ -272,6 +272,10 @@ impl Message {
         Self::new(&instructions, payer)
     }
 
+    pub fn compile_instruction(&self, ix: &Instruction) -> CompiledInstruction {
+        compile_instruction(ix, &self.account_keys)
+    }
+
     pub fn serialize(&self) -> Vec<u8> {
         bincode::serialize(self).unwrap()
     }

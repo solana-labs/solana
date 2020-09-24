@@ -15,7 +15,10 @@ use solana_measure::{measure::Measure, thread_mem_usage};
 use solana_metrics::{datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
-    bank::{Bank, TransactionBalancesSet, TransactionProcessResult, TransactionResults},
+    bank::{
+        Bank, InnerInstructionsList, TransactionBalancesSet, TransactionProcessResult,
+        TransactionResults,
+    },
     bank_forks::BankForks,
     bank_utils,
     commitment::VOTE_THRESHOLD_SIZE,
@@ -100,11 +103,13 @@ fn execute_batch(
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
-    let (tx_results, balances) = batch.bank().load_execute_and_commit_transactions(
-        batch,
-        MAX_PROCESSING_AGE,
-        transaction_status_sender.is_some(),
-    );
+    let (tx_results, balances, inner_instructions) =
+        batch.bank().load_execute_and_commit_transactions(
+            batch,
+            MAX_PROCESSING_AGE,
+            transaction_status_sender.is_some(),
+            transaction_status_sender.is_some(),
+        );
 
     bank_utils::find_and_send_votes(batch.transactions(), &tx_results, replay_vote_sender);
 
@@ -121,6 +126,7 @@ fn execute_batch(
             batch.iteration_order_vec(),
             processing_results,
             balances,
+            inner_instructions,
             sender,
         );
     }
@@ -1048,7 +1054,9 @@ pub struct TransactionStatusBatch {
     pub iteration_order: Option<Vec<usize>>,
     pub statuses: Vec<TransactionProcessResult>,
     pub balances: TransactionBalancesSet,
+    pub inner_instructions: Vec<Option<InnerInstructionsList>>,
 }
+
 pub type TransactionStatusSender = Sender<TransactionStatusBatch>;
 
 pub fn send_transaction_status_batch(
@@ -1057,6 +1065,7 @@ pub fn send_transaction_status_batch(
     iteration_order: Option<Vec<usize>>,
     statuses: Vec<TransactionProcessResult>,
     balances: TransactionBalancesSet,
+    inner_instructions: Vec<Option<InnerInstructionsList>>,
     transaction_status_sender: TransactionStatusSender,
 ) {
     let slot = bank.slot();
@@ -1066,6 +1075,7 @@ pub fn send_transaction_status_batch(
         iteration_order,
         statuses,
         balances,
+        inner_instructions,
     }) {
         trace!(
             "Slot {} transaction_status send batch failed: {:?}",
@@ -2913,9 +2923,13 @@ pub mod tests {
                 ..
             },
             _balances,
-        ) = batch
-            .bank()
-            .load_execute_and_commit_transactions(&batch, MAX_PROCESSING_AGE, false);
+            _inner_instructions,
+        ) = batch.bank().load_execute_and_commit_transactions(
+            &batch,
+            MAX_PROCESSING_AGE,
+            false,
+            false,
+        );
         let (err, signature) = get_first_error(&batch, fee_collection_results).unwrap();
         // First error found should be for the 2nd transaction, due to iteration_order
         assert_eq!(err.unwrap_err(), TransactionError::AccountNotFound);

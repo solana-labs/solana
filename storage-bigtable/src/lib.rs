@@ -8,8 +8,9 @@ use solana_sdk::{
     transaction::{Transaction, TransactionError},
 };
 use solana_transaction_status::{
-    ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Rewards,
-    TransactionStatus, TransactionStatusMeta, TransactionWithStatusMeta,
+    ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature,
+    InnerInstructions, Rewards, TransactionStatus, TransactionStatusMeta,
+    TransactionWithStatusMeta,
 };
 use std::collections::HashMap;
 use thiserror::Error;
@@ -161,6 +162,7 @@ struct StoredConfirmedBlockTransactionStatusMeta {
     fee: u64,
     pre_balances: Vec<u64>,
     post_balances: Vec<u64>,
+    inner_instructions: Option<Vec<InnerInstructions>>,
 }
 
 impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
@@ -170,6 +172,7 @@ impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
+            inner_instructions,
         } = value;
         let status = match &err {
             None => Ok(()),
@@ -180,6 +183,7 @@ impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
+            inner_instructions,
         }
     }
 }
@@ -191,6 +195,7 @@ impl From<TransactionStatusMeta> for StoredConfirmedBlockTransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
+            inner_instructions,
             ..
         } = value;
         Self {
@@ -198,6 +203,7 @@ impl From<TransactionStatusMeta> for StoredConfirmedBlockTransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
+            inner_instructions,
         }
     }
 }
