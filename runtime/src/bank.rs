@@ -3567,6 +3567,10 @@ impl Bank {
             self.rent_collector.rent.burn_percent = 50; // 50% rent burn
         }
 
+        if new_feature_activations.contains(&feature_set::spl_token_v2_multisig_fix::id()) {
+            self.apply_spl_token_v2_multisig_fix();
+        }
+
         self.ensure_builtins(init_finish_or_warp, &new_feature_activations);
         self.reinvoke_entered_epoch_callback(initiate_callback);
         self.recheck_cross_program_support();
@@ -3672,6 +3676,15 @@ impl Bank {
             ComputeBudget::default()
         };
         self.set_compute_budget(compute_budget);
+    }
+
+    fn apply_spl_token_v2_multisig_fix(&mut self) {
+        if let Some(mut account) = self.get_account(&inline_spl_token_v2_0::id()) {
+            self.capitalization.fetch_sub(account.lamports, Relaxed);
+            account.lamports = 0;
+            self.store_account(&inline_spl_token_v2_0::id(), &account);
+            self.remove_executor(&inline_spl_token_v2_0::id());
+        }
     }
 
     fn reconfigure_token2_native_mint(&mut self) {
@@ -9201,5 +9214,28 @@ mod tests {
         let new_activations = bank.compute_active_feature_set(true);
         assert!(new_activations.is_empty());
         assert!(bank.feature_set.is_active(&test_feature));
+    }
+
+    #[test]
+    fn test_spl_token_v2_multisig_fix() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(0);
+        let mut bank = Bank::new(&genesis_config);
+
+        // Setup a simulated account
+        bank.add_account_and_update_capitalization(
+            &inline_spl_token_v2_0::id(),
+            &Account {
+                lamports: 100,
+                ..Account::default()
+            },
+        );
+        assert_eq!(bank.get_balance(&inline_spl_token_v2_0::id()), 100);
+        let original_capitalization = bank.capitalization();
+
+        bank.apply_spl_token_v2_multisig_fix();
+
+        // Account is now empty, and the account lamports were burnt
+        assert_eq!(bank.get_balance(&inline_spl_token_v2_0::id()), 0);
+        assert_eq!(bank.capitalization(), original_capitalization - 100);
     }
 }
