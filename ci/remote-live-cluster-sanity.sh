@@ -28,7 +28,7 @@ echo "--- Starting validator $cluster_label"
 
 validator_log="$cluster_label-validator.log"
 sys_tuner_log="$cluster_label-sys-tuner.log"
-sudo ./solana-sys-tuner --user $(whoami) > "$sys_tuner_log" &
+sudo ./solana-sys-tuner --user "$(whoami)" > "$sys_tuner_log" &
 sys_tuner_pid=$!
 
 ./solana-validator  \
