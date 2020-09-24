@@ -7,7 +7,7 @@ use std::{convert::TryInto, fmt};
 #[macro_use]
 extern crate solana_sdk_macro_frozen_abi;
 
-// Older version structure used by 1.3.12 and earlier releases
+// Older version structure used earlier 1.3.x releases
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
 pub struct LegacyVersion {
     major: u16,
