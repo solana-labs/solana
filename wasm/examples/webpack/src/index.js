@@ -4,11 +4,11 @@ import './index.css';
 import App from './App';
 import * as serviceWorker from './serviceWorker';
 
-import * as solanaWasm from './../../../';
+import { waitReady, ed25519 } from './../../../';
 
-solanaWasm.waitReady().then(instance => {
-    const keyPair = instance.generateKeyPair();
-    const signature = instance.signED25519(keyPair.public, keyPair.secret, new TextEncoder().encode('message to encode'));
+waitReady().then(() => {
+    const keyPair = ed25519.keypair.generate();
+    const signature = ed25519.sign(keyPair.public, keyPair.secret, new TextEncoder().encode('message to encode'));
     console.log(signature);
 });
 
