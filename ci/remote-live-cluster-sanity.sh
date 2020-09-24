@@ -28,7 +28,8 @@ echo "--- Starting validator $cluster_label"
 
 validator_log="$cluster_label-validator.log"
 sys_tuner_log="$cluster_label-sys-tuner.log"
-sudo ./solana-sys-tuner --user "$(whoami)" > "$sys_tuner_log" &
+# shellcheck disable=SC2024 # create log as non-root user
+sudo ./solana-sys-tuner --user "$(whoami)" &> "$sys_tuner_log" &
 sys_tuner_pid=$!
 
 ./solana-validator  \
@@ -60,7 +61,7 @@ done
 
 echo "--- Monitoring validator $cluster_label"
 
-# shellcheck disable=SC2012
+# shellcheck disable=SC2012 # ls here is handy for sorted snapshots
 snapshot_slot=$(ls -t cluster-sanity/ledger/snapshot* |
   head -n 1 |
   grep -o 'snapshot-[0-9]*-' |
