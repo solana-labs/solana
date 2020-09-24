@@ -523,11 +523,6 @@ pub fn parse_command(
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
-        // Feature subcommand
-        ("feature", Some(matches)) => {
-            feature_parse_subcommand(matches, default_signer, wallet_manager)
-        }
-
         // Cluster Query Commands
         ("catchup", Some(matches)) => parse_catchup(matches, wallet_manager),
         ("cluster-date", Some(_matches)) => Ok(CliCommandInfo {
@@ -540,6 +535,9 @@ pub fn parse_command(
         }),
         ("create-address-with-seed", Some(matches)) => {
             parse_create_address_with_seed(matches, default_signer, wallet_manager)
+        }
+        ("feature", Some(matches)) => {
+            parse_feature_subcommand(matches, default_signer, wallet_manager)
         }
         ("fees", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::Fees,
@@ -1962,9 +1960,9 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .cluster_query_subcommands()
+        .feature_subcommands()
         .nonce_subcommands()
         .stake_subcommands()
-        .feature_subcommands()
         .subcommand(
             SubCommand::with_name("airdrop")
                 .about("Request lamports")

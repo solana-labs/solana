@@ -5,7 +5,7 @@ use crate::{
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::style;
 use solana_clap_utils::{input_parsers::*, input_validators::*, keypair::*};
-use solana_client::rpc_client::RpcClient;
+use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_runtime::{
     feature::{self, Feature},
@@ -35,11 +35,12 @@ impl FeatureSubCommands for App<'_, '_> {
                     SubCommand::with_name("status")
                         .about("Query runtime feature status")
                         .arg(
-                            Arg::with_name("feature")
+                            Arg::with_name("features")
                                 .value_name("ADDRESS")
                                 .validator(is_valid_pubkey)
                                 .index(1)
-                                .help("Feature status to query [default: "),
+                                .multiple(true)
+                                .help("Feature status to query [default: all known features]"),
                         ),
                 )
                 .subcommand(
@@ -50,6 +51,7 @@ impl FeatureSubCommands for App<'_, '_> {
                                 .value_name("FEATURE_KEYPAIR")
                                 .validator(is_valid_signer)
                                 .index(1)
+                                .required(true)
                                 .help("The signer for the feature to activate"),
                         ),
                 ),
@@ -68,7 +70,7 @@ fn known_feature(feature: &Pubkey) -> Result<(), CliError> {
     }
 }
 
-pub fn feature_parse_subcommand(
+pub fn parse_feature_subcommand(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
@@ -88,9 +90,11 @@ pub fn feature_parse_subcommand(
             }
         }
         ("status", Some(matches)) => {
-            let mut features = if let Some(feature) = pubkey_of(matches, "feature") {
-                known_feature(&feature)?;
-                vec![feature]
+            let mut features = if let Some(features) = pubkeys_of(matches, "features") {
+                for feature in &features {
+                    known_feature(feature)?;
+                }
+                features
             } else {
                 FEATURE_NAMES.keys().cloned().collect()
             };
@@ -117,7 +121,7 @@ pub fn process_feature_subcommand(
 }
 
 // Feature activation is only allowed when 95% of the active stake is on the current feature set
-fn feature_activation_allowed(rpc_client: &RpcClient) -> Result<bool, Box<dyn std::error::Error>> {
+fn feature_activation_allowed(rpc_client: &RpcClient) -> Result<bool, ClientError> {
     let my_feature_set = solana_version::Version::default().feature_set;
 
     let feature_set_map = rpc_client
