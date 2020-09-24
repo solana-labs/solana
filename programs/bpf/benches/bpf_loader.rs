@@ -227,6 +227,7 @@ impl InvokeContext for MockInvokeContext {
     fn get_executor(&mut self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         None
     }
+    fn record_instruction(&self, _instruction: &Instruction) {}
 }
 #[derive(Debug, Default, Clone)]
 pub struct MockLogger {

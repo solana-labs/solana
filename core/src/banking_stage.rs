@@ -531,8 +531,19 @@ impl BankingStage {
         } else {
             vec![]
         };
-        let (mut loaded_accounts, results, mut retryable_txs, tx_count, signature_count) =
-            bank.load_and_execute_transactions(batch, MAX_PROCESSING_AGE, None);
+        let (
+            mut loaded_accounts,
+            results,
+            inner_instructions,
+            mut retryable_txs,
+            tx_count,
+            signature_count,
+        ) = bank.load_and_execute_transactions(
+            batch,
+            MAX_PROCESSING_AGE,
+            None,
+            transaction_status_sender.is_some(),
+        );
         load_execute_time.stop();
 
         let freeze_lock = bank.freeze_lock();
@@ -569,6 +580,7 @@ impl BankingStage {
                     batch.iteration_order_vec(),
                     tx_results.processing_results,
                     TransactionBalancesSet::new(pre_balances, post_balances),
+                    inner_instructions,
                     sender,
                 );
             }

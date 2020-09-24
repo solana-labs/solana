@@ -14,6 +14,7 @@ pub mod commitment;
 pub mod epoch_stakes;
 pub mod genesis_utils;
 pub mod hardened_unpack;
+pub mod instruction_recorder;
 pub mod loader_utils;
 pub mod log_collector;
 pub mod message_processor;

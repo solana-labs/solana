@@ -15,7 +15,7 @@ use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     commitment_config::CommitmentConfig,
     instruction::CompiledInstruction,
-    message::MessageHeader,
+    message::{Message, MessageHeader},
     pubkey::Pubkey,
     signature::Signature,
     transaction::{Result, Transaction, TransactionError},
@@ -34,6 +34,19 @@ pub enum UiInstruction {
 pub enum UiParsedInstruction {
     Parsed(ParsedInstruction),
     PartiallyDecoded(UiPartiallyDecodedInstruction),
+}
+
+impl UiInstruction {
+    fn parse(instruction: &CompiledInstruction, message: &Message) -> Self {
+        let program_id = instruction.program_id(&message.account_keys);
+        if let Ok(parsed_instruction) = parse(program_id, instruction, &message.account_keys) {
+            UiInstruction::Parsed(UiParsedInstruction::Parsed(parsed_instruction))
+        } else {
+            UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(
+                UiPartiallyDecodedInstruction::from(instruction, &message.account_keys),
+            ))
+        }
+    }
 }
 
 /// A duplicate representation of a CompiledInstruction for pretty JSON serialization
@@ -79,12 +92,56 @@ impl UiPartiallyDecodedInstruction {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct InnerInstructions {
+    /// Transaction instruction index
+    pub index: u8,
+    /// List of inner instructions
+    pub instructions: Vec<CompiledInstruction>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UiInnerInstructions {
+    /// Transaction instruction index
+    pub index: u8,
+    /// List of inner instructions
+    pub instructions: Vec<UiInstruction>,
+}
+
+impl UiInnerInstructions {
+    fn parse(inner_instructions: InnerInstructions, message: &Message) -> Self {
+        Self {
+            index: inner_instructions.index,
+            instructions: inner_instructions
+                .instructions
+                .iter()
+                .map(|ix| UiInstruction::parse(ix, message))
+                .collect(),
+        }
+    }
+}
+
+impl From<InnerInstructions> for UiInnerInstructions {
+    fn from(inner_instructions: InnerInstructions) -> Self {
+        Self {
+            index: inner_instructions.index,
+            instructions: inner_instructions
+                .instructions
+                .iter()
+                .map(|ix| UiInstruction::Compiled(ix.into()))
+                .collect(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionStatusMeta {
     pub status: Result<()>,
     pub fee: u64,
     pub pre_balances: Vec<u64>,
     pub post_balances: Vec<u64>,
+    pub inner_instructions: Option<Vec<InnerInstructions>>,
 }
 
 impl Default for TransactionStatusMeta {
@@ -94,6 +151,7 @@ impl Default for TransactionStatusMeta {
             fee: 0,
             pre_balances: vec![],
             post_balances: vec![],
+            inner_instructions: None,
         }
     }
 }
@@ -107,6 +165,24 @@ pub struct UiTransactionStatusMeta {
     pub fee: u64,
     pub pre_balances: Vec<u64>,
     pub post_balances: Vec<u64>,
+    pub inner_instructions: Option<Vec<UiInnerInstructions>>,
+}
+
+impl UiTransactionStatusMeta {
+    fn parse(meta: TransactionStatusMeta, message: &Message) -> Self {
+        Self {
+            err: meta.status.clone().err(),
+            status: meta.status,
+            fee: meta.fee,
+            pre_balances: meta.pre_balances,
+            post_balances: meta.post_balances,
+            inner_instructions: meta.inner_instructions.map(|ixs| {
+                ixs.into_iter()
+                    .map(|ix| UiInnerInstructions::parse(ix, message))
+                    .collect()
+            }),
+        }
+    }
 }
 
 impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
@@ -117,6 +193,9 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
             fee: meta.fee,
             pre_balances: meta.pre_balances,
             post_balances: meta.post_balances,
+            inner_instructions: meta
+                .inner_instructions
+                .map(|ixs| ixs.into_iter().map(|ix| ix.into()).collect()),
         }
     }
 }
@@ -261,9 +340,11 @@ pub struct TransactionWithStatusMeta {
 
 impl TransactionWithStatusMeta {
     fn encode(self, encoding: UiTransactionEncoding) -> EncodedTransactionWithStatusMeta {
+        let message = self.transaction.message();
+        let meta = self.meta.map(|meta| meta.encode(encoding, message));
         EncodedTransactionWithStatusMeta {
             transaction: EncodedTransaction::encode(self.transaction, encoding),
-            meta: self.meta.map(|meta| meta.into()),
+            meta,
         }
     }
 }
@@ -273,6 +354,15 @@ impl TransactionWithStatusMeta {
 pub struct EncodedTransactionWithStatusMeta {
     pub transaction: EncodedTransaction,
     pub meta: Option<UiTransactionStatusMeta>,
+}
+
+impl TransactionStatusMeta {
+    fn encode(self, encoding: UiTransactionEncoding, message: &Message) -> UiTransactionStatusMeta {
+        match encoding {
+            UiTransactionEncoding::JsonParsed => UiTransactionStatusMeta::parse(self, message),
+            _ => self.into(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
@@ -334,24 +424,7 @@ impl EncodedTransaction {
                             .instructions
                             .iter()
                             .map(|instruction| {
-                                let program_id =
-                                    instruction.program_id(&transaction.message.account_keys);
-                                if let Ok(parsed_instruction) = parse(
-                                    program_id,
-                                    instruction,
-                                    &transaction.message.account_keys,
-                                ) {
-                                    UiInstruction::Parsed(UiParsedInstruction::Parsed(
-                                        parsed_instruction,
-                                    ))
-                                } else {
-                                    UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(
-                                        UiPartiallyDecodedInstruction::from(
-                                            instruction,
-                                            &transaction.message.account_keys,
-                                        ),
-                                    ))
-                                }
+                                UiInstruction::parse(instruction, &transaction.message)
                             })
                             .collect(),
                     })

@@ -239,6 +239,7 @@ fn process_instruction(
             );
             invoke(&invoked_instruction, accounts)?;
 
+            // Signer privilege escalation will always fail the whole transaction
             invoked_instruction.accounts[0].is_signer = true;
             assert_eq!(
                 invoke(&invoked_instruction, accounts),
@@ -254,6 +255,7 @@ fn process_instruction(
             );
             invoke(&invoked_instruction, accounts)?;
 
+            // Writable privilege escalation will always fail the whole transaction
             invoked_instruction.accounts[0].is_writable = true;
             assert_eq!(
                 invoke(&invoked_instruction, accounts),
