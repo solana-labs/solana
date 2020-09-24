@@ -78,10 +78,11 @@ Learn more about [transaction fees here](../implemented-proposals/transaction-fe
 
 ## Validator Stake Warm-up
 
-Stakes need to warm up, and warmup increments are applied at Epoch boundaries,
-so it can take an hour or more for stake to come fully online.
+To combat various attacks on consensus, new stake delegations are subject to
+a [warm-up](/staking/stake-accounts#delegation-warmup-and-cooldown)
+period.
 
-To monitor your validator during its warmup period:
+Monitor a validator's stake during warmup by:
 
 - View your vote account:`solana vote-account ~/vote-account-keypair.json` This displays the current state of all the votes the validator has submitted to the network.
 - View your stake account, the delegation preference and details of your stake:`solana stake-account ~/validator-stake-keypair.json`
