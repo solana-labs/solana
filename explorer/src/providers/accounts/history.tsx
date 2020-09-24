@@ -28,15 +28,23 @@ function combineFetched(
   current: ConfirmedSignatureInfo[] | undefined,
   before: TransactionSignature | undefined
 ) {
-  if (current === undefined) {
+  if (current === undefined || current.length === 0) {
     return fetched;
   }
 
-  if (current.length > 0 && current[current.length - 1].signature === before) {
-    return current.concat(fetched);
-  } else {
-    return fetched;
+  // History was refreshed, fetch results should be prepended if contiguous
+  if (before === undefined) {
+    const end = fetched.findIndex((f) => f.signature === current[0].signature);
+    if (end < 0) return fetched;
+    return fetched.slice(0, end).concat(current);
   }
+
+  // More history was loaded, fetch results should be appended
+  if (current[current.length - 1].signature === before) {
+    return current.concat(fetched);
+  }
+
+  return fetched;
 }
 
 function reconcile(
