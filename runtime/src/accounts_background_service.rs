@@ -10,6 +10,7 @@ use crate::{
 };
 use crossbeam_channel::{Receiver, Sender};
 use log::*;
+use rand::{thread_rng, Rng};
 use solana_measure::measure::Measure;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -22,6 +23,7 @@ const INTERVAL_MS: u64 = 100;
 const SHRUNKEN_ACCOUNT_PER_SEC: usize = 250;
 const SHRUNKEN_ACCOUNT_PER_INTERVAL: usize =
     SHRUNKEN_ACCOUNT_PER_SEC / (1000 / INTERVAL_MS as usize);
+const CLEAN_INTERVAL_BLOCKS: u64 = 100;
 
 pub type SnapshotRequestSender = Sender<SnapshotRequest>;
 pub type SnapshotRequestReceiver = Receiver<SnapshotRequest>;
@@ -138,6 +140,13 @@ impl AccountsBackgroundService {
                         consumed_budget,
                         SHRUNKEN_ACCOUNT_PER_INTERVAL,
                     );
+
+                    if bank.block_height() - last_cleaned_block_height
+                        > (CLEAN_INTERVAL_BLOCKS + thread_rng().gen_range(0, 10))
+                    {
+                        bank.clean_accounts(None);
+                        last_cleaned_block_height = bank.block_height();
+                    }
                 }
 
                 sleep(Duration::from_millis(INTERVAL_MS));
