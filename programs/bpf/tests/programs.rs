@@ -106,13 +106,16 @@ fn process_transaction_and_record_invoked(
     let txs = vec![tx];
     let tx_batch = bank.prepare_batch(&txs, None);
     let (mut results, _, mut invoked) =
-        bank.load_execute_and_commit_transactions(&tx_batch, MAX_PROCESSING_AGE, false);
+        bank.load_execute_and_commit_transactions(&tx_batch, MAX_PROCESSING_AGE, false, true);
     let invoked_instructions = invoked.swap_remove(0);
     let result = results
         .fee_collection_results
         .swap_remove(0)
         .and_then(|_| bank.get_signature_status(&signature).unwrap());
-    (result, invoked_instructions)
+    (
+        result,
+        invoked_instructions.expect("cpi recording should be enabled"),
+    )
 }
 
 #[test]
@@ -686,7 +689,7 @@ impl InvokeContext for MockInvokeContext {
     fn get_executor(&mut self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         None
     }
-    fn record_instruction(&self, _instruction: Instruction) {}
+    fn record_instruction(&self, _instruction: &Instruction) {}
 }
 
 #[derive(Debug, Default, Clone)]

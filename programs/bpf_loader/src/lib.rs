@@ -270,10 +270,7 @@ impl Executor for BPFExecutor {
 mod tests {
     use super::*;
     use rand::Rng;
-    use solana_runtime::{
-        instruction_recorder::InstructionRecorder,
-        message_processor::{Executors, ThisInvokeContext},
-    };
+    use solana_runtime::message_processor::{Executors, ThisInvokeContext};
     use solana_sdk::{
         account::Account,
         entrypoint_native::{ComputeBudget, Logger, ProcessInstruction},
@@ -364,7 +361,7 @@ mod tests {
         fn get_executor(&mut self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
             None
         }
-        fn record_instruction(&self, _instruction: Instruction) {}
+        fn record_instruction(&self, _instruction: &Instruction) {}
     }
 
     struct TestInstructionMeter {
@@ -592,7 +589,7 @@ mod tests {
                 max_invoke_depth: 2,
             },
             Rc::new(RefCell::new(Executors::default())),
-            InstructionRecorder::default(),
+            None,
         );
         assert_eq!(
             Err(InstructionError::Custom(194969602)),

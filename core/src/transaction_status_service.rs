@@ -87,15 +87,17 @@ impl TransactionStatusService {
                 let (writable_keys, readonly_keys) =
                     transaction.message.get_account_keys_by_lock_type();
 
-                let invoked_instructions = invoked_instructions
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, instructions)| InvokedInstructions {
-                        index: index as u8,
-                        instructions,
-                    })
-                    .filter(|i| !i.instructions.is_empty())
-                    .collect();
+                let invoked = invoked_instructions.map(|invoked_instructions| {
+                    invoked_instructions
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, instructions)| InvokedInstructions {
+                            index: index as u8,
+                            instructions,
+                        })
+                        .filter(|i| !i.instructions.is_empty())
+                        .collect()
+                });
 
                 blockstore
                     .write_transaction_status(
@@ -108,7 +110,7 @@ impl TransactionStatusService {
                             fee,
                             pre_balances,
                             post_balances,
-                            invoked: Some(invoked_instructions),
+                            invoked,
                         },
                     )
                     .expect("Expect database write to succeed");

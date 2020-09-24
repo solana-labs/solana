@@ -228,7 +228,7 @@ pub trait InvokeContext {
     /// Get the completed loader work that can be re-used across executions
     fn get_executor(&mut self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>>;
     /// Record invoked instruction
-    fn record_instruction(&self, instruction: Instruction);
+    fn record_instruction(&self, instruction: &Instruction);
 }
 
 #[derive(Clone, Copy, Debug)]

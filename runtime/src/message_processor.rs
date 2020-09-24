@@ -207,7 +207,7 @@ pub struct ThisInvokeContext {
     compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     executors: Rc<RefCell<Executors>>,
-    instruction_recorder: InstructionRecorder,
+    instruction_recorder: Option<InstructionRecorder>,
 }
 impl ThisInvokeContext {
     pub fn new(
@@ -219,7 +219,7 @@ impl ThisInvokeContext {
         is_cross_program_supported: bool,
         compute_budget: ComputeBudget,
         executors: Rc<RefCell<Executors>>,
-        instruction_recorder: InstructionRecorder,
+        instruction_recorder: Option<InstructionRecorder>,
     ) -> Self {
         let mut program_ids = Vec::with_capacity(compute_budget.max_invoke_depth);
         program_ids.push(*program_id);
@@ -298,8 +298,10 @@ impl InvokeContext for ThisInvokeContext {
     fn get_executor(&mut self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         self.executors.borrow().get(&pubkey)
     }
-    fn record_instruction(&self, instruction: Instruction) {
-        self.instruction_recorder.record_instruction(instruction);
+    fn record_instruction(&self, instruction: &Instruction) {
+        if let Some(recorder) = &self.instruction_recorder {
+            recorder.record_instruction(instruction.clone());
+        }
     }
 }
 pub struct ThisLogger {
@@ -674,7 +676,7 @@ impl MessageProcessor {
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
-        instruction_recorder: InstructionRecorder,
+        instruction_recorder: Option<InstructionRecorder>,
         instruction_index: usize,
         cluster_type: ClusterType,
         epoch: Epoch,
@@ -732,13 +734,16 @@ impl MessageProcessor {
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
-        instruction_recorders: &mut Vec<InstructionRecorder>,
+        mut instruction_recorders: Option<&mut Vec<InstructionRecorder>>,
         cluster_type: ClusterType,
         epoch: Epoch,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
-            let instruction_recorder = InstructionRecorder::default();
-            instruction_recorders.push(instruction_recorder.clone());
+            let instruction_recorder = instruction_recorders.as_mut().map(|recorders| {
+                let instruction_recorder = InstructionRecorder::default();
+                recorders.push(instruction_recorder.clone());
+                instruction_recorder
+            });
             self.execute_instruction(
                 message,
                 instruction,
@@ -808,7 +813,7 @@ mod tests {
             true,
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
-            InstructionRecorder::default(),
+            None,
         );
 
         // Check call depth increases and has a limit
@@ -1344,7 +1349,7 @@ mod tests {
             &rent_collector,
             None,
             executors.clone(),
-            &mut vec![],
+            None,
             ClusterType::Development,
             0,
         );
@@ -1368,7 +1373,7 @@ mod tests {
             &rent_collector,
             None,
             executors.clone(),
-            &mut vec![],
+            None,
             ClusterType::Development,
             0,
         );
@@ -1396,7 +1401,7 @@ mod tests {
             &rent_collector,
             None,
             executors,
-            &mut vec![],
+            None,
             ClusterType::Development,
             0,
         );
@@ -1507,7 +1512,7 @@ mod tests {
             &rent_collector,
             None,
             executors.clone(),
-            &mut vec![],
+            None,
             ClusterType::Development,
             0,
         );
@@ -1535,7 +1540,7 @@ mod tests {
             &rent_collector,
             None,
             executors.clone(),
-            &mut vec![],
+            None,
             ClusterType::Development,
             0,
         );
@@ -1560,7 +1565,7 @@ mod tests {
             &rent_collector,
             None,
             executors,
-            &mut vec![],
+            None,
             ClusterType::Development,
             0,
         );
@@ -1639,7 +1644,7 @@ mod tests {
             true,
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
-            InstructionRecorder::default(),
+            None,
         );
         let metas = vec![
             AccountMeta::new(owned_key, false),
