@@ -1,7 +1,9 @@
 use crate::{
-    instruction_recorder::InstructionRecorder, log_collector::LogCollector,
-    native_loader::NativeLoader, rent_collector::RentCollector,
     feature_set::{self, FeatureSet},
+    instruction_recorder::InstructionRecorder,
+    log_collector::LogCollector,
+    native_loader::NativeLoader,
+    rent_collector::RentCollector,
 };
 use log::*;
 use serde::{Deserialize, Serialize};
