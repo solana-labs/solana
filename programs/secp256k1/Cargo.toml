@@ -1,15 +1,12 @@
 [package]
 name = "solana-secp256k1-program"
-description = "Blockchain, Rebuilt for Scale"
+description = "Solana Secp256k1 program"
 version = "1.4.0"
-documentation = "https://docs.rs/solana"
 homepage = "https://solana.com/"
-readme = "README.md"
 repository = "https://github.com/solana-labs/solana"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 license = "Apache-2.0"
 edition = "2018"
-publish = false
 
 [dependencies]
 solana-sdk = { path = "../../sdk", version = "1.4.0" }
