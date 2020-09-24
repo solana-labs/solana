@@ -35,20 +35,24 @@
   "scripts": {
     "clean": "rimraf ./dist",
     "build": "rollup -c",
-    "watch": "rollup -cw"
-  },
-  "jest": {
-    "testEnvironment": "./jest-environment"
+    "watch": "rollup -cw",
+    "test": "jest --useStderr"
   },
   "dependencies": {},
   "devDependencies": {
+    "@types/jest": "^26.0.14",
+    "@types/node": "^14.11.2",
+    "crypto-hash": "^1.2.2",
     "glob": "^7.1.6",
+    "jest": "^26.4.2",
     "rimraf": "^3.0.2",
     "rollup": "^2.27.1",
     "rollup-plugin-typescript2": "^0.27.2",
     "rollup-pluginutils": "^2.8.2",
     "toml": "^3.0.0",
+    "ts-jest": "^26.4.0",
     "tslib": "^2.0.1",
-    "typescript": "^4.0.2"
+    "tweetnacl": "^1.0.3",
+    "typescript": "^4.0.3"
   }
 }

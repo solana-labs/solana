@@ -4,6 +4,7 @@
         "module": "ESNext",
         "declaration": true,
         "moduleResolution": "node",
+        "esModuleInterop": true,
         "outDir": "./dist",
         "allowJs": true,
         "strict": true,

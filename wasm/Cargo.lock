@@ -306,10 +306,12 @@ dependencies = [
  "bincode",
  "cfg-if",
  "console_error_panic_hook",
+ "curve25519-dalek",
  "ed25519-dalek",
  "rand",
  "rand_core",
  "serde",
+ "sha2",
  "wasm-bindgen",
  "web-sys",
 ]
