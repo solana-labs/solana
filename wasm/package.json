@@ -28,6 +28,9 @@
     "./dist",
     "./webpack"
   ],
+  "jest": {
+    "testEnvironment": "./jest-environment"
+  },
   "engines": {
     "node": ">=12.0.0",
     "npm": ">=6.0.0"
