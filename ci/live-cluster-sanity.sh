@@ -9,13 +9,13 @@ if [[ -n $CI ]]; then
   escaped_branch=$(echo "$BUILDKITE_BRANCH" | tr -c "[:alnum:]" - | sed -r "s#(^-*|-*head-*|-*$)##g")
   instance_prefix="testnet-live-sanity-$escaped_branch"
 else
-  instance_prefix="testnet-live-sanity-$(whoami)" --self-destruct-hours 1
+  instance_prefix="testnet-live-sanity-$(whoami)"
 fi
 
 # ensure to delete leftover cluster
 ./net/gce.sh delete -p "$instance_prefix" || true
 # only bootstrap, no normal validator
-./net/gce.sh create -p "$instance_prefix" -n 0
+./net/gce.sh create -p "$instance_prefix" -n 0 --self-destruct-hours 1
 instance_ip=$(./net/gce.sh info | grep bootstrap-validator | awk '{print $3}')
 
 on_trap() {
