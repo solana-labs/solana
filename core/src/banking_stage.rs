@@ -2044,8 +2044,7 @@ mod tests {
                 confirmed_block.transactions.into_iter()
             {
                 if transaction.signatures[0] == success_signature {
-                    let meta = meta.unwrap();
-                    assert_eq!(meta.status, Ok(()));
+                    assert_eq!(meta.unwrap().status, Ok(()));
                 } else if transaction.signatures[0] == ix_error_signature {
                     let meta = meta.unwrap();
                     assert_eq!(
