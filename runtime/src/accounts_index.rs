@@ -92,37 +92,36 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
         (reclaims, list.is_empty())
     }
 
-    // find the latest slot and T in a slice for a given ancestor
-    // returns index into 'slice' if found, None if not.
+    // Given a SlotSlice `L`, a list of ancestors and a maximum slot, find the latest element
+    // in `L`, where the slot `S < max_slot`, and `S` is an ancestor or root.
     fn latest_slot(
         &self,
         ancestors: Option<&Ancestors>,
         slice: SlotSlice<T>,
-        max_root: Option<Slot>,
+        max_slot: Option<Slot>,
     ) -> Option<usize> {
-        let mut max = 0;
+        let mut current_max = 0;
+        let max_slot = max_slot.unwrap_or(std::u64::MAX);
+
         let mut rv = None;
         for (i, (slot, _t)) in slice.iter().rev().enumerate() {
-            if *slot >= max
-                && (ancestors.map_or(false, |ancestors| ancestors.contains_key(slot))
-                    || (self.is_slot_rooted_and_le_max(*slot, max_root)))
+            if *slot >= current_max
+                && *slot <= max_slot
+                && self.is_ancestor_or_root(ancestors, *slot)
             {
                 rv = Some((slice.len() - 1) - i);
-                max = *slot;
+                current_max = *slot;
             }
         }
+
         rv
     }
 
     // Checks that the given slot is both:
     // 1) Rooted
     // 2) Less than or equal to an optionally specified `max_root`
-    fn is_slot_rooted_and_le_max(&self, slot: Slot, max_root: Option<Slot>) -> bool {
-        self.is_root(slot)
-            && max_root
-                .as_ref()
-                .map(|max_root| slot <= *max_root)
-                .unwrap_or(true)
+    fn is_ancestor_or_root(&self, ancestors: Option<&Ancestors>, slot: Slot) -> bool {
+        ancestors.map_or(false, |ancestors| ancestors.contains_key(&slot)) || (self.is_root(slot))
     }
 
     /// Get an account
@@ -554,5 +553,55 @@ mod tests {
         assert_eq!(purges, (vec![(1, 10)], true));
 
         assert_eq!(None, index.update(1, &key.pubkey(), 9, &mut gc));
+    }
+
+    #[test]
+    fn test_latest_slot() {
+        let slot_slice = vec![(0, true), (5, true), (3, true), (7, true)];
+        let mut index = AccountsIndex::<bool>::default();
+
+        // No ancestors, no root, should return None
+        assert!(index.latest_slot(None, &slot_slice, None).is_none());
+
+        // Given a root, should return the root
+        index.add_root(5);
+        assert_eq!(index.latest_slot(None, &slot_slice, None).unwrap(), 1);
+
+        // Given a maximum -= root, should still return the root
+        assert_eq!(index.latest_slot(None, &slot_slice, Some(5)).unwrap(), 1);
+
+        // Given a maximum < root, should filter out the root
+        assert!(index.latest_slot(None, &slot_slice, Some(4)).is_none());
+
+        // Given a maximum, should filter out the ancestors > maximum
+        let ancestors: HashMap<Slot, usize> = vec![(3, 1), (7, 1)].into_iter().collect();
+        assert_eq!(
+            index
+                .latest_slot(Some(&ancestors), &slot_slice, Some(4))
+                .unwrap(),
+            2
+        );
+        assert_eq!(
+            index
+                .latest_slot(Some(&ancestors), &slot_slice, Some(7))
+                .unwrap(),
+            3
+        );
+
+        // Given no maximum, should just return the greatest ancestor or root
+        assert_eq!(
+            index
+                .latest_slot(Some(&ancestors), &slot_slice, None)
+                .unwrap(),
+            3
+        );
+
+        // Because the given maximum `m == root`, ancestors > root
+        assert_eq!(
+            index
+                .latest_slot(Some(&ancestors), &slot_slice, Some(5))
+                .unwrap(),
+            1
+        );
     }
 }
