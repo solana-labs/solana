@@ -7,7 +7,9 @@ use solana_sdk::{
     pubkey::Pubkey, signature::Signature, transaction::Transaction,
 };
 use solana_stake_program::{stake_instruction::StakeInstruction, stake_state::Lockup};
-use solana_transaction_status::{ConfirmedBlock, UiTransactionEncoding, UiTransactionStatusMeta};
+use solana_transaction_status::{
+    EncodedConfirmedBlock, UiTransactionEncoding, UiTransactionStatusMeta,
+};
 use std::{collections::HashMap, thread::sleep, time::Duration};
 
 pub type PubkeyString = String;
@@ -244,7 +246,7 @@ fn process_transaction(
 
 fn process_confirmed_block(
     slot: Slot,
-    confirmed_block: ConfirmedBlock,
+    confirmed_block: EncodedConfirmedBlock,
     accounts: &mut HashMap<PubkeyString, AccountInfo>,
 ) {
     for rpc_transaction in confirmed_block.transactions {
@@ -281,7 +283,7 @@ fn load_blocks(
     rpc_client: &RpcClient,
     start_slot: Slot,
     end_slot: Slot,
-) -> ClientResult<Vec<(Slot, ConfirmedBlock)>> {
+) -> ClientResult<Vec<(Slot, EncodedConfirmedBlock)>> {
     info!(
         "Loading confirmed blocks between slots: {} - {}",
         start_slot, end_slot

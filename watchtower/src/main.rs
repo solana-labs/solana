@@ -16,7 +16,7 @@ use solana_sdk::{
     clock::Slot, hash::Hash, native_token::lamports_to_sol, program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
-use solana_transaction_status::{ConfirmedBlock, UiTransactionEncoding};
+use solana_transaction_status::{EncodedConfirmedBlock, UiTransactionEncoding};
 use solana_vote_program::vote_instruction::VoteInstruction;
 use std::{
     collections::HashMap,
@@ -157,7 +157,11 @@ fn get_config() -> Config {
     config
 }
 
-fn process_confirmed_block(notifier: &Notifier, slot: Slot, confirmed_block: ConfirmedBlock) {
+fn process_confirmed_block(
+    notifier: &Notifier,
+    slot: Slot,
+    confirmed_block: EncodedConfirmedBlock,
+) {
     let break_program_id = "BrEAK7zGZ6dM71zUDACDqJnekihmwF15noTddWTsknjC"
         .parse::<Pubkey>()
         .unwrap();
@@ -215,7 +219,7 @@ fn load_blocks(
     rpc_client: &RpcClient,
     start_slot: Slot,
     end_slot: Slot,
-) -> ClientResult<Vec<(Slot, ConfirmedBlock)>> {
+) -> ClientResult<Vec<(Slot, EncodedConfirmedBlock)>> {
     info!(
         "Loading confirmed blocks between slots: {} - {}",
         start_slot, end_slot
