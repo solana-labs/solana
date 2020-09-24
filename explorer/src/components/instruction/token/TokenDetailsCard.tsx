@@ -132,6 +132,24 @@ function TokenInstruction(props: InfoProps) {
     let value = props.info[key];
     if (value === undefined) continue;
 
+    // Flatten lists of public keys
+    if (Array.isArray(value) && value.every((v) => v instanceof PublicKey)) {
+      for (let i = 0; i < value.length; i++) {
+        let publicKey = value[i];
+        let label = `${key.charAt(0).toUpperCase() + key.slice(1)} - #${i + 1}`;
+
+        attributes.push(
+          <tr key={key + i}>
+            <td>{label}</td>
+            <td className="text-lg-right">
+              <Address pubkey={publicKey} alignRight link />
+            </td>
+          </tr>
+        );
+      }
+      continue;
+    }
+
     if (key === "tokenAmount") {
       key = "amount";
       value = (value as TokenAmountUi).amount;
