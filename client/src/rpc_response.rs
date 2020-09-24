@@ -275,6 +275,15 @@ pub struct RpcConfirmedTransactionStatusWithSignature {
     pub memo: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcPerfSample {
+    pub slot: Slot,
+    pub num_transactions: u64,
+    pub num_slots: u64,
+    pub sample_period_secs: u16,
+}
+
 impl From<ConfirmedTransactionStatusWithSignature> for RpcConfirmedTransactionStatusWithSignature {
     fn from(value: ConfirmedTransactionStatusWithSignature) -> Self {
         let ConfirmedTransactionStatusWithSignature {
