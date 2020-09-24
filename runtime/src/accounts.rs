@@ -151,7 +151,7 @@ impl Accounts {
                     }
 
                     if solana_sdk::sysvar::instructions::check_id(key)
-                        && feature_set.active(&feature_set::instructions_sysvar_enabled::id())
+                        && feature_set.is_active(&feature_set::instructions_sysvar_enabled::id())
                     {
                         if message.is_writable(i) {
                             return Err(TransactionError::InvalidAccountIndex);
@@ -307,7 +307,7 @@ impl Accounts {
 
         let fee_config = FeeConfig {
             secp256k1_program_enabled: feature_set
-                .active(&feature_set::secp256k1_program_enabled::id()),
+                .is_active(&feature_set::secp256k1_program_enabled::id()),
         };
         OrderedIterator::new(txs, txs_iteration_order)
             .zip(lock_results.into_iter())
