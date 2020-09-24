@@ -89,7 +89,7 @@ curl \
   -d '{"jsonrpc":"2.0","id":1, "method":"validatorExit"}' \
   http://localhost:8899
 
-(sleep 3 && kill "$tail_pid" && sudo kill "$sys_tuner_pid") &
+(set -x && sleep 3 && sudo kill "$sys_tuner_pid" && kill "$tail_pid") &
 kill_pid=$!
 
 wait "$validator_pid" "$sys_tuner_pid" "$tail_pid" "$kill_pid"

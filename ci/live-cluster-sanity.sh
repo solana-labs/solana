@@ -34,7 +34,7 @@ test_with_live_cluster() {
   _ ./net/ssh.sh "$instance_ip" ./remote-live-cluster-sanity.sh "$@"
 
   # good it existed successfully; let's collect logs for profit!
-  for log in $(./net/ssh.sh ls -l '*.log'); do
+  for log in $(./net/ssh.sh "$instance_ip" ls -l '*.log'); do
     _ ./net/scp.sh "$instance_ip:$log" .
   done
 }
