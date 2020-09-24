@@ -2867,9 +2867,9 @@ pub mod tests {
             "result": [
                 {
                     "slot": 0,
-                    "num_slots": 1,
-                    "num_transactions": 4,
-                    "sample_period_secs": 60
+                    "numSlots": 1,
+                    "numTransactions": 4,
+                    "samplePeriodSecs": 60
                 }
             ],
         });
