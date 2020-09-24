@@ -89,6 +89,7 @@ mod tests {
                 vec![accounts_dir.path().to_path_buf()],
                 &[],
                 None,
+                None,
             );
             bank0.freeze();
             let mut bank_forks = BankForks::new(bank0);
@@ -142,6 +143,7 @@ mod tests {
             ),
             CompressionType::Bzip2,
             old_genesis_config,
+            None,
             None,
         )
         .unwrap();

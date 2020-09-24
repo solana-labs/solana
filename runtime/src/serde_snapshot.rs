@@ -4,7 +4,7 @@ use {
         accounts_db::{AccountStorageEntry, AccountsDB, AppendVecId, BankHashInfo},
         accounts_index::Ancestors,
         append_vec::AppendVec,
-        bank::{Bank, BankFieldsToDeserialize, BankRc},
+        bank::{Bank, BankFieldsToDeserialize, BankRc, Builtins},
         blockhash_queue::BlockhashQueue,
         epoch_stakes::EpochStakes,
         message_processor::MessageProcessor,
@@ -125,6 +125,7 @@ pub(crate) fn bank_from_stream<R, P>(
     genesis_config: &GenesisConfig,
     frozen_account_pubkeys: &[Pubkey],
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
+    additional_builtins: Option<&Builtins>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -142,6 +143,7 @@ where
                 account_paths,
                 append_vecs_path,
                 debug_keys,
+                additional_builtins,
             )?;
             Ok(bank)
         }};
@@ -227,6 +229,7 @@ fn reconstruct_bank_from_fields<E, P>(
     account_paths: &[PathBuf],
     append_vecs_path: P,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
+    additional_builtins: Option<&Builtins>,
 ) -> Result<Bank, Error>
 where
     E: Into<AccountStorageEntry>,
@@ -241,7 +244,13 @@ where
     accounts_db.freeze_accounts(&bank_fields.ancestors, frozen_account_pubkeys);
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
-    let bank = Bank::new_from_fields(bank_rc, genesis_config, bank_fields, debug_keys);
+    let bank = Bank::new_from_fields(
+        bank_rc,
+        genesis_config,
+        bank_fields,
+        debug_keys,
+        additional_builtins,
+    );
 
     Ok(bank)
 }

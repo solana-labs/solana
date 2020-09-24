@@ -69,6 +69,7 @@ impl TestValidator {
             &Pubkey::new_rand(),
             42,
             bootstrap_validator_lamports,
+            solana_sdk::genesis_config::ClusterType::Development,
         );
         genesis_config.rent.lamports_per_byte_year = 1;
         genesis_config.rent.exemption_threshold = 1.0;

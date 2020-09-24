@@ -16,7 +16,7 @@ use solana_metrics::{datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
     bank::{
-        Bank, InnerInstructionsList, TransactionBalancesSet, TransactionProcessResult,
+        Bank, Builtins, InnerInstructionsList, TransactionBalancesSet, TransactionProcessResult,
         TransactionResults,
     },
     bank_forks::BankForks,
@@ -318,14 +318,7 @@ pub struct ProcessOptions {
     pub new_hard_forks: Option<Vec<Slot>>,
     pub frozen_accounts: Vec<Pubkey>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
-}
-
-fn initiate_callback(mut bank: &mut Arc<Bank>, genesis_config: &GenesisConfig) {
-    Arc::get_mut(&mut bank)
-        .unwrap()
-        .initiate_entered_epoch_callback(solana_genesis_programs::get_entered_epoch_callback(
-            genesis_config.cluster_type,
-        ));
+    pub additional_builtins: Option<Builtins>,
 }
 
 pub fn process_blockstore(
@@ -344,55 +337,43 @@ pub fn process_blockstore(
     }
 
     // Setup bank for slot 0
-    let mut bank0 = Arc::new(Bank::new_with_paths(
+    let bank0 = Bank::new_with_paths(
         &genesis_config,
         account_paths,
         &opts.frozen_accounts,
         opts.debug_keys.clone(),
-    ));
-    initiate_callback(&mut bank0, genesis_config);
+        opts.additional_builtins.as_ref(),
+    );
+    let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");
     let recyclers = VerifyRecyclers::default();
     process_bank_0(&bank0, blockstore, &opts, &recyclers)?;
-    do_process_blockstore_from_root(
-        genesis_config,
-        blockstore,
-        bank0,
-        &opts,
-        &recyclers,
-        None,
-        false,
-    )
+    do_process_blockstore_from_root(blockstore, bank0, &opts, &recyclers, None)
 }
 
 // Process blockstore from a known root bank
-pub fn process_blockstore_from_root(
-    genesis_config: &GenesisConfig,
+pub(crate) fn process_blockstore_from_root(
     blockstore: &Blockstore,
-    bank: Arc<Bank>,
+    bank: Bank,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     transaction_status_sender: Option<TransactionStatusSender>,
 ) -> BlockstoreProcessorResult {
     do_process_blockstore_from_root(
-        genesis_config,
         blockstore,
-        bank,
+        Arc::new(bank),
         opts,
         recyclers,
         transaction_status_sender,
-        true,
     )
 }
 
 fn do_process_blockstore_from_root(
-    genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
-    mut bank: Arc<Bank>,
+    bank: Arc<Bank>,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     transaction_status_sender: Option<TransactionStatusSender>,
-    enable_callback: bool,
 ) -> BlockstoreProcessorResult {
     info!("processing ledger from slot {}...", bank.slot());
     let allocated = thread_mem_usage::Allocatedp::default();
@@ -403,10 +384,6 @@ fn do_process_blockstore_from_root(
     let start_slot = bank.slot();
     let now = Instant::now();
     let mut root = start_slot;
-
-    if enable_callback {
-        initiate_callback(&mut bank, genesis_config);
-    }
 
     if let Some(ref new_hard_forks) = opts.new_hard_forks {
         let hard_forks = bank.hard_forks();
@@ -2662,8 +2639,7 @@ pub mod tests {
         blockstore.set_roots(&[3, 5]).unwrap();
 
         // Set up bank1
-        let mut bank0 = Arc::new(Bank::new(&genesis_config));
-        initiate_callback(&mut bank0, &genesis_config);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
         let opts = ProcessOptions {
             poh_verify: true,
             ..ProcessOptions::default()
@@ -2684,16 +2660,8 @@ pub mod tests {
         bank1.squash();
 
         // Test process_blockstore_from_root() from slot 1 onwards
-        let (bank_forks, _leader_schedule) = do_process_blockstore_from_root(
-            &genesis_config,
-            &blockstore,
-            bank1,
-            &opts,
-            &recyclers,
-            None,
-            false,
-        )
-        .unwrap();
+        let (bank_forks, _leader_schedule) =
+            do_process_blockstore_from_root(&blockstore, bank1, &opts, &recyclers, None).unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![5, 6]);
         assert_eq!(bank_forks.working_bank().slot(), 6);
@@ -2857,7 +2825,7 @@ pub mod tests {
         genesis_config: &GenesisConfig,
         account_paths: Vec<PathBuf>,
     ) -> EpochSchedule {
-        let bank = Bank::new_with_paths(&genesis_config, account_paths, &[], None);
+        let bank = Bank::new_with_paths(&genesis_config, account_paths, &[], None, None);
         *bank.epoch_schedule()
     }
 
@@ -3209,97 +3177,6 @@ pub mod tests {
         assert_eq!(
             supermajority_root_from_vote_accounts(slot, total_stake, accounts.into_iter()).unwrap(),
             8
-        );
-    }
-
-    #[test]
-    fn test_process_blockstore_feature_activations_since_genesis() {
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
-
-        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
-
-        let opts = ProcessOptions::default();
-        let (bank_forks, _leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, vec![], opts).unwrap();
-
-        assert_eq!(bank_forks.working_bank().slot(), 0);
-        assert_eq!(
-            bank_forks.working_bank().builtin_loader_ids(),
-            vec![
-                solana_sdk::bpf_loader::id(),
-                solana_sdk::bpf_loader_deprecated::id()
-            ]
-        );
-    }
-
-    #[test]
-    fn test_process_blockstore_feature_activations_from_snapshot() {
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
-
-        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
-
-        // Set up bank1
-        let mut bank0 = Arc::new(Bank::new(&genesis_config));
-        initiate_callback(&mut bank0, &genesis_config);
-        let recyclers = VerifyRecyclers::default();
-        let opts = ProcessOptions::default();
-        process_bank_0(&bank0, &blockstore, &opts, &recyclers).unwrap();
-        let restored_slot = genesis_config.epoch_schedule.get_first_slot_in_epoch(1);
-        let mut bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), restored_slot);
-        bank1.squash();
-
-        // this is similar to snapshot deserialization
-        bank1.reset_callback_and_message_processor();
-        assert_eq!(bank1.builtin_loader_ids(), vec![]);
-
-        let bank1 = Arc::new(bank1);
-        let (bank_forks, _leader_schedule) = process_blockstore_from_root(
-            &genesis_config,
-            &blockstore,
-            bank1,
-            &opts,
-            &recyclers,
-            None,
-        )
-        .unwrap();
-        assert_eq!(bank_forks.working_bank().slot(), restored_slot);
-        assert_eq!(
-            bank_forks.working_bank().builtin_loader_ids(),
-            vec![
-                solana_sdk::bpf_loader::id(),
-                solana_sdk::bpf_loader_deprecated::id()
-            ]
-        );
-    }
-
-    #[test]
-    fn test_process_blockstore_feature_activations_into_epoch_with_activation() {
-        let GenesisConfigInfo {
-            mut genesis_config, ..
-        } = create_genesis_config(123);
-
-        genesis_config.cluster_type = solana_sdk::genesis_config::ClusterType::MainnetBeta;
-        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
-
-        let opts = ProcessOptions::default();
-        let (bank_forks, _leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, vec![], opts).unwrap();
-        let bank0 = bank_forks.working_bank();
-        assert_eq!(bank0.builtin_loader_ids(), vec![]);
-
-        let restored_slot = genesis_config.epoch_schedule.get_first_slot_in_epoch(34);
-        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), restored_slot);
-
-        assert_eq!(bank0.slot(), 0);
-        assert_eq!(bank0.builtin_loader_ids(), vec![]);
-
-        assert_eq!(bank1.slot(), restored_slot);
-        assert_eq!(
-            bank1.builtin_loader_ids(),
-            vec![solana_sdk::bpf_loader_deprecated::id()]
         );
     }
 }
