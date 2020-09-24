@@ -37,7 +37,7 @@ validator_log="$cluster_label-validator.log"
     --rpc-port 8899 \
     --rpc-bind-address localhost \
     --snapshot-interval-slots 0 \
-    "$@" &> "$validator_log"
+    "$@" &> "$validator_log" &
 
 validator_pid=$!
 tail -F "$validator_log" > cluster-sanity/log-tail 2> /dev/null &
