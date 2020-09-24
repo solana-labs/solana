@@ -159,15 +159,31 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
         reclaims: &mut SlotList<T>,
     ) -> Option<T> {
         if let Some(lock) = self.account_maps.get(pubkey) {
-            let mut list = &mut lock.1.write().unwrap();
-            // filter out other dirty entries
-            reclaims.extend(list.iter().filter(|(f, _)| *f == slot).cloned());
-            list.retain(|(f, _)| *f != slot);
+            let list = &mut lock.1.write().unwrap();
+            // filter out other dirty entries from the same slot
+            let mut same_slot_previous_updates: Vec<(usize, (Slot, T))> = list
+                .iter()
+                .enumerate()
+                .filter_map(|(i, (f, value))| {
+                    if *f == slot {
+                        Some((i, (*f, value.clone())))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            assert!(same_slot_previous_updates.len() <= 1);
 
-            lock.0.fetch_add(1, Ordering::Relaxed);
+            if let Some((list_index, previous_update)) = same_slot_previous_updates.pop() {
+                reclaims.push(previous_update);
+                list.remove(list_index);
+            } else {
+                // Only increment ref count if the account was not prevously updated in this slot
+                lock.0.fetch_add(1, Ordering::Relaxed);
+            }
             list.push((slot, account_info));
             // now, do lazy clean
-            self.purge_older_root_entries(&mut list, reclaims);
+            self.purge_older_root_entries(list, reclaims);
 
             None
         } else {

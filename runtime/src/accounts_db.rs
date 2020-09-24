@@ -2064,24 +2064,31 @@ impl AccountsDB {
                 }
                 drop(storage);
                 datapoint_debug!("clean_dead_slots", ("stores", stores.len(), i64));
-                let pubkeys: Vec<Vec<Pubkey>> = {
+                let slot_pubkeys: Vec<(Slot, Vec<Pubkey>)> = {
                     self.thread_pool_clean.install(|| {
                         stores
                             .into_par_iter()
                             .map(|store| {
                                 let accounts = store.accounts.accounts(0);
-                                accounts
-                                    .into_iter()
-                                    .map(|account| account.meta.pubkey)
-                                    .collect::<Vec<Pubkey>>()
+                                (
+                                    store.slot,
+                                    accounts
+                                        .into_iter()
+                                        .map(|account| account.meta.pubkey)
+                                        .collect::<Vec<Pubkey>>(),
+                                )
                             })
                             .collect()
                     })
                 };
                 let index = self.accounts_index.read().unwrap();
-                for pubkey_v in pubkeys {
+                let mut cleaned_slot_keys: HashSet<(Slot, Pubkey)> = HashSet::new();
+                for (slot, pubkey_v) in slot_pubkeys {
                     for pubkey in pubkey_v {
-                        index.unref_from_storage(&pubkey);
+                        if !cleaned_slot_keys.contains(&(slot, pubkey)) {
+                            index.unref_from_storage(&pubkey);
+                            cleaned_slot_keys.insert((slot, pubkey));
+                        }
                     }
                 }
                 drop(index);
@@ -3073,7 +3080,9 @@ pub mod tests {
         let pubkey2 = Pubkey::new_rand();
         let normal_account = Account::new(1, 0, &Account::default().owner);
         let zero_account = Account::new(0, 0, &Account::default().owner);
+
         //store an account
+        accounts.store(0, &[(&pubkey1, &normal_account)]);
         accounts.store(0, &[(&pubkey1, &normal_account)]);
         accounts.store(1, &[(&pubkey1, &zero_account)]);
         accounts.store(0, &[(&pubkey2, &normal_account)]);
@@ -3093,8 +3102,20 @@ pub mod tests {
 
         //both zero lamport and normal accounts are cleaned up
         assert_eq!(accounts.alive_account_count_in_store(0), 0);
+        // The only store to slot 1 was a zero lamport account, should
+        // be purged by zero-lamport cleaning logic because slot 1 is
+        // rooted
         assert_eq!(accounts.alive_account_count_in_store(1), 0);
         assert_eq!(accounts.alive_account_count_in_store(2), 1);
+
+        // Pubkey 1, a zero lamport account, should no longer exist in accounts index
+        // because it has been removed
+        assert!(accounts
+            .accounts_index
+            .read()
+            .unwrap()
+            .get(&pubkey1, None)
+            .is_none());
     }
 
     #[test]
