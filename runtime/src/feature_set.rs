@@ -44,7 +44,7 @@ pub struct FeatureSet {
 }
 
 impl FeatureSet {
-    pub fn active(&self, feature_id: &Pubkey) -> bool {
+    pub fn is_active(&self, feature_id: &Pubkey) -> bool {
         self.active.contains(feature_id)
     }
 }
