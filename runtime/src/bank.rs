@@ -8993,4 +8993,59 @@ mod tests {
         assert!(executors.borrow().executors.contains_key(&key3));
         assert!(executors.borrow().executors.contains_key(&key4));
     }
+
+    #[test]
+    fn test_compute_active_feature_set() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+
+        let test_feature = "TestFeature11111111111111111111111111111111"
+            .parse::<Pubkey>()
+            .unwrap();
+        let mut feature_set = FeatureSet::default();
+        feature_set.inactive.insert(test_feature);
+        bank.feature_set = Arc::new(feature_set.clone());
+
+        let new_activations = bank.compute_active_feature_set(true);
+        assert!(new_activations.is_empty());
+        assert!(!bank.feature_set.active(&test_feature));
+
+        // Depositing into the `test_feature` account should do nothing
+        bank.deposit(&test_feature, 42);
+        let new_activations = bank.compute_active_feature_set(true);
+        assert!(new_activations.is_empty());
+        assert!(!bank.feature_set.active(&test_feature));
+
+        // Request `test_feature` activation
+        let feature = Feature::default();
+        assert_eq!(feature.activated_at, None);
+        bank.store_account(&test_feature, &feature.create_account(42));
+
+        // Run `compute_active_feature_set` disallowing new activations
+        let new_activations = bank.compute_active_feature_set(false);
+        assert!(new_activations.is_empty());
+        assert!(!bank.feature_set.active(&test_feature));
+        let feature = Feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
+            .expect("from_account");
+        assert_eq!(feature.activated_at, None);
+
+        // Run `compute_active_feature_set` allowing new activations
+        let new_activations = bank.compute_active_feature_set(true);
+        assert_eq!(new_activations.len(), 1);
+        assert!(bank.feature_set.active(&test_feature));
+        let feature = Feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
+            .expect("from_account");
+        assert_eq!(feature.activated_at, Some(1));
+
+        // Reset the bank's feature set
+        bank.feature_set = Arc::new(feature_set);
+        assert!(!bank.feature_set.active(&test_feature));
+
+        // Running `compute_active_feature_set` will not cause new activations, but
+        // `test_feature` is now be active
+        let new_activations = bank.compute_active_feature_set(true);
+        assert!(new_activations.is_empty());
+        assert!(bank.feature_set.active(&test_feature));
+    }
 }
