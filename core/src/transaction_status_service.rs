@@ -6,7 +6,7 @@ use solana_runtime::{
     nonce_utils,
     transaction_utils::OrderedIterator,
 };
-use solana_transaction_status::{InvokedInstructions, TransactionStatusMeta};
+use solana_transaction_status::{InnerInstructions, TransactionStatusMeta};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -55,7 +55,7 @@ impl TransactionStatusService {
             iteration_order,
             statuses,
             balances,
-            invoked_instructions,
+            inner_instructions,
         } = write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))?;
 
         let slot = bank.slot();
@@ -64,13 +64,13 @@ impl TransactionStatusService {
             (status, hash_age_kind),
             pre_balances,
             post_balances,
-            invoked_instructions,
+            inner_instructions,
         ) in izip!(
             OrderedIterator::new(&transactions, iteration_order.as_deref()),
             statuses,
             balances.pre_balances,
             balances.post_balances,
-            invoked_instructions
+            inner_instructions
         ) {
             if Bank::can_commit(&status) && !transaction.signatures.is_empty() {
                 let fee_calculator = match hash_age_kind {
@@ -87,11 +87,11 @@ impl TransactionStatusService {
                 let (writable_keys, readonly_keys) =
                     transaction.message.get_account_keys_by_lock_type();
 
-                let invoked = invoked_instructions.map(|invoked_instructions| {
-                    invoked_instructions
+                let inner_instructions = inner_instructions.map(|inner_instructions| {
+                    inner_instructions
                         .into_iter()
                         .enumerate()
-                        .map(|(index, instructions)| InvokedInstructions {
+                        .map(|(index, instructions)| InnerInstructions {
                             index: index as u8,
                             instructions,
                         })
@@ -110,7 +110,7 @@ impl TransactionStatusService {
                             fee,
                             pre_balances,
                             post_balances,
-                            invoked,
+                            inner_instructions,
                         },
                     )
                     .expect("Expect database write to succeed");

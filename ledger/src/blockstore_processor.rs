@@ -16,7 +16,7 @@ use solana_metrics::{datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
     bank::{
-        Bank, InvokedInstructionsList, TransactionBalancesSet, TransactionProcessResult,
+        Bank, InnerInstructionsList, TransactionBalancesSet, TransactionProcessResult,
         TransactionResults,
     },
     bank_forks::BankForks,
@@ -103,7 +103,7 @@ fn execute_batch(
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
-    let (tx_results, balances, invoked_instructions) =
+    let (tx_results, balances, inner_instructions) =
         batch.bank().load_execute_and_commit_transactions(
             batch,
             MAX_PROCESSING_AGE,
@@ -126,7 +126,7 @@ fn execute_batch(
             batch.iteration_order_vec(),
             processing_results,
             balances,
-            invoked_instructions,
+            inner_instructions,
             sender,
         );
     }
@@ -1054,7 +1054,7 @@ pub struct TransactionStatusBatch {
     pub iteration_order: Option<Vec<usize>>,
     pub statuses: Vec<TransactionProcessResult>,
     pub balances: TransactionBalancesSet,
-    pub invoked_instructions: Vec<Option<InvokedInstructionsList>>,
+    pub inner_instructions: Vec<Option<InnerInstructionsList>>,
 }
 
 pub type TransactionStatusSender = Sender<TransactionStatusBatch>;
@@ -1065,7 +1065,7 @@ pub fn send_transaction_status_batch(
     iteration_order: Option<Vec<usize>>,
     statuses: Vec<TransactionProcessResult>,
     balances: TransactionBalancesSet,
-    invoked_instructions: Vec<Option<InvokedInstructionsList>>,
+    inner_instructions: Vec<Option<InnerInstructionsList>>,
     transaction_status_sender: TransactionStatusSender,
 ) {
     let slot = bank.slot();
@@ -1075,7 +1075,7 @@ pub fn send_transaction_status_batch(
         iteration_order,
         statuses,
         balances,
-        invoked_instructions,
+        inner_instructions,
     }) {
         trace!(
             "Slot {} transaction_status send batch failed: {:?}",
@@ -2923,7 +2923,7 @@ pub mod tests {
                 ..
             },
             _balances,
-            _invoked_instructions,
+            _inner_instructions,
         ) = batch.bank().load_execute_and_commit_transactions(
             &batch,
             MAX_PROCESSING_AGE,

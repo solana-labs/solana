@@ -92,27 +92,27 @@ impl UiPartiallyDecodedInstruction {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct InvokedInstructions {
+pub struct InnerInstructions {
     /// Transaction instruction index
     pub index: u8,
-    /// List of invoked instructions
+    /// List of inner instructions
     pub instructions: Vec<CompiledInstruction>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UiInvokedInstructions {
+pub struct UiInnerInstructions {
     /// Transaction instruction index
     pub index: u8,
-    /// List of invoked instructions
+    /// List of inner instructions
     pub instructions: Vec<UiInstruction>,
 }
 
-impl UiInvokedInstructions {
-    fn parse(invoked: InvokedInstructions, message: &Message) -> Self {
+impl UiInnerInstructions {
+    fn parse(inner_instructions: InnerInstructions, message: &Message) -> Self {
         Self {
-            index: invoked.index,
-            instructions: invoked
+            index: inner_instructions.index,
+            instructions: inner_instructions
                 .instructions
                 .iter()
                 .map(|ix| UiInstruction::parse(ix, message))
@@ -121,11 +121,11 @@ impl UiInvokedInstructions {
     }
 }
 
-impl From<InvokedInstructions> for UiInvokedInstructions {
-    fn from(invoked: InvokedInstructions) -> Self {
+impl From<InnerInstructions> for UiInnerInstructions {
+    fn from(inner_instructions: InnerInstructions) -> Self {
         Self {
-            index: invoked.index,
-            instructions: invoked
+            index: inner_instructions.index,
+            instructions: inner_instructions
                 .instructions
                 .iter()
                 .map(|ix| UiInstruction::Compiled(ix.into()))
@@ -141,7 +141,7 @@ pub struct TransactionStatusMeta {
     pub fee: u64,
     pub pre_balances: Vec<u64>,
     pub post_balances: Vec<u64>,
-    pub invoked: Option<Vec<InvokedInstructions>>,
+    pub inner_instructions: Option<Vec<InnerInstructions>>,
 }
 
 impl Default for TransactionStatusMeta {
@@ -151,7 +151,7 @@ impl Default for TransactionStatusMeta {
             fee: 0,
             pre_balances: vec![],
             post_balances: vec![],
-            invoked: None,
+            inner_instructions: None,
         }
     }
 }
@@ -165,7 +165,7 @@ pub struct UiTransactionStatusMeta {
     pub fee: u64,
     pub pre_balances: Vec<u64>,
     pub post_balances: Vec<u64>,
-    pub invoked: Option<Vec<UiInvokedInstructions>>,
+    pub inner_instructions: Option<Vec<UiInnerInstructions>>,
 }
 
 impl UiTransactionStatusMeta {
@@ -176,9 +176,9 @@ impl UiTransactionStatusMeta {
             fee: meta.fee,
             pre_balances: meta.pre_balances,
             post_balances: meta.post_balances,
-            invoked: meta.invoked.map(|ixs| {
+            inner_instructions: meta.inner_instructions.map(|ixs| {
                 ixs.into_iter()
-                    .map(|ix| UiInvokedInstructions::parse(ix, message))
+                    .map(|ix| UiInnerInstructions::parse(ix, message))
                     .collect()
             }),
         }
@@ -193,8 +193,8 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
             fee: meta.fee,
             pre_balances: meta.pre_balances,
             post_balances: meta.post_balances,
-            invoked: meta
-                .invoked
+            inner_instructions: meta
+                .inner_instructions
                 .map(|ixs| ixs.into_iter().map(|ix| ix.into()).collect()),
         }
     }

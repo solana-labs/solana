@@ -534,7 +534,7 @@ impl BankingStage {
         let (
             mut loaded_accounts,
             results,
-            invoked_instructions,
+            inner_instructions,
             mut retryable_txs,
             tx_count,
             signature_count,
@@ -580,7 +580,7 @@ impl BankingStage {
                     batch.iteration_order_vec(),
                     tx_results.processing_results,
                     TransactionBalancesSet::new(pre_balances, post_balances),
-                    invoked_instructions,
+                    inner_instructions,
                     sender,
                 );
             }

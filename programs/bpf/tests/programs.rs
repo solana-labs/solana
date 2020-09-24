@@ -98,23 +98,23 @@ fn run_program(
     Ok(vm.get_total_instruction_count())
 }
 
-fn process_transaction_and_record_invoked(
+fn process_transaction_and_record_inner(
     bank: &Bank,
     tx: Transaction,
 ) -> (Result<(), TransactionError>, Vec<Vec<CompiledInstruction>>) {
     let signature = tx.signatures.get(0).unwrap().clone();
     let txs = vec![tx];
     let tx_batch = bank.prepare_batch(&txs, None);
-    let (mut results, _, mut invoked) =
+    let (mut results, _, mut inner) =
         bank.load_execute_and_commit_transactions(&tx_batch, MAX_PROCESSING_AGE, false, true);
-    let invoked_instructions = invoked.swap_remove(0);
+    let inner_instructions = inner.swap_remove(0);
     let result = results
         .fee_collection_results
         .swap_remove(0)
         .and_then(|_| bank.get_signature_status(&signature).unwrap());
     (
         result,
-        invoked_instructions.expect("cpi recording should be enabled"),
+        inner_instructions.expect("cpi recording should be enabled"),
     )
 }
 
@@ -512,9 +512,9 @@ fn test_program_bpf_invoke() {
             message.clone(),
             bank.last_blockhash(),
         );
-        let (result, invoked_instructions) = process_transaction_and_record_invoked(&bank, tx);
+        let (result, inner_instructions) = process_transaction_and_record_inner(&bank, tx);
         assert!(result.is_ok());
-        let invoked_programs: Vec<Pubkey> = invoked_instructions[0]
+        let invoked_programs: Vec<Pubkey> = inner_instructions[0]
             .iter()
             .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
             .collect();
@@ -552,8 +552,8 @@ fn test_program_bpf_invoke() {
             bank.last_blockhash(),
         );
 
-        let (result, invoked_instructions) = process_transaction_and_record_invoked(&bank, tx);
-        let invoked_programs: Vec<Pubkey> = invoked_instructions[0]
+        let (result, inner_instructions) = process_transaction_and_record_inner(&bank, tx);
+        let invoked_programs: Vec<Pubkey> = inner_instructions[0]
             .iter()
             .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
             .collect();
@@ -579,8 +579,8 @@ fn test_program_bpf_invoke() {
             message.clone(),
             bank.last_blockhash(),
         );
-        let (result, invoked_instructions) = process_transaction_and_record_invoked(&bank, tx);
-        let invoked_programs: Vec<Pubkey> = invoked_instructions[0]
+        let (result, inner_instructions) = process_transaction_and_record_inner(&bank, tx);
+        let invoked_programs: Vec<Pubkey> = inner_instructions[0]
             .iter()
             .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
             .collect();

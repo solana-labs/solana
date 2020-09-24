@@ -302,10 +302,10 @@ impl TransactionBalancesSet {
 pub type TransactionBalances = Vec<Vec<u64>>;
 
 /// An ordered list of instructions that were invoked during a transaction instruction
-pub type InvokedInstructions = Vec<CompiledInstruction>;
+pub type InnerInstructions = Vec<CompiledInstruction>;
 
 /// A list of instructions that were invoked during each instruction of a transaction
-pub type InvokedInstructionsList = Vec<InvokedInstructions>;
+pub type InnerInstructionsList = Vec<InnerInstructions>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum HashAgeKind {
@@ -1543,7 +1543,7 @@ impl Bank {
         let (
             _loaded_accounts,
             executed,
-            _invoked_instructions,
+            _inner_instructions,
             _retryable_transactions,
             _transaction_count,
             _signature_count,
@@ -1888,11 +1888,11 @@ impl Bank {
     }
 
     fn compile_recorded_instructions(
-        invoked_instructions: &mut Vec<Option<InvokedInstructionsList>>,
+        inner_instructions: &mut Vec<Option<InnerInstructionsList>>,
         instruction_recorders: Option<Vec<InstructionRecorder>>,
         message: &Message,
     ) {
-        invoked_instructions.push(instruction_recorders.map(|instruction_recorders| {
+        inner_instructions.push(instruction_recorders.map(|instruction_recorders| {
             instruction_recorders
                 .into_iter()
                 .map(|r| r.compile_instructions(message))
@@ -1953,7 +1953,7 @@ impl Bank {
     ) -> (
         Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)>,
         Vec<TransactionProcessResult>,
-        Vec<Option<InvokedInstructionsList>>,
+        Vec<Option<InnerInstructionsList>>,
         Vec<usize>,
         u64,
         u64,
@@ -1994,7 +1994,7 @@ impl Bank {
 
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
-        let mut invoked_instructions: Vec<Option<InvokedInstructionsList>> =
+        let mut inner_instructions: Vec<Option<InnerInstructionsList>> =
             Vec::with_capacity(txs.len());
         let executed: Vec<TransactionProcessResult> = loaded_accounts
             .iter_mut()
@@ -2027,7 +2027,7 @@ impl Bank {
                     );
 
                     Self::compile_recorded_instructions(
-                        &mut invoked_instructions,
+                        &mut inner_instructions,
                         instruction_recorders,
                         &tx.message,
                     );
@@ -2089,7 +2089,7 @@ impl Bank {
         (
             loaded_accounts,
             executed,
-            invoked_instructions,
+            inner_instructions,
             retryable_txs,
             tx_count,
             signature_count,
@@ -2720,14 +2720,14 @@ impl Bank {
     ) -> (
         TransactionResults,
         TransactionBalancesSet,
-        Vec<Option<InvokedInstructionsList>>,
+        Vec<Option<InnerInstructionsList>>,
     ) {
         let pre_balances = if collect_balances {
             self.collect_balances(batch)
         } else {
             vec![]
         };
-        let (mut loaded_accounts, executed, invoked_instructions, _, tx_count, signature_count) =
+        let (mut loaded_accounts, executed, inner_instructions, _, tx_count, signature_count) =
             self.load_and_execute_transactions(batch, max_age, None, enable_cpi_recording);
 
         let results = self.commit_transactions(
@@ -2746,7 +2746,7 @@ impl Bank {
         (
             results,
             TransactionBalancesSet::new(pre_balances, post_balances),
-            invoked_instructions,
+            inner_instructions,
         )
     }
 
@@ -7867,10 +7867,10 @@ mod tests {
         let txs = vec![tx0, tx1, tx2];
 
         let lock_result = bank0.prepare_batch(&txs, None);
-        let (transaction_results, transaction_balances_set, invoked_instructions) = bank0
+        let (transaction_results, transaction_balances_set, inner_instructions) = bank0
             .load_execute_and_commit_transactions(&lock_result, MAX_PROCESSING_AGE, true, false);
 
-        assert!(invoked_instructions[0].iter().all(|ix| ix.is_empty()));
+        assert!(inner_instructions[0].iter().all(|ix| ix.is_empty()));
         assert_eq!(transaction_balances_set.pre_balances.len(), 3);
         assert_eq!(transaction_balances_set.post_balances.len(), 3);
 

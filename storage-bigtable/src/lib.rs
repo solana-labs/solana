@@ -9,7 +9,7 @@ use solana_sdk::{
 };
 use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature,
-    InvokedInstructions, Rewards, TransactionStatus, TransactionStatusMeta,
+    InnerInstructions, Rewards, TransactionStatus, TransactionStatusMeta,
     TransactionWithStatusMeta,
 };
 use std::collections::HashMap;
@@ -162,7 +162,7 @@ struct StoredConfirmedBlockTransactionStatusMeta {
     fee: u64,
     pre_balances: Vec<u64>,
     post_balances: Vec<u64>,
-    invoked: Option<Vec<InvokedInstructions>>,
+    inner_instructions: Option<Vec<InnerInstructions>>,
 }
 
 impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
@@ -172,7 +172,7 @@ impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
-            invoked,
+            inner_instructions,
         } = value;
         let status = match &err {
             None => Ok(()),
@@ -183,7 +183,7 @@ impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
-            invoked,
+            inner_instructions,
         }
     }
 }
@@ -195,7 +195,7 @@ impl From<TransactionStatusMeta> for StoredConfirmedBlockTransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
-            invoked,
+            inner_instructions,
             ..
         } = value;
         Self {
@@ -203,7 +203,7 @@ impl From<TransactionStatusMeta> for StoredConfirmedBlockTransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
-            invoked,
+            inner_instructions,
         }
     }
 }
