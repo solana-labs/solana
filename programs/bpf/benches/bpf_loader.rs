@@ -286,8 +286,9 @@ pub struct MockComputeMeter {
 }
 impl ComputeMeter for MockComputeMeter {
     fn consume(&mut self, amount: u64) -> Result<(), InstructionError> {
+        let exceeded = self.remaining < amount;
         self.remaining = self.remaining.saturating_sub(amount);
-        if self.remaining == 0 {
+        if exceeded {
             return Err(InstructionError::ComputationalBudgetExceeded);
         }
         Ok(())
