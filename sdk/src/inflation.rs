@@ -19,7 +19,7 @@ pub struct Inflation {
     pub foundation_term: f64,
 
     /// DEPRECATED, this field is currently unused
-    pub storage: f64,
+    __unused: f64,
 }
 
 const DEFAULT_INITIAL: f64 = 0.15;
@@ -27,7 +27,6 @@ const DEFAULT_TERMINAL: f64 = 0.015;
 const DEFAULT_TAPER: f64 = 0.15;
 const DEFAULT_FOUNDATION: f64 = 0.05;
 const DEFAULT_FOUNDATION_TERM: f64 = 7.0;
-const DEFAULT_STORAGE: f64 = 0.0;
 
 impl Default for Inflation {
     fn default() -> Self {
@@ -37,7 +36,7 @@ impl Default for Inflation {
             taper: DEFAULT_TAPER,
             foundation: DEFAULT_FOUNDATION,
             foundation_term: DEFAULT_FOUNDATION_TERM,
-            storage: DEFAULT_STORAGE,
+            __unused: 0.0,
         }
     }
 }
@@ -50,9 +49,22 @@ impl Inflation {
             taper: 0.0,
             foundation: 0.0,
             foundation_term: 0.0,
-            storage: 0.0,
+            __unused: 0.0,
         }
     }
+
+    // fixed inflation rate at `validator` percentage for staking rewards, and none for foundation
+    pub fn new_fixed(validator: f64) -> Self {
+        Self {
+            initial: validator,
+            terminal: validator,
+            taper: 1.0,
+            foundation: 0.0,
+            foundation_term: 0.0,
+            __unused: 0.0,
+        }
+    }
+
     /// inflation rate at year
     pub fn total(&self, year: f64) -> f64 {
         assert!(year >= 0.0);
@@ -67,12 +79,7 @@ impl Inflation {
 
     /// portion of total that goes to validators
     pub fn validator(&self, year: f64) -> f64 {
-        self.total(year) - self.storage(year) - self.foundation(year)
-    }
-
-    /// DEPRECATED
-    fn storage(&self, year: f64) -> f64 {
-        self.total(year) * self.storage
+        self.total(year) - self.foundation(year)
     }
 
     /// portion of total that goes to foundation
@@ -100,12 +107,21 @@ mod tests {
             let total = inflation.total(*year);
             assert_eq!(
                 total,
-                inflation.validator(*year) + inflation.storage(*year) + inflation.foundation(*year)
+                inflation.validator(*year) + inflation.foundation(*year)
             );
             assert!(total < last);
             assert!(total >= inflation.terminal);
             last = total;
         }
         assert_eq!(last, inflation.terminal);
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn test_inflation_fixed() {
+        let inflation = Inflation::new_fixed(0.001);
+        for year in &[0.1, 0.5, 1.0, DEFAULT_FOUNDATION_TERM, 100.0] {
+            assert_eq!(inflation.total(*year), 0.001);
+        }
     }
 }

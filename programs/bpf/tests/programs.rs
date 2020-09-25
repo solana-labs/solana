@@ -27,7 +27,7 @@ use solana_sdk::{
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
-    sysvar::{clock, fees, rent, rewards, slot_hashes, stake_history},
+    sysvar::{clock, fees, rent, slot_hashes, stake_history},
     transaction::{Transaction, TransactionError},
 };
 use std::{cell::RefCell, env, fs::File, io::Read, path::PathBuf, rc::Rc, sync::Arc};
@@ -182,7 +182,6 @@ fn test_program_bpf_sanity() {
             AccountMeta::new(Keypair::new().pubkey(), false),
             AccountMeta::new(clock::id(), false),
             AccountMeta::new(fees::id(), false),
-            AccountMeta::new(rewards::id(), false),
             AccountMeta::new(slot_hashes::id(), false),
             AccountMeta::new(stake_history::id(), false),
             AccountMeta::new(rent::id(), false),

@@ -1097,13 +1097,18 @@ impl Bank {
 
         let validator_point_value = self.pay_validator_rewards(validator_rewards);
 
-        // this sysvar could be retired...
-        self.update_sysvar_account(&sysvar::rewards::id(), |account| {
-            sysvar::rewards::create_account(
-                self.inherit_sysvar_account_balance(account),
-                validator_point_value,
-            )
-        });
+        if !self
+            .feature_set
+            .is_active(&feature_set::pico_inflation::id())
+        {
+            // this sysvar can be retired once `pico_inflation` is enabled on all clusters
+            self.update_sysvar_account(&sysvar::rewards::id(), |account| {
+                sysvar::rewards::create_account(
+                    self.inherit_sysvar_account_balance(account),
+                    validator_point_value,
+                )
+            });
+        }
 
         let validator_rewards_paid =
             self.stakes.read().unwrap().vote_balance_and_staked() - vote_balance_and_staked;
@@ -3555,6 +3560,13 @@ impl Bank {
     // The entire code path herein must be idempotent
     fn apply_feature_activations(&mut self, init_finish_or_warp: bool, initiate_callback: bool) {
         let new_feature_activations = self.compute_active_feature_set(!init_finish_or_warp);
+
+        if new_feature_activations.contains(&feature_set::pico_inflation::id()) {
+            *self.inflation.write().unwrap() = Inflation::new_fixed(0.0001); // 0.01% inflation
+            self.fee_rate_governor.burn_percent = 50; // 50% fee burn
+            self.rent_collector.rent.burn_percent = 50; // 50% rent burn
+        }
+
         self.ensure_builtins(init_finish_or_warp, &new_feature_activations);
         self.reinvoke_entered_epoch_callback(initiate_callback);
         self.recheck_cross_program_support();
