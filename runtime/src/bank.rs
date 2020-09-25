@@ -2009,11 +2009,15 @@ impl Bank {
                     let (account_refcells, loader_refcells) =
                         Self::accounts_to_refcells(accounts, loaders);
 
-                    let mut instruction_recorders = if enable_cpi_recording {
-                        Some(Vec::new())
+                    let instruction_recorders = if enable_cpi_recording {
+                        Some(vec![
+                            InstructionRecorder::default();
+                            tx.message.instructions.len()
+                        ])
                     } else {
                         None
                     };
+
                     let process_result = self.message_processor.process_message(
                         tx.message(),
                         &loader_refcells,
@@ -2021,7 +2025,7 @@ impl Bank {
                         &self.rent_collector,
                         log_collector.clone(),
                         executors.clone(),
-                        instruction_recorders.as_mut(),
+                        instruction_recorders.as_deref(),
                         self.cluster_type(),
                         self.epoch(),
                     );
