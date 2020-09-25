@@ -128,7 +128,7 @@ pub fn register_syscalls<'a>(
         let invoke_context = Rc::new(RefCell::new(invoke_context));
         vm.register_syscall_with_context_ex(
             "sol_invoke_signed_c",
-            Box::new(SyscallProcessSolInstructionC {
+            Box::new(SyscallInvokeSignedC {
                 callers_keyed_accounts,
                 invoke_context: invoke_context.clone(),
                 loader_id,
@@ -136,7 +136,7 @@ pub fn register_syscalls<'a>(
         )?;
         vm.register_syscall_with_context_ex(
             "sol_invoke_signed_rust",
-            Box::new(SyscallProcessInstructionRust {
+            Box::new(SyscallInvokeSignedRust {
                 callers_keyed_accounts,
                 invoke_context: invoke_context.clone(),
                 loader_id,
@@ -149,7 +149,7 @@ pub fn register_syscalls<'a>(
     let heap_region = MemoryRegion::new_from_slice(&heap, MM_HEAP_START);
     vm.register_syscall_with_context_ex(
         "sol_alloc_free_",
-        Box::new(SyscallSolAllocFree {
+        Box::new(SyscallAllocFree {
             aligned: *loader_id != bpf_loader_deprecated::id(),
             allocator: BPFAllocator::new(heap, MM_HEAP_START),
         }),
@@ -375,11 +375,11 @@ impl SyscallObject<BPFError> for SyscallLogU64 {
 /// memory chunk is given to the allocator during allocator creation and
 /// information about that memory (start address and size) is passed
 /// to the VM to use for enforcement.
-pub struct SyscallSolAllocFree {
+pub struct SyscallAllocFree {
     aligned: bool,
     allocator: BPFAllocator,
 }
-impl SyscallObject<BPFError> for SyscallSolAllocFree {
+impl SyscallObject<BPFError> for SyscallAllocFree {
     fn call(
         &mut self,
         size: u64,
@@ -470,7 +470,7 @@ struct AccountReferences<'a> {
 type TranslatedAccounts<'a> = (Vec<Rc<RefCell<Account>>>, Vec<AccountReferences<'a>>);
 
 /// Implemented by language specific data structure translators
-trait SyscallProcessInstruction<'a> {
+trait SyscallInvokeSigned<'a> {
     fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BPFError>>;
     fn get_callers_keyed_accounts(&self) -> &'a [KeyedAccount<'a>];
     fn translate_instruction(
@@ -496,12 +496,12 @@ trait SyscallProcessInstruction<'a> {
 }
 
 /// Cross-program invocation called from Rust
-pub struct SyscallProcessInstructionRust<'a> {
+pub struct SyscallInvokeSignedRust<'a> {
     callers_keyed_accounts: &'a [KeyedAccount<'a>],
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
     loader_id: &'a Pubkey,
 }
-impl<'a> SyscallProcessInstruction<'a> for SyscallProcessInstructionRust<'a> {
+impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
     fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BPFError>> {
         self.invoke_context
             .try_borrow_mut()
@@ -651,7 +651,7 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessInstructionRust<'a> {
         let mut signers = Vec::new();
         if signers_seeds_len > 0 {
             let signers_seeds = translate_slice!(
-                &[&str],
+                &[&[u8]],
                 signers_seeds_addr,
                 signers_seeds_len,
                 ro_regions,
@@ -659,7 +659,7 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessInstructionRust<'a> {
             )?;
             for signer_seeds in signers_seeds.iter() {
                 let untranslated_seeds = translate_slice!(
-                    &str,
+                    &[u8],
                     signer_seeds.as_ptr(),
                     signer_seeds.len(),
                     ro_regions,
@@ -687,7 +687,7 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessInstructionRust<'a> {
         }
     }
 }
-impl<'a> SyscallObject<BPFError> for SyscallProcessInstructionRust<'a> {
+impl<'a> SyscallObject<BPFError> for SyscallInvokeSignedRust<'a> {
     fn call(
         &mut self,
         instruction_addr: u64,
@@ -758,12 +758,12 @@ struct SolSignerSeedsC {
 }
 
 /// Cross-program invocation called from C
-pub struct SyscallProcessSolInstructionC<'a> {
+pub struct SyscallInvokeSignedC<'a> {
     callers_keyed_accounts: &'a [KeyedAccount<'a>],
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
     loader_id: &'a Pubkey,
 }
-impl<'a> SyscallProcessInstruction<'a> for SyscallProcessSolInstructionC<'a> {
+impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
     fn get_context_mut(&self) -> Result<RefMut<&'a mut dyn InvokeContext>, EbpfError<BPFError>> {
         self.invoke_context
             .try_borrow_mut()
@@ -929,7 +929,7 @@ impl<'a> SyscallProcessInstruction<'a> for SyscallProcessSolInstructionC<'a> {
         }
     }
 }
-impl<'a> SyscallObject<BPFError> for SyscallProcessSolInstructionC<'a> {
+impl<'a> SyscallObject<BPFError> for SyscallInvokeSignedC<'a> {
     fn call(
         &mut self,
         instruction_addr: u64,
@@ -954,7 +954,7 @@ impl<'a> SyscallObject<BPFError> for SyscallProcessSolInstructionC<'a> {
 }
 
 fn verify_instruction<'a>(
-    syscall: &dyn SyscallProcessInstruction<'a>,
+    syscall: &dyn SyscallInvokeSigned<'a>,
     instruction: &Instruction,
     signers: &[Pubkey],
 ) -> Result<(), EbpfError<BPFError>> {
@@ -993,7 +993,7 @@ fn verify_instruction<'a>(
 
 /// Call process instruction, common to both Rust and C
 fn call<'a>(
-    syscall: &mut dyn SyscallProcessInstruction<'a>,
+    syscall: &mut dyn SyscallInvokeSigned<'a>,
     instruction_addr: u64,
     account_infos_addr: u64,
     account_infos_len: u64,
@@ -1094,6 +1094,15 @@ fn call<'a>(
 mod tests {
     use super::*;
     use crate::tests::{MockComputeMeter, MockLogger};
+
+    macro_rules! assert_access_violation {
+        ($result:expr, $va:expr, $len:expr) => {
+            match $result {
+                Err(EbpfError::AccessViolation(_, _, va, len, _)) if $va == va && len == len => (),
+                _ => panic!(),
+            }
+        };
+    }
 
     #[test]
     fn test_translate() {
@@ -1260,7 +1269,7 @@ mod tests {
         let addr = string.as_ptr() as *const _ as u64;
 
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
-            Rc::new(RefCell::new(MockComputeMeter { remaining: 3 }));
+            Rc::new(RefCell::new(MockComputeMeter { remaining: 4 }));
         let log = Rc::new(RefCell::new(vec![]));
         let logger: Rc<RefCell<dyn Logger>> =
             Rc::new(RefCell::new(MockLogger { log: log.clone() }));
@@ -1280,15 +1289,23 @@ mod tests {
         syscall_sol_log
             .call(100, string.len() as u64, 0, 0, 0, ro_regions, rw_regions)
             .unwrap();
+        assert_eq!(log.borrow().len(), 1);
+        assert_eq!(log.borrow()[0], "Program log: Gaggablaghblagh!");
 
-        assert_eq!(
-            Err(EbpfError::AccessViolation(
-                "programs/bpf_loader/src/syscalls.rs".to_string(),
-                248,
-                100,
-                32,
-                "  regions: \n0x64-0x73".to_string()
-            )),
+        assert_access_violation!(
+            syscall_sol_log.call(
+                101, // AccessViolation
+                string.len() as u64,
+                0,
+                0,
+                0,
+                ro_regions,
+                rw_regions,
+            ),
+            101,
+            string.len() as u64
+        );
+        assert_access_violation!(
             syscall_sol_log.call(
                 100,
                 string.len() as u64 * 2, // AccessViolation
@@ -1297,26 +1314,17 @@ mod tests {
                 0,
                 ro_regions,
                 rw_regions,
-            )
+            ),
+            100,
+            string.len() as u64 * 2
         );
 
         assert_eq!(
             Err(EbpfError::UserError(BPFError::SyscallError(
                 SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
             ))),
-            syscall_sol_log.call(
-                100,
-                string.len() as u64 * 2, // AccessViolation
-                0,
-                0,
-                0,
-                ro_regions,
-                rw_regions,
-            )
+            syscall_sol_log.call(100, string.len() as u64, 0, 0, 0, ro_regions, rw_regions)
         );
-
-        assert_eq!(log.borrow().len(), 1);
-        assert_eq!(log.borrow()[0], "Program log: Gaggablaghblagh!");
     }
 
     #[test]
@@ -1351,7 +1359,7 @@ mod tests {
             let heap = vec![0_u8; 100];
             let ro_regions = &[MemoryRegion::default()];
             let rw_regions = &[MemoryRegion::new_from_slice(&heap, MM_HEAP_START)];
-            let mut syscall = SyscallSolAllocFree {
+            let mut syscall = SyscallAllocFree {
                 aligned: true,
                 allocator: BPFAllocator::new(heap, MM_HEAP_START),
             };
@@ -1379,7 +1387,7 @@ mod tests {
             let heap = vec![0_u8; 100];
             let ro_regions = &[MemoryRegion::default()];
             let rw_regions = &[MemoryRegion::new_from_slice(&heap, MM_HEAP_START)];
-            let mut syscall = SyscallSolAllocFree {
+            let mut syscall = SyscallAllocFree {
                 aligned: false,
                 allocator: BPFAllocator::new(heap, MM_HEAP_START),
             };
@@ -1401,7 +1409,7 @@ mod tests {
             let heap = vec![0_u8; 100];
             let ro_regions = &[MemoryRegion::default()];
             let rw_regions = &[MemoryRegion::new_from_slice(&heap, MM_HEAP_START)];
-            let mut syscall = SyscallSolAllocFree {
+            let mut syscall = SyscallAllocFree {
                 aligned: true,
                 allocator: BPFAllocator::new(heap, MM_HEAP_START),
             };
@@ -1424,7 +1432,7 @@ mod tests {
             let heap = vec![0_u8; 100];
             let ro_regions = &[MemoryRegion::default()];
             let rw_regions = &[MemoryRegion::new_from_slice(&heap, MM_HEAP_START)];
-            let mut syscall = SyscallSolAllocFree {
+            let mut syscall = SyscallAllocFree {
                 aligned: true,
                 allocator: BPFAllocator::new(heap, MM_HEAP_START),
             };
