@@ -57,7 +57,7 @@ _ cargo +"$rust_nightly" clippy \
   -Zunstable-options --workspace --all-targets \
   -- --deny=warnings --allow=clippy::stable_sort_primitive
 
-_ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit --ignore RUSTSEC-2020-0002 --ignore RUSTSEC-2020-0008
+_ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit --ignore RUSTSEC-2020-0002 --ignore RUSTSEC-2020-0008 --ignore RUSTSEC-2020-0043
 
 {
   cd programs/bpf
