@@ -2210,6 +2210,10 @@ impl RpcSol for RpcSolImpl {
                 return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
             }
 
+            if let Err(e) = transaction.verify_precompiles() {
+                return Err(RpcCustomError::TransactionPrecompileVerificationFailure(e).into());
+            }
+
             if meta.health.check() != RpcHealthStatus::Ok {
                 return Err(RpcCustomError::RpcNodeUnhealthy.into());
             }
