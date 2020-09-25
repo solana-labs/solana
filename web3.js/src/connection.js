@@ -48,9 +48,11 @@ type Context = {
  *
  * @typedef {Object} SendOptions
  * @property {boolean | undefined} skipPreflight disable transaction verification step
+ * @property {Commitment | undefined} preflightCommitment preflight commitment level
  */
 export type SendOptions = {
   skipPreflight?: boolean,
+  preflightCommitment?: Commitment,
 };
 
 /**
@@ -59,10 +61,12 @@ export type SendOptions = {
  * @typedef {Object} ConfirmOptions
  * @property {boolean | undefined} skipPreflight disable transaction verification step
  * @property {Commitment | undefined} commitment desired commitment level
+ * @property {Commitment | undefined} preflightCommitment preflight commitment level
  */
 export type ConfirmOptions = {
   skipPreflight?: boolean,
   commitment?: Commitment,
+  preflightCommitment?: Commitment,
 };
 
 /**
@@ -2755,7 +2759,20 @@ export class Connection {
   ): Promise<TransactionSignature> {
     const args = [encodedTransaction];
     const skipPreflight = options && options.skipPreflight;
-    if (skipPreflight) args.push({skipPreflight});
+    const preflightCommitment = options && options.preflightCommitment;
+
+    if (skipPreflight && preflightCommitment) {
+      throw new Error(
+        'cannot set preflightCommitment when skipPreflight is enabled',
+      );
+    }
+
+    if (skipPreflight) {
+      args.push({skipPreflight});
+    } else if (preflightCommitment) {
+      args.push({preflightCommitment});
+    }
+
     const unsafeRes = await this._rpcRequest('sendTransaction', args);
     const res = SendTransactionRpcResult(unsafeRes);
     if (res.error) {

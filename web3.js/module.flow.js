@@ -62,11 +62,13 @@ declare module '@solana/web3.js' {
 
   declare export type SendOptions = {
     skipPreflight: ?boolean,
+    preflightCommitment: ?Commitment,
   };
 
   declare export type ConfirmOptions = {
     commitment: ?Commitment,
     skipPreflight: ?boolean,
+    preflightCommitment: ?Commitment,
   };
 
   declare export type ConfirmedSignaturesForAddress2Options = {
