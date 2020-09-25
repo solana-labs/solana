@@ -136,7 +136,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT MODE(last) FROM ( SELECT last(\"leader\") FROM \"$testnet\".\"autogen\".\"replay_stage-new_leader\" WHERE $timeFilter GROUP BY host_id )\n",
+          "query": "SELECT last(\"leader\") FROM \"$testnet\".\"autogen\".\"replay_stage-new_leader\" WHERE $timeFilter ORDER BY \"time\" desc \n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table",
