@@ -1022,14 +1022,21 @@ impl Bank {
         // period: time that has passed as a fraction of a year, basically the length of
         //  an epoch as a fraction of a year
         //  calculated as: slots_elapsed / (slots / year)
-        let period_in_year =
+        let epoch_duration_in_years =
             self.epoch_schedule.get_slots_in_epoch(prev_epoch) as f64 / self.slots_per_year;
 
-        let validator_rewards = {
+        let (validator_rate, foundation_rate) = {
             let inflation = self.inflation.read().unwrap();
+            error!("rewards: {:?}", inflation);
+            (
+                (*inflation).validator(slot_in_year),
+                (*inflation).foundation(slot_in_year),
+            )
+        };
 
-            (*inflation).validator(slot_in_year) * self.capitalization() as f64 * period_in_year
-        } as u64;
+        let capitalization = self.capitalization();
+        let validator_rewards =
+            (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
 
         let vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
 
@@ -1057,6 +1064,18 @@ impl Bank {
 
         self.capitalization
             .fetch_add(validator_rewards_paid, Relaxed);
+
+        datapoint_warn!(
+            "epoch_rewards",
+            ("slot", self.slot, i64),
+            ("epoch", self.epoch, i64),
+            ("validator_rate", validator_rate, f64),
+            ("foundation_rate", foundation_rate, f64),
+            ("epoch_duration_in_years", epoch_duration_in_years, f64),
+            ("validator_rewards", validator_rewards_paid, i64),
+            ("pre_capitalization", capitalization, i64),
+            ("post_capitalization", self.capitalization(), i64)
+        );
     }
 
     /// map stake delegations into resolved (pubkey, account) pairs
@@ -1090,7 +1109,7 @@ impl Bank {
     }
 
     /// iterate over all stakes, redeem vote credits for each stake we can
-    ///   successfully load and parse, return total payout
+    ///   successfully load and parse, return the lamport value of one point
     fn pay_validator_rewards(&mut self, rewards: u64) -> f64 {
         let stake_history = self.stakes.read().unwrap().history().clone();
 
