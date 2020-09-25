@@ -90,7 +90,7 @@ curl \
   http://localhost:8899
 
 ps auxf
-(set -x && sleep 3 && sudo kill "$sys_tuner_pid" && kill "$tail_pid" && sudo pkill sys-tuner) &
+(set -x && sleep 3 && kill "$tail_pid" && sudo pkill -f solana-sys-tuner) &
 kill_pid=$!
 
 wait "$validator_pid" "$sys_tuner_pid" "$tail_pid" "$kill_pid"
