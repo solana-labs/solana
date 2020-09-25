@@ -20,6 +20,7 @@ import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
 import type {Account} from './account';
 import type {TransactionSignature} from './transaction';
+import {AgentManager} from './agent-manager';
 
 export const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
 
@@ -502,10 +503,13 @@ type ConfirmedBlock = {
 };
 
 function createRpcRequest(url): RpcRequest {
+  const agentManager = new AgentManager();
   const server = jayson(async (request, callback) => {
+    const agent = agentManager.requestStart();
     const options = {
       method: 'POST',
       body: request,
+      agent,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -539,6 +543,8 @@ function createRpcRequest(url): RpcRequest {
       }
     } catch (err) {
       callback(err);
+    } finally {
+      agentManager.requestEnd();
     }
   });
 
