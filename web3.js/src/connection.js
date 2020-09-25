@@ -506,7 +506,7 @@ type ConfirmedBlock = {
 };
 
 /**
- * A PerfSample (performance sample)
+ * A performance sample
  *
  * @typedef {Object} PerfSample
  * @property {number} slot Slot number of sample
@@ -2361,9 +2361,9 @@ export class Connection {
    * @return {Promise<Array<PerfSample>>}
    */
   async getRecentPerformanceSamples(
-    limit: ?Number,
+    limit: ?number,
   ): Promise<Array<PerfSample>> {
-    const args = this._buildArgs([limit]);
+    const args = this._buildArgs(limit ? [limit] : []);
     const unsafeRes = await this._rpcRequest(
       'getRecentPerformanceSamples',
       args,
