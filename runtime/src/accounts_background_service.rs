@@ -41,7 +41,7 @@ pub struct SnapshotRequestHandler {
 
 impl SnapshotRequestHandler {
     // Returns the latest requested snapshot slot, if one exists
-    pub fn handle_snapshot_requests(&self) -> Option<Arc<Bank>> {
+    pub fn handle_snapshot_requests(&self) -> Option<u64> {
         self.snapshot_request_receiver
             .try_iter()
             .last()
@@ -99,7 +99,7 @@ impl SnapshotRequestHandler {
                         i64
                     )
                 );
-                snapshot_root_bank
+                snapshot_root_bank.block_height()
             })
     }
 }
@@ -141,15 +141,14 @@ impl AccountsBackgroundService {
                 // but did not see the snapshot for `N`. However, this is impossible because BankForks.set_root()
                 // will always flush the snapshot request for `N` to the snapshot request channel
                 // before setting a root `M > N`.
-                let snapshot_root_bank =
+                let snapshot_block_height =
                     snapshot_request_handler
                         .as_ref()
                         .and_then(|snapshot_request_handler| {
                             snapshot_request_handler.handle_snapshot_requests()
                         });
 
-                if let Some(snapshot_root_bank) = snapshot_root_bank {
-                    let snapshot_block_height = snapshot_root_bank.block_height();
+                if let Some(snapshot_block_height) = snapshot_block_height {
                     // Safe, see proof above
                     assert!(last_cleaned_block_height <= snapshot_block_height);
                     last_cleaned_block_height = snapshot_block_height;
