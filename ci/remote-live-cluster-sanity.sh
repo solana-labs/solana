@@ -26,8 +26,8 @@ shift
 
 echo "--- Starting validator $cluster_label"
 
-validator_log="$cluster_label-validator.log"
-sys_tuner_log="$cluster_label-sys-tuner.log"
+validator_log="cluster-sanity/validator.log"
+sys_tuner_log="cluster-sanity/sys-tuner.log"
 metrics_host="https://metrics.solana.com:8086"
 export SOLANA_METRICS_CONFIG="host=$metrics_host,db=testnet-live-cluster,u=scratch_writer,p=topsecret"
 
