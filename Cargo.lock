@@ -3691,10 +3691,10 @@ dependencies = [
  "serial_test_derive",
  "solana-account-decoder",
  "solana-banks-server",
+ "solana-bpf-loader-program",
  "solana-clap-utils",
  "solana-client",
  "solana-faucet",
- "solana-genesis-programs",
  "solana-ledger",
  "solana-logger 1.4.0",
  "solana-measure",
@@ -3862,29 +3862,18 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "solana-budget-program",
  "solana-clap-utils",
- "solana-genesis-programs",
+ "solana-exchange-program",
  "solana-ledger",
  "solana-logger 1.4.0",
  "solana-runtime",
  "solana-sdk 1.4.0",
  "solana-stake-program",
  "solana-version",
+ "solana-vest-program",
  "solana-vote-program",
  "tempfile",
-]
-
-[[package]]
-name = "solana-genesis-programs"
-version = "1.4.0"
-dependencies = [
- "log 0.4.8",
- "solana-bpf-loader-program",
- "solana-budget-program",
- "solana-exchange-program",
- "solana-runtime",
- "solana-sdk 1.4.0",
- "solana-vest-program",
 ]
 
 [[package]]
@@ -3980,7 +3969,6 @@ dependencies = [
  "serde_bytes",
  "sha2",
  "solana-budget-program",
- "solana-genesis-programs",
  "solana-logger 1.4.0",
  "solana-measure",
  "solana-merkle-tree",
@@ -4048,7 +4036,6 @@ dependencies = [
  "solana-download-utils",
  "solana-exchange-program",
  "solana-faucet",
- "solana-genesis-programs",
  "solana-ledger",
  "solana-logger 1.4.0",
  "solana-rayon-threadlimit",
