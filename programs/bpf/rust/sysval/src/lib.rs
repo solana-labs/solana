@@ -11,7 +11,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     rent,
     sysvar::{
-        self, clock::Clock, fees::Fees, rent::Rent, rewards::Rewards, slot_hashes::SlotHashes,
+        self, clock::Clock, fees::Fees, rent::Rent, slot_hashes::SlotHashes,
         stake_history::StakeHistory, Sysvar,
     },
 };
@@ -35,24 +35,19 @@ fn process_instruction(
     let fee_calculator = fees.fee_calculator;
     assert_eq!(fee_calculator.lamports_per_signature, 0);
 
-    // Rewards
-    info!("Rewards identifier:");
-    sysvar::rewards::id().log();
-    let _rewards = Rewards::from_account_info(&accounts[4]).expect("rewards");
-
     // Slot Hashes
     info!("SlotHashes identifier:");
     sysvar::slot_hashes::id().log();
-    let slot_hashes = SlotHashes::from_account_info(&accounts[5]).expect("slot_hashes");
+    let slot_hashes = SlotHashes::from_account_info(&accounts[4]).expect("slot_hashes");
     assert!(slot_hashes.len() >= 1);
 
     // Stake History
     info!("StakeHistory identifier:");
     sysvar::stake_history::id().log();
-    let stake_history = StakeHistory::from_account_info(&accounts[6]).expect("stake_history");
+    let stake_history = StakeHistory::from_account_info(&accounts[5]).expect("stake_history");
     assert!(stake_history.len() >= 1);
 
-    let rent = Rent::from_account_info(&accounts[7]).unwrap();
+    let rent = Rent::from_account_info(&accounts[6]).unwrap();
     assert_eq!(
         rent.due(
             rent::DEFAULT_LAMPORTS_PER_BYTE_YEAR * rent::DEFAULT_EXEMPTION_THRESHOLD as u64,

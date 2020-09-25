@@ -1,4 +1,4 @@
-//! This account contains the current cluster rewards point values
+//! DEPRECATED: This sysvar can be removed once the pico-inflation feature is enabled
 //!
 use crate::{account::Account, sysvar::Sysvar};
 
