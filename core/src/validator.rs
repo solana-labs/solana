@@ -97,11 +97,7 @@ pub struct ValidatorConfig {
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
     pub poh_verify: bool, // Perform PoH verification during blockstore processing at boo
     pub cuda: bool,
-<<<<<<< HEAD
-=======
-    pub require_tower: bool,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
->>>>>>> 68e5a2ef5... Add RPC notify and banking keys debug (#12396)
 }
 
 impl Default for ValidatorConfig {
@@ -134,11 +130,7 @@ impl Default for ValidatorConfig {
             wal_recovery_mode: None,
             poh_verify: true,
             cuda: false,
-<<<<<<< HEAD
-=======
-            require_tower: false,
             debug_keys: None,
->>>>>>> 68e5a2ef5... Add RPC notify and banking keys debug (#12396)
         }
     }
 }
