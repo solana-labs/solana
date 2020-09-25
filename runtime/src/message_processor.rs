@@ -734,16 +734,14 @@ impl MessageProcessor {
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
-        mut instruction_recorders: Option<&mut Vec<InstructionRecorder>>,
+        instruction_recorders: Option<&[InstructionRecorder]>,
         cluster_type: ClusterType,
         epoch: Epoch,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
-            let instruction_recorder = instruction_recorders.as_mut().map(|recorders| {
-                let instruction_recorder = InstructionRecorder::default();
-                recorders.push(instruction_recorder.clone());
-                instruction_recorder
-            });
+            let instruction_recorder = instruction_recorders
+                .as_ref()
+                .map(|recorders| recorders[instruction_index].clone());
             self.execute_instruction(
                 message,
                 instruction,
