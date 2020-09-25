@@ -2064,32 +2064,26 @@ impl AccountsDB {
                 }
                 drop(storage);
                 datapoint_debug!("clean_dead_slots", ("stores", stores.len(), i64));
-                let slot_pubkeys: Vec<(Slot, Vec<Pubkey>)> = {
+                let slot_pubkeys: HashSet<(Slot, Pubkey)> = {
                     self.thread_pool_clean.install(|| {
                         stores
                             .into_par_iter()
                             .map(|store| {
                                 let accounts = store.accounts.accounts(0);
-                                (
-                                    store.slot,
-                                    accounts
-                                        .into_iter()
-                                        .map(|account| account.meta.pubkey)
-                                        .collect::<Vec<Pubkey>>(),
-                                )
+                                accounts
+                                    .into_iter()
+                                    .map(|account| (store.slot, account.meta.pubkey))
+                                    .collect::<HashSet<(Slot, Pubkey)>>()
                             })
-                            .collect()
+                            .reduce(HashSet::new, |mut reduced, store_pubkeys| {
+                                reduced.extend(store_pubkeys);
+                                reduced
+                            })
                     })
                 };
                 let index = self.accounts_index.read().unwrap();
-                let mut cleaned_slot_keys: HashSet<(Slot, Pubkey)> = HashSet::new();
-                for (slot, pubkey_v) in slot_pubkeys {
-                    for pubkey in pubkey_v {
-                        if !cleaned_slot_keys.contains(&(slot, pubkey)) {
-                            index.unref_from_storage(&pubkey);
-                            cleaned_slot_keys.insert((slot, pubkey));
-                        }
-                    }
+                for (_slot, pubkey) in slot_pubkeys {
+                    index.unref_from_storage(&pubkey);
                 }
                 drop(index);
                 measure.stop();
