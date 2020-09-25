@@ -1755,6 +1755,7 @@ dependencies = [
  "elf",
  "solana-bpf-loader-program",
  "solana-logger",
+ "solana-measure",
  "solana-runtime",
  "solana-sdk",
  "solana_rbpf",

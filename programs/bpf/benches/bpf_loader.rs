@@ -6,7 +6,9 @@ extern crate test;
 extern crate solana_bpf_loader_program;
 
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
-use solana_rbpf::vm::EbpfVm;
+use solana_bpf_loader_program::syscalls::SyscallError;
+use solana_measure::measure::Measure;
+use solana_rbpf::vm::{EbpfVm, InstructionMeter};
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
@@ -186,11 +188,48 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
     });
 }
 
+#[bench]
+fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
+    const BUDGET: u64 = 200_000;
+    let loader_id = bpf_loader::id();
+    let mut invoke_context = MockInvokeContext::default();
+    invoke_context.compute_meter.borrow_mut().remaining = BUDGET;
+    let compute_meter = invoke_context.get_compute_meter();
+
+    let elf = load_elf("tuner").unwrap();
+    let executable =
+        EbpfVm::<solana_bpf_loader_program::BPFError>::create_executable_from_elf(&elf, None)
+            .unwrap();
+    let (mut vm, _) = solana_bpf_loader_program::create_vm(
+        &loader_id,
+        executable.as_ref(),
+        &[],
+        &mut invoke_context,
+    )
+    .unwrap();
+    let instruction_meter = MockInstructionMeter { compute_meter };
+
+    let mut measure = Measure::start("tune");
+    let _ = vm.execute_program_metered(&mut [0], &[], &[], instruction_meter.clone());
+    measure.stop();
+    assert_eq!(
+        0,
+        instruction_meter.get_remaining(),
+        "Tuner must consume the whole budget"
+    );
+    println!(
+        "{:?} Consumed compute budget took {:?} us ({:?} instructions)",
+        BUDGET - instruction_meter.get_remaining(),
+        measure.as_us(),
+        vm.get_total_instruction_count(),
+    );
+}
+
 #[derive(Debug, Default)]
 pub struct MockInvokeContext {
     key: Pubkey,
-    mock_logger: MockLogger,
-    mock_compute_meter: MockComputeMeter,
+    logger: MockLogger,
+    compute_meter: Rc<RefCell<MockComputeMeter>>,
 }
 impl InvokeContext for MockInvokeContext {
     fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
@@ -212,7 +251,7 @@ impl InvokeContext for MockInvokeContext {
         &[]
     }
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
-        Rc::new(RefCell::new(self.mock_logger.clone()))
+        Rc::new(RefCell::new(self.logger.clone()))
     }
     fn is_cross_program_supported(&self) -> bool {
         true
@@ -221,7 +260,7 @@ impl InvokeContext for MockInvokeContext {
         ComputeBudget::default()
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
-        Rc::new(RefCell::new(self.mock_compute_meter.clone()))
+        self.compute_meter.clone()
     }
     fn add_executor(&mut self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
     fn get_executor(&mut self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
@@ -255,5 +294,21 @@ impl ComputeMeter for MockComputeMeter {
     }
     fn get_remaining(&self) -> u64 {
         self.remaining
+    }
+}
+
+/// Passed to the VM to enforce the compute budget
+#[derive(Clone)]
+struct MockInstructionMeter {
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+}
+impl InstructionMeter for MockInstructionMeter {
+    fn consume(&mut self, amount: u64) {
+        // 1 to 1 instruction to compute unit mapping
+        // ignore error, Ebpf will bail if exceeded
+        let _ = self.compute_meter.borrow_mut().consume(amount);
+    }
+    fn get_remaining(&self) -> u64 {
+        self.compute_meter.borrow().get_remaining()
     }
 }
