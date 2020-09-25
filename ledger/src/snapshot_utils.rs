@@ -110,13 +110,8 @@ pub enum SnapshotError {
     #[error("I/O error: {0}")]
     IO(#[from] std::io::Error),
 
-<<<<<<< HEAD:ledger/src/snapshot_utils.rs
-    #[error("serialization error")]
-    Serialize(#[from] Box<bincode::ErrorKind>),
-=======
     #[error("serialization error: {0}")]
-    Serialize(#[from] bincode::Error),
->>>>>>> 5dcf34809... Improve 'Failed to create snapshot archive' warning message:runtime/src/snapshot_utils.rs
+    Serialize(#[from] Box<bincode::ErrorKind>),
 
     #[error("file system error: {0}")]
     FsExtra(#[from] fs_extra::error::Error),
