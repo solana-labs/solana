@@ -601,6 +601,8 @@ mod tests {
                 create_program_address_units: 1500,
                 invoke_units: 1000,
                 max_invoke_depth: 2,
+                sha256_base_cost: 85,
+                sha256_byte_cost: 1,
             },
             Rc::new(RefCell::new(Executors::default())),
             None,

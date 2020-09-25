@@ -81,6 +81,7 @@ fn main() {
             "panic",
             "param_passing",
             "sanity",
+            "sha256",
             "sysval",
         ];
         for program in rust_programs.iter() {

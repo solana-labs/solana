@@ -103,9 +103,27 @@ impl Hash {
 
 /// Return a Sha256 hash for the given data.
 pub fn hashv(vals: &[&[u8]]) -> Hash {
-    let mut hasher = Hasher::default();
-    hasher.hashv(vals);
-    hasher.result()
+    #[cfg(not(feature = "program"))]
+    {
+        let mut hasher = Hasher::default();
+        hasher.hashv(vals);
+        hasher.result()
+    }
+    #[cfg(feature = "program")]
+    {
+        extern "C" {
+            fn sol_sha256(vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64;
+        };
+        let mut hash_result = [0; HASH_BYTES];
+        unsafe {
+            sol_sha256(
+                vals as *const _ as *const u8,
+                vals.len() as u64,
+                &mut hash_result as *mut _ as *mut u8,
+            );
+        }
+        Hash::new_from_array(hash_result)
+    }
 }
 
 /// Return a Sha256 hash for the given data.

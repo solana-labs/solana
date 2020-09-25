@@ -427,6 +427,8 @@ impl MessageProcessor {
                 create_program_address_units: 0,
                 invoke_units: 0,
                 max_invoke_depth: 2,
+                sha256_base_cost: 0,
+                sha256_byte_cost: 0,
             }
         }
     }
