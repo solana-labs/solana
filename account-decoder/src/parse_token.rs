@@ -154,6 +154,31 @@ pub struct UiTokenAmount {
     pub amount: StringAmount,
 }
 
+impl UiTokenAmount {
+    pub fn real_number_string(&self) -> String {
+        let decimals = self.decimals as usize;
+        if decimals > 0 {
+            let amount = u64::from_str(&self.amount).unwrap_or(0);
+
+            // Left-pad zeros to decimals + 1, so we at least have an integer zero
+            let mut s = format!("{:01$}", amount, decimals + 1);
+
+            // Add the decimal point (Sorry, "," locales!)
+            s.insert(s.len() - decimals, '.');
+            s
+        } else {
+            self.amount.clone()
+        }
+    }
+
+    pub fn real_number_string_trimmed(&self) -> String {
+        let s = self.real_number_string();
+        let zeros_trimmed = s.trim_end_matches('0');
+        let decimal_trimmed = zeros_trimmed.trim_end_matches('.');
+        decimal_trimmed.to_string()
+    }
+}
+
 pub fn token_amount_to_ui_amount(amount: u64, decimals: u8) -> UiTokenAmount {
     // Use `amount_to_ui_amount()` once spl_token is bumped to a version that supports it: https://github.com/solana-labs/solana-program-library/pull/211
     let amount_decimals = amount as f64 / 10_usize.pow(decimals as u32) as f64;
@@ -295,5 +320,21 @@ mod test {
             get_token_account_mint(&account_data),
             Some(expected_mint_pubkey)
         );
+    }
+
+    #[test]
+    fn test_ui_token_amount_real_string() {
+        let token_amount = token_amount_to_ui_amount(1, 0);
+        assert_eq!(&token_amount.real_number_string(), "1");
+        assert_eq!(&token_amount.real_number_string_trimmed(), "1");
+        let token_amount = token_amount_to_ui_amount(1, 9);
+        assert_eq!(&token_amount.real_number_string(), "0.000000001");
+        assert_eq!(&token_amount.real_number_string_trimmed(), "0.000000001");
+        let token_amount = token_amount_to_ui_amount(1_000_000_000, 9);
+        assert_eq!(&token_amount.real_number_string(), "1.000000000");
+        assert_eq!(&token_amount.real_number_string_trimmed(), "1");
+        let token_amount = token_amount_to_ui_amount(1_234_567_890, 3);
+        assert_eq!(&token_amount.real_number_string(), "1234567.890");
+        assert_eq!(&token_amount.real_number_string_trimmed(), "1234567.89");
     }
 }
