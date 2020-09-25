@@ -1204,7 +1204,7 @@ const GetRecentBlockhashAndContextRpcResult = jsonRpcResultAndContext(
  */
 const GetRecentPerformanceSamplesRpcResult = jsonRpcResult(
   struct.array([
-    struct.object({
+    struct.pick({
       slot: 'number',
       numTransactions: 'number',
       numSlots: 'number',

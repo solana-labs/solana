@@ -1280,6 +1280,11 @@ test('get supply', async () => {
 });
 
 test('get performance samples', async () => {
+  if (!mockRpcEnabled) {
+    console.log('live test skipped');
+    return;
+  }
+
   const connection = new Connection(url);
 
   mockRpc.push([
@@ -1310,6 +1315,11 @@ test('get performance samples', async () => {
 });
 
 test('get performance samples limit too high', async () => {
+  if (!mockRpcEnabled) {
+    console.log('live test skipped');
+    return;
+  }
+
   const connection = new Connection(url);
 
   mockRpc.push([
