@@ -48,6 +48,10 @@ impl Signers for [Box<dyn Signer>] {
     default_keypairs_impl!();
 }
 
+impl Signers for Vec<Box<dyn Signer>> {
+    default_keypairs_impl!();
+}
+
 impl Signers for Vec<&dyn Signer> {
     default_keypairs_impl!();
 }
