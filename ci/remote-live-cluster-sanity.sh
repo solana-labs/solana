@@ -28,6 +28,9 @@ echo "--- Starting validator $cluster_label"
 
 validator_log="$cluster_label-validator.log"
 sys_tuner_log="$cluster_label-sys-tuner.log"
+metrics_host="https://metrics.solana.com:8086"
+export SOLANA_METRICS_CONFIG="host=$metrics_host,db=testnet-live-cluster,u=scratch_writer,p=topsecret"
+
 # shellcheck disable=SC2024 # create log as non-root user
 sudo ./solana-sys-tuner --user "$(whoami)" &> "$sys_tuner_log" &
 sys_tuner_pid=$!
@@ -62,7 +65,7 @@ done
 echo "--- Monitoring validator $cluster_label"
 
 # shellcheck disable=SC2012 # ls here is handy for sorted snapshots
-snapshot_slot=$(ls -t cluster-sanity/ledger/snapshot* |
+snapshot_slot=$(ls -t cluster-sanity/ledger/snapshot-*.tar.* |
   head -n 1 |
   grep -o 'snapshot-[0-9]*-' |
   grep -o '[0-9]*'
@@ -89,7 +92,7 @@ curl \
   -d '{"jsonrpc":"2.0","id":1, "method":"validatorExit"}' \
   http://localhost:8899
 
-ps auxf
+# well, kill $sys_tuner_pid didn't work for some reason, maybe sudo doen't relay signals?
 (set -x && sleep 3 && kill "$tail_pid" && sudo pkill -f solana-sys-tuner) &
 kill_pid=$!
 

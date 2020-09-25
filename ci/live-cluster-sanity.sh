@@ -31,12 +31,17 @@ _ ./net/scp.sh \
   "$instance_ip:."
 
 test_with_live_cluster() {
-  _ ./net/ssh.sh "$instance_ip" ./remote-live-cluster-sanity.sh "$@"
+  validator_failed=
+  _ ./net/ssh.sh "$instance_ip" ./remote-live-cluster-sanity.sh "$@" || validator_failed=$?
 
-  # good it existed successfully; let's collect logs for profit!
-  for log in $(./net/ssh.sh "$instance_ip" ls '*.log'); do
+  # let's collect logs for profit!
+  for log in $(./net/ssh.sh "$instance_ip" ls '*.log' 'cluster-sanity/ledger/snapshot-*.tar.*'); do
     _ ./net/scp.sh "$instance_ip:$log" .
   done
+
+  if [[ -n $validator_failed ]]; then
+    (exit "$validator_failed")
+  fi
 }
 
 # UPDATE docs/src/clusters.md TOO!!
