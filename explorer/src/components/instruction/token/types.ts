@@ -181,6 +181,10 @@ export const TokenInstructionType = enums([
   "approve2",
   "mintTo2",
   "burn2",
+  "transferChecked",
+  "approveChecked",
+  "mintToChecked",
+  "burnChecked",
 ]);
 
 export const IX_STRUCTS = {
@@ -200,6 +204,10 @@ export const IX_STRUCTS = {
   approve2: ApproveChecked,
   mintTo2: MintToChecked,
   burn2: BurnChecked,
+  transferChecked: TransferChecked,
+  approveChecked: ApproveChecked,
+  mintToChecked: MintToChecked,
+  burnChecked: BurnChecked,
 };
 
 export const IX_TITLES = {
@@ -219,4 +227,8 @@ export const IX_TITLES = {
   approve2: "Approve (Checked)",
   mintTo2: "Mint To (Checked)",
   burn2: "Burn (Checked)",
+  transferChecked: "Transfer (Checked)",
+  approveChecked: "Approve (Checked)",
+  mintToChecked: "Mint To (Checked)",
+  burnChecked: "Burn (Checked)",
 };
