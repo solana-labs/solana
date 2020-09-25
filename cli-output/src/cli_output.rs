@@ -4,6 +4,7 @@ use console::{style, Emoji};
 use inflector::cases::titlecase::to_title_case;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use solana_account_decoder::parse_token::UiTokenAccount;
 use solana_clap_utils::keypair::SignOnly;
 use solana_client::rpc_response::{
     RpcAccountBalance, RpcKeyedAccount, RpcSupply, RpcVoteAccountInfo,
@@ -1145,6 +1146,47 @@ impl fmt::Display for CliFees {
             &self.lamports_per_signature.to_string(),
         )?;
         writeln_name_value(f, "Last valid slot:", &self.last_valid_slot.to_string())?;
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliTokenAccount {
+    pub address: String,
+    #[serde(flatten)]
+    pub token_account: UiTokenAccount,
+}
+
+impl fmt::Display for CliTokenAccount {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln_name_value(f, "Address:", &self.address)?;
+        let account = &self.token_account;
+        writeln_name_value(
+            f,
+            "Balance:",
+            &account.token_amount.real_number_string_trimmed(),
+        )?;
+        let mint = format!(
+            "{}{}",
+            account.mint,
+            if account.is_native { " (native)" } else { "" }
+        );
+        writeln_name_value(f, "Mint:", &mint)?;
+        writeln_name_value(f, "Owner:", &account.owner)?;
+        writeln_name_value(f, "State:", &format!("{:?}", account.state))?;
+        if let Some(delegate) = &account.delegate {
+            writeln!(f, "Delegation:")?;
+            writeln_name_value(f, "  Delegate:", delegate)?;
+            let allowance = account.delegated_amount.as_ref().unwrap();
+            writeln_name_value(f, "  Allowance:", &allowance.real_number_string_trimmed())?;
+        }
+        writeln_name_value(
+            f,
+            "Close authority:",
+            &account.close_authority.as_ref().unwrap_or(&String::new()),
+        )?;
         Ok(())
     }
 }
