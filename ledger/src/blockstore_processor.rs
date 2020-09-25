@@ -39,7 +39,7 @@ use solana_sdk::{
 use solana_vote_program::vote_state::VoteState;
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::PathBuf,
     result,
     sync::Arc,
@@ -317,6 +317,7 @@ pub struct ProcessOptions {
     pub override_num_threads: Option<usize>,
     pub new_hard_forks: Option<Vec<Slot>>,
     pub frozen_accounts: Vec<Pubkey>,
+    pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
 }
 
 fn initiate_callback(mut bank: &mut Arc<Bank>, genesis_config: &GenesisConfig) {
@@ -347,6 +348,7 @@ pub fn process_blockstore(
         &genesis_config,
         account_paths,
         &opts.frozen_accounts,
+        opts.debug_keys.clone(),
     ));
     initiate_callback(&mut bank0, genesis_config);
     info!("processing ledger for slot 0...");
@@ -2856,7 +2858,7 @@ pub mod tests {
         genesis_config: &GenesisConfig,
         account_paths: Vec<PathBuf>,
     ) -> EpochSchedule {
-        let bank = Bank::new_with_paths(&genesis_config, account_paths, &[]);
+        let bank = Bank::new_with_paths(&genesis_config, account_paths, &[], None);
         *bank.epoch_schedule()
     }
 
