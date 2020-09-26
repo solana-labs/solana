@@ -137,6 +137,7 @@ pub enum Entrypoint {
     Program(ProcessInstruction),
     Loader(ProcessInstructionWithContext),
 }
+
 #[derive(Clone)]
 pub struct Builtin {
     pub name: String,
@@ -184,6 +185,17 @@ impl CowCachedExecutors {
             self.executors = Arc::new(RwLock::new(local_cache));
         }
         self.executors.write()
+    }
+}
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl AbiExample for Builtin {
+    fn example() -> Self {
+        Self {
+            name: String::default(),
+            id: Pubkey::default(),
+            entrypoint: Entrypoint::Program(|_, _, _| Ok(())),
+        }
     }
 }
 
