@@ -251,6 +251,9 @@ impl CachedExecutors {
                 .insert(*pubkey, (AtomicU64::new(0), executor));
         }
     }
+    fn remove(&mut self, pubkey: &Pubkey) {
+        let _ = self.executors.remove(pubkey);
+    }
 }
 
 #[derive(Default)]
@@ -2003,6 +2006,13 @@ impl Bank {
                 cache.put(key, (*executor).clone());
             }
         }
+    }
+
+    /// Remove an executor from the bank's cache
+    pub fn remove_executor(&self, pubkey: &Pubkey) {
+        let mut cow_cache = self.cached_executors.write().unwrap();
+        let mut cache = cow_cache.write().unwrap();
+        cache.remove(pubkey);
     }
 
     #[allow(clippy::type_complexity)]
@@ -9047,6 +9057,17 @@ mod tests {
         assert!(executors.borrow().executors.contains_key(&key2));
         assert!(executors.borrow().executors.contains_key(&key3));
         assert!(executors.borrow().executors.contains_key(&key4));
+
+        bank.remove_executor(&key1);
+        bank.remove_executor(&key2);
+        bank.remove_executor(&key3);
+        bank.remove_executor(&key4);
+        let executors = bank.get_executors(&message, loaders);
+        assert_eq!(executors.borrow().executors.len(), 0);
+        assert!(!executors.borrow().executors.contains_key(&key1));
+        assert!(!executors.borrow().executors.contains_key(&key2));
+        assert!(!executors.borrow().executors.contains_key(&key3));
+        assert!(!executors.borrow().executors.contains_key(&key4));
     }
 
     #[test]
@@ -9085,6 +9106,13 @@ mod tests {
 
         let executors = fork1.get_executors(&Message::default(), loaders);
         assert_eq!(executors.borrow().executors.len(), 2);
+        let executors = fork2.get_executors(&Message::default(), loaders);
+        assert_eq!(executors.borrow().executors.len(), 1);
+
+        fork1.remove_executor(&key1);
+
+        let executors = fork1.get_executors(&Message::default(), loaders);
+        assert_eq!(executors.borrow().executors.len(), 1);
         let executors = fork2.get_executors(&Message::default(), loaders);
         assert_eq!(executors.borrow().executors.len(), 1);
     }
