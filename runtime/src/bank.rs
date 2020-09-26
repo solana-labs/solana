@@ -1056,10 +1056,7 @@ impl Bank {
         assert!(validator_rewards >= validator_rewards_paid);
 
         self.capitalization
-<<<<<<< HEAD
             .fetch_add(validator_rewards_paid, Ordering::Relaxed);
-=======
-            .fetch_add(validator_rewards_paid, Relaxed);
 
         datapoint_warn!(
             "epoch_rewards",
@@ -1072,7 +1069,6 @@ impl Bank {
             ("pre_capitalization", capitalization, i64),
             ("post_capitalization", self.capitalization(), i64)
         );
->>>>>>> e50386f92... Add epoch rewards metric datapoint
     }
 
     /// map stake delegations into resolved (pubkey, account) pairs
