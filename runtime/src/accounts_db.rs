@@ -2064,7 +2064,7 @@ impl AccountsDB {
                 }
                 drop(storage);
                 datapoint_debug!("clean_dead_slots", ("stores", stores.len(), i64));
-                let pubkeys: Vec<Vec<Pubkey>> = {
+                let slot_pubkeys: HashSet<(Slot, Pubkey)> = {
                     self.thread_pool_clean.install(|| {
                         stores
                             .into_par_iter()
@@ -2072,17 +2072,18 @@ impl AccountsDB {
                                 let accounts = store.accounts.accounts(0);
                                 accounts
                                     .into_iter()
-                                    .map(|account| account.meta.pubkey)
-                                    .collect::<Vec<Pubkey>>()
+                                    .map(|account| (store.slot, account.meta.pubkey))
+                                    .collect::<HashSet<(Slot, Pubkey)>>()
                             })
-                            .collect()
+                            .reduce(HashSet::new, |mut reduced, store_pubkeys| {
+                                reduced.extend(store_pubkeys);
+                                reduced
+                            })
                     })
                 };
                 let index = self.accounts_index.read().unwrap();
-                for pubkey_v in pubkeys {
-                    for pubkey in pubkey_v {
-                        index.unref_from_storage(&pubkey);
-                    }
+                for (_slot, pubkey) in slot_pubkeys {
+                    index.unref_from_storage(&pubkey);
                 }
                 drop(index);
                 measure.stop();
@@ -3073,7 +3074,9 @@ pub mod tests {
         let pubkey2 = Pubkey::new_rand();
         let normal_account = Account::new(1, 0, &Account::default().owner);
         let zero_account = Account::new(0, 0, &Account::default().owner);
+
         //store an account
+        accounts.store(0, &[(&pubkey1, &normal_account)]);
         accounts.store(0, &[(&pubkey1, &normal_account)]);
         accounts.store(1, &[(&pubkey1, &zero_account)]);
         accounts.store(0, &[(&pubkey2, &normal_account)]);
@@ -3093,8 +3096,20 @@ pub mod tests {
 
         //both zero lamport and normal accounts are cleaned up
         assert_eq!(accounts.alive_account_count_in_store(0), 0);
+        // The only store to slot 1 was a zero lamport account, should
+        // be purged by zero-lamport cleaning logic because slot 1 is
+        // rooted
         assert_eq!(accounts.alive_account_count_in_store(1), 0);
         assert_eq!(accounts.alive_account_count_in_store(2), 1);
+
+        // Pubkey 1, a zero lamport account, should no longer exist in accounts index
+        // because it has been removed
+        assert!(accounts
+            .accounts_index
+            .read()
+            .unwrap()
+            .get(&pubkey1, None)
+            .is_none());
     }
 
     #[test]
@@ -4222,23 +4237,27 @@ pub mod tests {
         accounts.store(current_slot, &[(&pubkey1, &account2)]);
         accounts.store(current_slot, &[(&pubkey1, &account2)]);
         assert_eq!(1, accounts.alive_account_count_in_store(current_slot));
-        assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
+        // Stores to same pubkey, same slot only count once towards the
+        // ref count
+        assert_eq!(2, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.add_root(current_slot);
 
         // C: Yet more update to trigger lazy clean of step A
         current_slot += 1;
-        assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
+        assert_eq!(2, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.store(current_slot, &[(&pubkey1, &account3)]);
-        assert_eq!(4, accounts.ref_count_for_pubkey(&pubkey1));
+        assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.add_root(current_slot);
 
         // D: Make pubkey1 0-lamport; also triggers clean of step B
         current_slot += 1;
-        assert_eq!(4, accounts.ref_count_for_pubkey(&pubkey1));
+        assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.store(current_slot, &[(&pubkey1, &zero_lamport_account)]);
         accounts.process_dead_slots(None);
         assert_eq!(
-            3, /* == 4 - 2 + 1 */
+            // Removed one reference from the dead slot (reference only counted once
+            // even though there were two stores to the pubkey in that slot)
+            3, /* == 3 - 1 + 1 */
             accounts.ref_count_for_pubkey(&pubkey1)
         );
         accounts.add_root(current_slot);
