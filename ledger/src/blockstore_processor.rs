@@ -681,8 +681,7 @@ pub fn confirm_slot(
         let entry_state = entries.start_verify(
             &progress.last_entry,
             recyclers.clone(),
-            bank.cluster_type(),
-            bank.epoch(),
+            bank.secp256k1_program_enabled(),
         );
         if entry_state.status() == EntryVerificationStatus::Failure {
             warn!("Ledger proof of history failed at slot: {}", slot);

@@ -10,8 +10,10 @@ use crate::{
     accounts_db::{ErrorCounters, SnapshotStorages},
     accounts_index::Ancestors,
     blockhash_queue::BlockhashQueue,
-    builtins::get_builtins,
+    builtins::*,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
+    feature::Feature,
+    feature_set::{self, FeatureSet},
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     message_processor::{Executors, MessageProcessor},
@@ -41,7 +43,7 @@ use solana_sdk::{
     },
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
-    fee_calculator::{FeeCalculator, FeeRateGovernor},
+    fee_calculator::{FeeCalculator, FeeConfig, FeeRateGovernor},
     genesis_config::{ClusterType, GenesisConfig},
     hard_forks::HardForks,
     hash::{extend_and_hash, hashv, Hash},
@@ -526,6 +528,8 @@ pub struct Bank {
     cached_executors: Arc<RwLock<CachedExecutors>>,
 
     transaction_debug_keys: Option<Arc<HashSet<Pubkey>>>,
+
+    pub feature_set: Arc<FeatureSet>,
 }
 
 impl Default for BlockhashQueue {
@@ -651,6 +655,7 @@ impl Bank {
             rewards_pool_pubkeys: parent.rewards_pool_pubkeys.clone(),
             cached_executors: parent.cached_executors.clone(),
             transaction_debug_keys: parent.transaction_debug_keys.clone(),
+            feature_set: parent.feature_set.clone(),
         };
 
         datapoint_info!(
@@ -756,6 +761,7 @@ impl Bank {
             rewards_pool_pubkeys: new(),
             cached_executors: Arc::new(RwLock::new(CachedExecutors::new(MAX_CACHED_EXECUTORS))),
             transaction_debug_keys: debug_keys,
+            feature_set: new(),
         };
         bank.finish_init(genesis_config);
 
@@ -1607,6 +1613,7 @@ impl Bank {
             &self.blockhash_queue.read().unwrap(),
             error_counters,
             &self.rent_collector,
+            &self.feature_set,
         )
     }
     fn check_age(
@@ -2045,8 +2052,7 @@ impl Bank {
                         log_collector.clone(),
                         executors.clone(),
                         instruction_recorders.as_deref(),
-                        self.cluster_type(),
-                        self.epoch(),
+                        &self.feature_set,
                     );
 
                     Self::compile_recorded_instructions(
@@ -2127,6 +2133,11 @@ impl Bank {
     ) -> Vec<Result<()>> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         let mut fees = 0;
+
+        let fee_config = FeeConfig {
+            secp256k1_program_enabled: self.secp256k1_program_enabled(),
+        };
+
         let results = OrderedIterator::new(txs, iteration_order)
             .zip(executed.iter())
             .map(|((_, tx), (res, hash_age_kind))| {
@@ -2143,10 +2154,7 @@ impl Bank {
                 };
                 let fee_calculator = fee_calculator.ok_or(TransactionError::BlockhashNotFound)?;
 
-                let fee = fee_calculator.calculate_fee(
-                    tx.message(),
-                    solana_sdk::secp256k1::get_fee_config(self.cluster_type(), self.epoch()),
-                );
+                let fee = fee_calculator.calculate_fee_with_config(tx.message(), &fee_config);
 
                 let message = tx.message();
                 match *res {
@@ -3486,10 +3494,16 @@ impl Bank {
         consumed_budget.saturating_sub(budget_recovery_delta)
     }
 
+    pub fn secp256k1_program_enabled(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::secp256k1_program_enabled::id())
+    }
+
     // This is called from snapshot restore AND for each epoch boundary
     // The entire code path herein must be idempotent
     fn apply_feature_activations(&mut self, init_finish_or_warp: bool, initiate_callback: bool) {
-        self.ensure_builtins(init_finish_or_warp);
+        let new_feature_activations = self.compute_active_feature_set(!init_finish_or_warp);
+        self.ensure_builtins(init_finish_or_warp, &new_feature_activations);
         self.reinvoke_entered_epoch_callback(initiate_callback);
         self.recheck_cross_program_support();
         self.recheck_compute_budget();
@@ -3497,10 +3511,62 @@ impl Bank {
         self.ensure_no_storage_rewards_pool();
     }
 
-    fn ensure_builtins(&mut self, init_or_warp: bool) {
-        for (program, start_epoch) in get_builtins(self.cluster_type()) {
+    // Compute the active feature set based on the current bank state, and return the set of newly activated features
+    fn compute_active_feature_set(&mut self, allow_new_activations: bool) -> HashSet<Pubkey> {
+        let mut active = self.feature_set.active.clone();
+        let mut inactive = HashSet::new();
+        let mut newly_activated = HashSet::new();
+        let slot = self.slot();
+
+        for feature_id in &self.feature_set.inactive {
+            let mut activated = false;
+            if let Some(mut account) = self.get_account(feature_id) {
+                if let Some(mut feature) = Feature::from_account(&account) {
+                    match feature.activated_at {
+                        None => {
+                            if allow_new_activations {
+                                // Feature has been requested, activate it now
+                                feature.activated_at = Some(slot);
+                                if feature.to_account(&mut account).is_some() {
+                                    self.store_account(feature_id, &account);
+                                }
+                                newly_activated.insert(*feature_id);
+                                activated = true;
+                                info!("Feature {} activated at slot {}", feature_id, slot);
+                            }
+                        }
+                        Some(activation_slot) => {
+                            if slot >= activation_slot {
+                                // Feature is already active
+                                activated = true;
+                            }
+                        }
+                    }
+                }
+            }
+            if activated {
+                active.insert(*feature_id);
+            } else {
+                inactive.insert(*feature_id);
+            }
+        }
+
+        self.feature_set = Arc::new(FeatureSet { active, inactive });
+        newly_activated
+    }
+
+    fn ensure_builtins(&mut self, init_or_warp: bool, new_feature_activations: &HashSet<Pubkey>) {
+        for (program, start_epoch) in get_cluster_builtins(self.cluster_type()) {
             let should_populate = init_or_warp && self.epoch() >= start_epoch
                 || !init_or_warp && self.epoch() == start_epoch;
+            if should_populate {
+                self.add_builtin(&program.name, program.id, program.entrypoint);
+            }
+        }
+
+        for (program, feature) in get_feature_builtins() {
+            let should_populate = init_or_warp && self.feature_set.is_active(&feature)
+                || !init_or_warp && new_feature_activations.contains(&feature);
             if should_populate {
                 self.add_builtin(&program.name, program.id, program.entrypoint);
             }
@@ -8508,7 +8574,7 @@ mod tests {
             .collect::<Vec<_>>();
         consumed_budgets.sort();
         // consumed_budgets represents the count of alive accounts in the three slots 0,1,2
-        assert_eq!(consumed_budgets, vec![0, 1, 10]);
+        assert_eq!(consumed_budgets, vec![0, 1, 9]);
     }
 
     #[test]
@@ -8972,5 +9038,60 @@ mod tests {
         assert!(executors.borrow().executors.contains_key(&key2));
         assert!(executors.borrow().executors.contains_key(&key3));
         assert!(executors.borrow().executors.contains_key(&key4));
+    }
+
+    #[test]
+    fn test_compute_active_feature_set() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+
+        let test_feature = "TestFeature11111111111111111111111111111111"
+            .parse::<Pubkey>()
+            .unwrap();
+        let mut feature_set = FeatureSet::default();
+        feature_set.inactive.insert(test_feature);
+        bank.feature_set = Arc::new(feature_set.clone());
+
+        let new_activations = bank.compute_active_feature_set(true);
+        assert!(new_activations.is_empty());
+        assert!(!bank.feature_set.is_active(&test_feature));
+
+        // Depositing into the `test_feature` account should do nothing
+        bank.deposit(&test_feature, 42);
+        let new_activations = bank.compute_active_feature_set(true);
+        assert!(new_activations.is_empty());
+        assert!(!bank.feature_set.is_active(&test_feature));
+
+        // Request `test_feature` activation
+        let feature = Feature::default();
+        assert_eq!(feature.activated_at, None);
+        bank.store_account(&test_feature, &feature.create_account(42));
+
+        // Run `compute_active_feature_set` disallowing new activations
+        let new_activations = bank.compute_active_feature_set(false);
+        assert!(new_activations.is_empty());
+        assert!(!bank.feature_set.is_active(&test_feature));
+        let feature = Feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
+            .expect("from_account");
+        assert_eq!(feature.activated_at, None);
+
+        // Run `compute_active_feature_set` allowing new activations
+        let new_activations = bank.compute_active_feature_set(true);
+        assert_eq!(new_activations.len(), 1);
+        assert!(bank.feature_set.is_active(&test_feature));
+        let feature = Feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
+            .expect("from_account");
+        assert_eq!(feature.activated_at, Some(1));
+
+        // Reset the bank's feature set
+        bank.feature_set = Arc::new(feature_set);
+        assert!(!bank.feature_set.is_active(&test_feature));
+
+        // Running `compute_active_feature_set` will not cause new activations, but
+        // `test_feature` is now be active
+        let new_activations = bank.compute_active_feature_set(true);
+        assert!(new_activations.is_empty());
+        assert!(bank.feature_set.is_active(&test_feature));
     }
 }

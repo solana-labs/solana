@@ -480,11 +480,7 @@ mod tests {
 
         assert_eq!(None, process_rest(&bank_forks, "not-a-supported-rest-api"));
         assert_eq!(
-            Some("0.000010127".to_string()),
-            process_rest(&bank_forks, "/v0/circulating-supply")
-        );
-        assert_eq!(
-            Some("0.000010127".to_string()),
+            process_rest(&bank_forks, "/v0/circulating-supply"),
             process_rest(&bank_forks, "/v0/total-supply")
         );
     }
