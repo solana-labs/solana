@@ -3572,12 +3572,8 @@ dependencies = [
  "solana-logger 1.3.14",
  "solana-net-utils",
  "solana-remote-wallet",
-<<<<<<< HEAD
- "solana-sdk 1.3.14",
-=======
  "solana-runtime",
- "solana-sdk 1.4.0",
->>>>>>> 93ed0ab2b... Add feature management commands
+ "solana-sdk 1.3.14",
  "solana-stake-program",
  "solana-transaction-status",
  "solana-version",
@@ -4715,16 +4711,10 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
-<<<<<<< HEAD
  "solana-logger 1.3.14",
+ "solana-runtime",
  "solana-sdk 1.3.14",
  "solana-sdk-macro-frozen-abi 1.3.14",
-=======
- "solana-logger 1.4.0",
- "solana-runtime",
- "solana-sdk 1.4.0",
- "solana-sdk-macro-frozen-abi 1.4.0",
->>>>>>> 35f5f9fc7... Add feature set identifier to gossiped version information
 ]
 
 [[package]]
