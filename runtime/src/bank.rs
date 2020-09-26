@@ -76,15 +76,10 @@ use std::{
     path::PathBuf,
     ptr,
     rc::Rc,
-<<<<<<< HEAD
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
-    sync::{Arc, RwLock, RwLockReadGuard},
-=======
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         LockResult, RwLockWriteGuard, {Arc, RwLock, RwLockReadGuard},
     },
->>>>>>> 965f65347... Add copy-on-write executor cache (#12502)
 };
 
 // Partial SPL Token v2.0.x declarations inlined to avoid an external dependency on the spl-token crate
@@ -213,7 +208,10 @@ impl Clone for CachedExecutors {
         for (key, (count, executor)) in self.executors.iter() {
             executors.insert(
                 *key,
-                (AtomicU64::new(count.load(Relaxed)), executor.clone()),
+                (
+                    AtomicU64::new(count.load(Ordering::Relaxed)),
+                    executor.clone(),
+                ),
             );
         }
         Self {
