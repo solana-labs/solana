@@ -4096,31 +4096,13 @@ pub mod tests {
 
     #[test]
     fn test_rpc_send_bad_tx() {
-        let exit = Arc::new(AtomicBool::new(false));
-        let validator_exit = create_validator_exit(&exit);
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let genesis = create_genesis_config(100);
+        let bank = Arc::new(Bank::new(&genesis.genesis_config));
+        let meta = JsonRpcRequestProcessor::new_from_bank(&bank);
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
-        let cluster_info = Arc::new(ClusterInfo::default());
-        let tpu_address = cluster_info.my_contact_info().tpu;
-        let bank_forks = new_bank_forks().0;
-        let (meta, receiver) = JsonRpcRequestProcessor::new(
-            JsonRpcConfig::default(),
-            new_bank_forks().0,
-            block_commitment_cache,
-            blockstore,
-            validator_exit,
-            RpcHealth::stub(),
-            cluster_info,
-            Hash::default(),
-            &runtime::Runtime::new().unwrap(),
-            None,
-        );
-        SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["37u9WtQpcm6ULa3Vmu7ySnANv"]}"#;
         let res = io.handle_request_sync(req, meta);
