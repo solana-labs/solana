@@ -412,15 +412,16 @@ typedef struct {
 } SolInstruction;
 
 /**
- * Seed used to create a program address
+ * Seed used to create a program address or passed to sol_invoke_signed
  */
 typedef struct {
-  const uint8_t *addr; /** Seed string */
-  uint64_t len; /** Length of the seed string */
+  const uint8_t *addr; /** Seed bytes */
+  uint64_t len; /** Length of the seed bytes */
 } SolSignerSeed;
 
 /**
- * Seeds used by a signer to create a program address
+ * Seeds used by a signer to create a program address or passed to
+ * sol_invoke_signed
  */
 typedef struct {
   const SolSignerSeed *addr; /** An arry of a signer's seeds */
@@ -430,7 +431,7 @@ typedef struct {
 /*
  * Create a program address
  *
- * @param seeds Seed strings used to sign program accounts
+ * @param seeds Seed bytes used to sign program accounts
  * @param seeds_len Length of the seeds array
  * @param Progam id of the signer
  * @param Program address created, filled on return
@@ -453,7 +454,7 @@ static uint64_t sol_create_program_address(
  * @param instruction Instruction to process
  * @param account_infos Accounts used by instruction
  * @param account_infos_len Length of account_infos array
- * @param seeds Seed strings used to sign program accounts
+ * @param seeds Seed bytes used to sign program accounts
  * @param seeds_len Length of the seeds array
  */
 static uint64_t sol_invoke_signed(
