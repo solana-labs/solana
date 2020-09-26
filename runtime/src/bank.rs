@@ -1027,7 +1027,6 @@ impl Bank {
 
         let (validator_rate, foundation_rate) = {
             let inflation = self.inflation.read().unwrap();
-            error!("rewards: {:?}", inflation);
             (
                 (*inflation).validator(slot_in_year),
                 (*inflation).foundation(slot_in_year),
