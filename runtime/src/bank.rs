@@ -3506,6 +3506,7 @@ impl Bank {
         let slot = self.slot();
 
         for feature_id in &self.feature_set.inactive {
+            let mut activated = false;
             if let Some(mut account) = self.get_account(feature_id) {
                 if let Some(mut feature) = Feature::from_account(&account) {
                     match feature.activated_at {
@@ -3517,22 +3518,24 @@ impl Bank {
                                     self.store_account(feature_id, &account);
                                 }
                                 newly_activated.insert(*feature_id);
-                                active.insert(*feature_id);
+                                activated = true;
                                 info!("Feature {} activated at slot {}", feature_id, slot);
-                                continue;
                             }
                         }
                         Some(activation_slot) => {
                             if slot >= activation_slot {
                                 // Feature is already active
-                                active.insert(*feature_id);
-                                continue;
+                                activated = true;
                             }
                         }
                     }
                 }
             }
-            inactive.insert(*feature_id);
+            if activated {
+                active.insert(*feature_id);
+            } else {
+                inactive.insert(*feature_id);
+            }
         }
 
         self.feature_set = Arc::new(FeatureSet { active, inactive });
