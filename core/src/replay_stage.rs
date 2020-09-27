@@ -11,6 +11,7 @@ use crate::{
     consensus::{ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes},
     fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+    optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     progress_map::{ForkProgress, ProgressMap, PropagatedStats},
     pubkey_references::PubkeyReferences,
@@ -108,6 +109,7 @@ pub struct ReplayStageConfig {
     pub transaction_status_sender: Option<TransactionStatusSender>,
     pub rewards_recorder_sender: Option<RewardsRecorderSender>,
     pub cache_block_time_sender: Option<CacheBlockTimeSender>,
+    pub bank_notification_sender: Option<BankNotificationSender>,
 }
 
 #[derive(Default)]
@@ -239,6 +241,7 @@ impl ReplayStage {
             transaction_status_sender,
             rewards_recorder_sender,
             cache_block_time_sender,
+            bank_notification_sender,
         } = config;
 
         trace!("replay stage");
@@ -310,6 +313,7 @@ impl ReplayStage {
                         &mut heaviest_subtree_fork_choice,
                         &subscriptions,
                         &replay_vote_sender,
+                        &bank_notification_sender,
                     );
                     replay_active_banks_time.stop();
                     Self::report_memory(&allocated, "replay_active_banks", start);
@@ -462,6 +466,7 @@ impl ReplayStage {
                             &block_commitment_cache,
                             &mut heaviest_subtree_fork_choice,
                             &cache_block_time_sender,
+                            &bank_notification_sender,
                         )?;
                     };
                     voting_time.stop();
@@ -1032,6 +1037,7 @@ impl ReplayStage {
         block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         cache_block_time_sender: &Option<CacheBlockTimeSender>,
+        bank_notification_sender: &Option<BankNotificationSender>,
     ) -> Result<()> {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
@@ -1055,7 +1061,7 @@ impl ReplayStage {
                 .expect("Root bank doesn't exist")
                 .clone();
             let mut rooted_banks = root_bank.parents();
-            rooted_banks.push(root_bank);
+            rooted_banks.push(root_bank.clone());
             let rooted_slots: Vec<_> = rooted_banks.iter().map(|bank| bank.slot()).collect();
             // Call leader schedule_cache.set_root() before blockstore.set_root() because
             // bank_forks.root is consumed by repair_service to update gossip, so we don't want to
@@ -1087,6 +1093,11 @@ impl ReplayStage {
                 heaviest_subtree_fork_choice,
             );
             subscriptions.notify_roots(rooted_slots);
+            if let Some(sender) = bank_notification_sender {
+                sender
+                    .send(BankNotification::Root(root_bank))
+                    .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
+            }
             latest_root_senders.iter().for_each(|s| {
                 if let Err(e) = s.send(new_root) {
                     trace!("latest root send failed: {:?}", e);
@@ -1255,6 +1266,7 @@ impl ReplayStage {
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         subscriptions: &Arc<RpcSubscriptions>,
         replay_vote_sender: &ReplayVoteSender,
+        bank_notification_sender: &Option<BankNotificationSender>,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -1326,6 +1338,11 @@ impl ReplayStage {
                 heaviest_subtree_fork_choice
                     .add_new_leaf_slot(bank.slot(), Some(bank.parent_slot()));
                 subscriptions.notify_frozen(bank.slot());
+                if let Some(sender) = bank_notification_sender {
+                    sender
+                        .send(BankNotification::Frozen(bank.clone()))
+                        .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
+                }
             } else {
                 trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",

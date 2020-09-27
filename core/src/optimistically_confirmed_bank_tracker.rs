@@ -9,7 +9,7 @@ use std::{
     collections::HashSet,
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc::{Receiver, RecvTimeoutError},
+        mpsc::{Receiver, RecvTimeoutError, Sender},
         Arc, RwLock,
     },
     thread::{self, Builder, JoinHandle},
@@ -46,13 +46,16 @@ impl std::fmt::Debug for BankNotification {
     }
 }
 
+pub type BankNotificationReceiver = Receiver<BankNotification>;
+pub type BankNotificationSender = Sender<BankNotification>;
+
 pub struct OptimisticallyConfirmedBankTracker {
     thread_hdl: JoinHandle<()>,
 }
 
 impl OptimisticallyConfirmedBankTracker {
     pub fn new(
-        receiver: Receiver<BankNotification>,
+        receiver: BankNotificationReceiver,
         exit: &Arc<AtomicBool>,
         bank_forks: Arc<RwLock<BankForks>>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,

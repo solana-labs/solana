@@ -338,9 +338,6 @@ impl Validator {
         block_commitment_cache.initialize_slots(bank.slot());
         let block_commitment_cache = Arc::new(RwLock::new(block_commitment_cache));
 
-        let optimistically_confirmed_bank =
-            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
             bank_forks.clone(),
@@ -403,7 +400,7 @@ impl Validator {
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
-        let (rpc_service, _bank_notification_sender) =
+        let (rpc_service, bank_notification_sender) =
             if let Some((rpc_addr, rpc_pubsub_addr, rpc_banks_addr)) = config.rpc_addrs {
                 if ContactInfo::is_valid_address(&node.info.rpc) {
                     assert!(ContactInfo::is_valid_address(&node.info.rpc_pubsub));
@@ -415,6 +412,8 @@ impl Validator {
                 }
                 let tpu_address = cluster_info.my_contact_info().tpu;
                 let (bank_notification_sender, bank_notification_receiver) = channel();
+                let optimistically_confirmed_bank =
+                    OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
                 (
                     Some(RpcServices {
                         json_rpc_service: JsonRpcService::new(
@@ -431,6 +430,7 @@ impl Validator {
                             validator_exit.clone(),
                             config.trusted_validators.clone(),
                             rpc_override_health_check.clone(),
+                            optimistically_confirmed_bank.clone(),
                         ),
                         pubsub_service: PubSubService::new(&subscriptions, rpc_pubsub_addr, &exit),
                         rpc_banks_service: RpcBanksService::new(
@@ -445,7 +445,7 @@ impl Validator {
                                 bank_notification_receiver,
                                 &exit,
                                 bank_forks.clone(),
-                                optimistically_confirmed_bank.clone(),
+                                optimistically_confirmed_bank,
                                 subscriptions.clone(),
                             ),
                     }),
@@ -554,6 +554,7 @@ impl Validator {
             verified_vote_receiver,
             replay_vote_sender.clone(),
             completed_data_sets_sender,
+            bank_notification_sender.clone(),
             TvuConfig {
                 max_ledger_shreds: config.max_ledger_shreds,
                 halt_on_trusted_validators_accounts_hash_mismatch: config
@@ -584,6 +585,7 @@ impl Validator {
             verified_vote_sender,
             replay_vote_receiver,
             replay_vote_sender,
+            bank_notification_sender,
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));
