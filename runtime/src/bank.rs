@@ -1314,7 +1314,7 @@ impl Bank {
         // accounts that were included in the bank delta hash when the bank was frozen,
         // and if we clean them here, any newly created snapshot's hash for this bank
         // may not match the frozen hash.
-        self.clean_accounts(Some(self.slot() - 1));
+        self.clean_accounts(true);
         clean.stop();
 
         let mut shrink = Measure::start("shrink");
@@ -3259,7 +3259,7 @@ impl Bank {
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(&self) -> bool {
         if self.slot() > 0 {
-            self.clean_accounts(Some(self.slot() - 1));
+            self.clean_accounts(true);
             self.shrink_all_slots();
         }
         // Order and short-circuiting is significant; verify_hash requires a valid bank hash
@@ -3540,7 +3540,16 @@ impl Bank {
         );
     }
 
-    pub fn clean_accounts(&self, max_clean_slot: Option<Slot>) {
+    pub fn clean_accounts(&self, skip_last: bool) {
+        let max_clean_slot = if skip_last {
+            // Don't clean the slot we're snapshotting because it may have zero-lamport
+            // accounts that were included in the bank delta hash when the bank was frozen,
+            // and if we clean them here, any newly created snapshot's hash for this bank
+            // may not match the frozen hash.
+            Some(self.slot() - 1)
+        } else {
+            None
+        };
         self.rc.accounts.accounts_db.clean_accounts(max_clean_slot);
     }
 
@@ -5640,7 +5649,7 @@ mod tests {
         }
 
         let hash = bank.update_accounts_hash();
-        bank.clean_accounts(None);
+        bank.clean_accounts(false);
         assert_eq!(bank.update_accounts_hash(), hash);
 
         let bank0 = Arc::new(new_from_parent(&bank));
@@ -5660,14 +5669,14 @@ mod tests {
 
         info!("bank0 purge");
         let hash = bank0.update_accounts_hash();
-        bank0.clean_accounts(None);
+        bank0.clean_accounts(false);
         assert_eq!(bank0.update_accounts_hash(), hash);
 
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
         info!("bank1 purge");
-        bank1.clean_accounts(None);
+        bank1.clean_accounts(false);
 
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
@@ -5685,7 +5694,7 @@ mod tests {
         // keypair should have 0 tokens on both forks
         assert_eq!(bank0.get_account(&keypair.pubkey()), None);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
-        bank1.clean_accounts(None);
+        bank1.clean_accounts(false);
 
         assert!(bank1.verify_bank_hash());
     }
@@ -8575,7 +8584,7 @@ mod tests {
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
 
         bank.squash();
-        bank.clean_accounts(None);
+        bank.clean_accounts(false);
         let force_to_return_alive_account = 0;
         assert_eq!(
             bank.process_stale_slot_with_budget(22, force_to_return_alive_account),
@@ -9247,7 +9256,7 @@ mod tests {
         let old_hash = bank1.hash();
 
         // `zero_lamport_pubkey` should have been deleted, hashes will not match
-        bank1.clean_accounts(None);
+        bank1.clean_accounts(false);
         bank1.rehash();
         let new_bank1_hash = bank1.hash();
         assert_ne!(old_hash, new_bank1_hash);
@@ -9259,7 +9268,7 @@ mod tests {
         let old_hash = bank1.hash();
 
         // `zero_lamport_pubkey` will not be deleted, hashes will match
-        bank1.clean_accounts(Some(1));
+        bank1.clean_accounts(true);
         bank1.rehash();
         let new_bank1_hash = bank1.hash();
         assert_eq!(old_hash, new_bank1_hash);

@@ -60,7 +60,7 @@ impl SnapshotRequestHandler {
                 // accounts that were included in the bank delta hash when the bank was frozen,
                 // and if we clean them here, the newly created snapshot's hash may not match
                 // the frozen hash.
-                snapshot_root_bank.clean_accounts(Some(snapshot_root_bank.slot() - 1));
+                snapshot_root_bank.clean_accounts(true);
                 clean_time.stop();
 
                 // Generate an accounts package
@@ -131,16 +131,20 @@ impl AccountsBackgroundService {
                 // Check to see if there were any requests for snapshotting banks
                 // < the current root bank `bank` above.
 
-                // Claim: Any snapshot request for slot `N` found here means that cleanup has
-                // been called at most on slot `N`
+                // Claim: Any snapshot request for slot `N` found here implies that the last cleanup
+                // slot `M` satisfies `M < N`
                 //
                 // Proof: Assume for contradiction that we find a snapshot request for slot `N` here,
-                // but cleanup has already happened on some slot `M > N`.
+                // but cleanup has already happened on some slot `M >= N`. Because the call to
+                // `bank.clean_accounts(true)` (in the code below) implies we only clean slots `<= bank - 1`,
+                // then that means in some *previous* iteration of this loop, we must have gotten a root
+                // bank for slot some slot `R` where `R > N`, but did not see the snapshot for `N` in the
+                // snapshot request channel.
                 //
-                // Then that means on some previous iteration of this loop, we found `bank_forks.root_bank() == M`,
-                // but did not see the snapshot for `N`. However, this is impossible because BankForks.set_root()
-                // will always flush the snapshot request for `N` to the snapshot request channel
-                // before setting a root `M > N`.
+                // However, this is impossible because BankForks.set_root() will always flush the snapshot
+                // request for `N` to the snapshot request channel before setting a root `R > N`, and
+                // snapshot_request_handler.handle_snapshot_requests() will always look for the latest
+                // available snapshot in the channel.
                 let snapshot_block_height =
                     snapshot_request_handler
                         .as_ref()
@@ -161,7 +165,7 @@ impl AccountsBackgroundService {
                     if bank.block_height() - last_cleaned_block_height
                         > (CLEAN_INTERVAL_BLOCKS + thread_rng().gen_range(0, 10))
                     {
-                        bank.clean_accounts(None);
+                        bank.clean_accounts(true);
                         last_cleaned_block_height = bank.block_height();
                     }
                 }

@@ -117,9 +117,9 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
         rv
     }
 
-    // Checks that the given slot is both:
-    // 1) Rooted
-    // 2) Less than or equal to an optionally specified `max_root`
+    // Checks that the given slot is either:
+    // 1) in the `ancestors` set
+    // 2) or is a root
     fn is_ancestor_or_root(&self, ancestors: Option<&Ancestors>, slot: Slot) -> bool {
         ancestors.map_or(false, |ancestors| ancestors.contains_key(&slot)) || (self.is_root(slot))
     }
