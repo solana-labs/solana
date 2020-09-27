@@ -311,7 +311,6 @@ impl ReplayStage {
                         transaction_status_sender.clone(),
                         &verify_recyclers,
                         &mut heaviest_subtree_fork_choice,
-                        &subscriptions,
                         &replay_vote_sender,
                         &bank_notification_sender,
                     );
@@ -1264,7 +1263,6 @@ impl ReplayStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         verify_recyclers: &VerifyRecyclers,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
-        subscriptions: &Arc<RpcSubscriptions>,
         replay_vote_sender: &ReplayVoteSender,
         bank_notification_sender: &Option<BankNotificationSender>,
     ) -> bool {
@@ -1337,7 +1335,6 @@ impl ReplayStage {
                 bank.freeze();
                 heaviest_subtree_fork_choice
                     .add_new_leaf_slot(bank.slot(), Some(bank.parent_slot()));
-                subscriptions.notify_frozen(bank.slot());
                 if let Some(sender) = bank_notification_sender {
                     sender
                         .send(BankNotification::Frozen(bank.clone()))

@@ -61,7 +61,6 @@ enum NotificationEntry {
     Slot(SlotInfo),
     Vote(Vote),
     Root(Slot),
-    Frozen(Slot),
     Bank(CommitmentSlots),
     Gossip(Slot),
     SignaturesReceived((Slot, Vec<Signature>)),
@@ -71,7 +70,6 @@ impl std::fmt::Debug for NotificationEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             NotificationEntry::Root(root) => write!(f, "Root({})", root),
-            NotificationEntry::Frozen(slot) => write!(f, "Frozen({})", slot),
             NotificationEntry::Vote(vote) => write!(f, "Vote({:?})", vote),
             NotificationEntry::Slot(slot_info) => write!(f, "Slot({:?})", slot_info),
             NotificationEntry::Bank(commitment_slots) => {
@@ -724,10 +722,6 @@ impl RpcSubscriptions {
         self.enqueue_notification(NotificationEntry::Vote(vote.clone()));
     }
 
-    pub fn notify_frozen(&self, frozen_slot: Slot) {
-        self.enqueue_notification(NotificationEntry::Frozen(frozen_slot));
-    }
-
     pub fn add_root_subscription(&self, sub_id: SubscriptionId, subscriber: Subscriber<Slot>) {
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
         let mut subscriptions = self.subscriptions.root_subscriptions.write().unwrap();
@@ -771,7 +765,6 @@ impl RpcSubscriptions {
         bank_forks: Arc<RwLock<BankForks>>,
         last_checked_slots: Arc<RwLock<HashMap<CommitmentLevel, Slot>>>,
     ) {
-        let mut pending_gossip_notifications = HashSet::new();
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
@@ -804,18 +797,10 @@ impl RpcSubscriptions {
                     }
                     NotificationEntry::Root(root) => {
                         debug!("root notify: {:?}", root);
-                        {
-                            let subscriptions = subscriptions.root_subscriptions.read().unwrap();
-                            for (_, sink) in subscriptions.iter() {
-                                notifier.notify(root, sink);
-                            }
+                        let subscriptions = subscriptions.root_subscriptions.read().unwrap();
+                        for (_, sink) in subscriptions.iter() {
+                            notifier.notify(root, sink);
                         }
-
-                        // Prune old pending notifications
-                        pending_gossip_notifications = pending_gossip_notifications
-                            .into_iter()
-                            .filter(|&s| s > root)
-                            .collect();
                     }
                     NotificationEntry::Bank(commitment_slots) => {
                         RpcSubscriptions::notify_accounts_programs_signatures(
@@ -828,36 +813,14 @@ impl RpcSubscriptions {
                             "bank",
                         )
                     }
-                    NotificationEntry::Frozen(slot) => {
-                        if pending_gossip_notifications.remove(&slot) {
-                            Self::process_gossip_notification(
-                                slot,
-                                &notifier,
-                                &subscriptions,
-                                &bank_forks,
-                                &last_checked_slots,
-                            );
-                        }
-                    }
                     NotificationEntry::Gossip(slot) => {
-                        let bank_frozen = bank_forks
-                            .read()
-                            .unwrap()
-                            .get(slot)
-                            .filter(|b| b.is_frozen())
-                            .is_some();
-
-                        if !bank_frozen {
-                            pending_gossip_notifications.insert(slot);
-                        } else {
-                            Self::process_gossip_notification(
-                                slot,
-                                &notifier,
-                                &subscriptions,
-                                &bank_forks,
-                                &last_checked_slots,
-                            );
-                        }
+                        Self::process_gossip_notification(
+                            slot,
+                            &notifier,
+                            &subscriptions,
+                            &bank_forks,
+                            &last_checked_slots,
+                        );
                     }
                     NotificationEntry::SignaturesReceived(slot_signatures) => {
                         RpcSubscriptions::process_signatures_received(
@@ -1053,6 +1016,9 @@ impl RpcSubscriptions {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use crate::optimistically_confirmed_bank_tracker::{
+        BankNotification, OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
+    };
     use jsonrpc_core::futures::{self, stream::Stream};
     use jsonrpc_pubsub::typed::Subscriber;
     use serial_test_derive::serial;
@@ -1630,18 +1596,22 @@ pub(crate) mod tests {
         bank_forks.write().unwrap().insert(bank2);
         let alice = Keypair::new();
 
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+        let mut pending_optimistically_confirmed_banks = HashSet::new();
+
         let (subscriber0, _id_receiver, transport_receiver0) =
             Subscriber::new_test("accountNotification");
         let (subscriber1, _id_receiver, transport_receiver1) =
             Subscriber::new_test("accountNotification");
         let exit = Arc::new(AtomicBool::new(false));
-        let subscriptions = RpcSubscriptions::new(
+        let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
                 1, 1,
             ))),
-        );
+        ));
         let sub_id0 = SubscriptionId::Number(0 as u64);
         subscriptions.add_account_subscription(
             alice.pubkey(),
@@ -1685,10 +1655,22 @@ pub(crate) mod tests {
             .unwrap();
 
         // First, notify the unfrozen bank first to queue pending notification
-        subscriptions.notify_gossip_subscribers(2);
+        OptimisticallyConfirmedBankTracker::process_notification(
+            BankNotification::OptimisticallyConfirmed(2),
+            &bank_forks,
+            &optimistically_confirmed_bank,
+            &subscriptions,
+            &mut pending_optimistically_confirmed_banks,
+        );
 
         // Now, notify the frozen bank and ensure its notifications are processed
-        subscriptions.notify_gossip_subscribers(1);
+        OptimisticallyConfirmedBankTracker::process_notification(
+            BankNotification::OptimisticallyConfirmed(1),
+            &bank_forks,
+            &optimistically_confirmed_bank,
+            &subscriptions,
+            &mut pending_optimistically_confirmed_banks,
+        );
 
         let (response, _) = robust_poll_or_panic(transport_receiver0);
         let expected = json!({
@@ -1723,7 +1705,14 @@ pub(crate) mod tests {
             subscriber1,
         );
 
-        subscriptions.notify_frozen(2);
+        let bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
+        OptimisticallyConfirmedBankTracker::process_notification(
+            BankNotification::Frozen(bank2),
+            &bank_forks,
+            &optimistically_confirmed_bank,
+            &subscriptions,
+            &mut pending_optimistically_confirmed_banks,
+        );
         let (response, _) = robust_poll_or_panic(transport_receiver1);
         let expected = json!({
            "jsonrpc": "2.0",

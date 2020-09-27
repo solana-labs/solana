@@ -611,7 +611,6 @@ impl ClusterInfoVoteListener {
                                 warn!("bank_notification_sender failed: {:?}", err)
                             });
                     }
-                    subscriptions.notify_gossip_subscribers(*slot);
                 }
 
                 if !is_new && !is_gossip_vote {
