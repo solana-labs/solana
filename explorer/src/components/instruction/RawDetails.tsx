@@ -1,18 +1,18 @@
 import React from "react";
-import bs58 from "bs58";
 import { TransactionInstruction } from "@solana/web3.js";
-import { Copyable } from "components/common/Copyable";
 import { Address } from "components/common/Address";
 
-function displayData(data: string) {
-  if (data.length > 50) {
-    return `${data.substring(0, 49)}…`;
+function wrap(input: string, length: number): string {
+  var result = [];
+  while (input.length) {
+    result.push(input.substr(0, length));
+    input = input.substr(length);
   }
-  return data;
+  return result.join("\n");
 }
 
 export function RawDetails({ ix }: { ix: TransactionInstruction }) {
-  const data = bs58.encode(ix.data);
+  const data = wrap(ix.data.toString("hex"), 50);
   return (
     <>
       <tr>
@@ -40,11 +40,9 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
       ))}
 
       <tr>
-        <td>Instruction Data (Base58)</td>
+        <td>Instruction Data (Hex)</td>
         <td className="text-lg-right">
-          <Copyable text={data} right>
-            <code>{displayData(data)}</code>
-          </Copyable>
+          <pre className="d-inline-block text-left mb-0">{data}</pre>
         </td>
       </tr>
     </>
