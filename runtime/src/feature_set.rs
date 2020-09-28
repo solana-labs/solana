@@ -21,6 +21,10 @@ pub mod pico_inflation {
     solana_sdk::declare_id!("GaBtBJvmS4Arjj5W1NmFcyvPjsHN38UGYDq2MDwbs9Qu");
 }
 
+pub mod spl_token_v2_multisig_fix {
+    solana_sdk::declare_id!("E5JiFDQCwyC6QfT9REFyMpfK2mHcmv1GUDySU1Ue7TYv");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -28,6 +32,7 @@ lazy_static! {
         (secp256k1_program_enabled::id(), "secp256k1 program"),
         (consistent_recent_blockhashes_sysvar::id(), "consistent recentblockhashes sysvar"),
         (pico_inflation::id(), "pico-inflation"),
+        (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
