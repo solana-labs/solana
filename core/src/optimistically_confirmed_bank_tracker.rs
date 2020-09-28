@@ -125,7 +125,7 @@ impl OptimisticallyConfirmedBankTracker {
                     }
                     drop(w_optimistically_confirmed_bank);
                     subscriptions.notify_gossip_subscribers(slot);
-                } else {
+                } else if slot > bank_forks.read().unwrap().root_bank().slot() {
                     pending_optimistically_confirmed_banks.insert(slot);
                 }
             }
@@ -149,11 +149,7 @@ impl OptimisticallyConfirmedBankTracker {
                     w_optimistically_confirmed_bank.bank = bank;
                 }
                 drop(w_optimistically_confirmed_bank);
-                *pending_optimistically_confirmed_banks = pending_optimistically_confirmed_banks
-                    .iter()
-                    .cloned()
-                    .filter(|&s| s > root_slot)
-                    .collect();
+                pending_optimistically_confirmed_banks.retain(|&s| s > root_slot);
             }
         }
     }
@@ -230,7 +226,7 @@ mod tests {
             &subscriptions,
             &mut pending_optimistically_confirmed_banks,
         );
-        // assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 2);
+        assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 2);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 1);
         assert_eq!(pending_optimistically_confirmed_banks.contains(&3), true);
 
@@ -274,5 +270,24 @@ mod tests {
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 5);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 0);
         assert_eq!(pending_optimistically_confirmed_banks.contains(&4), false);
+
+        // Banks <= root do not get added to pending list, even if not frozen
+        let bank5 = bank_forks.read().unwrap().get(5).unwrap().clone();
+        let bank6 = Bank::new_from_parent(&bank5, &Pubkey::default(), 6);
+        bank_forks.write().unwrap().insert(bank6);
+        let bank5 = bank_forks.read().unwrap().get(5).unwrap().clone();
+        let bank7 = Bank::new_from_parent(&bank5, &Pubkey::default(), 7);
+        bank_forks.write().unwrap().insert(bank7);
+        bank_forks.write().unwrap().set_root(7, &None, None);
+        OptimisticallyConfirmedBankTracker::process_notification(
+            BankNotification::OptimisticallyConfirmed(6),
+            &bank_forks,
+            &optimistically_confirmed_bank,
+            &subscriptions,
+            &mut pending_optimistically_confirmed_banks,
+        );
+        assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 5);
+        assert_eq!(pending_optimistically_confirmed_banks.len(), 0);
+        assert_eq!(pending_optimistically_confirmed_banks.contains(&6), false);
     }
 }
