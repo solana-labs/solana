@@ -370,34 +370,19 @@ impl CrdsGossipPush {
 
     /// purge old pending push messages
     pub fn purge_old_pending_push_messages(&mut self, crds: &Crds, min_time: u64) {
-        let old_msgs: Vec<CrdsValueLabel> = self
-            .push_messages
-            .iter()
-            .filter_map(|(k, hash)| {
-                if let Some(versioned) = crds.lookup_versioned(k) {
-                    if versioned.value.wallclock() < min_time || versioned.value_hash != *hash {
-                        Some(k)
-                    } else {
-                        None
-                    }
-                } else {
-                    Some(k)
-                }
-            })
-            .cloned()
-            .collect();
-        for k in old_msgs {
-            self.push_messages.remove(&k);
-        }
+        self.push_messages.retain(|k, hash| {
+            matches!(crds.lookup_versioned(k), Some(versioned) if
+                         versioned.value.wallclock() >= min_time
+                         && versioned.value_hash == *hash)
+        });
     }
 
     /// purge received push message cache
     pub fn purge_old_received_cache(&mut self, min_time: u64) {
-        self.received_cache
-            .iter_mut()
-            .for_each(|v| v.1.retain(|_, v| v.1 > min_time));
-
-        self.received_cache.retain(|_, v| !v.is_empty());
+        self.received_cache.retain(|_, v| {
+            v.retain(|_, (_, t)| *t > min_time);
+            !v.is_empty()
+        });
     }
 }
 
