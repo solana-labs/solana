@@ -7,6 +7,7 @@ const JSON_RPC_SERVER_ERROR_2: i64 = -32002;
 const JSON_RPC_SERVER_ERROR_3: i64 = -32003;
 const JSON_RPC_SERVER_ERROR_4: i64 = -32004;
 const JSON_RPC_SERVER_ERROR_5: i64 = -32005;
+const JSON_RPC_SERVER_ERROR_6: i64 = -32006;
 
 pub enum RpcCustomError {
     BlockCleanedUp {
@@ -22,6 +23,7 @@ pub enum RpcCustomError {
         slot: Slot,
     },
     RpcNodeUnhealthy,
+    TransactionPrecompileVerificationFailure(solana_sdk::transaction::TransactionError),
 }
 
 impl From<RpcCustomError> for Error {
@@ -56,6 +58,11 @@ impl From<RpcCustomError> for Error {
             RpcCustomError::RpcNodeUnhealthy => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_5),
                 message: "RPC node is unhealthy".to_string(),
+                data: None,
+            },
+            RpcCustomError::TransactionPrecompileVerificationFailure(e) => Self {
+                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_6),
+                message: format!("Transaction precompile verification failure {:?}", e),
                 data: None,
             },
         }
