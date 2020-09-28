@@ -5,7 +5,8 @@ use crate::{
     serde_snapshot::{
         bank_from_stream, bank_to_stream, SerdeStyle, SnapshotStorage, SnapshotStorages,
     },
-    snapshot_package::AccountsPackage,
+    snapshot_package::{AccountsPackage, AccountsPackageSendError, AccountsPackageSender},
+    status_cache::MAX_CACHE_ENTRIES,
 };
 use bincode::{config::Options, serialize_into};
 use bzip2::bufread::BzDecoder;
@@ -124,6 +125,9 @@ pub enum SnapshotError {
 
     #[error("Unpack error: {0}")]
     UnpackError(#[from] UnpackError),
+
+    #[error("accounts package send error")]
+    AccountsPackageSendError(#[from] AccountsPackageSendError),
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
 
@@ -159,7 +163,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     bank: &Bank,
     snapshot_files: &SlotSnapshotPaths,
     snapshot_path: Q,
-    slots_to_snapshot: &[Slot],
+    status_cache_slot_deltas: Vec<BankSlotDelta>,
     snapshot_package_output_path: P,
     snapshot_storages: SnapshotStorages,
     compression: CompressionType,
@@ -188,7 +192,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     let package = AccountsPackage::new(
         bank.slot(),
         bank.block_height(),
-        bank.src.slot_deltas(slots_to_snapshot),
+        status_cache_slot_deltas,
         snapshot_hard_links_dir,
         snapshot_storages,
         snapshot_package_output_file,
@@ -844,6 +848,57 @@ pub fn verify_snapshot_archive<P, Q, R>(
     // Check the account entries are the same
     let unpacked_accounts = unpack_dir.join(&TAR_ACCOUNTS_DIR);
     assert!(!dir_diff::is_different(&storages_to_verify, unpacked_accounts).unwrap());
+}
+
+pub fn purge_old_snapshots(snapshot_path: &Path) {
+    // Remove outdated snapshots
+    let slot_snapshot_paths = get_snapshot_paths(snapshot_path);
+    let num_to_remove = slot_snapshot_paths.len().saturating_sub(MAX_CACHE_ENTRIES);
+    for slot_files in &slot_snapshot_paths[..num_to_remove] {
+        let r = remove_snapshot(slot_files.slot, snapshot_path);
+        if r.is_err() {
+            warn!("Couldn't remove snapshot at: {:?}", snapshot_path);
+        }
+    }
+}
+
+// Gather the necessary elements for a snapshot of the given `root_bank`
+pub fn snapshot_bank(
+    root_bank: &Bank,
+    status_cache_slot_deltas: Vec<BankSlotDelta>,
+    accounts_package_sender: &AccountsPackageSender,
+    snapshot_path: &Path,
+    snapshot_package_output_path: &Path,
+    snapshot_version: SnapshotVersion,
+    compression: &CompressionType,
+) -> Result<()> {
+    let storages: Vec<_> = root_bank.get_snapshot_storages();
+    let mut add_snapshot_time = Measure::start("add-snapshot-ms");
+    add_snapshot(snapshot_path, &root_bank, &storages, snapshot_version)?;
+    add_snapshot_time.stop();
+    inc_new_counter_info!("add-snapshot-ms", add_snapshot_time.as_ms() as usize);
+
+    // Package the relevant snapshots
+    let slot_snapshot_paths = get_snapshot_paths(snapshot_path);
+    let latest_slot_snapshot_paths = slot_snapshot_paths
+        .last()
+        .expect("no snapshots found in config snapshot_path");
+    // We only care about the last bank's snapshot.
+    // We'll ask the bank for MAX_CACHE_ENTRIES (on the rooted path) worth of statuses
+    let package = package_snapshot(
+        &root_bank,
+        latest_slot_snapshot_paths,
+        snapshot_path,
+        status_cache_slot_deltas,
+        snapshot_package_output_path,
+        storages,
+        compression.clone(),
+        snapshot_version,
+    )?;
+
+    accounts_package_sender.send(package)?;
+
+    Ok(())
 }
 
 #[cfg(test)]

@@ -454,13 +454,16 @@ impl Validator {
             cluster_info.set_entrypoint(cluster_entrypoint.clone());
         }
 
-        let (snapshot_packager_service, snapshot_package_sender) =
-            if config.snapshot_config.is_some() {
+        let (snapshot_packager_service, snapshot_config_and_package_sender) =
+            if let Some(snapshot_config) = config.snapshot_config.clone() {
                 // Start a snapshot packaging service
                 let (sender, receiver) = channel();
                 let snapshot_packager_service =
                     SnapshotPackagerService::new(receiver, snapshot_hash, &exit, &cluster_info);
-                (Some(snapshot_packager_service), Some(sender))
+                (
+                    Some(snapshot_packager_service),
+                    Some((snapshot_config, sender)),
+                )
             } else {
                 (None, None)
             };
@@ -523,7 +526,7 @@ impl Validator {
             transaction_status_sender.clone(),
             rewards_recorder_sender,
             cache_block_time_sender,
-            snapshot_package_sender,
+            snapshot_config_and_package_sender,
             vote_tracker.clone(),
             retransmit_slots_sender,
             verified_vote_receiver,

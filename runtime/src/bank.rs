@@ -1306,13 +1306,15 @@ impl Bank {
         }
     }
 
+    // Should not be called outside of startup, will race with
+    // concurrent cleaning logic in AccountsBackgroundService
     pub fn exhaustively_free_unused_resource(&self) {
-        let mut reclaim = Measure::start("reclaim");
-        self.process_dead_slots();
-        reclaim.stop();
-
         let mut clean = Measure::start("clean");
-        self.clean_accounts();
+        // Don't clean the slot we're snapshotting because it may have zero-lamport
+        // accounts that were included in the bank delta hash when the bank was frozen,
+        // and if we clean them here, any newly created snapshot's hash for this bank
+        // may not match the frozen hash.
+        self.clean_accounts(true);
         clean.stop();
 
         let mut shrink = Measure::start("shrink");
@@ -1320,8 +1322,10 @@ impl Bank {
         shrink.stop();
 
         info!(
-            "exhaustively_free_unused_resource(): {} {} {}",
-            reclaim, clean, shrink,
+            "exhaustively_free_unused_resource()
+            clean: {},
+            shrink: {}",
+            clean, shrink,
         );
     }
 
@@ -3254,8 +3258,10 @@ impl Bank {
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(&self) -> bool {
-        self.clean_accounts();
-        self.shrink_all_slots();
+        if self.slot() > 0 {
+            self.clean_accounts(true);
+            self.shrink_all_slots();
+        }
         // Order and short-circuiting is significant; verify_hash requires a valid bank hash
         self.verify_bank_hash() && self.verify_hash()
     }
@@ -3534,12 +3540,17 @@ impl Bank {
         );
     }
 
-    pub fn clean_accounts(&self) {
-        self.rc.accounts.accounts_db.clean_accounts();
-    }
-
-    pub fn process_dead_slots(&self) {
-        self.rc.accounts.accounts_db.process_dead_slots(None);
+    pub fn clean_accounts(&self, skip_last: bool) {
+        let max_clean_slot = if skip_last {
+            // Don't clean the slot we're snapshotting because it may have zero-lamport
+            // accounts that were included in the bank delta hash when the bank was frozen,
+            // and if we clean them here, any newly created snapshot's hash for this bank
+            // may not match the frozen hash.
+            Some(self.slot() - 1)
+        } else {
+            None
+        };
+        self.rc.accounts.accounts_db.clean_accounts(max_clean_slot);
     }
 
     pub fn shrink_all_slots(&self) {
@@ -5263,7 +5274,7 @@ mod tests {
     impl Bank {
         fn slots_by_pubkey(&self, pubkey: &Pubkey, ancestors: &Ancestors) -> Vec<Slot> {
             let accounts_index = self.rc.accounts.accounts_db.accounts_index.read().unwrap();
-            let (accounts, _) = accounts_index.get(&pubkey, Some(&ancestors)).unwrap();
+            let (accounts, _) = accounts_index.get(&pubkey, Some(&ancestors), None).unwrap();
             accounts
                 .iter()
                 .map(|(slot, _)| *slot)
@@ -5638,7 +5649,7 @@ mod tests {
         }
 
         let hash = bank.update_accounts_hash();
-        bank.clean_accounts();
+        bank.clean_accounts(false);
         assert_eq!(bank.update_accounts_hash(), hash);
 
         let bank0 = Arc::new(new_from_parent(&bank));
@@ -5658,14 +5669,14 @@ mod tests {
 
         info!("bank0 purge");
         let hash = bank0.update_accounts_hash();
-        bank0.clean_accounts();
+        bank0.clean_accounts(false);
         assert_eq!(bank0.update_accounts_hash(), hash);
 
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
         info!("bank1 purge");
-        bank1.clean_accounts();
+        bank1.clean_accounts(false);
 
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
@@ -5683,7 +5694,7 @@ mod tests {
         // keypair should have 0 tokens on both forks
         assert_eq!(bank0.get_account(&keypair.pubkey()), None);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
-        bank1.clean_accounts();
+        bank1.clean_accounts(false);
 
         assert!(bank1.verify_bank_hash());
     }
@@ -6471,7 +6482,6 @@ mod tests {
         let pubkey = Pubkey::new_rand();
         let (genesis_config, mint_keypair) = create_genesis_config(2_000);
         let bank = Bank::new(&genesis_config);
-
         bank.transfer(1_000, &mint_keypair, &pubkey).unwrap();
         bank.freeze();
         bank.update_accounts_hash();
@@ -8574,7 +8584,7 @@ mod tests {
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
 
         bank.squash();
-        bank.clean_accounts();
+        bank.clean_accounts(false);
         let force_to_return_alive_account = 0;
         assert_eq!(
             bank.process_stale_slot_with_budget(22, force_to_return_alive_account),
@@ -9186,5 +9196,81 @@ mod tests {
         // Account is now empty, and the account lamports were burnt
         assert_eq!(bank.get_balance(&inline_spl_token_v2_0::id()), 0);
         assert_eq!(bank.capitalization(), original_capitalization - 100);
+    }
+
+    fn setup_bank_with_removable_zero_lamport_account() -> Arc<Bank> {
+        let (genesis_config, _mint_keypair) = create_genesis_config(2000);
+        let bank0 = Bank::new(&genesis_config);
+        bank0.freeze();
+
+        let bank1 = Arc::new(Bank::new_from_parent(
+            &Arc::new(bank0),
+            &Pubkey::default(),
+            1,
+        ));
+
+        let zero_lamport_pubkey = Pubkey::new_rand();
+
+        bank1.add_account_and_update_capitalization(
+            &zero_lamport_pubkey,
+            &Account::new(0, 0, &Pubkey::default()),
+        );
+        // Store another account in a separate AppendVec than `zero_lamport_pubkey`
+        // (guaranteed because of large file size). We need this to ensure slot is
+        // not cleaned up after clean is called, so that the bank hash still exists
+        // when we call rehash() later in this test.
+        let large_account_pubkey = Pubkey::new_rand();
+        bank1.add_account_and_update_capitalization(
+            &large_account_pubkey,
+            &Account::new(
+                1000,
+                bank1.rc.accounts.accounts_db.file_size() as usize,
+                &Pubkey::default(),
+            ),
+        );
+
+        bank1.freeze();
+        let bank1_hash = bank1.hash();
+
+        let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
+        bank2.freeze();
+
+        // Set a root so clean will happen on this slot
+        bank1.squash();
+
+        // All accounts other than `zero_lamport_pubkey` should be updated, which
+        // means clean should be able to delete the `zero_lamport_pubkey`
+        bank2.squash();
+
+        // Bank 1 hash should not change
+        bank1.rehash();
+        let new_bank1_hash = bank1.hash();
+        assert_eq!(bank1_hash, new_bank1_hash);
+
+        bank1
+    }
+
+    #[test]
+    fn test_clean_zero_lamport_account_different_hash() {
+        let bank1 = setup_bank_with_removable_zero_lamport_account();
+        let old_hash = bank1.hash();
+
+        // `zero_lamport_pubkey` should have been deleted, hashes will not match
+        bank1.clean_accounts(false);
+        bank1.rehash();
+        let new_bank1_hash = bank1.hash();
+        assert_ne!(old_hash, new_bank1_hash);
+    }
+
+    #[test]
+    fn test_clean_zero_lamport_account_same_hash() {
+        let bank1 = setup_bank_with_removable_zero_lamport_account();
+        let old_hash = bank1.hash();
+
+        // `zero_lamport_pubkey` will not be deleted, hashes will match
+        bank1.clean_accounts(true);
+        bank1.rehash();
+        let new_bank1_hash = bank1.hash();
+        assert_eq!(old_hash, new_bank1_hash);
     }
 }

@@ -1,10 +1,10 @@
 //! The `bank_forks` module implements BankForks a DAG of checkpointed Banks
 
-use crate::snapshot_package::{AccountsPackageSendError, AccountsPackageSender};
-use crate::snapshot_utils::{self, SnapshotError};
-use crate::{bank::Bank, status_cache::MAX_CACHE_ENTRIES};
+use crate::{
+    accounts_background_service::{SnapshotRequest, SnapshotRequestSender},
+    bank::Bank,
+};
 use log::*;
-use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_info;
 use solana_sdk::{clock::Slot, timing};
 use std::{
@@ -14,7 +14,6 @@ use std::{
     sync::Arc,
     time::Instant,
 };
-use thiserror::Error;
 
 pub use crate::snapshot_utils::SnapshotVersion;
 
@@ -43,21 +42,10 @@ pub struct SnapshotConfig {
     pub snapshot_version: SnapshotVersion,
 }
 
-#[derive(Error, Debug)]
-pub enum BankForksError {
-    #[error("snapshot error")]
-    SnapshotError(#[from] SnapshotError),
-
-    #[error("accounts package send error")]
-    AccountsPackageSendError(#[from] AccountsPackageSendError),
-}
-type Result<T> = std::result::Result<T, BankForksError>;
-
 pub struct BankForks {
     pub banks: HashMap<Slot, Arc<Bank>>,
     root: Slot,
     pub snapshot_config: Option<SnapshotConfig>,
-    last_snapshot_slot: Slot,
 
     pub accounts_hash_interval_slots: Slot,
     last_accounts_hash_slot: Slot,
@@ -155,7 +143,6 @@ impl BankForks {
             root,
             banks,
             snapshot_config: None,
-            last_snapshot_slot: root,
             accounts_hash_interval_slots: std::u64::MAX,
             last_accounts_hash_slot: root,
         }
@@ -183,7 +170,7 @@ impl BankForks {
     pub fn set_root(
         &mut self,
         root: Slot,
-        accounts_package_sender: &Option<AccountsPackageSender>,
+        snapshot_request_sender: &Option<SnapshotRequestSender>,
         highest_confirmed_root: Option<Slot>,
     ) {
         let old_epoch = self.root_bank().epoch();
@@ -231,27 +218,26 @@ impl BankForks {
 
                 bank.update_accounts_hash();
 
-                if self.snapshot_config.is_some() && accounts_package_sender.is_some() {
-                    // Generate an accounts package
-                    let mut snapshot_time = Measure::start("total-snapshot-ms");
-                    let r = self.generate_accounts_package(
-                        bank_slot,
-                        &bank.src.roots(),
-                        accounts_package_sender.as_ref().unwrap(),
-                    );
-                    if r.is_err() {
+                if self.snapshot_config.is_some() && snapshot_request_sender.is_some() {
+                    let snapshot_root_bank = self.root_bank().clone();
+                    let root_slot = snapshot_root_bank.slot();
+                    if let Err(e) =
+                        snapshot_request_sender
+                            .as_ref()
+                            .unwrap()
+                            .send(SnapshotRequest {
+                                snapshot_root_bank,
+                                // Save off the status cache because these may get pruned
+                                // if another `set_root()` is called before the snapshots package
+                                // can be generated
+                                status_cache_slot_deltas: bank.src.slot_deltas(&bank.src.roots()),
+                            })
+                    {
                         warn!(
-                            "Error generating snapshot for bank: {}, err: {:?}",
-                            bank_slot, r
+                            "Error sending snapshot request for bank: {}, err: {:?}",
+                            root_slot, e
                         );
-                    } else {
-                        self.last_snapshot_slot = bank_slot;
                     }
-
-                    // Cleanup outdated snapshots
-                    self.purge_old_snapshots();
-                    snapshot_time.stop();
-                    inc_new_counter_info!("total-snapshot-ms", snapshot_time.as_ms() as usize);
                 }
                 break;
             }
@@ -275,67 +261,6 @@ impl BankForks {
 
     pub fn root(&self) -> Slot {
         self.root
-    }
-
-    pub fn purge_old_snapshots(&self) {
-        // Remove outdated snapshots
-        let config = self.snapshot_config.as_ref().unwrap();
-        let slot_snapshot_paths = snapshot_utils::get_snapshot_paths(&config.snapshot_path);
-        let num_to_remove = slot_snapshot_paths.len().saturating_sub(MAX_CACHE_ENTRIES);
-        for slot_files in &slot_snapshot_paths[..num_to_remove] {
-            let r = snapshot_utils::remove_snapshot(slot_files.slot, &config.snapshot_path);
-            if r.is_err() {
-                warn!("Couldn't remove snapshot at: {:?}", config.snapshot_path);
-            }
-        }
-    }
-
-    pub fn generate_accounts_package(
-        &self,
-        root: Slot,
-        slots_to_snapshot: &[Slot],
-        accounts_package_sender: &AccountsPackageSender,
-    ) -> Result<()> {
-        let config = self.snapshot_config.as_ref().unwrap();
-
-        // Add a snapshot for the new root
-        let bank = self
-            .get(root)
-            .cloned()
-            .expect("root must exist in BankForks");
-
-        let storages: Vec<_> = bank.get_snapshot_storages();
-        let mut add_snapshot_time = Measure::start("add-snapshot-ms");
-        snapshot_utils::add_snapshot(
-            &config.snapshot_path,
-            &bank,
-            &storages,
-            config.snapshot_version,
-        )?;
-        add_snapshot_time.stop();
-        inc_new_counter_info!("add-snapshot-ms", add_snapshot_time.as_ms() as usize);
-
-        // Package the relevant snapshots
-        let slot_snapshot_paths = snapshot_utils::get_snapshot_paths(&config.snapshot_path);
-        let latest_slot_snapshot_paths = slot_snapshot_paths
-            .last()
-            .expect("no snapshots found in config snapshot_path");
-        // We only care about the last bank's snapshot.
-        // We'll ask the bank for MAX_CACHE_ENTRIES (on the rooted path) worth of statuses
-        let package = snapshot_utils::package_snapshot(
-            &bank,
-            latest_slot_snapshot_paths,
-            &config.snapshot_path,
-            slots_to_snapshot,
-            &config.snapshot_package_output_path,
-            storages,
-            config.compression.clone(),
-            config.snapshot_version,
-        )?;
-
-        accounts_package_sender.send(package)?;
-
-        Ok(())
     }
 
     fn prune_non_root(&mut self, root: Slot, highest_confirmed_root: Option<Slot>) {

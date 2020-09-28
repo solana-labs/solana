@@ -35,12 +35,15 @@ macro_rules! DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS {
 #[cfg(test)]
 mod tests {
     use bincode::serialize_into;
+    use crossbeam_channel::unbounded;
     use fs_extra::dir::CopyOptions;
     use itertools::Itertools;
-    use solana_core::cluster_info::ClusterInfo;
-    use solana_core::contact_info::ContactInfo;
-    use solana_core::snapshot_packager_service::SnapshotPackagerService;
+    use solana_core::{
+        cluster_info::ClusterInfo, contact_info::ContactInfo,
+        snapshot_packager_service::SnapshotPackagerService,
+    };
     use solana_runtime::{
+        accounts_background_service::SnapshotRequestHandler,
         bank::{Bank, BankSlotDelta},
         bank_forks::{BankForks, CompressionType, SnapshotConfig},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
@@ -182,8 +185,14 @@ mod tests {
         let bank_forks = &mut snapshot_test_config.bank_forks;
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
-        let (s, _r) = channel();
-        let sender = Some(s);
+        let (s, snapshot_request_receiver) = unbounded();
+        let (accounts_package_sender, _r) = channel();
+        let snapshot_request_sender = Some(s);
+        let snapshot_request_handler = SnapshotRequestHandler {
+            snapshot_config: snapshot_test_config.snapshot_config.clone(),
+            snapshot_request_receiver,
+            accounts_package_sender,
+        };
         for slot in 0..last_slot {
             let mut bank = Bank::new_from_parent(&bank_forks[slot], &Pubkey::default(), slot + 1);
             f(&mut bank, &mint_keypair);
@@ -192,7 +201,9 @@ mod tests {
             // and to allow snapshotting of bank and the purging logic on status_cache to
             // kick in
             if slot % set_root_interval == 0 || slot == last_slot - 1 {
-                bank_forks.set_root(bank.slot(), &sender, None);
+                // set_root should send a snapshot request
+                bank_forks.set_root(bank.slot(), &snapshot_request_sender, None);
+                snapshot_request_handler.handle_snapshot_requests();
             }
         }
 
@@ -207,7 +218,7 @@ mod tests {
             last_bank,
             &last_slot_snapshot_path,
             snapshot_path,
-            &last_bank.src.roots(),
+            last_bank.src.slot_deltas(&last_bank.src.roots()),
             &snapshot_config.snapshot_package_output_path,
             last_bank.get_snapshot_storages(),
             CompressionType::Bzip2,
@@ -312,7 +323,6 @@ mod tests {
             assert_eq!(bank.process_transaction(&tx), Ok(()));
             bank.squash();
             let accounts_hash = bank.update_accounts_hash();
-            bank_forks.insert(bank);
 
             let package_sender = {
                 if slot == saved_slot as u64 {
@@ -325,10 +335,18 @@ mod tests {
                 }
             };
 
-            bank_forks
-                .generate_accounts_package(slot, &[], &package_sender)
-                .unwrap();
+            snapshot_utils::snapshot_bank(
+                &bank,
+                vec![],
+                &package_sender,
+                &snapshot_path,
+                &snapshot_package_output_path,
+                snapshot_config.snapshot_version,
+                &snapshot_config.compression,
+            )
+            .unwrap();
 
+            bank_forks.insert(bank);
             if slot == saved_slot as u64 {
                 let options = CopyOptions::new();
                 fs_extra::dir::copy(accounts_dir, &saved_accounts_dir, &options).unwrap();
@@ -359,7 +377,7 @@ mod tests {
 
         // Purge all the outdated snapshots, including the ones needed to generate the package
         // currently sitting in the channel
-        bank_forks.purge_old_snapshots();
+        snapshot_utils::purge_old_snapshots(&snapshot_path);
         assert!(snapshot_utils::get_snapshot_paths(&snapshots_dir)
             .into_iter()
             .map(|path| path.slot)
@@ -418,7 +436,7 @@ mod tests {
         let num_set_roots = MAX_CACHE_ENTRIES * 2;
 
         for add_root_interval in &[1, 3, 9] {
-            let (snapshot_sender, _snapshot_receiver) = channel();
+            let (snapshot_sender, _snapshot_receiver) = unbounded();
             // Make sure this test never clears bank.slots_since_snapshot
             let mut snapshot_test_config = SnapshotTestConfig::new(
                 snapshot_version,

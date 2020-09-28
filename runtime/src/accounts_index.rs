@@ -31,7 +31,7 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
     {
         for (pubkey, list) in iter {
             let list_r = &list.1.read().unwrap();
-            if let Some(index) = self.latest_slot(Some(ancestors), &list_r) {
+            if let Some(index) = self.latest_slot(Some(ancestors), &list_r, None) {
                 func(pubkey, (&list_r[index].1, list_r[index].0));
             }
         }
@@ -92,21 +92,36 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
         (reclaims, list.is_empty())
     }
 
-    // find the latest slot and T in a slice for a given ancestor
-    // returns index into 'slice' if found, None if not.
-    fn latest_slot(&self, ancestors: Option<&Ancestors>, slice: SlotSlice<T>) -> Option<usize> {
-        let mut max = 0;
+    // Given a SlotSlice `L`, a list of ancestors and a maximum slot, find the latest element
+    // in `L`, where the slot `S < max_slot`, and `S` is an ancestor or root.
+    fn latest_slot(
+        &self,
+        ancestors: Option<&Ancestors>,
+        slice: SlotSlice<T>,
+        max_slot: Option<Slot>,
+    ) -> Option<usize> {
+        let mut current_max = 0;
+        let max_slot = max_slot.unwrap_or(std::u64::MAX);
+
         let mut rv = None;
         for (i, (slot, _t)) in slice.iter().rev().enumerate() {
-            if *slot >= max
-                && (ancestors.map_or(false, |ancestors| ancestors.contains_key(slot))
-                    || self.is_root(*slot))
+            if *slot >= current_max
+                && *slot <= max_slot
+                && self.is_ancestor_or_root(ancestors, *slot)
             {
                 rv = Some((slice.len() - 1) - i);
-                max = *slot;
+                current_max = *slot;
             }
         }
+
         rv
+    }
+
+    // Checks that the given slot is either:
+    // 1) in the `ancestors` set
+    // 2) or is a root
+    fn is_ancestor_or_root(&self, ancestors: Option<&Ancestors>, slot: Slot) -> bool {
+        ancestors.map_or(false, |ancestors| ancestors.contains_key(&slot)) || (self.is_root(slot))
     }
 
     /// Get an account
@@ -115,11 +130,12 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
         &self,
         pubkey: &Pubkey,
         ancestors: Option<&Ancestors>,
+        max_root: Option<Slot>,
     ) -> Option<(RwLockReadGuard<SlotList<T>>, usize)> {
         self.account_maps.get(pubkey).and_then(|list| {
             let list_r = list.1.read().unwrap();
             let lock = &list_r;
-            let found_index = self.latest_slot(ancestors, &lock)?;
+            let found_index = self.latest_slot(ancestors, &lock, max_root)?;
             Some((list_r, found_index))
         })
     }
@@ -183,9 +199,6 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
                 lock.0.fetch_add(1, Ordering::Relaxed);
             }
             list.push((slot, account_info));
-            // now, do lazy clean
-            self.purge_older_root_entries(list, reclaims);
-
             None
         } else {
             Some(account_info)
@@ -208,10 +221,18 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
         }
     }
 
-    fn purge_older_root_entries(&self, list: &mut SlotList<T>, reclaims: &mut SlotList<T>) {
+    fn purge_older_root_entries(
+        &self,
+        list: &mut SlotList<T>,
+        reclaims: &mut SlotList<T>,
+        max_clean_root: Option<Slot>,
+    ) {
         let roots = &self.roots;
 
-        let max_root = Self::get_max_root(roots, &list);
+        let mut max_root = Self::get_max_root(roots, &list);
+        if let Some(max_clean_root) = max_clean_root {
+            max_root = std::cmp::min(max_root, max_clean_root);
+        }
 
         reclaims.extend(
             list.iter()
@@ -221,10 +242,15 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
         list.retain(|(slot, _)| !Self::can_purge(max_root, *slot));
     }
 
-    pub fn clean_rooted_entries(&self, pubkey: &Pubkey, reclaims: &mut SlotList<T>) {
+    pub fn clean_rooted_entries(
+        &self,
+        pubkey: &Pubkey,
+        reclaims: &mut SlotList<T>,
+        max_clean_root: Option<Slot>,
+    ) {
         if let Some(locked_entry) = self.account_maps.get(pubkey) {
             let mut list = locked_entry.1.write().unwrap();
-            self.purge_older_root_entries(&mut list, reclaims);
+            self.purge_older_root_entries(&mut list, reclaims, max_clean_root);
         }
     }
 
@@ -273,10 +299,19 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
         self.previous_uncleaned_roots.remove(&slot);
     }
 
-    pub fn reset_uncleaned_roots(&mut self) -> HashSet<Slot> {
-        let empty = HashSet::new();
-        let new_previous = std::mem::replace(&mut self.uncleaned_roots, empty);
-        std::mem::replace(&mut self.previous_uncleaned_roots, new_previous)
+    pub fn reset_uncleaned_roots(&mut self, max_clean_root: Option<Slot>) -> HashSet<Slot> {
+        let mut cleaned_roots = HashSet::new();
+        self.uncleaned_roots.retain(|root| {
+            let is_cleaned = max_clean_root
+                .map(|max_clean_root| *root <= max_clean_root)
+                .unwrap_or(true);
+            if is_cleaned {
+                cleaned_roots.insert(*root);
+            }
+            // Only keep the slots that have yet to be cleaned
+            !is_cleaned
+        });
+        std::mem::replace(&mut self.previous_uncleaned_roots, cleaned_roots)
     }
 }
 
@@ -290,8 +325,8 @@ mod tests {
         let key = Keypair::new();
         let index = AccountsIndex::<bool>::default();
         let ancestors = HashMap::new();
-        assert!(index.get(&key.pubkey(), Some(&ancestors)).is_none());
-        assert!(index.get(&key.pubkey(), None).is_none());
+        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
+        assert!(index.get(&key.pubkey(), None, None).is_none());
 
         let mut num = 0;
         index.scan_accounts(&ancestors, |_pubkey, _index| num += 1);
@@ -307,8 +342,8 @@ mod tests {
         assert!(gc.is_empty());
 
         let ancestors = HashMap::new();
-        assert!(index.get(&key.pubkey(), Some(&ancestors)).is_none());
-        assert!(index.get(&key.pubkey(), None).is_none());
+        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
+        assert!(index.get(&key.pubkey(), None, None).is_none());
 
         let mut num = 0;
         index.scan_accounts(&ancestors, |_pubkey, _index| num += 1);
@@ -324,7 +359,7 @@ mod tests {
         assert!(gc.is_empty());
 
         let ancestors = vec![(1, 1)].into_iter().collect();
-        assert!(index.get(&key.pubkey(), Some(&ancestors)).is_none());
+        assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
 
         let mut num = 0;
         index.scan_accounts(&ancestors, |_pubkey, _index| num += 1);
@@ -340,7 +375,7 @@ mod tests {
         assert!(gc.is_empty());
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors)).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
         assert_eq!(list[idx], (0, true));
 
         let mut num = 0;
@@ -372,7 +407,7 @@ mod tests {
         assert!(gc.is_empty());
 
         index.add_root(0);
-        let (list, idx) = index.get(&key.pubkey(), None).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), None, None).unwrap();
         assert_eq!(list[idx], (0, true));
     }
 
@@ -406,7 +441,7 @@ mod tests {
         assert_eq!(2, index.uncleaned_roots.len());
 
         assert_eq!(0, index.previous_uncleaned_roots.len());
-        index.reset_uncleaned_roots();
+        index.reset_uncleaned_roots(None);
         assert_eq!(2, index.roots.len());
         assert_eq!(0, index.uncleaned_roots.len());
         assert_eq!(2, index.previous_uncleaned_roots.len());
@@ -436,14 +471,14 @@ mod tests {
         let mut gc = Vec::new();
         index.insert(0, &key.pubkey(), true, &mut gc);
         assert!(gc.is_empty());
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors)).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
         assert_eq!(list[idx], (0, true));
         drop(list);
 
         let mut gc = Vec::new();
         index.insert(0, &key.pubkey(), false, &mut gc);
         assert_eq!(gc, vec![(0, true)]);
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors)).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
         assert_eq!(list[idx], (0, false));
     }
 
@@ -458,10 +493,10 @@ mod tests {
         assert!(gc.is_empty());
         index.insert(1, &key.pubkey(), false, &mut gc);
         assert!(gc.is_empty());
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors)).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
         assert_eq!(list[idx], (0, true));
         let ancestors = vec![(1, 0)].into_iter().collect();
-        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors)).unwrap();
+        let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
         assert_eq!(list[idx], (1, false));
     }
 
@@ -479,8 +514,11 @@ mod tests {
         index.add_root(1);
         index.add_root(3);
         index.insert(4, &key.pubkey(), true, &mut gc);
-        assert_eq!(gc, vec![(0, true), (1, false), (2, true)]);
-        let (list, idx) = index.get(&key.pubkey(), None).unwrap();
+
+        // Updating index should not purge older roots, only purges
+        // previous updates within the same slot
+        assert_eq!(gc, vec![]);
+        let (list, idx) = index.get(&key.pubkey(), None, None).unwrap();
         assert_eq!(list[idx], (3, true));
 
         let mut num = 0;
@@ -515,5 +553,55 @@ mod tests {
         assert_eq!(purges, (vec![(1, 10)], true));
 
         assert_eq!(None, index.update(1, &key.pubkey(), 9, &mut gc));
+    }
+
+    #[test]
+    fn test_latest_slot() {
+        let slot_slice = vec![(0, true), (5, true), (3, true), (7, true)];
+        let mut index = AccountsIndex::<bool>::default();
+
+        // No ancestors, no root, should return None
+        assert!(index.latest_slot(None, &slot_slice, None).is_none());
+
+        // Given a root, should return the root
+        index.add_root(5);
+        assert_eq!(index.latest_slot(None, &slot_slice, None).unwrap(), 1);
+
+        // Given a maximum -= root, should still return the root
+        assert_eq!(index.latest_slot(None, &slot_slice, Some(5)).unwrap(), 1);
+
+        // Given a maximum < root, should filter out the root
+        assert!(index.latest_slot(None, &slot_slice, Some(4)).is_none());
+
+        // Given a maximum, should filter out the ancestors > maximum
+        let ancestors: HashMap<Slot, usize> = vec![(3, 1), (7, 1)].into_iter().collect();
+        assert_eq!(
+            index
+                .latest_slot(Some(&ancestors), &slot_slice, Some(4))
+                .unwrap(),
+            2
+        );
+        assert_eq!(
+            index
+                .latest_slot(Some(&ancestors), &slot_slice, Some(7))
+                .unwrap(),
+            3
+        );
+
+        // Given no maximum, should just return the greatest ancestor or root
+        assert_eq!(
+            index
+                .latest_slot(Some(&ancestors), &slot_slice, None)
+                .unwrap(),
+            3
+        );
+
+        // Because the given maximum `m == root`, ancestors > root
+        assert_eq!(
+            index
+                .latest_slot(Some(&ancestors), &slot_slice, Some(5))
+                .unwrap(),
+            1
+        );
     }
 }

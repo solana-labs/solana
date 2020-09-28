@@ -1805,7 +1805,7 @@ fn main() {
                     );
                     assert!(bank.is_complete());
                     bank.squash();
-                    bank.clean_accounts();
+                    bank.clean_accounts(true);
                     bank.update_accounts_hash();
                     if rehash {
                         bank.rehash();
@@ -1823,7 +1823,7 @@ fn main() {
                                 &bank,
                                 &slot_snapshot_paths,
                                 &temp_dir,
-                                &bank.src.roots(),
+                                bank.src.slot_deltas(&bank.src.roots()),
                                 output_directory,
                                 storages,
                                 CompressionType::Bzip2,

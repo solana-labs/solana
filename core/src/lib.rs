@@ -9,7 +9,6 @@
 #[macro_use]
 extern crate solana_bpf_loader_program;
 
-pub mod accounts_background_service;
 pub mod accounts_hash_verifier;
 pub mod banking_stage;
 pub mod bigtable_upload_service;

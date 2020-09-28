@@ -1073,7 +1073,7 @@ mod tests {
             .transfer_and_confirm(50, &alice_keypair, &Pubkey::new_rand())
             .unwrap();
 
-        // super fun time; callback chooses to .clean_accounts() or not
+        // super fun time; callback chooses to .clean_accounts(None) or not
         callback(&*bank);
 
         // create a normal account at the same pubkey as the zero-lamports account
@@ -1091,7 +1091,7 @@ mod tests {
             bank.squash();
             // do clean and assert that it actually did its job
             assert_eq!(3, bank.get_snapshot_storages().len());
-            bank.clean_accounts();
+            bank.clean_accounts(false);
             assert_eq!(2, bank.get_snapshot_storages().len());
         });
     }
