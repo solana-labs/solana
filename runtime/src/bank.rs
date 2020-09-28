@@ -2395,6 +2395,10 @@ impl Bank {
 
         let enforce_fix = match self.cluster_type() {
             ClusterType::Development => true,
+            // Repurpose Devnet for testing
+            #[cfg(test)]
+            ClusterType::Devnet => false,
+            #[cfg(not(test))]
             ClusterType::Devnet => true,
             ClusterType::Testnet => self.epoch() >= Epoch::max_value(),
             ClusterType::MainnetBeta => self.epoch() >= Epoch::max_value(),
@@ -4503,6 +4507,51 @@ mod tests {
         );
         bank.freeze();
         assert!(bank.calculate_and_verify_capitalization());
+    }
+
+    #[test]
+    fn test_distribute_rent_to_validators_overflow() {
+        solana_logger::setup();
+
+        // These values are taken from the real cluster (testnet)
+        const RENT_TO_BE_DISTRIBUTED: u64 = 120525;
+        const VALIDATOR_STAKE: u64 = 374_999_998_287_840;
+
+        let validator_pubkey = Pubkey::new_rand();
+        let bootstrap_validator_stake_lamports = VALIDATOR_STAKE;
+        let mut genesis_config = create_genesis_config_with_leader(
+            10,
+            &validator_pubkey,
+            bootstrap_validator_stake_lamports,
+        )
+        .genesis_config;
+
+        let bank = Bank::new(&genesis_config);
+        let old_validator_lamports = bank.get_balance(&validator_pubkey);
+        bank.distribute_rent_to_validators(&bank.vote_accounts(), RENT_TO_BE_DISTRIBUTED);
+        let new_validator_lamports = bank.get_balance(&validator_pubkey);
+        assert_eq!(
+            new_validator_lamports,
+            old_validator_lamports + RENT_TO_BE_DISTRIBUTED
+        );
+
+        genesis_config.cluster_type = ClusterType::Devnet;
+        let bank = std::panic::AssertUnwindSafe(Bank::new(&genesis_config));
+        let old_validator_lamports = bank.get_balance(&validator_pubkey);
+        let new_validator_lamports = std::panic::catch_unwind(|| {
+            bank.distribute_rent_to_validators(&bank.vote_accounts(), RENT_TO_BE_DISTRIBUTED);
+            bank.get_balance(&validator_pubkey)
+        });
+
+        if let Ok(new_validator_lamports) = new_validator_lamports {
+            info!("asserting overflowing incorrect rent distribution");
+            assert_ne!(
+                new_validator_lamports,
+                old_validator_lamports + RENT_TO_BE_DISTRIBUTED
+            );
+        } else {
+            info!("NOT-asserting overflowing incorrect rent distribution");
+        }
     }
 
     #[test]
