@@ -6960,48 +6960,6 @@ mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
-    fn test_bank_entered_epoch_callback() {
-        let (genesis_config, _) = create_genesis_config(500);
-        let mut bank0 = Arc::new(Bank::new(&genesis_config));
-        let callback_count = Arc::new(AtomicU64::new(0));
-
-        Arc::get_mut(&mut bank0)
-            .unwrap()
-            .initiate_entered_epoch_callback({
-                let callback_count = callback_count.clone();
-                Box::new(move |_, _| {
-                    callback_count.fetch_add(1, Ordering::SeqCst);
-                })
-            });
-
-        // set_entered_eepoc_callbak fires the initial call
-        assert_eq!(callback_count.load(Ordering::SeqCst), 1);
-
-        let _bank1 =
-            Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0) - 1);
-        // No callback called while within epoch 0
-        assert_eq!(callback_count.load(Ordering::SeqCst), 1);
-
-        let _bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0));
-        // Callback called as bank1 is in epoch 1
-        assert_eq!(callback_count.load(Ordering::SeqCst), 2);
-
-        callback_count.store(0, Ordering::SeqCst);
-        let _bank1 = Bank::new_from_parent(
-            &bank0,
-            &Pubkey::default(),
-            std::u64::MAX / bank0.ticks_per_slot - 1,
-        );
-        // If the new bank jumps ahead multiple epochs the callback is still only called once.
-        // This was done to keep the callback implementation simpler as new bank will never jump
-        // cross multiple epochs in a real deployment.
-        assert_eq!(callback_count.load(Ordering::SeqCst), 1);
-    }
-
-    #[test]
-=======
->>>>>>> 31696a1d7... Port BPFLoader2 activation to FeatureSet and rework built-in program activation
     fn test_is_delta_true() {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let bank = Arc::new(Bank::new(&genesis_config));
