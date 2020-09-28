@@ -2393,16 +2393,7 @@ impl Bank {
             }
         });
 
-        let enforce_fix = match self.cluster_type() {
-            ClusterType::Development => true,
-            // Repurpose Devnet for testing
-            #[cfg(test)]
-            ClusterType::Devnet => false,
-            #[cfg(not(test))]
-            ClusterType::Devnet => true,
-            ClusterType::Testnet => self.epoch() >= Epoch::max_value(),
-            ClusterType::MainnetBeta => self.epoch() >= Epoch::max_value(),
-        };
+        let enforce_fix = self.no_overflow_rent_distribution_enabled();
 
         let mut rent_distributed_in_initial_round = 0;
         let validator_rent_shares = validator_stakes
@@ -3634,6 +3625,11 @@ impl Bank {
             .is_active(&feature_set::secp256k1_program_enabled::id())
     }
 
+    pub fn no_overflow_rent_distribution_enabled(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::no_overflow_rent_distribution::id())
+    }
+
     // This is called from snapshot restore AND for each epoch boundary
     // The entire code path herein must be idempotent
     fn apply_feature_activations(&mut self, init_finish_or_warp: bool) {
@@ -4514,7 +4510,7 @@ mod tests {
         solana_logger::setup();
 
         // These values are taken from the real cluster (testnet)
-        const RENT_TO_BE_DISTRIBUTED: u64 = 120525;
+        const RENT_TO_BE_DISTRIBUTED: u64 = 120_525;
         const VALIDATOR_STAKE: u64 = 374_999_998_287_840;
 
         let validator_pubkey = Pubkey::new_rand();
@@ -4535,7 +4531,10 @@ mod tests {
             old_validator_lamports + RENT_TO_BE_DISTRIBUTED
         );
 
-        genesis_config.cluster_type = ClusterType::Devnet;
+        genesis_config
+            .accounts
+            .remove(&feature_set::no_overflow_rent_distribution::id())
+            .unwrap();
         let bank = std::panic::AssertUnwindSafe(Bank::new(&genesis_config));
         let old_validator_lamports = bank.get_balance(&validator_pubkey);
         let new_validator_lamports = std::panic::catch_unwind(|| {
