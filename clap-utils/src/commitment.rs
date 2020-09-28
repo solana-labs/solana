@@ -15,7 +15,7 @@ pub fn commitment_arg_with_default<'a, 'b>(default_value: &'static str) -> Arg<'
     Arg::with_name(COMMITMENT_ARG.name)
         .long(COMMITMENT_ARG.long)
         .takes_value(true)
-        .possible_values(&["recent", "single", "root", "max"])
+        .possible_values(&["recent", "single", "singleGossip", "root", "max"])
         .default_value(default_value)
         .value_name("COMMITMENT_LEVEL")
         .help(COMMITMENT_ARG.help)
