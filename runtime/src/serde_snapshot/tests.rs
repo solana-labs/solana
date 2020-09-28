@@ -212,6 +212,7 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
         &genesis_config,
         &[],
         None,
+        None,
     )
     .unwrap();
     dbank.src = ref_sc;
