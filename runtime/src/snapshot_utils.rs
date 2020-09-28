@@ -607,6 +607,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
     }
     if genesis_config.cluster_type == ClusterType::Testnet {
+        // remove me after we transitions to the fixed rent distribution with no overflow
         let old = bank.set_capitalization();
         if old != bank.capitalization() {
             warn!(

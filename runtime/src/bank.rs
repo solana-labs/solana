@@ -2357,7 +2357,6 @@ impl Bank {
         rent_to_be_distributed: u64,
     ) {
         let mut total_staked = 0;
-        let mut rent_distributed_in_initial_round = 0;
 
         // Collect the stake associated with each validator.
         // Note that a validator may be present in this vector multiple times if it happens to have
@@ -2376,6 +2375,16 @@ impl Bank {
             })
             .collect::<Vec<(Pubkey, u64)>>();
 
+        #[cfg(test)]
+        if validator_stakes.is_empty() {
+            // some tests bank.freezes() with bad staking state
+            self.capitalization
+                .fetch_sub(rent_to_be_distributed, Relaxed);
+            return;
+        }
+        #[cfg(not(test))]
+        assert!(!validator_stakes.is_empty());
+
         // Sort first by stake and then by validator identity pubkey for determinism
         validator_stakes.sort_by(|(pubkey1, staked1), (pubkey2, staked2)| {
             match staked2.cmp(staked1) {
@@ -2391,6 +2400,7 @@ impl Bank {
             ClusterType::MainnetBeta => self.epoch() >= Epoch::max_value(),
         };
 
+        let mut rent_distributed_in_initial_round = 0;
         let validator_rent_shares = validator_stakes
             .into_iter()
             .map(|(pubkey, staked)| {
@@ -2426,6 +2436,12 @@ impl Bank {
 
         if enforce_fix {
             assert_eq!(leftover_lamports, 0);
+        } else if leftover_lamports != 0 {
+            warn!(
+                "There was leftover from rent distribution: {}",
+                leftover_lamports
+            );
+            self.capitalization.fetch_sub(leftover_lamports, Relaxed);
         }
     }
 
@@ -3996,6 +4012,8 @@ mod tests {
 
     #[test]
     fn test_credit_debit_rent_no_side_effect_on_hash() {
+        solana_logger::setup();
+
         let (mut genesis_config, _mint_keypair) = create_genesis_config(10);
         let keypair1: Keypair = Keypair::new();
         let keypair2: Keypair = Keypair::new();
