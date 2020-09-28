@@ -411,7 +411,7 @@ impl Validator {
                     assert!(!ContactInfo::is_valid_address(&node.info.rpc_pubsub));
                 }
                 let tpu_address = cluster_info.my_contact_info().tpu;
-                let (bank_notification_sender, bank_notification_receiver) = channel();
+                let (bank_notification_sender, bank_notification_receiver) = unbounded();
                 let optimistically_confirmed_bank =
                     OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
                 (

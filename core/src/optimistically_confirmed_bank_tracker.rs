@@ -3,13 +3,13 @@
 //! subscription notifications
 
 use crate::rpc_subscriptions::RpcSubscriptions;
+use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::clock::Slot;
 use std::{
     collections::HashSet,
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc::{Receiver, RecvTimeoutError, Sender},
         Arc, RwLock,
     },
     thread::{self, Builder, JoinHandle},
