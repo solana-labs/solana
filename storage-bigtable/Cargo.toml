@@ -28,6 +28,10 @@ futures = "0.3.5"
 tonic = {version="0.3.0", features = ["tls", "transport"]}
 zstd = "0.5.1"
 
+[build-dependencies]
+prost-build = "0.6"
+protobuf = "1.2"
+
 [lib]
 crate-type = ["lib"]
 name = "solana_storage_bigtable"

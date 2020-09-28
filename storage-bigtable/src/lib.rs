@@ -2,6 +2,7 @@ use log::*;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
+    instruction::CompiledInstruction,
     pubkey::Pubkey,
     signature::Signature,
     sysvar::is_sysvar_id,
@@ -9,10 +10,13 @@ use solana_sdk::{
 };
 use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature,
-    InnerInstructions, Rewards, TransactionStatus, TransactionStatusMeta,
+    InnerInstructions, Reward, Rewards, TransactionStatus, TransactionStatusMeta,
     TransactionWithStatusMeta,
 };
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    convert::{TryFrom, TryInto},
+};
 use thiserror::Error;
 
 #[macro_use]
@@ -21,6 +25,7 @@ extern crate serde_derive;
 mod access_token;
 mod bigtable;
 mod compression;
+mod generated;
 mod root_ca_certificate;
 
 #[derive(Debug, Error)]
@@ -88,6 +93,24 @@ struct StoredConfirmedBlock {
     block_time: Option<UnixTimestamp>,
 }
 
+impl From<Reward> for generated::Reward {
+    fn from(reward: Reward) -> Self {
+        Self {
+            pubkey: reward.pubkey,
+            lamports: reward.lamports,
+        }
+    }
+}
+
+impl From<generated::Reward> for Reward {
+    fn from(reward: generated::Reward) -> Self {
+        Self {
+            pubkey: reward.pubkey,
+            lamports: reward.lamports,
+        }
+    }
+}
+
 impl From<ConfirmedBlock> for StoredConfirmedBlock {
     fn from(confirmed_block: ConfirmedBlock) -> Self {
         let ConfirmedBlock {
@@ -132,6 +155,61 @@ impl From<StoredConfirmedBlock> for ConfirmedBlock {
     }
 }
 
+impl TryFrom<ConfirmedBlock> for generated::ConfirmedBlock {
+    type Error = bincode::Error;
+    fn try_from(confirmed_block: ConfirmedBlock) -> std::result::Result<Self, Self::Error> {
+        let ConfirmedBlock {
+            previous_blockhash,
+            blockhash,
+            parent_slot,
+            transactions,
+            rewards,
+            block_time,
+        } = confirmed_block;
+
+        Ok(Self {
+            previous_blockhash,
+            blockhash,
+            parent_slot,
+            transactions: transactions
+                .into_iter()
+                .map(|tx| tx.try_into())
+                .collect::<std::result::Result<Vec<generated::ConfirmedTransaction>, Self::Error>>(
+                )?,
+            rewards: rewards.into_iter().map(|r| r.into()).collect(),
+            block_time: block_time.map(|timestamp| generated::UnixTimestamp { timestamp }),
+        })
+    }
+}
+
+impl TryFrom<generated::ConfirmedBlock> for ConfirmedBlock {
+    type Error = bincode::Error;
+    fn try_from(
+        confirmed_block: generated::ConfirmedBlock,
+    ) -> std::result::Result<Self, Self::Error> {
+        let generated::ConfirmedBlock {
+            previous_blockhash,
+            blockhash,
+            parent_slot,
+            transactions,
+            rewards,
+            block_time,
+        } = confirmed_block;
+
+        Ok(Self {
+            previous_blockhash,
+            blockhash,
+            parent_slot,
+            transactions: transactions
+                .into_iter()
+                .map(|tx| tx.try_into())
+                .collect::<std::result::Result<Vec<TransactionWithStatusMeta>, Self::Error>>()?,
+            rewards: rewards.into_iter().map(|r| r.into()).collect(),
+            block_time: block_time.map(|generated::UnixTimestamp { timestamp }| timestamp),
+        })
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 struct StoredConfirmedBlockTransaction {
     transaction: Transaction,
@@ -156,13 +234,42 @@ impl From<StoredConfirmedBlockTransaction> for TransactionWithStatusMeta {
     }
 }
 
+impl TryFrom<TransactionWithStatusMeta> for generated::ConfirmedTransaction {
+    type Error = bincode::Error;
+    fn try_from(value: TransactionWithStatusMeta) -> std::result::Result<Self, Self::Error> {
+        let meta = if let Some(meta) = value.meta {
+            Some(meta.try_into()?)
+        } else {
+            None
+        };
+        Ok(Self {
+            transaction: bincode::serialize(&value.transaction)?,
+            meta,
+        })
+    }
+}
+
+impl TryFrom<generated::ConfirmedTransaction> for TransactionWithStatusMeta {
+    type Error = bincode::Error;
+    fn try_from(value: generated::ConfirmedTransaction) -> std::result::Result<Self, Self::Error> {
+        let meta = if let Some(meta) = value.meta {
+            Some(meta.try_into()?)
+        } else {
+            None
+        };
+        Ok(Self {
+            transaction: bincode::deserialize(&value.transaction)?,
+            meta,
+        })
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 struct StoredConfirmedBlockTransactionStatusMeta {
     err: Option<TransactionError>,
     fee: u64,
     pre_balances: Vec<u64>,
     post_balances: Vec<u64>,
-    inner_instructions: Option<Vec<InnerInstructions>>,
 }
 
 impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
@@ -172,7 +279,6 @@ impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
-            inner_instructions,
         } = value;
         let status = match &err {
             None => Ok(()),
@@ -183,7 +289,7 @@ impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
-            inner_instructions,
+            inner_instructions: None,
         }
     }
 }
@@ -195,7 +301,6 @@ impl From<TransactionStatusMeta> for StoredConfirmedBlockTransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
-            inner_instructions,
             ..
         } = value;
         Self {
@@ -203,8 +308,107 @@ impl From<TransactionStatusMeta> for StoredConfirmedBlockTransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
-            inner_instructions,
         }
+    }
+}
+
+impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
+    type Error = bincode::Error;
+
+    fn try_from(value: generated::TransactionStatusMeta) -> std::result::Result<Self, Self::Error> {
+        let generated::TransactionStatusMeta {
+            err,
+            fee,
+            pre_balances,
+            post_balances,
+            inner_instructions,
+        } = value;
+        let status = match &err {
+            None => Ok(()),
+            Some(tx_error) => Err(bincode::deserialize(&tx_error.err)?),
+        };
+        let inner_instructions = Some(
+            inner_instructions
+                .into_iter()
+                .map(|inner| inner.into())
+                .collect(),
+        );
+        Ok(Self {
+            status,
+            fee,
+            pre_balances,
+            post_balances,
+            inner_instructions,
+        })
+    }
+}
+
+impl From<InnerInstructions> for generated::InnerInstructions {
+    fn from(value: InnerInstructions) -> Self {
+        Self {
+            index: value.index as u32,
+            instructions: value.instructions.into_iter().map(|i| i.into()).collect(),
+        }
+    }
+}
+
+impl From<generated::InnerInstructions> for InnerInstructions {
+    fn from(value: generated::InnerInstructions) -> Self {
+        Self {
+            index: value.index as u8,
+            instructions: value.instructions.into_iter().map(|i| i.into()).collect(),
+        }
+    }
+}
+
+impl From<CompiledInstruction> for generated::CompiledInstruction {
+    fn from(value: CompiledInstruction) -> Self {
+        Self {
+            program_id_index: value.program_id_index as u32,
+            accounts: value.accounts,
+            data: value.data,
+        }
+    }
+}
+
+impl From<generated::CompiledInstruction> for CompiledInstruction {
+    fn from(value: generated::CompiledInstruction) -> Self {
+        Self {
+            program_id_index: value.program_id_index as u8,
+            accounts: value.accounts,
+            data: value.data,
+        }
+    }
+}
+
+impl TryFrom<TransactionStatusMeta> for generated::TransactionStatusMeta {
+    type Error = bincode::Error;
+    fn try_from(value: TransactionStatusMeta) -> std::result::Result<Self, Self::Error> {
+        let TransactionStatusMeta {
+            status,
+            fee,
+            pre_balances,
+            post_balances,
+            inner_instructions,
+        } = value;
+        let err = match status {
+            Ok(()) => None,
+            Err(err) => Some(generated::TransactionError {
+                err: bincode::serialize(&err)?,
+            }),
+        };
+        let inner_instructions = inner_instructions
+            .unwrap_or_default()
+            .into_iter()
+            .map(|ii| ii.into())
+            .collect();
+        Ok(Self {
+            err,
+            fee,
+            pre_balances,
+            post_balances,
+            inner_instructions,
+        })
     }
 }
 
@@ -279,10 +483,18 @@ impl LedgerStorage {
     /// Fetch the confirmed block from the desired slot
     pub async fn get_confirmed_block(&self, slot: Slot) -> Result<ConfirmedBlock> {
         let mut bigtable = self.connection.client();
-        let block = bigtable
-            .get_bincode_cell::<StoredConfirmedBlock>("blocks", slot_to_key(slot))
+        let block_cell_data = bigtable
+            .get_bincode_or_protobuf_cell::<StoredConfirmedBlock, generated::ConfirmedBlock>(
+                "blocks",
+                slot_to_key(slot),
+            )
             .await?;
-        Ok(block.into())
+        Ok(match block_cell_data {
+            bigtable::CellData::Bincode(block) => block.into(),
+            bigtable::CellData::Protobuf(block) => block
+                .try_into()
+                .map_err(|_err| bigtable::Error::ObjectCorrupt("todo".into()))?,
+        })
     }
 
     pub async fn get_signature_status(&self, signature: &Signature) -> Result<TransactionStatus> {
@@ -405,7 +617,7 @@ impl LedgerStorage {
                 ))
             })?;
             let mut cell_data: Vec<TransactionByAddrInfo> =
-                bigtable::deserialize_cell_data(&data, "tx-by-addr", row_key)?;
+                bigtable::deserialize_bincode_cell_data(&data, "tx-by-addr", row_key)?;
             cell_data.reverse();
             for tx_by_addr_info in cell_data.into_iter() {
                 // Filter out records before `before_transaction_index`
@@ -508,10 +720,10 @@ impl LedgerStorage {
         // Store the block itself last, after all other metadata about the block has been
         // successfully stored.  This avoids partial uploaded blocks from becoming visible to
         // `get_confirmed_block()` and `get_confirmed_blocks()`
-        let blocks_cells = [(slot_to_key(slot), confirmed_block.into())];
+        let blocks_cells = [(slot_to_key(slot), confirmed_block.try_into().unwrap())];
         bytes_written += self
             .connection
-            .put_bincode_cells_with_retry::<StoredConfirmedBlock>("blocks", &blocks_cells)
+            .put_protobuf_cells_with_retry::<generated::ConfirmedBlock>("blocks", &blocks_cells)
             .await?;
         info!(
             "uploaded block for slot {}: {} transactions, {} bytes",

@@ -26,10 +26,14 @@ mod google {
 use google::bigtable::v2::*;
 
 pub type RowKey = String;
-pub type CellName = String;
-pub type CellValue = Vec<u8>;
 pub type RowData = Vec<(CellName, CellValue)>;
 pub type RowDataSlice<'a> = &'a [(CellName, CellValue)];
+pub type CellName = String;
+pub type CellValue = Vec<u8>;
+pub enum CellData<B, P> {
+    Bincode(B),
+    Protobuf(P),
+}
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -192,6 +196,23 @@ impl BigTableConnection {
         (|| async {
             let mut client = self.client();
             Ok(client.put_bincode_cells(table, cells).await?)
+        })
+        .retry(ExponentialBackoff::default())
+        .await
+    }
+
+    pub async fn put_protobuf_cells_with_retry<T>(
+        &self,
+        table: &str,
+        cells: &[(RowKey, T)],
+    ) -> Result<usize>
+    where
+        T: prost::Message,
+    {
+        use backoff::{future::FutureOperation as _, ExponentialBackoff};
+        (|| async {
+            let mut client = self.client();
+            Ok(client.put_protobuf_cells(table, cells).await?)
         })
         .retry(ExponentialBackoff::default())
         .await
@@ -484,7 +505,30 @@ impl BigTable {
         T: serde::de::DeserializeOwned,
     {
         let row_data = self.get_single_row_data(table, key.clone()).await?;
-        deserialize_cell_data(&row_data, table, key.to_string())
+        deserialize_bincode_cell_data(&row_data, table, key.to_string())
+    }
+
+    pub async fn get_bincode_or_protobuf_cell<B, P>(
+        &mut self,
+        table: &str,
+        key: RowKey,
+    ) -> Result<CellData<B, P>>
+    where
+        B: serde::de::DeserializeOwned,
+        P: prost::Message + Default,
+    {
+        let row_data = self.get_single_row_data(table, key.clone()).await?;
+        match deserialize_protobuf_cell_data(&row_data, table, key.to_string()) {
+            Ok(result) => return Ok(CellData::Protobuf(result)),
+            Err(err) => match err {
+                Error::ObjectNotFound(_) => {}
+                _ => return Err(err),
+            },
+        }
+        match deserialize_bincode_cell_data(&row_data, table, key.to_string()) {
+            Ok(result) => Ok(CellData::Bincode(result)),
+            Err(err) => Err(err),
+        }
     }
 
     pub async fn put_bincode_cells<T>(
@@ -506,9 +550,52 @@ impl BigTable {
         self.put_row_data(table, "x", &new_row_data).await?;
         Ok(bytes_written)
     }
+
+    pub async fn put_protobuf_cells<T>(
+        &mut self,
+        table: &str,
+        cells: &[(RowKey, T)],
+    ) -> Result<usize>
+    where
+        T: prost::Message,
+    {
+        let mut bytes_written = 0;
+        let mut new_row_data = vec![];
+        for (row_key, data) in cells {
+            let mut buf = Vec::with_capacity(data.encoded_len());
+            data.encode(&mut buf).unwrap();
+            let data = compress_best(&buf)?;
+            bytes_written += data.len();
+            new_row_data.push((row_key, vec![("proto".to_string(), data)]));
+        }
+
+        self.put_row_data(table, "x", &new_row_data).await?;
+        Ok(bytes_written)
+    }
 }
 
-pub(crate) fn deserialize_cell_data<T>(
+pub(crate) fn deserialize_protobuf_cell_data<T>(
+    row_data: RowDataSlice,
+    table: &str,
+    key: RowKey,
+) -> Result<T>
+where
+    T: prost::Message + Default,
+{
+    let value = &row_data
+        .iter()
+        .find(|(name, _)| name == "proto")
+        .ok_or_else(|| Error::ObjectNotFound(format!("{}/{}", table, key)))?
+        .1;
+
+    let data = decompress(&value)?;
+    T::decode(&data[..]).map_err(|err| {
+        warn!("Failed to deserialize {}/{}: {}", table, key, err);
+        Error::ObjectCorrupt(format!("{}/{}", table, key))
+    })
+}
+
+pub(crate) fn deserialize_bincode_cell_data<T>(
     row_data: RowDataSlice,
     table: &str,
     key: RowKey,
