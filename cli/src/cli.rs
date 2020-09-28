@@ -1016,6 +1016,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
     rpc_client: &RpcClient,
     mut transactions: Vec<Transaction>,
     signer_keys: &T,
+    commitment: CommitmentConfig,
 ) -> Result<(), Box<dyn error::Error>> {
     let progress_bar = new_spinner_progress_bar();
     let mut send_retries = 5;
@@ -1037,7 +1038,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                 .send_transaction_with_config(
                     &transaction,
                     RpcSendTransactionConfig {
-                        skip_preflight: true,
+                        preflight_commitment: Some(commitment.commitment),
                         ..RpcSendTransactionConfig::default()
                     },
                 )
@@ -1199,9 +1200,15 @@ fn process_deploy(
     }
 
     trace!("Writing program data");
-    send_and_confirm_transactions_with_spinner(&rpc_client, write_transactions, &signers).map_err(
-        |_| CliError::DynamicProgramError("Data writes to program account failed".to_string()),
-    )?;
+    send_and_confirm_transactions_with_spinner(
+        &rpc_client,
+        write_transactions,
+        &signers,
+        config.commitment,
+    )
+    .map_err(|_| {
+        CliError::DynamicProgramError("Data writes to program account failed".to_string())
+    })?;
 
     let (blockhash, _, _) = rpc_client
         .get_recent_blockhash_with_commitment(config.commitment)?
@@ -2103,7 +2110,8 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(false)
                         .hidden(true) // Don't document this argument to discourage its use
                         .help("Use the deprecated BPF loader")
-                ),
+                )
+                .arg(commitment_arg_with_default("max")),
         )
         .subcommand(
             SubCommand::with_name("pay")
