@@ -40,7 +40,7 @@ $(eval echo "$@")"
   )
 
   execution_step "Deleting Testnet"
-  "${REPO_ROOT}"/net/"${CLOUD_PROVIDER}".sh delete -p "${TESTNET_TAG}"
+  "${REPO_ROOT}"/net/"${CLOUD_PROVIDER}".sh delete -p "${testnetPrefix}"
 
 }
 trap 'cleanup_testnet $BASH_COMMAND' EXIT
@@ -63,7 +63,7 @@ function launch_testnet() {
         -d pd-ssd \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
         $maybeCustomMachineType "$VALIDATOR_NODE_MACHINE_TYPE" $maybeEnableGpu \
-        -p "$TESTNET_TAG" $maybeCreateAllowBootFailures $maybePublicIpAddresses \
+        -p "$testnetPrefix" $maybeCreateAllowBootFailures $maybePublicIpAddresses \
         ${TESTNET_CLOUD_ZONES[@]/#/"-z "} \
         --self-destruct-hours 0 \
         ${ADDITIONAL_FLAGS[@]/#/" "}
@@ -74,7 +74,7 @@ function launch_testnet() {
       "${REPO_ROOT}"/net/ec2.sh create \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
         $maybeCustomMachineType "$VALIDATOR_NODE_MACHINE_TYPE" $maybeEnableGpu \
-        -p "$TESTNET_TAG" $maybeCreateAllowBootFailures $maybePublicIpAddresses \
+        -p "$testnetPrefix" $maybeCreateAllowBootFailures $maybePublicIpAddresses \
         ${TESTNET_CLOUD_ZONES[@]/#/"-z "} \
         ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
@@ -84,7 +84,7 @@ function launch_testnet() {
       "${REPO_ROOT}"/net/azure.sh create \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" \
         $maybeCustomMachineType "$VALIDATOR_NODE_MACHINE_TYPE" $maybeEnableGpu \
-        -p "$TESTNET_TAG" $maybeCreateAllowBootFailures $maybePublicIpAddresses \
+        -p "$testnetPrefix" $maybeCreateAllowBootFailures $maybePublicIpAddresses \
         ${TESTNET_CLOUD_ZONES[@]/#/"-z "} \
         ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
@@ -94,7 +94,7 @@ function launch_testnet() {
     # shellcheck disable=SC2086
       "${REPO_ROOT}"/net/colo.sh create \
         -n "$NUMBER_OF_VALIDATOR_NODES" -c "$NUMBER_OF_CLIENT_NODES" $maybeEnableGpu \
-        -p "$TESTNET_TAG" $maybePublicIpAddresses --dedicated \
+        -p "$testnetPrefix" $maybePublicIpAddresses --dedicated \
         ${ADDITIONAL_FLAGS[@]/#/" "}
       ;;
     *)
@@ -223,6 +223,9 @@ if [[ -z $NUMBER_OF_VALIDATOR_NODES ]]; then
   exit 1
 fi
 
+dbName="$TESTNET_TAG"
+testnetPrefix="${TESTNET_TAG}-$(hostname)"
+
 startGpuMode="off"
 if [[ -z $ENABLE_GPU ]]; then
   ENABLE_GPU=false
@@ -242,7 +245,7 @@ if [[ -z $SOLANA_METRICS_CONFIG ]]; then
     echo SOLANA_METRICS_PARTIAL_CONFIG not defined
     exit 1
   fi
-  export SOLANA_METRICS_CONFIG="db=$TESTNET_TAG,host=$INFLUX_HOST,$SOLANA_METRICS_PARTIAL_CONFIG"
+  export SOLANA_METRICS_CONFIG="db=$dbName,host=$INFLUX_HOST,$SOLANA_METRICS_PARTIAL_CONFIG"
 fi
 echo "SOLANA_METRICS_CONFIG: $SOLANA_METRICS_CONFIG"
 
