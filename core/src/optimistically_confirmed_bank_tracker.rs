@@ -122,9 +122,9 @@ impl OptimisticallyConfirmedBankTracker {
                         optimistically_confirmed_bank.write().unwrap();
                     if bank.slot() > w_optimistically_confirmed_bank.bank.slot() {
                         w_optimistically_confirmed_bank.bank = bank.clone();
+                        subscriptions.notify_gossip_subscribers(slot);
                     }
                     drop(w_optimistically_confirmed_bank);
-                    subscriptions.notify_gossip_subscribers(slot);
                 } else if slot > bank_forks.read().unwrap().root_bank().slot() {
                     pending_optimistically_confirmed_banks.insert(slot);
                 }
@@ -136,9 +136,9 @@ impl OptimisticallyConfirmedBankTracker {
                         optimistically_confirmed_bank.write().unwrap();
                     if frozen_slot > w_optimistically_confirmed_bank.bank.slot() {
                         w_optimistically_confirmed_bank.bank = bank;
+                        subscriptions.notify_gossip_subscribers(frozen_slot);
                     }
                     drop(w_optimistically_confirmed_bank);
-                    subscriptions.notify_gossip_subscribers(frozen_slot);
                 }
             }
             BankNotification::Root(bank) => {
@@ -186,15 +186,16 @@ mod tests {
         let bank3 = Bank::new_from_parent(&bank2, &Pubkey::default(), 3);
         bank_forks.write().unwrap().insert(bank3);
 
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
             bank_forks.clone(),
             block_commitment_cache,
+            optimistically_confirmed_bank.clone(),
         ));
-
-        let optimistically_confirmed_bank =
-            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let mut pending_optimistically_confirmed_banks = HashSet::new();
 
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 0);

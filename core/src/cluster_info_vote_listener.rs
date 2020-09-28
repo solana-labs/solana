@@ -786,6 +786,7 @@ impl ClusterInfoVoteListener {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
     use solana_perf::packet;
     use solana_runtime::{
         bank::Bank,
@@ -1445,13 +1446,16 @@ mod tests {
             );
         let bank = Bank::new(&genesis_config);
         let exit = Arc::new(AtomicBool::new(false));
-        let bank_forks = BankForks::new(bank);
-        let bank = bank_forks.get(0).unwrap().clone();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank = bank_forks.read().unwrap().get(0).unwrap().clone();
         let vote_tracker = VoteTracker::new(&bank);
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
-            Arc::new(RwLock::new(bank_forks)),
+            bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::default())),
+            optimistically_confirmed_bank,
         ));
 
         // Send a vote to process, should add a reference to the pubkey for that voter
@@ -1602,12 +1606,15 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let vote_tracker = VoteTracker::new(&bank);
         let exit = Arc::new(AtomicBool::new(false));
-        let bank_forks = BankForks::new(bank);
-        let bank = bank_forks.get(0).unwrap().clone();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
-            Arc::new(RwLock::new(bank_forks)),
+            bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::default())),
+            optimistically_confirmed_bank,
         ));
 
         // Integrity Checks

@@ -258,6 +258,7 @@ pub mod tests {
     use crate::{
         banking_stage::create_test_recorder,
         cluster_info::{ClusterInfo, Node},
+        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     };
     use serial_test_derive::serial;
     use solana_ledger::{
@@ -327,6 +328,7 @@ pub mod tests {
                 &exit,
                 bank_forks.clone(),
                 block_commitment_cache.clone(),
+                OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             )),
             &poh_recorder,
             tower,

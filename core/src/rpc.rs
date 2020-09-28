@@ -5568,6 +5568,7 @@ pub mod tests {
             &exit,
             bank_forks.clone(),
             block_commitment_cache.clone(),
+            optimistically_confirmed_bank.clone(),
         ));
 
         let (meta, _receiver) = JsonRpcRequestProcessor::new(

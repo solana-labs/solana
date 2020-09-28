@@ -354,6 +354,7 @@ mod tests {
     use super::*;
     use crate::{
         cluster_info_vote_listener::{ClusterInfoVoteListener, VoteTracker},
+        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         rpc_subscriptions::tests::robust_poll_or_panic,
     };
     use crossbeam_channel::unbounded;
@@ -431,6 +432,7 @@ mod tests {
                 &Arc::new(AtomicBool::new(false)),
                 bank_forks.clone(),
                 Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
+                OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             )),
             uid: Arc::new(atomic::AtomicUsize::default()),
         };
@@ -568,6 +570,7 @@ mod tests {
                 Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
                     1, 1,
                 ))),
+                OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             )),
             uid: Arc::new(atomic::AtomicUsize::default()),
         };
@@ -676,6 +679,7 @@ mod tests {
                 Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
                     1, 1,
                 ))),
+                OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             )),
             uid: Arc::new(atomic::AtomicUsize::default()),
         };
@@ -798,6 +802,7 @@ mod tests {
             &exit,
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
         rpc.subscriptions = Arc::new(subscriptions);
         let session = create_session();
@@ -847,8 +852,12 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests()));
 
-        let subscriptions =
-            RpcSubscriptions::new(&exit, bank_forks.clone(), block_commitment_cache);
+        let subscriptions = RpcSubscriptions::new(
+            &exit,
+            bank_forks.clone(),
+            block_commitment_cache,
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
+        );
         rpc.subscriptions = Arc::new(subscriptions);
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("accountNotification");
@@ -991,7 +1000,14 @@ mod tests {
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("voteNotification");
 
         // Setup Subscriptions
-        let subscriptions = RpcSubscriptions::new(&exit, bank_forks, block_commitment_cache);
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+        let subscriptions = RpcSubscriptions::new(
+            &exit,
+            bank_forks,
+            block_commitment_cache,
+            optimistically_confirmed_bank,
+        );
         rpc.subscriptions = Arc::new(subscriptions);
         rpc.vote_subscribe(session, subscriber);
 

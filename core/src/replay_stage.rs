@@ -1975,6 +1975,7 @@ pub(crate) mod tests {
     use crate::{
         consensus::test::{initialize_state, VoteSimulator},
         consensus::Tower,
+        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         progress_map::ValidatorStakeInfo,
         replay_stage::ReplayStage,
         transaction_status_service::TransactionStatusService,
@@ -2087,11 +2088,14 @@ pub(crate) mod tests {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
 
         // RpcSubscriptions
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let exit = Arc::new(AtomicBool::new(false));
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::default())),
+            optimistically_confirmed_bank,
         ));
 
         ReplayBlockstoreComponents {
@@ -2582,6 +2586,7 @@ pub(crate) mod tests {
             &exit,
             bank_forks.clone(),
             block_commitment_cache.clone(),
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         ));
         let (lockouts_sender, _) =
             AggregateCommitmentService::new(&exit, block_commitment_cache.clone(), subscriptions);

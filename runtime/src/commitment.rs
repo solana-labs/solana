@@ -104,8 +104,8 @@ impl BlockCommitmentCache {
     }
 
     pub fn highest_gossip_confirmed_slot(&self) -> Slot {
-        // TODO: see solana_core::RpcSubscriptions:
-        //self.last_checked_slots.get(&CommitmentLevel::SingleGossip).unwrap_or(&0)
+        // TODO: combine bank caches
+        // Currently, this information is provided by OptimisticallyConfirmedBank::bank.slot()
         self.highest_confirmed_slot()
     }
 

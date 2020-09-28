@@ -338,10 +338,14 @@ impl Validator {
         block_commitment_cache.initialize_slots(bank.slot());
         let block_commitment_cache = Arc::new(RwLock::new(block_commitment_cache));
 
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
             bank_forks.clone(),
             block_commitment_cache.clone(),
+            optimistically_confirmed_bank.clone(),
         ));
 
         let (completed_data_sets_sender, completed_data_sets_receiver) =
@@ -412,8 +416,6 @@ impl Validator {
                 }
                 let tpu_address = cluster_info.my_contact_info().tpu;
                 let (bank_notification_sender, bank_notification_receiver) = unbounded();
-                let optimistically_confirmed_bank =
-                    OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
                 (
                     Some(RpcServices {
                         json_rpc_service: JsonRpcService::new(

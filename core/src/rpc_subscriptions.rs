@@ -1,6 +1,9 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::rpc::{get_parsed_token_account, get_parsed_token_accounts};
+use crate::{
+    optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+    rpc::{get_parsed_token_account, get_parsed_token_accounts},
+};
 use core::hash::Hash;
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::{
@@ -344,7 +347,7 @@ pub struct RpcSubscriptions {
     notifier_runtime: Option<Runtime>,
     bank_forks: Arc<RwLock<BankForks>>,
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
-    last_checked_slots: Arc<RwLock<HashMap<CommitmentLevel, Slot>>>,
+    optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
     exit: Arc<AtomicBool>,
 }
 
@@ -361,6 +364,7 @@ impl RpcSubscriptions {
         exit: &Arc<AtomicBool>,
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+        optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
     ) -> Self {
         let (notification_sender, notification_receiver): (
             Sender<NotificationEntry>,
@@ -394,9 +398,6 @@ impl RpcSubscriptions {
         };
         let _subscriptions = subscriptions.clone();
 
-        let last_checked_slots = Arc::new(RwLock::new(HashMap::new()));
-        let _last_checked_slots = last_checked_slots.clone();
-
         let notifier_runtime = RuntimeBuilder::new()
             .core_threads(1)
             .name_prefix("solana-rpc-notifier-")
@@ -413,7 +414,6 @@ impl RpcSubscriptions {
                     notification_receiver,
                     _subscriptions,
                     _bank_forks,
-                    _last_checked_slots,
                 );
             })
             .unwrap();
@@ -425,16 +425,19 @@ impl RpcSubscriptions {
             t_cleanup: Some(t_cleanup),
             bank_forks,
             block_commitment_cache,
-            last_checked_slots,
+            optimistically_confirmed_bank,
             exit: exit.clone(),
         }
     }
 
     pub fn default_with_bank_forks(bank_forks: Arc<RwLock<BankForks>>) -> Self {
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         Self::new(
             &Arc::new(AtomicBool::new(false)),
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::default())),
+            optimistically_confirmed_bank,
         )
     }
 
@@ -527,12 +530,12 @@ impl RpcSubscriptions {
                 .read()
                 .unwrap()
                 .highest_confirmed_slot(),
-            CommitmentLevel::SingleGossip => *self
-                .last_checked_slots
+            CommitmentLevel::SingleGossip => self
+                .optimistically_confirmed_bank
                 .read()
                 .unwrap()
-                .get(&CommitmentLevel::SingleGossip)
-                .unwrap_or(&0),
+                .bank
+                .slot(),
         };
         let last_notified_slot = if let Some((_account, slot)) = self
             .bank_forks
@@ -763,7 +766,6 @@ impl RpcSubscriptions {
         notification_receiver: Receiver<NotificationEntry>,
         subscriptions: Subscriptions,
         bank_forks: Arc<RwLock<BankForks>>,
-        last_checked_slots: Arc<RwLock<HashMap<CommitmentLevel, Slot>>>,
     ) {
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -819,7 +821,6 @@ impl RpcSubscriptions {
                             &notifier,
                             &subscriptions,
                             &bank_forks,
-                            &last_checked_slots,
                         );
                     }
                     NotificationEntry::SignaturesReceived(slot_signatures) => {
@@ -846,23 +847,7 @@ impl RpcSubscriptions {
         notifier: &RpcNotifier,
         subscriptions: &Subscriptions,
         bank_forks: &Arc<RwLock<BankForks>>,
-        last_checked_slots: &Arc<RwLock<HashMap<CommitmentLevel, Slot>>>,
     ) {
-        let mut last_checked_slots_lock = last_checked_slots.write().unwrap();
-        let last_checked_slot = last_checked_slots_lock
-            .get(&CommitmentLevel::SingleGossip)
-            .cloned()
-            .unwrap_or_default();
-
-        if slot > last_checked_slot {
-            last_checked_slots_lock.insert(CommitmentLevel::SingleGossip, slot);
-        } else {
-            // Avoid sending stale or duplicate notifications
-            return;
-        }
-
-        drop(last_checked_slots_lock);
-
         let commitment_slots = CommitmentSlots {
             highest_confirmed_slot: slot,
             ..CommitmentSlots::default()
@@ -1084,6 +1069,7 @@ pub(crate) mod tests {
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
                 1, 1,
             ))),
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
         subscriptions.add_account_subscription(
             alice.pubkey(),
@@ -1182,10 +1168,13 @@ pub(crate) mod tests {
             Subscriber::new_test("programNotification");
         let sub_id = SubscriptionId::Number(0 as u64);
         let exit = Arc::new(AtomicBool::new(false));
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let subscriptions = RpcSubscriptions::new(
             &exit,
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
+            optimistically_confirmed_bank,
         );
         subscriptions.add_program_subscription(
             solana_stake_program::id(),
@@ -1290,10 +1279,13 @@ pub(crate) mod tests {
         );
 
         let exit = Arc::new(AtomicBool::new(false));
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let subscriptions = RpcSubscriptions::new(
             &exit,
             bank_forks,
             Arc::new(RwLock::new(block_commitment_cache)),
+            optimistically_confirmed_bank,
         );
 
         let (past_bank_sub1, _id_receiver, past_bank_recv1) =
@@ -1446,10 +1438,13 @@ pub(crate) mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let subscriptions = RpcSubscriptions::new(
             &exit,
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
+            optimistically_confirmed_bank,
         );
         subscriptions.add_slot_subscription(sub_id.clone(), subscriber);
 
@@ -1494,10 +1489,13 @@ pub(crate) mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let subscriptions = RpcSubscriptions::new(
             &exit,
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
+            optimistically_confirmed_bank,
         );
         subscriptions.add_root_subscription(sub_id.clone(), subscriber);
 
@@ -1611,6 +1609,7 @@ pub(crate) mod tests {
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
                 1, 1,
             ))),
+            optimistically_confirmed_bank.clone(),
         ));
         let sub_id0 = SubscriptionId::Number(0 as u64);
         subscriptions.add_account_subscription(
