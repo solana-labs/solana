@@ -1,7 +1,5 @@
 //! @brief Solana Native program entry point
 
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-use crate::abi_example::AbiExample;
 use crate::{account::KeyedAccount, instruction::InstructionError, pubkey::Pubkey};
 
 // Prototype of a native program entry point
