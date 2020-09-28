@@ -11,7 +11,7 @@ solana_sdk::declare_id!("Feature111111111111111111111111111111111111");
 /// 2. When the next epoch is entered the runtime will check for new activation requests and
 ///    active them.  When this occurs, the activation slot is recorded in the feature account
 ///
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Feature {
     pub activated_at: Option<Slot>,
 }
@@ -19,7 +19,7 @@ pub struct Feature {
 impl Feature {
     pub fn size_of() -> usize {
         bincode::serialized_size(&Self {
-            activated_at: Some(Slot::MAX),
+            activated_at: Some(0),
         })
         .unwrap() as usize
     }
@@ -38,5 +38,42 @@ impl Feature {
         let mut account = Account::new(lamports, data_len, &id());
         self.to_account(&mut account).unwrap();
         account
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn feature_deserialize_none() {
+        let just_initialized = Account::new(42, Feature::size_of(), &id());
+        assert_eq!(
+            Feature::from_account(&just_initialized),
+            Some(Feature { activated_at: None })
+        );
+    }
+
+    #[test]
+    fn feature_sizeof() {
+        assert!(
+            Feature::size_of() >= bincode::serialized_size(&Feature::default()).unwrap() as usize
+        );
+        assert_eq!(Feature::default(), Feature { activated_at: None });
+
+        let features = [
+            Feature {
+                activated_at: Some(0),
+            },
+            Feature {
+                activated_at: Some(Slot::MAX),
+            },
+        ];
+        for feature in &features {
+            assert_eq!(
+                Feature::size_of(),
+                bincode::serialized_size(feature).unwrap() as usize
+            );
+        }
     }
 }
