@@ -47,7 +47,7 @@ use std::{
     ops::RangeBounds,
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-    sync::{Arc, Mutex, MutexGuard, RwLock, RwLockWriteGuard},
+    sync::{Arc, Mutex, MutexGuard, RwLock},
     time::Instant,
 };
 use tempfile::TempDir;
@@ -127,17 +127,12 @@ pub struct AccountStorage(pub DashMap<Slot, Arc<RwLock<SlotStores>>>);
 impl AccountStorage {
     fn get_account_storage_entry(
         &self,
-        account_info: &AccountInfo,
         slot: Slot,
+        store_id: AppendVecId,
     ) -> Option<Arc<AccountStorageEntry>> {
-        self.0.get(&slot).and_then(|storage_map| {
-            storage_map
-                .value()
-                .read()
-                .unwrap()
-                .get(&account_info.store_id)
-                .cloned()
-        })
+        self.0
+            .get(&slot)
+            .and_then(|storage_map| storage_map.value().read().unwrap().get(&store_id).cloned())
     }
 
     fn get_slot_stores(&self, slot: Slot) -> Option<Arc<RwLock<SlotStores>>> {
@@ -145,9 +140,7 @@ impl AccountStorage {
     }
 
     fn slot_store_count(&self, slot: Slot, store_id: AppendVecId) -> Option<usize> {
-        self.0
-            .get(&slot)
-            .and_then(|slot_storages| slot_storages.get(&store_id))
+        self.get_account_storage_entry(slot, store_id)
             .map(|store| store.count_and_status.read().unwrap().0)
     }
 
@@ -1234,7 +1227,9 @@ impl AccountsDB {
         let mut collector = A::default();
         let accounts_index = self.accounts_index.read().unwrap();
         accounts_index.scan_accounts(ancestors, |pubkey, (account_info, slot)| {
-            let account_storage_entry = self.storage.get_account_storage_entry(account_info, slot);
+            let account_storage_entry = self
+                .storage
+                .get_account_storage_entry(slot, account_info.store_id);
             let account_slot = account_storage_entry
                 .and_then(|account_storage_entry| account_storage_entry.get_account(account_info))
                 .map(|account| (pubkey, account, slot));
@@ -1252,7 +1247,9 @@ impl AccountsDB {
         let mut collector = A::default();
         let accounts_index = self.accounts_index.read().unwrap();
         accounts_index.range_scan_accounts(ancestors, range, |pubkey, (account_info, slot)| {
-            let account_storage_entry = self.storage.get_account_storage_entry(account_info, slot);
+            let account_storage_entry = self
+                .storage
+                .get_account_storage_entry(slot, account_info.store_id);
             let account_slot = account_storage_entry
                 .and_then(|account_storage_entry| account_storage_entry.get_account(account_info))
                 .map(|account| (pubkey, account, slot));
@@ -1324,7 +1321,7 @@ impl AccountsDB {
         let slot = lock[index].0;
         //TODO: thread this as a ref
         storage
-            .get_account_storage_entry(&lock[index].1, slot)
+            .get_account_storage_entry(slot, lock[index].1.store_id)
             .and_then(|store| {
                 let info = &lock[index].1;
                 store
@@ -1340,7 +1337,10 @@ impl AccountsDB {
         let (lock, index) = accounts_index.get(pubkey, Some(ancestors), None).unwrap();
         let slot = lock[index].0;
         let info = &lock[index].1;
-        let entry = self.storage.get_account_storage_entry(&info, slot).unwrap();
+        let entry = self
+            .storage
+            .get_account_storage_entry(slot, info.store_id)
+            .unwrap();
         let account = entry.accounts.get_account(info.offset);
         *account.as_ref().unwrap().0.hash
     }
@@ -1499,7 +1499,7 @@ impl AccountsDB {
 
         // 1) Remove old bank hash from self.bank_hashes
         // 2) Purge this slot's storage entries from self.storage
-        self.handle_reclaims(&reclaims, Some(remove_slot), false);
+        self.handle_reclaims(&reclaims, Some(remove_slot), false, None);
         assert!(self.storage.get_slot_stores(remove_slot).is_none());
     }
 
@@ -1941,7 +1941,7 @@ impl AccountsDB {
                     let (slot, account_info) = &list[index];
                     if account_info.lamports != 0 {
                         self.storage
-                            .get_account_storage_entry(account_info, *slot)
+                            .get_account_storage_entry(*slot, account_info.store_id)
                             .and_then(|store| {
                                 let account = store.accounts.get_account(account_info.offset)?.0;
                                 let balance = Self::account_balance_for_capitalization(
@@ -2133,7 +2133,10 @@ impl AccountsDB {
             if let Some(expected_slot) = expected_slot {
                 assert_eq!(*slot, expected_slot);
             }
-            if let Some(store) = self.storage.get_account_storage_entry(&account_info, *slot) {
+            if let Some(store) = self
+                .storage
+                .get_account_storage_entry(*slot, account_info.store_id)
+            {
                 assert_eq!(
                     *slot, store.slot,
                     "AccountDB::accounts_index corrupted. Storage should only point to one slot"
@@ -2169,7 +2172,7 @@ impl AccountsDB {
             let mut stores: Vec<Arc<AccountStorageEntry>> = vec![];
             for slot in dead_slots.iter() {
                 if let Some(slot_storage) = self.storage.get_slot_stores(*slot) {
-                    for store in slot_storage.values() {
+                    for store in slot_storage.read().unwrap().values() {
                         stores.push(store.clone());
                     }
                 }
@@ -3207,8 +3210,8 @@ pub mod tests {
         // Slot 1 should be removed, slot 0 cannot be removed because it still has
         // the latest update for pubkey 2
         accounts.clean_accounts(None);
-        assert!(accounts.storage.read().unwrap().0.get(&0).is_some());
-        assert!(accounts.storage.read().unwrap().0.get(&1).is_none());
+        assert!(accounts.storage.get_slot_stores(0).is_some());
+        assert!(accounts.storage.get_slot_stores(1).is_none());
 
         // Slot 1 should be cleaned because all it's accounts are
         // zero lamports, and are not present in any other slot's
@@ -3238,8 +3241,8 @@ pub mod tests {
         // zero-lamport account should be cleaned
         accounts.clean_accounts(None);
 
-        assert!(accounts.storage.read().unwrap().0.get(&0).is_none());
-        assert!(accounts.storage.read().unwrap().0.get(&1).is_none());
+        assert!(accounts.storage.get_slot_stores(0).is_none());
+        assert!(accounts.storage.get_slot_stores(1).is_none());
 
         // Slot 0 should be cleaned because all it's accounts have been
         // updated in the rooted slot 1
