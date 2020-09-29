@@ -2132,8 +2132,8 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .required(true)
                         .help("The amount to send, in SOL; accepts keyword ALL"),
                 )
-                .offline_args()
-                .nonce_args()
+                .offline_args(false)
+                .nonce_args(false)
         )
         .subcommand(
             SubCommand::with_name("resolve-signer")
@@ -2179,8 +2179,8 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(false)
                         .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
                 )
-                .offline_args()
-                .nonce_args()
+                .offline_args(false)
+                .nonce_args(false)
                 .arg(fee_payer_arg()),
         )
         .subcommand(

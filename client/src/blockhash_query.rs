@@ -177,7 +177,9 @@ mod tests {
 
     #[test]
     fn test_blockhash_query_new_from_matches_ok() {
-        let test_commands = App::new("blockhash_query_test").nonce_args().offline_args();
+        let test_commands = App::new("blockhash_query_test")
+            .nonce_args(false)
+            .offline_args(false);
         let blockhash = hash(&[1u8]);
         let blockhash_string = blockhash.to_string();
 
