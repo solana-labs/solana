@@ -71,6 +71,14 @@ pub trait BanksClientExt {
     /// are said to be finalized. The cluster will not fork to a higher slot height.
     async fn get_root_slot(&mut self) -> io::Result<Slot>;
 
+    /// Return the account at the given address at the slot corresponding to the given
+    /// commitment level. If the account is not found, None is returned.
+    async fn get_account_with_commitment(
+        &mut self,
+        address: Pubkey,
+        commitment: CommitmentLevel,
+    ) -> io::Result<Option<Account>>;
+
     /// Return the account at the given address at the time of the most recent root slot.
     /// If the account is not found, None is returned.
     async fn get_account(&mut self, address: Pubkey) -> io::Result<Option<Account>>;
@@ -130,13 +138,18 @@ impl BanksClientExt for BanksClient {
             .await
     }
 
+    async fn get_account_with_commitment(
+        &mut self,
+        address: Pubkey,
+        commitment: CommitmentLevel,
+    ) -> io::Result<Option<Account>> {
+        self.get_account_with_commitment_and_context(context::current(), address, commitment)
+            .await
+    }
+
     async fn get_account(&mut self, address: Pubkey) -> io::Result<Option<Account>> {
-        self.get_account_with_commitment_and_context(
-            context::current(),
-            address,
-            CommitmentLevel::default(),
-        )
-        .await
+        self.get_account_with_commitment(address, CommitmentLevel::default())
+            .await
     }
 
     async fn get_balance_with_commitment(
