@@ -572,8 +572,16 @@ impl RpcClient {
     }
 
     pub fn get_program_accounts(&self, pubkey: &Pubkey) -> ClientResult<Vec<(Pubkey, Account)>> {
-        let accounts: Vec<RpcKeyedAccount> =
-            self.send(RpcRequest::GetProgramAccounts, json!([pubkey.to_string()]))?;
+        let config = RpcAccountInfoConfig {
+            encoding: Some(UiAccountEncoding::Base64),
+            commitment: None,
+            data_slice: None,
+        };
+
+        let accounts: Vec<RpcKeyedAccount> = self.send(
+            RpcRequest::GetProgramAccounts,
+            json!([pubkey.to_string(), config]),
+        )?;
         parse_keyed_accounts(accounts, RpcRequest::GetProgramAccounts)
     }
 
