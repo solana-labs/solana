@@ -311,6 +311,17 @@ impl CrdsValue {
         value.sign(keypair);
         value
     }
+
+    /// New random crds value for tests and benchmarks.
+    pub fn new_rand<R: ?Sized>(rng: &mut R) -> CrdsValue
+    where
+        R: rand::Rng,
+    {
+        let now = rng.gen();
+        let contact_info = ContactInfo::new_localhost(&Pubkey::new_rand(), now);
+        Self::new_signed(CrdsData::ContactInfo(contact_info), &Keypair::new())
+    }
+
     /// Totally unsecure unverifiable wallclock of the node that generated this message
     /// Latest wallclock is always picked.
     /// This is used to time out push messages.
