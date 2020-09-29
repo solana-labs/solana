@@ -6,16 +6,16 @@ source "$here"/common.sh
 
 set -e
 
-rm -rf "$SOLANA_CONFIG_DIR"/latest-mainnet-beta-snapshot
-mkdir -p "$SOLANA_CONFIG_DIR"/latest-mainnet-beta-snapshot
+rm -rf "$SOLANA_CONFIG_DIR"/latest-testnet-snapshot
+mkdir -p "$SOLANA_CONFIG_DIR"/latest-testnet-snapshot
 (
-  cd "$SOLANA_CONFIG_DIR"/latest-mainnet-beta-snapshot || exit 1
+  cd "$SOLANA_CONFIG_DIR"/latest-testnet-snapshot || exit 1
   set -x
-  wget http://api.mainnet-beta.solana.com/genesis.tar.bz2
-  wget --trust-server-names http://api.mainnet-beta.solana.com/snapshot.tar.bz2
+  wget http://api.testnet.solana.com/genesis.tar.bz2
+  wget --trust-server-names http://testnet.solana.com/snapshot.tar.bz2
 )
 
-snapshot=$(ls "$SOLANA_CONFIG_DIR"/latest-mainnet-beta-snapshot/snapshot-[0-9]*-*.tar.zst)
+snapshot=$(ls "$SOLANA_CONFIG_DIR"/latest-testnet-snapshot/snapshot-[0-9]*-*.tar.zst)
 if [[ -z $snapshot ]]; then
   echo Error: Unable to find latest snapshot
   exit 1
@@ -49,7 +49,7 @@ $solana_keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/bootstrap-validator/
 $solana_keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/bootstrap-validator/stake-account.json
 
 $solana_ledger_tool create-snapshot \
-  --ledger "$SOLANA_CONFIG_DIR"/latest-mainnet-beta-snapshot \
+  --ledger "$SOLANA_CONFIG_DIR"/latest-testnet-snapshot \
   --faucet-pubkey "$SOLANA_CONFIG_DIR"/faucet.json \
   --faucet-lamports 500000000000000000 \
   --bootstrap-validator "$SOLANA_CONFIG_DIR"/bootstrap-validator/identity.json \
@@ -59,6 +59,6 @@ $solana_ledger_tool create-snapshot \
   "$snapshot_slot" "$SOLANA_CONFIG_DIR"/bootstrap-validator
 
 $solana_ledger_tool modify-genesis \
-  --ledger "$SOLANA_CONFIG_DIR"/latest-mainnet-beta-snapshot \
+  --ledger "$SOLANA_CONFIG_DIR"/latest-testnet-snapshot \
   --hashes-per-tick sleep \
   "$SOLANA_CONFIG_DIR"/bootstrap-validator
