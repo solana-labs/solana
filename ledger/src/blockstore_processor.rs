@@ -37,6 +37,7 @@ use solana_sdk::{
     transaction::{Result, Transaction, TransactionError},
 };
 use solana_vote_program::vote_state::VoteState;
+use std::thread;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -624,6 +625,7 @@ pub fn confirm_slot(
         load_result
     }?;
 
+    let entries = Arc::new(entries);
     let num_entries = entries.len();
     let num_txs = entries.iter().map(|e| e.transactions.len()).sum::<usize>();
     trace!(
@@ -655,16 +657,15 @@ pub fn confirm_slot(
 
     let verifier = if !skip_verification {
         datapoint_debug!("verify-batch-size", ("size", num_entries as i64, i64));
-        let entry_state = entries.start_verify(
-            &progress.last_entry,
-            recyclers.clone(),
-            bank.secp256k1_program_enabled(),
-        );
-        if entry_state.status() == EntryVerificationStatus::Failure {
-            warn!("Ledger proof of history failed at slot: {}", slot);
-            return Err(BlockError::InvalidEntryHash.into());
-        }
-        Some(entry_state)
+
+        let secp256k1_program_enabled = bank.secp256k1_program_enabled();
+        let recyclers0 = recyclers.clone();
+        let last_entry = progress.last_entry;
+        let entries0 = entries.clone();
+        let verify_thread = thread::spawn(move || {
+            entries0.verify_with_recyclers(&last_entry, recyclers0, secp256k1_program_enabled)
+        });
+        Some(verify_thread)
     } else {
         None
     };
@@ -682,11 +683,11 @@ pub fn confirm_slot(
     replay_elapsed.stop();
     timing.replay_elapsed += replay_elapsed.as_us();
 
-    if let Some(mut verifier) = verifier {
-        let verified = verifier.finish_verify(&entries);
-        timing.poh_verify_elapsed += verifier.poh_duration_us();
-        timing.transaction_verify_elapsed += verifier.transaction_duration_us();
-        if !verified {
+    if let Some(verifier) = verifier {
+        let verified = verifier.join().unwrap();
+        timing.poh_verify_elapsed += verified.poh_duration_us();
+        timing.transaction_verify_elapsed += verified.transaction_duration_us();
+        if verified.status() != EntryVerificationStatus::Success {
             warn!("Ledger proof of history failed at slot: {}", bank.slot());
             return Err(BlockError::InvalidEntryHash.into());
         }

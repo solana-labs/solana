@@ -1,5 +1,7 @@
 use clap::{crate_description, crate_name, value_t, App, Arg};
-use solana_ledger::entry::{self, create_ticks, init_poh, EntrySlice, VerifyRecyclers};
+use solana_ledger::entry::{
+    self, create_ticks, init_poh, EntrySlice, EntryVerificationStatus, VerifyRecyclers,
+};
 use solana_measure::measure::Measure;
 use solana_perf::perf_libs;
 use solana_sdk::hash::hash;
@@ -72,9 +74,12 @@ fn main() {
     while num_entries <= max_num_entries as usize {
         let mut time = Measure::start("time");
         for _ in 0..iterations {
-            assert!(ticks[..num_entries]
-                .verify_cpu_generic(&start_hash)
-                .finish_verify(&ticks[..num_entries]));
+            assert_eq!(
+                ticks[..num_entries]
+                    .verify_cpu_generic(&start_hash)
+                    .status(),
+                EntryVerificationStatus::Success
+            );
         }
         time.stop();
         println!(
@@ -86,9 +91,12 @@ fn main() {
         if is_x86_feature_detected!("avx2") && entry::api().is_some() {
             let mut time = Measure::start("time");
             for _ in 0..iterations {
-                assert!(ticks[..num_entries]
-                    .verify_cpu_x86_simd(&start_hash, 8)
-                    .finish_verify(&ticks[..num_entries]));
+                assert_eq!(
+                    ticks[..num_entries]
+                        .verify_cpu_x86_simd(&start_hash, 8)
+                        .status(),
+                    EntryVerificationStatus::Success
+                );
             }
             time.stop();
             println!(
@@ -101,9 +109,12 @@ fn main() {
         if is_x86_feature_detected!("avx512f") && entry::api().is_some() {
             let mut time = Measure::start("time");
             for _ in 0..iterations {
-                assert!(ticks[..num_entries]
-                    .verify_cpu_x86_simd(&start_hash, 16)
-                    .finish_verify(&ticks[..num_entries]));
+                assert_eq!(
+                    ticks[..num_entries]
+                        .verify_cpu_x86_simd(&start_hash, 16)
+                        .status(),
+                    EntryVerificationStatus::Success
+                );
             }
             time.stop();
             println!(
@@ -117,9 +128,12 @@ fn main() {
             let mut time = Measure::start("time");
             let recyclers = VerifyRecyclers::default();
             for _ in 0..iterations {
-                assert!(ticks[..num_entries]
-                    .start_verify(&start_hash, recyclers.clone(), true)
-                    .finish_verify(&ticks[..num_entries]));
+                assert_eq!(
+                    ticks[..num_entries]
+                        .verify_with_recyclers(&start_hash, recyclers.clone(), true)
+                        .status(),
+                    EntryVerificationStatus::Success
+                );
             }
             time.stop();
             println!(

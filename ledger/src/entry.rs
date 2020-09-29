@@ -21,13 +21,11 @@ use solana_sdk::hash::Hash;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
 use std::cell::RefCell;
+use std::cmp;
 use std::ffi::OsStr;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Once;
-use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
 use std::time::Instant;
-use std::{cmp, thread};
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -206,22 +204,10 @@ pub fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction
     }
 }
 
-pub struct GpuVerificationData {
-    thread_h: Option<JoinHandle<u64>>,
-    hashes: Option<Arc<Mutex<PinnedVec<Hash>>>>,
-    tx_hashes: Vec<Option<Hash>>,
-}
-
-pub enum DeviceVerificationData {
-    CPU(),
-    GPU(GpuVerificationData),
-}
-
 pub struct EntryVerificationState {
     verification_status: EntryVerificationStatus,
     poh_duration_us: u64,
     transaction_duration_us: u64,
-    device_verification_data: DeviceVerificationData,
 }
 
 #[derive(Default, Clone)]
@@ -253,54 +239,6 @@ impl EntryVerificationState {
     pub fn transaction_duration_us(&self) -> u64 {
         self.transaction_duration_us
     }
-
-    pub fn finish_verify(&mut self, entries: &[Entry]) -> bool {
-        match &mut self.device_verification_data {
-            DeviceVerificationData::GPU(verification_state) => {
-                let gpu_time_us = verification_state.thread_h.take().unwrap().join().unwrap();
-
-                let mut verify_check_time = Measure::start("verify_check");
-                let hashes = verification_state.hashes.take().unwrap();
-                let hashes = Arc::try_unwrap(hashes)
-                    .expect("unwrap Arc")
-                    .into_inner()
-                    .expect("into_inner");
-                let res = PAR_THREAD_POOL.with(|thread_pool| {
-                    thread_pool.borrow().install(|| {
-                        hashes
-                            .into_par_iter()
-                            .zip(&verification_state.tx_hashes)
-                            .zip(entries)
-                            .all(|((hash, tx_hash), answer)| {
-                                if answer.num_hashes == 0 {
-                                    *hash == answer.hash
-                                } else {
-                                    let mut poh = Poh::new(*hash, None);
-                                    if let Some(mixin) = tx_hash {
-                                        poh.record(*mixin).unwrap().hash == answer.hash
-                                    } else {
-                                        poh.tick().unwrap().hash == answer.hash
-                                    }
-                                }
-                            })
-                    })
-                });
-
-                verify_check_time.stop();
-                self.poh_duration_us += gpu_time_us + verify_check_time.as_us();
-
-                self.verification_status = if res {
-                    EntryVerificationStatus::Success
-                } else {
-                    EntryVerificationStatus::Failure
-                };
-                res
-            }
-            DeviceVerificationData::CPU() => {
-                self.verification_status == EntryVerificationStatus::Success
-            }
-        }
-    }
 }
 
 fn compare_hashes(computed_hash: Hash, ref_entry: &Entry) -> bool {
@@ -323,7 +261,7 @@ pub trait EntrySlice {
     fn verify_cpu(&self, start_hash: &Hash) -> EntryVerificationState;
     fn verify_cpu_generic(&self, start_hash: &Hash) -> EntryVerificationState;
     fn verify_cpu_x86_simd(&self, start_hash: &Hash, simd_len: usize) -> EntryVerificationState;
-    fn start_verify(
+    fn verify_with_recyclers(
         &self,
         start_hash: &Hash,
         recyclers: VerifyRecyclers,
@@ -341,8 +279,8 @@ pub trait EntrySlice {
 
 impl EntrySlice for [Entry] {
     fn verify(&self, start_hash: &Hash) -> bool {
-        self.start_verify(start_hash, VerifyRecyclers::default(), true)
-            .finish_verify(self)
+        let s = self.verify_with_recyclers(start_hash, VerifyRecyclers::default(), true);
+        s.verification_status == EntryVerificationStatus::Success
     }
 
     fn verify_cpu_generic(&self, start_hash: &Hash) -> EntryVerificationState {
@@ -379,7 +317,6 @@ impl EntrySlice for [Entry] {
             },
             poh_duration_us,
             transaction_duration_us: 0,
-            device_verification_data: DeviceVerificationData::CPU(),
         }
     }
 
@@ -463,7 +400,6 @@ impl EntrySlice for [Entry] {
             },
             poh_duration_us,
             transaction_duration_us: 0,
-            device_verification_data: DeviceVerificationData::CPU(),
         }
     }
 
@@ -477,9 +413,9 @@ impl EntrySlice for [Entry] {
         let (has_avx2, has_avx512) = (false, false);
 
         if api().is_some() {
-            if has_avx512 && self.len() >= 128 {
+            if has_avx512 && self.len() >= 16 {
                 self.verify_cpu_x86_simd(start_hash, 16)
-            } else if has_avx2 && self.len() >= 48 {
+            } else if has_avx2 && self.len() >= 8 {
                 self.verify_cpu_x86_simd(start_hash, 8)
             } else {
                 self.verify_cpu_generic(start_hash)
@@ -508,7 +444,7 @@ impl EntrySlice for [Entry] {
         })
     }
 
-    fn start_verify(
+    fn verify_with_recyclers(
         &self,
         start_hash: &Hash,
         recyclers: VerifyRecyclers,
@@ -522,17 +458,17 @@ impl EntrySlice for [Entry] {
                 verification_status: EntryVerificationStatus::Failure,
                 transaction_duration_us,
                 poh_duration_us: 0,
-                device_verification_data: DeviceVerificationData::CPU(),
             };
         }
 
         let start = Instant::now();
         let api = perf_libs::api();
         if api.is_none() {
-            let mut res: EntryVerificationState = self.verify_cpu(start_hash);
-            res.set_transaction_duration_us(transaction_duration_us);
+            let mut res = self.verify_cpu(start_hash);
+            res.transaction_duration_us = transaction_duration_us;
             return res;
         }
+
         let api = api.unwrap();
         inc_new_counter_info!("entry_verify-num_entries", self.len() as usize);
 
@@ -563,32 +499,26 @@ impl EntrySlice for [Entry] {
         }
 
         let length = self.len();
-        let hashes = Arc::new(Mutex::new(hashes_pinned));
-        let hashes_clone = hashes.clone();
 
-        let gpu_verify_thread = thread::spawn(move || {
-            let mut hashes = hashes_clone.lock().unwrap();
-            let gpu_wait = Instant::now();
-            let res;
-            unsafe {
-                res = (api.poh_verify_many)(
-                    hashes.as_mut_ptr() as *mut u8,
-                    num_hashes_vec.as_ptr(),
-                    length,
-                    1,
-                );
-            }
-            if res != 0 {
-                panic!("GPU PoH verify many failed");
-            }
-            inc_new_counter_info!(
-                "entry_verify-gpu_thread",
-                timing::duration_as_us(&gpu_wait.elapsed()) as usize
-            );
-            timing::duration_as_us(&gpu_wait.elapsed())
-        });
+        let gpu_wait = Instant::now();
+        let res = unsafe {
+            (api.poh_verify_many)(
+                hashes_pinned.as_mut_ptr() as *mut u8,
+                num_hashes_vec.as_ptr(),
+                length,
+                1,
+            )
+        };
+        if res != 0 {
+            panic!("GPU PoH verify many failed");
+        }
+        inc_new_counter_info!(
+            "entry_verify-gpu_thread",
+            timing::duration_as_us(&gpu_wait.elapsed()) as usize
+        );
+        timing::duration_as_us(&gpu_wait.elapsed());
 
-        let tx_hashes = PAR_THREAD_POOL.with(|thread_pool| {
+        let tx_hashes: Vec<_> = PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
                 self.into_par_iter()
                     .map(|entry| {
@@ -602,16 +532,38 @@ impl EntrySlice for [Entry] {
             })
         });
 
-        let device_verification_data = DeviceVerificationData::GPU(GpuVerificationData {
-            thread_h: Some(gpu_verify_thread),
-            tx_hashes,
-            hashes: Some(hashes),
+        let mut verify_check_time = Measure::start("verify_check");
+
+        let res = PAR_THREAD_POOL.with(|thread_pool| {
+            thread_pool.borrow().install(|| {
+                hashes_pinned.into_par_iter().zip(&tx_hashes).zip(self).all(
+                    |((hash, tx_hash), answer)| {
+                        if answer.num_hashes == 0 {
+                            *hash == answer.hash
+                        } else {
+                            let mut poh = Poh::new(*hash, None);
+                            if let Some(mixin) = tx_hash {
+                                poh.record(*mixin).unwrap().hash == answer.hash
+                            } else {
+                                poh.tick().unwrap().hash == answer.hash
+                            }
+                        }
+                    },
+                )
+            })
         });
+
+        verify_check_time.stop();
+
+        let verification_status = if res {
+            EntryVerificationStatus::Success
+        } else {
+            EntryVerificationStatus::Failure
+        };
         EntryVerificationState {
-            verification_status: EntryVerificationStatus::Pending,
+            verification_status,
             poh_duration_us: timing::duration_as_us(&start.elapsed()),
             transaction_duration_us,
-            device_verification_data,
         }
     }
 
