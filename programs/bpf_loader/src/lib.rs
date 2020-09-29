@@ -16,12 +16,12 @@ use solana_rbpf::{
     memory_region::MemoryRegion,
     vm::{EbpfVm, Executable, InstructionMeter},
 };
+use solana_runtime::process_instruction::{ComputeMeter, Executor, InvokeContext};
 use solana_sdk::{
     account::{is_executable, next_keyed_account, KeyedAccount},
     bpf_loader, bpf_loader_deprecated,
     decode_error::DecodeError,
     entrypoint::SUCCESS,
-    entrypoint_native::{ComputeMeter, Executor, InvokeContext},
     instruction::InstructionError,
     loader_instruction::LoaderInstruction,
     program_utils::limited_deserialize,
@@ -270,14 +270,13 @@ impl Executor for BPFExecutor {
 mod tests {
     use super::*;
     use rand::Rng;
-    use solana_runtime::message_processor::{Executors, ThisInvokeContext};
+    use solana_runtime::{
+        message_processor::{Executors, ThisInvokeContext},
+        process_instruction::{ComputeBudget, Logger, ProcessInstruction},
+    };
     use solana_sdk::{
-        account::Account,
-        entrypoint_native::{ComputeBudget, Logger, ProcessInstruction},
-        instruction::CompiledInstruction,
-        instruction::Instruction,
-        message::Message,
-        rent::Rent,
+        account::Account, instruction::CompiledInstruction, instruction::Instruction,
+        message::Message, rent::Rent,
     };
     use std::{cell::RefCell, fs::File, io::Read, ops::Range, rc::Rc};
 

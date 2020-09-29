@@ -14,15 +14,15 @@ use solana_runtime::{
     bank_client::BankClient,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::load_program,
+    process_instruction::{
+        ComputeBudget, ComputeMeter, Executor, InvokeContext, Logger, ProcessInstruction,
+    },
 };
 use solana_sdk::{
     account::Account,
     bpf_loader,
     client::SyncClient,
     entrypoint::SUCCESS,
-    entrypoint_native::{
-        ComputeBudget, ComputeMeter, Executor, InvokeContext, Logger, ProcessInstruction,
-    },
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     message::Message,
     pubkey::Pubkey,
