@@ -47,7 +47,7 @@ Programs support a limited subset of Rust's float operations, though they
 are highly discouraged due to the overhead involved.  If a program attempts to
 use a float operation that is not supported, the runtime will report an
 unresolved symbol error. Be sure to include integration tests against a local
-cluster to ensure the operation is supported."
+cluster to ensure the operation is supported.
 
 ## Heap size
 
