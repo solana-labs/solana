@@ -120,10 +120,8 @@ pub fn process_feature_subcommand(
     }
 }
 
-// Feature activation is only allowed when 95% of the active stake is on the current feature set
-fn feature_activation_allowed(rpc_client: &RpcClient) -> Result<bool, ClientError> {
-    let my_feature_set = solana_version::Version::default().feature_set;
-
+fn active_stake_by_feature_set(rpc_client: &RpcClient) -> Result<HashMap<u32, u64>, ClientError> {
+    // Validator identity -> feature set
     let feature_set_map = rpc_client
         .get_cluster_nodes()?
         .into_iter()
@@ -139,19 +137,58 @@ fn feature_activation_allowed(rpc_client: &RpcClient) -> Result<bool, ClientErro
         .map(|vote_account| vote_account.activated_stake)
         .sum();
 
-    let total_compatible_stake: u64 = vote_accounts
-        .current
-        .iter()
-        .map(|vote_account| {
-            if Some(&Some(my_feature_set)) == feature_set_map.get(&vote_account.node_pubkey) {
-                vote_account.activated_stake
-            } else {
-                0
-            }
-        })
-        .sum();
+    // Sum all active stake by feature set
+    let mut active_stake_by_feature_set = HashMap::new();
+    for vote_account in vote_accounts.current {
+        if let Some(Some(feature_set)) = feature_set_map.get(&vote_account.node_pubkey) {
+            *active_stake_by_feature_set.entry(*feature_set).or_default() +=
+                vote_account.activated_stake;
+        } else {
+            *active_stake_by_feature_set
+                .entry(0 /* "unknown" */)
+                .or_default() += vote_account.activated_stake;
+        }
+    }
 
-    Ok(total_compatible_stake * 100 / total_active_stake >= 95)
+    // Convert active stake to a percentage so the caller doesn't need `total_active_stake`
+    for (_, val) in active_stake_by_feature_set.iter_mut() {
+        *val = *val * 100 / total_active_stake;
+    }
+    Ok(active_stake_by_feature_set)
+}
+
+// Feature activation is only allowed when 95% of the active stake is on the current feature set
+fn feature_activation_allowed(rpc_client: &RpcClient) -> Result<bool, ClientError> {
+    let my_feature_set = solana_version::Version::default().feature_set;
+
+    let active_stake_by_feature_set = active_stake_by_feature_set(rpc_client)?;
+
+    let feature_activation_allowed = active_stake_by_feature_set
+        .get(&my_feature_set)
+        .map(|percentage| *percentage >= 95)
+        .unwrap_or(false);
+
+    if !feature_activation_allowed {
+        println!("\n{}", style("Stake By Feature Id:").bold());
+        for (feature_set, percentage) in active_stake_by_feature_set.iter() {
+            if *feature_set == 0 {
+                println!("unknown - {}%", percentage);
+            } else {
+                println!(
+                    "{} - {}% {}",
+                    feature_set,
+                    percentage,
+                    if *feature_set == my_feature_set {
+                        " <-- current"
+                    } else {
+                        ""
+                    }
+                );
+            }
+        }
+    }
+
+    Ok(feature_activation_allowed)
 }
 
 fn process_status(rpc_client: &RpcClient, feature_ids: &[Pubkey]) -> ProcessResult {
