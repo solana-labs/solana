@@ -1,5 +1,3 @@
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-use solana_sdk::abi_example::AbiExample;
 use solana_sdk::{
     account::{Account, KeyedAccount},
     instruction::{CompiledInstruction, Instruction, InstructionError},
@@ -129,22 +127,4 @@ pub trait Executor: Send + Sync {
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError>;
-}
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl AbiExample for Arc<dyn Executor> {
-    fn example() -> Self {
-        struct ExampleExecutor {}
-        impl Executor for ExampleExecutor {
-            fn execute(
-                &self,
-                _program_id: &Pubkey,
-                _keyed_accounts: &[KeyedAccount],
-                _instruction_data: &[u8],
-                _invoke_context: &mut dyn InvokeContext,
-            ) -> std::result::Result<(), InstructionError> {
-                Ok(())
-            }
-        }
-        Arc::new(ExampleExecutor {})
-    }
 }

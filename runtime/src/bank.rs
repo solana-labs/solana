@@ -211,7 +211,6 @@ pub struct Builtins {
 const MAX_CACHED_EXECUTORS: usize = 100; // 10 MB assuming programs are around 100k
 
 /// LFU Cache of executors
-#[derive(AbiExample)]
 struct CachedExecutors {
     max: usize,
     executors: HashMap<Pubkey, (AtomicU64, Arc<dyn Executor>)>,
@@ -224,6 +223,17 @@ impl Default for CachedExecutors {
         }
     }
 }
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl AbiExample for CachedExecutors {
+    fn example() -> Self {
+        // Delegate AbiExample impl to Default before going deep and stuck with
+        // not easily impl-able Arc<dyn Executor> due to rust's coherence issue
+        // This is safe because CachedExecutors isn't serializable by definition.
+        Self::default()
+    }
+}
+
 impl Clone for CachedExecutors {
     fn clone(&self) -> Self {
         let mut executors = HashMap::new();
