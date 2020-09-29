@@ -2,6 +2,7 @@ use crate::{
     cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
     crds_value::CrdsValueLabel,
     optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
+    optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
     poh_recorder::PohRecorder,
     pubkey_references::LockedPubkeyReferences,
     result::{Error, Result},
@@ -248,6 +249,7 @@ impl ClusterInfoVoteListener {
         verified_vote_sender: VerifiedVoteSender,
         replay_votes_receiver: ReplayVoteReceiver,
         blockstore: Arc<Blockstore>,
+        bank_notification_sender: Option<BankNotificationSender>,
     ) -> Self {
         let exit_ = exit.clone();
 
@@ -293,6 +295,7 @@ impl ClusterInfoVoteListener {
                     verified_vote_sender,
                     replay_votes_receiver,
                     blockstore,
+                    bank_notification_sender,
                 );
             })
             .unwrap();
@@ -420,6 +423,7 @@ impl ClusterInfoVoteListener {
         verified_vote_sender: VerifiedVoteSender,
         replay_votes_receiver: ReplayVoteReceiver,
         blockstore: Arc<Blockstore>,
+        bank_notification_sender: Option<BankNotificationSender>,
     ) -> Result<()> {
         let mut optimistic_confirmation_verifier =
             OptimisticConfirmationVerifier::new(bank_forks.read().unwrap().root());
@@ -451,6 +455,7 @@ impl ClusterInfoVoteListener {
                 &subscriptions,
                 &verified_vote_sender,
                 &replay_votes_receiver,
+                &bank_notification_sender,
             );
 
             if let Err(e) = optimistic_confirmed_slots {
@@ -485,6 +490,7 @@ impl ClusterInfoVoteListener {
             subscriptions,
             verified_vote_sender,
             replay_votes_receiver,
+            &None,
         )
     }
 
@@ -495,6 +501,7 @@ impl ClusterInfoVoteListener {
         subscriptions: &RpcSubscriptions,
         verified_vote_sender: &VerifiedVoteSender,
         replay_votes_receiver: &ReplayVoteReceiver,
+        bank_notification_sender: &Option<BankNotificationSender>,
     ) -> Result<Vec<(Slot, Hash)>> {
         let mut sel = Select::new();
         sel.recv(gossip_vote_txs_receiver);
@@ -523,6 +530,7 @@ impl ClusterInfoVoteListener {
                     root_bank,
                     subscriptions,
                     verified_vote_sender,
+                    bank_notification_sender,
                 ));
             } else {
                 remaining_wait_time = remaining_wait_time
@@ -543,6 +551,7 @@ impl ClusterInfoVoteListener {
         diff: &mut HashMap<Slot, HashMap<Arc<Pubkey>, bool>>,
         new_optimistic_confirmed_slots: &mut Vec<(Slot, Hash)>,
         is_gossip_vote: bool,
+        bank_notification_sender: &Option<BankNotificationSender>,
     ) {
         if vote.slots.is_empty() {
             return;
@@ -595,7 +604,13 @@ impl ClusterInfoVoteListener {
                 if is_confirmed {
                     new_optimistic_confirmed_slots.push((*slot, last_vote_hash));
                     // Notify subscribers about new optimistic confirmation
-                    subscriptions.notify_gossip_subscribers(*slot);
+                    if let Some(sender) = bank_notification_sender {
+                        sender
+                            .send(BankNotification::OptimisticallyConfirmed(*slot))
+                            .unwrap_or_else(|err| {
+                                warn!("bank_notification_sender failed: {:?}", err)
+                            });
+                    }
                 }
 
                 if !is_new && !is_gossip_vote {
@@ -636,6 +651,7 @@ impl ClusterInfoVoteListener {
         root_bank: &Bank,
         subscriptions: &RpcSubscriptions,
         verified_vote_sender: &VerifiedVoteSender,
+        bank_notification_sender: &Option<BankNotificationSender>,
     ) -> Vec<(Slot, Hash)> {
         let mut diff: HashMap<Slot, HashMap<Arc<Pubkey>, bool>> = HashMap::new();
         let mut new_optimistic_confirmed_slots = vec![];
@@ -686,6 +702,7 @@ impl ClusterInfoVoteListener {
                 &mut diff,
                 &mut new_optimistic_confirmed_slots,
                 is_gossip,
+                bank_notification_sender,
             );
         }
 
@@ -769,6 +786,7 @@ impl ClusterInfoVoteListener {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
     use solana_perf::packet;
     use solana_runtime::{
         bank::Bank,
@@ -996,6 +1014,7 @@ mod tests {
             &subscriptions,
             &verified_vote_sender,
             &replay_votes_receiver,
+            &None,
         )
         .unwrap();
 
@@ -1024,6 +1043,7 @@ mod tests {
             &subscriptions,
             &verified_vote_sender,
             &replay_votes_receiver,
+            &None,
         )
         .unwrap();
 
@@ -1101,6 +1121,7 @@ mod tests {
             &subscriptions,
             &verified_vote_sender,
             &replay_votes_receiver,
+            &None,
         )
         .unwrap();
 
@@ -1219,6 +1240,7 @@ mod tests {
             &subscriptions,
             &verified_vote_sender,
             &replay_votes_receiver,
+            &None,
         )
         .unwrap();
 
@@ -1313,6 +1335,7 @@ mod tests {
                     &subscriptions,
                     &verified_vote_sender,
                     &replay_votes_receiver,
+                    &None,
                 );
             }
             let slot_vote_tracker = vote_tracker.get_slot_vote_tracker(vote_slot).unwrap();
@@ -1423,13 +1446,16 @@ mod tests {
             );
         let bank = Bank::new(&genesis_config);
         let exit = Arc::new(AtomicBool::new(false));
-        let bank_forks = BankForks::new(bank);
-        let bank = bank_forks.get(0).unwrap().clone();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank = bank_forks.read().unwrap().get(0).unwrap().clone();
         let vote_tracker = VoteTracker::new(&bank);
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
-            Arc::new(RwLock::new(bank_forks)),
+            bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::default())),
+            optimistically_confirmed_bank,
         ));
 
         // Send a vote to process, should add a reference to the pubkey for that voter
@@ -1460,6 +1486,7 @@ mod tests {
             &bank,
             &subscriptions,
             &verified_vote_sender,
+            &None,
         );
         let ref_count = Arc::strong_count(
             &vote_tracker
@@ -1529,6 +1556,7 @@ mod tests {
             &new_root_bank,
             &subscriptions,
             &verified_vote_sender,
+            &None,
         );
 
         // Check new replay vote pubkey first
@@ -1578,12 +1606,15 @@ mod tests {
         let bank = Bank::new(&genesis_config);
         let vote_tracker = VoteTracker::new(&bank);
         let exit = Arc::new(AtomicBool::new(false));
-        let bank_forks = BankForks::new(bank);
-        let bank = bank_forks.get(0).unwrap().clone();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
-            Arc::new(RwLock::new(bank_forks)),
+            bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::default())),
+            optimistically_confirmed_bank,
         ));
 
         // Integrity Checks
