@@ -2326,6 +2326,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "ouroboros"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "776469997c56d7130b691a5edea1cbe63d7fef495f98b1b0ced0f3a5571c37aa"
+dependencies = [
+ "ouroboros_macro",
+ "stable_deref_trait",
+]
+
+[[package]]
+name = "ouroboros_macro"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85165ba45bb44e86ddb86e33ad92640522d572229c5c326eb7eb81ef31b06ce7"
+dependencies = [
+ "Inflector",
+ "proc-macro2 1.0.19",
+ "quote 1.0.6",
+ "syn 1.0.27",
+]
+
+[[package]]
 name = "parity-ws"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4410,6 +4432,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "num_cpus",
+ "ouroboros",
  "rand 0.7.3",
  "rayon",
  "regex",
@@ -4947,6 +4970,12 @@ dependencies = [
  "solana-sdk 1.3.17",
  "thiserror",
 ]
+
+[[package]]
+name = "stable_deref_trait"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "standback"
