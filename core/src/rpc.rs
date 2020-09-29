@@ -711,6 +711,15 @@ impl JsonRpcRequestProcessor {
                 .highest_confirmed_root()
         {
             let result = self.blockstore.get_block_time(slot);
+            if result.is_err() {
+                if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
+                    return Ok(self
+                        .runtime_handle
+                        .block_on(bigtable_ledger_storage.get_confirmed_block(slot))
+                        .ok()
+                        .and_then(|confirmed_block| confirmed_block.block_time));
+                }
+            }
             self.check_slot_cleaned_up(&result, slot)?;
             Ok(result.ok().unwrap_or(None))
         } else {
