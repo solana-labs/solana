@@ -11,7 +11,7 @@ export const ensureReady = () => {
 export const waitReady = async () => {
   if (!exports) {
     // @ts-ignore
-    let wasm = await import("./../Cargo.toml");
+    let wasm = await import("./../../Cargo.toml");
     exports = await wasm.init();
   }
 

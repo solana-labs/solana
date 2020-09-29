@@ -10,6 +10,6 @@
         "strict": true,
         "typeRoots": [ "./types", "./node_modules/@types"]
       },
-      "include": ["./ts"],
-      "exclude": ["node_modules", "**/__tests__/*", "dist", "src", "target", "types"]
+      "include": ["./src/ts"],
+      "exclude": ["node_modules", "**/__tests__/*", "dist", "target", "types"]
   }

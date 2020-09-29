@@ -21,7 +21,7 @@ describe("Benchmark in Node.js WASM implementation of ED25519 vs tweetnacl", () 
     await waitReady();
   });
 
-  // on avg. WASM is 20-25x faster than nacl but I am testing conservative assumption
+  // on avg. WASM is 20-25x faster than tweetnacl but I am testing conservative assumption
   test("WASM sign method should be faster than nacl by at least 15x", async () => {
     const ITERATIONS = 100;
     const keypair = ed25519.keypair.fromSeed(
@@ -40,7 +40,6 @@ describe("Benchmark in Node.js WASM implementation of ED25519 vs tweetnacl", () 
   });
 
   test("ed25519.sign should return the same signature as tweetnacl", async () => {
-    const ITERATIONS = 100;
     const keypair = ed25519.keypair.fromSeed(
       Uint8Array.from(Array(32).fill(8))
     );
@@ -53,8 +52,25 @@ describe("Benchmark in Node.js WASM implementation of ED25519 vs tweetnacl", () 
     );
   });
 
-  test("ed25519.verify should return the same signature as tweetnacl", async () => {
-    // TODO
+  test("ed25519.verify should return true for valid signature and false otherwise", async () => {
+    const keypair = ed25519.keypair.fromSeed(
+      Uint8Array.from(Array(32).fill(8))
+    );
+
+    const data = Uint8Array.from(crypto.randomBytes(1024));
+    const signature = nacl.sign.detached(data, keypair.secretKey);
+
+    const valid = ed25519.verify(keypair.publicKey, signature, data);
+    expect(valid).toBe(true);
+
+    const invalid = ed25519.verify(keypair.publicKey, new Uint8Array(), data);
+    expect(invalid).toBe(false);
+  });
+
+  test("ed25519.isOnCurve should return true for random public key", async () => {
+    const keypair = ed25519.keypair.fromSeed(
+      Uint8Array.from(Array(32).fill(8))
+    );
   });
 
   test("sha256 should return the same result as crypto-hash", async () => {
