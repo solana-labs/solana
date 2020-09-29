@@ -36,12 +36,15 @@ pub fn nonce_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
 }
 
 pub trait NonceArgs {
-    fn nonce_args(self) -> Self;
+    fn nonce_args(self, global: bool) -> Self;
 }
 
 impl NonceArgs for App<'_, '_> {
-    fn nonce_args(self) -> Self {
-        self.arg(nonce_arg())
-            .arg(nonce_authority_arg().requires(NONCE_ARG.name))
+    fn nonce_args(self, global: bool) -> Self {
+        self.arg(nonce_arg().global(global)).arg(
+            nonce_authority_arg()
+                .requires(NONCE_ARG.name)
+                .global(global),
+        )
     }
 }
