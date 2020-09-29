@@ -42,7 +42,7 @@ lazy_static! {
         (pico_inflation::id(), "pico-inflation"),
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
         (bpf_loader2_program::id(), "bpf_loader2 program"),
-        (compute_budget_config2::id(), "compute budget configuration 2"),
+        (compute_budget_config2::id(), "1ms compute budget"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

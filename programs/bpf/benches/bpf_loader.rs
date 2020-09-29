@@ -218,7 +218,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         "Tuner must consume the whole budget"
     );
     println!(
-        "{:?} Consumed compute budget took {:?} us ({:?} instructions)",
+        "{:?} compute units took {:?} us ({:?} instructions)",
         BUDGET - instruction_meter.get_remaining(),
         measure.as_us(),
         vm.get_total_instruction_count(),
