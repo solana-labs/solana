@@ -350,8 +350,9 @@ const SignatureStatusResult = struct({err: TransactionErrorResult});
  * @typedef {Object} Version
  * @property {string} solana-core Version of solana-core
  */
-const Version = struct({
+const Version = struct.pick({
   'solana-core': 'string',
+  'feature-set': 'number?',
 });
 
 type SimulatedTransactionResponse = {

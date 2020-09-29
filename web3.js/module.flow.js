@@ -226,6 +226,7 @@ declare module '@solana/web3.js' {
 
   declare export type Version = {
     'solana-core': string,
+    'feature-set': ?number,
   };
 
   declare export type VoteAccountInfo = {
