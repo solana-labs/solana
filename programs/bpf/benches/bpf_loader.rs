@@ -218,7 +218,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         "Tuner must consume the whole budget"
     );
     println!(
-        "{:?} Consumed compute budget took {:?} us ({:?} instructions)",
+        "{:?} compute units took {:?} us ({:?} instructions)",
         BUDGET - instruction_meter.get_remaining(),
         measure.as_us(),
         vm.get_total_instruction_count(),
@@ -229,6 +229,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
 pub struct MockInvokeContext {
     key: Pubkey,
     logger: MockLogger,
+    compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<MockComputeMeter>>,
 }
 impl InvokeContext for MockInvokeContext {
@@ -253,11 +254,8 @@ impl InvokeContext for MockInvokeContext {
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
         Rc::new(RefCell::new(self.logger.clone()))
     }
-    fn is_cross_program_supported(&self) -> bool {
-        true
-    }
-    fn get_compute_budget(&self) -> ComputeBudget {
-        ComputeBudget::default()
+    fn get_compute_budget(&self) -> &ComputeBudget {
+        &self.compute_budget
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
         self.compute_meter.clone()
@@ -267,6 +265,9 @@ impl InvokeContext for MockInvokeContext {
         None
     }
     fn record_instruction(&self, _instruction: &Instruction) {}
+    fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
+        true
+    }
 }
 #[derive(Debug, Default, Clone)]
 pub struct MockLogger {
