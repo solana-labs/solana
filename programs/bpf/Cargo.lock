@@ -1897,6 +1897,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-rand"
+version = "1.4.0"
+dependencies = [
+ "getrandom",
+ "rand",
+ "solana-sdk",
+]
+
+[[package]]
 name = "solana-bpf-rust-sanity"
 version = "1.4.0"
 dependencies = [

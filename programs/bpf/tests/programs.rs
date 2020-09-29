@@ -23,7 +23,6 @@ use solana_sdk::{
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, MAX_PROCESSING_AGE},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     message::Message,
     pubkey::Pubkey,
@@ -153,6 +152,7 @@ fn test_program_bpf_sanity() {
             ("solana_bpf_rust_noop", true),
             ("solana_bpf_rust_panic", false),
             ("solana_bpf_rust_param_passing", true),
+            ("solana_bpf_rust_rand", true),
             ("solana_bpf_rust_sanity", true),
             ("solana_bpf_rust_sysval", true),
         ]);
