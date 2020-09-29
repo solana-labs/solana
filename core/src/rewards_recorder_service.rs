@@ -53,6 +53,7 @@ impl RewardsRecorderService {
             .map(|(pubkey, reward_info)| Reward {
                 pubkey: pubkey.to_string(),
                 lamports: reward_info.lamports,
+                post_balance: reward_info.post_balance,
             })
             .collect();
 
