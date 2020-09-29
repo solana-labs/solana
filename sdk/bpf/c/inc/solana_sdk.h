@@ -399,12 +399,12 @@ typedef struct {
   uint64_t len; /** number of bytes*/
 } SolBytes;
 
-/* 
+/**
  * Length of a sha256 hash result
  */
 #define SHA256_RESULT_LENGTH 32
 
-/*
+/**
  * Sha256
  *
  * @param bytes Array of byte arrays
@@ -454,7 +454,7 @@ typedef struct {
   uint64_t len; /** Number of seeds */
 } SolSignerSeeds;
 
-/*
+/**
  * Create a program address
  *
  * @param seeds Seed bytes used to sign program accounts
@@ -474,7 +474,7 @@ static uint64_t sol_create_program_address(
  *  * @{
  */
 
-/*
+/**
  * Invoke another program and sign for some of the keys
  *
  * @param instruction Instruction to process
@@ -506,7 +506,7 @@ static uint64_t sol_invoke_signed(
     signers_seeds_len
   );
 }
-/*
+/**
  * Invoke another program
  *
  * @param instruction Instruction to process
