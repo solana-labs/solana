@@ -1,4 +1,5 @@
 //! Native loader
+use crate::process_instruction::{InvokeContext, LoaderEntrypoint};
 #[cfg(unix)]
 use libloading::os::unix::*;
 #[cfg(windows)]
@@ -8,7 +9,7 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use solana_sdk::{
     account::{next_keyed_account, KeyedAccount},
     decode_error::DecodeError,
-    entrypoint_native::{InvokeContext, LoaderEntrypoint, ProgramEntrypoint},
+    entrypoint_native::ProgramEntrypoint,
     instruction::InstructionError,
     pubkey::Pubkey,
 };
