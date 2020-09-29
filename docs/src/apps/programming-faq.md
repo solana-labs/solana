@@ -92,7 +92,7 @@ error: target is not supported, for more information see: https://docs.rs/getran
 260 | |         ");
     | |___________^
 ```
-    
+
 To work around this dependency issue, add the following dependency to the
 program's `Cargo.toml`:
 
