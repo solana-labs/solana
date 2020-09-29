@@ -48,13 +48,13 @@ fn signer_arg<'a, 'b>() -> Arg<'a, 'b> {
 }
 
 pub trait OfflineArgs {
-    fn offline_args(self) -> Self;
+    fn offline_args(self, global: bool) -> Self;
 }
 
 impl OfflineArgs for App<'_, '_> {
-    fn offline_args(self) -> Self {
-        self.arg(blockhash_arg())
-            .arg(sign_only_arg())
-            .arg(signer_arg())
+    fn offline_args(self, global: bool) -> Self {
+        self.arg(blockhash_arg().global(global))
+            .arg(sign_only_arg().global(global))
+            .arg(signer_arg().global(global))
     }
 }
