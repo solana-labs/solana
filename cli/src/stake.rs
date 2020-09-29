@@ -154,8 +154,8 @@ impl StakeSubCommands for App<'_, '_> {
                         .validator(is_valid_signer)
                         .help("Source account of funds [default: cli config keypair]"),
                 )
-                .offline_args()
-                .nonce_args()
+                .offline_args(false)
+                .nonce_args(false)
                 .arg(fee_payer_arg())
         )
         .subcommand(
@@ -183,8 +183,8 @@ impl StakeSubCommands for App<'_, '_> {
                         "The vote account to which the stake will be delegated")
                 )
                 .arg(stake_authority_arg())
-                .offline_args()
-                .nonce_args()
+                .offline_args(false)
+                .nonce_args(false)
                 .arg(fee_payer_arg())
         )
         .subcommand(
@@ -213,8 +213,8 @@ impl StakeSubCommands for App<'_, '_> {
                 )
                 .arg(stake_authority_arg())
                 .arg(withdraw_authority_arg())
-                .offline_args()
-                .nonce_args()
+                .offline_args(false)
+                .nonce_args(false)
                 .arg(fee_payer_arg())
         )
         .subcommand(
@@ -228,8 +228,8 @@ impl StakeSubCommands for App<'_, '_> {
                         "Stake account to be deactivated. ")
                 )
                 .arg(stake_authority_arg())
-                .offline_args()
-                .nonce_args()
+                .offline_args(false)
+                .nonce_args(false)
                 .arg(fee_payer_arg())
         )
         .subcommand(
@@ -268,8 +268,8 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Seed for address generation; if specified, the resulting account will be at a derived address of the SPLIT STAKE ACCOUNT pubkey")
                 )
                 .arg(stake_authority_arg())
-                .offline_args()
-                .nonce_args()
+                .offline_args(false)
+                .nonce_args(false)
                 .arg(fee_payer_arg())
         )
         .subcommand(
@@ -290,8 +290,8 @@ impl StakeSubCommands for App<'_, '_> {
                         "Source stake account for the merge.  If successful, this stake account will no longer exist after the merge")
                 )
                 .arg(stake_authority_arg())
-                .offline_args()
-                .nonce_args()
+                .offline_args(false)
+                .nonce_args(false)
                 .arg(fee_payer_arg())
         )
         .subcommand(
@@ -321,8 +321,8 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("The amount to withdraw from the stake account, in SOL")
                 )
                 .arg(withdraw_authority_arg())
-                .offline_args()
-                .nonce_args()
+                .offline_args(false)
+                .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(
                     Arg::with_name("custodian")
@@ -376,8 +376,8 @@ impl StakeSubCommands for App<'_, '_> {
                         .validator(is_valid_signer)
                         .help("Keypair of the existing custodian [default: cli config pubkey]")
                 )
-                .offline_args()
-                .nonce_args()
+                .offline_args(false)
+                .nonce_args(false)
                 .arg(fee_payer_arg())
         )
         .subcommand(
