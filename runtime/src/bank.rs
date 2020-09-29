@@ -18,6 +18,9 @@ use crate::{
     log_collector::LogCollector,
     message_processor::{Executors, MessageProcessor},
     nonce_utils,
+    process_instruction::{
+        ComputeBudget, Executor, ProcessInstruction, ProcessInstructionWithContext,
+    },
     rent_collector::RentCollector,
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
@@ -37,9 +40,6 @@ use solana_sdk::{
     clock::{
         Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
         MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES, SECONDS_PER_DAY,
-    },
-    entrypoint_native::{
-        ComputeBudget, Executor, ProcessInstruction, ProcessInstructionWithContext,
     },
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
@@ -211,7 +211,6 @@ pub struct Builtins {
 const MAX_CACHED_EXECUTORS: usize = 100; // 10 MB assuming programs are around 100k
 
 /// LFU Cache of executors
-#[derive(AbiExample)]
 struct CachedExecutors {
     max: usize,
     executors: HashMap<Pubkey, (AtomicU64, Arc<dyn Executor>)>,
@@ -224,6 +223,17 @@ impl Default for CachedExecutors {
         }
     }
 }
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl AbiExample for CachedExecutors {
+    fn example() -> Self {
+        // Delegate AbiExample impl to Default before going deep and stuck with
+        // not easily impl-able Arc<dyn Executor> due to rust's coherence issue
+        // This is safe because CachedExecutors isn't serializable by definition.
+        Self::default()
+    }
+}
+
 impl Clone for CachedExecutors {
     fn clone(&self) -> Self {
         let mut executors = HashMap::new();
@@ -3816,13 +3826,13 @@ mod tests {
         genesis_utils::{
             create_genesis_config_with_leader, GenesisConfigInfo, BOOTSTRAP_VALIDATOR_LAMPORTS,
         },
+        process_instruction::InvokeContext,
         status_cache::MAX_CACHE_ENTRIES,
     };
     use solana_sdk::{
         account::KeyedAccount,
         account_utils::StateMut,
         clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
-        entrypoint_native::InvokeContext,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_config::create_genesis_config,
         instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
@@ -8750,7 +8760,7 @@ mod tests {
             _pubkey: &Pubkey,
             _ka: &[KeyedAccount],
             _data: &[u8],
-            _context: &mut dyn solana_sdk::entrypoint_native::InvokeContext,
+            _context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
         }
