@@ -4,7 +4,7 @@ import {
   ConfirmedSignatureInfo,
   ParsedInstruction,
 } from "@solana/web3.js";
-import { FetchStatus } from "providers/cache";
+import { CacheEntry, FetchStatus } from "providers/cache";
 import {
   useAccountHistories,
   useFetchAccountHistory,
@@ -12,14 +12,18 @@ import {
 import {
   useAccountOwnedTokens,
   TokenInfoWithPubkey,
+  TOKEN_PROGRAM_ID,
 } from "providers/accounts/tokens";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { Signature } from "components/common/Signature";
 import { Address } from "components/common/Address";
 import { Slot } from "components/common/Slot";
-import { useTransactionDetails } from "providers/transactions";
-import { useFetchTransactionDetails } from "providers/transactions/details";
+import {
+  Details,
+  useFetchTransactionDetails,
+  useTransactionDetailsCache,
+} from "providers/transactions/details";
 import { coerce } from "superstruct";
 import { ParsedInfo } from "validators";
 import {
@@ -51,6 +55,7 @@ export function TokenHistoryCard({ pubkey }: { pubkey: PublicKey }) {
 function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
   const accountHistories = useAccountHistories();
   const fetchAccountHistory = useFetchAccountHistory();
+  const transactionDetailsCache = useTransactionDetailsCache();
 
   const fetchHistories = (refresh?: boolean) => {
     tokens.forEach((token) => {
@@ -68,10 +73,29 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchedFullHistory = tokens.every((token) => {
+  const allFoundOldest = tokens.every((token) => {
     const history = accountHistories[token.pubkey.toBase58()];
     return history?.data?.foundOldest === true;
   });
+
+  const allFetchedSome = tokens.every((token) => {
+    const history = accountHistories[token.pubkey.toBase58()];
+    return history?.data !== undefined;
+  });
+
+  // Find the oldest slot which we know we have the full history for
+  let oldestSlot: number | undefined = allFoundOldest ? 0 : undefined;
+  if (!allFoundOldest && allFetchedSome) {
+    tokens.forEach((token) => {
+      const history = accountHistories[token.pubkey.toBase58()];
+      if (history?.data?.foundOldest === false) {
+        const earliest =
+          history.data.fetched[history.data.fetched.length - 1].slot;
+        if (!oldestSlot) oldestSlot = earliest;
+        oldestSlot = Math.max(oldestSlot, earliest);
+      }
+    });
+  }
 
   const fetching = tokens.some((token) => {
     const history = accountHistories[token.pubkey.toBase58()];
@@ -102,6 +126,9 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
       if (sigSet.has(tx.signature)) return false;
       sigSet.add(tx.signature);
       return true;
+    })
+    .filter(({ tx }) => {
+      return oldestSlot !== undefined && tx.slot >= oldestSlot;
     });
 
   if (mintAndTxs.length === 0) {
@@ -166,14 +193,19 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
           </thead>
           <tbody className="list">
             {mintAndTxs.map(({ mint, tx }) => (
-              <TokenTransactionRow key={tx.signature} mint={mint} tx={tx} />
+              <TokenTransactionRow
+                key={tx.signature}
+                mint={mint}
+                tx={tx}
+                details={transactionDetailsCache[tx.signature]}
+              />
             ))}
           </tbody>
         </table>
       </div>
 
       <div className="card-footer">
-        {fetchedFullHistory ? (
+        {allFoundOldest ? (
           <div className="text-muted text-center">Fetched full history</div>
         ) : (
           <button
@@ -211,104 +243,112 @@ function instructionTypeName(
   }
 }
 
-function TokenTransactionRow({
-  mint,
-  tx,
-}: {
-  mint: PublicKey;
-  tx: ConfirmedSignatureInfo;
-}) {
-  const details = useTransactionDetails(tx.signature);
-  const fetchDetails = useFetchTransactionDetails();
+const TokenTransactionRow = React.memo(
+  ({
+    mint,
+    tx,
+    details,
+  }: {
+    mint: PublicKey;
+    tx: ConfirmedSignatureInfo;
+    details: CacheEntry<Details> | undefined;
+  }) => {
+    const fetchDetails = useFetchTransactionDetails();
 
-  // Fetch details on load
-  React.useEffect(() => {
-    if (!details) fetchDetails(tx.signature);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // Fetch details on load
+    React.useEffect(() => {
+      if (!details) fetchDetails(tx.signature);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const instructions =
-    details?.data?.transaction?.transaction.message.instructions;
-  if (instructions) {
-    const tokenInstructions = instructions.filter(
-      (ix) => "parsed" in ix && ix.program === "spl-token"
-    ) as ParsedInstruction[];
-    if (tokenInstructions.length > 0) {
-      return (
-        <>
-          {tokenInstructions.map((ix, index) => {
-            const typeName = instructionTypeName(ix, tx);
-
-            let statusText;
-            let statusClass;
-            if (tx.err) {
-              statusClass = "warning";
-              statusText = "Failed";
-            } else {
-              statusClass = "success";
-              statusText = "Success";
-            }
-
-            return (
-              <tr key={index}>
-                <td className="w-1">
-                  <Slot slot={tx.slot} />
-                </td>
-
-                <td>
-                  <span className={`badge badge-soft-${statusClass}`}>
-                    {statusText}
-                  </span>
-                </td>
-
-                <td>
-                  <Address pubkey={mint} link truncate />
-                </td>
-
-                <td>{typeName}</td>
-
-                <td>
-                  <Signature signature={tx.signature} link />
-                </td>
-              </tr>
-            );
-          })}
-        </>
-      );
+    let statusText: string;
+    let statusClass: string;
+    if (tx.err) {
+      statusClass = "warning";
+      statusText = "Failed";
+    } else {
+      statusClass = "success";
+      statusText = "Success";
     }
+
+    const instructions =
+      details?.data?.transaction?.transaction.message.instructions;
+    if (!instructions)
+      return (
+        <tr key={tx.signature}>
+          <td className="w-1">
+            <Slot slot={tx.slot} />
+          </td>
+
+          <td>
+            <span className={`badge badge-soft-${statusClass}`}>
+              {statusText}
+            </span>
+          </td>
+
+          <td>
+            <Address pubkey={mint} link truncate />
+          </td>
+
+          <td>
+            <span className="spinner-grow spinner-grow-sm mr-2"></span>
+            Loading
+          </td>
+
+          <td>
+            <Signature signature={tx.signature} link />
+          </td>
+        </tr>
+      );
+
+    const tokenInstructionNames = instructions
+      .map((ix): string | undefined => {
+        if ("parsed" in ix) {
+          if (ix.program === "spl-token") {
+            return instructionTypeName(ix, tx);
+          } else {
+            return undefined;
+          }
+        } else {
+          if (
+            ix.accounts.findIndex((account) =>
+              account.equals(TOKEN_PROGRAM_ID)
+            ) >= 0
+          ) {
+            return "Unknown (Inner)";
+          }
+          return undefined;
+        }
+      })
+      .filter((name) => name !== undefined) as string[];
+
+    return (
+      <>
+        {tokenInstructionNames.map((typeName, index) => {
+          return (
+            <tr key={index}>
+              <td className="w-1">
+                <Slot slot={tx.slot} />
+              </td>
+
+              <td>
+                <span className={`badge badge-soft-${statusClass}`}>
+                  {statusText}
+                </span>
+              </td>
+
+              <td>
+                <Address pubkey={mint} link truncate />
+              </td>
+
+              <td>{typeName}</td>
+
+              <td>
+                <Signature signature={tx.signature} link />
+              </td>
+            </tr>
+          );
+        })}
+      </>
+    );
   }
-
-  let statusText;
-  let statusClass;
-  if (tx.err) {
-    statusClass = "warning";
-    statusText = "Failed";
-  } else {
-    statusClass = "success";
-    statusText = "Success";
-  }
-
-  return (
-    <tr key={tx.signature}>
-      <td className="w-1">
-        <Slot slot={tx.slot} />
-      </td>
-
-      <td>
-        <span className={`badge badge-soft-${statusClass}`}>{statusText}</span>
-      </td>
-
-      <td>
-        <Address pubkey={mint} link />
-      </td>
-
-      <td>
-        <span className="spinner-grow spinner-grow-sm mr-2"></span>
-        Loading
-      </td>
-
-      <td>
-        <Signature signature={tx.signature} link />
-      </td>
-    </tr>
-  );
-}
+);

@@ -104,3 +104,18 @@ export function useTransactionDetails(
 
   return context.entries[signature];
 }
+
+export type TransactionDetailsCache = {
+  [key: string]: Cache.CacheEntry<Details>;
+};
+export function useTransactionDetailsCache(): TransactionDetailsCache {
+  const context = React.useContext(StateContext);
+
+  if (!context) {
+    throw new Error(
+      `useTransactionDetailsCache must be used within a TransactionsProvider`
+    );
+  }
+
+  return context.entries;
+}
