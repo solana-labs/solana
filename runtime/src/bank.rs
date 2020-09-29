@@ -1153,6 +1153,14 @@ impl Bank {
         self.capitalization
             .fetch_add(validator_rewards_paid, Relaxed);
 
+        let active_stake = if let Some(stake_history_entry) =
+            self.stakes.read().unwrap().history().get(&self.epoch)
+        {
+            stake_history_entry.effective
+        } else {
+            0
+        };
+
         datapoint_warn!(
             "epoch_rewards",
             ("slot", self.slot, i64),
@@ -1161,6 +1169,7 @@ impl Bank {
             ("foundation_rate", foundation_rate, f64),
             ("epoch_duration_in_years", epoch_duration_in_years, f64),
             ("validator_rewards", validator_rewards_paid, i64),
+            ("active_stake", active_stake, i64),
             ("pre_capitalization", capitalization, i64),
             ("post_capitalization", self.capitalization(), i64)
         );
