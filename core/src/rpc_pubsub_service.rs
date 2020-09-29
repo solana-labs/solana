@@ -1,7 +1,6 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
 use crate::{
-    rpc::MAX_REQUEST_PAYLOAD_SIZE,
     rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl},
     rpc_subscriptions::RpcSubscriptions,
 };
@@ -45,7 +44,7 @@ impl PubSubService {
                         session
                 })
                 .max_connections(1000) // Arbitrary, default of 100 is too low
-                .max_payload(MAX_REQUEST_PAYLOAD_SIZE)
+                .max_payload(10 * 1024 * 1024 + 1024) // max account size (10MB) + extra (1K)
                 .start(&pubsub_addr);
 
                 if let Err(e) = server {
