@@ -1291,6 +1291,20 @@ impl Bank {
         self.update_recent_blockhashes_locked(&blockhash_queue);
     }
 
+    // Distribute collected transaction fees for this slot to collector_id (= current leader).
+    //
+    // Each validator is incentivized to process more transactions to earn more transaction fees.
+    // Transaction fees are rewarded for the computing resource utilization cost, directly
+    // proportional to their actual processing power.
+    //
+    // collector_id is rotated according to stake-weighted leader schedule. So the opportunity of
+    // earning transaction fees are fairly distributed by stake. And missing the opportunity
+    // (not producing a block as a leader) earns nothing. So, being online is incentivized as a
+    // form of transaction fees as well.
+    //
+    // On the other hand, rent fees are distributed under slightly different philosophy, while
+    // still being stake-weighted.
+    // Ref: distribute_rent_to_validators
     fn collect_fees(&self) {
         let collector_fees = self.collector_fees.load(Relaxed) as u64;
 
@@ -2350,6 +2364,26 @@ impl Bank {
         }
     }
 
+    // Distribute collected rent fees for this slot to staked validators (excluding stakers)
+    // according to stake.
+    //
+    // The nature of rent fee is the cost of doing business, every validator has to hold (or have
+    // access to) the same list of accounts, so we pay according to stake, which is a rough proxy for
+    // value to the network.
+    //
+    // Currently, rent distribution doesn't consider given validator's uptime at all (this might
+    // change). That's because rent should be rewarded for the storage resource utilization cost.
+    // It's treated differently from transaction fees, which is for the computing resource
+    // utilization cost.
+    //
+    // We can't use collector_id (which is rotated according to stake-weighted leader schedule)
+    // as an approximation to the ideal rent distribution to simplify and avoid this per-slot
+    // computation for the distribution (time: N log N, space: N acct. stores; N = # of
+    // validators):
+    // - rent fee doesn't need to be incentivized for throughput unlike transaction fees
+    // - leader schedule could be manipulated to locate certain validators more often at the
+    //   start of epoch to unfairly earn more rent for the epoch.
+    // Ref: collect_fees
     #[allow(clippy::needless_collect)]
     fn distribute_rent_to_validators(
         &self,
