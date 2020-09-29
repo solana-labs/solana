@@ -4,6 +4,7 @@ use crate::{
     cluster_info::ClusterInfo,
     contact_info::ContactInfo,
     non_circulating_supply::calculate_non_circulating_supply,
+    optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     rpc_error::RpcCustomError,
     rpc_health::*,
     send_transaction_service::{SendTransactionService, TransactionInfo},
@@ -121,6 +122,7 @@ pub struct JsonRpcRequestProcessor {
     transaction_sender: Arc<Mutex<Sender<TransactionInfo>>>,
     runtime_handle: runtime::Handle,
     bigtable_ledger_storage: Option<solana_storage_bigtable::LedgerStorage>,
+    optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
 }
 impl Metadata for JsonRpcRequestProcessor {}
 
@@ -133,6 +135,17 @@ impl JsonRpcRequestProcessor {
             None => CommitmentLevel::Max,
             Some(config) => config.commitment,
         };
+
+        if commitment_level == CommitmentLevel::SingleGossip {
+            let bank = self
+                .optimistically_confirmed_bank
+                .read()
+                .unwrap()
+                .bank
+                .clone();
+            debug!("RPC using optimistically confirmed slot: {:?}", bank.slot());
+            return bank;
+        }
 
         let slot = self
             .block_commitment_cache
@@ -147,12 +160,13 @@ impl JsonRpcRequestProcessor {
             CommitmentLevel::Root => {
                 debug!("RPC using node root: {:?}", slot);
             }
-            CommitmentLevel::Single | CommitmentLevel::SingleGossip => {
+            CommitmentLevel::Single => {
                 debug!("RPC using confirmed slot: {:?}", slot);
             }
             CommitmentLevel::Max => {
                 debug!("RPC using block: {:?}", slot);
             }
+            CommitmentLevel::SingleGossip => unreachable!(),
         };
 
         r_bank_forks.get(slot).cloned().unwrap_or_else(|| {
@@ -187,6 +201,7 @@ impl JsonRpcRequestProcessor {
         genesis_hash: Hash,
         runtime: &runtime::Runtime,
         bigtable_ledger_storage: Option<solana_storage_bigtable::LedgerStorage>,
+        optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
     ) -> (Self, Receiver<TransactionInfo>) {
         let (sender, receiver) = channel();
         (
@@ -202,6 +217,7 @@ impl JsonRpcRequestProcessor {
                 transaction_sender: Arc::new(Mutex::new(sender)),
                 runtime_handle: runtime.handle().clone(),
                 bigtable_ledger_storage,
+                optimistically_confirmed_bank,
             },
             receiver,
         )
@@ -237,6 +253,9 @@ impl JsonRpcRequestProcessor {
             transaction_sender: Arc::new(Mutex::new(sender)),
             runtime_handle: runtime::Runtime::new().unwrap().handle().clone(),
             bigtable_ledger_storage: None,
+            optimistically_confirmed_bank: Arc::new(RwLock::new(OptimisticallyConfirmedBank {
+                bank: bank.clone(),
+            })),
         }
     }
 
@@ -2553,8 +2572,13 @@ pub(crate) fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Option
 pub mod tests {
     use super::*;
     use crate::{
-        contact_info::ContactInfo, non_circulating_supply::non_circulating_accounts,
+        contact_info::ContactInfo,
+        non_circulating_supply::non_circulating_accounts,
+        optimistically_confirmed_bank_tracker::{
+            BankNotification, OptimisticallyConfirmedBankTracker,
+        },
         replay_stage::tests::create_test_transactions_and_populate_blockstore,
+        rpc_subscriptions::RpcSubscriptions,
     };
     use bincode::deserialize;
     use jsonrpc_core::{
@@ -2752,6 +2776,7 @@ pub mod tests {
             Hash::default(),
             &runtime::Runtime::new().unwrap(),
             None,
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
 
@@ -4096,31 +4121,13 @@ pub mod tests {
 
     #[test]
     fn test_rpc_send_bad_tx() {
-        let exit = Arc::new(AtomicBool::new(false));
-        let validator_exit = create_validator_exit(&exit);
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let genesis = create_genesis_config(100);
+        let bank = Arc::new(Bank::new(&genesis.genesis_config));
+        let meta = JsonRpcRequestProcessor::new_from_bank(&bank);
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
-        let cluster_info = Arc::new(ClusterInfo::default());
-        let tpu_address = cluster_info.my_contact_info().tpu;
-        let bank_forks = new_bank_forks().0;
-        let (meta, receiver) = JsonRpcRequestProcessor::new(
-            JsonRpcConfig::default(),
-            new_bank_forks().0,
-            block_commitment_cache,
-            blockstore,
-            validator_exit,
-            RpcHealth::stub(),
-            cluster_info,
-            Hash::default(),
-            &runtime::Runtime::new().unwrap(),
-            None,
-        );
-        SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["37u9WtQpcm6ULa3Vmu7ySnANv"]}"#;
         let res = io.handle_request_sync(req, meta);
@@ -4160,6 +4167,7 @@ pub mod tests {
             Hash::default(),
             &runtime::Runtime::new().unwrap(),
             None,
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
 
@@ -4342,6 +4350,7 @@ pub mod tests {
             Hash::default(),
             &runtime::Runtime::new().unwrap(),
             None,
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
         assert_eq!(request_processor.validator_exit(), false);
@@ -4371,6 +4380,7 @@ pub mod tests {
             Hash::default(),
             &runtime::Runtime::new().unwrap(),
             None,
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
         assert_eq!(request_processor.validator_exit(), true);
@@ -4459,6 +4469,7 @@ pub mod tests {
             Hash::default(),
             &runtime::Runtime::new().unwrap(),
             None,
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
         assert_eq!(
@@ -5524,5 +5535,119 @@ pub mod tests {
                 }
             })
         );
+    }
+
+    #[test]
+    fn test_rpc_single_gossip() {
+        let exit = Arc::new(AtomicBool::new(false));
+        let validator_exit = create_validator_exit(&exit);
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let cluster_info = Arc::new(ClusterInfo::default());
+
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100);
+        let bank = Bank::new(&genesis_config);
+
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank_forks.write().unwrap().insert(bank1);
+        let bank1 = bank_forks.read().unwrap().get(1).unwrap().clone();
+        let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
+        bank_forks.write().unwrap().insert(bank2);
+        let bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
+        let bank3 = Bank::new_from_parent(&bank2, &Pubkey::default(), 3);
+        bank_forks.write().unwrap().insert(bank3);
+
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+        let mut pending_optimistically_confirmed_banks = HashSet::new();
+
+        let subscriptions = Arc::new(RpcSubscriptions::new(
+            &exit,
+            bank_forks.clone(),
+            block_commitment_cache.clone(),
+            optimistically_confirmed_bank.clone(),
+        ));
+
+        let (meta, _receiver) = JsonRpcRequestProcessor::new(
+            JsonRpcConfig::default(),
+            bank_forks.clone(),
+            block_commitment_cache,
+            blockstore,
+            validator_exit,
+            RpcHealth::stub(),
+            cluster_info,
+            Hash::default(),
+            &runtime::Runtime::new().unwrap(),
+            None,
+            optimistically_confirmed_bank.clone(),
+        );
+
+        let mut io = MetaIoHandler::default();
+        io.extend_with(RpcSolImpl.to_delegate());
+
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getSlot","params":[{"commitment":"singleGossip"}]}"#;
+        let res = io.handle_request_sync(req, meta.clone());
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let slot: Slot = serde_json::from_value(json["result"].clone()).unwrap();
+        assert_eq!(slot, 0);
+
+        OptimisticallyConfirmedBankTracker::process_notification(
+            BankNotification::OptimisticallyConfirmed(2),
+            &bank_forks,
+            &optimistically_confirmed_bank,
+            &subscriptions,
+            &mut pending_optimistically_confirmed_banks,
+        );
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getSlot","params":[{"commitment": "singleGossip"}]}"#;
+        let res = io.handle_request_sync(&req, meta.clone());
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let slot: Slot = serde_json::from_value(json["result"].clone()).unwrap();
+        assert_eq!(slot, 2);
+
+        // Test rollback does not appear to happen, even if slots are notified out of order
+        OptimisticallyConfirmedBankTracker::process_notification(
+            BankNotification::OptimisticallyConfirmed(1),
+            &bank_forks,
+            &optimistically_confirmed_bank,
+            &subscriptions,
+            &mut pending_optimistically_confirmed_banks,
+        );
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getSlot","params":[{"commitment": "singleGossip"}]}"#;
+        let res = io.handle_request_sync(&req, meta.clone());
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let slot: Slot = serde_json::from_value(json["result"].clone()).unwrap();
+        assert_eq!(slot, 2);
+
+        // Test bank will only be cached when frozen
+        OptimisticallyConfirmedBankTracker::process_notification(
+            BankNotification::OptimisticallyConfirmed(3),
+            &bank_forks,
+            &optimistically_confirmed_bank,
+            &subscriptions,
+            &mut pending_optimistically_confirmed_banks,
+        );
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getSlot","params":[{"commitment": "singleGossip"}]}"#;
+        let res = io.handle_request_sync(&req, meta.clone());
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let slot: Slot = serde_json::from_value(json["result"].clone()).unwrap();
+        assert_eq!(slot, 2);
+
+        // Test freezing an optimistically confirmed bank will update cache
+        let bank3 = bank_forks.read().unwrap().get(3).unwrap().clone();
+        OptimisticallyConfirmedBankTracker::process_notification(
+            BankNotification::Frozen(bank3),
+            &bank_forks,
+            &optimistically_confirmed_bank,
+            &subscriptions,
+            &mut pending_optimistically_confirmed_banks,
+        );
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getSlot","params":[{"commitment": "singleGossip"}]}"#;
+        let res = io.handle_request_sync(&req, meta);
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let slot: Slot = serde_json::from_value(json["result"].clone()).unwrap();
+        assert_eq!(slot, 3);
     }
 }

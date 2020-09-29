@@ -3,6 +3,7 @@
 use crate::{
     bigtable_upload_service::BigTableUploadService,
     cluster_info::ClusterInfo,
+    optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     poh_recorder::PohRecorder,
     rpc::*,
     rpc_health::*,
@@ -249,6 +250,7 @@ impl JsonRpcService {
         validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
         trusted_validators: Option<HashSet<Pubkey>>,
         override_health_check: Arc<AtomicBool>,
+        optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
@@ -311,6 +313,7 @@ impl JsonRpcService {
             genesis_hash,
             &runtime,
             bigtable_ledger_storage,
+            optimistically_confirmed_bank,
         );
 
         let leader_info =
@@ -436,6 +439,8 @@ mod tests {
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let mut rpc_service = JsonRpcService::new(
             rpc_addr,
             JsonRpcConfig::default(),
@@ -450,6 +455,7 @@ mod tests {
             validator_exit,
             None,
             Arc::new(AtomicBool::new(false)),
+            optimistically_confirmed_bank,
         );
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");

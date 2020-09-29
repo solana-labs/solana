@@ -1,5 +1,6 @@
 use solana_client::{pubsub_client::PubsubClient, rpc_client::RpcClient, rpc_response::SlotInfo};
 use solana_core::{
+    optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     rpc_pubsub_service::PubSubService, rpc_subscriptions::RpcSubscriptions,
     test_validator::TestValidator,
 };
@@ -91,10 +92,13 @@ fn test_slot_subscription() {
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
     let bank = Bank::new(&genesis_config);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+    let optimistically_confirmed_bank =
+        OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
     let subscriptions = Arc::new(RpcSubscriptions::new(
         &exit,
         bank_forks,
         Arc::new(RwLock::new(BlockCommitmentCache::default())),
+        optimistically_confirmed_bank,
     ));
     let pubsub_service = PubSubService::new(&subscriptions, pubsub_addr, &exit);
     std::thread::sleep(Duration::from_millis(400));

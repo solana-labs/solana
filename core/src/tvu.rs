@@ -11,6 +11,7 @@ use crate::{
     completed_data_sets_service::CompletedDataSetsSender,
     consensus::Tower,
     ledger_cleanup_service::LedgerCleanupService,
+    optimistically_confirmed_bank_tracker::BankNotificationSender,
     poh_recorder::PohRecorder,
     replay_stage::{ReplayStage, ReplayStageConfig},
     retransmit_stage::RetransmitStage,
@@ -108,6 +109,7 @@ impl Tvu {
         verified_vote_receiver: VerifiedVoteReceiver,
         replay_vote_sender: ReplayVoteSender,
         completed_data_sets_sender: CompletedDataSetsSender,
+        bank_notification_sender: Option<BankNotificationSender>,
         tvu_config: TvuConfig,
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info.keypair.clone();
@@ -219,6 +221,7 @@ impl Tvu {
             transaction_status_sender,
             rewards_recorder_sender,
             cache_block_time_sender,
+            bank_notification_sender,
         };
 
         let replay_stage = ReplayStage::new(
@@ -279,6 +282,7 @@ pub mod tests {
     use crate::{
         banking_stage::create_test_recorder,
         cluster_info::{ClusterInfo, Node},
+        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     };
     use serial_test_derive::serial;
     use solana_ledger::{
@@ -348,6 +352,7 @@ pub mod tests {
                 &exit,
                 bank_forks.clone(),
                 block_commitment_cache.clone(),
+                OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             )),
             &poh_recorder,
             tower,
@@ -365,6 +370,7 @@ pub mod tests {
             verified_vote_receiver,
             replay_vote_sender,
             completed_data_sets_sender,
+            None,
             TvuConfig::default(),
         );
         exit.store(true, Ordering::Relaxed);
