@@ -94,6 +94,7 @@ pub fn register_syscalls<'a>(
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<MemoryRegion, EbpfError<BPFError>> {
     let compute_budget = invoke_context.get_compute_budget();
+
     // Syscall functions common across languages
 
     vm.register_syscall_ex("abort", syscall_abort)?;
@@ -115,36 +116,35 @@ pub fn register_syscalls<'a>(
             logger: invoke_context.get_logger(),
         }),
     )?;
-    if invoke_context.is_cross_program_supported() {
-        vm.register_syscall_with_context_ex(
-            "sol_create_program_address",
-            Box::new(SyscallCreateProgramAddress {
-                cost: compute_budget.create_program_address_units,
-                compute_meter: invoke_context.get_compute_meter(),
-                loader_id,
-            }),
-        )?;
 
-        // Cross-program invocation syscalls
+    vm.register_syscall_with_context_ex(
+        "sol_create_program_address",
+        Box::new(SyscallCreateProgramAddress {
+            cost: compute_budget.create_program_address_units,
+            compute_meter: invoke_context.get_compute_meter(),
+            loader_id,
+        }),
+    )?;
 
-        let invoke_context = Rc::new(RefCell::new(invoke_context));
-        vm.register_syscall_with_context_ex(
-            "sol_invoke_signed_c",
-            Box::new(SyscallInvokeSignedC {
-                callers_keyed_accounts,
-                invoke_context: invoke_context.clone(),
-                loader_id,
-            }),
-        )?;
-        vm.register_syscall_with_context_ex(
-            "sol_invoke_signed_rust",
-            Box::new(SyscallInvokeSignedRust {
-                callers_keyed_accounts,
-                invoke_context: invoke_context.clone(),
-                loader_id,
-            }),
-        )?;
-    }
+    // Cross-program invocation syscalls
+
+    let invoke_context = Rc::new(RefCell::new(invoke_context));
+    vm.register_syscall_with_context_ex(
+        "sol_invoke_signed_c",
+        Box::new(SyscallInvokeSignedC {
+            callers_keyed_accounts,
+            invoke_context: invoke_context.clone(),
+            loader_id,
+        }),
+    )?;
+    vm.register_syscall_with_context_ex(
+        "sol_invoke_signed_rust",
+        Box::new(SyscallInvokeSignedRust {
+            callers_keyed_accounts,
+            invoke_context: invoke_context.clone(),
+            loader_id,
+        }),
+    )?;
 
     // Memory allocator
     let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
@@ -1044,7 +1044,6 @@ fn call<'a>(
     }
     message_processor.add_loader(bpf_loader::id(), crate::process_instruction);
     message_processor.add_loader(bpf_loader_deprecated::id(), crate::process_instruction);
-    message_processor.set_cross_program_support(invoke_context.is_cross_program_supported());
 
     #[allow(clippy::deref_addrof)]
     match message_processor.process_cross_program_instruction(

@@ -29,6 +29,10 @@ pub mod bpf_loader2_program {
     solana_sdk::declare_id!("DFBnrgThdzH4W6wZ12uGPoWcMnvfZj11EHnxHcVxLPhD");
 }
 
+pub mod compute_budget_config2 {
+    solana_sdk::declare_id!("HxvjqDSiF5sYdSYuCXsUnS8UeAoWsMT9iGoFP8pgV1mB");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -38,6 +42,7 @@ lazy_static! {
         (pico_inflation::id(), "pico-inflation"),
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
         (bpf_loader2_program::id(), "bpf_loader2 program"),
+        (compute_budget_config2::id(), "1ms compute budget"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
@@ -75,15 +80,6 @@ impl Default for FeatureSet {
         Self {
             active: HashSet::new(),
             inactive: FEATURE_NAMES.keys().cloned().collect(),
-        }
-    }
-}
-
-impl FeatureSet {
-    pub fn enabled() -> Self {
-        Self {
-            active: FEATURE_NAMES.keys().cloned().collect(),
-            inactive: HashSet::new(),
         }
     }
 }
