@@ -1,0 +1,61 @@
+{
+  "name": "@solana/wasm",
+  "version": "0.0.0-development",
+  "description": "Solana WebAssembly API",
+  "keywords": [
+    "wasm",
+    "api",
+    "blockchain"
+  ],
+  "license": "MIT",
+  "author": "Solana Maintainers <maintainers@solana.com>",
+  "homepage": "https://solana.com/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/solana-labs/solana-wasm.git"
+  },
+  "bugs": {
+    "url": "http://github.com/solana-labs/solana-wasm.git/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "dist/solana-wasm.cjs.js",
+  "module": "dist/solana-wasm.esm.js",
+  "browser": "dist/solana-wasm.umd.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "./dist",
+    "./webpack"
+  ],
+  "jest": {
+    "testEnvironment": "./jest-environment"
+  },
+  "engines": {
+    "node": ">=12.0.0",
+    "npm": ">=6.0.0"
+  },
+  "scripts": {
+    "clean": "rimraf ./dist",
+    "build": "rollup -c",
+    "watch": "rollup -cw",
+    "test": "jest --useStderr"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/jest": "^26.0.14",
+    "@types/node": "^14.11.2",
+    "crypto-hash": "^1.2.2",
+    "glob": "^7.1.6",
+    "jest": "^26.4.2",
+    "rimraf": "^3.0.2",
+    "rollup": "^2.27.1",
+    "rollup-plugin-typescript2": "^0.27.2",
+    "rollup-pluginutils": "^2.8.2",
+    "toml": "^3.0.0",
+    "ts-jest": "^26.4.0",
+    "tslib": "^2.0.1",
+    "tweetnacl": "^1.0.3",
+    "typescript": "^4.0.3"
+  }
+}
