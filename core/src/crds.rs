@@ -185,18 +185,14 @@ impl Crds {
         now: u64,
         timeouts: &HashMap<Pubkey, u64>,
     ) -> Vec<CrdsValueLabel> {
-        let min_ts = *timeouts
+        let default_timeout = *timeouts
             .get(&Pubkey::default())
             .expect("must have default timeout");
         self.table
             .iter()
             .filter_map(|(k, v)| {
-                if now < v.local_timestamp
-                    || (timeouts.get(&k.pubkey()).is_some()
-                        && now - v.local_timestamp < timeouts[&k.pubkey()])
-                {
-                    None
-                } else if now - v.local_timestamp >= min_ts {
+                let timeout = timeouts.get(&k.pubkey()).unwrap_or(&default_timeout);
+                if v.local_timestamp.saturating_add(*timeout) <= now {
                     Some(k)
                 } else {
                     None
@@ -308,6 +304,24 @@ mod test {
         assert_eq!(crds.find_old_labels(2, &set), vec![val.label()]);
         set.insert(Pubkey::default(), 2);
         assert_eq!(crds.find_old_labels(4, &set), vec![val.label()]);
+    }
+    #[test]
+    fn test_find_old_records_with_override() {
+        let mut rng = thread_rng();
+        let mut crds = Crds::default();
+        let mut timeouts = HashMap::new();
+        let val = CrdsValue::new_rand(&mut rng);
+        timeouts.insert(Pubkey::default(), 3);
+        assert_eq!(crds.insert(val.clone(), 0), Ok(None));
+        assert!(crds.find_old_labels(2, &timeouts).is_empty());
+        timeouts.insert(val.pubkey(), 1);
+        assert_eq!(crds.find_old_labels(2, &timeouts), vec![val.label()]);
+        timeouts.insert(val.pubkey(), u64::MAX);
+        assert!(crds.find_old_labels(2, &timeouts).is_empty());
+        timeouts.insert(Pubkey::default(), 1);
+        assert!(crds.find_old_labels(2, &timeouts).is_empty());
+        timeouts.remove(&val.pubkey());
+        assert_eq!(crds.find_old_labels(2, &timeouts), vec![val.label()]);
     }
     #[test]
     fn test_remove_default() {
