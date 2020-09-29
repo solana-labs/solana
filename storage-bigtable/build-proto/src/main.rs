@@ -17,8 +17,8 @@ fn main() -> Result<(), std::io::Error> {
             &[googleapis],
         )?;
 
-    let out_dir = manifest_dir.join("../src/proto");
-    let proto_files = manifest_dir.join("../src/proto");
+    let out_dir = manifest_dir.join("../proto");
+    let proto_files = manifest_dir.join("../src");
 
     println!("Protobuf directory: {}", proto_files.display());
     println!("output directory: {}", out_dir.display());

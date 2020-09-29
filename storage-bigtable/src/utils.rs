@@ -11,7 +11,12 @@ use solana_transaction_status::{
 };
 use std::convert::{TryFrom, TryInto};
 
-pub mod generated;
+pub mod generated {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        concat!("/proto/solana.bigtable.confirmed_block.rs")
+    ));
+}
 
 impl From<Reward> for generated::Reward {
     fn from(reward: Reward) -> Self {

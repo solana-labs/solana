@@ -20,9 +20,9 @@ extern crate serde_derive;
 mod access_token;
 mod bigtable;
 mod compression;
-mod proto;
 mod root_ca_certificate;
-use proto::generated as prost;
+mod utils;
+use utils::generated;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -277,7 +277,7 @@ impl LedgerStorage {
     pub async fn get_confirmed_block(&self, slot: Slot) -> Result<ConfirmedBlock> {
         let mut bigtable = self.connection.client();
         let block_cell_data = bigtable
-            .get_bincode_or_protobuf_cell::<StoredConfirmedBlock, prost::ConfirmedBlock>(
+            .get_bincode_or_protobuf_cell::<StoredConfirmedBlock, generated::ConfirmedBlock>(
                 "blocks",
                 slot_to_key(slot),
             )
@@ -516,7 +516,7 @@ impl LedgerStorage {
         let blocks_cells = [(slot_to_key(slot), confirmed_block.into())];
         bytes_written += self
             .connection
-            .put_protobuf_cells_with_retry::<prost::ConfirmedBlock>("blocks", &blocks_cells)
+            .put_protobuf_cells_with_retry::<generated::ConfirmedBlock>("blocks", &blocks_cells)
             .await?;
         info!(
             "uploaded block for slot {}: {} transactions, {} bytes",
