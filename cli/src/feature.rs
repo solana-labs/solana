@@ -4,15 +4,19 @@ use crate::{
 };
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::style;
+use serde::{Deserialize, Serialize};
 use solana_clap_utils::{input_parsers::*, input_validators::*, keypair::*};
+use solana_cli_output::{QuietDisplay, VerboseDisplay};
 use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_runtime::{
     feature::{self, Feature},
     feature_set::FEATURE_NAMES,
 };
-use solana_sdk::{message::Message, pubkey::Pubkey, system_instruction, transaction::Transaction};
-use std::{collections::HashMap, sync::Arc};
+use solana_sdk::{
+    clock::Slot, message::Message, pubkey::Pubkey, system_instruction, transaction::Transaction,
+};
+use std::{collections::HashMap, fmt, sync::Arc};
 
 #[derive(Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
@@ -20,6 +24,75 @@ pub enum FeatureCliCommand {
     Status { features: Vec<Pubkey> },
     Activate { feature: Pubkey },
 }
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "status", content = "sinceSlot")]
+pub enum CliFeatureStatus {
+    Inactive,
+    Pending,
+    Active(Slot),
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliFeature {
+    pub id: String,
+    pub description: String,
+    #[serde(flatten)]
+    pub status: CliFeatureStatus,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliFeatures {
+    pub features: Vec<CliFeature>,
+    pub feature_activation_allowed: bool,
+    #[serde(skip)]
+    pub inactive: bool,
+}
+
+impl fmt::Display for CliFeatures {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.features.len() > 1 {
+            writeln!(
+                f,
+                "{}",
+                style(format!(
+                    "{:<44} {:<40} {}",
+                    "Feature", "Description", "Status"
+                ))
+                .bold()
+            )?;
+        }
+        for feature in &self.features {
+            writeln!(
+                f,
+                "{:<44} {:<40} {}",
+                feature.id,
+                feature.description,
+                match feature.status {
+                    CliFeatureStatus::Inactive => style("inactive".to_string()).red(),
+                    CliFeatureStatus::Pending => style("activation pending".to_string()).yellow(),
+                    CliFeatureStatus::Active(activation_slot) =>
+                        style(format!("active since slot {}", activation_slot)).green(),
+                }
+            )?;
+        }
+        if self.inactive && !self.feature_activation_allowed {
+            writeln!(
+                f,
+                "{}",
+                style("\nFeature activation is not allowed at this time")
+                    .bold()
+                    .red()
+            )?;
+        }
+        Ok(())
+    }
+}
+
+impl QuietDisplay for CliFeatures {}
+impl VerboseDisplay for CliFeatures {}
 
 pub trait FeatureSubCommands {
     fn feature_subcommands(self) -> Self;
@@ -115,7 +188,7 @@ pub fn process_feature_subcommand(
     feature_subcommand: &FeatureCliCommand,
 ) -> ProcessResult {
     match feature_subcommand {
-        FeatureCliCommand::Status { features } => process_status(rpc_client, features),
+        FeatureCliCommand::Status { features } => process_status(rpc_client, config, features),
         FeatureCliCommand::Activate { feature } => process_activate(rpc_client, config, *feature),
     }
 }
@@ -191,18 +264,12 @@ fn feature_activation_allowed(rpc_client: &RpcClient) -> Result<bool, ClientErro
     Ok(feature_activation_allowed)
 }
 
-fn process_status(rpc_client: &RpcClient, feature_ids: &[Pubkey]) -> ProcessResult {
-    if feature_ids.len() > 1 {
-        println!(
-            "{}",
-            style(format!(
-                "{:<44} {:<40} {}",
-                "Feature", "Description", "Status"
-            ))
-            .bold()
-        );
-    }
-
+fn process_status(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    feature_ids: &[Pubkey],
+) -> ProcessResult {
+    let mut features: Vec<CliFeature> = vec![];
     let mut inactive = false;
     for (i, account) in rpc_client
         .get_multiple_accounts(feature_ids)?
@@ -213,43 +280,32 @@ fn process_status(rpc_client: &RpcClient, feature_ids: &[Pubkey]) -> ProcessResu
         let feature_name = FEATURE_NAMES.get(feature_id).unwrap();
         if let Some(account) = account {
             if let Some(feature) = Feature::from_account(&account) {
-                match feature.activated_at {
-                    None => println!(
-                        "{:<44} {:<40} {}",
-                        feature_id,
-                        feature_name,
-                        style("activation pending").yellow()
-                    ),
-                    Some(activation_slot) => {
-                        println!(
-                            "{:<44} {:<40} {}",
-                            feature_id,
-                            feature_name,
-                            style(format!("active since slot {}", activation_slot)).green()
-                        );
-                    }
-                }
+                let feature_status = match feature.activated_at {
+                    None => CliFeatureStatus::Pending,
+                    Some(activation_slot) => CliFeatureStatus::Active(activation_slot),
+                };
+                features.push(CliFeature {
+                    id: feature_id.to_string(),
+                    description: feature_name.to_string(),
+                    status: feature_status,
+                });
                 continue;
             }
         }
         inactive = true;
-        println!(
-            "{:<44} {:<40} {}",
-            feature_id,
-            feature_name,
-            style("inactive").red()
-        );
+        features.push(CliFeature {
+            id: feature_id.to_string(),
+            description: feature_name.to_string(),
+            status: CliFeatureStatus::Inactive,
+        });
     }
 
-    if inactive && !feature_activation_allowed(rpc_client)? {
-        println!(
-            "{}",
-            style("\nFeature activation is not allowed at this time")
-                .bold()
-                .red()
-        );
-    }
-    Ok("".to_string())
+    let feature_set = CliFeatures {
+        features,
+        feature_activation_allowed: feature_activation_allowed(rpc_client)?,
+        inactive,
+    };
+    Ok(config.output_format.formatted_string(&feature_set))
 }
 
 fn process_activate(
