@@ -111,7 +111,7 @@ fn run_check_duplicate(
     Ok(())
 }
 
-fn verify_repair(_shred: &Shred, repair_info: &Option<RepairMeta>) -> bool {
+fn verify_repair(repair_info: &Option<RepairMeta>) -> bool {
     repair_info
         .as_ref()
         .map(|repair_info| repair_info.nonce == DEFAULT_NONCE)
@@ -138,15 +138,24 @@ where
 
     assert_eq!(shreds.len(), repair_infos.len());
     let mut i = 0;
-    shreds.retain(|shred| (verify_repair(&shred, &repair_infos[i]), i += 1).0);
+    shreds.retain(|_shred| (verify_repair(&repair_infos[i]), i += 1).0);
+    repair_infos.retain(|repair_info| verify_repair(&repair_info));
+    assert_eq!(shreds.len(), repair_infos.len());
 
-    completed_data_sets_sender.try_send(blockstore.insert_shreds_handle_duplicate(
+    let (completed_data_sets, inserted_indices) = blockstore.insert_shreds_handle_duplicate(
         shreds,
         Some(leader_schedule_cache),
         false,
         &handle_duplicate,
         metrics,
-    )?)?;
+    )?;
+    for index in inserted_indices {
+        if repair_infos[index].is_some() {
+            metrics.num_repair += 1;
+        }
+    }
+
+    completed_data_sets_sender.try_send(completed_data_sets)?;
     Ok(())
 }
 
