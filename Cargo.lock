@@ -969,12 +969,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fixedbitset"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37ab347416e802de484e4d03c7316c48f1ecb56574dfd4a46a80f173ce1de04d"
-
-[[package]]
 name = "flate2"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1310,15 +1304,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e91b62f79061a0bc2e046024cb7ba44b08419ed238ecbd9adbd787434b9e8c25"
 dependencies = [
  "autocfg 1.0.0",
-]
-
-[[package]]
-name = "heck"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20564e78d53d2bb135c343b3f47714a56af2061f1c928fdb541dc7b9fdd94205"
-dependencies = [
- "unicode-segmentation",
 ]
 
 [[package]]
@@ -2085,12 +2070,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "multimap"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1255076139a83bb467426e7f8d0134968a8118844faa755985e077cf31850333"
-
-[[package]]
 name = "native-tls"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2398,16 +2377,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4fd5641d01c8f18a23da7b6fe29298ff4b55afcccdf78973b24cf3175fee32e"
 
 [[package]]
-name = "petgraph"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "467d164a6de56270bd7c4d070df81d07beace25012d5103ced4e9ff08d6afdb7"
-dependencies = [
- "fixedbitset",
- "indexmap",
-]
-
-[[package]]
 name = "pickledb"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2552,24 +2521,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "prost-build"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02b10678c913ecbd69350e8535c3aef91a8676c0773fc1d7b95cdd196d7f2f26"
-dependencies = [
- "bytes 0.5.4",
- "heck",
- "itertools 0.8.2",
- "log 0.4.8",
- "multimap",
- "petgraph",
- "prost",
- "prost-types",
- "tempfile",
- "which",
-]
-
-[[package]]
 name = "prost-derive"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2591,12 +2542,6 @@ dependencies = [
  "bytes 0.5.4",
  "prost",
 ]
-
-[[package]]
-name = "protobuf"
-version = "1.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e14ccd6b79ec748412d4f2dfde1a80fa363a67def4062969f8aed3d790a30f28"
 
 [[package]]
 name = "quick-error"
@@ -4607,9 +4552,7 @@ dependencies = [
  "goauth",
  "log 0.4.8",
  "prost",
- "prost-build",
  "prost-types",
- "protobuf",
  "serde",
  "serde_derive",
  "smpl_jwt",
@@ -5889,12 +5832,6 @@ checksum = "5479532badd04e128284890390c1e876ef7a993d0570b3597ae43dfa1d59afa4"
 dependencies = [
  "smallvec 1.4.0",
 ]
-
-[[package]]
-name = "unicode-segmentation"
-version = "1.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e83e153d1053cbb5a118eeff7fd5be06ed99153f00dbcd8ae310c5fb2b22edc0"
 
 [[package]]
 name = "unicode-width"

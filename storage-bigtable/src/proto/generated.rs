@@ -15,10 +15,37 @@ pub struct ConfirmedBlock {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ConfirmedTransaction {
-    #[prost(bytes, tag = "1")]
-    pub transaction: std::vec::Vec<u8>,
+    #[prost(message, optional, tag = "1")]
+    pub transaction: ::std::option::Option<Transaction>,
     #[prost(message, optional, tag = "2")]
     pub meta: ::std::option::Option<TransactionStatusMeta>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Transaction {
+    #[prost(bytes, repeated, tag = "1")]
+    pub signatures: ::std::vec::Vec<std::vec::Vec<u8>>,
+    #[prost(message, optional, tag = "2")]
+    pub message: ::std::option::Option<Message>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Message {
+    #[prost(message, optional, tag = "1")]
+    pub header: ::std::option::Option<MessageHeader>,
+    #[prost(bytes, repeated, tag = "2")]
+    pub account_keys: ::std::vec::Vec<std::vec::Vec<u8>>,
+    #[prost(bytes, tag = "3")]
+    pub recent_blockhash: std::vec::Vec<u8>,
+    #[prost(message, repeated, tag = "4")]
+    pub instructions: ::std::vec::Vec<CompiledInstruction>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MessageHeader {
+    #[prost(uint32, tag = "1")]
+    pub num_required_signatures: u32,
+    #[prost(uint32, tag = "2")]
+    pub num_readonly_signed_accounts: u32,
+    #[prost(uint32, tag = "3")]
+    pub num_readonly_unsigned_accounts: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TransactionStatusMeta {
