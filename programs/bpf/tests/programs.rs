@@ -13,6 +13,9 @@ use solana_runtime::{
     bank_client::BankClient,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::load_program,
+    process_instruction::{
+        ComputeBudget, ComputeMeter, Executor, InvokeContext, Logger, ProcessInstruction,
+    },
 };
 use solana_sdk::{
     account::{Account, KeyedAccount},
@@ -20,9 +23,7 @@ use solana_sdk::{
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, MAX_PROCESSING_AGE},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-    entrypoint_native::{
-        ComputeBudget, ComputeMeter, Executor, InvokeContext, Logger, ProcessInstruction,
-    },
+
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     message::Message,
     pubkey::Pubkey,
@@ -629,12 +630,12 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_128bit", 543),
             ("solana_bpf_rust_alloc", 19082),
             ("solana_bpf_rust_dep_crate", 2),
-            ("solana_bpf_rust_external_spend", 473),
+            ("solana_bpf_rust_external_spend", 477),
             ("solana_bpf_rust_iter", 723),
             ("solana_bpf_rust_many_args", 231),
-            ("solana_bpf_rust_noop", 447),
+            ("solana_bpf_rust_noop", 451),
             ("solana_bpf_rust_param_passing", 54),
-            ("solana_bpf_rust_sanity", 2211),
+            ("solana_bpf_rust_sanity", 2215),
         ]);
     }
 
