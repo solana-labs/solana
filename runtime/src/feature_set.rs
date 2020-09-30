@@ -67,19 +67,24 @@ pub struct FeatureSet {
     pub active: HashSet<Pubkey>,
     pub inactive: HashSet<Pubkey>,
 }
-
-impl FeatureSet {
-    pub fn is_active(&self, feature_id: &Pubkey) -> bool {
-        self.active.contains(feature_id)
-    }
-}
-
 impl Default for FeatureSet {
     fn default() -> Self {
         // All features disabled
         Self {
             active: HashSet::new(),
             inactive: FEATURE_NAMES.keys().cloned().collect(),
+        }
+    }
+}
+impl FeatureSet {
+    pub fn is_active(&self, feature_id: &Pubkey) -> bool {
+        self.active.contains(feature_id)
+    }
+    /// All features enabled, useful for testing
+    pub fn all_enabled() -> Self {
+        Self {
+            active: FEATURE_NAMES.keys().cloned().collect(),
+            inactive: HashSet::new(),
         }
     }
 }

@@ -887,7 +887,7 @@ mod tests {
             &hash_queue,
             error_counters,
             rent_collector,
-            &FeatureSet::default(),
+            &FeatureSet::all_enabled(),
         )
     }
 
@@ -1832,7 +1832,7 @@ mod tests {
             &hash_queue,
             &mut error_counters,
             &rent_collector,
-            &FeatureSet::default(),
+            &FeatureSet::all_enabled(),
         )
     }
 
