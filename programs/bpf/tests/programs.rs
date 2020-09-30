@@ -152,6 +152,7 @@ fn test_program_bpf_sanity() {
             ("solana_bpf_rust_noop", true),
             ("solana_bpf_rust_panic", false),
             ("solana_bpf_rust_param_passing", true),
+            ("solana_bpf_rust_rand", true),
             ("solana_bpf_rust_sanity", true),
             ("solana_bpf_rust_sysval", true),
         ]);

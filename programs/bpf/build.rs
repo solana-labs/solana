@@ -80,6 +80,7 @@ fn main() {
             "noop",
             "panic",
             "param_passing",
+            "rand",
             "sanity",
             "sysval",
         ];
