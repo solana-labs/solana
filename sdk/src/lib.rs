@@ -17,6 +17,7 @@ pub mod builtins;
 pub mod clock;
 pub mod commitment_config;
 pub mod decode_error;
+pub mod deserialize_utils;
 pub mod entrypoint_native;
 pub mod epoch_info;
 pub mod epoch_schedule;
