@@ -1157,15 +1157,6 @@ mod tests {
         };
     }
 
-    macro_rules! assert_access_violation {
-        ($result:expr, $va:expr, $len:expr) => {
-            match $result {
-                Err(EbpfError::AccessViolation(_, _, va, len, _)) if $va == va && len == len => (),
-                _ => panic!(),
-            }
-        };
-    }
-
     #[test]
     fn test_translate() {
         const START: u64 = 100;
