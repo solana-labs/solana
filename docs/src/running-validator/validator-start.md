@@ -49,7 +49,7 @@ that CUDA is enabled: `"[<timestamp> solana::validator] CUDA is enabled"`
 ### Linux
 #### Automatic
 The solana repo includes a daemon to adjust system settings to optimize performance
-(namely by increasing the OS UDP buffer limits, and scheduling PoH with realtime policy).
+(namely by increasing the OS UDP buffer and file mapping limits).
 
 The daemon (`solana-sys-tuner`) is included in the solana binary release. Restart
 it, *before* restarting your validator, after each software upgrade to ensure that
