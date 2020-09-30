@@ -4,7 +4,7 @@ import pkg from './package.json';
 
 function generateConfig(configType) {
     const config = {
-      input: './ts/index.ts',
+      input: './src/ts/index.ts',
       inlineDynamicImports: true,
       external: ['@solana/wasm', '*.wasm'],
       plugins: [

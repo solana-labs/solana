@@ -6,8 +6,11 @@ import * as crypto from "crypto";
 import nacl from "tweetnacl";
 import { sha256 } from "crypto-hash";
 
+const toHex = (arrayBuffer: ArrayBuffer | SharedArrayBuffer) => {
+  return Buffer.from(arrayBuffer).toString('hex');
+}
+
 const benchmark = (func: Function, iterations: number) => {
-  /* any boilerplate code you want to have happen before the timer starts, perhaps copying a variable so it isn't mutated */
   const start = performance.now();
   for (let i = 0; i < iterations; i++) {
     func();
@@ -37,6 +40,55 @@ describe("Benchmark in Node.js WASM implementation of ED25519 vs tweetnacl", () 
     }, ITERATIONS);
 
     expect(mod / wasm).toBeGreaterThanOrEqual(15);
+  });
+});
+
+describe("Key generation", () => {
+  beforeAll(async () => {
+    await waitReady();
+  });
+
+  test("secret key should be 64bit and public key should be 32bit", async () => {
+    const keypair = ed25519.keypair.generate();
+    // const keypair = ed25519.keypair.fromSeed(
+    //   Uint8Array.from(Array(32).fill(8))
+    // );
+
+    expect(keypair.secretKey).toBeDefined();
+    expect(keypair.secretKey.length).toBe(64);
+    expect(keypair.publicKey).toBeDefined();
+    expect(keypair.publicKey.length).toBe(32);
+  });
+
+
+  test("given same seed wasm should generate same private and public key", async () => {
+    const keypair = ed25519.keypair.fromSeed(
+      Uint8Array.from(Array(32).fill(8))
+    );
+
+    const privateKey = '08080808080808080808080808080808080808080808080808080808080808081398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca';
+    const publicKey = '1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca';
+
+    expect(toHex(keypair.secretKey)).toBe(privateKey);
+    expect(toHex(keypair.publicKey)).toBe(publicKey)
+  });
+
+  test("given same seed wasm should generate same private and public key", async () => {
+    const privateKey = '08080808080808080808080808080808080808080808080808080808080808081398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca';
+    const keypair = ed25519.keypair.fromSecretKey(
+      Uint8Array.from(Buffer.from(privateKey, 'hex'))
+    );
+
+    const publicKey = '1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca';
+
+    expect(toHex(keypair.secretKey)).toBe(privateKey);
+    expect(toHex(keypair.publicKey)).toBe(publicKey)
+  });
+});
+
+describe("WASM implementation of ED25519 should be backwards compatible with tweetnacl", () => {
+  beforeAll(async () => {
+    await waitReady();
   });
 
   test("ed25519.sign should return the same signature as tweetnacl", async () => {
@@ -71,9 +123,13 @@ describe("Benchmark in Node.js WASM implementation of ED25519 vs tweetnacl", () 
     const keypair = ed25519.keypair.fromSeed(
       Uint8Array.from(Array(32).fill(8))
     );
+
+    expect(ed25519.isOnCurve(keypair.publicKey)).toBe(true);
   });
 
   test("sha256 should return the same result as crypto-hash", async () => {
-    // TODO
+    const data = Uint8Array.from(Array(32).fill(8))
+    const expected = await sha256(data);
+    expect(hasher.sha256(data)).toBe(expected);
   });
 });

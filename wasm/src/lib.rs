@@ -1,5 +1,7 @@
 extern crate ed25519_dalek;
 extern crate rand;
+extern crate hex;
+
 mod utils;
 
 use std::convert::TryFrom;
@@ -7,11 +9,12 @@ use wasm_bindgen::prelude::*;
 use ed25519_dalek::{Keypair, PublicKey, SecretKey, Signature, Signer as _, Verifier as _, SECRET_KEY_LENGTH, PUBLIC_KEY_LENGTH};
 use serde::{Deserialize, Serialize};
 use rand::rngs::OsRng;
-use web_sys::console;
 use sha2::{Digest, Sha256};
 
 cfg_if::cfg_if! {
 	if #[cfg(consolelog)] {
+		use web_sys::console;
+
 		fn console_log(info: &str) {
 			console::log_1(&info.into());
 		}
@@ -39,8 +42,8 @@ pub struct Pair{
 /// * returned struct has two fields public and secret.
 #[wasm_bindgen(js_name = generateKeyPair)]
 pub fn generate_keypair() -> Result<JsValue, JsValue> {
-	let mut csprng = OsRng{};
-	let keypair = Keypair::generate(&mut csprng);
+	let mut csprng = OsRng {};
+    let keypair: Keypair = Keypair::generate(&mut csprng);
 	// use all 64bit for secret key to maintain compatibility with tweetnacl
 	let secret_key = keypair.to_bytes().to_vec();
 	let public_key = keypair.public.as_bytes().to_vec();
@@ -134,8 +137,8 @@ pub fn ed25519_is_on_curve(pubkey: &[u8]) -> bool {
 }
 
 #[wasm_bindgen(js_name = sha256)]
-pub fn hash_sha256(data: &[u8]) -> Vec<u8> {
+pub fn hash_sha256(data: &[u8]) -> String {
 	let mut hasher = Sha256::new();
 	hasher.input(data);
-	return hasher.result().to_vec();
+	return hex::encode(hasher.result());
 }
