@@ -633,7 +633,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{utils::generated, StoredConfirmedBlock};
+    use crate::{convert::generated, StoredConfirmedBlock};
     use prost::Message;
     use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Keypair, system_transaction};
     use solana_transaction_status::{

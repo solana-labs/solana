@@ -20,9 +20,10 @@ extern crate serde_derive;
 mod access_token;
 mod bigtable;
 mod compression;
+mod convert;
 mod root_ca_certificate;
-mod utils;
-use utils::generated;
+
+use convert::generated;
 
 #[derive(Debug, Error)]
 pub enum Error {
