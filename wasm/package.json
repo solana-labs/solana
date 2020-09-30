@@ -34,10 +34,10 @@
   },
   "scripts": {
     "clean": "rimraf ./dist",
-    "coverage": "jest --coverage --useStderr",
-    "build": "rollup -c",
+    "coverage": "cross-env NODE_ENV=test CI=1 jest --coverage --useStderr",
+    "build": "cross-env NODE_ENV=production rollup -c",
     "watch": "rollup -cw",
-    "test": "jest --useStderr",
+    "test": "cross-env NODE_ENV=test CI=1 jest --useStderr",
     "pretty": "prettier --check '{,{examples,src,tests}/**/}*.{j,t}s'",
     "pretty:fix": "prettier --write '{,{examples,src,tests}/**/}*.{j,t}s'",
     "lint": "eslint . --ext .ts,.js"
@@ -49,6 +49,7 @@
     "@typescript-eslint/eslint-plugin": "^4.0.0",
     "@typescript-eslint/parser": "^4.0.0",
     "crypto-hash": "^1.2.2",
+    "cross-env": "7.0.2",
     "eslint": "7.9.0",
     "eslint-config-prettier": "^6.0.0",
     "eslint-plugin-flowtype": "^5.2.0",

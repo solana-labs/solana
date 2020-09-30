@@ -1,7 +1,7 @@
-let exports: any; // TODO: figure out a way to link to types
+let cargo: any; // TODO: figure out a way to link to types
 
 export const ensureReady = () => {
-  if (exports === undefined) {
+  if (cargo === undefined) {
     throw new Error(
       `@solana/wasm package is not ready. You need to await waitReady() before making API calls`,
     );
@@ -9,16 +9,16 @@ export const ensureReady = () => {
 };
 
 export const waitReady = async () => {
-  if (!exports) {
+  if (!cargo) {
     // @ts-ignore
     const wasm = await import('./../../Cargo.toml');
-    exports = await wasm.init();
+    cargo = await wasm.init();
   }
 
-  return exports;
+  return cargo;
 };
 
 export const getWASM = () => {
   ensureReady();
-  return exports;
+  return cargo;
 };
