@@ -22,7 +22,6 @@ pub mod loader_utils;
 pub mod log_collector;
 pub mod message_processor;
 mod native_loader;
-pub mod nonce_utils;
 pub mod process_instruction;
 pub mod rent_collector;
 pub mod serde_snapshot;

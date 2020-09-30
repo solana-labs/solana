@@ -17,7 +17,6 @@ use crate::{
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     message_processor::{Executors, MessageProcessor},
-    nonce_utils,
     process_instruction::{Executor, ProcessInstruction, ProcessInstructionWithContext},
     rent_collector::RentCollector,
     stakes::Stakes,
@@ -1828,7 +1827,7 @@ impl Bank {
                     .map(|acc| (*nonce_pubkey, acc))
             })
             .filter(|(_pubkey, nonce_account)| {
-                nonce_utils::verify_nonce_account(nonce_account, &tx.message().recent_blockhash)
+                nonce::utils::verify_nonce_account(nonce_account, &tx.message().recent_blockhash)
             })
     }
 
@@ -2244,7 +2243,7 @@ impl Bank {
             .map(|((_, tx), (res, hash_age_kind))| {
                 let (fee_calculator, is_durable_nonce) = match hash_age_kind {
                     Some(HashAgeKind::DurableNonce(_, account)) => {
-                        (nonce_utils::fee_calculator_of(account), true)
+                        (nonce::utils::fee_calculator_of(account), true)
                     }
                     _ => (
                         hash_queue
