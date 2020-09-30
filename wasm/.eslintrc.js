@@ -5,66 +5,54 @@ module.exports = {
     node: true,
   },
   extends: [
-    "eslint:recommended",
-    "plugin:import/errors",
-    "plugin:import/warnings",
+    'eslint:recommended',
+    'plugin:import/errors',
+    'plugin:import/warnings',
+    'plugin:@typescript-eslint/recommended',
+    'plugin:jest/recommended',
+    // 'plugin:prettier/recommended',
   ],
-  parser: "babel-eslint",
+  parser: '@typescript-eslint/parser',
+  plugins: ['@typescript-eslint', 'jest'],
   parserOptions: {
-    sourceType: "module",
-    ecmaVersion: 8,
+    sourceType: 'module',
+    ecmaVersion: 2018,
   },
   rules: {
-    "no-trailing-spaces": ["error"],
-    "import/first": ["error"],
-    "import/no-commonjs": ["error"],
-    "import/order": [
-      "error",
+    'no-trailing-spaces': ['error'],
+    'import/first': ['error'],
+    'import/no-commonjs': 'off',
+    'import/no-unresolved': 'off',
+    'import/order': [
+      'error',
       {
         groups: [
-          ["internal", "external", "builtin"],
-          ["index", "sibling", "parent"],
+          ['internal', 'external', 'builtin'],
+          ['index', 'sibling', 'parent'],
         ],
-        "newlines-between": "always",
+        'newlines-between': 'always',
       },
     ],
     indent: [
-      "error",
+      'error',
       2,
       {
         MemberExpression: 1,
         SwitchCase: 1,
       },
     ],
-    "linebreak-style": ["error", "unix"],
-    "no-console": [0],
+    'linebreak-style': ['error', 'unix'],
+    'no-console': [0],
     quotes: [
-      "error",
-      "single",
-      { avoidEscape: true, allowTemplateLiterals: true },
+      'error',
+      'single',
+      {avoidEscape: true, allowTemplateLiterals: true},
     ],
-    "require-await": ["error"],
-    semi: ["error", "always"],
+    'require-await': ['error'],
+    semi: ['error', 'always'],
+    '@typescript-eslint/explicit-function-return-type': 'off',
+    '@typescript-eslint/ban-ts-comment': 'off',
+    '@typescript-eslint/explicit-module-boundary-types': 'off',
+    '@typescript-eslint/no-explicit-any': 'off',
   },
-
-  // Used to lint the TypeScript type declaration file
-  overrides: [
-    {
-      files: ["*.js"],
-      plugins: ["flowtype"],
-      extends: ["plugin:flowtype/recommended"],
-      rules: {
-        "flowtype/generic-spacing": [0],
-      },
-    },
-    {
-      files: ["*.d.ts"],
-      parser: "@typescript-eslint/parser",
-      plugins: ["@typescript-eslint"],
-      rules: {
-        "no-unused-vars": "off",
-        "@typescript-eslint/no-unused-vars": ["error"],
-      },
-    },
-  ],
 };

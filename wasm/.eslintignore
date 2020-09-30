@@ -1,4 +1,6 @@
-/src
+/scripts
+/webpack
 /dist
 /target
 /node_modules
+*.js

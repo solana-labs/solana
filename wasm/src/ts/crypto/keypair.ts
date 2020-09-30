@@ -1,4 +1,4 @@
-import { getWASM, ensureReady } from "./../wrapper";
+import {getWASM, ensureReady} from './../wrapper';
 
 export interface KeyPair {
   publicKey: Uint8Array;

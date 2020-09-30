@@ -37,9 +37,9 @@
     "build": "rollup -c",
     "watch": "rollup -cw",
     "test": "jest --useStderr",
-    "pretty": "prettier --check '{,{examples,ts,tests,scripts,webpack}/**/}*.{j,t}s'",
-    "pretty:fix": "prettier --write '{,{examples,ts,tests,scripts,webpack}/**/}*.{j,t}s'",
-    "lint": "npm run pretty; eslint . --ext .ts,.js"
+    "pretty": "prettier --check '{,{examples,src,tests}/**/}*.{j,t}s'",
+    "pretty:fix": "prettier --write '{,{examples,src,tests}/**/}*.{j,t}s'",
+    "lint": "eslint . --ext .ts,.js"
   },
   "dependencies": {},
   "devDependencies": {

@@ -1,30 +1,31 @@
-import typescript from "rollup-plugin-typescript2";
-import rust from "./scripts/rollup-wasm-plugin";
-import pkg from "./package.json";
+import typescript from 'rollup-plugin-typescript2';
+
+import rust from './scripts/rollup-wasm-plugin';
+import pkg from './package.json';
 
 function generateConfig(configType) {
   const config = {
-    input: "./src/ts/index.ts",
+    input: './src/ts/index.ts',
     inlineDynamicImports: true,
-    external: ["@solana/wasm", "*.wasm"],
+    external: ['@solana/wasm', '*.wasm'],
     plugins: [
       rust({
         verbose: true,
         debug: true,
         cargoArgs: [],
-        wasmName: "solana",
+        wasmName: 'solana',
       }),
       typescript(),
     ],
   };
 
   switch (configType) {
-    case "browser":
+    case 'browser':
       config.output = [
         {
-          file: "lib/index.iife.js",
-          format: "iife",
-          name: "solana-wasm-web",
+          file: 'lib/index.iife.js',
+          format: 'iife',
+          name: 'solana-wasm-web',
           sourcemap: true,
         },
       ];
@@ -33,23 +34,23 @@ function generateConfig(configType) {
       config.plugins.push(
         nodeResolve({
           browser: true,
-        })
+        }),
       );
 
-      if (env === "production") {
+      if (env === 'production') {
         config.plugins.push(
           terser({
             mangle: false,
             compress: false,
-          })
+          }),
         );
       }
 
       break;
-    case "node":
+    case 'node':
       config.output = [
-        { file: pkg.main, format: "cjs" },
-        { file: pkg.module, format: "es" },
+        {file: pkg.main, format: 'cjs'},
+        {file: pkg.module, format: 'es'},
       ];
 
       break;
@@ -60,4 +61,4 @@ function generateConfig(configType) {
   return config;
 }
 
-export default [generateConfig("node")];
+export default [generateConfig('node')];
