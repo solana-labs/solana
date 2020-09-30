@@ -23,6 +23,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 - [getClusterNodes](jsonrpc-api.md#getclusternodes)
 - [getConfirmedBlock](jsonrpc-api.md#getconfirmedblock)
 - [getConfirmedBlocks](jsonrpc-api.md#getconfirmedblocks)
+- [getConfirmedBlocksWithLimit](jsonrpc-api.md#getconfirmedblockswithlimit)
 - [getConfirmedSignaturesForAddress](jsonrpc-api.md#getconfirmedsignaturesforaddress)
 - [getConfirmedSignaturesForAddress2](jsonrpc-api.md#getconfirmedsignaturesforaddress2)
 - [getConfirmedTransaction](jsonrpc-api.md#getconfirmedtransaction)
@@ -392,7 +393,7 @@ The JSON structure of inner instructions is defined as a list of objects in the 
 
 ### getConfirmedBlocks
 
-Returns a list of confirmed blocks
+Returns a list of confirmed blocks between two slots
 
 #### Parameters:
 
@@ -414,6 +415,30 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 
 // Result
 {"jsonrpc":"2.0","result":[5,6,7,8,9,10],"id":1}
+```
+
+### getConfirmedBlocksWithLimit
+
+Returns a list of confirmed blocks starting at the given slot
+
+#### Parameters:
+
+- `<u64>` - start_slot, as u64 integer
+- `<u64>` - limit, as u64 integer
+
+#### Results:
+
+The result field will be an array of u64 integers listing confirmed blocks
+starting at `start_slot` for up to `limit` blocks, inclusive.
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlockWithLimit2","params":[5, 3]}' localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":[5,6,7],"id":1}
 ```
 
 ### getConfirmedSignaturesForAddress
