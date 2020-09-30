@@ -15,5 +15,21 @@ fn main() -> Result<(), std::io::Error> {
         .compile(
             &[googleapis.join("google/bigtable/v2/bigtable.proto")],
             &[googleapis],
+        )?;
+
+    let out_dir = manifest_dir.join("../proto");
+    let proto_files = manifest_dir.join("../src");
+
+    println!("Protobuf directory: {}", proto_files.display());
+    println!("output directory: {}", out_dir.display());
+
+    tonic_build::configure()
+        .build_client(true)
+        .build_server(false)
+        .format(true)
+        .out_dir(&out_dir)
+        .compile(
+            &[proto_files.join("confirmed_block.proto")],
+            &[proto_files],
         )
 }
