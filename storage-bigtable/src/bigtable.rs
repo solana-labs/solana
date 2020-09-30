@@ -1,8 +1,10 @@
 // Primitives for reading/writing BigTable tables
 
-use crate::access_token::{AccessToken, Scope};
-use crate::compression::{compress_best, decompress};
-use crate::root_ca_certificate;
+use crate::{
+    access_token::{AccessToken, Scope},
+    compression::{compress_best, decompress},
+    root_ca_certificate,
+};
 use log::*;
 use thiserror::Error;
 use tonic::{metadata::MetadataValue, transport::ClientTlsConfig, Request};
