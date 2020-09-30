@@ -4548,7 +4548,7 @@ mod tests {
         const VALIDATOR_STAKE: u64 = 374_999_998_287_840;
 
         let validator_pubkey = Pubkey::new_rand();
-       let mut genesis_config =
+        let mut genesis_config =
             create_genesis_config_with_leader(10, &validator_pubkey, VALIDATOR_STAKE)
                 .genesis_config;
 
