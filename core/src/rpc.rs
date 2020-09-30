@@ -679,8 +679,8 @@ impl JsonRpcRequestProcessor {
             )));
         }
 
-        let lowest_slot = self.blockstore.lowest_slot();
-        if start_slot < lowest_slot {
+        let lowest_blockstore_slot = self.blockstore.lowest_slot();
+        if start_slot < lowest_blockstore_slot {
             // If the starting slot is lower than what's available in blockstore assume the entire
             // [start_slot..end_slot] can be fetched from BigTable.
             if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
@@ -696,9 +696,42 @@ impl JsonRpcRequestProcessor {
 
         Ok(self
             .blockstore
-            .rooted_slot_iterator(max(start_slot, lowest_slot))
+            .rooted_slot_iterator(max(start_slot, lowest_blockstore_slot))
             .map_err(|_| Error::internal_error())?
             .filter(|&slot| slot <= end_slot)
+            .collect())
+    }
+
+    pub fn get_confirmed_blocks_with_limit(
+        &self,
+        start_slot: Slot,
+        limit: usize,
+    ) -> Result<Vec<Slot>> {
+        if limit > MAX_GET_CONFIRMED_BLOCKS_RANGE as usize {
+            return Err(Error::invalid_params(format!(
+                "Limit too large; max {}",
+                MAX_GET_CONFIRMED_BLOCKS_RANGE
+            )));
+        }
+
+        let lowest_blockstore_slot = self.blockstore.lowest_slot();
+
+        if start_slot < lowest_blockstore_slot {
+            // If the starting slot is lower than what's available in blockstore assume the entire
+            // range can be fetched from BigTable.
+            if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
+                return Ok(self
+                    .runtime_handle
+                    .block_on(bigtable_ledger_storage.get_confirmed_blocks(start_slot, limit))
+                    .unwrap_or_else(|_| vec![]));
+            }
+        }
+
+        Ok(self
+            .blockstore
+            .rooted_slot_iterator(max(start_slot, lowest_blockstore_slot))
+            .map_err(|_| Error::internal_error())?
+            .take(limit)
             .collect())
     }
 
@@ -1699,6 +1732,14 @@ pub trait RpcSol {
         end_slot: Option<Slot>,
     ) -> Result<Vec<Slot>>;
 
+    #[rpc(meta, name = "getConfirmedBlocksWithLimit")]
+    fn get_confirmed_blocks_with_limit(
+        &self,
+        meta: Self::Metadata,
+        start_slot: Slot,
+        limit: usize,
+    ) -> Result<Vec<Slot>>;
+
     #[rpc(meta, name = "getConfirmedTransaction")]
     fn get_confirmed_transaction(
         &self,
@@ -2366,10 +2407,23 @@ impl RpcSol for RpcSolImpl {
         end_slot: Option<Slot>,
     ) -> Result<Vec<Slot>> {
         debug!(
-            "get_confirmed_blocks rpc request received: {:?}-{:?}",
+            "get_confirmed_blocks rpc request received: {}-{:?}",
             start_slot, end_slot
         );
         meta.get_confirmed_blocks(start_slot, end_slot)
+    }
+
+    fn get_confirmed_blocks_with_limit(
+        &self,
+        meta: Self::Metadata,
+        start_slot: Slot,
+        limit: usize,
+    ) -> Result<Vec<Slot>> {
+        debug!(
+            "get_confirmed_blocks_with_limit rpc request received: {}-{}",
+            start_slot, limit,
+        );
+        meta.get_confirmed_blocks_with_limit(start_slot, limit)
     }
 
     fn get_block_time(&self, meta: Self::Metadata, slot: Slot) -> Result<Option<UnixTimestamp>> {
@@ -4731,6 +4785,69 @@ pub mod tests {
                 r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Slot range too large; max 500000"},"id":1}"#.to_string(),
             )
         );
+    }
+
+    #[test]
+    fn test_get_confirmed_blocks_with_limit() {
+        let bob_pubkey = Pubkey::new_rand();
+        let roots = vec![0, 1, 3, 4, 8];
+        let RpcHandler {
+            io,
+            meta,
+            block_commitment_cache,
+            ..
+        } = start_rpc_handler_with_tx_and_blockstore(&bob_pubkey, roots, 0);
+        block_commitment_cache
+            .write()
+            .unwrap()
+            .set_highest_confirmed_root(8);
+
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[0,500001]}"#;
+        let res = io.handle_request_sync(&req, meta.clone());
+        assert_eq!(
+            res,
+            Some(
+                r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Limit too large; max 500000"},"id":1}"#.to_string(),
+            )
+        );
+
+        let req =
+            r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[0,0]}"#;
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
+        assert!(confirmed_blocks.is_empty());
+
+        let req =
+            r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[2,2]}"#;
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
+        assert_eq!(confirmed_blocks, vec![3, 4]);
+
+        let req =
+            r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[2,3]}"#;
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
+        assert_eq!(confirmed_blocks, vec![3, 4, 8]);
+
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[2,500000]}"#;
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
+        assert_eq!(confirmed_blocks, vec![3, 4, 8]);
+
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[9,500000]}"#;
+        let res = io.handle_request_sync(&req, meta);
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let confirmed_blocks: Vec<Slot> = serde_json::from_value(result["result"].clone()).unwrap();
+        assert_eq!(confirmed_blocks, Vec::<Slot>::new());
     }
 
     #[test]
