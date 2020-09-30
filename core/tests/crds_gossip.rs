@@ -1,6 +1,8 @@
 use bincode::serialized_size;
 use log::*;
 use rayon::prelude::*;
+use rayon::{ThreadPool, ThreadPoolBuilder};
+use serial_test_derive::serial;
 use solana_core::cluster_info;
 use solana_core::contact_info::ContactInfo;
 use solana_core::crds_gossip::*;
@@ -200,9 +202,9 @@ fn connected_staked_network_create(stakes: &[u64]) -> Network {
     Network::new(network)
 }
 
-fn network_simulator_pull_only(network: &mut Network) {
+fn network_simulator_pull_only(thread_pool: &ThreadPool, network: &mut Network) {
     let num = network.len();
-    let (converged, bytes_tx) = network_run_pull(network, 0, num * 2, 0.9);
+    let (converged, bytes_tx) = network_run_pull(&thread_pool, network, 0, num * 2, 0.9);
     trace!(
         "network_simulator_pull_{}: converged: {} total_bytes: {}",
         num,
@@ -212,10 +214,10 @@ fn network_simulator_pull_only(network: &mut Network) {
     assert!(converged >= 0.9);
 }
 
-fn network_simulator(network: &mut Network, max_convergance: f64) {
+fn network_simulator(thread_pool: &ThreadPool, network: &mut Network, max_convergance: f64) {
     let num = network.len();
     // run for a small amount of time
-    let (converged, bytes_tx) = network_run_pull(network, 0, 10, 1.0);
+    let (converged, bytes_tx) = network_run_pull(&thread_pool, network, 0, 10, 1.0);
     trace!("network_simulator_push_{}: converged: {}", num, converged);
     // make sure there is someone in the active set
     let network_values: Vec<Node> = network.values().cloned().collect();
@@ -254,7 +256,7 @@ fn network_simulator(network: &mut Network, max_convergance: f64) {
             bytes_tx
         );
         // pull for a bit
-        let (converged, bytes_tx) = network_run_pull(network, start, end, 1.0);
+        let (converged, bytes_tx) = network_run_pull(&thread_pool, network, start, end, 1.0);
         total_bytes += bytes_tx;
         trace!(
             "network_simulator_push_{}: converged: {} bytes: {} total_bytes: {}",
@@ -386,6 +388,7 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
 }
 
 fn network_run_pull(
+    thread_pool: &ThreadPool,
     network: &mut Network,
     start: usize,
     end: usize,
@@ -408,7 +411,13 @@ fn network_run_pull(
                 .filter_map(|from| {
                     from.lock()
                         .unwrap()
-                        .new_pull_request(now, None, &HashMap::new(), cluster_info::MAX_BLOOM_SIZE)
+                        .new_pull_request(
+                            &thread_pool,
+                            now,
+                            None,
+                            &HashMap::new(),
+                            cluster_info::MAX_BLOOM_SIZE,
+                        )
                         .ok()
                 })
                 .collect()
@@ -489,32 +498,41 @@ fn network_run_pull(
 #[test]
 fn test_star_network_pull_50() {
     let mut network = star_network_create(50);
-    network_simulator_pull_only(&mut network);
+    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    network_simulator_pull_only(&thread_pool, &mut network);
 }
 #[test]
 fn test_star_network_pull_100() {
     let mut network = star_network_create(100);
-    network_simulator_pull_only(&mut network);
+    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    network_simulator_pull_only(&thread_pool, &mut network);
 }
 #[test]
+#[serial]
 fn test_star_network_push_star_200() {
     let mut network = star_network_create(200);
-    network_simulator(&mut network, 0.9);
+    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    network_simulator(&thread_pool, &mut network, 0.9);
 }
 #[ignore]
 #[test]
 fn test_star_network_push_rstar_200() {
     let mut network = rstar_network_create(200);
-    network_simulator(&mut network, 0.9);
+    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    network_simulator(&thread_pool, &mut network, 0.9);
 }
 #[test]
+#[serial]
 fn test_star_network_push_ring_200() {
     let mut network = ring_network_create(200);
-    network_simulator(&mut network, 0.9);
+    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    network_simulator(&thread_pool, &mut network, 0.9);
 }
 #[test]
+#[serial]
 fn test_connected_staked_network() {
     solana_logger::setup();
+    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
     let stakes = [
         [1000; 2].to_vec(),
         [100; 3].to_vec(),
@@ -523,7 +541,7 @@ fn test_connected_staked_network() {
     ]
     .concat();
     let mut network = connected_staked_network_create(&stakes);
-    network_simulator(&mut network, 1.0);
+    network_simulator(&thread_pool, &mut network, 1.0);
 
     let stake_sum: u64 = stakes.iter().sum();
     let avg_stake: u64 = stake_sum / stakes.len() as u64;
@@ -544,28 +562,32 @@ fn test_connected_staked_network() {
 fn test_star_network_large_pull() {
     solana_logger::setup();
     let mut network = star_network_create(2000);
-    network_simulator_pull_only(&mut network);
+    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    network_simulator_pull_only(&thread_pool, &mut network);
 }
 #[test]
 #[ignore]
 fn test_rstar_network_large_push() {
     solana_logger::setup();
     let mut network = rstar_network_create(4000);
-    network_simulator(&mut network, 0.9);
+    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    network_simulator(&thread_pool, &mut network, 0.9);
 }
 #[test]
 #[ignore]
 fn test_ring_network_large_push() {
     solana_logger::setup();
     let mut network = ring_network_create(4001);
-    network_simulator(&mut network, 0.9);
+    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    network_simulator(&thread_pool, &mut network, 0.9);
 }
 #[test]
 #[ignore]
 fn test_star_network_large_push() {
     solana_logger::setup();
     let mut network = star_network_create(4002);
-    network_simulator(&mut network, 0.9);
+    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    network_simulator(&thread_pool, &mut network, 0.9);
 }
 #[test]
 fn test_prune_errors() {

@@ -1285,6 +1285,7 @@ impl ClusterInfo {
     // If the network entrypoint hasn't been discovered yet, add it to the crds table
     fn append_entrypoint_to_pulls(
         &self,
+        thread_pool: &ThreadPool,
         pulls: &mut Vec<(Pubkey, CrdsFilter, SocketAddr, CrdsValue)>,
     ) {
         let pull_from_entrypoint = {
@@ -1335,7 +1336,7 @@ impl ClusterInfo {
                     .unwrap_or_else(|| panic!("self_id invalid {}", self.id()));
                 r_gossip
                     .pull
-                    .build_crds_filters(&r_gossip.crds, MAX_BLOOM_SIZE)
+                    .build_crds_filters(thread_pool, &r_gossip.crds, MAX_BLOOM_SIZE)
                     .into_iter()
                     .for_each(|filter| pulls.push((id, filter, gossip, self_info.clone())));
             }
@@ -1384,7 +1385,7 @@ impl ClusterInfo {
 
     fn new_pull_requests(
         &self,
-        _thread_pool: &ThreadPool,
+        thread_pool: &ThreadPool,
         gossip_validators: Option<&HashSet<Pubkey>>,
         stakes: &HashMap<Pubkey, u64>,
     ) -> Vec<(SocketAddr, Protocol)> {
@@ -1393,7 +1394,7 @@ impl ClusterInfo {
             let r_gossip =
                 self.time_gossip_read_lock("new_pull_reqs", &self.stats.new_pull_requests);
             r_gossip
-                .new_pull_request(now, gossip_validators, stakes, MAX_BLOOM_SIZE)
+                .new_pull_request(thread_pool, now, gossip_validators, stakes, MAX_BLOOM_SIZE)
                 .ok()
                 .into_iter()
                 .filter_map(|(peer, filters, me)| {
@@ -1411,7 +1412,7 @@ impl ClusterInfo {
                 .flatten()
                 .collect()
         };
-        self.append_entrypoint_to_pulls(&mut pulls);
+        self.append_entrypoint_to_pulls(thread_pool, &mut pulls);
         self.stats
             .new_pull_requests_count
             .add_relaxed(pulls.len() as u64);
@@ -2881,6 +2882,7 @@ mod tests {
     //when constructed with keypairs
     #[test]
     fn test_gossip_signature_verification() {
+        let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         //create new cluster info, leader, and peer
         let keypair = Keypair::new();
         let peer_keypair = Keypair::new();
@@ -2909,7 +2911,13 @@ mod tests {
             .gossip
             .write()
             .unwrap()
-            .new_pull_request(timestamp(), None, &HashMap::new(), MAX_BLOOM_SIZE)
+            .new_pull_request(
+                &thread_pool,
+                timestamp(),
+                None,
+                &HashMap::new(),
+                MAX_BLOOM_SIZE,
+            )
             .ok()
             .unwrap();
         assert!(val.verify());
