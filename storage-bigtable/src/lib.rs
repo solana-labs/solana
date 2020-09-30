@@ -277,7 +277,7 @@ impl LedgerStorage {
     pub async fn get_confirmed_block(&self, slot: Slot) -> Result<ConfirmedBlock> {
         let mut bigtable = self.connection.client();
         let block_cell_data = bigtable
-            .get_bincode_or_protobuf_cell::<StoredConfirmedBlock, generated::ConfirmedBlock>(
+            .get_protobuf_or_bincode_cell::<StoredConfirmedBlock, generated::ConfirmedBlock>(
                 "blocks",
                 slot_to_key(slot),
             )
