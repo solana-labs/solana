@@ -82,7 +82,7 @@ impl Config {
             return "".to_string();
         }
         let mut url = json_rpc_url.unwrap();
-        let port = url.port_or_known_default().unwrap_or(80);
+        let port = url.port().unwrap_or(8899);
         url.set_port(Some(port + 3)).expect("unable to set port");
         url.to_string()
     }
@@ -138,12 +138,12 @@ mod test {
     fn compute_rpc_banks_url() {
         assert_eq!(
             Config::compute_rpc_banks_url(&"http://devnet.solana.com"),
-            "http://devnet.solana.com:83/".to_string()
+            "http://devnet.solana.com:8902/".to_string()
         );
 
         assert_eq!(
             Config::compute_rpc_banks_url(&"https://devnet.solana.com"),
-            "https://devnet.solana.com:446/".to_string()
+            "https://devnet.solana.com:8902/".to_string()
         );
 
         assert_eq!(
