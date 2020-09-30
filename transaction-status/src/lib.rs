@@ -14,6 +14,7 @@ use crate::{
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     commitment_config::CommitmentConfig,
+    deserialize_utils::default_on_eof,
     instruction::CompiledInstruction,
     message::{Message, MessageHeader},
     pubkey::Pubkey,
@@ -141,6 +142,7 @@ pub struct TransactionStatusMeta {
     pub fee: u64,
     pub pre_balances: Vec<u64>,
     pub post_balances: Vec<u64>,
+    #[serde(deserialize_with = "default_on_eof")]
     pub inner_instructions: Option<Vec<InnerInstructions>>,
 }
 
