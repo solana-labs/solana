@@ -17,10 +17,14 @@ use crate::{
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     message_processor::{Executors, MessageProcessor},
+<<<<<<< HEAD
     nonce_utils,
     process_instruction::{
         ComputeBudget, Executor, ProcessInstruction, ProcessInstructionWithContext,
     },
+=======
+    process_instruction::{Executor, ProcessInstruction, ProcessInstructionWithContext},
+>>>>>>> 3c7b9c293... Move remaining nonce utils from runtime to SDK
     rent_collector::RentCollector,
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
@@ -1839,7 +1843,7 @@ impl Bank {
                     .map(|acc| (*nonce_pubkey, acc))
             })
             .filter(|(_pubkey, nonce_account)| {
-                nonce_utils::verify_nonce_account(nonce_account, &tx.message().recent_blockhash)
+                nonce::utils::verify_nonce_account(nonce_account, &tx.message().recent_blockhash)
             })
     }
 
@@ -2255,7 +2259,7 @@ impl Bank {
             .map(|((_, tx), (res, hash_age_kind))| {
                 let (fee_calculator, is_durable_nonce) = match hash_age_kind {
                     Some(HashAgeKind::DurableNonce(_, account)) => {
-                        (nonce_utils::fee_calculator_of(account), true)
+                        (nonce::utils::fee_calculator_of(account), true)
                     }
                     _ => (
                         hash_queue

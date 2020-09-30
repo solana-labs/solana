@@ -3,9 +3,9 @@ use itertools::izip;
 use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusBatch};
 use solana_runtime::{
     bank::{Bank, HashAgeKind},
-    nonce_utils,
     transaction_utils::OrderedIterator,
 };
+use solana_sdk::nonce;
 use solana_transaction_status::{InnerInstructions, TransactionStatusMeta};
 use std::{
     sync::{
@@ -75,7 +75,7 @@ impl TransactionStatusService {
             if Bank::can_commit(&status) && !transaction.signatures.is_empty() {
                 let fee_calculator = match hash_age_kind {
                     Some(HashAgeKind::DurableNonce(_, account)) => {
-                        nonce_utils::fee_calculator_of(&account)
+                        nonce::utils::fee_calculator_of(&account)
                     }
                     _ => bank.get_fee_calculator(&transaction.message().recent_blockhash),
                 }
