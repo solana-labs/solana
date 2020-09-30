@@ -540,7 +540,11 @@ impl AccountsDB {
 
     // Reclaim older states of rooted non-zero lamport accounts as a general
     // AccountsDB bloat mitigation and preprocess for better zero-lamport purging.
-    fn clean_old_rooted_accounts(&self, purges_in_root: Vec<Pubkey>, max_clean_root: Option<Slot>) {
+    fn clean_old_rooted_accounts(
+        &self,
+        purges_in_root: Vec<Pubkey>,
+        max_clean_root: Option<Slot>,
+    ) -> HashSet<Slot> {
         // This number isn't carefully chosen; just guessed randomly such that
         // the hot loop will be the order of ~Xms.
         const INDEX_CLEAN_BULK_COUNT: usize = 4096;
@@ -562,10 +566,11 @@ impl AccountsDB {
         inc_new_counter_info!("clean-old-root-par-clean-ms", clean_rooted.as_ms() as usize);
 
         let mut measure = Measure::start("clean_old_root_reclaims");
-        self.handle_reclaims(&reclaims, None, false);
+        let dead_slots = self.handle_reclaims(&reclaims, None, false);
         measure.stop();
         debug!("{} {}", clean_rooted, measure);
         inc_new_counter_info!("clean-old-root-reclaim-ms", measure.as_ms() as usize);
+        dead_slots
     }
 
     fn do_reset_uncleaned_roots(
@@ -681,7 +686,8 @@ impl AccountsDB {
                         let (slot, account_info) = &list[index];
                         if account_info.lamports == 0 {
                             purges.insert(*pubkey, accounts_index.would_purge(pubkey));
-                        } else if accounts_index.uncleaned_roots.contains(slot) {
+                        }
+                        if accounts_index.uncleaned_roots.contains(slot) {
                             purges_in_root.push(*pubkey);
                         }
                     }
@@ -702,9 +708,13 @@ impl AccountsDB {
         accounts_scan.stop();
 
         let mut clean_old_rooted = Measure::start("clean_old_roots");
-        if !purges_in_root.is_empty() {
-            self.clean_old_rooted_accounts(purges_in_root, max_clean_root);
-        }
+        let old_rooted_dead_slots = {
+            if !purges_in_root.is_empty() {
+                self.clean_old_rooted_accounts(purges_in_root, max_clean_root)
+            } else {
+                HashSet::new()
+            }
+        };
         self.do_reset_uncleaned_roots(&mut candidates, max_clean_root);
         clean_old_rooted.stop();
 
@@ -713,26 +723,35 @@ impl AccountsDB {
         // Calculate store counts as if everything was purged
         // Then purge if we can
         let mut store_counts: HashMap<AppendVecId, (usize, HashSet<Pubkey>)> = HashMap::new();
-        let storage = self.storage.read().unwrap();
-        for (key, (account_infos, _ref_count)) in &purges {
-            for (slot, account_info) in account_infos {
-                let slot_storage = storage.0.get(&slot).unwrap();
-                let store = slot_storage.get(&account_info.store_id).unwrap();
+        for (key, (account_infos, ref_count)) in purges.iter_mut() {
+            account_infos.retain(|(slot, account_info)| {
+                if old_rooted_dead_slots.contains(slot) {
+                    *ref_count = self
+                        .accounts_index
+                        .read()
+                        .unwrap()
+                        .ref_count_from_storage(&key);
+                    return false;
+                }
                 if let Some(store_count) = store_counts.get_mut(&account_info.store_id) {
                     store_count.0 -= 1;
                     store_count.1.insert(*key);
                 } else {
                     let mut key_set = HashSet::new();
                     key_set.insert(*key);
-                    store_counts.insert(
-                        account_info.store_id,
-                        (store.count_and_status.read().unwrap().0 - 1, key_set),
-                    );
+                    let count: usize = {
+                        let storage = self.storage.read().unwrap();
+                        let slot_storage = storage.0.get(&slot).unwrap();
+                        let store = slot_storage.get(&account_info.store_id).unwrap();
+                        let count = store.count_and_status.read().unwrap().0;
+                        count - 1
+                    };
+                    store_counts.insert(account_info.store_id, (count, key_set));
                 }
-            }
+                true
+            });
         }
         store_counts_time.stop();
-        drop(storage);
 
         let mut calc_deps_time = Measure::start("calc_deps");
         Self::calc_delete_dependencies(&purges, &mut store_counts);
@@ -816,21 +835,24 @@ impl AccountsDB {
         reclaims: SlotSlice<AccountInfo>,
         expected_single_dead_slot: Option<Slot>,
         no_dead_slot: bool,
-    ) {
-        if !reclaims.is_empty() {
-            let dead_slots = self.remove_dead_accounts(reclaims, expected_single_dead_slot);
-            if no_dead_slot {
-                assert!(dead_slots.is_empty());
-            } else if let Some(expected_single_dead_slot) = expected_single_dead_slot {
-                assert!(dead_slots.len() <= 1);
-                if dead_slots.len() == 1 {
-                    assert!(dead_slots.contains(&expected_single_dead_slot));
-                }
-            }
-            if !dead_slots.is_empty() {
-                self.process_dead_slots(&dead_slots);
+    ) -> HashSet<Slot> {
+        if reclaims.is_empty() {
+            return HashSet::new();
+        }
+
+        let dead_slots = self.remove_dead_accounts(reclaims, expected_single_dead_slot);
+        if no_dead_slot {
+            assert!(dead_slots.is_empty());
+        } else if let Some(expected_single_dead_slot) = expected_single_dead_slot {
+            assert!(dead_slots.len() <= 1);
+            if dead_slots.len() == 1 {
+                assert!(dead_slots.contains(&expected_single_dead_slot));
             }
         }
+        if !dead_slots.is_empty() {
+            self.process_dead_slots(&dead_slots);
+        }
+        dead_slots
     }
 
     // Must be kept private!, does sensitive cleanup that should only be called from
@@ -3038,6 +3060,110 @@ pub mod tests {
         fn uncleaned_root_count(&self) -> usize {
             self.accounts_index.read().unwrap().uncleaned_roots.len()
         }
+    }
+
+    #[test]
+    fn test_clean_zero_lamport_and_dead_slot() {
+        solana_logger::setup();
+
+        let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
+        let pubkey1 = Pubkey::new_rand();
+        let pubkey2 = Pubkey::new_rand();
+        let account = Account::new(1, 1, &Account::default().owner);
+        let zero_lamport_account = Account::new(0, 0, &Account::default().owner);
+
+        // Store two accounts
+        accounts.store(0, &[(&pubkey1, &account)]);
+        accounts.store(0, &[(&pubkey2, &account)]);
+
+        // Make sure both accounts are in the same AppendVec in slot 0, which
+        // will prevent pubkey1 from being cleaned up later even when it's a
+        // zero-lamport account
+        let ancestors: HashMap<Slot, usize> = vec![(0, 1)].into_iter().collect();
+        let (slot1, account_info1) = accounts
+            .accounts_index
+            .read()
+            .unwrap()
+            .get(&pubkey1, Some(&ancestors), None)
+            .map(|(account_list1, index1)| account_list1[index1].clone())
+            .unwrap();
+        let (slot2, account_info2) = accounts
+            .accounts_index
+            .read()
+            .unwrap()
+            .get(&pubkey2, Some(&ancestors), None)
+            .map(|(account_list2, index2)| account_list2[index2].clone())
+            .unwrap();
+        assert_eq!(slot1, 0);
+        assert_eq!(slot1, slot2);
+        assert_eq!(account_info1.store_id, account_info2.store_id);
+
+        // Update account 1 in slot 1
+        accounts.store(1, &[(&pubkey1, &account)]);
+
+        // Update account 1 as  zero lamports account
+        accounts.store(2, &[(&pubkey1, &zero_lamport_account)]);
+
+        // Pubkey 1 was the only account in slot 1, and it was updated in slot 2, so
+        // slot 1 should be purged
+        accounts.add_root(0);
+        accounts.add_root(1);
+        accounts.add_root(2);
+
+        // Slot 1 should be removed, slot 0 cannot be removed because it still has
+        // the latest update for pubkey 2
+        accounts.clean_accounts(None);
+        assert!(accounts.storage.read().unwrap().0.get(&0).is_some());
+        assert!(accounts.storage.read().unwrap().0.get(&1).is_none());
+
+        // Slot 1 should be cleaned because all it's accounts are
+        // zero lamports, and are not present in any other slot's
+        // storage entries
+        assert_eq!(accounts.alive_account_count_in_store(1), 0);
+    }
+
+    #[test]
+    fn test_clean_zero_lamport_and_old_roots() {
+        solana_logger::setup();
+
+        let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
+        let pubkey = Pubkey::new_rand();
+        let account = Account::new(1, 0, &Account::default().owner);
+        let zero_lamport_account = Account::new(0, 0, &Account::default().owner);
+
+        // Store a zero-lamport account
+        accounts.store(0, &[(&pubkey, &account)]);
+        accounts.store(1, &[(&pubkey, &zero_lamport_account)]);
+
+        // Simulate rooting the zero-lamport account, should be a
+        // candidate for cleaning
+        accounts.add_root(0);
+        accounts.add_root(1);
+
+        // Slot 0 should be removed, and
+        // zero-lamport account should be cleaned
+        accounts.clean_accounts(None);
+
+        assert!(accounts.storage.read().unwrap().0.get(&0).is_none());
+        assert!(accounts.storage.read().unwrap().0.get(&1).is_none());
+
+        // Slot 0 should be cleaned because all it's accounts have been
+        // updated in the rooted slot 1
+        assert_eq!(accounts.alive_account_count_in_store(0), 0);
+
+        // Slot 1 should be cleaned because all it's accounts are
+        // zero lamports, and are not present in any other slot's
+        // storage entries
+        assert_eq!(accounts.alive_account_count_in_store(1), 0);
+
+        // zero lamport account, should no longer exist in accounts index
+        // because it has been removed
+        assert!(accounts
+            .accounts_index
+            .read()
+            .unwrap()
+            .get(&pubkey, None, None)
+            .is_none());
     }
 
     #[test]
