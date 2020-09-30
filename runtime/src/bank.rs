@@ -477,6 +477,12 @@ pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) is_delta: bool,
 }
 
+#[derive(Debug, PartialEq, Serialize, Deserialize, AbiExample, Default, Clone, Copy)]
+pub struct RewardInfo {
+    pub lamports: i64,     // Reward amount
+    pub post_balance: u64, // Account balance in lamports after `lamports` was applied
+}
+
 /// Manager for the state of all accounts and programs after processing its entries.
 /// AbiExample is needed even without Serialize/Deserialize; actual (de-)serialization
 /// are implemented elsewhere for versioning
@@ -592,7 +598,7 @@ pub struct Bank {
     pub last_vote_sync: AtomicU64,
 
     /// Rewards that were paid out immediately after this bank was created
-    pub rewards: Option<Vec<(Pubkey, i64)>>,
+    pub rewards: Option<Vec<(Pubkey, RewardInfo)>>,
 
     pub skip_drop: AtomicBool,
 
@@ -1142,7 +1148,13 @@ impl Bank {
         if let Some(rewards) = self.rewards.as_ref() {
             assert_eq!(
                 validator_rewards_paid,
-                u64::try_from(rewards.iter().map(|(_pubkey, reward)| reward).sum::<i64>()).unwrap()
+                u64::try_from(
+                    rewards
+                        .iter()
+                        .map(|(_pubkey, reward_info)| reward_info.lamports)
+                        .sum::<i64>()
+                )
+                .unwrap()
             );
         }
 
@@ -1247,11 +1259,19 @@ impl Bank {
                     vote_account_changed = true;
 
                     if voters_reward > 0 {
-                        *rewards.entry(*vote_pubkey).or_insert(0i64) += voters_reward as i64;
+                        let reward_info = rewards
+                            .entry(*vote_pubkey)
+                            .or_insert_with(RewardInfo::default);
+                        reward_info.lamports += voters_reward as i64;
+                        reward_info.post_balance = vote_account.lamports;
                     }
 
                     if stakers_reward > 0 {
-                        *rewards.entry(*stake_pubkey).or_insert(0i64) += stakers_reward as i64;
+                        let reward_info = rewards
+                            .entry(*stake_pubkey)
+                            .or_insert_with(RewardInfo::default);
+                        reward_info.lamports += stakers_reward as i64;
+                        reward_info.post_balance = stake_account.lamports;
                     }
                 } else {
                     debug!(
@@ -5513,7 +5533,10 @@ mod tests {
             bank1.rewards,
             Some(vec![(
                 stake_id,
-                (rewards.validator_point_value * validator_points as f64) as i64
+                RewardInfo {
+                    lamports: (rewards.validator_point_value * validator_points as f64) as i64,
+                    post_balance: bank1.get_balance(&stake_id),
+                }
             )])
         );
         bank1.freeze();

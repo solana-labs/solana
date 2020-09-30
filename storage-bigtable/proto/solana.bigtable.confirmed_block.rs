@@ -87,6 +87,8 @@ pub struct Reward {
     pub pubkey: std::string::String,
     #[prost(int64, tag = "2")]
     pub lamports: i64,
+    #[prost(uint64, tag = "3")]
+    pub post_balance: u64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UnixTimestamp {
