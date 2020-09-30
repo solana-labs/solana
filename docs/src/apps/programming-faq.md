@@ -28,19 +28,6 @@ during execution.  The following operations incur a cost:
 - Cross-program invocations incur a base cost and the cost of the program
   invoked.
 
-## Failure to compiler due to `rand` incompatibility
-
-Programs are constrained to run deterministically, so random numbers are not
-available.  Sometimes a program may depend on a crate that depends itself on
-`rand` even if the program does not use any of the random number functionality.
-If a program depends on `rand`, the compilation will fail because there is not
-`get-random` support for Solana.  To work around this dependency issue, add the
-following dependency to the program's `Cargo.toml`:
-
-```
-getrandom = { version = "0.1.14", features = ["dummy"] }
-```
-
 ## Float Rust types
 
 Programs support a limited subset of Rust's float operations, though they
@@ -86,6 +73,32 @@ An implementation of a program might also cause this error when performing a
 cross-program invocation that requires a signed program address, but the passed
 signer seeds passed to `invoke_signed` don't match the signer seeds used to
 create the program address (`create_program_address`).
+
+## `rand` dependency causes compilation failure
+
+Programs are constrained to run deterministically, so random numbers are not
+available.  Sometimes a program may depend on a crate that depends itself on
+`rand` even if the program does not use any of the random number functionality.
+If a program depends on `rand`, the compilation will fail because there is no
+`get-random` support for Solana.  The error will typically look like this:
+
+```
+error: target is not supported, for more information see: https://docs.rs/getrandom/#unsupported-targets
+   --> /Users/jack/.cargo/registry/src/github.com-1ecc6299db9ec823/getrandom-0.1.14/src/lib.rs:257:9
+    |
+257 | /         compile_error!("\
+258 | |             target is not supported, for more information see: \
+259 | |             https://docs.rs/getrandom/#unsupported-targets\
+260 | |         ");
+    | |___________^
+```
+
+To work around this dependency issue, add the following dependency to the
+program's `Cargo.toml`:
+
+```
+getrandom = { version = "0.1.14", features = ["dummy"] }
+```
 
 ## Rust restrictions
 
