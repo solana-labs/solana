@@ -2381,8 +2381,7 @@ impl Bank {
     // computation for the distribution (time: N log N, space: N acct. stores; N = # of
     // validators):
     // - rent fee doesn't need to be incentivized for throughput unlike transaction fees
-    // - leader schedule could be manipulated to locate certain validators more often at the
-    //   start of epoch to unfairly earn more rent for the epoch.
+    //
     // Ref: collect_fees
     #[allow(clippy::needless_collect)]
     fn distribute_rent_to_validators(
@@ -4548,11 +4547,10 @@ mod tests {
         const VALIDATOR_STAKE: u64 = 374_999_998_287_840;
 
         let validator_pubkey = Pubkey::new_rand();
-        let bootstrap_validator_stake_lamports = VALIDATOR_STAKE;
         let mut genesis_config = create_genesis_config_with_leader(
             10,
             &validator_pubkey,
-            bootstrap_validator_stake_lamports,
+            VALIDATOR_STAKE,
         )
         .genesis_config;
 
