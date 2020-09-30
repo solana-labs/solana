@@ -13,5 +13,5 @@ for acceptable_channel in "$@"; do
   fi
 done
 
-echo "Not running from one of the following channels: $@"
+echo "Not running from one of the following channels: $*"
 exit 1
