@@ -1,14 +1,13 @@
 extern crate ed25519_dalek;
-extern crate rand;
 extern crate hex;
 
 mod utils;
 
-use std::convert::TryFrom;
 use wasm_bindgen::prelude::*;
+
+use std::convert::TryFrom;
 use ed25519_dalek::{Keypair, PublicKey, SecretKey, Signature, Signer as _, Verifier as _, SECRET_KEY_LENGTH, PUBLIC_KEY_LENGTH};
 use serde::{Deserialize, Serialize};
-use rand::rngs::OsRng;
 use sha2::{Digest, Sha256};
 
 cfg_if::cfg_if! {
@@ -42,8 +41,13 @@ pub struct Pair{
 /// * returned struct has two fields public and secret.
 #[wasm_bindgen(js_name = generateKeyPair)]
 pub fn generate_keypair() -> Result<JsValue, JsValue> {
-	let mut csprng = OsRng {};
-    let keypair: Keypair = Keypair::generate(&mut csprng);
+	// using get random directly instead of OsRng since it's easier to integrate with WASM
+	let mut seed = [0u8; 32];
+	getrandom::getrandom(&mut seed).unwrap();
+	let secret = SecretKey::from_bytes(&seed).unwrap();
+	let public: PublicKey = (&secret).into();
+	let keypair = Keypair{secret, public};
+
 	// use all 64bit for secret key to maintain compatibility with tweetnacl
 	let secret_key = keypair.to_bytes().to_vec();
 	let public_key = keypair.public.as_bytes().to_vec();
