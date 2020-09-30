@@ -7,7 +7,6 @@ use crate::{
     bank::{HashAgeKind, TransactionProcessResult},
     blockhash_queue::BlockhashQueue,
     feature_set::{self, FeatureSet},
-    nonce_utils,
     rent_collector::RentCollector,
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
     transaction_utils::OrderedIterator,
@@ -316,7 +315,7 @@ impl Accounts {
                 ((_, tx), (Ok(()), hash_age_kind)) => {
                     let fee_calculator = match hash_age_kind.as_ref() {
                         Some(HashAgeKind::DurableNonce(_, account)) => {
-                            nonce_utils::fee_calculator_of(account)
+                            nonce::utils::fee_calculator_of(account)
                         }
                         _ => hash_queue
                             .get_fee_calculator(&tx.message().recent_blockhash)
