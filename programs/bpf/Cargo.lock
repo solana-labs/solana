@@ -1913,6 +1913,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-sha256"
+version = "1.4.0"
+dependencies = [
+ "solana-sdk",
+]
+
+[[package]]
 name = "solana-bpf-rust-sysval"
 version = "1.4.0"
 dependencies = [

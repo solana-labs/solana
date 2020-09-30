@@ -136,6 +136,7 @@ fn test_program_bpf_sanity() {
             ("relative_call", true),
             ("sanity", true),
             ("sanity++", true),
+            ("sha256", true),
             ("struct_pass", true),
             ("struct_ret", true),
         ]);
@@ -154,6 +155,7 @@ fn test_program_bpf_sanity() {
             ("solana_bpf_rust_param_passing", true),
             ("solana_bpf_rust_rand", true),
             ("solana_bpf_rust_sanity", true),
+            ("solana_bpf_rust_sha256", true),
             ("solana_bpf_rust_sysval", true),
         ]);
     }

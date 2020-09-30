@@ -87,6 +87,10 @@ pub struct ComputeBudget {
     pub invoke_units: u64,
     /// Maximum cross-program invocation depth allowed including the orignal caller
     pub max_invoke_depth: usize,
+    /// Base number of compute units consumed to call sha256
+    pub sha256_base_cost: u64,
+    /// Incremental number of units consumed by sha256 (based on bytes)
+    pub sha256_byte_cost: u64,
 }
 impl Default for ComputeBudget {
     fn default() -> Self {
@@ -98,6 +102,8 @@ impl Default for ComputeBudget {
             create_program_address_units: 1500,
             invoke_units: 1000,
             max_invoke_depth: 2,
+            sha256_base_cost: 85,
+            sha256_byte_cost: 1,
         }
     }
 }

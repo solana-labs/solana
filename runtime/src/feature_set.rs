@@ -33,6 +33,10 @@ pub mod compute_budget_config2 {
     solana_sdk::declare_id!("HxvjqDSiF5sYdSYuCXsUnS8UeAoWsMT9iGoFP8pgV1mB");
 }
 
+pub mod sha256_syscall_enabled {
+    solana_sdk::declare_id!("D7KfP7bZxpkYtD4Pc38t9htgs1k5k47Yhxe4rp6WDVi8");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -43,6 +47,7 @@ lazy_static! {
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
         (bpf_loader2_program::id(), "bpf_loader2 program"),
         (compute_budget_config2::id(), "1ms compute budget"),
+        (sha256_syscall_enabled::id(), "sha256 syscall")
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

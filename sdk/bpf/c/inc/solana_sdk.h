@@ -392,6 +392,32 @@ static bool sol_deserialize(
 }
 
 /**
+ * Byte array pointer and string
+ */
+typedef struct {
+  const uint8_t *addr; /** bytes */
+  uint64_t len; /** number of bytes*/
+} SolBytes;
+
+/**
+ * Length of a sha256 hash result
+ */
+#define SHA256_RESULT_LENGTH 32
+
+/**
+ * Sha256
+ *
+ * @param bytes Array of byte arrays
+ * @param bytes_len Number of byte arrays
+ * @param result 32 byte array to hold the result
+ */
+static uint64_t sol_sha256(
+    const SolBytes *bytes,
+    int bytes_len,
+    const uint8_t *result
+);
+
+/**
  * Account Meta
  */
 typedef struct {
@@ -428,7 +454,7 @@ typedef struct {
   uint64_t len; /** Number of seeds */
 } SolSignerSeeds;
 
-/*
+/**
  * Create a program address
  *
  * @param seeds Seed bytes used to sign program accounts
@@ -448,7 +474,7 @@ static uint64_t sol_create_program_address(
  *  * @{
  */
 
-/*
+/**
  * Invoke another program and sign for some of the keys
  *
  * @param instruction Instruction to process
@@ -480,7 +506,7 @@ static uint64_t sol_invoke_signed(
     signers_seeds_len
   );
 }
-/*
+/**
  * Invoke another program
  *
  * @param instruction Instruction to process

@@ -7,6 +7,7 @@ use solana_rbpf::{
     vm::{EbpfVm, SyscallObject},
 };
 use solana_runtime::{
+    feature_set::sha256_syscall_enabled,
     message_processor::MessageProcessor,
     process_instruction::{ComputeMeter, InvokeContext, Logger},
 };
@@ -16,6 +17,7 @@ use solana_sdk::{
     account_info::AccountInfo,
     bpf_loader, bpf_loader_deprecated,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
+    hash::{Hasher, HASH_BYTES},
     instruction::{AccountMeta, Instruction, InstructionError},
     message::Message,
     program_error::ProgramError,
@@ -116,6 +118,18 @@ pub fn register_syscalls<'a>(
             logger: invoke_context.get_logger(),
         }),
     )?;
+
+    if invoke_context.is_feature_active(&sha256_syscall_enabled::id()) {
+        vm.register_syscall_with_context_ex(
+            "sol_sha256",
+            Box::new(SyscallSha256 {
+                sha256_base_cost: compute_budget.sha256_base_cost,
+                sha256_byte_cost: compute_budget.sha256_byte_cost,
+                compute_meter: invoke_context.get_compute_meter(),
+                loader_id,
+            }),
+        )?;
+    }
 
     vm.register_syscall_with_context_ex(
         "sol_create_program_address",
@@ -456,6 +470,43 @@ impl<'a> SyscallObject<BPFError> for SyscallCreateProgramAddress<'a> {
         };
         let address = translate_slice_mut!(u8, address_addr, 32, rw_regions, self.loader_id)?;
         address.copy_from_slice(new_address.as_ref());
+        Ok(0)
+    }
+}
+
+/// SHA256
+pub struct SyscallSha256<'a> {
+    sha256_base_cost: u64,
+    sha256_byte_cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BPFError> for SyscallSha256<'a> {
+    fn call(
+        &mut self,
+        vals_addr: u64,
+        vals_len: u64,
+        result_addr: u64,
+        _arg4: u64,
+        _arg5: u64,
+        ro_regions: &[MemoryRegion],
+        rw_regions: &[MemoryRegion],
+    ) -> Result<u64, EbpfError<BPFError>> {
+        self.compute_meter.consume(self.sha256_base_cost)?;
+        let hash_result =
+            translate_slice_mut!(u8, result_addr, HASH_BYTES, rw_regions, self.loader_id)?;
+        let mut hasher = Hasher::default();
+        if vals_len > 0 {
+            let vals = translate_slice!(&[u8], vals_addr, vals_len, ro_regions, self.loader_id)?;
+            for val in vals.iter() {
+                let bytes =
+                    translate_slice!(u8, val.as_ptr(), val.len(), ro_regions, self.loader_id)?;
+                self.compute_meter
+                    .consume(self.sha256_byte_cost * (val.len() as u64 / 2))?;
+                hasher.hash(bytes);
+            }
+        }
+        hash_result.copy_from_slice(&hasher.result().to_bytes());
         Ok(0)
     }
 }
@@ -1095,6 +1146,7 @@ fn call<'a>(
 mod tests {
     use super::*;
     use crate::tests::{MockComputeMeter, MockLogger};
+    use solana_sdk::hash::hashv;
 
     macro_rules! assert_access_violation {
         ($result:expr, $va:expr, $len:expr) => {
@@ -1448,5 +1500,116 @@ mod tests {
         check_alignment::<u32>();
         check_alignment::<u64>();
         check_alignment::<u128>();
+    }
+
+    #[test]
+    fn test_syscall_sha256() {
+        let bytes1 = "Gaggablaghblagh!";
+        let bytes2 = "flurbos";
+
+        struct MockSlice {
+            pub addr: u64,
+            pub len: usize,
+        }
+        let mock_slice1 = MockSlice {
+            addr: 4096,
+            len: bytes1.len(),
+        };
+        let mock_slice2 = MockSlice {
+            addr: 8192,
+            len: bytes2.len(),
+        };
+        let bytes_to_hash = [mock_slice1, mock_slice2]; // TODO
+        let ro_len = bytes_to_hash.len() as u64;
+        let ro_va = 96;
+        let ro_regions = &mut [
+            MemoryRegion {
+                addr_host: bytes1.as_ptr() as *const _ as u64,
+                addr_vm: 4096,
+                len: bytes1.len() as u64,
+            },
+            MemoryRegion {
+                addr_host: bytes2.as_ptr() as *const _ as u64,
+                addr_vm: 8192,
+                len: bytes2.len() as u64,
+            },
+            MemoryRegion {
+                addr_host: bytes_to_hash.as_ptr() as *const _ as u64,
+                addr_vm: 96,
+                len: 32,
+            },
+        ];
+        ro_regions.sort_by(|a, b| a.addr_vm.cmp(&b.addr_vm));
+        let hash_result = [0; HASH_BYTES];
+        let rw_va = 192;
+        let rw_regions = &[MemoryRegion {
+            addr_host: hash_result.as_ptr() as *const _ as u64,
+            addr_vm: rw_va,
+            len: HASH_BYTES as u64,
+        }];
+        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
+            Rc::new(RefCell::new(MockComputeMeter {
+                remaining: (bytes1.len() + bytes2.len()) as u64,
+            }));
+        let mut syscall = SyscallSha256 {
+            sha256_base_cost: 0,
+            sha256_byte_cost: 2,
+            compute_meter,
+            loader_id: &bpf_loader_deprecated::id(),
+        };
+
+        syscall
+            .call(ro_va, ro_len, rw_va, 0, 0, ro_regions, rw_regions)
+            .unwrap();
+
+        let hash_local = hashv(&[bytes1.as_ref(), bytes2.as_ref()]).to_bytes();
+        assert_eq!(hash_result, hash_local);
+
+        assert_access_violation!(
+            syscall.call(
+                ro_va - 1, // AccessViolation
+                ro_len,
+                rw_va,
+                0,
+                0,
+                ro_regions,
+                rw_regions
+            ),
+            ro_va - 1,
+            ro_len
+        );
+        assert_access_violation!(
+            syscall.call(
+                ro_va,
+                ro_len + 1, // AccessViolation
+                rw_va,
+                0,
+                0,
+                ro_regions,
+                rw_regions
+            ),
+            ro_va,
+            ro_len + 1
+        );
+        assert_access_violation!(
+            syscall.call(
+                ro_va,
+                ro_len,
+                rw_va - 1, // AccessViolation
+                0,
+                0,
+                ro_regions,
+                rw_regions
+            ),
+            rw_va - 1,
+            HASH_BYTES as u64
+        );
+
+        assert_eq!(
+            Err(EbpfError::UserError(BPFError::SyscallError(
+                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
+            ))),
+            syscall.call(ro_va, ro_len, rw_va, 0, 0, ro_regions, rw_regions)
+        );
     }
 }

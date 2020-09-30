@@ -54,6 +54,7 @@ members = [
     "rust/param_passing_dep",
     "rust/rand",
     "rust/sanity",
+    "rust/sha256",
     "rust/sysval",
 ]
 

@@ -82,6 +82,7 @@ fn main() {
             "param_passing",
             "rand",
             "sanity",
+            "sha256",
             "sysval",
         ];
         for program in rust_programs.iter() {
