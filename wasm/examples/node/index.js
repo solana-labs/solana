@@ -6,7 +6,6 @@ const TextEncoder = util.TextEncoder;
 
 (async () => {
   await sdk.waitReady();
-  debugger;
   const keyPair = sdk.ed25519.keypair.generate();
   const signature = sdk.ed25519.sign(
     keyPair.publicKey,
