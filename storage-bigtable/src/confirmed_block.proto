@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package solana.bigtable.ConfirmedBlock;
+
+message ConfirmedBlock {
+    string previous_blockhash = 1;
+    string blockhash = 2;
+    uint64 parent_slot = 3;
+    repeated ConfirmedTransaction transactions = 4;
+    repeated Reward rewards = 5;
+    UnixTimestamp block_time = 6;
+}
+
+message ConfirmedTransaction {
+    Transaction transaction = 1;
+    TransactionStatusMeta meta = 2;
+}
+
+message Transaction {
+    repeated bytes signatures = 1;
+    Message message = 2;
+}
+
+message Message {
+    MessageHeader header = 1;
+    repeated bytes account_keys = 2;
+    bytes recent_blockhash = 3;
+    repeated CompiledInstruction instructions = 4;
+}
+
+message MessageHeader {
+    uint32 num_required_signatures = 1;
+    uint32 num_readonly_signed_accounts = 2;
+    uint32 num_readonly_unsigned_accounts = 3;
+}
+
+message TransactionStatusMeta {
+    TransactionError err = 1;
+    uint64 fee = 2;
+    repeated uint64 pre_balances = 3;
+    repeated uint64 post_balances = 4;
+    repeated InnerInstructions inner_instructions = 5;
+}
+
+message TransactionError {
+    bytes err = 1;
+}
+
+message InnerInstructions {
+    uint32 index = 1;
+    repeated CompiledInstruction instructions = 2;
+}
+
+message CompiledInstruction {
+    uint32 program_id_index = 1;
+    bytes accounts = 2;
+    bytes data = 3;
+}
+
+message Reward {
+    string pubkey = 1;
+    int64 lamports = 2;
+}
+
+message UnixTimestamp {
+    int64 timestamp = 1;
+}
