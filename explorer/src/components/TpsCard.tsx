@@ -3,7 +3,7 @@ import { Bar } from "react-chartjs-2";
 import CountUp from "react-countup";
 import {
   usePerformanceInfo,
-  PERF_UPDATE_SEC,
+  PERF_UPDATE_SEC, ClusterStatsStatus
 } from "providers/stats/solanaClusterStats";
 import classNames from "classnames";
 import { TableCardBody } from "components/common/TableCardBody";
@@ -24,7 +24,7 @@ export function TpsCard() {
 function TpsCardBody() {
   const performanceInfo = usePerformanceInfo();
 
-  if (!performanceInfo || performanceInfo.loading) {
+  if (performanceInfo.status === ClusterStatsStatus.Loading) {
     return (
       <div className="card-body text-center">
         <span className="spinner-grow spinner-grow-sm mr-2"></span>

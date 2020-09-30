@@ -1,7 +1,8 @@
 import { PerfSample } from "@solana/web3.js";
+import { ClusterStatsStatus } from "./solanaClusterStats";
 
 export type PerformanceInfo = {
-  loading: boolean;
+  status: ClusterStatsStatus;
   avgTps: number;
   historyMaxTps: number;
   perfHistory: {
@@ -15,6 +16,7 @@ export type PerformanceInfo = {
 export enum PerformanceInfoActionType {
   SetTransactionCount,
   SetPerfSamples,
+  SetErroredOut,
   Reset,
 }
 
@@ -31,7 +33,8 @@ export function performanceInfoReducer(
   state: PerformanceInfo,
   action: PerformanceInfoAction
 ) {
-  const loading = state.avgTps === 0 && state.transactionCount === 0;
+  const status = (state.avgTps === 0 && state.transactionCount === 0) ?
+    ClusterStatsStatus.Ready : ClusterStatsStatus.Loading;
 
   if (
     action.type === PerformanceInfoActionType.SetPerfSamples &&
@@ -58,7 +61,7 @@ export function performanceInfoReducer(
       historyMaxTps,
       avgTps,
       perfHistory,
-      loading,
+      status
     };
   }
 
@@ -69,7 +72,14 @@ export function performanceInfoReducer(
     return {
       ...state,
       transactionCount: action.data.transactionCount,
-      loading,
+      status
+    };
+  }
+
+  if (action.type === PerformanceInfoActionType.SetErroredOut) {
+    return {
+      ...state,
+      status: ClusterStatsStatus.Error
     };
   }
 
@@ -83,8 +93,7 @@ export function performanceInfoReducer(
   }
 
   return {
-    ...state,
-    loading,
+    ...state
   };
 }
 

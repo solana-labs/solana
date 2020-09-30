@@ -3,6 +3,7 @@ import React from "react";
 import { TableCardBody } from "components/common/TableCardBody";
 import { Slot } from "components/common/Slot";
 import {
+  ClusterStatsStatus,
   useDashboardInfo,
   usePerformanceInfo,
   useSetActive,
@@ -41,10 +42,8 @@ function StatsCardBody() {
   }, [setActive, cluster]);
 
   if (
-    !dashboardInfo ||
-    !performanceInfo ||
-    performanceInfo.loading ||
-    dashboardInfo.loading
+    performanceInfo.status === ClusterStatsStatus.Loading ||
+    dashboardInfo.status === ClusterStatsStatus.Loading
   ) {
     return (
       <div className="card-body text-center">

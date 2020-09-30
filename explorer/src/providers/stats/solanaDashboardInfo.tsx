@@ -1,7 +1,8 @@
 import { PerfSample } from "@solana/web3.js";
+import { ClusterStatsStatus } from "./solanaClusterStats";
 
 export type DashboardInfo = {
-  loading: boolean;
+  status: ClusterStatsStatus;
   avgBlockTime_1h: number;
   avgBlockTime_1min: number;
   epochInfo: {
@@ -16,6 +17,7 @@ export type DashboardInfo = {
 export enum DashboardInfoActionType {
   SetPerfSamples,
   SetEpochInfo,
+  SetErroredOut,
   Reset,
 }
 
@@ -32,8 +34,8 @@ export function dashboardInfoReducer(
   state: DashboardInfo,
   action: DashboardInfoAction
 ) {
-  const loading =
-    state.avgBlockTime_1h === 0 && state.epochInfo.absoluteSlot === 0;
+  const status = (state.avgBlockTime_1h !== 0 && state.epochInfo.absoluteSlot !== 0) ?
+    ClusterStatsStatus.Ready : ClusterStatsStatus.Loading;
 
   if (
     action.type === DashboardInfoActionType.SetPerfSamples &&
@@ -52,7 +54,7 @@ export function dashboardInfoReducer(
       ...state,
       avgBlockTime_1h,
       avgBlockTime_1min: samples[0],
-      loading,
+      status
     };
   }
 
@@ -63,7 +65,14 @@ export function dashboardInfoReducer(
     return {
       ...state,
       epochInfo: action.data.epochInfo,
-      loading,
+      status
+    };
+  }
+
+  if (action.type === DashboardInfoActionType.SetErroredOut) {
+    return {
+      ...state,
+      status: ClusterStatsStatus.Error
     };
   }
 
@@ -77,7 +86,6 @@ export function dashboardInfoReducer(
   }
 
   return {
-    ...state,
-    loading,
+    ...state
   };
 }

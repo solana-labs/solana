@@ -19,8 +19,14 @@ export const PERFORMANCE_SAMPLE_INTERVAL = 60000;
 export const TRANSACTION_COUNT_INTERVAL = 5000;
 export const EPOCH_INFO_INTERVAL = 2000;
 
+export enum ClusterStatsStatus {
+  Loading,
+  Ready,
+  Error
+};
+
 const initialPerformanceInfo: PerformanceInfo = {
-  loading: true,
+  status: ClusterStatsStatus.Loading,
   avgTps: 0,
   historyMaxTps: 0,
   perfHistory: {
@@ -32,7 +38,7 @@ const initialPerformanceInfo: PerformanceInfo = {
 };
 
 const initialDashboardInfo: DashboardInfo = {
-  loading: true,
+  status: ClusterStatsStatus.Loading,
   avgBlockTime_1h: 0,
   avgBlockTime_1min: 0,
   epochInfo: {
@@ -49,12 +55,12 @@ const SetActiveContext = React.createContext<
   { setActive: SetActive } | undefined
 >(undefined);
 
-type DashboardState = { info: DashboardInfo | undefined };
+type DashboardState = { info: DashboardInfo };
 const DashboardContext = React.createContext<DashboardState | undefined>(
   undefined
 );
 
-type PerformanceState = { info: PerformanceInfo | undefined };
+type PerformanceState = { info: PerformanceInfo  };
 const PerformanceContext = React.createContext<PerformanceState | undefined>(
   undefined
 );
