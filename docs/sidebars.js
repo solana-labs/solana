@@ -183,7 +183,7 @@ module.exports = {
       "implemented-proposals/rent",
       "implemented-proposals/repair-service",
       "implemented-proposals/rpc-transaction-history",
-      "implemented-proposals/secp256k1_instruction,
+      "implemented-proposals/secp256k1_instruction",
       "implemented-proposals/snapshot-verification",
       "implemented-proposals/staking-rewards",
       "implemented-proposals/testing-programs",
