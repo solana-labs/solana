@@ -58,6 +58,7 @@ module.exports = {
     ],
     "Developing": [
       "apps",
+      "programming-faq"
       "apps/rent",
       "apps/hello-world",
       "apps/break",
