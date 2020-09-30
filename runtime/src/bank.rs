@@ -1154,7 +1154,7 @@ impl Bank {
             .fetch_add(validator_rewards_paid, Relaxed);
 
         let active_stake = if let Some(stake_history_entry) =
-            self.stakes.read().unwrap().history().get(&self.epoch)
+            self.stakes.read().unwrap().history().get(&prev_epoch)
         {
             stake_history_entry.effective
         } else {
@@ -1164,7 +1164,7 @@ impl Bank {
         datapoint_warn!(
             "epoch_rewards",
             ("slot", self.slot, i64),
-            ("epoch", self.epoch, i64),
+            ("epoch", prev_epoch, i64),
             ("validator_rate", validator_rate, f64),
             ("foundation_rate", foundation_rate, f64),
             ("epoch_duration_in_years", epoch_duration_in_years, f64),
