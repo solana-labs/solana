@@ -2379,8 +2379,9 @@ impl Bank {
     // We can't use collector_id (which is rotated according to stake-weighted leader schedule)
     // as an approximation to the ideal rent distribution to simplify and avoid this per-slot
     // computation for the distribution (time: N log N, space: N acct. stores; N = # of
-    // validators):
-    // - rent fee doesn't need to be incentivized for throughput unlike transaction fees
+    // validators).
+    // The reason is that rent fee doesn't need to be incentivized for throughput unlike transaction
+    // fees
     //
     // Ref: collect_fees
     #[allow(clippy::needless_collect)]
@@ -4547,12 +4548,9 @@ mod tests {
         const VALIDATOR_STAKE: u64 = 374_999_998_287_840;
 
         let validator_pubkey = Pubkey::new_rand();
-        let mut genesis_config = create_genesis_config_with_leader(
-            10,
-            &validator_pubkey,
-            VALIDATOR_STAKE,
-        )
-        .genesis_config;
+       let mut genesis_config =
+            create_genesis_config_with_leader(10, &validator_pubkey, VALIDATOR_STAKE)
+                .genesis_config;
 
         let bank = Bank::new(&genesis_config);
         let old_validator_lamports = bank.get_balance(&validator_pubkey);
