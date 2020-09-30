@@ -7,8 +7,8 @@ import nacl from "tweetnacl";
 import { sha256 } from "crypto-hash";
 
 const toHex = (arrayBuffer: ArrayBuffer | SharedArrayBuffer) => {
-  return Buffer.from(arrayBuffer).toString('hex');
-}
+  return Buffer.from(arrayBuffer).toString("hex");
+};
 
 const benchmark = (func: Function, iterations: number) => {
   const start = performance.now();
@@ -60,29 +60,32 @@ describe("Key generation", () => {
     expect(keypair.publicKey.length).toBe(32);
   });
 
-
   test("given same seed wasm should generate same private and public key", async () => {
     const keypair = ed25519.keypair.fromSeed(
       Uint8Array.from(Array(32).fill(8))
     );
 
-    const privateKey = '08080808080808080808080808080808080808080808080808080808080808081398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca';
-    const publicKey = '1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca';
+    const privateKey =
+      "08080808080808080808080808080808080808080808080808080808080808081398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca";
+    const publicKey =
+      "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca";
 
     expect(toHex(keypair.secretKey)).toBe(privateKey);
-    expect(toHex(keypair.publicKey)).toBe(publicKey)
+    expect(toHex(keypair.publicKey)).toBe(publicKey);
   });
 
   test("given same seed wasm should generate same private and public key", async () => {
-    const privateKey = '08080808080808080808080808080808080808080808080808080808080808081398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca';
+    const privateKey =
+      "08080808080808080808080808080808080808080808080808080808080808081398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca";
     const keypair = ed25519.keypair.fromSecretKey(
-      Uint8Array.from(Buffer.from(privateKey, 'hex'))
+      Uint8Array.from(Buffer.from(privateKey, "hex"))
     );
 
-    const publicKey = '1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca';
+    const publicKey =
+      "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca";
 
     expect(toHex(keypair.secretKey)).toBe(privateKey);
-    expect(toHex(keypair.publicKey)).toBe(publicKey)
+    expect(toHex(keypair.publicKey)).toBe(publicKey);
   });
 });
 
@@ -128,7 +131,7 @@ describe("WASM implementation of ED25519 should be backwards compatible with twe
   });
 
   test("sha256 should return the same result as crypto-hash", async () => {
-    const data = Uint8Array.from(Array(32).fill(8))
+    const data = Uint8Array.from(Array(32).fill(8));
     const expected = await sha256(data);
     expect(hasher.sha256(data)).toBe(expected);
   });
