@@ -271,6 +271,17 @@ impl RpcClient {
         )
     }
 
+    pub fn get_confirmed_blocks_with_limit(
+        &self,
+        start_slot: Slot,
+        limit: usize,
+    ) -> ClientResult<Vec<Slot>> {
+        self.send(
+            RpcRequest::GetConfirmedBlocksWithLimit,
+            json!([start_slot, limit]),
+        )
+    }
+
     pub fn get_confirmed_signatures_for_address(
         &self,
         address: &Pubkey,
