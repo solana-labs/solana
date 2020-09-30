@@ -60,6 +60,7 @@ message CompiledInstruction {
 message Reward {
     string pubkey = 1;
     int64 lamports = 2;
+    uint64 post_balance = 3;
 }
 
 message UnixTimestamp {

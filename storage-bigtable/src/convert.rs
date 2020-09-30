@@ -23,6 +23,7 @@ impl From<Reward> for generated::Reward {
         Self {
             pubkey: reward.pubkey,
             lamports: reward.lamports,
+            post_balance: reward.post_balance,
         }
     }
 }
@@ -32,6 +33,7 @@ impl From<generated::Reward> for Reward {
         Self {
             pubkey: reward.pubkey,
             lamports: reward.lamports,
+            post_balance: reward.post_balance,
         }
     }
 }
