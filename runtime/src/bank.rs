@@ -61,7 +61,7 @@ use solana_sdk::{
     system_transaction,
     sysvar::{self, Sysvar},
     timing::years_as_slots,
-    transaction::{Result, Transaction, TransactionError},
+    transaction::{self, Result, Transaction, TransactionError},
 };
 use solana_stake_program::stake_state::{self, Delegation, PointValue};
 use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteState};
@@ -1821,8 +1821,8 @@ impl Bank {
     }
 
     pub fn check_tx_durable_nonce(&self, tx: &Transaction) -> Option<(Pubkey, Account)> {
-        nonce_utils::transaction_uses_durable_nonce(&tx)
-            .and_then(|nonce_ix| nonce_utils::get_nonce_pubkey_from_instruction(&nonce_ix, &tx))
+        transaction::uses_durable_nonce(&tx)
+            .and_then(|nonce_ix| transaction::get_nonce_pubkey_from_instruction(&nonce_ix, &tx))
             .and_then(|nonce_pubkey| {
                 self.get_account(&nonce_pubkey)
                     .map(|acc| (*nonce_pubkey, acc))
