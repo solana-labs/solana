@@ -8,11 +8,10 @@ use solana_sdk::{
     transaction::{Transaction, TransactionError},
 };
 use solana_transaction_status::{
-    ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature,
-    InnerInstructions, Rewards, TransactionStatus, TransactionStatusMeta,
-    TransactionWithStatusMeta,
+    ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Rewards,
+    TransactionStatus, TransactionStatusMeta, TransactionWithStatusMeta,
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, convert::TryInto};
 use thiserror::Error;
 
 #[macro_use]
@@ -21,7 +20,10 @@ extern crate serde_derive;
 mod access_token;
 mod bigtable;
 mod compression;
+mod convert;
 mod root_ca_certificate;
+
+use convert::generated;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -162,7 +164,6 @@ struct StoredConfirmedBlockTransactionStatusMeta {
     fee: u64,
     pre_balances: Vec<u64>,
     post_balances: Vec<u64>,
-    inner_instructions: Option<Vec<InnerInstructions>>,
 }
 
 impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
@@ -172,7 +173,6 @@ impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
-            inner_instructions,
         } = value;
         let status = match &err {
             None => Ok(()),
@@ -183,7 +183,7 @@ impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
-            inner_instructions,
+            inner_instructions: None,
         }
     }
 }
@@ -195,7 +195,6 @@ impl From<TransactionStatusMeta> for StoredConfirmedBlockTransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
-            inner_instructions,
             ..
         } = value;
         Self {
@@ -203,7 +202,6 @@ impl From<TransactionStatusMeta> for StoredConfirmedBlockTransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
-            inner_instructions,
         }
     }
 }
@@ -279,10 +277,18 @@ impl LedgerStorage {
     /// Fetch the confirmed block from the desired slot
     pub async fn get_confirmed_block(&self, slot: Slot) -> Result<ConfirmedBlock> {
         let mut bigtable = self.connection.client();
-        let block = bigtable
-            .get_bincode_cell::<StoredConfirmedBlock>("blocks", slot_to_key(slot))
+        let block_cell_data = bigtable
+            .get_protobuf_or_bincode_cell::<StoredConfirmedBlock, generated::ConfirmedBlock>(
+                "blocks",
+                slot_to_key(slot),
+            )
             .await?;
-        Ok(block.into())
+        Ok(match block_cell_data {
+            bigtable::CellData::Bincode(block) => block.into(),
+            bigtable::CellData::Protobuf(block) => block.try_into().map_err(|_err| {
+                bigtable::Error::ObjectCorrupt(format!("blocks/{}", slot_to_key(slot)))
+            })?,
+        })
     }
 
     pub async fn get_signature_status(&self, signature: &Signature) -> Result<TransactionStatus> {
@@ -405,7 +411,7 @@ impl LedgerStorage {
                 ))
             })?;
             let mut cell_data: Vec<TransactionByAddrInfo> =
-                bigtable::deserialize_cell_data(&data, "tx-by-addr", row_key)?;
+                bigtable::deserialize_bincode_cell_data(&data, "tx-by-addr", row_key)?;
             cell_data.reverse();
             for tx_by_addr_info in cell_data.into_iter() {
                 // Filter out records before `before_transaction_index`
@@ -511,7 +517,7 @@ impl LedgerStorage {
         let blocks_cells = [(slot_to_key(slot), confirmed_block.into())];
         bytes_written += self
             .connection
-            .put_bincode_cells_with_retry::<StoredConfirmedBlock>("blocks", &blocks_cells)
+            .put_protobuf_cells_with_retry::<generated::ConfirmedBlock>("blocks", &blocks_cells)
             .await?;
         info!(
             "uploaded block for slot {}: {} transactions, {} bytes",

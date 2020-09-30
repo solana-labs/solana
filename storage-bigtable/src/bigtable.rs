@@ -1,8 +1,10 @@
 // Primitives for reading/writing BigTable tables
 
-use crate::access_token::{AccessToken, Scope};
-use crate::compression::{compress_best, decompress};
-use crate::root_ca_certificate;
+use crate::{
+    access_token::{AccessToken, Scope},
+    compression::{compress_best, decompress},
+    root_ca_certificate,
+};
 use log::*;
 use thiserror::Error;
 use tonic::{metadata::MetadataValue, transport::ClientTlsConfig, Request};
@@ -26,10 +28,14 @@ mod google {
 use google::bigtable::v2::*;
 
 pub type RowKey = String;
-pub type CellName = String;
-pub type CellValue = Vec<u8>;
 pub type RowData = Vec<(CellName, CellValue)>;
 pub type RowDataSlice<'a> = &'a [(CellName, CellValue)];
+pub type CellName = String;
+pub type CellValue = Vec<u8>;
+pub enum CellData<B, P> {
+    Bincode(B),
+    Protobuf(P),
+}
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -192,6 +198,23 @@ impl BigTableConnection {
         (|| async {
             let mut client = self.client();
             Ok(client.put_bincode_cells(table, cells).await?)
+        })
+        .retry(ExponentialBackoff::default())
+        .await
+    }
+
+    pub async fn put_protobuf_cells_with_retry<T>(
+        &self,
+        table: &str,
+        cells: &[(RowKey, T)],
+    ) -> Result<usize>
+    where
+        T: prost::Message,
+    {
+        use backoff::{future::FutureOperation as _, ExponentialBackoff};
+        (|| async {
+            let mut client = self.client();
+            Ok(client.put_protobuf_cells(table, cells).await?)
         })
         .retry(ExponentialBackoff::default())
         .await
@@ -484,7 +507,20 @@ impl BigTable {
         T: serde::de::DeserializeOwned,
     {
         let row_data = self.get_single_row_data(table, key.clone()).await?;
-        deserialize_cell_data(&row_data, table, key.to_string())
+        deserialize_bincode_cell_data(&row_data, table, key.to_string())
+    }
+
+    pub async fn get_protobuf_or_bincode_cell<B, P>(
+        &mut self,
+        table: &str,
+        key: RowKey,
+    ) -> Result<CellData<B, P>>
+    where
+        B: serde::de::DeserializeOwned,
+        P: prost::Message + Default,
+    {
+        let row_data = self.get_single_row_data(table, key.clone()).await?;
+        deserialize_protobuf_or_bincode_cell_data(&row_data, table, key)
     }
 
     pub async fn put_bincode_cells<T>(
@@ -506,9 +542,74 @@ impl BigTable {
         self.put_row_data(table, "x", &new_row_data).await?;
         Ok(bytes_written)
     }
+
+    pub async fn put_protobuf_cells<T>(
+        &mut self,
+        table: &str,
+        cells: &[(RowKey, T)],
+    ) -> Result<usize>
+    where
+        T: prost::Message,
+    {
+        let mut bytes_written = 0;
+        let mut new_row_data = vec![];
+        for (row_key, data) in cells {
+            let mut buf = Vec::with_capacity(data.encoded_len());
+            data.encode(&mut buf).unwrap();
+            let data = compress_best(&buf)?;
+            bytes_written += data.len();
+            new_row_data.push((row_key, vec![("proto".to_string(), data)]));
+        }
+
+        self.put_row_data(table, "x", &new_row_data).await?;
+        Ok(bytes_written)
+    }
 }
 
-pub(crate) fn deserialize_cell_data<T>(
+pub(crate) fn deserialize_protobuf_or_bincode_cell_data<B, P>(
+    row_data: RowDataSlice,
+    table: &str,
+    key: RowKey,
+) -> Result<CellData<B, P>>
+where
+    B: serde::de::DeserializeOwned,
+    P: prost::Message + Default,
+{
+    match deserialize_protobuf_cell_data(row_data, table, key.to_string()) {
+        Ok(result) => return Ok(CellData::Protobuf(result)),
+        Err(err) => match err {
+            Error::ObjectNotFound(_) => {}
+            _ => return Err(err),
+        },
+    }
+    match deserialize_bincode_cell_data(row_data, table, key) {
+        Ok(result) => Ok(CellData::Bincode(result)),
+        Err(err) => Err(err),
+    }
+}
+
+pub(crate) fn deserialize_protobuf_cell_data<T>(
+    row_data: RowDataSlice,
+    table: &str,
+    key: RowKey,
+) -> Result<T>
+where
+    T: prost::Message + Default,
+{
+    let value = &row_data
+        .iter()
+        .find(|(name, _)| name == "proto")
+        .ok_or_else(|| Error::ObjectNotFound(format!("{}/{}", table, key)))?
+        .1;
+
+    let data = decompress(&value)?;
+    T::decode(&data[..]).map_err(|err| {
+        warn!("Failed to deserialize {}/{}: {}", table, key, err);
+        Error::ObjectCorrupt(format!("{}/{}", table, key))
+    })
+}
+
+pub(crate) fn deserialize_bincode_cell_data<T>(
     row_data: RowDataSlice,
     table: &str,
     key: RowKey,
@@ -527,4 +628,112 @@ where
         warn!("Failed to deserialize {}/{}: {}", table, key, err);
         Error::ObjectCorrupt(format!("{}/{}", table, key))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{convert::generated, StoredConfirmedBlock};
+    use prost::Message;
+    use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Keypair, system_transaction};
+    use solana_transaction_status::{
+        ConfirmedBlock, TransactionStatusMeta, TransactionWithStatusMeta,
+    };
+    use std::convert::TryInto;
+
+    #[test]
+    fn test_deserialize_protobuf_or_bincode_cell_data() {
+        let from = Keypair::new();
+        let recipient = Pubkey::new_rand();
+        let transaction = system_transaction::transfer(&from, &recipient, 42, Hash::default());
+        let with_meta = TransactionWithStatusMeta {
+            transaction,
+            meta: Some(TransactionStatusMeta {
+                status: Ok(()),
+                fee: 1,
+                pre_balances: vec![43, 0, 1],
+                post_balances: vec![0, 42, 1],
+                inner_instructions: Some(vec![]),
+            }),
+        };
+        let block = ConfirmedBlock {
+            transactions: vec![with_meta],
+            parent_slot: 1,
+            blockhash: Hash::default().to_string(),
+            previous_blockhash: Hash::default().to_string(),
+            rewards: vec![],
+            block_time: Some(1_234_567_890),
+        };
+        let bincode_block = compress_best(
+            &bincode::serialize::<StoredConfirmedBlock>(&block.clone().into()).unwrap(),
+        )
+        .unwrap();
+
+        let protobuf_block = generated::ConfirmedBlock::from(block.clone());
+        let mut buf = Vec::with_capacity(protobuf_block.encoded_len());
+        protobuf_block.encode(&mut buf).unwrap();
+        let protobuf_block = compress_best(&buf).unwrap();
+
+        let deserialized = deserialize_protobuf_or_bincode_cell_data::<
+            StoredConfirmedBlock,
+            generated::ConfirmedBlock,
+        >(
+            &[("proto".to_string(), protobuf_block.clone())],
+            "",
+            "".to_string(),
+        )
+        .unwrap();
+        if let CellData::Protobuf(protobuf_block) = deserialized {
+            assert_eq!(block, protobuf_block.try_into().unwrap());
+        } else {
+            panic!("deserialization should produce CellData::Protobuf");
+        }
+
+        let deserialized = deserialize_protobuf_or_bincode_cell_data::<
+            StoredConfirmedBlock,
+            generated::ConfirmedBlock,
+        >(
+            &[("bin".to_string(), bincode_block.clone())],
+            "",
+            "".to_string(),
+        )
+        .unwrap();
+        if let CellData::Bincode(bincode_block) = deserialized {
+            let mut block = block;
+            if let Some(meta) = &mut block.transactions[0].meta {
+                meta.inner_instructions = None; // Legacy bincode implementation does not suport inner_instructions
+            }
+            assert_eq!(block, bincode_block.into());
+        } else {
+            panic!("deserialization should produce CellData::Bincode");
+        }
+
+        let result = deserialize_protobuf_or_bincode_cell_data::<
+            StoredConfirmedBlock,
+            generated::ConfirmedBlock,
+        >(&[("proto".to_string(), bincode_block)], "", "".to_string());
+        assert!(result.is_err());
+
+        let result = deserialize_protobuf_or_bincode_cell_data::<
+            StoredConfirmedBlock,
+            generated::ConfirmedBlock,
+        >(
+            &[("proto".to_string(), vec![1, 2, 3, 4])],
+            "",
+            "".to_string(),
+        );
+        assert!(result.is_err());
+
+        let result = deserialize_protobuf_or_bincode_cell_data::<
+            StoredConfirmedBlock,
+            generated::ConfirmedBlock,
+        >(&[("bin".to_string(), protobuf_block)], "", "".to_string());
+        assert!(result.is_err());
+
+        let result = deserialize_protobuf_or_bincode_cell_data::<
+            StoredConfirmedBlock,
+            generated::ConfirmedBlock,
+        >(&[("bin".to_string(), vec![1, 2, 3, 4])], "", "".to_string());
+        assert!(result.is_err());
+    }
 }

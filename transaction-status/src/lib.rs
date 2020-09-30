@@ -227,7 +227,7 @@ pub struct ConfirmedTransactionStatusWithSignature {
     pub memo: Option<String>,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Reward {
     pub pubkey: String,
     pub lamports: i64,
@@ -235,7 +235,7 @@ pub struct Reward {
 
 pub type Rewards = Vec<Reward>;
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfirmedBlock {
     pub previous_blockhash: String,
