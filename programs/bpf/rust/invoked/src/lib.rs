@@ -12,6 +12,7 @@ use solana_sdk::{
     program::invoke, program_error::ProgramError, pubkey::Pubkey,
 };
 
+#[cfg(feature = "program")]
 entrypoint!(process_instruction);
 #[allow(clippy::cognitive_complexity)]
 fn process_instruction(
