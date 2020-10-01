@@ -42,7 +42,7 @@ use solana_sdk::{
     commitment_config::CommitmentConfig,
     decode_error::DecodeError,
     hash::Hash,
-    instruction::InstructionError,
+    instruction::{Instruction, InstructionError},
     loader_instruction,
     message::Message,
     pubkey::{Pubkey, MAX_SEED_LEN},
@@ -1131,24 +1131,62 @@ fn process_deploy(
         bpf_loader::id()
     };
 
+    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(program_data.len())?;
+    let signers = [config.signers[0], program_id];
+
+    // Check program account to see if partial initialization has occurred
+    let initial_instructions = if let Some(account) = rpc_client
+        .get_account_with_commitment(&program_id.pubkey(), config.commitment)?
+        .value
+    {
+        let mut instructions: Vec<Instruction> = vec![];
+        if account.executable {
+            return Err(CliError::DynamicProgramError(
+                "Program account is already executable".to_string(),
+            ));
+        }
+        if account.data.is_empty() {
+            instructions.push(system_instruction::allocate(
+                &program_id.pubkey(),
+                program_data.len() as u64,
+            ));
+        }
+        if account.owner != loader_id {
+            instructions.push(system_instruction::assign(&program_id.pubkey(), &loader_id));
+        }
+        if account.lamports < minimum_balance {
+            instructions.push(system_instruction::transfer(
+                &config.signers[0].pubkey(),
+                &program_id.pubkey(),
+                minimum_balance - account.lamports,
+            ));
+        }
+        instructions
+    } else {
+        vec![system_instruction::create_account(
+            &config.signers[0].pubkey(),
+            &program_id.pubkey(),
+            minimum_balance.max(1),
+            program_data.len() as u64,
+            &loader_id,
+        )]
+    };
+    let initial_message = if initial_instructions.len() > 0 {
+        Some(Message::new(
+            &initial_instructions,
+            Some(&config.signers[0].pubkey()),
+        ))
+    } else {
+        None
+    };
+
     // Build transactions to calculate fees
     let mut messages: Vec<&Message> = Vec::new();
-    let (blockhash, fee_calculator, _) = rpc_client
-        .get_recent_blockhash_with_commitment(config.commitment)?
-        .value;
-    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(program_data.len())?;
-    let ix = system_instruction::create_account(
-        &config.signers[0].pubkey(),
-        &program_id.pubkey(),
-        minimum_balance.max(1),
-        program_data.len() as u64,
-        &loader_id,
-    );
-    let message = Message::new(&[ix], Some(&config.signers[0].pubkey()));
-    let mut create_account_tx = Transaction::new_unsigned(message);
-    let signers = [config.signers[0], program_id];
-    create_account_tx.try_sign(&signers, blockhash)?;
-    messages.push(&create_account_tx.message);
+
+    if let Some(message) = &initial_message {
+        messages.push(message);
+    }
+
     let mut write_messages = vec![];
     for (chunk, i) in program_data.chunks(DATA_CHUNK_SIZE).zip(0..) {
         let instruction = loader_instruction::write(
@@ -1170,6 +1208,10 @@ fn process_deploy(
     let finalize_message = Message::new(&[instruction], Some(&signers[0].pubkey()));
     messages.push(&finalize_message);
 
+    let (blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
+
     check_account_for_multiple_fees_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
@@ -1178,15 +1220,25 @@ fn process_deploy(
         config.commitment,
     )?;
 
-    trace!("Creating program account");
-    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-        &create_account_tx,
-        config.commitment,
-        config.send_transaction_config,
-    );
-    log_instruction_custom_error::<SystemError>(result, &config).map_err(|_| {
-        CliError::DynamicProgramError("Program account allocation failed".to_string())
-    })?;
+    if let Some(message) = initial_message {
+        trace!("Creating or modifying program account");
+        let num_required_signatures = message.header.num_required_signatures;
+
+        let mut initial_transaction = Transaction::new_unsigned(message);
+        if num_required_signatures == 2 {
+            initial_transaction.try_sign(&signers, blockhash)?;
+        } else {
+            initial_transaction.try_sign(&[signers[0]], blockhash)?;
+        }
+        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+            &initial_transaction,
+            config.commitment,
+            config.send_transaction_config,
+        );
+        log_instruction_custom_error::<SystemError>(result, &config).map_err(|_| {
+            CliError::DynamicProgramError("Program account allocation failed".to_string())
+        })?;
+    }
 
     let (blockhash, _, _) = rpc_client
         .get_recent_blockhash_with_commitment(config.commitment)?
