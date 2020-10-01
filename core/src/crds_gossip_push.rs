@@ -32,17 +32,34 @@ pub const CRDS_GOSSIP_PUSH_FANOUT: usize = 6;
 // With a fanout of 6, a 1000 node cluster should only take ~4 hops to converge.
 // However since pushes are stake weighed, some trailing nodes
 // might need more time to receive values. 30 seconds should be plenty.
-pub const CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS: u64 = 30000;
+pub const CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS: u64 = 30_000;
 pub const CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS: u64 = 500;
 pub const CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT: f64 = 0.15;
 pub const CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES: usize = 2;
+
+pub const CRDS_GOSSIP_MAX_TIMEOUT: u64 = 600_000; // 10 minutes
+
+#[derive(Clone)]
+struct FilterAge {
+    last_contact_ts: u64,
+    next_contact_ts: u64,
+}
+
+impl FilterAge {
+    fn new(last_contact_ts: u64) -> Self {
+        Self {
+            last_contact_ts,
+            next_contact_ts: 10,
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct CrdsGossipPush {
     /// max bytes per message
     pub max_bytes: usize,
     /// active set of validators for push
-    active_set: IndexMap<Pubkey, Bloom<Pubkey>>,
+    active_set: IndexMap<Pubkey, (FilterAge, Bloom<Pubkey>)>,
     /// push message queue
     push_messages: HashMap<CrdsValueLabel, Hash>,
     /// Cache that tracks which validators a message was received from
@@ -184,6 +201,12 @@ impl CrdsGossipPush {
             .or_insert_with(HashMap::new);
         received_set.entry(*from).or_insert((false, 0)).1 = now;
 
+        self.active_set
+            .entry(origin)
+            .or_insert((FilterAge::new(now), Bloom::default()))
+            .0
+            .last_contact_ts = now;
+
         let old = crds.insert_versioned(new_value);
         if old.is_err() {
             self.num_old += 1;
@@ -237,6 +260,7 @@ impl CrdsGossipPush {
             values.len(),
             self.active_set.len()
         );
+        let mut ages_to_update = HashSet::new();
         for v in values {
             //use a consistent index for the same origin so
             //the active set learns the MST for that origin
@@ -244,14 +268,27 @@ impl CrdsGossipPush {
             let max = self.push_fanout.min(self.active_set.len());
             for i in start..(start + max) {
                 let ix = i % self.active_set.len();
-                if let Some((p, filter)) = self.active_set.get_index(ix) {
-                    if !filter.contains(&v.label().pubkey()) {
-                        trace!("new_push_messages insert {} {:?}", *p, v);
-                        push_messages.entry(*p).or_default().push(v.clone());
-                        self.num_pushes += 1;
+                if let Some((p, (filter_age, filter))) = self.active_set.get_index(ix) {
+                    if now > (filter_age.last_contact_ts + filter_age.next_contact_ts) {
+                        if !filter.contains(&v.label().pubkey()) {
+                            ages_to_update.insert(ix);
+                            trace!("new_push_messages insert {} {:?}", *p, v);
+                            push_messages.entry(*p).or_default().push(v.clone());
+                            self.num_pushes += 1;
+                        }
                     }
                 }
                 self.push_messages.remove(&v.label());
+            }
+        }
+        for age_to_update_index in ages_to_update {
+            if let Some((_p, filter_and_bloom)) = self.active_set.get_index_mut(age_to_update_index)
+            {
+                filter_and_bloom.0.next_contact_ts *= 2;
+                filter_and_bloom.0.next_contact_ts = filter_and_bloom
+                    .0
+                    .next_contact_ts
+                    .max(CRDS_GOSSIP_MAX_TIMEOUT);
             }
         }
         push_messages
@@ -259,12 +296,14 @@ impl CrdsGossipPush {
 
     /// add the `from` to the peer's filter of nodes
     pub fn process_prune_msg(&mut self, self_pubkey: &Pubkey, peer: &Pubkey, origins: &[Pubkey]) {
+        let now = timestamp();
         for origin in origins {
             if origin == self_pubkey {
                 continue;
             }
-            if let Some(p) = self.active_set.get_mut(peer) {
-                p.add(origin)
+            if let Some((filter_age, peer_bloom_set)) = self.active_set.get_mut(peer) {
+                filter_age.last_contact_ts = now;
+                peer_bloom_set.add(origin)
             }
         }
     }
@@ -332,8 +371,9 @@ impl CrdsGossipPush {
         for k in &keys[..num] {
             self.active_set.swap_remove(k);
         }
+        let now = timestamp();
         for (k, v) in new_items {
-            self.active_set.insert(k, v);
+            self.active_set.insert(k, (FilterAge::new(now), v));
         }
     }
 
