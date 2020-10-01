@@ -1,6 +1,6 @@
 use crate::{
-    checks::*, cluster_query::*, feature::*, nonce::*, spend_utils::*, stake::*, validator_info::*,
-    vote::*,
+    checks::*, cluster_query::*, feature::*, inflation::*, nonce::*, spend_utils::*, stake::*,
+    validator_info::*, vote::*,
 };
 use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
@@ -93,6 +93,7 @@ pub enum CliCommand {
         program_id: Pubkey,
     },
     Feature(FeatureCliCommand),
+    Inflation(InflationCliCommand),
     Fees,
     FirstAvailableBlock,
     GetBlock {
@@ -557,6 +558,9 @@ pub fn parse_command(
         ("epoch", Some(matches)) => parse_get_epoch(matches),
         ("slot", Some(matches)) => parse_get_slot(matches),
         ("block-height", Some(matches)) => parse_get_block_height(matches),
+        ("inflation", Some(matches)) => {
+            parse_inflation_subcommand(matches, default_signer, wallet_manager)
+        }
         ("largest-accounts", Some(matches)) => parse_largest_accounts(matches),
         ("supply", Some(matches)) => parse_supply(matches),
         ("total-supply", Some(matches)) => parse_total_supply(matches),
@@ -1365,6 +1369,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             process_largest_accounts(&rpc_client, config, filter.clone())
         }
         CliCommand::GetTransactionCount => process_get_transaction_count(&rpc_client, config),
+        CliCommand::Inflation(inflation_subcommand) => {
+            process_inflation_subcommand(&rpc_client, config, inflation_subcommand)
+        }
         CliCommand::LeaderSchedule => process_leader_schedule(&rpc_client),
         CliCommand::LiveSlots => process_live_slots(&config.websocket_url),
         CliCommand::Ping {
@@ -1968,6 +1975,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         )
         .cluster_query_subcommands()
         .feature_subcommands()
+        .inflation_subcommands()
         .nonce_subcommands()
         .stake_subcommands()
         .subcommand(

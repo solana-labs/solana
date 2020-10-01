@@ -24,6 +24,7 @@ pub mod checks;
 pub mod cli;
 pub mod cluster_query;
 pub mod feature;
+pub mod inflation;
 pub mod nonce;
 pub mod spend_utils;
 pub mod stake;
