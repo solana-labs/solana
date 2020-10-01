@@ -67,7 +67,7 @@ use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteSta
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    convert::TryFrom,
+    convert::{TryFrom, TryInto},
     mem,
     ops::RangeInclusive,
     path::PathBuf,
@@ -1161,6 +1161,11 @@ impl Bank {
         // verify that we didn't pay any more than we expected to
         assert!(validator_rewards >= validator_rewards_paid);
 
+        info!(
+            "distributed inflation: {} (rounded from: {})",
+            validator_rewards_paid, validator_rewards
+        );
+
         self.capitalization
             .fetch_add(validator_rewards_paid, Relaxed);
 
@@ -1306,12 +1311,30 @@ impl Bank {
         self.update_recent_blockhashes_locked(&blockhash_queue);
     }
 
+    // Distribute collected transaction fees for this slot to collector_id (= current leader).
+    //
+    // Each validator is incentivized to process more transactions to earn more transaction fees.
+    // Transaction fees are rewarded for the computing resource utilization cost, directly
+    // proportional to their actual processing power.
+    //
+    // collector_id is rotated according to stake-weighted leader schedule. So the opportunity of
+    // earning transaction fees are fairly distributed by stake. And missing the opportunity
+    // (not producing a block as a leader) earns nothing. So, being online is incentivized as a
+    // form of transaction fees as well.
+    //
+    // On the other hand, rent fees are distributed under slightly different philosophy, while
+    // still being stake-weighted.
+    // Ref: distribute_rent_to_validators
     fn collect_fees(&self) {
         let collector_fees = self.collector_fees.load(Relaxed) as u64;
 
         if collector_fees != 0 {
             let (unburned, burned) = self.fee_rate_governor.burn(collector_fees);
             // burn a portion of fees
+            debug!(
+                "distributed fee: {} (rounded from: {}, burned: {})",
+                unburned, collector_fees, burned
+            );
             self.deposit(&self.collector_id, unburned);
             self.capitalization.fetch_sub(burned, Relaxed);
         }
@@ -2361,14 +2384,33 @@ impl Bank {
         }
     }
 
+    // Distribute collected rent fees for this slot to staked validators (excluding stakers)
+    // according to stake.
+    //
+    // The nature of rent fee is the cost of doing business, every validator has to hold (or have
+    // access to) the same list of accounts, so we pay according to stake, which is a rough proxy for
+    // value to the network.
+    //
+    // Currently, rent distribution doesn't consider given validator's uptime at all (this might
+    // change). That's because rent should be rewarded for the storage resource utilization cost.
+    // It's treated differently from transaction fees, which is for the computing resource
+    // utilization cost.
+    //
+    // We can't use collector_id (which is rotated according to stake-weighted leader schedule)
+    // as an approximation to the ideal rent distribution to simplify and avoid this per-slot
+    // computation for the distribution (time: N log N, space: N acct. stores; N = # of
+    // validators).
+    // The reason is that rent fee doesn't need to be incentivized for throughput unlike transaction
+    // fees
+    //
+    // Ref: collect_fees
     #[allow(clippy::needless_collect)]
     fn distribute_rent_to_validators(
         &self,
         vote_account_hashmap: &HashMap<Pubkey, (u64, Account)>,
         rent_to_be_distributed: u64,
-    ) -> u64 {
+    ) {
         let mut total_staked = 0;
-        let mut rent_distributed_in_initial_round = 0;
 
         // Collect the stake associated with each validator.
         // Note that a validator may be present in this vector multiple times if it happens to have
@@ -2387,6 +2429,16 @@ impl Bank {
             })
             .collect::<Vec<(Pubkey, u64)>>();
 
+        #[cfg(test)]
+        if validator_stakes.is_empty() {
+            // some tests bank.freezes() with bad staking state
+            self.capitalization
+                .fetch_sub(rent_to_be_distributed, Relaxed);
+            return;
+        }
+        #[cfg(not(test))]
+        assert!(!validator_stakes.is_empty());
+
         // Sort first by stake and then by validator identity pubkey for determinism
         validator_stakes.sort_by(|(pubkey1, staked1), (pubkey2, staked2)| {
             match staked2.cmp(staked1) {
@@ -2395,11 +2447,19 @@ impl Bank {
             }
         });
 
+        let enforce_fix = self.no_overflow_rent_distribution_enabled();
+
+        let mut rent_distributed_in_initial_round = 0;
         let validator_rent_shares = validator_stakes
             .into_iter()
             .map(|(pubkey, staked)| {
-                let rent_share =
-                    (((staked * rent_to_be_distributed) as f64) / (total_staked as f64)) as u64;
+                let rent_share = if !enforce_fix {
+                    (((staked * rent_to_be_distributed) as f64) / (total_staked as f64)) as u64
+                } else {
+                    (((staked as u128) * (rent_to_be_distributed as u128)) / (total_staked as u128))
+                        .try_into()
+                        .unwrap()
+                };
                 rent_distributed_in_initial_round += rent_share;
                 (pubkey, rent_share)
             })
@@ -2422,7 +2482,16 @@ impl Bank {
                 account.lamports += rent_to_be_paid;
                 self.store_account(&pubkey, &account);
             });
-        leftover_lamports
+
+        if enforce_fix {
+            assert_eq!(leftover_lamports, 0);
+        } else if leftover_lamports != 0 {
+            warn!(
+                "There was leftover from rent distribution: {}",
+                leftover_lamports
+            );
+            self.capitalization.fetch_sub(leftover_lamports, Relaxed);
+        }
     }
 
     fn distribute_rent(&self) {
@@ -2433,18 +2502,17 @@ impl Bank {
             .rent
             .calculate_burn(total_rent_collected);
 
+        debug!(
+            "distributed rent: {} (rounded from: {}, burned: {})",
+            rent_to_be_distributed, total_rent_collected, burned_portion
+        );
         self.capitalization.fetch_sub(burned_portion, Relaxed);
 
         if rent_to_be_distributed == 0 {
             return;
         }
 
-        let leftover =
-            self.distribute_rent_to_validators(&self.vote_accounts(), rent_to_be_distributed);
-        if leftover != 0 {
-            warn!("There was leftover from rent distribution: {}", leftover);
-            self.capitalization.fetch_sub(leftover, Relaxed);
-        }
+        self.distribute_rent_to_validators(&self.vote_accounts(), rent_to_be_distributed);
     }
 
     fn collect_rent(
@@ -3611,6 +3679,11 @@ impl Bank {
             .is_active(&feature_set::secp256k1_program_enabled::id())
     }
 
+    pub fn no_overflow_rent_distribution_enabled(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::no_overflow_rent_distribution::id())
+    }
+
     // This is called from snapshot restore AND for each epoch boundary
     // The entire code path herein must be idempotent
     fn apply_feature_activations(&mut self, init_finish_or_warp: bool) {
@@ -3993,6 +4066,8 @@ mod tests {
 
     #[test]
     fn test_credit_debit_rent_no_side_effect_on_hash() {
+        solana_logger::setup();
+
         let (mut genesis_config, _mint_keypair) = create_genesis_config(10);
         let keypair1: Keypair = Keypair::new();
         let keypair2: Keypair = Keypair::new();
@@ -4482,6 +4557,50 @@ mod tests {
         );
         bank.freeze();
         assert!(bank.calculate_and_verify_capitalization());
+    }
+
+    #[test]
+    fn test_distribute_rent_to_validators_overflow() {
+        solana_logger::setup();
+
+        // These values are taken from the real cluster (testnet)
+        const RENT_TO_BE_DISTRIBUTED: u64 = 120_525;
+        const VALIDATOR_STAKE: u64 = 374_999_998_287_840;
+
+        let validator_pubkey = Pubkey::new_rand();
+        let mut genesis_config =
+            create_genesis_config_with_leader(10, &validator_pubkey, VALIDATOR_STAKE)
+                .genesis_config;
+
+        let bank = Bank::new(&genesis_config);
+        let old_validator_lamports = bank.get_balance(&validator_pubkey);
+        bank.distribute_rent_to_validators(&bank.vote_accounts(), RENT_TO_BE_DISTRIBUTED);
+        let new_validator_lamports = bank.get_balance(&validator_pubkey);
+        assert_eq!(
+            new_validator_lamports,
+            old_validator_lamports + RENT_TO_BE_DISTRIBUTED
+        );
+
+        genesis_config
+            .accounts
+            .remove(&feature_set::no_overflow_rent_distribution::id())
+            .unwrap();
+        let bank = std::panic::AssertUnwindSafe(Bank::new(&genesis_config));
+        let old_validator_lamports = bank.get_balance(&validator_pubkey);
+        let new_validator_lamports = std::panic::catch_unwind(|| {
+            bank.distribute_rent_to_validators(&bank.vote_accounts(), RENT_TO_BE_DISTRIBUTED);
+            bank.get_balance(&validator_pubkey)
+        });
+
+        if let Ok(new_validator_lamports) = new_validator_lamports {
+            info!("asserting overflowing incorrect rent distribution");
+            assert_ne!(
+                new_validator_lamports,
+                old_validator_lamports + RENT_TO_BE_DISTRIBUTED
+            );
+        } else {
+            info!("NOT-asserting overflowing incorrect rent distribution");
+        }
     }
 
     #[test]
