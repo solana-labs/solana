@@ -1933,16 +1933,20 @@ impl ClusterInfo {
         let filtered_len = crds_values.len();
 
         let mut pull_stats = ProcessPullStats::default();
-        let (filtered_pulls, filtered_pulls_expired_timeout) = self
+        let (filtered_pulls, filtered_pulls_expired_timeout, failed_inserts) = self
             .time_gossip_read_lock("filter_pull_resp", &self.stats.filter_pull_response)
             .filter_pull_responses(timeouts, crds_values, timestamp(), &mut pull_stats);
 
-        if !filtered_pulls.is_empty() || !filtered_pulls_expired_timeout.is_empty() {
+        if !filtered_pulls.is_empty()
+            || !filtered_pulls_expired_timeout.is_empty()
+            || !failed_inserts.is_empty()
+        {
             self.time_gossip_write_lock("process_pull_resp", &self.stats.process_pull_response)
                 .process_pull_responses(
                     from,
                     filtered_pulls,
                     filtered_pulls_expired_timeout,
+                    failed_inserts,
                     timestamp(),
                     &mut pull_stats,
                 );
@@ -2156,9 +2160,13 @@ impl ClusterInfo {
 
     fn print_reset_stats(&self, last_print: &mut Instant) {
         if last_print.elapsed().as_millis() > 2000 {
-            let (table_size, purged_values_size) = {
+            let (table_size, purged_values_size, failed_inserts_size) = {
                 let r_gossip = self.gossip.read().unwrap();
-                (r_gossip.crds.table.len(), r_gossip.pull.purged_values.len())
+                (
+                    r_gossip.crds.table.len(),
+                    r_gossip.pull.purged_values.len(),
+                    r_gossip.pull.failed_inserts.len(),
+                )
             };
             datapoint_info!(
                 "cluster_info_stats",
@@ -2185,6 +2193,7 @@ impl ClusterInfo {
                 ),
                 ("table_size", table_size as i64, i64),
                 ("purged_values_size", purged_values_size as i64, i64),
+                ("failed_inserts_size", failed_inserts_size as i64, i64),
             );
             datapoint_info!(
                 "cluster_info_stats2",

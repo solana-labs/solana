@@ -105,19 +105,13 @@ impl Crds {
         &self,
         value: CrdsValue,
         local_timestamp: u64,
-    ) -> Option<VersionedCrdsValue> {
+    ) -> (bool, VersionedCrdsValue) {
         let new_value = self.new_versioned(local_timestamp, value);
         let label = new_value.value.label();
-        let would_insert = self
-            .table
-            .get(&label)
-            .map(|current| new_value > *current)
-            .unwrap_or(true);
-        if would_insert {
-            Some(new_value)
-        } else {
-            None
-        }
+        // New value is outdated and fails to insert, if it already exists in
+        // the table with a more recent wallclock.
+        let outdated = matches!(self.table.get(&label), Some(current) if new_value <= *current);
+        (!outdated, new_value)
     }
     /// insert the new value, returns the old value if insert succeeds
     pub fn insert_versioned(
