@@ -544,7 +544,7 @@ impl AccountsDB {
         &self,
         purges_in_root: Vec<Pubkey>,
         max_clean_root: Option<Slot>,
-    ) -> HashSet<Slot> {
+    ) -> (HashSet<Slot>, HashMap<AppendVecId, HashSet<usize>>) {
         // This number isn't carefully chosen; just guessed randomly such that
         // the hot loop will be the order of ~Xms.
         const INDEX_CLEAN_BULK_COUNT: usize = 4096;
@@ -566,11 +566,11 @@ impl AccountsDB {
         inc_new_counter_info!("clean-old-root-par-clean-ms", clean_rooted.as_ms() as usize);
 
         let mut measure = Measure::start("clean_old_root_reclaims");
-        let dead_slots = self.handle_reclaims(&reclaims, None, false);
+        let (dead_slots, removed_accounts) = self.handle_reclaims(&reclaims, None, false);
         measure.stop();
         debug!("{} {}", clean_rooted, measure);
         inc_new_counter_info!("clean-old-root-reclaim-ms", measure.as_ms() as usize);
-        dead_slots
+        (dead_slots, removed_accounts)
     }
 
     fn do_reset_uncleaned_roots(
@@ -713,11 +713,11 @@ impl AccountsDB {
         accounts_scan.stop();
 
         let mut clean_old_rooted = Measure::start("clean_old_roots");
-        let old_rooted_dead_slots = {
+        let (old_rooted_dead_slots, removed_accounts) = {
             if !purges_in_root.is_empty() {
                 self.clean_old_rooted_accounts(purges_in_root, max_clean_root)
             } else {
-                HashSet::new()
+                (HashSet::new(), HashMap::new())
             }
         };
         self.do_reset_uncleaned_roots(&mut candidates, max_clean_root);
@@ -732,7 +732,18 @@ impl AccountsDB {
             let mut ref_count_needs_update = false;
             account_infos.retain(|(slot, account_info)| {
                 if old_rooted_dead_slots.contains(slot) {
+                    // ref count is only updated when a slot is dead in
+                    // `clean_dead_slots()`
                     ref_count_needs_update = true;
+                    return false;
+                }
+                // Check if this update in `slot`to the account with `key` was reclaimed earlier by
+                // `clean_old_rooted_accounts()`
+                let was_reclaimed = removed_accounts
+                    .get(&account_info.store_id)
+                    .map(|store_removed| store_removed.contains(&account_info.offset))
+                    .unwrap_or(false);
+                if was_reclaimed {
                     return false;
                 }
                 if let Some(store_count) = store_counts.get_mut(&account_info.store_id) {
@@ -845,12 +856,13 @@ impl AccountsDB {
         reclaims: SlotSlice<AccountInfo>,
         expected_single_dead_slot: Option<Slot>,
         no_dead_slot: bool,
-    ) -> HashSet<Slot> {
+    ) -> (HashSet<Slot>, HashMap<AppendVecId, HashSet<usize>>) {
         if reclaims.is_empty() {
-            return HashSet::new();
+            return (HashSet::new(), HashMap::new());
         }
 
-        let dead_slots = self.remove_dead_accounts(reclaims, expected_single_dead_slot);
+        let (dead_slots, removed_accounts) =
+            self.remove_dead_accounts(reclaims, expected_single_dead_slot);
         if no_dead_slot {
             assert!(dead_slots.is_empty());
         } else if let Some(expected_single_dead_slot) = expected_single_dead_slot {
@@ -862,7 +874,7 @@ impl AccountsDB {
         if !dead_slots.is_empty() {
             self.process_dead_slots(&dead_slots);
         }
-        dead_slots
+        (dead_slots, removed_accounts)
     }
 
     // Must be kept private!, does sensitive cleanup that should only be called from
@@ -2069,10 +2081,15 @@ impl AccountsDB {
         &self,
         reclaims: SlotSlice<AccountInfo>,
         expected_slot: Option<Slot>,
-    ) -> HashSet<Slot> {
+    ) -> (HashSet<Slot>, HashMap<AppendVecId, HashSet<usize>>) {
         let storage = self.storage.read().unwrap();
         let mut dead_slots = HashSet::new();
+        let mut removed_accounts: HashMap<AppendVecId, HashSet<usize>> = HashMap::new();
         for (slot, account_info) in reclaims {
+            removed_accounts
+                .entry(account_info.store_id)
+                .or_default()
+                .insert(account_info.offset);
             if let Some(expected_slot) = expected_slot {
                 assert_eq!(*slot, expected_slot);
             }
@@ -2101,7 +2118,7 @@ impl AccountsDB {
             true
         });
 
-        dead_slots
+        (dead_slots, removed_accounts)
     }
 
     fn clean_dead_slots(&self, dead_slots: &HashSet<Slot>) {
@@ -3227,8 +3244,8 @@ pub mod tests {
 
         accounts.clean_accounts(None);
 
-        //still old state behind zero-lamport account isn't cleaned up
-        assert_eq!(accounts.alive_account_count_in_store(0), 1);
+        //Old state behind zero-lamport account is cleaned up
+        assert_eq!(accounts.alive_account_count_in_store(0), 0);
         assert_eq!(accounts.alive_account_count_in_store(1), 2);
     }
 
@@ -3511,11 +3528,28 @@ pub mod tests {
 
         let mut current_slot = 1;
         accounts.store(current_slot, &[(&pubkey, &account)]);
-
         // Store another live account to slot 1 which will prevent any purge
         // since the store count will not be zero
         accounts.store(current_slot, &[(&pubkey2, &account2)]);
         accounts.add_root(current_slot);
+        let (slot1, account_info1) = accounts
+            .accounts_index
+            .read()
+            .unwrap()
+            .get(&pubkey, None, None)
+            .map(|(account_list1, index1)| account_list1[index1].clone())
+            .unwrap();
+        let (slot2, account_info2) = accounts
+            .accounts_index
+            .read()
+            .unwrap()
+            .get(&pubkey2, None, None)
+            .map(|(account_list2, index2)| account_list2[index2].clone())
+            .unwrap();
+        assert_eq!(slot1, current_slot);
+        assert_eq!(slot1, slot2);
+        assert_eq!(account_info1.store_id, account_info2.store_id);
+        println!("stored into {}", account_info1.store_id);
 
         current_slot += 1;
         accounts.store(current_slot, &[(&pubkey, &zero_lamport_account)]);
