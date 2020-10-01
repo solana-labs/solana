@@ -125,9 +125,8 @@ wait_step() {
 }
 
 all_test_steps() {
-  #command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20
-  #wait_step
-  true
+  command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20
+  wait_step
 
   # Coverage...
   if affects \
@@ -138,18 +137,16 @@ all_test_steps() {
              ^ci/test-coverage.sh \
              ^scripts/coverage.sh \
       ; then
-    #command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 30
-    #wait_step
-    true
+    command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 30
+    wait_step
   else
     annotate --style info --context test-coverage \
       "Coverage skipped as no .rs files were modified"
   fi
 
   # Full test suite
-  # command_step stable ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-stable.sh" 60
-  #wait_step
-  true
+  command_step stable ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-stable.sh" 60
+  wait_step
 
   # Perf test suite
   if affects \
@@ -232,8 +229,8 @@ EOF
 }
 
 pull_or_push_steps() {
-  #command_step sanity "ci/test-sanity.sh" 5
-  #wait_step
+  command_step sanity "ci/test-sanity.sh" 5
+  wait_step
 
   # Check for any .sh file changes
   if affects .sh$; then
