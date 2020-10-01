@@ -17,7 +17,7 @@ use crate::{
     poh_service::PohService,
     rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
     rpc::JsonRpcConfig,
-    rpc_pubsub_service::PubSubService,
+    rpc_pubsub_service::{PubSubConfig, PubSubService},
     rpc_service::JsonRpcService,
     rpc_subscriptions::RpcSubscriptions,
     sample_performance_service::SamplePerformanceService,
@@ -83,6 +83,7 @@ pub struct ValidatorConfig {
     pub account_paths: Vec<PathBuf>,
     pub rpc_config: JsonRpcConfig,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub, Banks)
+    pub pubsub_config: PubSubConfig,
     pub snapshot_config: Option<SnapshotConfig>,
     pub max_ledger_shreds: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
@@ -118,6 +119,7 @@ impl Default for ValidatorConfig {
             account_paths: Vec::new(),
             rpc_config: JsonRpcConfig::default(),
             rpc_addrs: None,
+            pubsub_config: PubSubConfig::default(),
             snapshot_config: None,
             broadcast_stage_type: BroadcastStageType::Standard,
             enable_partition: None,
@@ -435,7 +437,12 @@ impl Validator {
                             rpc_override_health_check.clone(),
                             optimistically_confirmed_bank.clone(),
                         ),
-                        pubsub_service: PubSubService::new(&subscriptions, rpc_pubsub_addr, &exit),
+                        pubsub_service: PubSubService::new(
+                            config.pubsub_config.clone(),
+                            &subscriptions,
+                            rpc_pubsub_addr,
+                            &exit,
+                        ),
                         rpc_banks_service: RpcBanksService::new(
                             rpc_banks_addr,
                             tpu_address,
