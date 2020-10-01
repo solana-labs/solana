@@ -2396,8 +2396,6 @@ impl Bank {
         }
     }
 
-<<<<<<< HEAD
-=======
     // Distribute collected rent fees for this slot to staked validators (excluding stakers)
     // according to stake.
     //
@@ -2418,8 +2416,6 @@ impl Bank {
     // fees
     //
     // Ref: collect_fees
-    #[allow(clippy::needless_collect)]
->>>>>>> e3773d919... Avoid overflow when computing rent distribution (#12112)
     fn distribute_rent_to_validators(
         &self,
         vote_account_hashmap: &HashMap<Pubkey, (u64, Account)>,
@@ -2448,7 +2444,7 @@ impl Bank {
         if validator_stakes.is_empty() {
             // some tests bank.freezes() with bad staking state
             self.capitalization
-                .fetch_sub(rent_to_be_distributed, Relaxed);
+                .fetch_sub(rent_to_be_distributed, Ordering::Relaxed);
             return;
         }
         #[cfg(not(test))]
@@ -2505,7 +2501,8 @@ impl Bank {
                 "There was leftover from rent distribution: {}",
                 leftover_lamports
             );
-            self.capitalization.fetch_sub(leftover_lamports, Relaxed);
+            self.capitalization
+                .fetch_sub(leftover_lamports, Ordering::Relaxed);
         }
     }
 
@@ -2517,31 +2514,18 @@ impl Bank {
             .rent
             .calculate_burn(total_rent_collected);
 
-<<<<<<< HEAD
-        self.capitalization
-            .fetch_sub(burned_portion, Ordering::Relaxed);
-=======
         debug!(
             "distributed rent: {} (rounded from: {}, burned: {})",
             rent_to_be_distributed, total_rent_collected, burned_portion
         );
-        self.capitalization.fetch_sub(burned_portion, Relaxed);
->>>>>>> e3773d919... Avoid overflow when computing rent distribution (#12112)
+        self.capitalization
+            .fetch_sub(burned_portion, Ordering::Relaxed);
 
         if rent_to_be_distributed == 0 {
             return;
         }
 
-<<<<<<< HEAD
-        let leftover =
-            self.distribute_rent_to_validators(&self.vote_accounts(), rent_to_be_distributed);
-        if leftover != 0 {
-            warn!("There was leftover from rent distribution: {}", leftover);
-            self.capitalization.fetch_sub(leftover, Ordering::Relaxed);
-        }
-=======
         self.distribute_rent_to_validators(&self.vote_accounts(), rent_to_be_distributed);
->>>>>>> e3773d919... Avoid overflow when computing rent distribution (#12112)
     }
 
     fn collect_rent(
