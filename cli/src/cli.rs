@@ -29,7 +29,8 @@ use solana_client::{
     nonce_utils,
     rpc_client::RpcClient,
     rpc_config::{RpcLargestAccountsFilter, RpcSendTransactionConfig},
-    rpc_response::{Response, RpcKeyedAccount},
+    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+    rpc_response::RpcKeyedAccount,
 };
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -1025,7 +1026,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
         let mut status_retries = 15;
 
         // Send all transactions
-        let mut transactions_signatures = vec![];
+        let mut pending_transactions = HashMap::new();
         let num_transactions = transactions.len();
         for transaction in transactions {
             if cfg!(not(test)) {
@@ -1035,7 +1036,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                 sleep(Duration::from_millis(1000 / DEFAULT_TICKS_PER_SECOND));
             }
 
-            let signature = rpc_client
+            let _result = rpc_client
                 .send_transaction_with_config(
                     &transaction,
                     RpcSendTransactionConfig {
@@ -1044,11 +1045,11 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                     },
                 )
                 .ok();
-            transactions_signatures.push((transaction, signature));
+            pending_transactions.insert(transaction.signatures[0], transaction);
 
             progress_bar.set_message(&format!(
                 "[{}/{}] Transactions sent",
-                transactions_signatures.len(),
+                pending_transactions.len(),
                 num_transactions
             ));
         }
@@ -1059,38 +1060,44 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
 
             progress_bar.set_message(&format!(
                 "[{}/{}] Transactions confirmed",
-                num_transactions - transactions_signatures.len(),
+                num_transactions - pending_transactions.len(),
                 num_transactions
             ));
 
-            if cfg!(not(test)) {
-                // Retry twice a second
-                sleep(Duration::from_millis(500));
+            let mut statuses = vec![];
+            let pending_signatures = pending_transactions.keys().cloned().collect::<Vec<_>>();
+            for pending_signatures_chunk in
+                pending_signatures.chunks(MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS - 1)
+            {
+                statuses.extend(
+                    rpc_client
+                        .get_signature_statuses_with_history(pending_signatures_chunk)?
+                        .value
+                        .into_iter(),
+                );
+            }
+            assert_eq!(statuses.len(), pending_signatures.len());
+
+            for (signature, status) in pending_signatures.into_iter().zip(statuses.into_iter()) {
+                if let Some(status) = status {
+                    if status.confirmations.is_none() || status.confirmations.unwrap() > 1 {
+                        let _ = pending_transactions.remove(&signature);
+                    }
+                }
             }
 
-            transactions_signatures = transactions_signatures
-                .into_iter()
-                .filter(|(_transaction, signature)| {
-                    signature
-                        .and_then(|signature| rpc_client.get_signature_statuses(&[signature]).ok())
-                        .map(|Response { context: _, value }| match &value[0] {
-                            None => true,
-                            Some(transaction_status) => {
-                                !(transaction_status.confirmations.is_none()
-                                    || transaction_status.confirmations.unwrap() > 1)
-                            }
-                        })
-                        .unwrap_or(true)
-                })
-                .collect();
-
-            if transactions_signatures.is_empty() {
+            if pending_transactions.is_empty() {
                 return Ok(());
             }
 
             let slot = rpc_client.get_slot_with_commitment(commitment)?;
             if slot > last_valid_slot {
                 break;
+            }
+
+            if cfg!(not(test)) {
+                // Retry twice a second
+                sleep(Duration::from_millis(500));
             }
         }
 
@@ -1105,7 +1112,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
             .value;
         last_valid_slot = new_last_valid_slot;
         transactions = vec![];
-        for (mut transaction, _) in transactions_signatures.into_iter() {
+        for (_, mut transaction) in pending_transactions.into_iter() {
             transaction.try_sign(signer_keys, blockhash)?;
             transactions.push(transaction);
         }
