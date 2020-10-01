@@ -688,6 +688,11 @@ impl AccountsDB {
                             purges.insert(*pubkey, accounts_index.would_purge(pubkey));
                         }
                         if accounts_index.uncleaned_roots.contains(slot) {
+                            // Assertion enforced by `accounts_index.get()`, the latest slot
+                            // will not be greater than the given `max_clean_root`
+                            if let Some(max_clean_root) = max_clean_root {
+                                assert!(*slot <= max_clean_root);
+                            }
                             purges_in_root.push(*pubkey);
                         }
                     }
@@ -724,13 +729,10 @@ impl AccountsDB {
         // Then purge if we can
         let mut store_counts: HashMap<AppendVecId, (usize, HashSet<Pubkey>)> = HashMap::new();
         for (key, (account_infos, ref_count)) in purges.iter_mut() {
+            let mut ref_count_needs_update = false;
             account_infos.retain(|(slot, account_info)| {
                 if old_rooted_dead_slots.contains(slot) {
-                    *ref_count = self
-                        .accounts_index
-                        .read()
-                        .unwrap()
-                        .ref_count_from_storage(&key);
+                    ref_count_needs_update = true;
                     return false;
                 }
                 if let Some(store_count) = store_counts.get_mut(&account_info.store_id) {
@@ -750,6 +752,14 @@ impl AccountsDB {
                 }
                 true
             });
+
+            if ref_count_needs_update {
+                *ref_count = self
+                    .accounts_index
+                    .read()
+                    .unwrap()
+                    .ref_count_from_storage(&key);
+            }
         }
         store_counts_time.stop();
 
@@ -3266,6 +3276,53 @@ pub mod tests {
             .read()
             .unwrap()
             .get(&pubkey1, None, None)
+            .is_none());
+    }
+
+    #[test]
+    fn test_clean_max_slot_zero_lamport_account() {
+        solana_logger::setup();
+
+        let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
+        let pubkey = Pubkey::new_rand();
+        let account = Account::new(1, 0, &Account::default().owner);
+        let zero_account = Account::new(0, 0, &Account::default().owner);
+
+        // store an account, make it a zero lamport account
+        // in slot 1
+        accounts.store(0, &[(&pubkey, &account)]);
+        accounts.store(1, &[(&pubkey, &zero_account)]);
+
+        // simulate slots are rooted after while
+        accounts.add_root(0);
+        accounts.add_root(1);
+
+        // Only clean up to account 0, should not purge slot 0 based on
+        // updates in later slots in slot 1
+        assert_eq!(accounts.alive_account_count_in_store(0), 1);
+        assert_eq!(accounts.alive_account_count_in_store(1), 1);
+        accounts.clean_accounts(Some(0));
+        assert_eq!(accounts.alive_account_count_in_store(0), 1);
+        assert_eq!(accounts.alive_account_count_in_store(1), 1);
+        assert!(accounts
+            .accounts_index
+            .read()
+            .unwrap()
+            .get(&pubkey, None, None)
+            .is_some());
+
+        // Now the account can be cleaned up
+        accounts.clean_accounts(Some(1));
+        assert_eq!(accounts.alive_account_count_in_store(0), 0);
+        assert_eq!(accounts.alive_account_count_in_store(1), 0);
+
+        // The zero lamport account, should no longer exist in accounts index
+        // because it has been removed
+        assert!(accounts
+            .accounts_index
+            .read()
+            .unwrap()
+            .get(&pubkey, None, None)
             .is_none());
     }
 
