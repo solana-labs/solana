@@ -170,7 +170,7 @@ all_test_steps() {
     agents:
       - "queue=cuda"
   - command: "ci/live-cluster-sanity.sh"
-    name: "live-cluster-sanity"
+    name: "live-cluster"
     timeout_in_minutes: 20
     artifact_paths:
       - "*/validator.log"
