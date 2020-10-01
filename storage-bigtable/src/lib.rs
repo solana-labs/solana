@@ -8,7 +8,7 @@ use solana_sdk::{
     transaction::{Transaction, TransactionError},
 };
 use solana_transaction_status::{
-    ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Rewards,
+    ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Reward,
     TransactionStatus, TransactionStatusMeta, TransactionWithStatusMeta,
 };
 use std::{collections::HashMap, convert::TryInto};
@@ -86,7 +86,7 @@ struct StoredConfirmedBlock {
     blockhash: String,
     parent_slot: Slot,
     transactions: Vec<StoredConfirmedBlockTransaction>,
-    rewards: Rewards,
+    rewards: StoredConfirmedBlockRewards,
     block_time: Option<UnixTimestamp>,
 }
 
@@ -106,7 +106,7 @@ impl From<ConfirmedBlock> for StoredConfirmedBlock {
             blockhash,
             parent_slot,
             transactions: transactions.into_iter().map(|tx| tx.into()).collect(),
-            rewards,
+            rewards: rewards.into_iter().map(|reward| reward.into()).collect(),
             block_time,
         }
     }
@@ -128,7 +128,7 @@ impl From<StoredConfirmedBlock> for ConfirmedBlock {
             blockhash,
             parent_slot,
             transactions: transactions.into_iter().map(|tx| tx.into()).collect(),
-            rewards,
+            rewards: rewards.into_iter().map(|reward| reward.into()).collect(),
             block_time,
         }
     }
@@ -203,6 +203,34 @@ impl From<TransactionStatusMeta> for StoredConfirmedBlockTransactionStatusMeta {
             pre_balances,
             post_balances,
         }
+    }
+}
+
+type StoredConfirmedBlockRewards = Vec<StoredConfirmedBlockReward>;
+
+#[derive(Serialize, Deserialize)]
+struct StoredConfirmedBlockReward {
+    pubkey: String,
+    lamports: i64,
+}
+
+impl From<StoredConfirmedBlockReward> for Reward {
+    fn from(value: StoredConfirmedBlockReward) -> Self {
+        let StoredConfirmedBlockReward { pubkey, lamports } = value;
+        Self {
+            pubkey,
+            lamports,
+            post_balance: 0,
+        }
+    }
+}
+
+impl From<Reward> for StoredConfirmedBlockReward {
+    fn from(value: Reward) -> Self {
+        let Reward {
+            pubkey, lamports, ..
+        } = value;
+        Self { pubkey, lamports }
     }
 }
 

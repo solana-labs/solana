@@ -1,5 +1,6 @@
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
 use solana_ledger::blockstore::Blockstore;
+use solana_runtime::bank::RewardInfo;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use solana_transaction_status::Reward;
 use std::{
@@ -11,8 +12,8 @@ use std::{
     time::Duration,
 };
 
-pub type RewardsRecorderReceiver = Receiver<(Slot, Vec<(Pubkey, i64)>)>;
-pub type RewardsRecorderSender = Sender<(Slot, Vec<(Pubkey, i64)>)>;
+pub type RewardsRecorderReceiver = Receiver<(Slot, Vec<(Pubkey, RewardInfo)>)>;
+pub type RewardsRecorderSender = Sender<(Slot, Vec<(Pubkey, RewardInfo)>)>;
 
 pub struct RewardsRecorderService {
     thread_hdl: JoinHandle<()>,
@@ -49,9 +50,10 @@ impl RewardsRecorderService {
         let (slot, rewards) = rewards_receiver.recv_timeout(Duration::from_secs(1))?;
         let rpc_rewards = rewards
             .into_iter()
-            .map(|(pubkey, lamports)| Reward {
+            .map(|(pubkey, reward_info)| Reward {
                 pubkey: pubkey.to_string(),
-                lamports,
+                lamports: reward_info.lamports,
+                post_balance: reward_info.post_balance,
             })
             .collect();
 

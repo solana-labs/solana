@@ -228,9 +228,12 @@ pub struct ConfirmedTransactionStatusWithSignature {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Reward {
     pub pubkey: String,
     pub lamports: i64,
+    #[serde(deserialize_with = "default_on_eof")]
+    pub post_balance: u64, // Account balance in lamports after `lamports` was applied
 }
 
 pub type Rewards = Vec<Reward>;
