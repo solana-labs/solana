@@ -17,14 +17,9 @@ use crate::{
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     message_processor::{Executors, MessageProcessor},
-<<<<<<< HEAD
-    nonce_utils,
     process_instruction::{
         ComputeBudget, Executor, ProcessInstruction, ProcessInstructionWithContext,
     },
-=======
-    process_instruction::{Executor, ProcessInstruction, ProcessInstructionWithContext},
->>>>>>> 3c7b9c293... Move remaining nonce utils from runtime to SDK
     rent_collector::RentCollector,
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
