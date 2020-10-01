@@ -71,7 +71,7 @@ snapshot_slot=$(ls -t cluster-sanity/ledger/snapshot-*.tar.* |
   grep -o '[0-9]*'
 )
 current_root=$snapshot_slot
-goal_root=$((snapshot_slot + 100))
+goal_root=$((snapshot_slot + 400))
 
 attempts=100
 while [[ $current_root -le $goal_root ]]; do
