@@ -11,6 +11,7 @@ use solana_core::crds_gossip_pull::{ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIME
 use solana_core::crds_gossip_push::CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS;
 use solana_core::crds_value::CrdsValueLabel;
 use solana_core::crds_value::{CrdsData, CrdsValue};
+use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
@@ -502,44 +503,54 @@ fn network_run_pull(
     (convergance, bytes)
 }
 
+fn build_gossip_thread_pool() -> ThreadPool {
+    ThreadPoolBuilder::new()
+        .num_threads(get_thread_count().min(2))
+        .thread_name(|i| format!("crds_gossip_test_{}", i))
+        .build()
+        .unwrap()
+}
+
 #[test]
+#[serial]
 fn test_star_network_pull_50() {
     let mut network = star_network_create(50);
-    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    let thread_pool = build_gossip_thread_pool();
     network_simulator_pull_only(&thread_pool, &mut network);
 }
 #[test]
+#[serial]
 fn test_star_network_pull_100() {
     let mut network = star_network_create(100);
-    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    let thread_pool = build_gossip_thread_pool();
     network_simulator_pull_only(&thread_pool, &mut network);
 }
 #[test]
 #[serial]
 fn test_star_network_push_star_200() {
     let mut network = star_network_create(200);
-    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    let thread_pool = build_gossip_thread_pool();
     network_simulator(&thread_pool, &mut network, 0.9);
 }
 #[ignore]
 #[test]
 fn test_star_network_push_rstar_200() {
     let mut network = rstar_network_create(200);
-    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    let thread_pool = build_gossip_thread_pool();
     network_simulator(&thread_pool, &mut network, 0.9);
 }
 #[test]
 #[serial]
 fn test_star_network_push_ring_200() {
     let mut network = ring_network_create(200);
-    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    let thread_pool = build_gossip_thread_pool();
     network_simulator(&thread_pool, &mut network, 0.9);
 }
 #[test]
 #[serial]
 fn test_connected_staked_network() {
     solana_logger::setup();
-    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    let thread_pool = build_gossip_thread_pool();
     let stakes = [
         [1000; 2].to_vec(),
         [100; 3].to_vec(),
@@ -569,7 +580,7 @@ fn test_connected_staked_network() {
 fn test_star_network_large_pull() {
     solana_logger::setup();
     let mut network = star_network_create(2000);
-    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    let thread_pool = build_gossip_thread_pool();
     network_simulator_pull_only(&thread_pool, &mut network);
 }
 #[test]
@@ -577,7 +588,7 @@ fn test_star_network_large_pull() {
 fn test_rstar_network_large_push() {
     solana_logger::setup();
     let mut network = rstar_network_create(4000);
-    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    let thread_pool = build_gossip_thread_pool();
     network_simulator(&thread_pool, &mut network, 0.9);
 }
 #[test]
@@ -585,7 +596,7 @@ fn test_rstar_network_large_push() {
 fn test_ring_network_large_push() {
     solana_logger::setup();
     let mut network = ring_network_create(4001);
-    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    let thread_pool = build_gossip_thread_pool();
     network_simulator(&thread_pool, &mut network, 0.9);
 }
 #[test]
@@ -593,7 +604,7 @@ fn test_ring_network_large_push() {
 fn test_star_network_large_push() {
     solana_logger::setup();
     let mut network = star_network_create(4002);
-    let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+    let thread_pool = build_gossip_thread_pool();
     network_simulator(&thread_pool, &mut network, 0.9);
 }
 #[test]
