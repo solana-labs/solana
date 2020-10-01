@@ -17,7 +17,6 @@ use crate::{
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     message_processor::{Executors, MessageProcessor},
-    nonce_utils,
     process_instruction::{
         ComputeBudget, Executor, ProcessInstruction, ProcessInstructionWithContext,
     },
@@ -63,7 +62,7 @@ use solana_sdk::{
     system_transaction,
     sysvar::{self, Sysvar},
     timing::years_as_slots,
-    transaction::{Result, Transaction, TransactionError},
+    transaction::{self, Result, Transaction, TransactionError},
 };
 use solana_stake_program::stake_state::{self, Delegation, PointValue};
 use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteState};
@@ -1852,14 +1851,14 @@ impl Bank {
     }
 
     pub fn check_tx_durable_nonce(&self, tx: &Transaction) -> Option<(Pubkey, Account)> {
-        nonce_utils::transaction_uses_durable_nonce(&tx)
-            .and_then(|nonce_ix| nonce_utils::get_nonce_pubkey_from_instruction(&nonce_ix, &tx))
+        transaction::uses_durable_nonce(&tx)
+            .and_then(|nonce_ix| transaction::get_nonce_pubkey_from_instruction(&nonce_ix, &tx))
             .and_then(|nonce_pubkey| {
                 self.get_account(&nonce_pubkey)
                     .map(|acc| (*nonce_pubkey, acc))
             })
             .filter(|(_pubkey, nonce_account)| {
-                nonce_utils::verify_nonce_account(nonce_account, &tx.message().recent_blockhash)
+                nonce::utils::verify_nonce_account(nonce_account, &tx.message().recent_blockhash)
             })
     }
 
@@ -2275,7 +2274,7 @@ impl Bank {
             .map(|((_, tx), (res, hash_age_kind))| {
                 let (fee_calculator, is_durable_nonce) = match hash_age_kind {
                     Some(HashAgeKind::DurableNonce(_, account)) => {
-                        (nonce_utils::fee_calculator_of(account), true)
+                        (nonce::utils::fee_calculator_of(account), true)
                     }
                     _ => (
                         hash_queue
