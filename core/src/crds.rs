@@ -167,46 +167,97 @@ impl Crds {
 
     /// Update the timestamp's of all the labels that are associated with Pubkey
     pub fn update_record_timestamp(&mut self, pubkey: &Pubkey, now: u64) {
-        for label in &CrdsValue::record_labels(pubkey) {
-            self.update_label_timestamp(label, now);
+        for label in CrdsValue::record_labels(*pubkey) {
+            self.update_label_timestamp(&label, now);
         }
     }
 
-    /// Find all the keys that are older or equal to the timeout.
+    /// Removes values that are older or equal to the timeout.
+    /// Returns an iterator yielding removed values.
     /// * timeouts - Pubkey specific timeouts with Pubkey::default() as the default timeout.
-    pub fn find_old_labels(
-        &self,
+    /// Note: Because iterators are lazy, only values consumed
+    /// from the iterator are removed.
+    pub fn drain_old_values<'a>(
+        &'a mut self,
         now: u64,
-        timeouts: &HashMap<Pubkey, u64>,
-    ) -> Vec<CrdsValueLabel> {
+        timeouts: &'a HashMap<Pubkey, u64>,
+    ) -> impl Iterator<Item = (CrdsValueLabel, VersionedCrdsValue)> + 'a {
         let default_timeout = *timeouts
             .get(&Pubkey::default())
             .expect("must have default timeout");
-        self.table
-            .iter()
-            .filter_map(|(k, v)| {
-                let timeout = timeouts.get(&k.pubkey()).unwrap_or(&default_timeout);
-                if v.local_timestamp.saturating_add(*timeout) <= now {
-                    Some(k)
-                } else {
-                    None
-                }
-            })
-            .cloned()
-            .collect()
+        self.drain_filter(move |label, value| {
+            let timeout = timeouts.get(&label.pubkey()).unwrap_or(&default_timeout);
+            value.local_timestamp.saturating_add(*timeout) <= now
+        })
+    }
+
+    // Removes values that the filter function returns true.
+    // Returns an iterator yielding removed values.
+    // Note: Because iterators are lazy, only values consumed
+    // from the iterator are removed.
+    fn drain_filter<F>(&mut self, filter: F) -> CrdsDrainFilter<F>
+    where
+        F: FnMut(&CrdsValueLabel, &VersionedCrdsValue) -> bool,
+    {
+        CrdsDrainFilter {
+            crds: self,
+            index: 0,
+            filter,
+        }
     }
 
     pub fn remove(&mut self, key: &CrdsValueLabel) {
         if let Some((index, _, value)) = self.table.swap_remove_full(key) {
-            assert!(self.shards.remove(index, &value));
-            // The previously last element in the table is now moved to the
-            // 'index' position. Shards need to be updated accordingly.
-            if index < self.table.len() {
-                let value = self.table.index(index);
-                assert!(self.shards.remove(self.table.len(), value));
-                assert!(self.shards.insert(index, value));
+            self.remove_from_shards(index, &value);
+        }
+    }
+
+    fn swap_remove_index(&mut self, index: usize) -> Option<(CrdsValueLabel, VersionedCrdsValue)> {
+        let (label, value) = self.table.swap_remove_index(index)?;
+        self.remove_from_shards(index, &value);
+        Some((label, value))
+    }
+
+    fn remove_from_shards(&mut self, index: usize, value: &VersionedCrdsValue) {
+        assert!(self.shards.remove(index, value));
+        // The previously last element in the table is now moved to the
+        // 'index' position. Shards need to be updated accordingly.
+        if index < self.table.len() {
+            let value = self.table.index(index);
+            assert!(self.shards.remove(self.table.len(), value));
+            assert!(self.shards.insert(index, value));
+        }
+    }
+}
+
+pub struct CrdsDrainFilter<'a, F>
+where
+    F: FnMut(&CrdsValueLabel, &VersionedCrdsValue) -> bool,
+{
+    crds: &'a mut Crds,
+    index: usize,
+    filter: F,
+}
+
+impl<F> Iterator for CrdsDrainFilter<'_, F>
+where
+    F: FnMut(&CrdsValueLabel, &VersionedCrdsValue) -> bool,
+{
+    type Item = (CrdsValueLabel, VersionedCrdsValue);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let (label, value) = self.crds.table.get_index(self.index)?;
+            if (self.filter)(label, value) {
+                return self.crds.swap_remove_index(self.index);
+            } else {
+                self.index += 1;
             }
         }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, Some(self.crds.table.len().saturating_sub(self.index)))
     }
 }
 
@@ -286,6 +337,44 @@ mod test {
         assert_eq!(crds.table[&val2.label()].local_timestamp, 3);
         assert_eq!(crds.table[&val2.label()].insert_timestamp, 3);
     }
+
+    #[test]
+    fn test_drain_old_values() {
+        let mut rng = thread_rng();
+        let mut crds = Crds::default();
+        for _ in 0..537 {
+            let value = CrdsValue::new_rand(&mut rng);
+            let local_timestamp = rng.gen_range(0, 100);
+            assert_eq!(crds.insert(value, local_timestamp), Ok(None));
+        }
+        assert_eq!(crds.table.len(), 537);
+        let mut timeouts = HashMap::new();
+        timeouts.insert(Pubkey::default(), 29);
+        let mut count = 0;
+        for (_, value) in crds.drain_old_values(50, &timeouts) {
+            count += 1;
+            assert!(value.local_timestamp + 29 <= 50);
+        }
+        assert!(count > 50 && count < 170, "# old values: {}", count);
+        assert_eq!(count + crds.table.len(), 537);
+        for (_, value) in &crds.table {
+            assert!(value.local_timestamp + 29 > 50);
+        }
+        crds.shards
+            .check(&crds.table.values().cloned().collect::<Vec<_>>());
+    }
+
+    fn find_old_labels(
+        crds: &Crds,
+        now: u64,
+        timeouts: &HashMap<Pubkey, u64>,
+    ) -> Vec<CrdsValueLabel> {
+        crds.clone()
+            .drain_old_values(now, timeouts)
+            .map(|(v, _)| v)
+            .collect()
+    }
+
     #[test]
     fn test_find_old_records_default() {
         let mut crds = Crds::default();
@@ -293,11 +382,11 @@ mod test {
         assert_eq!(crds.insert(val.clone(), 1), Ok(None));
         let mut set = HashMap::new();
         set.insert(Pubkey::default(), 0);
-        assert!(crds.find_old_labels(0, &set).is_empty());
+        assert!(find_old_labels(&crds, 0, &set).is_empty());
         set.insert(Pubkey::default(), 1);
-        assert_eq!(crds.find_old_labels(2, &set), vec![val.label()]);
+        assert_eq!(find_old_labels(&crds, 2, &set), vec![val.label()]);
         set.insert(Pubkey::default(), 2);
-        assert_eq!(crds.find_old_labels(4, &set), vec![val.label()]);
+        assert_eq!(find_old_labels(&crds, 4, &set), vec![val.label()]);
     }
     #[test]
     fn test_find_old_records_with_override() {
@@ -307,15 +396,15 @@ mod test {
         let val = CrdsValue::new_rand(&mut rng);
         timeouts.insert(Pubkey::default(), 3);
         assert_eq!(crds.insert(val.clone(), 0), Ok(None));
-        assert!(crds.find_old_labels(2, &timeouts).is_empty());
+        assert!(find_old_labels(&crds, 2, &timeouts).is_empty());
         timeouts.insert(val.pubkey(), 1);
-        assert_eq!(crds.find_old_labels(2, &timeouts), vec![val.label()]);
+        assert_eq!(find_old_labels(&crds, 2, &timeouts), vec![val.label()]);
         timeouts.insert(val.pubkey(), u64::MAX);
-        assert!(crds.find_old_labels(2, &timeouts).is_empty());
+        assert!(find_old_labels(&crds, 2, &timeouts).is_empty());
         timeouts.insert(Pubkey::default(), 1);
-        assert!(crds.find_old_labels(2, &timeouts).is_empty());
+        assert!(find_old_labels(&crds, 2, &timeouts).is_empty());
         timeouts.remove(&val.pubkey());
-        assert_eq!(crds.find_old_labels(2, &timeouts), vec![val.label()]);
+        assert_eq!(find_old_labels(&crds, 2, &timeouts), vec![val.label()]);
     }
     #[test]
     fn test_remove_default() {
@@ -324,9 +413,9 @@ mod test {
         assert_matches!(crds.insert(val.clone(), 1), Ok(_));
         let mut set = HashMap::new();
         set.insert(Pubkey::default(), 1);
-        assert_eq!(crds.find_old_labels(2, &set), vec![val.label()]);
+        assert_eq!(find_old_labels(&crds, 2, &set), vec![val.label()]);
         crds.remove(&val.label());
-        assert!(crds.find_old_labels(2, &set).is_empty());
+        assert!(find_old_labels(&crds, 2, &set).is_empty());
     }
     #[test]
     fn test_find_old_records_staked() {
@@ -337,20 +426,20 @@ mod test {
         //now < timestamp
         set.insert(Pubkey::default(), 0);
         set.insert(val.pubkey(), 0);
-        assert!(crds.find_old_labels(0, &set).is_empty());
+        assert!(find_old_labels(&crds, 0, &set).is_empty());
 
         //pubkey shouldn't expire since its timeout is MAX
         set.insert(val.pubkey(), std::u64::MAX);
-        assert!(crds.find_old_labels(2, &set).is_empty());
+        assert!(find_old_labels(&crds, 2, &set).is_empty());
 
         //default has max timeout, but pubkey should still expire
         set.insert(Pubkey::default(), std::u64::MAX);
         set.insert(val.pubkey(), 1);
-        assert_eq!(crds.find_old_labels(2, &set), vec![val.label()]);
+        assert_eq!(find_old_labels(&crds, 2, &set), vec![val.label()]);
 
         set.insert(val.pubkey(), 2);
-        assert!(crds.find_old_labels(2, &set).is_empty());
-        assert_eq!(crds.find_old_labels(3, &set), vec![val.label()]);
+        assert!(find_old_labels(&crds, 2, &set).is_empty());
+        assert_eq!(find_old_labels(&crds, 3, &set), vec![val.label()]);
     }
 
     #[test]
@@ -404,9 +493,9 @@ mod test {
         //default has max timeout, but pubkey should still expire
         set.insert(Pubkey::default(), std::u64::MAX);
         set.insert(val.pubkey(), 1);
-        assert_eq!(crds.find_old_labels(2, &set), vec![val.label()]);
+        assert_eq!(find_old_labels(&crds, 2, &set), vec![val.label()]);
         crds.remove(&val.label());
-        assert!(crds.find_old_labels(2, &set).is_empty());
+        assert!(find_old_labels(&crds, 2, &set).is_empty());
     }
 
     #[test]
