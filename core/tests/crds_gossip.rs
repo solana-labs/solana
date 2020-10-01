@@ -459,9 +459,16 @@ fn network_run_pull(
                     let mut node = node.lock().unwrap();
                     node.mark_pull_request_creation_time(&from, now);
                     let mut stats = ProcessPullStats::default();
-                    let (vers, vers_expired_timeout) =
+                    let (vers, vers_expired_timeout, failed_inserts) =
                         node.filter_pull_responses(&timeouts, rsp, now, &mut stats);
-                    node.process_pull_responses(&from, vers, vers_expired_timeout, now, &mut stats);
+                    node.process_pull_responses(
+                        &from,
+                        vers,
+                        vers_expired_timeout,
+                        failed_inserts,
+                        now,
+                        &mut stats,
+                    );
                     overhead += stats.failed_insert;
                     overhead += stats.failed_timeout;
                 }

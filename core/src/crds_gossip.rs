@@ -11,7 +11,7 @@ use crate::{
     crds_value::{CrdsValue, CrdsValueLabel},
 };
 use rayon::ThreadPool;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{hash::Hash, pubkey::Pubkey};
 use std::collections::{HashMap, HashSet};
 
 ///The min size for bloom filters
@@ -180,7 +180,7 @@ impl CrdsGossip {
         response: Vec<CrdsValue>,
         now: u64,
         process_pull_stats: &mut ProcessPullStats,
-    ) -> (Vec<VersionedCrdsValue>, Vec<VersionedCrdsValue>) {
+    ) -> (Vec<VersionedCrdsValue>, Vec<VersionedCrdsValue>, Vec<Hash>) {
         self.pull
             .filter_pull_responses(&self.crds, timeouts, response, now, process_pull_stats)
     }
@@ -191,6 +191,7 @@ impl CrdsGossip {
         from: &Pubkey,
         responses: Vec<VersionedCrdsValue>,
         responses_expired_timeout: Vec<VersionedCrdsValue>,
+        failed_inserts: Vec<Hash>,
         now: u64,
         process_pull_stats: &mut ProcessPullStats,
     ) {
@@ -199,6 +200,7 @@ impl CrdsGossip {
             from,
             responses,
             responses_expired_timeout,
+            failed_inserts,
             now,
             process_pull_stats,
         );
@@ -238,6 +240,7 @@ impl CrdsGossip {
             let min = now - 5 * self.pull.crds_timeout;
             self.pull.purge_purged(min);
         }
+        self.pull.purge_failed_inserts(now);
         rv
     }
 }
