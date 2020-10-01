@@ -124,6 +124,7 @@ jobs:
           - ~/.npm
 
       before_install:
+        - source ci/env.sh
         - .travis/channel_restriction.sh edge beta || travis_terminate 0
         - .travis/affects.sh docs/ .travis || travis_terminate 0
         - cd docs/
