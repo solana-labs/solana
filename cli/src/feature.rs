@@ -19,7 +19,6 @@ use solana_sdk::{
 use std::{collections::HashMap, fmt, sync::Arc};
 
 #[derive(Debug, PartialEq)]
-#[allow(clippy::large_enum_variant)]
 pub enum FeatureCliCommand {
     Status { features: Vec<Pubkey> },
     Activate { feature: Pubkey },
@@ -242,7 +241,7 @@ fn feature_activation_allowed(rpc_client: &RpcClient) -> Result<bool, ClientErro
         .unwrap_or(false);
 
     if !feature_activation_allowed {
-        println!("\n{}", style("Stake By Feature Id:").bold());
+        println!("\n{}", style("Stake By Feature Set:").bold());
         for (feature_set, percentage) in active_stake_by_feature_set.iter() {
             if *feature_set == 0 {
                 println!("unknown - {}%", percentage);
@@ -252,7 +251,7 @@ fn feature_activation_allowed(rpc_client: &RpcClient) -> Result<bool, ClientErro
                     feature_set,
                     percentage,
                     if *feature_set == my_feature_set {
-                        " <-- current"
+                        " <-- me"
                     } else {
                         ""
                     }
