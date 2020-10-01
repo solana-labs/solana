@@ -32,7 +32,7 @@ use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
     signature::Signature,
-    transaction::{self, Transaction},
+    transaction::{self, uses_durable_nonce, Transaction},
 };
 use solana_transaction_status::{
     EncodedConfirmedBlock, EncodedConfirmedTransaction, TransactionStatus, UiTransactionEncoding,
@@ -415,7 +415,13 @@ impl RpcClient {
         transaction: &Transaction,
     ) -> ClientResult<Signature> {
         let signature = self.send_transaction(transaction)?;
-        let recent_blockhash = transaction.message.recent_blockhash;
+        let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
+            self.get_recent_blockhash_with_commitment(CommitmentConfig::recent())?
+                .value
+                .0
+        } else {
+            transaction.message.recent_blockhash
+        };
         let status = loop {
             let status = self.get_signature_status(&signature)?;
             if status.is_none() {
@@ -1117,7 +1123,13 @@ impl RpcClient {
             "[{}/{}] Finalizing transaction {}",
             confirmations, desired_confirmations, transaction.signatures[0],
         ));
-        let recent_blockhash = transaction.message.recent_blockhash;
+        let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
+            self.get_recent_blockhash_with_commitment(CommitmentConfig::recent())?
+                .value
+                .0
+        } else {
+            transaction.message.recent_blockhash
+        };
         let signature = self.send_transaction_with_config(transaction, config)?;
         let (signature, status) = loop {
             // Get recent commitment in order to count confirmations for successful transactions
