@@ -1017,6 +1017,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
     mut transactions: Vec<Transaction>,
     signer_keys: &T,
     commitment: CommitmentConfig,
+    mut last_valid_slot: Slot,
 ) -> Result<(), Box<dyn error::Error>> {
     let progress_bar = new_spinner_progress_bar();
     let mut send_retries = 5;
@@ -1086,6 +1087,11 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
             if transactions_signatures.is_empty() {
                 return Ok(());
             }
+
+            let slot = rpc_client.get_slot_with_commitment(commitment)?;
+            if slot > last_valid_slot {
+                break;
+            }
         }
 
         if send_retries == 0 {
@@ -1094,8 +1100,10 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
         send_retries -= 1;
 
         // Re-sign any failed transactions with a new blockhash and retry
-        let (blockhash, _fee_calculator) = rpc_client
-            .get_new_blockhash(&transactions_signatures[0].0.message().recent_blockhash)?;
+        let (blockhash, _fee_calculator, new_last_valid_slot) = rpc_client
+            .get_recent_blockhash_with_commitment(commitment)?
+            .value;
+        last_valid_slot = new_last_valid_slot;
         transactions = vec![];
         for (mut transaction, _) in transactions_signatures.into_iter() {
             transaction.try_sign(signer_keys, blockhash)?;
@@ -1240,7 +1248,7 @@ fn process_deploy(
         })?;
     }
 
-    let (blockhash, _, _) = rpc_client
+    let (blockhash, _, last_valid_slot) = rpc_client
         .get_recent_blockhash_with_commitment(config.commitment)?
         .value;
 
@@ -1257,6 +1265,7 @@ fn process_deploy(
         write_transactions,
         &signers,
         config.commitment,
+        last_valid_slot,
     )
     .map_err(|_| {
         CliError::DynamicProgramError("Data writes to program account failed".to_string())
