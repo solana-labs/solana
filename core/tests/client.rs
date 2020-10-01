@@ -3,8 +3,10 @@ use solana_client::{
     rpc_client::RpcClient,
 };
 use solana_core::{
-    commitment::BlockCommitmentCache, rpc_pubsub_service::PubSubService,
-    rpc_subscriptions::RpcSubscriptions, validator::TestValidator,
+    commitment::BlockCommitmentCache,
+    rpc_pubsub_service::{PubSubConfig, PubSubService},
+    rpc_subscriptions::RpcSubscriptions,
+    validator::TestValidator,
 };
 use solana_ledger::{
     bank_forks::BankForks,
@@ -104,7 +106,8 @@ fn test_slot_subscription() {
             blockstore,
         ))),
     ));
-    let pubsub_service = PubSubService::new(&subscriptions, pubsub_addr, &exit);
+    let pubsub_service =
+        PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr, &exit);
     std::thread::sleep(Duration::from_millis(400));
 
     let (mut client, receiver) =

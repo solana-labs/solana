@@ -11,7 +11,7 @@ use crate::{
     poh_service::PohService,
     rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
     rpc::JsonRpcConfig,
-    rpc_pubsub_service::PubSubService,
+    rpc_pubsub_service::{PubSubConfig, PubSubService},
     rpc_service::JsonRpcService,
     rpc_subscriptions::RpcSubscriptions,
     serve_repair::ServeRepair,
@@ -70,6 +70,7 @@ pub struct ValidatorConfig {
     pub account_paths: Vec<PathBuf>,
     pub rpc_config: JsonRpcConfig,
     pub rpc_ports: Option<(u16, u16)>, // (API, PubSub)
+    pub pubsub_config: PubSubConfig,
     pub snapshot_config: Option<SnapshotConfig>,
     pub max_ledger_shreds: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
@@ -101,6 +102,7 @@ impl Default for ValidatorConfig {
             account_paths: Vec::new(),
             rpc_config: JsonRpcConfig::default(),
             rpc_ports: None,
+            pubsub_config: PubSubConfig::default(),
             snapshot_config: None,
             broadcast_stage_type: BroadcastStageType::Standard,
             enable_partition: None,
@@ -353,6 +355,7 @@ impl Validator {
                     rpc_override_health_check.clone(),
                 ),
                 PubSubService::new(
+                    config.pubsub_config.clone(),
                     &subscriptions,
                     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_pubsub_port),
                     &exit,

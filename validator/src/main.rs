@@ -20,6 +20,7 @@ use solana_core::{
     contact_info::ContactInfo,
     gossip_service::GossipService,
     rpc::JsonRpcConfig,
+    rpc_pubsub_service::PubSubConfig,
     validator::{Validator, ValidatorConfig},
 };
 use solana_download_utils::{download_genesis_if_missing, download_snapshot};
@@ -507,6 +508,13 @@ pub fn main() {
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
     let default_genesis_archive_unpacked_size = &MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
+    let default_rpc_pubsub_max_connections = PubSubConfig::default().max_connections.to_string();
+    let default_rpc_pubsub_max_fragment_size =
+        PubSubConfig::default().max_fragment_size.to_string();
+    let default_rpc_pubsub_max_in_buffer_capacity =
+        PubSubConfig::default().max_in_buffer_capacity.to_string();
+    let default_rpc_pubsub_max_out_buffer_capacity =
+        PubSubConfig::default().max_out_buffer_capacity.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
@@ -901,6 +909,45 @@ pub fn main() {
                 .help("IP address to bind the RPC port [default: use --bind-address]"),
         )
         .arg(
+            Arg::with_name("rpc_pubsub_max_connections")
+                .long("rpc-pubsub-max-connections")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .validator(is_parsable::<usize>)
+                .default_value(&default_rpc_pubsub_max_connections)
+                .help("The maximum number of connections that RPC PubSub will support. \
+                       This is a hard limit and no new connections beyond this limit can \
+                       be made until an old connection is dropped."),
+        )
+        .arg(
+            Arg::with_name("rpc_pubsub_max_fragment_size")
+                .long("rpc-pubsub-max-fragment-size")
+                .value_name("BYTES")
+                .takes_value(true)
+                .validator(is_parsable::<usize>)
+                .default_value(&default_rpc_pubsub_max_fragment_size)
+                .help("The maximum length in bytes of acceptable incoming frames. Messages longer \
+                       than this will be rejected."),
+        )
+        .arg(
+            Arg::with_name("rpc_pubsub_max_in_buffer_capacity")
+                .long("rpc-pubsub-max-in-buffer-capacity")
+                .value_name("BYTES")
+                .takes_value(true)
+                .validator(is_parsable::<usize>)
+                .default_value(&default_rpc_pubsub_max_in_buffer_capacity)
+                .help("The maximum size in bytes to which the incoming websocket buffer can grow."),
+        )
+        .arg(
+            Arg::with_name("rpc_pubsub_max_out_buffer_capacity")
+                .long("rpc-pubsub-max-out-buffer-capacity")
+                .value_name("BYTES")
+                .takes_value(true)
+                .validator(is_parsable::<usize>)
+                .default_value(&default_rpc_pubsub_max_out_buffer_capacity)
+                .help("The maximum size in bytes to which the outgoing websocket buffer can grow."),
+        )
+        .arg(
             Arg::with_name("halt_on_trusted_validators_accounts_hash_mismatch")
                 .long("halt-on-trusted-validators-accounts-hash-mismatch")
                 .requires("trusted_validators")
@@ -1008,7 +1055,6 @@ pub fn main() {
     };
 
     let restricted_repair_only_mode = matches.is_present("restricted_repair_only_mode");
-
     let mut validator_config = ValidatorConfig {
         dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
         expected_genesis_hash: matches
@@ -1039,6 +1085,20 @@ pub fn main() {
         rpc_ports: value_t!(matches, "rpc_port", u16)
             .ok()
             .map(|rpc_port| (rpc_port, rpc_port + 1)),
+        pubsub_config: PubSubConfig {
+            max_connections: value_t_or_exit!(matches, "rpc_pubsub_max_connections", usize),
+            max_fragment_size: value_t_or_exit!(matches, "rpc_pubsub_max_fragment_size", usize),
+            max_in_buffer_capacity: value_t_or_exit!(
+                matches,
+                "rpc_pubsub_max_in_buffer_capacity",
+                usize
+            ),
+            max_out_buffer_capacity: value_t_or_exit!(
+                matches,
+                "rpc_pubsub_max_out_buffer_capacity",
+                usize
+            ),
+        },
         voting_disabled: matches.is_present("no_voting") || restricted_repair_only_mode,
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
         trusted_validators,
