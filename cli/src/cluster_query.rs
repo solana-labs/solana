@@ -18,7 +18,11 @@ use solana_client::{
     client_error::ClientErrorKind,
     pubsub_client::PubsubClient,
     rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
-    rpc_config::{RpcLargestAccountsConfig, RpcLargestAccountsFilter},
+    rpc_config::{
+        RpcAccountInfoConfig, RpcLargestAccountsConfig, RpcLargestAccountsFilter,
+        RpcProgramAccountsConfig,
+    },
+    rpc_filter,
     rpc_response::SlotInfo,
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
@@ -1276,16 +1280,49 @@ pub fn process_show_stakes(
 
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message("Fetching stake accounts...");
-    let all_stake_accounts = rpc_client.get_program_accounts(&solana_stake_program::id())?;
+
+    let mut program_accounts_config = RpcProgramAccountsConfig {
+        filters: None,
+        account_config: RpcAccountInfoConfig {
+            encoding: Some(solana_account_decoder::UiAccountEncoding::Base64),
+            ..RpcAccountInfoConfig::default()
+        },
+    };
+
+    if let Some(vote_account_pubkeys) = vote_account_pubkeys {
+        // Use server-side filtering if only one vote account is provided
+        if vote_account_pubkeys.len() == 1 {
+            program_accounts_config.filters = Some(vec![
+                // Filter by `StakeState::Stake(_, _)`
+                rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
+                    offset: 0,
+                    bytes: rpc_filter::MemcmpEncodedBytes::Binary(
+                        bs58::encode([2, 0, 0, 0]).into_string(),
+                    ),
+                    encoding: Some(rpc_filter::MemcmpEncoding::Binary),
+                }),
+                // Filter by `Delegation::voter_pubkey`, which begins at byte offset 124
+                rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
+                    offset: 124,
+                    bytes: rpc_filter::MemcmpEncodedBytes::Binary(
+                        vote_account_pubkeys[0].to_string(),
+                    ),
+                    encoding: Some(rpc_filter::MemcmpEncoding::Binary),
+                }),
+            ]);
+        }
+    }
+    let all_stake_accounts = rpc_client
+        .get_program_accounts_with_config(&solana_stake_program::id(), program_accounts_config)?;
     let stake_history_account = rpc_client.get_account(&stake_history::id())?;
-    progress_bar.finish_and_clear();
     let clock_account = rpc_client.get_account(&sysvar::clock::id())?;
+    let clock: Clock = Sysvar::from_account(&clock_account).ok_or_else(|| {
+        CliError::RpcRequestError("Failed to deserialize clock sysvar".to_string())
+    })?;
+    progress_bar.finish_and_clear();
 
     let stake_history = StakeHistory::from_account(&stake_history_account).ok_or_else(|| {
         CliError::RpcRequestError("Failed to deserialize stake history".to_string())
-    })?;
-    let clock: Clock = Sysvar::from_account(&clock_account).ok_or_else(|| {
-        CliError::RpcRequestError("Failed to deserialize clock sysvar".to_string())
     })?;
 
     let mut stake_accounts: Vec<CliKeyedStakeState> = vec![];
