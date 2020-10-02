@@ -19,6 +19,7 @@ use solana_sdk::{
 const TEST_SUCCESS: u8 = 1;
 const TEST_PRIVILEGE_ESCALATION_SIGNER: u8 = 2;
 const TEST_PRIVILEGE_ESCALATION_WRITABLE: u8 = 3;
+const TEST_PPROGRAM_NOT_EXECUTABLE: u8 = 4;
 
 // const MINT_INDEX: usize = 0;
 const ARGUMENT_INDEX: usize = 1;
@@ -241,10 +242,7 @@ fn process_instruction(
 
             // Signer privilege escalation will always fail the whole transaction
             invoked_instruction.accounts[0].is_signer = true;
-            assert_eq!(
-                invoke(&invoked_instruction, accounts),
-                Err(ProgramError::Custom(0x0b9f_0002))
-            );
+            invoke(&invoked_instruction, accounts)?;
         }
         TEST_PRIVILEGE_ESCALATION_WRITABLE => {
             info!("Test privilege escalation writable");
@@ -257,10 +255,17 @@ fn process_instruction(
 
             // Writable privilege escalation will always fail the whole transaction
             invoked_instruction.accounts[0].is_writable = true;
-            assert_eq!(
-                invoke(&invoked_instruction, accounts),
-                Err(ProgramError::Custom(0x0b9f_0002))
+
+            invoke(&invoked_instruction, accounts)?;
+        }
+        TEST_PPROGRAM_NOT_EXECUTABLE => {
+            info!("Test program not executable");
+            let instruction = create_instruction(
+                *accounts[ARGUMENT_INDEX].key,
+                &[(accounts[ARGUMENT_INDEX].key, true, true)],
+                vec![TEST_RETURN_ERROR],
             );
+            invoke(&instruction, accounts)?;
         }
         _ => panic!(),
     }

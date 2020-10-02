@@ -457,7 +457,6 @@ impl MessageProcessor {
             })
             .collect();
         keyed_accounts.append(&mut keyed_accounts2);
-        assert!(keyed_accounts[0].executable()?, "account not executable");
         Ok(keyed_accounts)
     }
 
