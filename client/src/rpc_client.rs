@@ -164,6 +164,19 @@ impl RpcClient {
         self.send(RpcRequest::GetSignatureStatuses, json!([signatures]))
     }
 
+    pub fn get_signature_statuses_with_history(
+        &self,
+        signatures: &[Signature],
+    ) -> RpcResult<Vec<Option<TransactionStatus>>> {
+        let signatures: Vec<_> = signatures.iter().map(|s| s.to_string()).collect();
+        self.send(
+            RpcRequest::GetSignatureStatuses,
+            json!([signatures, {
+                "searchTransactionHistory": true
+            }]),
+        )
+    }
+
     pub fn get_signature_status_with_commitment(
         &self,
         signature: &Signature,

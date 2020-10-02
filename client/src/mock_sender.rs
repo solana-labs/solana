@@ -94,9 +94,15 @@ impl RpcSender for MockSender {
                         err,
                     })
                 };
+                let statuses: Vec<Option<TransactionStatus>> = params.as_array().unwrap()[0]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|_| status.clone())
+                    .collect();
                 serde_json::to_value(Response {
                     context: RpcResponseContext { slot: 1 },
-                    value: vec![status],
+                    value: statuses,
                 })?
             }
             RpcRequest::GetTransactionCount => Value::Number(Number::from(1234)),

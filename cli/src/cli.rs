@@ -29,7 +29,8 @@ use solana_client::{
     nonce_utils,
     rpc_client::RpcClient,
     rpc_config::{RpcLargestAccountsFilter, RpcSendTransactionConfig},
-    rpc_response::{Response, RpcKeyedAccount},
+    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+    rpc_response::RpcKeyedAccount,
 };
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -42,7 +43,7 @@ use solana_sdk::{
     commitment_config::CommitmentConfig,
     decode_error::DecodeError,
     hash::Hash,
-    instruction::InstructionError,
+    instruction::{Instruction, InstructionError},
     loader_instruction,
     message::Message,
     pubkey::{Pubkey, MAX_SEED_LEN},
@@ -1021,6 +1022,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
     mut transactions: Vec<Transaction>,
     signer_keys: &T,
     commitment: CommitmentConfig,
+    mut last_valid_slot: Slot,
 ) -> Result<(), Box<dyn error::Error>> {
     let progress_bar = new_spinner_progress_bar();
     let mut send_retries = 5;
@@ -1028,7 +1030,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
         let mut status_retries = 15;
 
         // Send all transactions
-        let mut transactions_signatures = vec![];
+        let mut pending_transactions = HashMap::new();
         let num_transactions = transactions.len();
         for transaction in transactions {
             if cfg!(not(test)) {
@@ -1038,7 +1040,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                 sleep(Duration::from_millis(1000 / DEFAULT_TICKS_PER_SECOND));
             }
 
-            let signature = rpc_client
+            let _result = rpc_client
                 .send_transaction_with_config(
                     &transaction,
                     RpcSendTransactionConfig {
@@ -1047,11 +1049,11 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                     },
                 )
                 .ok();
-            transactions_signatures.push((transaction, signature));
+            pending_transactions.insert(transaction.signatures[0], transaction);
 
             progress_bar.set_message(&format!(
                 "[{}/{}] Transactions sent",
-                transactions_signatures.len(),
+                pending_transactions.len(),
                 num_transactions
             ));
         }
@@ -1062,33 +1064,44 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
 
             progress_bar.set_message(&format!(
                 "[{}/{}] Transactions confirmed",
-                num_transactions - transactions_signatures.len(),
+                num_transactions - pending_transactions.len(),
                 num_transactions
             ));
+
+            let mut statuses = vec![];
+            let pending_signatures = pending_transactions.keys().cloned().collect::<Vec<_>>();
+            for pending_signatures_chunk in
+                pending_signatures.chunks(MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS - 1)
+            {
+                statuses.extend(
+                    rpc_client
+                        .get_signature_statuses_with_history(pending_signatures_chunk)?
+                        .value
+                        .into_iter(),
+                );
+            }
+            assert_eq!(statuses.len(), pending_signatures.len());
+
+            for (signature, status) in pending_signatures.into_iter().zip(statuses.into_iter()) {
+                if let Some(status) = status {
+                    if status.confirmations.is_none() || status.confirmations.unwrap() > 1 {
+                        let _ = pending_transactions.remove(&signature);
+                    }
+                }
+            }
+
+            if pending_transactions.is_empty() {
+                return Ok(());
+            }
+
+            let slot = rpc_client.get_slot_with_commitment(commitment)?;
+            if slot > last_valid_slot {
+                break;
+            }
 
             if cfg!(not(test)) {
                 // Retry twice a second
                 sleep(Duration::from_millis(500));
-            }
-
-            transactions_signatures = transactions_signatures
-                .into_iter()
-                .filter(|(_transaction, signature)| {
-                    signature
-                        .and_then(|signature| rpc_client.get_signature_statuses(&[signature]).ok())
-                        .map(|Response { context: _, value }| match &value[0] {
-                            None => true,
-                            Some(transaction_status) => {
-                                !(transaction_status.confirmations.is_none()
-                                    || transaction_status.confirmations.unwrap() > 1)
-                            }
-                        })
-                        .unwrap_or(true)
-                })
-                .collect();
-
-            if transactions_signatures.is_empty() {
-                return Ok(());
             }
         }
 
@@ -1098,10 +1111,12 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
         send_retries -= 1;
 
         // Re-sign any failed transactions with a new blockhash and retry
-        let (blockhash, _fee_calculator) = rpc_client
-            .get_new_blockhash(&transactions_signatures[0].0.message().recent_blockhash)?;
+        let (blockhash, _fee_calculator, new_last_valid_slot) = rpc_client
+            .get_recent_blockhash_with_commitment(commitment)?
+            .value;
+        last_valid_slot = new_last_valid_slot;
         transactions = vec![];
-        for (mut transaction, _) in transactions_signatures.into_iter() {
+        for (_, mut transaction) in pending_transactions.into_iter() {
             transaction.try_sign(signer_keys, blockhash)?;
             transactions.push(transaction);
         }
@@ -1135,24 +1150,70 @@ fn process_deploy(
         bpf_loader::id()
     };
 
+    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(program_data.len())?;
+    let signers = [config.signers[0], program_id];
+
+    // Check program account to see if partial initialization has occurred
+    let initial_instructions = if let Some(account) = rpc_client
+        .get_account_with_commitment(&program_id.pubkey(), config.commitment)?
+        .value
+    {
+        let mut instructions: Vec<Instruction> = vec![];
+        if account.executable {
+            return Err(CliError::DynamicProgramError(
+                "Program account is already executable".to_string(),
+            )
+            .into());
+        }
+        if account.owner != loader_id && !system_program::check_id(&account.owner) {
+            return Err(CliError::DynamicProgramError(
+                "Program account is already owned by another account".to_string(),
+            )
+            .into());
+        }
+
+        if account.data.is_empty() && system_program::check_id(&account.owner) {
+            instructions.push(system_instruction::allocate(
+                &program_id.pubkey(),
+                program_data.len() as u64,
+            ));
+            if account.owner != loader_id {
+                instructions.push(system_instruction::assign(&program_id.pubkey(), &loader_id));
+            }
+        }
+        if account.lamports < minimum_balance {
+            instructions.push(system_instruction::transfer(
+                &config.signers[0].pubkey(),
+                &program_id.pubkey(),
+                minimum_balance - account.lamports,
+            ));
+        }
+        instructions
+    } else {
+        vec![system_instruction::create_account(
+            &config.signers[0].pubkey(),
+            &program_id.pubkey(),
+            minimum_balance,
+            program_data.len() as u64,
+            &loader_id,
+        )]
+    };
+    let initial_message = if !initial_instructions.is_empty() {
+        Some(Message::new(
+            &initial_instructions,
+            Some(&config.signers[0].pubkey()),
+        ))
+    } else {
+        None
+    };
+
     // Build transactions to calculate fees
     let mut messages: Vec<&Message> = Vec::new();
-    let (blockhash, fee_calculator, _) = rpc_client
-        .get_recent_blockhash_with_commitment(config.commitment)?
-        .value;
-    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(program_data.len())?;
-    let ix = system_instruction::create_account(
-        &config.signers[0].pubkey(),
-        &program_id.pubkey(),
-        minimum_balance.max(1),
-        program_data.len() as u64,
-        &loader_id,
-    );
-    let message = Message::new(&[ix], Some(&config.signers[0].pubkey()));
-    let mut create_account_tx = Transaction::new_unsigned(message);
-    let signers = [config.signers[0], program_id];
-    create_account_tx.try_sign(&signers, blockhash)?;
-    messages.push(&create_account_tx.message);
+
+    if let Some(message) = &initial_message {
+        messages.push(message);
+    }
+
     let mut write_messages = vec![];
     for (chunk, i) in program_data.chunks(DATA_CHUNK_SIZE).zip(0..) {
         let instruction = loader_instruction::write(
@@ -1174,6 +1235,10 @@ fn process_deploy(
     let finalize_message = Message::new(&[instruction], Some(&signers[0].pubkey()));
     messages.push(&finalize_message);
 
+    let (blockhash, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
+
     check_account_for_multiple_fees_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
@@ -1182,17 +1247,31 @@ fn process_deploy(
         config.commitment,
     )?;
 
-    trace!("Creating program account");
-    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-        &create_account_tx,
-        config.commitment,
-        config.send_transaction_config,
-    );
-    log_instruction_custom_error::<SystemError>(result, &config).map_err(|_| {
-        CliError::DynamicProgramError("Program account allocation failed".to_string())
-    })?;
+    if let Some(message) = initial_message {
+        trace!("Creating or modifying program account");
+        let num_required_signatures = message.header.num_required_signatures;
 
-    let (blockhash, _, _) = rpc_client
+        let mut initial_transaction = Transaction::new_unsigned(message);
+        // Most of the initial_transaction combinations require both the fee-payer and new program
+        // account to sign the transaction. One (transfer) only requires the fee-payer signature.
+        // This check is to ensure signing does not fail on a KeypairPubkeyMismatch error from an
+        // extraneous signature.
+        if num_required_signatures == 2 {
+            initial_transaction.try_sign(&signers, blockhash)?;
+        } else {
+            initial_transaction.try_sign(&[signers[0]], blockhash)?;
+        }
+        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+            &initial_transaction,
+            config.commitment,
+            config.send_transaction_config,
+        );
+        log_instruction_custom_error::<SystemError>(result, &config).map_err(|_| {
+            CliError::DynamicProgramError("Program account allocation failed".to_string())
+        })?;
+    }
+
+    let (blockhash, _, last_valid_slot) = rpc_client
         .get_recent_blockhash_with_commitment(config.commitment)?
         .value;
 
@@ -1209,6 +1288,7 @@ fn process_deploy(
         write_transactions,
         &signers,
         config.commitment,
+        last_valid_slot,
     )
     .map_err(|_| {
         CliError::DynamicProgramError("Data writes to program account failed".to_string())
@@ -2225,7 +2305,12 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
 mod tests {
     use super::*;
     use serde_json::Value;
-    use solana_client::{blockhash_query, mock_sender::SIGNATURE};
+    use solana_client::{
+        blockhash_query,
+        mock_sender::SIGNATURE,
+        rpc_request::RpcRequest,
+        rpc_response::{Response, RpcResponseContext},
+    };
     use solana_sdk::{
         pubkey::Pubkey,
         signature::{keypair_from_seed, read_keypair_file, write_keypair_file, Presigner},
@@ -2797,7 +2882,15 @@ mod tests {
 
         // Success case
         let mut config = CliConfig::default();
-        config.rpc_client = Some(RpcClient::new_mock("deploy_succeeds".to_string()));
+        let account_info_response = json!(Response {
+            context: RpcResponseContext { slot: 1 },
+            value: Value::Null,
+        });
+        let mut mocks = HashMap::new();
+        mocks.insert(RpcRequest::GetAccountInfo, account_info_response);
+        let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
+
+        config.rpc_client = Some(rpc_client);
         let default_keypair = Keypair::new();
         config.signers = vec![&default_keypair];
 
