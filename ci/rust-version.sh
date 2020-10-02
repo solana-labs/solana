@@ -34,6 +34,9 @@ export rust_stable_docker_image=solanalabs/rust:"$stable_version"
 export rust_nightly=nightly-"$nightly_version"
 export rust_nightly_docker_image=solanalabs/rust-nightly:"$nightly_version"
 
+export rust_audit="1.46.0"
+export rust_audit_docker_image=solanalabs/rust-nightly:2020-08-17
+
 [[ -z $1 ]] || (
 
   rustup_install() {
@@ -47,6 +50,9 @@ export rust_nightly_docker_image=solanalabs/rust-nightly:"$nightly_version"
   set -e
   cd "$(dirname "${BASH_SOURCE[0]}")"
   case $1 in
+  audit)
+     rustup_install "$rust_audit"
+     ;;
   stable)
      rustup_install "$rust_stable"
      ;;
@@ -56,6 +62,7 @@ export rust_nightly_docker_image=solanalabs/rust-nightly:"$nightly_version"
   all)
      rustup_install "$rust_stable"
      rustup_install "$rust_nightly"
+     rustup_install "$rust_audit"
     ;;
   *)
     echo "Note: ignoring unknown argument: $1"
