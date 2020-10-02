@@ -1158,7 +1158,8 @@ fn process_deploy(
         if account.executable {
             return Err(CliError::DynamicProgramError(
                 "Program account is already executable".to_string(),
-            ));
+            )
+            .into());
         }
         if account.data.is_empty() {
             instructions.push(system_instruction::allocate(
@@ -1186,7 +1187,7 @@ fn process_deploy(
             &loader_id,
         )]
     };
-    let initial_message = if initial_instructions.len() > 0 {
+    let initial_message = if !initial_instructions.is_empty() {
         Some(Message::new(
             &initial_instructions,
             Some(&config.signers[0].pubkey()),
