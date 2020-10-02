@@ -169,15 +169,19 @@ macro_rules! translate_type {
 #[macro_export]
 macro_rules! translate_slice_mut {
     ($t:ty, $vm_addr:expr, $len: expr, $regions:expr) => {
-        match translate_addr::<BPFError>(
-            $vm_addr as u64,
-            $len as usize * size_of::<$t>(),
-            file!(),
-            line!() as usize - ELF_INSN_DUMP_OFFSET + 1,
-            $regions,
-        ) {
-            Ok(value) => Ok(unsafe { from_raw_parts_mut(value as *mut $t, $len as usize) }),
-            Err(e) => Err(e),
+        if $len == 0 {
+            Ok(unsafe { from_raw_parts_mut(0x1 as *mut $t, $len as usize) })
+        } else {
+            match translate_addr::<BPFError>(
+                $vm_addr as u64,
+                $len as usize * size_of::<$t>(),
+                file!(),
+                line!() as usize - ELF_INSN_DUMP_OFFSET + 1,
+                $regions,
+            ) {
+                Ok(value) => Ok(unsafe { from_raw_parts_mut(value as *mut $t, $len as usize) }),
+                Err(e) => Err(e),
+            }
         }
     };
 }
@@ -932,6 +936,20 @@ mod tests {
 
     #[test]
     fn test_translate_slice() {
+        // zero len
+        let good_data = vec![1u8, 2, 3, 4, 5];
+        let data: Vec<u8> = vec![];
+        assert_eq!(0x1 as *const u8, data.as_ptr());
+        let addr = good_data.as_ptr() as *const _ as u64;
+        let regions = vec![MemoryRegion {
+            addr_host: addr,
+            addr_vm: 100,
+            len: good_data.len() as u64,
+        }];
+        let translated_data = translate_slice!(u8, data.as_ptr(), data.len(), &regions).unwrap();
+        assert_eq!(data, translated_data);
+        assert_eq!(0, translated_data.len());
+
         // u8
         let mut data = vec![1u8, 2, 3, 4, 5];
         let addr = data.as_ptr() as *const _ as u64;
