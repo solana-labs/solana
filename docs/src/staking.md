@@ -66,12 +66,12 @@ description is below.
 #### Supported Wallets
 Staking operations are supported by the following wallet solutions:
 
- - SolFlare.com in conjunction with a keystore file or a Ledger Nano S.  Check
- out our [guide to using SolFlare](wallet-guide/solflare.md) for details.
+ - SolFlare.com in conjunction with a keystore file or a Ledger Nano.
+Check out our [guide to using SolFlare](wallet-guide/solflare.md) for details.
 
  - Solana command line tools can perform all stake operations in conjunction
  with a CLI-generated keypair file wallet, a paper wallet, or with a connected
- Ledger Nano S.
+ Ledger Nano.
  [Staking commands using the Solana Command Line Tools](cli/delegate-stake.md).
 
 #### Create a Stake Account
