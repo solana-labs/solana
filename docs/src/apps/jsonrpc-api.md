@@ -42,6 +42,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 - [getMultipleAccounts](jsonrpc-api.md#getmultipleaccounts)
 - [getProgramAccounts](jsonrpc-api.md#getprogramaccounts)
 - [getRecentBlockhash](jsonrpc-api.md#getrecentblockhash)
+- [getRecentPerformanceSamples](jsonrpc-api.md#getrecentperformancesamples)
 - [getSignatureStatuses](jsonrpc-api.md#getsignaturestatuses)
 - [getSlot](jsonrpc-api.md#getslot)
 - [getSlotLeader](jsonrpc-api.md#getslotleader)
@@ -974,6 +975,35 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"blockhash":"CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR","feeCalculator":{"lamportsPerSignature":5000}}},"id":1}
+```
+
+### getRecentPerformanceSamples
+
+Returns a list of recent performance samples, in reverse slot order. Performance samples are taken every 60 seconds and
+include the number of transactions and slots that occur in a given time window.
+
+#### Parameters:
+- `limit: <usize>` - (optional) number of samples to return (maximum 720)
+
+#### Results:
+
+An array of:
+
+- `RpcPerfSample<object>`
+  - `slot: <u64>` - Slot in which sample was taken at
+  - `numTransactions: <u64>` - Number of transactions in sample
+  - `numSlots: <u64>` - Number of slots in sample
+  - `samplePeriodSecs: <u16>` - Number of seconds in a sample window
+
+#### Example:
+
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getRecentPerformanceSamples", "params": [4]}'
+http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":[{"numSlots":126,"numTransactions":126,"samplePeriodSecs":60,"slot":348125},{"numSlots":126,"numTransactions":126,"samplePeriodSecs":60,"slot":347999},{"numSlots":125,"numTransactions":125,"samplePeriodSecs":60,"slot":347873},{"numSlots":125,"numTransactions":125,"samplePeriodSecs":60,"slot":347748}],"id":1}
 ```
 
 ### getSignatureStatuses
