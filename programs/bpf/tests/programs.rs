@@ -430,10 +430,17 @@ fn test_program_bpf_error_handling() {
 fn test_program_bpf_invoke() {
     solana_logger::setup();
 
+<<<<<<< HEAD
     const TEST_SUCCESS: u8 = 1;
     const TEST_PRIVILEGE_ESCALATION_SIGNER: u8 = 2;
     const TEST_PRIVILEGE_ESCALATION_WRITABLE: u8 = 3;
     const TEST_PPROGRAM_NOT_EXECUTABLE: u8 = 4;
+=======
+        const TEST_SUCCESS: u8 = 1;
+        const TEST_PRIVILEGE_ESCALATION_SIGNER: u8 = 2;
+        const TEST_PRIVILEGE_ESCALATION_WRITABLE: u8 = 3;
+        const TEST_PPROGRAM_NOT_EXECUTABLE: u8 = 4;
+>>>>>>> a61d24bfa... Check CPI program is executable
 
     let mut programs = Vec::new();
     #[cfg(feature = "bpf_c")]
@@ -637,6 +644,7 @@ fn test_program_bpf_invoke() {
     }
 }
 
+<<<<<<< HEAD
 #[test]
 fn assert_instruction_count() {
     solana_logger::setup();
@@ -724,6 +732,147 @@ impl InvokeContext for MockInvokeContext {
     fn add_executor(&mut self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
     fn get_executor(&mut self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         None
+=======
+        for program in programs.iter() {
+            println!("Test program: {:?}", program);
+
+            let GenesisConfigInfo {
+                mut genesis_config,
+                mint_keypair,
+                ..
+            } = create_genesis_config(50);
+            genesis_config
+                .native_instruction_processors
+                .push(solana_bpf_loader_program!());
+            let bank = Arc::new(Bank::new(&genesis_config));
+            let bank_client = BankClient::new_shared(&bank);
+
+            let invoke_program_id = load_bpf_program(&bank_client, &mint_keypair, program.0);
+            let invoked_program_id = load_bpf_program(&bank_client, &mint_keypair, program.1);
+
+            let argument_keypair = Keypair::new();
+            let account = Account::new(41, 100, &invoke_program_id);
+            bank.store_account(&argument_keypair.pubkey(), &account);
+
+            let invoked_argument_keypair = Keypair::new();
+            let account = Account::new(10, 10, &invoked_program_id);
+            bank.store_account(&invoked_argument_keypair.pubkey(), &account);
+
+            let from_keypair = Keypair::new();
+            let account = Account::new(43, 0, &solana_sdk::system_program::id());
+            bank.store_account(&from_keypair.pubkey(), &account);
+
+            let (derived_key1, nonce1) =
+                Pubkey::find_program_address(&[b"You pass butter"], &invoke_program_id);
+            let (derived_key2, nonce2) =
+                Pubkey::find_program_address(&[b"Lil'", b"Bits"], &invoked_program_id);
+            let (derived_key3, nonce3) =
+                Pubkey::find_program_address(&[derived_key2.as_ref()], &invoked_program_id);
+
+            let mint_pubkey = mint_keypair.pubkey();
+            let account_metas = vec![
+                AccountMeta::new(mint_pubkey, true),
+                AccountMeta::new(argument_keypair.pubkey(), true),
+                AccountMeta::new_readonly(invoked_program_id, false),
+                AccountMeta::new(invoked_argument_keypair.pubkey(), true),
+                AccountMeta::new_readonly(invoked_program_id, false),
+                AccountMeta::new(argument_keypair.pubkey(), true),
+                AccountMeta::new(derived_key1, false),
+                AccountMeta::new(derived_key2, false),
+                AccountMeta::new_readonly(derived_key3, false),
+                AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
+                AccountMeta::new(from_keypair.pubkey(), true),
+            ];
+
+            // success cases
+
+            let instruction = Instruction::new(
+                invoke_program_id,
+                &[TEST_SUCCESS, nonce1, nonce2, nonce3],
+                account_metas.clone(),
+            );
+            let message = Message::new(&[instruction], Some(&mint_pubkey));
+            assert!(bank_client
+                .send_and_confirm_message(
+                    &[
+                        &mint_keypair,
+                        &argument_keypair,
+                        &invoked_argument_keypair,
+                        &from_keypair
+                    ],
+                    message,
+                )
+                .is_ok());
+
+            // failure cases
+
+            let instruction = Instruction::new(
+                invoke_program_id,
+                &[TEST_PRIVILEGE_ESCALATION_SIGNER, nonce1, nonce2, nonce3],
+                account_metas.clone(),
+            );
+            let message = Message::new(&[instruction], Some(&mint_pubkey));
+            assert_eq!(
+                bank_client
+                    .send_and_confirm_message(
+                        &[
+                            &mint_keypair,
+                            &argument_keypair,
+                            &invoked_argument_keypair,
+                            &from_keypair
+                        ],
+                        message,
+                    )
+                    .unwrap_err()
+                    .unwrap(),
+                TransactionError::InstructionError(0, InstructionError::Custom(194969602))
+            );
+
+            let instruction = Instruction::new(
+                invoke_program_id,
+                &[TEST_PRIVILEGE_ESCALATION_WRITABLE, nonce1, nonce2, nonce3],
+                account_metas.clone(),
+            );
+            let message = Message::new(&[instruction], Some(&mint_pubkey));
+            assert_eq!(
+                bank_client
+                    .send_and_confirm_message(
+                        &[
+                            &mint_keypair,
+                            &argument_keypair,
+                            &invoked_argument_keypair,
+                            &from_keypair
+                        ],
+                        message,
+                    )
+                    .unwrap_err()
+                    .unwrap(),
+                TransactionError::InstructionError(0, InstructionError::Custom(194969602))
+            );
+
+            let instruction = Instruction::new(
+                invoke_program_id,
+                &[TEST_PPROGRAM_NOT_EXECUTABLE, nonce1, nonce2, nonce3],
+                account_metas.clone(),
+            );
+            let message = Message::new(&[instruction], Some(&mint_pubkey));
+            assert_eq!(
+                bank_client
+                    .send_and_confirm_message(
+                        &[
+                            &mint_keypair,
+                            &argument_keypair,
+                            &invoked_argument_keypair,
+                            &from_keypair
+                        ],
+                        message,
+                    )
+                    .unwrap_err()
+                    .unwrap(),
+                TransactionError::InstructionError(0, InstructionError::AccountNotExecutable)
+            );
+        }
+>>>>>>> a61d24bfa... Check CPI program is executable
     }
     fn record_instruction(&self, _instruction: &Instruction) {}
 }
