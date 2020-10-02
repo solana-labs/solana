@@ -30,11 +30,6 @@ on your Nano S device, users have several options of how to
 ## Install the Solana App on your Nano S
 
 - Open Ledger Live
-- Currently Ledger Live needs to be in "Developer Mode"
-  (Settings > Experimental Features > Developer Mode) to see our app.
-
-![Enabling Developer Mode](/img/ledger-live-enable-developer-mode.png)
-
 - Go to Manager in the app and find "Solana" in the App Catalog and
   click Install
   - Make sure your device is plugged in via USB and is unlocked with its PIN
