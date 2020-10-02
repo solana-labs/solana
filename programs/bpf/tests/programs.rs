@@ -535,6 +535,7 @@ fn test_program_bpf_invoke() {
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
+                invoked_program_id.clone(),
             ]
         );
 
@@ -632,12 +633,12 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_128bit", 543),
             ("solana_bpf_rust_alloc", 19082),
             ("solana_bpf_rust_dep_crate", 2),
-            ("solana_bpf_rust_external_spend", 477),
+            ("solana_bpf_rust_external_spend", 485),
             ("solana_bpf_rust_iter", 723),
             ("solana_bpf_rust_many_args", 231),
-            ("solana_bpf_rust_noop", 451),
+            ("solana_bpf_rust_noop", 459),
             ("solana_bpf_rust_param_passing", 54),
-            ("solana_bpf_rust_sanity", 2215),
+            ("solana_bpf_rust_sanity", 2223),
         ]);
     }
 

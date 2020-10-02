@@ -21,6 +21,10 @@ fn process_instruction(
 ) -> ProgramResult {
     info!("Invoked program");
 
+    if instruction_data.is_empty() {
+        return Ok(());
+    }
+
     match instruction_data[0] {
         TEST_VERIFY_TRANSLATIONS => {
             info!("verify data translations");
