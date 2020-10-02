@@ -35,7 +35,6 @@ _ ci/order-crates-for-publishing.py
 
 {
   cd programs/bpf
-  _ cargo +"$rust_stable" audit
   for project in rust/*/ ; do
     echo "+++ do_bpf_checks $project"
     (
