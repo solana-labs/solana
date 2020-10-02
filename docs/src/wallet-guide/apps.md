@@ -35,19 +35,18 @@ viewed at any later time in the app by following these steps:
 
 [Trust Wallet](trust-wallet.md)
 
-## Ledger Live with Ledger Nano S
+## Ledger Live with Nano S or Nano X
 
 [Ledger Live](https://www.ledger.com/ledger-live) is available as free desktop
 software and as a free app for iOS and Android. It is used to manage apps and
 crypto accounts on a Ledger _hardware wallet_, which must be purchased
 separately and connected to the device running Ledger Live.
 
-[Ledger Nano S](https://shop.ledger.com/products/ledger-nano-s) is a
-hardware wallet which stores the wallet's private keys on a secure device that
+[Ledger Nano S](https://shop.ledger.com/products/ledger-nano-s) and the
+[Ledger Nano X](https://shop.ledger.com/pages/ledger-nano-x) are
+hardware wallets which stores the wallet's private keys on a secure device that
 is physically separate from the computer, and connects via USB cable.
 This provides an extra level of security but requires the user to purchase and
 keep track of the hardware device.
-
-Solana does not support the Ledger Nano **X** at this time.
 
 [Ledger Live](ledger-live.md)
