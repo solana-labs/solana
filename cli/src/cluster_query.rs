@@ -2,6 +2,7 @@ use crate::{
     cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
 };
+use chrono::{Local, TimeZone};
 use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
 use solana_clap_utils::{
@@ -682,26 +683,43 @@ pub fn process_leader_schedule(rpc_client: &RpcClient) -> ProcessResult {
 }
 
 pub fn process_get_block(rpc_client: &RpcClient, _config: &CliConfig, slot: Slot) -> ProcessResult {
-    let block =
+    let mut block =
         rpc_client.get_confirmed_block_with_encoding(slot, UiTransactionEncoding::Base64)?;
 
     println!("Slot: {}", slot);
     println!("Parent Slot: {}", block.parent_slot);
     println!("Blockhash: {}", block.blockhash);
     println!("Previous Blockhash: {}", block.previous_blockhash);
-    if block.block_time.is_some() {
-        println!("Block Time: {:?}", block.block_time);
+    if let Some(block_time) = block.block_time {
+        println!("Block Time: {:?}", Local.timestamp(block_time, 0));
     }
     if !block.rewards.is_empty() {
+        block.rewards.sort_by(|a, b| a.pubkey.cmp(&b.pubkey));
         println!("Rewards:",);
+        println!(
+            "  {:<44}  {:<15}  {:<13}  {:>14}",
+            "Address", "Amount", "New Balance", "Percent Change"
+        );
         for reward in block.rewards {
+            let sign = if reward.lamports < 0 { "-" } else { "" };
+
             println!(
-                "  {:<44}: {}",
+                "  {:<44}  {:>15}  {}",
                 reward.pubkey,
-                if reward.lamports > 0 {
-                    format!("◎{}", lamports_to_sol(reward.lamports as u64))
+                format!(
+                    "{}◎{:<14.4}",
+                    sign,
+                    lamports_to_sol(reward.lamports.abs() as u64)
+                ),
+                if reward.post_balance == 0 {
+                    "          -                 -".to_string()
                 } else {
-                    format!("◎-{}", lamports_to_sol(reward.lamports.abs() as u64))
+                    format!(
+                        "◎{:<12.4}  {:>13.4}%",
+                        lamports_to_sol(reward.post_balance),
+                        reward.lamports.abs() as f64
+                            / (reward.post_balance as f64 - reward.lamports as f64)
+                    )
                 }
             );
         }
