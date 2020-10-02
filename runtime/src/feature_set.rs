@@ -29,6 +29,10 @@ pub mod bpf_loader2_program {
     solana_sdk::declare_id!("DFBnrgThdzH4W6wZ12uGPoWcMnvfZj11EHnxHcVxLPhD");
 }
 
+pub mod no_overflow_rent_distribution {
+    solana_sdk::declare_id!("4kpdyrcj5jS47CZb2oJGfVxjYbsMm2Kx97gFyZrxxwXz");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -38,6 +42,7 @@ lazy_static! {
         (pico_inflation::id(), "pico-inflation"),
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
         (bpf_loader2_program::id(), "bpf_loader2 program"),
+        (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
