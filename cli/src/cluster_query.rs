@@ -15,6 +15,7 @@ use solana_cli_output::{
     *,
 };
 use solana_client::{
+    client_error::ClientErrorKind,
     pubsub_client::PubsubClient,
     rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
     rpc_config::{RpcLargestAccountsConfig, RpcLargestAccountsFilter},
@@ -537,7 +538,20 @@ pub fn process_catchup(
         RpcClient::new_socket(rpc_addr)
     };
 
-    let reported_node_pubkey = node_client.get_identity()?;
+    let reported_node_pubkey = loop {
+        match node_client.get_identity() {
+            Ok(reported_node_pubkey) => break reported_node_pubkey,
+            Err(err) => {
+                if let ClientErrorKind::Reqwest(err) = err.kind() {
+                    progress_bar.set_message(&format!("Connection failed: {}", err));
+                    sleep(Duration::from_secs(sleep_interval as u64));
+                    continue;
+                }
+                return Err(Box::new(err));
+            }
+        }
+    };
+
     if reported_node_pubkey != *node_pubkey {
         return Err(format!(
             "The identity reported by node RPC URL does not match.  Expected: {:?}.  Reported: {:?}",
