@@ -34,6 +34,8 @@ export RUST_BACKTRACE=1
 dataDir=$PWD/config/"$(basename "$0" .sh)"
 ledgerDir=$PWD/config/ledger
 
+SOLANA_RUN_SH_CLUSTER_TYPE=${SOLANA_RUN_SH_CLUSTER_TYPE:-development}
+
 set -x
 validator_identity="$dataDir/validator-identity.json"
 if [[ -e $validator_identity ]]; then
@@ -78,7 +80,7 @@ else
       "$dataDir"/validator-vote-account.json \
       "$dataDir"/validator-stake-account.json \
     --ledger "$ledgerDir" \
-    --cluster-type development \
+    --cluster-type "$SOLANA_RUN_SH_CLUSTER_TYPE" \
     $SPL_GENESIS_ARGS \
     $SOLANA_RUN_SH_GENESIS_ARGS
 fi
