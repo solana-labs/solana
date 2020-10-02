@@ -1246,6 +1246,8 @@ fn main() {
         )
         .get_matches();
 
+    info!("{} {}", crate_name!(), solana_version::version!());
+
     let ledger_path = PathBuf::from(value_t!(matches, "ledger_path", String).unwrap_or_else(
         |_err| {
             eprintln!(
