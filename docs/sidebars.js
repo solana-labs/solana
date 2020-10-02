@@ -7,21 +7,13 @@ module.exports = {
       ],
     "Wallets": [
       "wallet-guide",
+      "wallet-guide/apps",
+      "wallet-guide/web-wallets",
       {
         type: "category",
-        label: "App Wallets",
+        label: "Hardware Wallets",
         items: [
-          "wallet-guide/apps",
-          "wallet-guide/trust-wallet",
           "wallet-guide/ledger-live",
-        ],
-      },
-      {
-        type: "category",
-        label: "Web Wallets",
-        items: [
-          "wallet-guide/web-wallets",
-          "wallet-guide/solflare",
         ],
       },
       {
@@ -33,7 +25,10 @@ module.exports = {
           {
             type: "category",
             label: "Hardware Wallets",
-            items: ["wallet-guide/hardware-wallets", "wallet-guide/hardware-wallets/ledger"],
+            items: [
+              "wallet-guide/hardware-wallets",
+              "wallet-guide/hardware-wallets/ledger",
+            ],
           },
           "wallet-guide/file-system-wallet",
         ],
