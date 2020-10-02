@@ -201,6 +201,7 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             pre_balances,
             post_balances,
             inner_instructions,
+            log_messages,
         } = value;
         let err = match status {
             Ok(()) => None,
@@ -213,12 +214,14 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             .into_iter()
             .map(|ii| ii.into())
             .collect();
+        let log_messages = log_messages.unwrap_or_default();
         Self {
             err,
             fee,
             pre_balances,
             post_balances,
             inner_instructions,
+            log_messages,
         }
     }
 }
@@ -233,6 +236,7 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             pre_balances,
             post_balances,
             inner_instructions,
+            log_messages,
         } = value;
         let status = match &err {
             None => Ok(()),
@@ -244,12 +248,14 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
                 .map(|inner| inner.into())
                 .collect(),
         );
+        let log_messages = Some(log_messages);
         Ok(Self {
             status,
             fee,
             pre_balances,
             post_balances,
             inner_instructions,
+            log_messages,
         })
     }
 }

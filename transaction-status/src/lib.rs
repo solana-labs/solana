@@ -144,6 +144,8 @@ pub struct TransactionStatusMeta {
     pub post_balances: Vec<u64>,
     #[serde(deserialize_with = "default_on_eof")]
     pub inner_instructions: Option<Vec<InnerInstructions>>,
+    #[serde(deserialize_with = "default_on_eof")]
+    pub log_messages: Option<Vec<String>>,
 }
 
 impl Default for TransactionStatusMeta {
@@ -154,6 +156,7 @@ impl Default for TransactionStatusMeta {
             pre_balances: vec![],
             post_balances: vec![],
             inner_instructions: None,
+            log_messages: None,
         }
     }
 }
@@ -168,6 +171,7 @@ pub struct UiTransactionStatusMeta {
     pub pre_balances: Vec<u64>,
     pub post_balances: Vec<u64>,
     pub inner_instructions: Option<Vec<UiInnerInstructions>>,
+    pub log_messages: Option<Vec<String>>,
 }
 
 impl UiTransactionStatusMeta {
@@ -183,6 +187,7 @@ impl UiTransactionStatusMeta {
                     .map(|ix| UiInnerInstructions::parse(ix, message))
                     .collect()
             }),
+            log_messages: meta.log_messages,
         }
     }
 }
@@ -198,6 +203,7 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
             inner_instructions: meta
                 .inner_instructions
                 .map(|ixs| ixs.into_iter().map(|ix| ix.into()).collect()),
+            log_messages: meta.log_messages,
         }
     }
 }
