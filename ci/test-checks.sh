@@ -31,13 +31,13 @@ _ cargo +"$rust_stable" fmt --all -- --check
 _ cargo +"$rust_stable" clippy --version
 _ cargo +"$rust_stable" clippy --workspace -- --deny=warnings
 
-_ cargo +"$rust_stable" audit --version
-_ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit --ignore RUSTSEC-2020-0002 --ignore RUSTSEC-2020-0008
+#_ cargo +"$rust_stable" audit --version
+#_ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit --ignore RUSTSEC-2020-0002 --ignore RUSTSEC-2020-0008
 _ ci/order-crates-for-publishing.py
 
 {
   cd programs/bpf
-  _ cargo +"$rust_stable" audit
+  #_ cargo +"$rust_stable" audit
   for project in rust/*/ ; do
     echo "+++ do_bpf_checks $project"
     (
