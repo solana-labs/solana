@@ -50,9 +50,8 @@ then you will be taken to the wallet interface main page.
 
 ### Using a Ledger Nano hardware wallet
 
-*NOTE: SolFlare and Solana supports both Ledger Nano S and Nano X.
-There is a known issue in which a Nano X sometimes cannot connect using the
-Windows operating system. The Ledger team is working to resolve this.*
+*NOTE: Please see [known issues](ledger-live.md#known-issues) for any current
+limitations in using the Nano.*
 
 #### Initial Device Setup
 To use a Ledger Nano with SolFlare, first ensure you have
@@ -178,7 +177,7 @@ If you accessed your wallet using a Keystore file, you will be prompted to enter
 your password any time the key is needed to sign a transaction.
 
 ### Using a Ledger Nano
-If you accessed your wallet with a Ledger Nano S or X, you will be prompted to
+If you accessed your wallet with a Ledger Nano, you will be prompted to
 confirm the pending transaction details on your device whenever the key is needed
 to sign. On the Nano, use the left and right buttons to view and confirm all of the
 transaction details.  If everything looks correct, keep clicking the right button

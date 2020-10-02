@@ -2,20 +2,20 @@
 title: Ledger Hardware Wallet
 ---
 
-The Ledger Nano hardware wallet offers secure storage of your Solana private
-keys. The Solana Ledger app enables derivation of essentially infinite keys, and
-secure transaction signing.
+This page describes how to use a Ledger Nano S or Nano X to interact with Solana
+using the command line tools.  To see other solutions to interact with Solana with
+your Nano, [click here](../ledger-live.md#interact-with-the-solana-network).
 
 ## Before You Begin
 
-- [Set up a Ledger Nano with the Solana App](../ledger-live.md)
+- [Set up a Nano with the Solana App](../ledger-live.md)
 - [Install the Solana command-line tools](../../cli/install-solana-cli-tools.md)
 
-## Use Ledger Nano S or Nano X with Solana CLI
+## Use Ledger Nano with Solana CLI
 
 1. Ensure the Ledger Live application is closed
-2. Plug your Ledger device into your computer's USB port
-3. Enter your pin and start the Solana app on the Ledger device
+2. Plug your Nano into your computer's USB port
+3. Enter your pin and start the Solana app on the Nano
 4. Ensure the screen reads "Application is ready"
 
 ### View your Wallet ID
@@ -28,7 +28,7 @@ solana-keygen pubkey usb://ledger
 
 This confirms your Ledger device is connected properly and in the correct state
 to interact with the Solana CLI. The command returns your Ledger's unique
-_wallet ID_. When you have multiple Nano S or X devices connected to the same
+_wallet ID_. When you have multiple Nano devices connected to the same
 computer, you can use your wallet ID to specify which Ledger hardware wallet
 you want to use. If you only plan to use a single Nano on your computer
 at a time, you don't need to include the wallet ID. For information on
@@ -37,7 +37,7 @@ using the wallet ID to use a specific Ledger, see
 
 ### View your Wallet Addresses
 
-Your Nano S and X supports an arbitrary number of valid wallet addresses and signers.
+Your Nano supports an arbitrary number of valid wallet addresses and signers.
 To view any address, use the `solana-keygen pubkey` command, as shown below,
 followed by a valid [keypair URL](../hardware-wallets.md#specify-a-keypair-url).
 
@@ -58,7 +58,7 @@ solana-keygen pubkey usb://ledger?key=2
 You can use other values for the number after `key=` as well.
 Any of the addresses displayed by these commands are valid Solana wallet
 addresses. The private portion associated with each address is stored securely
-on the Nano device, and is used to sign transactions from this address.
+on the Nano, and is used to sign transactions from this address.
 Just make a note of which keypair URL you used to derive any address you will be
 using to receive tokens.
 
@@ -99,7 +99,7 @@ Ledger, will show as "Not Found" in the explorer. Empty accounts and non-existen
 accounts are treated the same in Solana. This will change when your account
 address has some SOL in it.
 
-### Send SOL from a Ledger Nano
+### Send SOL from a Nano
 
 To send some tokens from an address controlled by your Nano, you will
 need to use the device to sign a transaction, using the same keypair URL you
@@ -159,7 +159,7 @@ choose which wallet to use for each signature.
 
 Instead of using the interactive prompts, you can generate fully qualified
 URLs using the Solana CLI `resolve-signer` command. For example, try
-connecting a Ledger Nano to USB, unlock it with your pin, and running the
+connecting a Nano to USB, unlock it with your pin, and running the
 following command:
 
 ```text

@@ -20,13 +20,13 @@ on your Nano device, users have several options of how to
 - Install [Ledger Live desktop software](https://www.ledger.com/ledger-live/)
   - If you already have Ledger Live installed, please update to the latest
   version of Ledger Live, which enables the newest firmware and app updates.
-- Connect your Nano S or X to your computer and follow the on-screen instructions.
+- Connect your Nano to your computer and follow the on-screen instructions.
 - Update the firmware on your new Nano.  This is needed to ensure you are able
 to install the latest version of the Solana App.
   - [Update Nano S Firmware](https://support.ledger.com/hc/en-us/articles/360002731113-Update-Ledger-Nano-S-firmware)
   - [Update Nano X Firmware](https://support.ledger.com/hc/en-us/articles/360013349800)
 
-## Install the Solana App on your Ledger Nano
+## Install the Solana App on your Nano
 
 - Open Ledger Live
 - Click on "Manager" in the left pane on the app and search for "Solana" in the
@@ -59,12 +59,18 @@ Solana:
 - [SolFlare.com](https://solflare.com/) is a non-custodial web wallet built
 specifically for Solana and supports basic transfers and staking operations
 with the Ledger device.
-Check out our guide for [using a Ledger Nano with SolFlare](solflare.md).
+Check out our guide for [using a Nano with SolFlare](solflare.md).
 
 - Developers and advanced users may
-[use a Ledger Nano with the Solana command line tools](hardware-wallets/ledger.md).
+[use a Nano with the Solana command line tools](hardware-wallets/ledger.md).
 New wallet features are almost always supported in the native command line tools
 before being supported by third-party wallets.
+
+## Known Issues
+
+- Nano X sometimes cannot connect to web wallets using the Windows operating
+system. This is likely to affect any browser-based wallets that use WebUSB.
+The Ledger team is working to resolve this.
 
 ## Support
 
