@@ -936,7 +936,7 @@ mod tests {
 
     #[test]
     fn test_translate_slice() {
-        // zero len
+        // zero-len
         let good_data = vec![1u8, 2, 3, 4, 5];
         let data: Vec<u8> = vec![];
         assert_eq!(0x1 as *const u8, data.as_ptr());
