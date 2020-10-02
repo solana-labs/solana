@@ -605,8 +605,11 @@ fn rpc_bootstrap(
     cluster_entrypoint: &ContactInfo,
     validator_config: &mut ValidatorConfig,
     bootstrap_config: RpcBootstrapConfig,
+    no_port_check: bool,
 ) {
-    verify_reachable_ports(&node, cluster_entrypoint, &validator_config);
+    if !no_port_check {
+        verify_reachable_ports(&node, cluster_entrypoint, &validator_config);
+    }
 
     if bootstrap_config.no_genesis_fetch && bootstrap_config.no_snapshot_fetch {
         return;
@@ -752,6 +755,7 @@ fn create_validator(
     cluster_entrypoint: Option<ContactInfo>,
     mut validator_config: ValidatorConfig,
     rpc_bootstrap_config: RpcBootstrapConfig,
+    no_port_check: bool,
 ) -> Validator {
     if validator_config.cuda {
         solana_perf::perf_libs::init_cuda();
@@ -769,6 +773,7 @@ fn create_validator(
             cluster_entrypoint,
             &mut validator_config,
             rpc_bootstrap_config,
+            no_port_check,
         );
     }
 
@@ -920,6 +925,12 @@ pub fn main() {
                 .long("--private-rpc")
                 .takes_value(false)
                 .help("Do not publish the RPC port for use by other nodes")
+        )
+        .arg(
+            Arg::with_name("no_port_check")
+                .long("--no-port-check")
+                .takes_value(false)
+                .help("Do not perform TCP/UDP reachable port checks at start-up")
         )
         .arg(
             Arg::with_name("enable_rpc_exit")
@@ -1308,6 +1319,7 @@ pub fn main() {
     };
 
     let private_rpc = matches.is_present("private_rpc");
+    let no_port_check = matches.is_present("no_port_check");
     let no_rocksdb_compaction = matches.is_present("no_rocksdb_compaction");
     let wal_recovery_mode = matches
         .value_of("wal_recovery_mode")
@@ -1392,6 +1404,8 @@ pub fn main() {
             (
                 SocketAddr::new(rpc_bind_address, rpc_port),
                 SocketAddr::new(rpc_bind_address, rpc_port + 1),
+                // +2 is skipped to avoid a conflict with the websocket port (which is +2) in web3.js
+                // This odd port shifting is tracked at https://github.com/solana-labs/solana/issues/12250
                 SocketAddr::new(rpc_bind_address, rpc_port + 3),
             )
         }),
@@ -1643,6 +1657,7 @@ pub fn main() {
         cluster_entrypoint,
         validator_config,
         rpc_bootstrap_config,
+        no_port_check,
     );
 
     if let Some(filename) = init_complete_file {
