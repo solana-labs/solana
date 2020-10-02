@@ -435,6 +435,7 @@ fn test_program_bpf_invoke() {
     const TEST_SUCCESS: u8 = 1;
     const TEST_PRIVILEGE_ESCALATION_SIGNER: u8 = 2;
     const TEST_PRIVILEGE_ESCALATION_WRITABLE: u8 = 3;
+    const TEST_PPROGRAM_NOT_EXECUTABLE: u8 = 4;
 
     let mut programs = Vec::new();
     #[cfg(feature = "bpf_c")]
@@ -595,6 +596,35 @@ fn test_program_bpf_invoke() {
             TransactionError::InstructionError(0, InstructionError::Custom(194969602))
         );
 
+        let instruction = Instruction::new(
+            invoke_program_id,
+            &[TEST_PPROGRAM_NOT_EXECUTABLE, nonce1, nonce2, nonce3],
+            account_metas.clone(),
+        );
+        let message = Message::new(&[instruction], Some(&mint_pubkey));
+        let tx = Transaction::new(
+            &[
+                &mint_keypair,
+                &argument_keypair,
+                &invoked_argument_keypair,
+                &from_keypair,
+            ],
+            message.clone(),
+            bank.last_blockhash(),
+        );
+        let (result, inner_instructions) = process_transaction_and_record_inner(&bank, tx);
+        let invoked_programs: Vec<Pubkey> = inner_instructions[0]
+            .iter()
+            .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
+            .collect();
+        assert_eq!(invoked_programs, vec![argument_keypair.pubkey().clone()]);
+        assert_eq!(
+            result.unwrap_err(),
+            TransactionError::InstructionError(0, InstructionError::AccountNotExecutable)
+        );
+
+        // Check final state
+
         assert_eq!(43, bank.get_balance(&derived_key1));
         let account = bank.get_account(&derived_key1).unwrap();
         assert_eq!(invoke_program_id, account.owner);
@@ -632,12 +662,12 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_128bit", 543),
             ("solana_bpf_rust_alloc", 19082),
             ("solana_bpf_rust_dep_crate", 2),
-            ("solana_bpf_rust_external_spend", 477),
+            ("solana_bpf_rust_external_spend", 485),
             ("solana_bpf_rust_iter", 723),
             ("solana_bpf_rust_many_args", 231),
-            ("solana_bpf_rust_noop", 451),
+            ("solana_bpf_rust_noop", 459),
             ("solana_bpf_rust_param_passing", 54),
-            ("solana_bpf_rust_sanity", 2215),
+            ("solana_bpf_rust_sanity", 2223),
         ]);
     }
 

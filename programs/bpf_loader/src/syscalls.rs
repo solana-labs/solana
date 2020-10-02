@@ -1088,6 +1088,9 @@ fn call<'a>(
     // Process instruction
 
     let program_account = (*accounts[callee_program_id_index]).clone();
+    if !program_account.borrow().executable {
+        return Err(SyscallError::InstructionError(InstructionError::AccountNotExecutable).into());
+    }
     let executable_accounts = vec![(callee_program_id, program_account)];
     let mut message_processor = MessageProcessor::default();
     for (program_id, process_instruction) in invoke_context.get_programs().iter() {
