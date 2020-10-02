@@ -16,12 +16,35 @@ use std::{
     time::Duration,
 };
 
+#[derive(Debug, Clone)]
+pub struct PubSubConfig {
+    // See the corresponding fields in
+    // https://github.com/paritytech/ws-rs/blob/be4d47575bae55c60d9f51b47480d355492a94fc/src/lib.rs#L131
+    // for a complete description of each field in this struct
+    pub max_connections: usize,
+    pub max_fragment_size: usize,
+    pub max_in_buffer_capacity: usize,
+    pub max_out_buffer_capacity: usize,
+}
+
+impl Default for PubSubConfig {
+    fn default() -> Self {
+        Self {
+            max_connections: 1000,             // Arbitrary, default of 100 is too low
+            max_fragment_size: 50 * 1024,      // 50KB
+            max_in_buffer_capacity: 50 * 1024, // 50KB
+            max_out_buffer_capacity: 15 * 1024 * 1024, // max account size (10MB), then 5MB extra for base64 encoding overhead/etc
+        }
+    }
+}
+
 pub struct PubSubService {
     thread_hdl: JoinHandle<()>,
 }
 
 impl PubSubService {
     pub fn new(
+        pubsub_config: PubSubConfig,
         subscriptions: &Arc<RpcSubscriptions>,
         pubsub_addr: SocketAddr,
         exit: &Arc<AtomicBool>,
@@ -29,6 +52,20 @@ impl PubSubService {
         info!("rpc_pubsub bound to {:?}", pubsub_addr);
         let rpc = RpcSolPubSubImpl::new(subscriptions.clone());
         let exit_ = exit.clone();
+
+        // TODO: Once https://github.com/paritytech/jsonrpc/pull/594 lands, use
+        // `ServerBuilder::max_in_buffer_capacity()` and `Server::max_out_buffer_capacity() methods
+        // instead of only `ServerBuilder::max_payload`
+        let max_payload = *[
+            pubsub_config.max_fragment_size,
+            pubsub_config.max_in_buffer_capacity,
+            pubsub_config.max_out_buffer_capacity,
+        ]
+        .iter()
+        .max()
+        .unwrap();
+        info!("rpc_pubsub max_payload: {}", max_payload);
+
         let thread_hdl = Builder::new()
             .name("solana-pubsub".to_string())
             .spawn(move || {
@@ -36,19 +73,24 @@ impl PubSubService {
                 io.extend_with(rpc.to_delegate());
 
                 let server = ServerBuilder::with_meta_extractor(io, |context: &RequestContext| {
-                        info!("New pubsub connection");
-                        let session = Arc::new(Session::new(context.sender()));
-                        session.on_drop(|| {
-                            info!("Pubsub connection dropped");
-                        });
-                        session
+                    info!("New pubsub connection");
+                    let session = Arc::new(Session::new(context.sender()));
+                    session.on_drop(|| {
+                        info!("Pubsub connection dropped");
+                    });
+                    session
                 })
-                .max_connections(1000) // Arbitrary, default of 100 is too low
-                .max_payload(10 * 1024 * 1024 + 1024) // max account size (10MB) + extra (1K)
+                .max_connections(pubsub_config.max_connections)
+                .max_payload(max_payload)
                 .start(&pubsub_addr);
 
                 if let Err(e) = server {
-                    warn!("Pubsub service unavailable error: {:?}. \nAlso, check that port {} is not already in use by another application", e, pubsub_addr.port());
+                    warn!(
+                        "Pubsub service unavailable error: {:?}. \n\
+                           Also, check that port {} is not already in use by another application",
+                        e,
+                        pubsub_addr.port()
+                    );
                     return;
                 }
                 while !exit_.load(Ordering::Relaxed) {
@@ -99,7 +141,8 @@ mod tests {
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
             optimistically_confirmed_bank,
         ));
-        let pubsub_service = PubSubService::new(&subscriptions, pubsub_addr, &exit);
+        let pubsub_service =
+            PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr, &exit);
         let thread = pubsub_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-pubsub");
     }

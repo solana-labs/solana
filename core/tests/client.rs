@@ -1,7 +1,8 @@
 use solana_client::{pubsub_client::PubsubClient, rpc_client::RpcClient, rpc_response::SlotInfo};
 use solana_core::{
     optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-    rpc_pubsub_service::PubSubService, rpc_subscriptions::RpcSubscriptions,
+    rpc_pubsub_service::{PubSubConfig, PubSubService},
+    rpc_subscriptions::RpcSubscriptions,
     test_validator::TestValidator,
 };
 use solana_runtime::{
@@ -100,7 +101,8 @@ fn test_slot_subscription() {
         Arc::new(RwLock::new(BlockCommitmentCache::default())),
         optimistically_confirmed_bank,
     ));
-    let pubsub_service = PubSubService::new(&subscriptions, pubsub_addr, &exit);
+    let pubsub_service =
+        PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr, &exit);
     std::thread::sleep(Duration::from_millis(400));
 
     let (mut client, receiver) =
