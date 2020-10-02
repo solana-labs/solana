@@ -1910,6 +1910,7 @@ name = "solana-bpf-rust-sanity"
 version = "1.4.0"
 dependencies = [
  "solana-sdk",
+ "solana-stake-program",
 ]
 
 [[package]]
@@ -2133,11 +2134,8 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "solana-config-program",
- "solana-metrics",
  "solana-sdk",
  "solana-sdk-macro-frozen-abi",
- "solana-vote-program",
  "thiserror",
 ]
 

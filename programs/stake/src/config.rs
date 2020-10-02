@@ -1,13 +1,13 @@
 //! config for staking
 //!  carries variables that the stake program cares about
-use bincode::{deserialize, serialized_size};
+// use bincode::{deserialize, serialized_size};
 use serde_derive::{Deserialize, Serialize};
-use solana_config_program::{create_config_account, get_config_data, ConfigState};
-use solana_sdk::{
-    account::{Account, KeyedAccount},
-    genesis_config::GenesisConfig,
-    instruction::InstructionError,
-};
+// use solana_config_program::{create_config_account, get_config_data, ConfigState};
+// use solana_sdk::{
+//     account::{Account, KeyedAccount},
+//     genesis_config::GenesisConfig,
+//     instruction::InstructionError,
+// };
 
 // stake config ID
 solana_sdk::declare_id!("StakeConfig11111111111111111111111111111111");
@@ -25,13 +25,13 @@ pub struct Config {
     pub slash_penalty: u8,
 }
 
-impl Config {
-    pub fn from(account: &Account) -> Option<Self> {
-        get_config_data(&account.data)
-            .ok()
-            .and_then(|data| deserialize(data).ok())
-    }
-}
+// impl Config {
+//     pub fn from(account: &Account) -> Option<Self> {
+//         get_config_data(&account.data)
+//             .ok()
+//             .and_then(|data| deserialize(data).ok())
+//     }
+// }
 
 impl Default for Config {
     fn default() -> Self {
@@ -42,47 +42,47 @@ impl Default for Config {
     }
 }
 
-impl ConfigState for Config {
-    fn max_space() -> u64 {
-        serialized_size(&Config::default()).unwrap()
-    }
-}
+// impl ConfigState for Config {
+//     fn max_space() -> u64 {
+//         serialized_size(&Config::default()).unwrap()
+//     }
+// }
 
-pub fn add_genesis_account(genesis_config: &mut GenesisConfig) -> u64 {
-    let mut account = create_config_account(vec![], &Config::default(), 0);
-    let lamports = genesis_config.rent.minimum_balance(account.data.len());
+// pub fn add_genesis_account(genesis_config: &mut GenesisConfig) -> u64 {
+//     let mut account = create_config_account(vec![], &Config::default(), 0);
+//     let lamports = genesis_config.rent.minimum_balance(account.data.len());
 
-    account.lamports = lamports.max(1);
+//     account.lamports = lamports.max(1);
 
-    genesis_config.add_account(id(), account);
+//     genesis_config.add_account(id(), account);
 
-    lamports
-}
+//     lamports
+// }
 
-pub fn create_account(lamports: u64, config: &Config) -> Account {
-    create_config_account(vec![], config, lamports)
-}
+// pub fn create_account(lamports: u64, config: &Config) -> Account {
+//     create_config_account(vec![], config, lamports)
+// }
 
-pub fn from_keyed_account(account: &KeyedAccount) -> Result<Config, InstructionError> {
-    if !check_id(account.unsigned_key()) {
-        return Err(InstructionError::InvalidArgument);
-    }
-    Config::from(&*account.try_account_ref()?).ok_or(InstructionError::InvalidArgument)
-}
+// pub fn from_keyed_account(account: &KeyedAccount) -> Result<Config, InstructionError> {
+//     if !check_id(account.unsigned_key()) {
+//         return Err(InstructionError::InvalidArgument);
+//     }
+//     Config::from(&*account.try_account_ref()?).ok_or(InstructionError::InvalidArgument)
+// }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use solana_sdk::pubkey::Pubkey;
-    use std::cell::RefCell;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use solana_sdk::pubkey::Pubkey;
+//     use std::cell::RefCell;
 
-    #[test]
-    fn test() {
-        let account = RefCell::new(create_account(0, &Config::default()));
-        assert_eq!(Config::from(&account.borrow()), Some(Config::default()));
-        assert_eq!(
-            from_keyed_account(&KeyedAccount::new(&Pubkey::default(), false, &account)),
-            Err(InstructionError::InvalidArgument)
-        );
-    }
-}
+//     #[test]
+//     fn test() {
+//         let account = RefCell::new(create_account(0, &Config::default()));
+//         assert_eq!(Config::from(&account.borrow()), Some(Config::default()));
+//         assert_eq!(
+//             from_keyed_account(&KeyedAccount::new(&Pubkey::default(), false, &account)),
+//             Err(InstructionError::InvalidArgument)
+//         );
+//     }
+// }
