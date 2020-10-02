@@ -2286,7 +2286,12 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
 mod tests {
     use super::*;
     use serde_json::Value;
-    use solana_client::{blockhash_query, mock_sender::SIGNATURE};
+    use solana_client::{
+        blockhash_query,
+        mock_sender::SIGNATURE,
+        rpc_request::RpcRequest,
+        rpc_response::{Response, RpcResponseContext},
+    };
     use solana_sdk::{
         pubkey::Pubkey,
         signature::{keypair_from_seed, read_keypair_file, write_keypair_file, Presigner},
@@ -2858,7 +2863,15 @@ mod tests {
 
         // Success case
         let mut config = CliConfig::default();
-        config.rpc_client = Some(RpcClient::new_mock("deploy_succeeds".to_string()));
+        let account_info_response = json!(Response {
+            context: RpcResponseContext { slot: 1 },
+            value: Value::Null,
+        });
+        let mut mocks = HashMap::new();
+        mocks.insert(RpcRequest::GetAccountInfo, account_info_response);
+        let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
+
+        config.rpc_client = Some(rpc_client);
         let default_keypair = Keypair::new();
         config.signers = vec![&default_keypair];
 
