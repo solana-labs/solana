@@ -1107,6 +1107,7 @@ const ConfirmedTransactionMetaResult = struct.union([
     fee: 'number',
     preBalances: struct.array(['number']),
     postBalances: struct.array(['number']),
+    logMessages: struct.array(['string'])
   }),
 ]);
 
