@@ -56,11 +56,17 @@ _ cargo +"$rust_stable" fmt --all -- --check
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
 _ cargo +"$rust_nightly" clippy -Zunstable-options --workspace --all-targets -- --deny=warnings
 
+<<<<<<< HEAD
 _ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit --ignore RUSTSEC-2020-0002 --ignore RUSTSEC-2020-0008
+=======
+#_ cargo +"$rust_stable" audit --version
+#_ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit --ignore RUSTSEC-2020-0002 --ignore RUSTSEC-2020-0008
+_ ci/order-crates-for-publishing.py
+>>>>>>> b5305587e... don't commit! disable audit
 
 {
   cd programs/bpf
-  _ cargo +"$rust_stable" audit
+  #_ cargo +"$rust_stable" audit
   for project in rust/*/ ; do
     echo "+++ do_bpf_checks $project"
     (
