@@ -311,6 +311,7 @@ mod bpf {
         const TEST_SUCCESS: u8 = 1;
         const TEST_PRIVILEGE_ESCALATION_SIGNER: u8 = 2;
         const TEST_PRIVILEGE_ESCALATION_WRITABLE: u8 = 3;
+        const TEST_PPROGRAM_NOT_EXECUTABLE: u8 = 4;
 
         let mut programs = Vec::new();
         #[cfg(feature = "bpf_c")]
@@ -397,7 +398,7 @@ mod bpf {
 
             let instruction = Instruction::new(
                 invoke_program_id,
-                &TEST_PRIVILEGE_ESCALATION_SIGNER,
+                &[TEST_PRIVILEGE_ESCALATION_SIGNER, nonce1, nonce2, nonce3],
                 account_metas.clone(),
             );
             let message = Message::new(&[instruction], Some(&mint_pubkey));
@@ -419,7 +420,7 @@ mod bpf {
 
             let instruction = Instruction::new(
                 invoke_program_id,
-                &TEST_PRIVILEGE_ESCALATION_WRITABLE,
+                &[TEST_PRIVILEGE_ESCALATION_WRITABLE, nonce1, nonce2, nonce3],
                 account_metas.clone(),
             );
             let message = Message::new(&[instruction], Some(&mint_pubkey));
@@ -437,6 +438,28 @@ mod bpf {
                     .unwrap_err()
                     .unwrap(),
                 TransactionError::InstructionError(0, InstructionError::Custom(194969602))
+            );
+
+            let instruction = Instruction::new(
+                invoke_program_id,
+                &[TEST_PPROGRAM_NOT_EXECUTABLE, nonce1, nonce2, nonce3],
+                account_metas.clone(),
+            );
+            let message = Message::new(&[instruction], Some(&mint_pubkey));
+            assert_eq!(
+                bank_client
+                    .send_and_confirm_message(
+                        &[
+                            &mint_keypair,
+                            &argument_keypair,
+                            &invoked_argument_keypair,
+                            &from_keypair
+                        ],
+                        message,
+                    )
+                    .unwrap_err()
+                    .unwrap(),
+                TransactionError::InstructionError(0, InstructionError::AccountNotExecutable)
             );
         }
     }
