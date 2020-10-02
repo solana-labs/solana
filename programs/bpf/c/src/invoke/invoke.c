@@ -7,6 +7,7 @@
 static const uint8_t TEST_SUCCESS = 1;
 static const uint8_t TEST_PRIVILEGE_ESCALATION_SIGNER = 2;
 static const uint8_t TEST_PRIVILEGE_ESCALATION_WRITABLE = 3;
+static const uint8_t TEST_PPROGRAM_NOT_EXECUTABLE = 4;
 
 static const int MINT_INDEX = 0;
 static const int ARGUMENT_INDEX = 1;
@@ -271,6 +272,16 @@ extern uint64_t entrypoint(const uint8_t *input) {
     instruction.accounts[0].is_writable = true;
     sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
     break;
+  }
+  case TEST_PPROGRAM_NOT_EXECUTABLE: {
+    sol_log("Test program not executable");
+    SolAccountMeta arguments[] = {
+        {accounts[DERIVED_KEY3_INDEX].key, false, false}};
+    uint8_t data[] = {TEST_VERIFY_PRIVILEGE_ESCALATION};
+    const SolInstruction instruction = {accounts[ARGUMENT_INDEX].key, arguments,
+                                        SOL_ARRAY_SIZE(arguments), data,
+                                        SOL_ARRAY_SIZE(data)};
+    return sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
   }
   default:
     sol_panic();
