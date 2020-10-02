@@ -1161,14 +1161,21 @@ fn process_deploy(
             )
             .into());
         }
-        if account.data.is_empty() {
+        if account.owner != loader_id && !system_program::check_id(&account.owner) {
+            return Err(CliError::DynamicProgramError(
+                "Program account is already owned by another account".to_string(),
+            )
+            .into());
+        }
+
+        if account.data.is_empty() && system_program::check_id(&account.owner) {
             instructions.push(system_instruction::allocate(
                 &program_id.pubkey(),
                 program_data.len() as u64,
             ));
-        }
-        if account.owner != loader_id {
-            instructions.push(system_instruction::assign(&program_id.pubkey(), &loader_id));
+            if account.owner != loader_id {
+                instructions.push(system_instruction::assign(&program_id.pubkey(), &loader_id));
+            }
         }
         if account.lamports < minimum_balance {
             instructions.push(system_instruction::transfer(
@@ -1182,7 +1189,7 @@ fn process_deploy(
         vec![system_instruction::create_account(
             &config.signers[0].pubkey(),
             &program_id.pubkey(),
-            minimum_balance.max(1),
+            minimum_balance,
             program_data.len() as u64,
             &loader_id,
         )]
@@ -1241,6 +1248,10 @@ fn process_deploy(
         let num_required_signatures = message.header.num_required_signatures;
 
         let mut initial_transaction = Transaction::new_unsigned(message);
+        // Most of the initial_transaction combinations require both the fee-payer and new program
+        // account to sign the transaction. One (transfer) only requires the fee-payer signature.
+        // This check is to ensure signing does not fail on a KeypairPubkeyMismatch error from an
+        // extraneous signature.
         if num_required_signatures == 2 {
             initial_transaction.try_sign(&signers, blockhash)?;
         } else {
