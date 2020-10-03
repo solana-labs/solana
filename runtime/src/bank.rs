@@ -9333,7 +9333,25 @@ mod tests {
                 &Pubkey::default(),
             ),
         );
+        assert_ne!(
+            bank1
+                .rc
+                .accounts
+                .accounts_db
+                .get_append_vec_id(&large_account_pubkey, 1)
+                .unwrap(),
+            bank1
+                .rc
+                .accounts
+                .accounts_db
+                .get_append_vec_id(&zero_lamport_pubkey, 1)
+                .unwrap()
+        );
 
+        // Make sure rent collection doesn't overwrite `large_account_pubkey`, which
+        // keeps slot 1 alive in the accounts database. Otherwise, slot 1 and it's bank
+        // hash would be removed from accounts, preventing `rehash()` from succeeding
+        bank1.lazy_rent_collection.store(true, Relaxed);
         bank1.freeze();
         let bank1_hash = bank1.hash();
 
