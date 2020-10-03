@@ -12,6 +12,10 @@ extern uint64_t entrypoint(const uint8_t *input) {
     return ERROR_INVALID_ARGUMENT;
   }
 
+  if (params.data_len == 0) {
+    return SUCCESS;
+  }
+
   switch (params.data[0]) {
   case TEST_VERIFY_TRANSLATIONS: {
     sol_log("verify data translations");
