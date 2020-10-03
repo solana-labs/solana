@@ -5,7 +5,7 @@ use crate::{
     rpc_config::RpcAccountInfoConfig,
     rpc_config::{
         RpcGetConfirmedSignaturesForAddress2Config, RpcLargestAccountsConfig,
-        RpcSendTransactionConfig, RpcTokenAccountsFilter,
+        RpcProgramAccountsConfig, RpcSendTransactionConfig, RpcTokenAccountsFilter,
     },
     rpc_request::{RpcError, RpcRequest, TokenAccountsFilter},
     rpc_response::*,
@@ -602,12 +602,23 @@ impl RpcClient {
     }
 
     pub fn get_program_accounts(&self, pubkey: &Pubkey) -> ClientResult<Vec<(Pubkey, Account)>> {
-        let config = RpcAccountInfoConfig {
-            encoding: Some(UiAccountEncoding::Base64),
-            commitment: None,
-            data_slice: None,
-        };
+        self.get_program_accounts_with_config(
+            pubkey,
+            RpcProgramAccountsConfig {
+                filters: None,
+                account_config: RpcAccountInfoConfig {
+                    encoding: Some(UiAccountEncoding::Base64),
+                    ..RpcAccountInfoConfig::default()
+                },
+            },
+        )
+    }
 
+    pub fn get_program_accounts_with_config(
+        &self,
+        pubkey: &Pubkey,
+        config: RpcProgramAccountsConfig,
+    ) -> ClientResult<Vec<(Pubkey, Account)>> {
         let accounts: Vec<RpcKeyedAccount> = self.send(
             RpcRequest::GetProgramAccounts,
             json!([pubkey.to_string(), config]),
