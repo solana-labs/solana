@@ -140,9 +140,19 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
         })
     }
 
-    pub fn get_max_root(roots: &HashSet<Slot>, slice: SlotSlice<T>) -> Slot {
+    // Get the maximum root <= `max_allowed_root` from the given `slice`
+    fn get_max_root(
+        roots: &HashSet<Slot>,
+        slice: SlotSlice<T>,
+        max_allowed_root: Option<Slot>,
+    ) -> Slot {
         let mut max_root = 0;
         for (f, _) in slice.iter() {
+            if let Some(max_allowed_root) = max_allowed_root {
+                if *f > max_allowed_root {
+                    continue;
+                }
+            }
             if *f > max_root && roots.contains(f) {
                 max_root = *f;
             }
@@ -229,10 +239,7 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
     ) {
         let roots = &self.roots;
 
-        let mut max_root = Self::get_max_root(roots, &list);
-        if let Some(max_clean_root) = max_clean_root {
-            max_root = std::cmp::min(max_root, max_clean_root);
-        }
+        let max_root = Self::get_max_root(roots, &list, max_clean_root);
 
         reclaims.extend(
             list.iter()
@@ -603,5 +610,73 @@ mod tests {
                 .unwrap(),
             1
         );
+    }
+
+    #[test]
+    fn test_purge_older_root_entries() {
+        // No roots, should be no reclaims
+        let mut index = AccountsIndex::<bool>::default();
+        let mut slot_list = vec![(1, true), (2, true), (5, true), (9, true)];
+        let mut reclaims = vec![];
+        index.purge_older_root_entries(&mut slot_list, &mut reclaims, None);
+        assert!(reclaims.is_empty());
+        assert_eq!(slot_list, vec![(1, true), (2, true), (5, true), (9, true)]);
+
+        // Add a later root, earlier slots should be reclaimed
+        slot_list = vec![(1, true), (2, true), (5, true), (9, true)];
+        index.add_root(1);
+        // Note 2 is not a root
+        index.add_root(5);
+        reclaims = vec![];
+        index.purge_older_root_entries(&mut slot_list, &mut reclaims, None);
+        assert_eq!(reclaims, vec![(1, true), (2, true)]);
+        assert_eq!(slot_list, vec![(5, true), (9, true)]);
+
+        // Add a later root that is not in the list, should not affect the outcome
+        slot_list = vec![(1, true), (2, true), (5, true), (9, true)];
+        index.add_root(6);
+        reclaims = vec![];
+        index.purge_older_root_entries(&mut slot_list, &mut reclaims, None);
+        assert_eq!(reclaims, vec![(1, true), (2, true)]);
+        assert_eq!(slot_list, vec![(5, true), (9, true)]);
+
+        // Pass a max root >= than any root in the slot list, should not affect
+        // outcome
+        slot_list = vec![(1, true), (2, true), (5, true), (9, true)];
+        reclaims = vec![];
+        index.purge_older_root_entries(&mut slot_list, &mut reclaims, Some(6));
+        assert_eq!(reclaims, vec![(1, true), (2, true)]);
+        assert_eq!(slot_list, vec![(5, true), (9, true)]);
+
+        // Pass a max root, earlier slots should be reclaimed
+        slot_list = vec![(1, true), (2, true), (5, true), (9, true)];
+        reclaims = vec![];
+        index.purge_older_root_entries(&mut slot_list, &mut reclaims, Some(5));
+        assert_eq!(reclaims, vec![(1, true), (2, true)]);
+        assert_eq!(slot_list, vec![(5, true), (9, true)]);
+
+        // Pass a max root 2. This means the latest root < 2 is 1 because 2 is not a root
+        // so nothing will be purged
+        slot_list = vec![(1, true), (2, true), (5, true), (9, true)];
+        reclaims = vec![];
+        index.purge_older_root_entries(&mut slot_list, &mut reclaims, Some(2));
+        assert!(reclaims.is_empty());
+        assert_eq!(slot_list, vec![(1, true), (2, true), (5, true), (9, true)]);
+
+        // Pass a max root 1. This means the latest root < 3 is 1 because 2 is not a root
+        // so nothing will be purged
+        slot_list = vec![(1, true), (2, true), (5, true), (9, true)];
+        reclaims = vec![];
+        index.purge_older_root_entries(&mut slot_list, &mut reclaims, Some(1));
+        assert!(reclaims.is_empty());
+        assert_eq!(slot_list, vec![(1, true), (2, true), (5, true), (9, true)]);
+
+        // Pass a max root that doesn't exist in the list but is greater than
+        // some of the roots in the list, shouldn't return those smaller roots
+        slot_list = vec![(1, true), (2, true), (5, true), (9, true)];
+        reclaims = vec![];
+        index.purge_older_root_entries(&mut slot_list, &mut reclaims, Some(7));
+        assert_eq!(reclaims, vec![(1, true), (2, true)]);
+        assert_eq!(slot_list, vec![(5, true), (9, true)]);
     }
 }
