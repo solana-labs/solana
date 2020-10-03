@@ -9351,7 +9351,7 @@ mod tests {
         // Make sure rent collection doesn't overwrite `large_account_pubkey`, which
         // keeps slot 1 alive in the accounts database. Otherwise, slot 1 and it's bank
         // hash would be removed from accounts, preventing `rehash()` from succeeding
-        bank1.lazy_rent_collection.store(false, Relaxed);
+        bank1.lazy_rent_collection.store(true, Relaxed);
         bank1.freeze();
         let bank1_hash = bank1.hash();
 
