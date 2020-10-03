@@ -117,6 +117,16 @@ fn process_instruction(
                 invoke(&instruction, accounts)?;
             }
 
+            info!("Test no instruction data");
+            {
+                let instruction = create_instruction(
+                    *accounts[INVOKED_PROGRAM_INDEX].key,
+                    &[(accounts[ARGUMENT_INDEX].key, true, true)],
+                    vec![],
+                );
+                invoke(&instruction, accounts)?;
+            }
+
             info!("Test return error");
             {
                 let instruction = create_instruction(
