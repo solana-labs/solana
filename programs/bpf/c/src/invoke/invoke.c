@@ -115,6 +115,18 @@ extern uint64_t entrypoint(const uint8_t *input) {
                  sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
     }
 
+    sol_log("Test no instruction data");
+    {
+      SolAccountMeta arguments[] = {{accounts[ARGUMENT_INDEX].key, true, true}};
+      uint8_t data[] = {};
+      const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                          arguments, SOL_ARRAY_SIZE(arguments),
+                                          data, SOL_ARRAY_SIZE(data)};
+
+      sol_assert(SUCCESS ==
+                 sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+    }
+
     sol_log("Test return error");
     {
       SolAccountMeta arguments[] = {{accounts[ARGUMENT_INDEX].key, true, true}};

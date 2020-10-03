@@ -536,6 +536,7 @@ fn test_program_bpf_invoke() {
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
+                invoked_program_id.clone(),
             ]
         );
 

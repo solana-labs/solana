@@ -227,6 +227,8 @@ macro_rules! translate_slice_mut {
             && ($vm_addr as u64 as *mut $t).align_offset(align_of::<$t>()) != 0
         {
             Err(SyscallError::UnalignedPointer.into())
+        } else if $len == 0 {
+            Ok(unsafe { from_raw_parts_mut(0x1 as *mut $t, $len as usize) })
         } else {
             match translate_addr::<BPFError>(
                 $vm_addr as u64,
@@ -1230,6 +1232,21 @@ mod tests {
 
     #[test]
     fn test_translate_slice() {
+        // zero len
+        let good_data = vec![1u8, 2, 3, 4, 5];
+        let data: Vec<u8> = vec![];
+        assert_eq!(0x1 as *const u8, data.as_ptr());
+        let addr = good_data.as_ptr() as *const _ as u64;
+        let regions = vec![MemoryRegion {
+            addr_host: addr,
+            addr_vm: 100,
+            len: good_data.len() as u64,
+        }];
+        let translated_data =
+            translate_slice!(u8, data.as_ptr(), data.len(), &regions, &bpf_loader::id()).unwrap();
+        assert_eq!(data, translated_data);
+        assert_eq!(0, translated_data.len());
+
         // u8
         let mut data = vec![1u8, 2, 3, 4, 5];
         let addr = data.as_ptr() as *const _ as u64;
