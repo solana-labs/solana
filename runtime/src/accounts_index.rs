@@ -141,7 +141,7 @@ impl<'a, T: 'a + Clone> AccountsIndex<T> {
     }
 
     // Get the maximum root <= `max_allowed_root` from the given `slice`
-    pub fn get_max_root(
+    fn get_max_root(
         roots: &HashSet<Slot>,
         slice: SlotSlice<T>,
         max_allowed_root: Option<Slot>,
@@ -629,8 +629,7 @@ mod tests {
         index.add_root(5);
         reclaims = vec![];
         index.purge_older_root_entries(&mut slot_list, &mut reclaims, None);
-        let expected_reclaims = vec![(1, true), (2, true)];
-        assert_eq!(reclaims, expected_reclaims);
+        assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
 
         // Add a later root that is not in the list, should not affect the outcome
@@ -638,8 +637,7 @@ mod tests {
         index.add_root(6);
         reclaims = vec![];
         index.purge_older_root_entries(&mut slot_list, &mut reclaims, None);
-        let expected_reclaims = vec![(1, true), (2, true)];
-        assert_eq!(reclaims, expected_reclaims);
+        assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
 
         // Pass a max root >= than any root in the slot list, should not affect
@@ -647,16 +645,14 @@ mod tests {
         slot_list = vec![(1, true), (2, true), (5, true), (9, true)];
         reclaims = vec![];
         index.purge_older_root_entries(&mut slot_list, &mut reclaims, Some(6));
-        let expected_reclaims = vec![(1, true), (2, true)];
-        assert_eq!(reclaims, expected_reclaims);
+        assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
 
         // Pass a max root, earlier slots should be reclaimed
         slot_list = vec![(1, true), (2, true), (5, true), (9, true)];
         reclaims = vec![];
         index.purge_older_root_entries(&mut slot_list, &mut reclaims, Some(5));
-        let expected_reclaims = vec![(1, true), (2, true)];
-        assert_eq!(reclaims, expected_reclaims);
+        assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
 
         // Pass a max root 2. This means the latest root < 2 is 1 because 2 is not a root
@@ -664,8 +660,7 @@ mod tests {
         slot_list = vec![(1, true), (2, true), (5, true), (9, true)];
         reclaims = vec![];
         index.purge_older_root_entries(&mut slot_list, &mut reclaims, Some(2));
-        let expected_reclaims = vec![];
-        assert_eq!(reclaims, expected_reclaims);
+        assert!(reclaims.is_empty());
         assert_eq!(slot_list, vec![(1, true), (2, true), (5, true), (9, true)]);
 
         // Pass a max root 1. This means the latest root < 3 is 1 because 2 is not a root
@@ -673,8 +668,7 @@ mod tests {
         slot_list = vec![(1, true), (2, true), (5, true), (9, true)];
         reclaims = vec![];
         index.purge_older_root_entries(&mut slot_list, &mut reclaims, Some(1));
-        let expected_reclaims = vec![];
-        assert_eq!(reclaims, expected_reclaims);
+        assert!(reclaims.is_empty());
         assert_eq!(slot_list, vec![(1, true), (2, true), (5, true), (9, true)]);
 
         // Pass a max root that doesn't exist in the list but is greater than
@@ -682,8 +676,7 @@ mod tests {
         slot_list = vec![(1, true), (2, true), (5, true), (9, true)];
         reclaims = vec![];
         index.purge_older_root_entries(&mut slot_list, &mut reclaims, Some(7));
-        let expected_reclaims = vec![(1, true), (2, true)];
-        assert_eq!(reclaims, expected_reclaims);
+        assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
     }
 }
