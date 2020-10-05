@@ -45,6 +45,10 @@ pub mod ristretto_mul_syscall_enabled {
     solana_sdk::declare_id!("HRe7A6aoxgjKzdjbBv6HTy7tJ4YWqE6tVmYCGho6S9Aq");
 }
 
+pub mod epoch_timestamps {
+    solana_sdk::declare_id!("3zydSLUwuqqsV3wL5wBsaVgyvMox3XTHx7zLEuQf1U2Z");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -58,6 +62,7 @@ lazy_static! {
         (sha256_syscall_enabled::id(), "sha256 syscall"),
         (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
         (ristretto_mul_syscall_enabled::id(), "ristretto multiply syscall"),
+        (epoch_timestamps::id(), "bank timestamp relative to epoch boundary"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

@@ -1334,14 +1334,19 @@ impl Bank {
         if epoch == Some(self.epoch()) {
             return;
         }
-        // if I'm the first Bank in an epoch, ensure epoch_timestamps are updated
-        self.update_sysvar_account(&sysvar::epoch_timestamps::id(), |account| {
-            sysvar::epoch_timestamps::create_account(
-                self.inherit_sysvar_account_balance(account),
-                self.slot,
-                self.unix_timestamp_from_genesis(),
-            )
-        });
+        if self
+            .feature_set
+            .is_active(&feature_set::epoch_timestamps::id())
+        {
+            // if I'm the first Bank in an epoch, ensure epoch_timestamps are updated
+            self.update_sysvar_account(&sysvar::epoch_timestamps::id(), |account| {
+                sysvar::epoch_timestamps::create_account(
+                    self.inherit_sysvar_account_balance(account),
+                    self.slot,
+                    self.unix_timestamp_from_genesis(),
+                )
+            });
+        }
     }
 
     // Distribute collected transaction fees for this slot to collector_id (= current leader).
@@ -9350,7 +9355,7 @@ mod tests {
         assert!(!bank.feature_set.is_active(&test_feature));
 
         // Running `compute_active_feature_set` will not cause new activations, but
-        // `test_feature` is now be active
+        // `test_feature` is now active
         let new_activations = bank.compute_active_feature_set(true);
         assert!(new_activations.is_empty());
         assert!(bank.feature_set.is_active(&test_feature));
@@ -9377,6 +9382,35 @@ mod tests {
         // Account is now empty, and the account lamports were burnt
         assert_eq!(bank.get_balance(&inline_spl_token_v2_0::id()), 0);
         assert_eq!(bank.capitalization(), original_capitalization - 100);
+    }
+
+    #[test]
+    fn test_epoch_timestamps_feature() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(0);
+        let mut bank = Bank::new(&genesis_config);
+        bank.update_epoch_timestamps(None);
+        let epoch_timestamps_account = bank.get_account(&sysvar::epoch_timestamps::id());
+        assert!(epoch_timestamps_account.is_none());
+
+        // Request `epoch_timestamps` activation
+        let feature = Feature {
+            activated_at: Some(bank.slot),
+        };
+        bank.store_account(
+            &feature_set::epoch_timestamps::id(),
+            &feature.create_account(42),
+        );
+        bank.compute_active_feature_set(true);
+        bank.update_epoch_timestamps(None);
+        let epoch_timestamps = EpochTimestamps::from_account(
+            &bank.get_account(&sysvar::epoch_timestamps::id()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(epoch_timestamps.first_slot, bank.slot);
+        assert_eq!(
+            epoch_timestamps.timestamp,
+            bank.unix_timestamp_from_genesis()
+        );
     }
 
     fn setup_bank_with_removable_zero_lamport_account() -> Arc<Bank> {
