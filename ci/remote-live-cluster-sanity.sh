@@ -35,9 +35,10 @@ export SOLANA_METRICS_CONFIG="host=$metrics_host,db=testnet-live-cluster,u=scrat
 sudo ./solana-sys-tuner --user "$(whoami)" &> "$sys_tuner_log" &
 sys_tuner_pid=$!
 
-./solana-validator  \
-    --no-untrusted-rpc \
+(
+  ./solana-validator \
     --ledger cluster-sanity/ledger \
+    --no-untrusted-rpc \
     --log - \
     --init-complete-file cluster-sanity/init-completed \
     --enable-rpc-exit \
@@ -45,7 +46,12 @@ sys_tuner_pid=$!
     --rpc-port 8899 \
     --rpc-bind-address localhost \
     --snapshot-interval-slots 0 \
-    "$@" &> "$validator_log" &
+    "$@" &&
+  ./solana-ledger-tool \
+    --ledger cluster-sanity/ledger \
+    verify
+) &> "$validator_log" &
+
 validator_pid=$!
 tail -F "$validator_log" > cluster-sanity/log-tail 2> /dev/null &
 tail_pid=$!
@@ -71,7 +77,7 @@ snapshot_slot=$(ls -t cluster-sanity/ledger/snapshot-*.tar.* |
   grep -o '[0-9]*'
 )
 current_root=$snapshot_slot
-goal_root=$((snapshot_slot + 400))
+goal_root=$((snapshot_slot + 100))
 
 attempts=100
 while [[ $current_root -le $goal_root ]]; do
@@ -91,6 +97,18 @@ curl \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1, "method":"validatorExit"}' \
   http://localhost:8899
+
+attempts=100
+while true; do
+  attempts=$((attempts - 1))
+  if [[ (($attempts == 0)) || ! -d "/proc/$validator_pid" ]]; then
+    handle_error "ledger tool"
+  fi
+
+  sleep 3
+  echo "##### ledger-tool is running... (until timeout: $attempts) #####"
+  show_log
+done
 
 # well, kill $sys_tuner_pid didn't work for some reason, maybe sudo doen't relay signals?
 (set -x && sleep 3 && kill "$tail_pid" && sudo pkill -f solana-sys-tuner) &

@@ -27,7 +27,7 @@ trap on_trap INT TERM EXIT
 _ cargo +"$rust_stable" build --bins --release
 _ ./net/scp.sh \
   ./ci/remote-live-cluster-sanity.sh \
-  ./target/release/{solana,solana-validator,solana-sys-tuner} \
+  ./target/release/{solana,solana-validator,solana-ledger-tool,solana-sys-tuner} \
   "$instance_ip:."
 
 test_with_live_cluster() {
