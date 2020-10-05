@@ -29,6 +29,8 @@ _ ./net/scp.sh \
   ./ci/remote-live-cluster-sanity.sh \
   ./target/release/{solana,solana-validator,solana-ledger-tool,solana-sys-tuner} \
   "$instance_ip:."
+_ ./net/ssh.sh "$instance_ip" mkdir deps
+_ ./net/scp.sh ./target/release/deps/libsolana_bpf_loader_program.so "$instance_ip:./deps/"
 
 test_with_live_cluster() {
   cluster_label="$1"
