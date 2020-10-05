@@ -45,7 +45,7 @@ pub const HEAP_LENGTH: usize = 32 * 1024;
 #[macro_export]
 macro_rules! entrypoint {
     ($process_instruction:ident) => {
-        #[cfg(not(feature = "custom-heap"))]
+        #[cfg(all(not(feature = "custom-heap"),not(test)))]
         #[global_allocator]
         static A: $crate::entrypoint::BumpAllocator = $crate::entrypoint::BumpAllocator {
             start: $crate::entrypoint::HEAP_START_ADDRESS,
@@ -72,7 +72,7 @@ pub struct BumpAllocator {
     pub len: usize,
 }
 unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
-    #[inline] // TODO may save a little space?
+    #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let pos_ptr = self.start as *mut usize;
 
@@ -89,9 +89,9 @@ unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
         *pos_ptr = pos;
         pos as *mut u8
     }
-    #[inline] // TODO may save a little space?
+    #[inline]
     unsafe fn dealloc(&self, _: *mut u8, _: Layout) {
-        // It's a bump allocator, free not supported
+        // I'm a bump allocator, I don't free
     }
 }
 

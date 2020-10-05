@@ -19,7 +19,7 @@ use std::{
 /// but can be flushed out with whatever the developer sees fit.
 struct BumpAllocator;
 unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
-    #[inline] // TODO may save a little space?
+    #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         if layout.size() == usize::MAX - 0x42 {
             // Return test value
@@ -43,11 +43,12 @@ unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
             pos as *mut u8
         }
     }
-    #[inline] // TODO may save a little space?
+    #[inline]
     unsafe fn dealloc(&self, _: *mut u8, _: Layout) {
-        // It's a bump allocator, free not supported
+        // I'm a bump allocator, I don't free
     }
 }
+#[cfg(not(test))]
 #[global_allocator]
 static A: BumpAllocator = BumpAllocator;
 
