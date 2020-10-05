@@ -45,7 +45,7 @@ pub const HEAP_LENGTH: usize = 32 * 1024;
 #[macro_export]
 macro_rules! entrypoint {
     ($process_instruction:ident) => {
-        #[cfg(all(not(feature = "custom-heap"),not(test)))]
+        #[cfg(all(not(feature = "custom-heap"), not(test)))]
         #[global_allocator]
         static A: $crate::entrypoint::BumpAllocator = $crate::entrypoint::BumpAllocator {
             start: $crate::entrypoint::HEAP_START_ADDRESS,
