@@ -1,5 +1,9 @@
 ---
+<<<<<<< HEAD
 title: Ledger Live and Ledger Nano S
+=======
+title: Ledger Nano S and Nano X
+>>>>>>> 0571882b1... Add new wallets to docs, clean up existing structure (#12655)
 ---
 
 This document describes how to set up a
