@@ -393,7 +393,7 @@ impl CrdsGossipPush {
             })
             .map(|info| {
                 let last_pushed_to: u64 = *self.last_pushed_to.get(&info.id).unwrap_or(&0);
-                let since = ((now - last_pushed_to) / 1024) as u32;
+                let since = (now.saturating_sub(last_pushed_to) / 1024) as u32;
                 let stake = get_stake(&info.id, stakes);
                 let weight = get_weight(max_weight, since, stake);
                 (weight, info)
