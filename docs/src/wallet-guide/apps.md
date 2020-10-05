@@ -1,5 +1,5 @@
 ---
-title: App Wallets
+title: Mobile App Wallets
 ---
 
 Solana is supported by multiple third-party apps which should provide a familiar
