@@ -8,7 +8,14 @@ module.exports = {
     "Wallets": [
       "wallet-guide",
       "wallet-guide/apps",
-      "wallet-guide/web-wallets",
+      {
+        type: "category",
+        label: "Web Wallets",
+        items: [
+          "wallet-guide/web-wallets",
+          "wallet-guide/solflare",
+        ],
+      },
       {
         type: "category",
         label: "Hardware Wallets",
