@@ -316,7 +316,7 @@ ExecStart=/home/sol/bin/validator.sh
 WantedBy=multi-user.target
 ```
 
-Now edit `/home/sol/bin/validator.sh` to include the desired `solana-validator`
+Now create `/home/sol/bin/validator.sh` to include the desired `solana-validator`
 command-line.  Ensure that running `/home/sol/bin/validator.sh` manually starts
 the validator as expected.
 
