@@ -10,6 +10,7 @@ use crate::{
 
 pub mod clock;
 pub mod epoch_schedule;
+pub mod epoch_timestamps;
 pub mod fees;
 pub mod instructions;
 pub mod recent_blockhashes;
@@ -22,6 +23,7 @@ pub mod stake_history;
 pub fn is_sysvar_id(id: &Pubkey) -> bool {
     clock::check_id(id)
         || epoch_schedule::check_id(id)
+        || epoch_timestamps::check_id(id)
         || fees::check_id(id)
         || recent_blockhashes::check_id(id)
         || rent::check_id(id)
