@@ -211,14 +211,14 @@ fn get_rpc_node(
         );
 
         if rpc_peers_blacklisted == rpc_peers_total {
-            if blacklist_timeout.elapsed().as_secs() > 60 {
+            retry_reason = if blacklist_timeout.elapsed().as_secs() > 60 {
                 // If all nodes are blacklisted and no additional nodes are discovered after 60 seconds,
                 // remove the blacklist and try them all again
-                retry_reason = Some("Blacklist timeout expired".to_owned());
                 blacklisted_rpc_nodes.clear();
+                Some("Blacklist timeout expired".to_owned())
             } else {
-                retry_reason = Some("Wait for trusted rpc peers".to_owned());
-            }
+                Some("Wait for trusted rpc peers".to_owned())
+            };
             continue;
         }
         blacklist_timeout = Instant::now();
