@@ -1,5 +1,5 @@
 ---
-title: Set up a Ledger Nano S or Nano X
+title: Ledger Nano S and Nano X
 ---
 
 This document describes how to set up a
