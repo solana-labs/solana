@@ -180,7 +180,7 @@ fn get_rpc_node(
             "Searching for an RPC service with shred version {}{}...",
             shred_version,
             retry_reason
-                .clone()
+                .as_ref()
                 .map(|s| format!(" (Retrying: {})", s))
                 .unwrap_or_default()
         );
