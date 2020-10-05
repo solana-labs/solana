@@ -57,6 +57,7 @@ use solana_sdk::{
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
+    stake_weighted_timestamp::{calculate_stake_weighted_timestamp, TIMESTAMP_SLOT_RANGE},
     system_transaction,
     sysvar::{self, epoch_timestamps::EpochTimestamps, Sysvar},
     timing::years_as_slots,
@@ -77,6 +78,7 @@ use std::{
         atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
         LockResult, RwLockWriteGuard, {Arc, RwLock, RwLockReadGuard},
     },
+    time::Duration,
 };
 
 // Partial SPL Token v2.0.x declarations inlined to avoid an external dependency on the spl-token crate
@@ -1347,6 +1349,47 @@ impl Bank {
                 )
             });
         }
+    }
+
+    fn get_timestamp_estimate(&self) -> Option<UnixTimestamp> {
+        let mut get_timestamp_estimate_time = Measure::start("get_timestamp_estimate");
+        let recent_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = self
+            .vote_accounts()
+            .into_iter()
+            .filter_map(|(pubkey, (_, account))| {
+                VoteState::from(&account).and_then(|state| {
+                    let timestamp_slot = state.last_timestamp.slot;
+                    if self.slot().checked_sub(timestamp_slot)? <= TIMESTAMP_SLOT_RANGE as u64 {
+                        Some((
+                            pubkey,
+                            (state.last_timestamp.slot, state.last_timestamp.timestamp),
+                        ))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
+        let slot_duration = Duration::from_nanos(self.ns_per_slot as u64);
+        let epoch = self.epoch_schedule().get_epoch(self.slot());
+        let stakes = HashMap::new();
+        let stakes = self.epoch_vote_accounts(epoch).unwrap_or(&stakes);
+        let stake_weighted_timestamp = calculate_stake_weighted_timestamp(
+            recent_timestamps,
+            stakes,
+            self.slot(),
+            slot_duration,
+        );
+        get_timestamp_estimate_time.stop();
+        datapoint_info!(
+            "bank-timestamp",
+            (
+                "get_timestamp_estimate_us",
+                get_timestamp_estimate_time.as_us(),
+                i64
+            ),
+        );
+        stake_weighted_timestamp
     }
 
     // Distribute collected transaction fees for this slot to collector_id (= current leader).
