@@ -257,25 +257,6 @@ solana-validator \
   --log ~/solana-validator.log
 ```
 
-Lastly, to configure log rotation, please run the following:
-
-```bash
-# Setup log rotation
-
-cat > logrotate.sol <<EOF
-~/solana-validator.log {
-  rotate 7
-  daily
-  missingok
-  postrotate
-    systemctl kill -s USR1 sol.service
-  endscript
-}
-EOF
-sudo cp logrotate.sol /etc/logrotate.d/sol
-systemctl restart logrotate.service
-```
-
 To force validator logging to the console add a `--log -` argument, otherwise
 the validator will automatically log to a file.
 
@@ -306,3 +287,70 @@ the validator to ports 11000-11010.
 
 The `--limit-ledger-size` argument will instruct the validator to only retain the
 last couple hours of ledger. To retain the full ledger, simply remove that arg.
+
+
+### Systemd Unit
+Running the validator as a systemd unit is one easy way to manage running in the
+background.
+
+Assuming you have a user called `sol` on your machine, create the file `/etc/systemd/system/sol.service` with
+the following:
+```
+[Unit]
+Description=Solana Validator
+After=network.target
+Wants=solana-sys-tuner.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=sol
+LimitNOFILE=500000
+LogRateLimitIntervalSec=0
+Environment="PATH=/bin:/usr/bin:/home/sol/.local/share/solana/install/active_release/bin"
+ExecStart=/home/sol/bin/validator.sh
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Now create `/home/sol/bin/validator.sh` to include the desired `solana-validator`
+command-line.  Ensure that running `/home/sol/bin/validator.sh` manually starts
+the validator as expected. Don't forget to mark it executable with `chmod +x /home/sol/bin/validator.sh`
+
+Start the service with:
+```bash
+$ sudo systemctl enable --now sol
+```
+
+### Log rotation
+
+The validator log file, as specified by `--log ~/solana-validator.log`, can get
+very large over time and it's recommended that log rotation be configured.
+
+The validator will re-open its when it receives the `USR1` signal, which is the
+basic primitive that enables log rotation.
+
+### Using logrotate
+
+An example setup for the `logrotate`, which assumes that the validator is
+running as a systemd service called `sol.service` and writes a log file at
+/home/sol/solana-validator.log:
+```bash
+# Setup log rotation
+
+cat > logrotate.sol <<EOF
+/home/sol/solana-validator.log {
+  rotate 7
+  daily
+  missingok
+  postrotate
+    systemctl kill -s USR1 sol.service
+  endscript
+}
+EOF
+sudo cp logrotate.sol /etc/logrotate.d/sol
+systemctl restart logrotate.service
+```
