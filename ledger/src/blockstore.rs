@@ -1293,9 +1293,15 @@ impl Blockstore {
             &data_index,
         );
         if slot_meta.is_full() {
-            info!(
-                "slot {} is full, last: {}",
-                slot_meta.slot, slot_meta.last_index
+            datapoint_info!(
+                "shred_insert_is_full",
+                (
+                    "total_time_ms",
+                    solana_sdk::timing::timestamp() - slot_meta.first_shred_timestamp,
+                    i64
+                ),
+                ("slot", slot_meta.slot, i64),
+                ("last_index", slot_meta.last_index, i64),
             );
         }
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
