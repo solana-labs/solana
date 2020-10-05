@@ -29,6 +29,7 @@ use solana_perf::recycler::enable_recycler_warming;
 use solana_runtime::{
     bank_forks::{CompressionType, SnapshotConfig, SnapshotVersion},
     hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+    snapshot_utils::get_highest_snapshot_archive_path,
 };
 use solana_sdk::{
     clock::Slot,
@@ -146,8 +147,10 @@ fn get_rpc_node(
     blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
     snapshot_not_required: bool,
     no_untrusted_rpc: bool,
+    ledger_path: &std::path::Path,
 ) -> (ContactInfo, Option<(Slot, Hash)>) {
     let mut blacklist_timeout = Instant::now();
+    let mut retry_reason = None;
     loop {
         sleep(Duration::from_secs(1));
         info!("\n{}", cluster_info.contact_info_trace());
@@ -174,8 +177,12 @@ fn get_rpc_node(
         }
 
         info!(
-            "Searching for an RPC service with shred version {}...",
-            shred_version
+            "Searching for an RPC service with shred version {}{}...",
+            shred_version,
+            retry_reason
+                .clone()
+                .map(|s| format!(" (Retrying: {})", s))
+                .unwrap_or_default()
         );
 
         let rpc_peers = cluster_info
@@ -204,17 +211,21 @@ fn get_rpc_node(
         );
 
         if rpc_peers_blacklisted == rpc_peers_total {
-            // If all nodes are blacklisted and no additional nodes are discovered after 60 seconds,
-            // remove the blacklist and try them all again
             if blacklist_timeout.elapsed().as_secs() > 60 {
-                info!("Blacklist timeout expired");
+                // If all nodes are blacklisted and no additional nodes are discovered after 60 seconds,
+                // remove the blacklist and try them all again
+                retry_reason = Some("Blacklist timeout expired".to_owned());
                 blacklisted_rpc_nodes.clear();
+            } else {
+                retry_reason = Some("Wait for trusted rpc peers".to_owned());
             }
             continue;
         }
         blacklist_timeout = Instant::now();
 
-        let mut highest_snapshot_hash: Option<(Slot, Hash)> = None;
+        let mut highest_snapshot_hash: Option<(Slot, Hash)> =
+            get_highest_snapshot_archive_path(ledger_path)
+                .map(|(_path, (slot, hash, _compression))| (slot, hash));
         let eligible_rpc_peers = if snapshot_not_required {
             rpc_peers
         } else {
@@ -256,9 +267,16 @@ fn get_rpc_node(
             match highest_snapshot_hash {
                 None => {
                     assert!(eligible_rpc_peers.is_empty());
-                    info!("No snapshots available");
                 }
                 Some(highest_snapshot_hash) => {
+                    if eligible_rpc_peers.is_empty() {
+                        retry_reason = Some(format!(
+                            "Wait for newer snapshot than local: {:?}",
+                            highest_snapshot_hash
+                        ));
+                        continue;
+                    }
+
                     info!(
                         "Highest available snapshot slot is {}, available from {} node{}: {:?}",
                         highest_snapshot_hash.0,
@@ -282,6 +300,8 @@ fn get_rpc_node(
             let contact_info =
                 &eligible_rpc_peers[thread_rng().gen_range(0, eligible_rpc_peers.len())];
             return (contact_info.clone(), highest_snapshot_hash);
+        } else {
+            retry_reason = Some("No snapshots available".to_owned());
         }
     }
 }
@@ -636,6 +656,7 @@ fn rpc_bootstrap(
             &mut blacklisted_rpc_nodes,
             bootstrap_config.no_snapshot_fetch,
             bootstrap_config.no_untrusted_rpc,
+            ledger_path,
         );
         info!(
             "Using RPC service from node {}: {:?}",
