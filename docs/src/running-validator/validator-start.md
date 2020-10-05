@@ -318,7 +318,7 @@ WantedBy=multi-user.target
 
 Now create `/home/sol/bin/validator.sh` to include the desired `solana-validator`
 command-line.  Ensure that running `/home/sol/bin/validator.sh` manually starts
-the validator as expected.
+the validator as expected. Don't forget to mark it executable with `chmod +x /home/sol/bin/validator.sh`
 
 Start the service with:
 ```bash
