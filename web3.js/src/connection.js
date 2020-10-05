@@ -374,12 +374,14 @@ const SimulatedTransactionResponseValidator = jsonRpcResultAndContext(
  * @property {number} fee The fee charged for processing the transaction
  * @property {Array<number>} preBalances The balances of the transaction accounts before processing
  * @property {Array<number>} postBalances The balances of the transaction accounts after processing
+ * @property {Array<string>} logMessages An array of program log messages emitted during a transaction
  * @property {object|null} err The error result of transaction processing
  */
 type ConfirmedTransactionMeta = {
   fee: number,
   preBalances: Array<number>,
   postBalances: Array<number>,
+  logMessages?: Array<string>,
   err: TransactionError | null,
 };
 
@@ -1107,6 +1109,7 @@ const ConfirmedTransactionMetaResult = struct.union([
     fee: 'number',
     preBalances: struct.array(['number']),
     postBalances: struct.array(['number']),
+    logMessages: struct.union([struct.array(['string']), 'undefined']),
   }),
 ]);
 
