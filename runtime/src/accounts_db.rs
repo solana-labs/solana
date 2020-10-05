@@ -138,6 +138,13 @@ impl AccountStorage {
             })
             .map(|account| (account, slot))
     }
+
+    fn slot_store_count(&self, slot: Slot, store_id: AppendVecId) -> Option<usize> {
+        self.0
+            .get(&slot)
+            .and_then(|slot_storages| slot_storages.get(&store_id))
+            .map(|store| store.count_and_status.read().unwrap().0)
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Deserialize, Serialize, AbiExample, AbiEnumVisitor)]
@@ -541,13 +548,15 @@ impl AccountsDB {
         )
     }
 
-    // Reclaim older states of rooted non-zero lamport accounts as a general
-    // AccountsDB bloat mitigation and preprocess for better zero-lamport purging.
+    // Reclaim older states of rooted accounts for AccountsDB bloat mitigation
     fn clean_old_rooted_accounts(
         &self,
         purges_in_root: Vec<Pubkey>,
         max_clean_root: Option<Slot>,
     ) -> (PurgedAccountSlots, ReclaimedAccounts) {
+        if purges_in_root.is_empty() {
+            return (HashMap::new(), HashMap::new());
+        }
         // This number isn't carefully chosen; just guessed randomly such that
         // the hot loop will be the order of ~Xms.
         const INDEX_CLEAN_BULK_COUNT: usize = 4096;
@@ -736,13 +745,8 @@ impl AccountsDB {
         accounts_scan.stop();
 
         let mut clean_old_rooted = Measure::start("clean_old_roots");
-        let (purged_account_slots, removed_accounts) = {
-            if !purges_in_root.is_empty() {
-                self.clean_old_rooted_accounts(purges_in_root, max_clean_root)
-            } else {
-                (HashMap::new(), HashMap::new())
-            }
-        };
+        let (purged_account_slots, removed_accounts) =
+            self.clean_old_rooted_accounts(purges_in_root, max_clean_root);
         self.do_reset_uncleaned_roots(&mut candidates, max_clean_root);
         clean_old_rooted.stop();
 
@@ -784,13 +788,13 @@ impl AccountsDB {
                 } else {
                     let mut key_set = HashSet::new();
                     key_set.insert(*key);
-                    let count: usize = {
-                        let storage = self.storage.read().unwrap();
-                        let slot_storage = storage.0.get(&slot).unwrap();
-                        let store = slot_storage.get(&account_info.store_id).unwrap();
-                        let count = store.count_and_status.read().unwrap().0;
-                        count - 1
-                    };
+                    let count = self
+                        .storage
+                        .read()
+                        .unwrap()
+                        .slot_store_count(*slot, account_info.store_id)
+                        .unwrap()
+                        - 1;
                     debug!(
                         "store_counts, inserting slot: {}, store id: {}, count: {}",
                         slot, account_info.store_id, count
@@ -899,17 +903,16 @@ impl AccountsDB {
                 assert!(dead_slots.contains(&expected_single_dead_slot));
             }
         }
-        let purged_account_slots = if !dead_slots.is_empty() {
-            self.process_dead_slots(&dead_slots)
-        } else {
-            HashMap::new()
-        };
+        let purged_account_slots = self.process_dead_slots(&dead_slots);
         (purged_account_slots, removed_accounts)
     }
 
     // Must be kept private!, does sensitive cleanup that should only be called from
     // supported pipelines in AccountsDb
     fn process_dead_slots(&self, dead_slots: &HashSet<Slot>) -> PurgedAccountSlots {
+        if dead_slots.is_empty() {
+            return HashMap::new();
+        }
         let mut clean_dead_slots = Measure::start("reclaims::purge_slots");
         let purged_account_slots = self.clean_dead_slots(&dead_slots);
         clean_dead_slots.stop();
@@ -3444,7 +3447,7 @@ pub mod tests {
         let account = Account::new(0, 0, &Account::default().owner);
         accounts.store(latest_slot, &[(&pubkeys[30], &account)]);
 
-        // Create 10 new accounts in slot 1, should now have 11 = 10 = 21
+        // Create 10 new accounts in slot 1, should now have 11 + 10 = 21
         // accounts
         create_account(&accounts, &mut pubkeys1, latest_slot, 10, 0, 0);
 
