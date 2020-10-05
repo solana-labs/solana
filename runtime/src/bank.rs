@@ -58,7 +58,7 @@ use solana_sdk::{
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
     system_transaction,
-    sysvar::{self, Sysvar},
+    sysvar::{self, epoch_timestamps::EpochTimestamps, Sysvar},
     timing::years_as_slots,
     transaction::{self, Result, Transaction, TransactionError},
 };
@@ -663,6 +663,7 @@ impl Bank {
         bank.update_rent();
         bank.update_epoch_schedule();
         bank.update_recent_blockhashes();
+        bank.update_epoch_timestamps(None);
         bank
     }
 
@@ -768,6 +769,7 @@ impl Bank {
         if !new.fix_recent_blockhashes_sysvar_delay() {
             new.update_recent_blockhashes();
         }
+        new.update_epoch_timestamps(Some(parent.epoch()));
 
         new
     }
@@ -962,8 +964,25 @@ impl Bank {
     }
 
     /// computed unix_timestamp at this slot height
-    pub fn unix_timestamp(&self) -> i64 {
+    pub fn unix_timestamp_from_genesis(&self) -> i64 {
         self.genesis_creation_time + ((self.slot as u128 * self.ns_per_slot) / 1_000_000_000) as i64
+    }
+
+    /// computed unix_timestamp at this slot height
+    pub fn unix_timestamp_from_epoch(&self) -> i64 {
+        let epoch_timestamps = EpochTimestamps::from_account(
+            &self
+                .get_account(&sysvar::epoch_timestamps::id())
+                .unwrap_or_default(),
+        )
+        .unwrap_or_default();
+        if epoch_timestamps == EpochTimestamps::default() {
+            self.unix_timestamp_from_genesis()
+        } else {
+            epoch_timestamps.timestamp
+                + (((self.slot - epoch_timestamps.first_slot) as u128 * self.ns_per_slot)
+                    / 1_000_000_000) as i64
+        }
     }
 
     fn update_sysvar_account<F>(&self, pubkey: &Pubkey, updater: F)
@@ -990,7 +1009,7 @@ impl Bank {
             unused: Self::get_unused_from_slot(self.slot, self.unused),
             epoch: self.epoch_schedule.get_epoch(self.slot),
             leader_schedule_epoch: self.epoch_schedule.get_leader_schedule_epoch(self.slot),
-            unix_timestamp: self.unix_timestamp(),
+            unix_timestamp: self.unix_timestamp_from_epoch(),
         }
     }
 
@@ -1309,6 +1328,20 @@ impl Bank {
     pub fn update_recent_blockhashes(&self) {
         let blockhash_queue = self.blockhash_queue.read().unwrap();
         self.update_recent_blockhashes_locked(&blockhash_queue);
+    }
+
+    pub fn update_epoch_timestamps(&self, epoch: Option<Epoch>) {
+        if epoch == Some(self.epoch()) {
+            return;
+        }
+        // if I'm the first Bank in an epoch, ensure epoch_timestamps are updated
+        self.update_sysvar_account(&sysvar::epoch_timestamps::id(), |account| {
+            sysvar::epoch_timestamps::create_account(
+                self.inherit_sysvar_account_balance(account),
+                self.slot,
+                self.unix_timestamp_from_genesis(),
+            )
+        });
     }
 
     // Distribute collected transaction fees for this slot to collector_id (= current leader).
@@ -3929,7 +3962,16 @@ mod tests {
         let (genesis_config, _mint_keypair) = create_genesis_config(1);
         let mut bank = Arc::new(Bank::new(&genesis_config));
 
-        assert_eq!(genesis_config.creation_time, bank.unix_timestamp());
+        assert_eq!(
+            genesis_config.creation_time,
+            bank.unix_timestamp_from_genesis()
+        );
+        // Without EpochTimestamps sysvar initialized, unix_timestamp_from_epoch should default to
+        // unix_timestamp_from_genesis
+        assert_eq!(
+            genesis_config.creation_time,
+            bank.unix_timestamp_from_epoch()
+        );
         let slots_per_sec = 1.0
             / (duration_as_s(&genesis_config.poh_config.target_tick_duration)
                 * genesis_config.ticks_per_slot as f32);
@@ -3938,7 +3980,41 @@ mod tests {
             bank = Arc::new(new_from_parent(&bank));
         }
 
-        assert!(bank.unix_timestamp() - genesis_config.creation_time >= 1);
+        assert!(bank.unix_timestamp_from_genesis() - genesis_config.creation_time >= 1);
+        // Without EpochTimestamps sysvar initialized, unix_timestamp_from_epoch should default to
+        // unix_timestamp_from_genesis
+        assert_eq!(
+            bank.unix_timestamp_from_epoch(),
+            bank.unix_timestamp_from_genesis()
+        );
+
+        let mut bank = Arc::new(Bank::new(&genesis_config));
+        let timestamp = 1_234_567_890;
+        bank.update_sysvar_account(&sysvar::epoch_timestamps::id(), |account| {
+            sysvar::epoch_timestamps::create_account(
+                bank.inherit_sysvar_account_balance(account),
+                bank.slot,
+                timestamp,
+            )
+        });
+        assert_ne!(
+            bank.unix_timestamp_from_genesis(),
+            bank.unix_timestamp_from_epoch()
+        );
+
+        let slots_per_sec = 1.0
+            / (duration_as_s(&genesis_config.poh_config.target_tick_duration)
+                * genesis_config.ticks_per_slot as f32);
+
+        for _i in 0..slots_per_sec as usize + 1 {
+            bank = Arc::new(new_from_parent(&bank));
+        }
+        assert!(bank.unix_timestamp_from_genesis() - genesis_config.creation_time >= 1);
+        assert_ne!(
+            bank.unix_timestamp_from_genesis(),
+            bank.unix_timestamp_from_epoch()
+        );
+        assert!(bank.unix_timestamp_from_epoch() - timestamp >= 1);
     }
 
     #[test]
