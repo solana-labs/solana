@@ -2599,7 +2599,16 @@ impl RpcSol for RpcSolImpl {
     }
 }
 
+const WORST_CASE_BASE58_TX: usize = 1683; // Golden, bump if PACKET_DATA_SIZE changes
 fn deserialize_bs58_transaction(bs58_transaction: String) -> Result<(Vec<u8>, Transaction)> {
+    if bs58_transaction.len() > WORST_CASE_BASE58_TX {
+        return Err(Error::invalid_params(format!(
+            "encoded transaction too large: {} bytes (max: encoded/raw {}/{})",
+            bs58_transaction.len(),
+            WORST_CASE_BASE58_TX,
+            PACKET_DATA_SIZE,
+        )));
+    }
     let wire_transaction = bs58::decode(bs58_transaction)
         .into_vec()
         .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
@@ -5775,5 +5784,12 @@ pub mod tests {
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let slot: Slot = serde_json::from_value(json["result"].clone()).unwrap();
         assert_eq!(slot, 3);
+    }
+
+    #[test]
+    fn test_worst_case_encoded_tx_goldens() {
+        let ff_tx = vec![0xffu8; PACKET_DATA_SIZE];
+        let tx58 = bs58::encode(ff_tx).into_string();
+        assert_eq!(tx58.len(), WORST_CASE_BASE58_TX);
     }
 }
