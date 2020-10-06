@@ -205,6 +205,31 @@ module.exports = [
             }
         }
     }),
+    resultFactory('confirmedSignaturesForAddress2', {
+        "type": "array",
+        "items": {
+            "required": ["signature", "slot"],
+            "properties": {
+                "signature": { "type": "string" },
+                "slot": { "type": "number" },
+                "err": { "type": "object" },
+                "memo": { "type": "string" }
+            }
+        }
+    }),
+    resultFactory('clusterNodes', {
+        "type": "array",
+        "items": {
+            "required": ["pubkey"],
+            "properties": {
+                "pubkey": { "type": "string" },
+                "gossip": { "type": "string" },
+                "tpu": { "type": "string" },
+                "rpc": { "type": "string" },
+                "version": { "type": "string" },
+            }
+        }
+    }),
     contextFactory('recentBlockHash', {
         "required": [ "blockhash", "feeCalculator" ],
         "properties": {

@@ -252,20 +252,12 @@ type VoteAccountStatus = {
  * @property {number} terminal
  */
 type InflationGovernor = {
-  foundation: number,
+foundation: number,
   foundationTerm: number,
   initial: number,
   taper: number,
   terminal: number,
 };
-
-const GetInflationGovernorResult = struct({
-  foundation: 'number',
-  foundationTerm: 'number',
-  initial: 'number',
-  taper: 'number',
-  terminal: 'number',
-});
 
 /**
  * Information about the current epoch
@@ -284,14 +276,6 @@ type EpochInfo = {
   absoluteSlot: number,
   blockHeight: number | null,
 };
-
-const GetEpochInfoResult = struct({
-  epoch: 'number',
-  slotIndex: 'number',
-  slotsInEpoch: 'number',
-  absoluteSlot: 'number',
-  blockHeight: 'number?',
-});
 
 /**
  * Epoch schedule
@@ -312,14 +296,6 @@ type EpochSchedule = {
   firstNormalSlot: number,
 };
 
-const GetEpochScheduleResult = struct({
-  slotsPerEpoch: 'number',
-  leaderScheduleSlotOffset: 'number',
-  warmup: 'boolean',
-  firstNormalEpoch: 'number',
-  firstNormalSlot: 'number',
-});
-
 /**
  * Leader schedule
  * (see https://docs.solana.com/terminology#leader-schedule)
@@ -329,11 +305,6 @@ const GetEpochScheduleResult = struct({
 type LeaderSchedule = {
   [address: string]: number[],
 };
-
-const GetLeaderScheduleResult = struct.record([
-  'string',
-  'any', // validating struct.array(['number']) is extremely slow
-]);
 
 /**
  * Transaction error or null
@@ -345,16 +316,6 @@ const TransactionErrorResult = struct.union(['null', 'object']);
  */
 const SignatureStatusResult = struct({err: TransactionErrorResult});
 
-/**
- * Version info for a node
- *
- * @typedef {Object} Version
- * @property {string} solana-core Version of solana-core
- */
-const Version = struct.pick({
-  'solana-core': 'string',
-  'feature-set': 'number?',
-});
 
 type SimulatedTransactionResponse = {
   err: TransactionError | string | null,
@@ -564,41 +525,6 @@ function createRpcRequest(url): RpcRequest {
 }
 
 /**
- * Expected JSON RPC response for the "getInflationGovernor" message
- */
-const GetInflationGovernorRpcResult = struct({
-  jsonrpc: struct.literal('2.0'),
-  id: 'string',
-  error: 'any?',
-  result: GetInflationGovernorResult,
-});
-
-/**
- * Expected JSON RPC response for the "getEpochInfo" message
- */
-const GetEpochInfoRpcResult = struct({
-  jsonrpc: struct.literal('2.0'),
-  id: 'string',
-  error: 'any?',
-  result: GetEpochInfoResult,
-});
-
-/**
- * Expected JSON RPC response for the "getEpochSchedule" message
- */
-const GetEpochScheduleRpcResult = struct({
-  jsonrpc: struct.literal('2.0'),
-  id: 'string',
-  error: 'any?',
-  result: GetEpochScheduleResult,
-});
-
-/**
- * Expected JSON RPC response for the "getLeaderSchedule" message
- */
-const GetLeaderScheduleRpcResult = jsonRpcResult(GetLeaderScheduleResult);
-
-/**
  * Expected JSON RPC response for the "getBalance" message
  */
 const GetBalanceAndContextRpcResult = jsonRpcResultAndContext('number?');
@@ -667,15 +593,6 @@ type TokenAmount = {
 };
 
 /**
- * Expected JSON RPC structure for token amounts
- */
-const TokenAmountResult = struct.object({
-  amount: 'string',
-  uiAmount: 'number',
-  decimals: 'number',
-});
-
-/**
  * Token address and balance.
  *
  * @typedef {Object} TokenAccountBalancePair
@@ -704,16 +621,6 @@ const GetTokenLargestAccountsResult = jsonRpcResultAndContext(
     }),
   ]),
 );
-
-/**
- * Expected JSON RPC response for the "getTokenAccountBalance" message
- */
-const GetTokenAccountBalance = jsonRpcResultAndContext(TokenAmountResult);
-
-/**
- * Expected JSON RPC response for the "getTokenSupply" message
- */
-const GetTokenSupplyRpcResult = jsonRpcResultAndContext(TokenAmountResult);
 
 /**
  * Expected JSON RPC response for the "getTokenAccountsByOwner" message
@@ -766,29 +673,6 @@ type AccountBalancePair = {
   address: PublicKey,
   lamports: number,
 };
-
-/**
- * Expected JSON RPC response for the "getLargestAccounts" message
- */
-const GetLargestAccountsRpcResult = jsonRpcResultAndContext(
-  struct.array([
-    struct({
-      lamports: 'number',
-      address: 'string',
-    }),
-  ]),
-);
-
-/**
- * Expected JSON RPC response for the "getVersion" message
- */
-const GetVersionRpcResult = struct({
-  jsonrpc: struct.literal('2.0'),
-  id: 'string',
-  error: 'any?',
-  result: Version,
-});
-
 /**
  * @private
  */
@@ -798,87 +682,6 @@ const AccountInfoResult = struct({
   lamports: 'number',
   data: 'any',
   rentEpoch: 'number?',
-});
-
-/**
- * @private
- */
-const ParsedAccountInfoResult = struct.object({
-  executable: 'boolean',
-  owner: 'string',
-  lamports: 'number',
-  data: struct.union([
-    ['string', struct.literal('base64')],
-    struct.pick({
-      program: 'string',
-      parsed: 'any',
-      space: 'number',
-    }),
-  ]),
-  rentEpoch: 'number?',
-});
-
-/**
- * @private
- */
-const StakeActivationResult = struct.object({
-  state: struct.union([
-    struct.literal('active'),
-    struct.literal('inactive'),
-    struct.literal('activating'),
-    struct.literal('deactivating'),
-  ]),
-  active: 'number',
-  inactive: 'number',
-});
-
-/**
- * Expected JSON RPC response for the "getAccountInfo" message
- */
-const GetAccountInfoAndContextRpcResult = jsonRpcResultAndContext(
-  struct.union(['null', AccountInfoResult]),
-);
-
-/**
- * Expected JSON RPC response for the "getAccountInfo" message with jsonParsed param
- */
-const GetParsedAccountInfoResult = jsonRpcResultAndContext(
-  struct.union(['null', ParsedAccountInfoResult]),
-);
-
-/**
- * Expected JSON RPC response for the "getStakeActivation" message with jsonParsed param
- */
-const GetStakeActivationResult = jsonRpcResult(StakeActivationResult);
-
-/**
- * Expected JSON RPC response for the "getConfirmedSignaturesForAddress" message
- */
-const GetConfirmedSignaturesForAddressRpcResult = jsonRpcResult(
-  struct.array(['string']),
-);
-
-/**
- * Expected JSON RPC response for the "getConfirmedSignaturesForAddress2" message
- */
-
-const GetConfirmedSignaturesForAddress2RpcResult = jsonRpcResult(
-  struct.array([
-    struct({
-      signature: 'string',
-      slot: 'number',
-      err: TransactionErrorResult,
-      memo: struct.union(['null', 'string']),
-    }),
-  ]),
-);
-
-/***
- * Expected JSON RPC response for the "accountNotification" message
- */
-const AccountNotificationResult = struct({
-  subscription: 'number',
-  result: notificationResultAndContext(AccountInfoResult),
 });
 
 /**
@@ -953,31 +756,6 @@ const GetParsedProgramAccountsRpcResult = jsonRpcResult(
 );
 
 /**
- * Expected JSON RPC response for the "getSlot" message
- */
-const GetSlot = jsonRpcResult('number');
-
-/**
- * Expected JSON RPC response for the "getSlotLeader" message
- */
-const GetSlotLeader = jsonRpcResult('string');
-
-/**
- * Expected JSON RPC response for the "getClusterNodes" message
- */
-const GetClusterNodes = jsonRpcResult(
-  struct.array([
-    struct.pick({
-      pubkey: 'string',
-      gossip: struct.union(['null', 'string']),
-      tpu: struct.union(['null', 'string']),
-      rpc: struct.union(['null', 'string']),
-      version: struct.union(['null', 'string']),
-    }),
-  ]),
-);
-
-/**
  * Expected JSON RPC response for the "getVoteAccounts" message
  */
 const GetVoteAccounts = jsonRpcResult(
@@ -1028,21 +806,6 @@ const GetSignatureStatusesRpcResult = jsonRpcResultAndContext(
     ]),
   ]),
 );
-
-/**
- * Expected JSON RPC response for the "getTransactionCount" message
- */
-const GetTransactionCountRpcResult = jsonRpcResult('number');
-
-/**
- * Expected JSON RPC response for the "getTotalSupply" message
- */
-const GetTotalSupplyRpcResult = jsonRpcResult('number');
-
-/**
- * Expected JSON RPC response for the "getMinimumBalanceForRentExemption" message
- */
-const GetMinimumBalanceForRentExemptionRpcResult = jsonRpcResult('number');
 
 /**
  * @private
@@ -1167,42 +930,6 @@ const GetParsedConfirmedTransactionRpcResult = jsonRpcResult(
     }),
   ]),
 );
-
-/**
- * Expected JSON RPC response for the "getRecentBlockhash" message
- */
-const GetRecentBlockhashAndContextRpcResult = jsonRpcResultAndContext(
-  struct({
-    blockhash: 'string',
-    feeCalculator: struct({
-      lamportsPerSignature: 'number',
-    }),
-  }),
-);
-
-/**
- * Expected JSON RPC response for the "getFeeCalculatorForBlockhash" message
- */
-const GetFeeCalculatorRpcResult = jsonRpcResultAndContext(
-  struct.union([
-    'null',
-    struct({
-      feeCalculator: struct({
-        lamportsPerSignature: 'number',
-      }),
-    }),
-  ]),
-);
-
-/**
- * Expected JSON RPC response for the "requestAirdrop" message
- */
-const RequestAirdropRpcResult = jsonRpcResult('string');
-
-/**
- * Expected JSON RPC response for the "sendTransaction" message
- */
-const SendTransactionRpcResult = jsonRpcResult('string');
 
 /**
  * Information about the latest slot being processed by a node
@@ -1567,8 +1294,8 @@ export class Connection {
    */
   async getMinimumLedgerSlot(): Promise<number> {
     const unsafeRes = await this._rpcRequest('minimumLedgerSlot', []);
-    const res = SlotRpcResult(unsafeRes);
-    if (res.error) {
+    const res = schema.numberResult.get(unsafeRes);
+    if (schema.numberResult.isError(res)) {
       throw new Error(
         'failed to get minimum ledger slot: ' + res.error.message,
       );
@@ -1582,8 +1309,8 @@ export class Connection {
    */
   async getFirstAvailableBlock(): Promise<number> {
     const unsafeRes = await this._rpcRequest('getFirstAvailableBlock', []);
-    const res = SlotRpcResult(unsafeRes);
-    if (res.error) {
+    const res = schema.numberResult.get(unsafeRes);
+    if (schema.numberResult.isError(res)) {
       throw new Error(
         'failed to get first available block: ' + res.error.message,
       );
@@ -1637,8 +1364,8 @@ export class Connection {
   ): Promise<RpcResponseAndContext<TokenAmount>> {
     const args = this._buildArgs([tokenAddress.toBase58()], commitment);
     const unsafeRes = await this._rpcRequest('getTokenAccountBalance', args);
-    const res = GetTokenAccountBalance(unsafeRes);
-    if (res.error) {
+    const res = schema.tokenAccountBalance.get(unsafeRes)
+    if (schema.tokenAccountBalance.hasError(res)) {
       throw new Error(
         'failed to get token account balance: ' + res.error.message,
       );
@@ -1764,8 +1491,8 @@ export class Connection {
     };
     const args = arg.filter || arg.commitment ? [arg] : [];
     const unsafeRes = await this._rpcRequest('getLargestAccounts', args);
-    const res = GetLargestAccountsRpcResult(unsafeRes);
-    if (res.error) {
+    const res = schema.largestAccounts.get(unsafeRes);
+    if (schema.largestAccounts.isError(res)) {
       throw new Error('failed to get largest accounts: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
@@ -1809,8 +1536,9 @@ export class Connection {
   ): Promise<RpcResponseAndContext<AccountInfo<Buffer> | null>> {
     
     const args = this._buildArgs([publicKey.toBase58()], commitment, 'base64');
-    const res = await this._rpcRequest('getAccountInfo', args);
-    if (schema.accountInfo.validate(res)) {
+    const unsafeRes = await this._rpcRequest('getAccountInfo', args);
+    const res = schema.accountInfo.get(unsafeRes);
+    if (schema.accountInfo.isError(res)) {
       throw new Error(
         'failed to get info about account ' +
           publicKey.toBase58() +
@@ -1855,8 +1583,8 @@ export class Connection {
       'jsonParsed',
     );
     const unsafeRes = await this._rpcRequest('getAccountInfo', args);
-    const res = GetParsedAccountInfoResult(unsafeRes);
-    if (res.error) {
+    const res = schema.parsedAccountInfo.get(unsafeRes);
+    if (schema.parsedAccountInfo.isError(res)) {
       throw new Error(
         'failed to get info about account ' +
           publicKey.toBase58() +
@@ -1915,7 +1643,7 @@ export class Connection {
     publicKey: PublicKey,
     commitment: ?Commitment,
     epoch: ?number,
-  ): Promise<StakeActivationData> {
+  ) {
     const args = this._buildArgs(
       [publicKey.toBase58()],
       commitment,
@@ -1923,8 +1651,9 @@ export class Connection {
       epoch !== undefined ? {epoch} : undefined,
     );
 
-    const res = await this._rpcRequest('getStakeActivation', args);
-    if (schema.stakeActivation.validate(res)) {
+    const unsafeRes = await this._rpcRequest('getStakeActivation', args);
+    const res = schema.stakeActivation.get(unsafeRes);
+    if (schema.stakeActivation.isError(res)) {
       throw new Error(
         `failed to get Stake Activation ${publicKey.toBase58()}: ${
           res.error.message
@@ -1933,8 +1662,7 @@ export class Connection {
     }
     assert(typeof res.result !== 'undefined');
 
-    const {state, active, inactive} = res.result;
-    return {state, active, inactive};
+    return res.result;
   }
 
   /**
@@ -2107,9 +1835,8 @@ export class Connection {
    */
   async getClusterNodes(): Promise<Array<ContactInfo>> {
     const unsafeRes = await this._rpcRequest('getClusterNodes', []);
-
-    const res = GetClusterNodes(unsafeRes);
-    if (res.error) {
+    const res = schema.clusterNodes.get(unsafeRes);
+    if (schema.clusterNodes.isError(res)) {
       throw new Error('failed to get cluster nodes: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
@@ -2137,8 +1864,8 @@ export class Connection {
   async getSlot(commitment: ?Commitment): Promise<number> {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getSlot', args);
-    const res = GetSlot(unsafeRes);
-    if (res.error) {
+    const res = schema.numberResult.get(unsafeRes);
+    if (schema.numberResult.isError(res)) {
       throw new Error('failed to get slot: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
@@ -2151,8 +1878,8 @@ export class Connection {
   async getSlotLeader(commitment: ?Commitment): Promise<string> {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getSlotLeader', args);
-    const res = GetSlotLeader(unsafeRes);
-    if (res.error) {
+    const res = schema.stringResult.get(unsafeRes);
+    if (schema.stringResult.isError(res)) {
       throw new Error('failed to get slot leader: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
@@ -2200,8 +1927,8 @@ export class Connection {
   async getTransactionCount(commitment: ?Commitment): Promise<number> {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getTransactionCount', args);
-    const res = GetTransactionCountRpcResult(unsafeRes);
-    if (res.error) {
+    const res = schema.numberResult.get(unsafeRes);
+    if (schema.numberResult.isError(res)) {
       throw new Error('failed to get transaction count: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
@@ -2214,8 +1941,8 @@ export class Connection {
   async getTotalSupply(commitment: ?Commitment): Promise<number> {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getTotalSupply', args);
-    const res = GetTotalSupplyRpcResult(unsafeRes);
-    if (res.error) {
+    const res = schema.numberResult.get(unsafeRes);
+    if (schema.numberResult.isError(res)) {
       throw new Error('faied to get total supply: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
@@ -2230,12 +1957,12 @@ export class Connection {
   ): Promise<InflationGovernor> {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getInflationGovernor', args);
-    const res = GetInflationGovernorRpcResult(unsafeRes);
-    if (res.error) {
+    const res = schema.inflationGovernorResult.get(unsafeRes);
+    if (schema.inflationGovernor.isError(res)) {
       throw new Error('failed to get inflation: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
-    return GetInflationGovernorResult(res.result);
+    return res.result;
   }
 
   /**
@@ -2244,12 +1971,12 @@ export class Connection {
   async getEpochInfo(commitment: ?Commitment): Promise<EpochInfo> {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getEpochInfo', args);
-    const res = GetEpochInfoRpcResult(unsafeRes);
-    if (res.error) {
+    const res = schema.epochInfoResult.get(unsafeRes);
+    if (schema.epochInfoResult.isError(res)) {
       throw new Error('failed to get epoch info: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
-    return GetEpochInfoResult(res.result);
+    return res.result;
   }
 
   /**
@@ -2257,12 +1984,12 @@ export class Connection {
    */
   async getEpochSchedule(): Promise<EpochSchedule> {
     const unsafeRes = await this._rpcRequest('getEpochSchedule', []);
-    const res = GetEpochScheduleRpcResult(unsafeRes);
-    if (res.error) {
+    const res = schema.epochSchedule.get(unsafeRes);
+    if (schema.epochSchedule.isError(res)) {
       throw new Error('failed to get epoch schedule: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
-    return GetEpochScheduleResult(res.result);
+    return res.result;
   }
 
   /**
@@ -2271,8 +1998,8 @@ export class Connection {
    */
   async getLeaderSchedule(): Promise<LeaderSchedule> {
     const unsafeRes = await this._rpcRequest('getLeaderSchedule', []);
-    const res = GetLeaderScheduleRpcResult(unsafeRes);
-    if (res.error) {
+    const res = schema.leaderSchedule.get(unsafeRes);
+    if (schema.leaderSchedule.isError(res)) {
       throw new Error('failed to get leader schedule: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
@@ -2292,8 +2019,8 @@ export class Connection {
       'getMinimumBalanceForRentExemption',
       args,
     );
-    const res = GetMinimumBalanceForRentExemptionRpcResult(unsafeRes);
-    if (res.error) {
+    const res = schema.numberResult.get(unsafeRes);
+    if (schema.numberResult.isError(res)) {
       console.warn('Unable to fetch minimum balance for rent exemption');
       return 0;
     }
@@ -2313,8 +2040,8 @@ export class Connection {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getRecentBlockhash', args);
 
-    const res = GetRecentBlockhashAndContextRpcResult(unsafeRes);
-    if (res.error) {
+    const res = schema.recentBlockhash.get(unsafeRes);
+    if (schema.recentBlockhash.isError(res)) {
       throw new Error('failed to get recent blockhash: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
@@ -2334,8 +2061,8 @@ export class Connection {
       args,
     );
 
-    const res = GetFeeCalculatorRpcResult(unsafeRes);
-    if (res.error) {
+    const res = schema.feeCalculator.get(unsafeRes);
+    if (schema.feeCalculator.isError(res)) {
       throw new Error('failed to get fee calculator: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
@@ -2365,8 +2092,8 @@ export class Connection {
    */
   async getVersion(): Promise<Version> {
     const unsafeRes = await this._rpcRequest('getVersion', []);
-    const res = GetVersionRpcResult(unsafeRes);
-    if (res.error) {
+    const res = schema.version.get(unsafeRes);
+    if (schema.version.isError(res)) {
       throw new Error('failed to get version: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
@@ -2495,8 +2222,8 @@ export class Connection {
       'getConfirmedSignaturesForAddress',
       [address.toBase58(), startSlot, endSlot],
     );
-    const result = GetConfirmedSignaturesForAddressRpcResult(unsafeRes);
-    if (result.error) {
+    const result = schema.stringArray.get(unsafeRes);
+    if (schema.stringArray.isError(result)) {
       throw new Error(
         'failed to get confirmed signatures for address: ' +
           result.error.message,
@@ -2522,8 +2249,8 @@ export class Connection {
       'getConfirmedSignaturesForAddress2',
       [address.toBase58(), options],
     );
-    const result = GetConfirmedSignaturesForAddress2RpcResult(unsafeRes);
-    if (result.error) {
+    const result = schema.confirmedSignaturesForAddress2.get(unsafeRes);
+    if (schema.confirmedSignaturesForAddress2.isError(result)) {
       throw new Error(
         'failed to get confirmed signatures for address: ' +
           result.error.message,
@@ -2586,8 +2313,8 @@ export class Connection {
       to.toBase58(),
       amount,
     ]);
-    const res = RequestAirdropRpcResult(unsafeRes);
-    if (res.error) {
+    const res = schema.simpleString.get(unsafeRes);
+    if (schema.simpleString.isError(res)) {
       throw new Error(
         'airdrop to ' + to.toBase58() + ' failed: ' + res.error.message,
       );
@@ -2738,8 +2465,8 @@ export class Connection {
    */
   async validatorExit(): Promise<boolean> {
     const unsafeRes = await this._rpcRequest('validatorExit', []);
-    const res = jsonRpcResult('boolean')(unsafeRes);
-    if (res.error) {
+    const res = schema.booleanResult.get(unsafeRes);
+    if (schema.booleanResult.isError(res)) {
       throw new Error('validator exit failed: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
@@ -2787,8 +2514,8 @@ export class Connection {
     }
 
     const unsafeRes = await this._rpcRequest('sendTransaction', args);
-    const res = SendTransactionRpcResult(unsafeRes);
-    if (res.error) {
+    const res = schema.stringResult.get(unsafeRes);
+    if (schema.stringResult.isError(res)) {
       throw new Error('failed to send transaction: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
@@ -2980,8 +2707,8 @@ export class Connection {
    * @private
    */
   _wsOnAccountNotification(notification: Object) {
-    const res = AccountNotificationResult(notification);
-    if (res.error) {
+    const res = schema.accountNotification.get(notification);
+    if (schema.accountNotification.isError(res)) {
       throw new Error('account notification failed: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
