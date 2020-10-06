@@ -878,7 +878,11 @@ impl Bank {
         );
         assert_eq!(bank.epoch_schedule, genesis_config.epoch_schedule);
         assert_eq!(bank.epoch, bank.epoch_schedule.get_epoch(bank.slot));
-
+        bank.fee_rate_governor.lamports_per_signature = bank.fee_calculator.lamports_per_signature;
+        assert_eq!(
+            bank.fee_rate_governor.create_fee_calculator(),
+            bank.fee_calculator
+        );
         bank
     }
 
