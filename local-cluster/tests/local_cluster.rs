@@ -1372,9 +1372,14 @@ fn test_optimistic_confirmation_violation_with_no_tower() {
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
     let node_stakes = vec![51, 50];
-    let validator_keys: Vec<_> = iter::repeat_with(|| (Arc::new(Keypair::new()), true))
-        .take(node_stakes.len())
-        .collect();
+    let validator_keys: Vec<_> = vec![
+        "4qhhXNTbKD1a5vxDDLZcHKj7ELNeiivtUBxn3wUK1F5VRsQVP89VUhfXqSfgiFB14GfuBgtrQ96n9NvWQADVkcCg",
+        "3kHBzVwie5vTEaY6nFCPeFT8qDpoXzn7dCEioGRNBTnUDpvwnG85w8Wq63gVWpVTP8k2a8cgcWRjSXyUkEygpXWS",
+    ]
+    .iter()
+    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+    .take(node_stakes.len())
+    .collect();
     let config = ClusterConfig {
         cluster_lamports: 100_000,
         node_stakes: node_stakes.clone(),
@@ -1474,9 +1479,14 @@ fn test_no_optimistic_confirmation_violation_with_tower() {
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
     let node_stakes = vec![51, 50];
-    let validator_keys: Vec<_> = iter::repeat_with(|| (Arc::new(Keypair::new()), true))
-        .take(node_stakes.len())
-        .collect();
+    let validator_keys: Vec<_> = vec![
+        "4qhhXNTbKD1a5vxDDLZcHKj7ELNeiivtUBxn3wUK1F5VRsQVP89VUhfXqSfgiFB14GfuBgtrQ96n9NvWQADVkcCg",
+        "3kHBzVwie5vTEaY6nFCPeFT8qDpoXzn7dCEioGRNBTnUDpvwnG85w8Wq63gVWpVTP8k2a8cgcWRjSXyUkEygpXWS",
+    ]
+    .iter()
+    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+    .take(node_stakes.len())
+    .collect();
     let config = ClusterConfig {
         cluster_lamports: 100_000,
         node_stakes: node_stakes.clone(),
