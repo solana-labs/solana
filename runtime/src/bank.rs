@@ -69,6 +69,7 @@ use solana_stake_program::stake_state::{self, Delegation, PointValue};
 use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteState};
 use std::{
     cell::RefCell,
+    cmp::max,
     collections::{HashMap, HashSet},
     convert::{TryFrom, TryInto},
     mem,
@@ -1375,16 +1376,16 @@ impl Bank {
                         .map(|account| EpochTimestamps::from_account(&account).unwrap_or_default())
                         .unwrap_or_default();
 
-                        let epoch_timestamp = calculate_timestamp_from_samples(
-                            &epoch_timestamps.samples,
-                            self.slot,
-                            (epoch_timestamps.first_slot, epoch_timestamps.timestamp),
-                        )
-                        .unwrap_or_else(|| self.unix_timestamp_from_genesis());
+                    let epoch_timestamp = calculate_timestamp_from_samples(
+                        &epoch_timestamps.samples,
+                        self.slot,
+                        (epoch_timestamps.first_slot, epoch_timestamps.timestamp),
+                    )
+                    .unwrap_or_else(|| self.unix_timestamp_from_genesis());
 
                     EpochTimestamps {
                         first_slot: self.slot,
-                        timestamp: epoch_timestamp,
+                        timestamp: max(epoch_timestamp, self.unix_timestamp_from_genesis()),
                         ..EpochTimestamps::default()
                     }
                     .create_account(self.inherit_sysvar_account_balance(account))
@@ -9506,11 +9507,55 @@ mod tests {
         genesis_config.epoch_schedule = EpochSchedule::new(32);
         let mut bank = Arc::new(Bank::new(&genesis_config));
         let recent_timestamp: UnixTimestamp = bank.unix_timestamp_from_genesis();
+        let slot_duration = Duration::from_nanos(bank.ns_per_slot as u64);
+        let slow_slot_duration = slot_duration * 2;
 
+        let timestamp_slot_10 = recent_timestamp + (10 * slot_duration).as_secs() as i64;
+        let timestamp_slot_20 = timestamp_slot_10 + (10 * slow_slot_duration).as_secs() as i64;
         bank.update_sysvar_account(&sysvar::epoch_timestamps::id(), |account| {
             let mut samples = HashMap::new();
-            samples.insert(12, Some(recent_timestamp));
-            samples.insert(22, Some(recent_timestamp + 6));
+            samples.insert(10, Some(timestamp_slot_10));
+            samples.insert(20, Some(timestamp_slot_20));
+
+            EpochTimestamps {
+                first_slot: bank.slot,
+                timestamp: recent_timestamp,
+                samples,
+            }
+            .create_account(bank.inherit_sysvar_account_balance(account))
+        });
+        for _ in 0..32 {
+            bank = Arc::new(new_from_parent(&bank));
+        }
+        let epoch_timestamps = EpochTimestamps::from_account(
+            &bank.get_account(&sysvar::epoch_timestamps::id()).unwrap(),
+        )
+        .unwrap();
+        let expected_slot_duration = (slot_duration + slow_slot_duration) / 2;
+        assert_eq!(epoch_timestamps.first_slot, bank.slot());
+        assert_eq!(
+            epoch_timestamps.timestamp,
+            recent_timestamp + (bank.slot() as u32 * expected_slot_duration).as_secs() as i64
+        );
+        assert!(epoch_timestamps.samples.is_empty());
+    }
+
+    #[test]
+    fn test_update_epoch_timestamps_epoch_boundary_must_increase() {
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = crate::genesis_utils::create_genesis_config(0);
+        genesis_config.epoch_schedule = EpochSchedule::new(32);
+        let mut bank = Arc::new(Bank::new(&genesis_config));
+        let recent_timestamp: UnixTimestamp = bank.unix_timestamp_from_genesis();
+        let fast_slot_duration = Duration::from_nanos(bank.ns_per_slot as u64) / 2;
+
+        let timestamp_slot_10 = recent_timestamp + (10 * fast_slot_duration).as_secs() as i64;
+        let timestamp_slot_20 = timestamp_slot_10 + (10 * fast_slot_duration).as_secs() as i64;
+        bank.update_sysvar_account(&sysvar::epoch_timestamps::id(), |account| {
+            let mut samples = HashMap::new();
+            samples.insert(10, Some(timestamp_slot_10));
+            samples.insert(20, Some(timestamp_slot_20));
 
             EpochTimestamps {
                 first_slot: bank.slot,
@@ -9527,7 +9572,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(epoch_timestamps.first_slot, bank.slot());
-        assert_eq!(epoch_timestamps.timestamp, recent_timestamp + 12);
+        assert_eq!(
+            epoch_timestamps.timestamp,
+            bank.unix_timestamp_from_genesis()
+        );
         assert!(epoch_timestamps.samples.is_empty());
     }
 
