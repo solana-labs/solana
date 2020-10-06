@@ -88,15 +88,15 @@ fn star_network_create(num: usize) -> Network {
             )));
             let id = new.label().pubkey();
             let mut node = CrdsGossip::default();
-            node.crds.insert(new.clone(), 0).unwrap();
-            node.crds.insert(entry.clone(), 0).unwrap();
+            node.crds.insert(new.clone(), timestamp()).unwrap();
+            node.crds.insert(entry.clone(), timestamp()).unwrap();
             node.set_self(&id);
             (new.label().pubkey(), Node::new(Arc::new(Mutex::new(node))))
         })
         .collect();
     let mut node = CrdsGossip::default();
     let id = entry.label().pubkey();
-    node.crds.insert(entry, 0).unwrap();
+    node.crds.insert(entry, timestamp()).unwrap();
     node.set_self(&id);
     network.insert(id, Node::new(Arc::new(Mutex::new(node))));
     Network::new(network)
@@ -109,7 +109,7 @@ fn rstar_network_create(num: usize) -> Network {
     )));
     let mut origin = CrdsGossip::default();
     let id = entry.label().pubkey();
-    origin.crds.insert(entry, 0).unwrap();
+    origin.crds.insert(entry, timestamp()).unwrap();
     origin.set_self(&id);
     let mut network: HashMap<_, _> = (1..num)
         .map(|_| {
@@ -119,8 +119,8 @@ fn rstar_network_create(num: usize) -> Network {
             )));
             let id = new.label().pubkey();
             let mut node = CrdsGossip::default();
-            node.crds.insert(new.clone(), 0).unwrap();
-            origin.crds.insert(new.clone(), 0).unwrap();
+            node.crds.insert(new.clone(), timestamp()).unwrap();
+            origin.crds.insert(new.clone(), timestamp()).unwrap();
             node.set_self(&id);
             (new.label().pubkey(), Node::new(Arc::new(Mutex::new(node))))
         })
@@ -138,7 +138,7 @@ fn ring_network_create(num: usize) -> Network {
             )));
             let id = new.label().pubkey();
             let mut node = CrdsGossip::default();
-            node.crds.insert(new.clone(), 0).unwrap();
+            node.crds.insert(new.clone(), timestamp()).unwrap();
             node.set_self(&id);
             (new.label().pubkey(), Node::new(Arc::new(Mutex::new(node))))
         })
@@ -157,7 +157,11 @@ fn ring_network_create(num: usize) -> Network {
                 .clone()
         };
         let end = network.get_mut(&keys[(k + 1) % keys.len()]).unwrap();
-        end.lock().unwrap().crds.insert(start_info, 0).unwrap();
+        end.lock()
+            .unwrap()
+            .crds
+            .insert(start_info, timestamp())
+            .unwrap();
     }
     Network::new(network)
 }
@@ -172,7 +176,7 @@ fn connected_staked_network_create(stakes: &[u64]) -> Network {
             )));
             let id = new.label().pubkey();
             let mut node = CrdsGossip::default();
-            node.crds.insert(new.clone(), 0).unwrap();
+            node.crds.insert(new.clone(), timestamp()).unwrap();
             node.set_self(&id);
             (
                 new.label().pubkey(),
@@ -196,7 +200,7 @@ fn connected_staked_network_create(stakes: &[u64]) -> Network {
             let mut end = end.lock().unwrap();
             if keys[k] != end.id {
                 let start_info = start_entries[k].clone();
-                end.crds.insert(start_info, 0).unwrap();
+                end.crds.insert(start_info, timestamp()).unwrap();
             }
         }
     }
@@ -228,10 +232,12 @@ fn network_simulator(thread_pool: &ThreadPool, network: &mut Network, max_conver
             .refresh_push_active_set(&HashMap::new(), None);
     });
     let mut total_bytes = bytes_tx;
-    for second in 1..num {
-        let start = second * 10;
-        let end = (second + 1) * 10;
+    let mut ts = timestamp();
+    for _ in 1..num {
+        let start = ((ts + 99) / 100) as usize;
+        let end = start + 10;
         let now = (start * 100) as u64;
+        ts += 1000;
         // push a message to the network
         network_values.par_iter().for_each(|locked_node| {
             let node = &mut locked_node.lock().unwrap();
