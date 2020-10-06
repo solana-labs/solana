@@ -21,6 +21,7 @@ import type {FeeCalculator} from './fee-calculator';
 import type {Account} from './account';
 import type {TransactionSignature} from './transaction';
 import {AgentManager} from './agent-manager';
+import * as schema from './schema/validators';
 
 export const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
 
@@ -1806,10 +1807,10 @@ export class Connection {
     publicKey: PublicKey,
     commitment: ?Commitment,
   ): Promise<RpcResponseAndContext<AccountInfo<Buffer> | null>> {
+    
     const args = this._buildArgs([publicKey.toBase58()], commitment, 'base64');
-    const unsafeRes = await this._rpcRequest('getAccountInfo', args);
-    const res = GetAccountInfoAndContextRpcResult(unsafeRes);
-    if (res.error) {
+    const res = await this._rpcRequest('getAccountInfo', args);
+    if (schema.accountInfo.validate(res)) {
       throw new Error(
         'failed to get info about account ' +
           publicKey.toBase58() +
@@ -1922,9 +1923,8 @@ export class Connection {
       epoch !== undefined ? {epoch} : undefined,
     );
 
-    const unsafeRes = await this._rpcRequest('getStakeActivation', args);
-    const res = GetStakeActivationResult(unsafeRes);
-    if (res.error) {
+    const res = await this._rpcRequest('getStakeActivation', args);
+    if (schema.stakeActivation.validate(res)) {
       throw new Error(
         `failed to get Stake Activation ${publicKey.toBase58()}: ${
           res.error.message

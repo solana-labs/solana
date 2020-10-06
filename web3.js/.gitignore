@@ -27,3 +27,5 @@ doc
 
 # fixtures
 /test/fixtures
+
+/src/schema/validators
