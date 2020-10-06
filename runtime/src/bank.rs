@@ -57,7 +57,9 @@ use solana_sdk::{
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
-    stake_weighted_timestamp::{calculate_stake_weighted_timestamp, TIMESTAMP_SLOT_RANGE},
+    stake_weighted_timestamp::{
+        calculate_stake_weighted_timestamp, calculate_timestamp_from_samples, TIMESTAMP_SLOT_RANGE,
+    },
     system_transaction,
     sysvar::{self, epoch_timestamps::EpochTimestamps, Sysvar},
     timing::years_as_slots,
@@ -1333,21 +1335,61 @@ impl Bank {
     }
 
     pub fn update_epoch_timestamps(&self, epoch: Option<Epoch>) {
-        if epoch == Some(self.epoch()) {
-            return;
-        }
         if self
             .feature_set
             .is_active(&feature_set::epoch_timestamps::id())
         {
-            // if I'm the first Bank in an epoch, ensure epoch_timestamps are updated
-            self.update_sysvar_account(&sysvar::epoch_timestamps::id(), |account| {
-                sysvar::epoch_timestamps::create_account(
-                    self.inherit_sysvar_account_balance(account),
-                    self.slot,
-                    self.unix_timestamp_from_genesis(),
-                )
-            });
+            if epoch == Some(self.epoch()) {
+                self.update_sysvar_account(&sysvar::epoch_timestamps::id(), |account| {
+                    let mut epoch_timestamps = account
+                        .as_ref()
+                        .map(|account| EpochTimestamps::from_account(&account).unwrap_or_default())
+                        .unwrap_or_default();
+                    let slots_to_update: Vec<Slot> = epoch_timestamps
+                        .samples
+                        .iter()
+                        .filter_map(|(slot, sample_timestamp)| {
+                            if self.slot >= *slot && sample_timestamp.is_none() {
+                                Some(*slot)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    for sample_slot in slots_to_update {
+                        epoch_timestamps
+                            .samples
+                            .remove(&sample_slot)
+                            .expect("sample must exist");
+                        epoch_timestamps
+                            .samples
+                            .insert(self.slot, self.get_timestamp_estimate());
+                    }
+                    epoch_timestamps.create_account(self.inherit_sysvar_account_balance(account))
+                });
+            } else {
+                // if I'm the first Bank in an epoch, ensure epoch_timestamps are updated
+                self.update_sysvar_account(&sysvar::epoch_timestamps::id(), |account| {
+                    let epoch_timestamps = account
+                        .as_ref()
+                        .map(|account| EpochTimestamps::from_account(&account).unwrap_or_default())
+                        .unwrap_or_default();
+
+                        let epoch_timestamp = calculate_timestamp_from_samples(
+                            &epoch_timestamps.samples,
+                            self.slot,
+                            (epoch_timestamps.first_slot, epoch_timestamps.timestamp),
+                        )
+                        .unwrap_or_else(|| self.unix_timestamp_from_genesis());
+
+                    EpochTimestamps {
+                        first_slot: self.slot,
+                        timestamp: epoch_timestamp,
+                        ..EpochTimestamps::default()
+                    }
+                    .create_account(self.inherit_sysvar_account_balance(account))
+                });
+            }
         }
     }
 
@@ -3990,7 +4032,7 @@ mod tests {
         stake_instruction,
         stake_state::{self, Authorized, Delegation, Lockup, Stake},
     };
-    use solana_vote_program::vote_state::VoteStateVersions;
+    use solana_vote_program::vote_state::{BlockTimestamp, VoteStateVersions};
     use solana_vote_program::{
         vote_instruction,
         vote_state::{self, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
@@ -9454,6 +9496,153 @@ mod tests {
             epoch_timestamps.timestamp,
             bank.unix_timestamp_from_genesis()
         );
+    }
+
+    #[test]
+    fn test_update_epoch_timestamps_epoch_boundary() {
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = crate::genesis_utils::create_genesis_config(0);
+        genesis_config.epoch_schedule = EpochSchedule::new(32);
+        let mut bank = Arc::new(Bank::new(&genesis_config));
+        let recent_timestamp: UnixTimestamp = bank.unix_timestamp_from_genesis();
+
+        bank.update_sysvar_account(&sysvar::epoch_timestamps::id(), |account| {
+            let mut samples = HashMap::new();
+            samples.insert(12, Some(recent_timestamp));
+            samples.insert(22, Some(recent_timestamp + 6));
+
+            EpochTimestamps {
+                first_slot: bank.slot,
+                timestamp: recent_timestamp,
+                samples,
+            }
+            .create_account(bank.inherit_sysvar_account_balance(account))
+        });
+        for _ in 0..32 {
+            bank = Arc::new(new_from_parent(&bank));
+        }
+        let epoch_timestamps = EpochTimestamps::from_account(
+            &bank.get_account(&sysvar::epoch_timestamps::id()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(epoch_timestamps.first_slot, bank.slot());
+        assert_eq!(epoch_timestamps.timestamp, recent_timestamp + 12);
+        assert!(epoch_timestamps.samples.is_empty());
+    }
+
+    fn update_vote_account_timestamp(
+        timestamp: BlockTimestamp,
+        bank: &Arc<Bank>,
+        vote_pubkey: &Pubkey,
+    ) {
+        let mut vote_account = bank.get_account(vote_pubkey).unwrap();
+        let mut vote_state = VoteState::from(&vote_account).unwrap();
+        vote_state.last_timestamp = timestamp;
+        let versioned = VoteStateVersions::Current(Box::new(vote_state));
+        VoteState::to(&versioned, &mut vote_account).unwrap();
+        bank.store_account(vote_pubkey, &vote_account);
+    }
+
+    #[test]
+    fn test_update_epoch_timestamps_samples() {
+        let leader_pubkey = Pubkey::new_rand();
+        let leader_lamports = 3;
+        let GenesisConfigInfo {
+            genesis_config,
+            voting_keypair,
+            ..
+        } = create_genesis_config_with_leader(5, &leader_pubkey, leader_lamports);
+        let mut bank = Arc::new(Bank::new(&genesis_config));
+        let recent_timestamp: UnixTimestamp = bank.unix_timestamp_from_genesis();
+        let sample_slot0 = 12;
+        let sample_slot1 = 22;
+        let slot_duration = Duration::from_nanos(bank.ns_per_slot as u64);
+        bank.update_sysvar_account(&sysvar::epoch_timestamps::id(), |account| {
+            let mut samples = HashMap::new();
+            samples.insert(sample_slot0, None);
+            samples.insert(sample_slot1, None);
+
+            EpochTimestamps {
+                first_slot: bank.slot,
+                timestamp: recent_timestamp,
+                samples,
+            }
+            .create_account(bank.inherit_sysvar_account_balance(account))
+        });
+
+        bank = Arc::new(new_from_parent(&bank));
+        let vote_timestamp0 = recent_timestamp + 1;
+        update_vote_account_timestamp(
+            BlockTimestamp {
+                slot: 0,
+                timestamp: vote_timestamp0,
+            },
+            &bank,
+            &voting_keypair.pubkey(),
+        );
+
+        for _ in 0..11 {
+            bank = Arc::new(new_from_parent(&bank));
+        }
+        let epoch_timestamps = EpochTimestamps::from_account(
+            &bank.get_account(&sysvar::epoch_timestamps::id()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(epoch_timestamps.first_slot, 0);
+        assert_eq!(epoch_timestamps.timestamp, recent_timestamp);
+        let mut expected_samples = HashMap::new();
+        let expected_timestamp0 =
+            (sample_slot0 as u32 * slot_duration).as_secs() as i64 + vote_timestamp0;
+        expected_samples.insert(sample_slot0, Some(expected_timestamp0));
+        expected_samples.insert(sample_slot1, None);
+        assert_eq!(epoch_timestamps.samples, expected_samples);
+
+        let vote_slot1 = bank.slot();
+        let vote_timestamp1 = recent_timestamp + 10;
+        update_vote_account_timestamp(
+            BlockTimestamp {
+                slot: vote_slot1,
+                timestamp: vote_timestamp1,
+            },
+            &bank,
+            &voting_keypair.pubkey(),
+        );
+        for _ in 0..9 {
+            bank = Arc::new(new_from_parent(&bank));
+        }
+        // Skip a slot, emulating a fork
+        bank = Arc::new(Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            bank.slot() + 2,
+        ));
+        let epoch_timestamps = EpochTimestamps::from_account(
+            &bank.get_account(&sysvar::epoch_timestamps::id()).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(epoch_timestamps.first_slot, 0);
+        assert_eq!(epoch_timestamps.timestamp, recent_timestamp);
+        expected_samples.remove(&sample_slot1);
+        let expected_timestamp1 = ((sample_slot1 + 1 - vote_slot1) as u32 * slot_duration).as_secs()
+            as i64
+            + vote_timestamp1;
+        expected_samples.insert(sample_slot1 + 1, Some(expected_timestamp1));
+        assert_eq!(epoch_timestamps.samples, expected_samples);
+
+        // Add a couple more banks to ensure values do not change
+        for _ in 0..2 {
+            bank = Arc::new(new_from_parent(&bank));
+        }
+        let epoch_timestamps = EpochTimestamps::from_account(
+            &bank.get_account(&sysvar::epoch_timestamps::id()).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(epoch_timestamps.first_slot, 0);
+        assert_eq!(epoch_timestamps.timestamp, recent_timestamp);
+        assert_eq!(epoch_timestamps.samples, expected_samples);
     }
 
     fn setup_bank_with_removable_zero_lamport_account() -> Arc<Bank> {
