@@ -87,7 +87,10 @@ impl Faucet {
     }
 
     pub fn check_time_request_limit(&mut self, request_amount: u64) -> bool {
-        (self.request_current + request_amount) <= self.per_time_cap
+        self.request_current
+            .checked_add(request_amount)
+            .map(|s| s <= self.per_time_cap)
+            .unwrap_or(false)
     }
 
     pub fn clear_request_count(&mut self) {
@@ -122,7 +125,7 @@ impl Faucet {
                     }
                 }
                 if self.check_time_request_limit(lamports) {
-                    self.request_current += lamports;
+                    self.request_current = self.request_current.saturating_add(lamports);
                     datapoint_info!(
                         "faucet-airdrop",
                         ("request_amount", lamports, i64),
