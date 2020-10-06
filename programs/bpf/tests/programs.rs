@@ -146,6 +146,7 @@ fn test_program_bpf_sanity() {
         programs.extend_from_slice(&[
             ("solana_bpf_rust_128bit", true),
             ("solana_bpf_rust_alloc", true),
+            ("solana_bpf_rust_custom_heap", true),
             ("solana_bpf_rust_dep_crate", true),
             ("solana_bpf_rust_external_spend", false),
             ("solana_bpf_rust_iter", true),
@@ -663,12 +664,12 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_128bit", 543),
             ("solana_bpf_rust_alloc", 19082),
             ("solana_bpf_rust_dep_crate", 2),
-            ("solana_bpf_rust_external_spend", 485),
+            ("solana_bpf_rust_external_spend", 538),
             ("solana_bpf_rust_iter", 723),
             ("solana_bpf_rust_many_args", 231),
-            ("solana_bpf_rust_noop", 459),
-            ("solana_bpf_rust_param_passing", 54),
-            ("solana_bpf_rust_sanity", 2223),
+            ("solana_bpf_rust_noop", 512),
+            ("solana_bpf_rust_param_passing", 46),
+            ("solana_bpf_rust_sanity", 1989),
         ]);
     }
 
