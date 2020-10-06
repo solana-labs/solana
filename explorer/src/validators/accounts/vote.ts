@@ -14,20 +14,20 @@ export type VoteAccountType = StructType<typeof VoteAccountType>;
 export const VoteAccountType = enums(["vote"]);
 
 export type AuthorizedVoter = StructType<typeof AuthorizedVoter>;
-export const AuthorizedVoter = object({
+export const AuthorizedVoter = pick({
   authorizedVoter: Pubkey,
   epoch: number(),
 });
 
 export type PriorVoter = StructType<typeof PriorVoter>;
-export const PriorVoter = object({
+export const PriorVoter = pick({
   authorizedPubkey: Pubkey,
   epochOfLastAuthorizedSwitch: number(),
   targetEpoch: number(),
 });
 
 export type EpochCredits = StructType<typeof EpochCredits>;
-export const EpochCredits = object({
+export const EpochCredits = pick({
   epoch: number(),
   credits: string(),
   previousCredits: string(),

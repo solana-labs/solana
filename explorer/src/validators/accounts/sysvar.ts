@@ -7,6 +7,7 @@ import {
   boolean,
   string,
   any,
+  pick,
 } from "superstruct";
 
 export type SysvarAccountType = StructType<typeof SysvarAccountType>;
@@ -23,7 +24,7 @@ export const SysvarAccountType = enums([
 ]);
 
 export type ClockAccountInfo = StructType<typeof ClockAccountInfo>;
-export const ClockAccountInfo = object({
+export const ClockAccountInfo = pick({
   slot: number(),
   epoch: number(),
   leaderScheduleEpoch: number(),
@@ -31,7 +32,7 @@ export const ClockAccountInfo = object({
 });
 
 export type EpochScheduleInfo = StructType<typeof EpochScheduleInfo>;
-export const EpochScheduleInfo = object({
+export const EpochScheduleInfo = pick({
   slotsPerEpoch: number(),
   leaderScheduleSlotOffset: number(),
   warmup: boolean(),
@@ -40,16 +41,16 @@ export const EpochScheduleInfo = object({
 });
 
 export type FeesInfo = StructType<typeof FeesInfo>;
-export const FeesInfo = object({
-  feeCalculator: object({
+export const FeesInfo = pick({
+  feeCalculator: pick({
     lamportsPerSignature: string(),
   }),
 });
 
 export type RecentBlockhashesEntry = StructType<typeof RecentBlockhashesEntry>;
-export const RecentBlockhashesEntry = object({
+export const RecentBlockhashesEntry = pick({
   blockhash: string(),
-  feeCalculator: object({
+  feeCalculator: pick({
     lamportsPerSignature: string(),
   }),
 });
@@ -58,19 +59,19 @@ export type RecentBlockhashesInfo = StructType<typeof RecentBlockhashesInfo>;
 export const RecentBlockhashesInfo = array(RecentBlockhashesEntry);
 
 export type RentInfo = StructType<typeof RentInfo>;
-export const RentInfo = object({
+export const RentInfo = pick({
   lamportsPerByteYear: string(),
   exemptionThreshold: number(),
   burnPercent: number(),
 });
 
 export type RewardsInfo = StructType<typeof RewardsInfo>;
-export const RewardsInfo = object({
+export const RewardsInfo = pick({
   validatorPointValue: number(),
 });
 
 export type SlotHashEntry = StructType<typeof SlotHashEntry>;
-export const SlotHashEntry = object({
+export const SlotHashEntry = pick({
   slot: number(),
   hash: string(),
 });
@@ -79,20 +80,20 @@ export type SlotHashesInfo = StructType<typeof SlotHashesInfo>;
 export const SlotHashesInfo = array(SlotHashEntry);
 
 export type SlotHistoryInfo = StructType<typeof SlotHistoryInfo>;
-export const SlotHistoryInfo = object({
+export const SlotHistoryInfo = pick({
   nextSlot: number(),
   bits: string(),
 });
 
 export type StakeHistoryEntryItem = StructType<typeof StakeHistoryEntryItem>;
-export const StakeHistoryEntryItem = object({
+export const StakeHistoryEntryItem = pick({
   effective: number(),
   activating: number(),
   deactivating: number(),
 });
 
 export type StakeHistoryEntry = StructType<typeof StakeHistoryEntry>;
-export const StakeHistoryEntry = object({
+export const StakeHistoryEntry = pick({
   epoch: number(),
   stakeHistory: StakeHistoryEntryItem,
 });

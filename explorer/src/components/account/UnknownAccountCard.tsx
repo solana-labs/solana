@@ -1,5 +1,4 @@
 import React from "react";
-
 import { Account } from "providers/accounts";
 import { lamportsToSolString } from "utils";
 import { TableCardBody } from "components/common/TableCardBody";
