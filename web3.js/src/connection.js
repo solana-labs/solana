@@ -306,28 +306,11 @@ type LeaderSchedule = {
   [address: string]: number[],
 };
 
-/**
- * Transaction error or null
- */
-const TransactionErrorResult = struct.union(['null', 'object']);
-
-/**
- * Signature status for a transaction
- */
-const SignatureStatusResult = struct({err: TransactionErrorResult});
-
 
 type SimulatedTransactionResponse = {
   err: TransactionError | string | null,
   logs: Array<string> | null,
 };
-
-const SimulatedTransactionResponseValidator = jsonRpcResultAndContext(
-  struct.pick({
-    err: struct.union(['null', 'object', 'string']),
-    logs: struct.union(['null', struct.array(['string'])]),
-  }),
-);
 
 /**
  * Metadata for a confirmed transaction on the ledger
@@ -530,26 +513,6 @@ function createRpcRequest(url): RpcRequest {
 const GetBalanceAndContextRpcResult = jsonRpcResultAndContext('number?');
 
 /**
- * Expected JSON RPC response for the "getBlockTime" message
- */
-const GetBlockTimeRpcResult = struct({
-  jsonrpc: struct.literal('2.0'),
-  id: 'string',
-  error: 'any?',
-  result: struct.union(['null', 'number', 'undefined']),
-});
-
-/**
- * Expected JSON RPC response for the "minimumLedgerSlot" and "getFirstAvailableBlock" messages
- */
-const SlotRpcResult = struct({
-  jsonrpc: struct.literal('2.0'),
-  id: 'string',
-  error: 'any?',
-  result: 'number',
-});
-
-/**
  * Supply
  *
  * @typedef {Object} Supply
@@ -564,18 +527,6 @@ type Supply = {
   nonCirculating: number,
   nonCirculatingAccounts: Array<PublicKey>,
 };
-
-/**
- * Expected JSON RPC response for the "getSupply" message
- */
-const GetSupplyRpcResult = jsonRpcResultAndContext(
-  struct({
-    total: 'number',
-    circulating: 'number',
-    nonCirculating: 'number',
-    nonCirculatingAccounts: struct.array(['string']),
-  }),
-);
 
 /**
  * Token amount object which returns a token amount in different formats
@@ -609,60 +560,6 @@ type TokenAccountBalancePair = {
 };
 
 /**
- * Expected JSON RPC response for the "getTokenLargestAccounts" message
- */
-const GetTokenLargestAccountsResult = jsonRpcResultAndContext(
-  struct.array([
-    struct.pick({
-      address: 'string',
-      amount: 'string',
-      uiAmount: 'number',
-      decimals: 'number',
-    }),
-  ]),
-);
-
-/**
- * Expected JSON RPC response for the "getTokenAccountsByOwner" message
- */
-const GetTokenAccountsByOwner = jsonRpcResultAndContext(
-  struct.array([
-    struct.object({
-      pubkey: 'string',
-      account: struct.object({
-        executable: 'boolean',
-        owner: 'string',
-        lamports: 'number',
-        data: ['string', struct.literal('base64')],
-        rentEpoch: 'number?',
-      }),
-    }),
-  ]),
-);
-
-/**
- * Expected JSON RPC response for the "getTokenAccountsByOwner" message with parsed data
- */
-const GetParsedTokenAccountsByOwner = jsonRpcResultAndContext(
-  struct.array([
-    struct.object({
-      pubkey: 'string',
-      account: struct.object({
-        executable: 'boolean',
-        owner: 'string',
-        lamports: 'number',
-        data: struct.pick({
-          program: 'string',
-          parsed: 'any',
-          space: 'number',
-        }),
-        rentEpoch: 'number?',
-      }),
-    }),
-  ]),
-);
-
-/**
  * Pair of an account address and its balance
  *
  * @typedef {Object} AccountBalancePair
@@ -673,263 +570,6 @@ type AccountBalancePair = {
   address: PublicKey,
   lamports: number,
 };
-/**
- * @private
- */
-const AccountInfoResult = struct({
-  executable: 'boolean',
-  owner: 'string',
-  lamports: 'number',
-  data: 'any',
-  rentEpoch: 'number?',
-});
-
-/**
- * @private
- */
-const ProgramAccountInfoResult = struct({
-  pubkey: 'string',
-  account: AccountInfoResult,
-});
-
-/**
- * @private
- */
-const ParsedProgramAccountInfoResult = struct({
-  pubkey: 'string',
-  account: ParsedAccountInfoResult,
-});
-
-/***
- * Expected JSON RPC response for the "programNotification" message
- */
-const ProgramAccountNotificationResult = struct({
-  subscription: 'number',
-  result: notificationResultAndContext(ProgramAccountInfoResult),
-});
-
-/**
- * @private
- */
-const SlotInfoResult = struct({
-  parent: 'number',
-  slot: 'number',
-  root: 'number',
-});
-
-/**
- * Expected JSON RPC response for the "slotNotification" message
- */
-const SlotNotificationResult = struct({
-  subscription: 'number',
-  result: SlotInfoResult,
-});
-
-/**
- * Expected JSON RPC response for the "signatureNotification" message
- */
-const SignatureNotificationResult = struct({
-  subscription: 'number',
-  result: notificationResultAndContext(SignatureStatusResult),
-});
-
-/**
- * Expected JSON RPC response for the "rootNotification" message
- */
-const RootNotificationResult = struct({
-  subscription: 'number',
-  result: 'number',
-});
-
-/**
- * Expected JSON RPC response for the "getProgramAccounts" message
- */
-const GetProgramAccountsRpcResult = jsonRpcResult(
-  struct.array([ProgramAccountInfoResult]),
-);
-
-/**
- * Expected JSON RPC response for the "getProgramAccounts" message
- */
-const GetParsedProgramAccountsRpcResult = jsonRpcResult(
-  struct.array([ParsedProgramAccountInfoResult]),
-);
-
-/**
- * Expected JSON RPC response for the "getVoteAccounts" message
- */
-const GetVoteAccounts = jsonRpcResult(
-  struct({
-    current: struct.array([
-      struct.pick({
-        votePubkey: 'string',
-        nodePubkey: 'string',
-        activatedStake: 'number',
-        epochVoteAccount: 'boolean',
-        epochCredits: struct.array([
-          struct.tuple(['number', 'number', 'number']),
-        ]),
-        commission: 'number',
-        lastVote: 'number',
-        rootSlot: 'number?',
-      }),
-    ]),
-    delinquent: struct.array([
-      struct.pick({
-        votePubkey: 'string',
-        nodePubkey: 'string',
-        activatedStake: 'number',
-        epochVoteAccount: 'boolean',
-        epochCredits: struct.array([
-          struct.tuple(['number', 'number', 'number']),
-        ]),
-        commission: 'number',
-        lastVote: 'number',
-        rootSlot: 'number?',
-      }),
-    ]),
-  }),
-);
-
-/**
- * Expected JSON RPC response for the "getSignatureStatuses" message
- */
-const GetSignatureStatusesRpcResult = jsonRpcResultAndContext(
-  struct.array([
-    struct.union([
-      'null',
-      struct.pick({
-        slot: 'number',
-        confirmations: struct.union(['number', 'null']),
-        err: TransactionErrorResult,
-      }),
-    ]),
-  ]),
-);
-
-/**
- * @private
- */
-const ConfirmedTransactionResult = struct({
-  signatures: struct.array(['string']),
-  message: struct({
-    accountKeys: struct.array(['string']),
-    header: struct({
-      numRequiredSignatures: 'number',
-      numReadonlySignedAccounts: 'number',
-      numReadonlyUnsignedAccounts: 'number',
-    }),
-    instructions: struct.array([
-      struct({
-        accounts: struct.array(['number']),
-        data: 'string',
-        programIdIndex: 'number',
-      }),
-    ]),
-    recentBlockhash: 'string',
-  }),
-});
-
-/**
- * @private
- */
-const ParsedConfirmedTransactionResult = struct({
-  signatures: struct.array(['string']),
-  message: struct({
-    accountKeys: struct.array([
-      struct({
-        pubkey: 'string',
-        signer: 'boolean',
-        writable: 'boolean',
-      }),
-    ]),
-    instructions: struct.array([
-      struct.union([
-        struct({
-          accounts: struct.array(['string']),
-          data: 'string',
-          programId: 'string',
-        }),
-        struct({
-          parsed: 'any',
-          program: 'string',
-          programId: 'string',
-        }),
-      ]),
-    ]),
-    recentBlockhash: 'string',
-  }),
-});
-
-/**
- * @private
- */
-const ConfirmedTransactionMetaResult = struct.union([
-  'null',
-  struct.pick({
-    err: TransactionErrorResult,
-    fee: 'number',
-    preBalances: struct.array(['number']),
-    postBalances: struct.array(['number']),
-  }),
-]);
-
-/**
- * Expected JSON RPC response for the "getConfirmedBlock" message
- */
-export const GetConfirmedBlockRpcResult = jsonRpcResult(
-  struct.union([
-    'null',
-    struct.pick({
-      blockhash: 'string',
-      previousBlockhash: 'string',
-      parentSlot: 'number',
-      transactions: struct.array([
-        struct({
-          transaction: ConfirmedTransactionResult,
-          meta: ConfirmedTransactionMetaResult,
-        }),
-      ]),
-      rewards: struct.union([
-        'undefined',
-        struct.array([
-          struct({
-            pubkey: 'string',
-            lamports: 'number',
-          }),
-        ]),
-      ]),
-    }),
-  ]),
-);
-
-/**
- * Expected JSON RPC response for the "getConfirmedTransaction" message
- */
-const GetConfirmedTransactionRpcResult = jsonRpcResult(
-  struct.union([
-    'null',
-    struct.pick({
-      slot: 'number',
-      transaction: ConfirmedTransactionResult,
-      meta: ConfirmedTransactionMetaResult,
-    }),
-  ]),
-);
-
-/**
- * Expected JSON RPC response for the "getConfirmedTransaction" message
- */
-const GetParsedConfirmedTransactionRpcResult = jsonRpcResult(
-  struct.union([
-    'null',
-    struct.pick({
-      slot: 'number',
-      transaction: ParsedConfirmedTransactionResult,
-      meta: ConfirmedTransactionMetaResult,
-    }),
-  ]),
-);
 
 /**
  * Information about the latest slot being processed by a node
@@ -1278,8 +918,8 @@ export class Connection {
    */
   async getBlockTime(slot: number): Promise<number | null> {
     const unsafeRes = await this._rpcRequest('getBlockTime', [slot]);
-    const res = GetBlockTimeRpcResult(unsafeRes);
-    if (res.error) {
+    const res = schema.numberResult.get(unsafeRes);
+    if (schema.numberResult.isError(res)) {
       throw new Error(
         'failed to get block time for slot ' + slot + ': ' + res.error.message,
       );
@@ -1327,7 +967,7 @@ export class Connection {
   ): Promise<RpcResponseAndContext<Supply>> {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getSupply', args);
-    const res = GetSupplyRpcResult(unsafeRes);
+    const res = schema.supply.get(unsafeRes);
     if (res.error) {
       throw new Error('failed to get supply: ' + res.error.message);
     }
@@ -1397,7 +1037,7 @@ export class Connection {
 
     const args = this._buildArgs(_args, commitment, 'base64');
     const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
-    const res = GetTokenAccountsByOwner(unsafeRes);
+    const res = schema.tokenAccountByOwner.get(unsafeRes);
     if (res.error) {
       throw new Error(
         'failed to get token accounts owned by account ' +
@@ -1451,7 +1091,7 @@ export class Connection {
 
     const args = this._buildArgs(_args, commitment, 'jsonParsed');
     const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
-    const res = GetParsedTokenAccountsByOwner(unsafeRes);
+    const res = schema.tokenAccountByOwner.get(unsafeRes);
     if (res.error) {
       throw new Error(
         'failed to get token accounts owned by account ' +
@@ -1513,7 +1153,7 @@ export class Connection {
   ): Promise<RpcResponseAndContext<Array<TokenAccountBalancePair>>> {
     const args = this._buildArgs([mintAddress.toBase58()], commitment);
     const unsafeRes = await this._rpcRequest('getTokenLargestAccounts', args);
-    const res = GetTokenLargestAccountsResult(unsafeRes);
+    const res = schema.tokenLargestAccounts.get(unsafeRes);
     if (res.error) {
       throw new Error(
         'failed to get token largest accounts: ' + res.error.message,
@@ -1676,7 +1316,7 @@ export class Connection {
   ): Promise<Array<{pubkey: PublicKey, account: AccountInfo<Buffer>}>> {
     const args = this._buildArgs([programId.toBase58()], commitment, 'base64');
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
-    const res = GetProgramAccountsRpcResult(unsafeRes);
+    const res = schema.programAccounts.get(unsafeRes);
     if (res.error) {
       throw new Error(
         'failed to get accounts owned by program ' +
@@ -1723,7 +1363,7 @@ export class Connection {
       'jsonParsed',
     );
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
-    const res = GetParsedProgramAccountsRpcResult(unsafeRes);
+    const res = schema.parsedProgramAccounts.get(unsafeRes);
     if (res.error) {
       throw new Error(
         'failed to get accounts owned by program ' +
@@ -1849,7 +1489,7 @@ export class Connection {
   async getVoteAccounts(commitment: ?Commitment): Promise<VoteAccountStatus> {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getVoteAccounts', args);
-    const res = GetVoteAccounts(unsafeRes);
+    const res = schema.voteAccounts.get(unsafeRes);
     //const res = unsafeRes;
     if (res.error) {
       throw new Error('failed to get vote accounts: ' + res.error.message);
@@ -1913,7 +1553,7 @@ export class Connection {
       params.push(config);
     }
     const unsafeRes = await this._rpcRequest('getSignatureStatuses', params);
-    const res = GetSignatureStatusesRpcResult(unsafeRes);
+    const res = schema.signatureStatuses.get(unsafeRes);
     if (res.error) {
       throw new Error('failed to get signature status: ' + res.error.message);
     }
@@ -1971,8 +1611,8 @@ export class Connection {
   async getEpochInfo(commitment: ?Commitment): Promise<EpochInfo> {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getEpochInfo', args);
-    const res = schema.epochInfoResult.get(unsafeRes);
-    if (schema.epochInfoResult.isError(res)) {
+    const res = schema.epochInfo.get(unsafeRes);
+    if (schema.epochInfo.isError(res)) {
       throw new Error('failed to get epoch info: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');
@@ -2106,7 +1746,7 @@ export class Connection {
    */
   async getConfirmedBlock(slot: number): Promise<ConfirmedBlock> {
     const unsafeRes = await this._rpcRequest('getConfirmedBlock', [slot]);
-    const {result, error} = GetConfirmedBlockRpcResult(unsafeRes);
+    const {result, error} = schema.confirmedBlock.get(unsafeRes);
     if (error) {
       throw new Error('failed to get confirmed block: ' + result.error.message);
     }
@@ -2138,7 +1778,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getConfirmedTransaction', [
       signature,
     ]);
-    const {result, error} = GetConfirmedTransactionRpcResult(unsafeRes);
+    const {result, error} = schema.confirmedTransaction.get(unsafeRes);
     if (error) {
       throw new Error('failed to get confirmed transaction: ' + error.message);
     }
@@ -2165,7 +1805,7 @@ export class Connection {
       signature,
       'jsonParsed',
     ]);
-    const {result, error} = GetParsedConfirmedTransactionRpcResult(unsafeRes);
+    const {result, error} = schema.parsedConfirmedTransaction.get(unsafeRes);
     if (error) {
       throw new Error('failed to get confirmed transaction: ' + error.message);
     }
@@ -2313,8 +1953,8 @@ export class Connection {
       to.toBase58(),
       amount,
     ]);
-    const res = schema.simpleString.get(unsafeRes);
-    if (schema.simpleString.isError(res)) {
+    const res = schema.stringResult.get(unsafeRes);
+    if (schema.stringResult.isError(res)) {
       throw new Error(
         'airdrop to ' + to.toBase58() + ' failed: ' + res.error.message,
       );
@@ -2416,7 +2056,7 @@ export class Connection {
     }
 
     const unsafeRes = await this._rpcRequest('simulateTransaction', args);
-    const res = SimulatedTransactionResponseValidator(unsafeRes);
+    const res = schema.simulateTransaction.get(unsafeRes);
     if (res.error) {
       throw new Error('failed to simulate transaction: ' + res.error.message);
     }
@@ -2778,7 +2418,7 @@ export class Connection {
    * @private
    */
   _wsOnProgramAccountNotification(notification: Object) {
-    const res = ProgramAccountNotificationResult(notification);
+    const res = schema.programAccountNotification.get(notification);
     if (res.error) {
       throw new Error(
         'program account notification failed: ' + res.error.message,
@@ -2857,7 +2497,7 @@ export class Connection {
    * @private
    */
   _wsOnSlotNotification(notification: Object) {
-    const res = SlotNotificationResult(notification);
+    const res = schema.slotNotification.get(notification);
     if (res.error) {
       throw new Error('slot notification failed: ' + res.error.message);
     }
@@ -2936,7 +2576,7 @@ export class Connection {
    * @private
    */
   _wsOnSignatureNotification(notification: Object) {
-    const res = SignatureNotificationResult(notification);
+    const res = schema.signatureNotification.get(notification);
     if (res.error) {
       throw new Error('signature notification failed: ' + res.error.message);
     }
@@ -2999,7 +2639,7 @@ export class Connection {
    * @private
    */
   _wsOnRootNotification(notification: Object) {
-    const res = RootNotificationResult(notification);
+    const res = schema.rootNotification.get(notification);
     if (res.error) {
       throw new Error('root notification failed: ' + res.error.message);
     }
