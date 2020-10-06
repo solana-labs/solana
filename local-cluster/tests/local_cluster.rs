@@ -15,7 +15,9 @@ use solana_core::{
 };
 use solana_download_utils::download_snapshot;
 use solana_ledger::{
-    blockstore::Blockstore, blockstore_db::AccessType, leader_schedule::FixedSchedule,
+    blockstore::{Blockstore, PurgeType},
+    blockstore_db::AccessType,
+    leader_schedule::FixedSchedule,
     leader_schedule::LeaderSchedule,
 };
 use solana_local_cluster::{
@@ -1366,7 +1368,7 @@ fn test_no_voting() {
 
 #[test]
 #[serial]
-fn test_optimistic_confirmation_violation_with_no_tower() {
+fn test_optimistic_confirmation_violation_detection() {
     solana_logger::setup();
     let mut buf = BufferRedirect::stderr().unwrap();
     // First set up the cluster with 2 nodes
@@ -1466,92 +1468,6 @@ fn test_optimistic_confirmation_violation_with_no_tower() {
     let mut output = String::new();
     buf.read_to_string(&mut output).unwrap();
     assert!(output.contains(&expected_log));
-}
-
-#[test]
-#[serial]
-#[ignore]
-fn test_no_optimistic_confirmation_violation_with_tower() {
-    // rewrite this test scenario!
-    solana_logger::setup();
-    let mut buf = BufferRedirect::stderr().unwrap();
-
-    // First set up the cluster with 2 nodes
-    let slots_per_epoch = 2048;
-    let node_stakes = vec![51, 50];
-    let validator_keys: Vec<_> = vec![
-        "4qhhXNTbKD1a5vxDDLZcHKj7ELNeiivtUBxn3wUK1F5VRsQVP89VUhfXqSfgiFB14GfuBgtrQ96n9NvWQADVkcCg",
-        "3kHBzVwie5vTEaY6nFCPeFT8qDpoXzn7dCEioGRNBTnUDpvwnG85w8Wq63gVWpVTP8k2a8cgcWRjSXyUkEygpXWS",
-    ]
-    .iter()
-    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
-    .take(node_stakes.len())
-    .collect();
-    let config = ClusterConfig {
-        cluster_lamports: 100_000,
-        node_stakes: node_stakes.clone(),
-        validator_configs: vec![ValidatorConfig::default(); node_stakes.len()],
-        validator_keys: Some(validator_keys),
-        slots_per_epoch,
-        stakers_slot_offset: slots_per_epoch,
-        skip_warmup_slots: true,
-        ..ClusterConfig::default()
-    };
-    let mut cluster = LocalCluster::new(&config);
-    let entry_point_id = cluster.entry_point_info.id;
-    // Let the nodes run for a while. Wait for validators to vote on slot `S`
-    // so that the vote on `S-1` is definitely in gossip and optimistic confirmation is
-    // detected on slot `S-1` for sure, then stop the heavier of the two
-    // validators
-    let client = cluster.get_validator_client(&entry_point_id).unwrap();
-    let mut prev_voted_slot = 0;
-    loop {
-        let last_voted_slot = client
-            .get_slot_with_commitment(CommitmentConfig::recent())
-            .unwrap();
-        if last_voted_slot > 50 {
-            if prev_voted_slot == 0 {
-                prev_voted_slot = last_voted_slot;
-            } else {
-                break;
-            }
-        }
-        sleep(Duration::from_millis(100));
-    }
-
-    let exited_validator_info = cluster.exit_node(&entry_point_id);
-
-    // Mark fork as dead on the heavier validator, this should make the fork effectively
-    // dead, even though it was optimistically confirmed. The smaller validator should
-    // create and jump over to a new fork
-    {
-        let blockstore = Blockstore::open_with_access_type(
-            &exited_validator_info.info.ledger_path,
-            AccessType::PrimaryOnly,
-            None,
-        )
-        .unwrap_or_else(|e| {
-            panic!(
-                "Failed to open ledger at {:?}, err: {}",
-                exited_validator_info.info.ledger_path, e
-            );
-        });
-        info!(
-            "Setting slot: {} on main fork as dead, should cause fork",
-            prev_voted_slot
-        );
-        blockstore.set_dead_slot(prev_voted_slot).unwrap();
-    }
-    cluster.restart_node(&entry_point_id, exited_validator_info);
-
-    cluster.check_no_new_roots(400, "test_no_optimistic_confirmation_violation_with_tower");
-
-    // Check to see that validator didn't detected optimistic confirmation for
-    // `prev_voted_slot` failed
-    let expected_log = format!("Optimistic slot {} was not rooted", prev_voted_slot);
-    let mut output = String::new();
-    buf.read_to_string(&mut output).unwrap();
-    assert!(!output.contains(&expected_log));
 }
 
 #[test]
@@ -1686,6 +1602,239 @@ fn test_validator_saves_tower() {
     trace!("tower4: {:?}", tower4);
     // should tower4 advance 1 slot compared to tower3????
     assert_eq!(tower4.root(), tower3.root() + 1);
+}
+
+fn last_vote_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
+    let tower = Tower::restore(&ledger_path, &node_pubkey);
+    if let Err(tower_err) = tower {
+        if tower_err.is_file_missing() {
+            return None;
+        } else {
+            panic!("tower restore failed...: {:?}", tower_err);
+        }
+    }
+    // actually saved tower must have at least one vote.
+    let last_vote = Tower::restore(&ledger_path, &node_pubkey)
+        .unwrap()
+        .last_voted_slot()
+        .unwrap();
+    Some(last_vote)
+}
+
+fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: bool) {
+    solana_logger::setup();
+
+    // First set up the cluster with 4 nodes
+    let slots_per_epoch = 2048;
+    let node_stakes = vec![31, 36, 33, 0];
+
+    // each pubkeys are prefixed with A, B, C and D.
+    let validator_keys = vec![
+        "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+        "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
+        "4mx9yoFBeYasDKBGDWCTWGJdWuJCKbgqmuP8bN9umybCh5Jzngw7KQxe99Rf5uzfyzgba1i65rJW4Wqk7Ab5S8ye",
+        "3zsEPEDsjfEay7te9XqNjRTCE7vwuT6u4DHzBJC19yp7GS8BuNRMRjnpVrKCBzb3d44kxc4KPGSHkCmk6tEfswCg",
+    ]
+    .iter()
+    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+    .take(node_stakes.len())
+    .collect::<Vec<_>>();
+    let validators = validator_keys
+        .iter()
+        .map(|(kp, _)| kp.pubkey())
+        .collect::<Vec<_>>();
+    let (validator_a_pubkey, validator_b_pubkey, validator_c_pubkey) =
+        (validators[0], validators[1], validators[2]);
+
+    let config = ClusterConfig {
+        cluster_lamports: 100_000,
+        node_stakes: node_stakes.clone(),
+        validator_configs: vec![ValidatorConfig::default(); node_stakes.len()],
+        validator_keys: Some(validator_keys),
+        slots_per_epoch,
+        stakers_slot_offset: slots_per_epoch,
+        skip_warmup_slots: true,
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&config);
+
+    // 25 <- 26 <- 27
+    //
+    //
+    let base_slot = 26;
+    let next_slot_on_a = 27;
+    let truncated_slots = 100;
+
+    // Immediately kill validator C
+    let validator_c_info = cluster.exit_node(&validator_c_pubkey);
+
+    // Let validator A, B, (D) run for a while.
+    let client = cluster.get_validator_client(&validator_a_pubkey).unwrap();
+    loop {
+        sleep(Duration::from_millis(100));
+        let highest_bank = client
+            .get_slot_with_commitment(CommitmentConfig::recent())
+            .unwrap();
+        if highest_bank >= next_slot_on_a {
+            break;
+        }
+    }
+    let validator_a_info = cluster.exit_node(&validator_a_pubkey);
+    let client = cluster.get_validator_client(&validator_b_pubkey).unwrap();
+    loop {
+        sleep(Duration::from_millis(100));
+        let highest_bank = client
+            .get_slot_with_commitment(CommitmentConfig::recent())
+            .unwrap();
+        if highest_bank >= next_slot_on_a {
+            break;
+        }
+    }
+    let _validator_c_info = cluster.exit_node(&validator_b_pubkey);
+
+    info!("truncate validator C's ledger");
+    {
+        // first copy from validator A's ledger
+        std::fs::remove_dir_all(&validator_c_info.info.ledger_path).unwrap();
+        let mut opt = fs_extra::dir::CopyOptions::new();
+        opt.copy_inside = true;
+        fs_extra::dir::copy(
+            &validator_a_info.info.ledger_path,
+            &validator_c_info.info.ledger_path,
+            &opt,
+        )
+        .unwrap();
+        std::fs::remove_file(Tower::get_filename(
+            &validator_c_info.info.ledger_path,
+            &validator_a_pubkey,
+        ))
+        .unwrap();
+
+        let blockstore = Blockstore::open_with_access_type(
+            &validator_c_info.info.ledger_path,
+            AccessType::PrimaryOnly,
+            None,
+        )
+        .unwrap_or_else(|e| {
+            panic!(
+                "Failed to open ledger at {:?}, err: {}",
+                validator_c_info.info.ledger_path, e
+            );
+        });
+        blockstore.purge_from_next_slots(base_slot + 1, base_slot + truncated_slots);
+        blockstore.purge_slots(base_slot + 1, base_slot + truncated_slots, PurgeType::Exact);
+    }
+    info!("truncate validator A's ledger");
+    {
+        let blockstore = Blockstore::open_with_access_type(
+            &validator_a_info.info.ledger_path,
+            AccessType::PrimaryOnly,
+            None,
+        )
+        .unwrap_or_else(|e| {
+            panic!(
+                "Failed to open ledger at {:?}, err: {}",
+                validator_a_info.info.ledger_path, e
+            );
+        });
+        blockstore.purge_from_next_slots(next_slot_on_a + 1, next_slot_on_a + truncated_slots);
+        blockstore.purge_slots(
+            next_slot_on_a + 1,
+            next_slot_on_a + truncated_slots,
+            PurgeType::Exact,
+        );
+        if !with_tower {
+            info!("Removing tower!");
+            std::fs::remove_file(Tower::get_filename(
+                &validator_a_info.info.ledger_path,
+                &validator_a_pubkey,
+            ))
+            .unwrap();
+
+            // For some reason, fork_choice always selects slot 27 over votes_on_c_fork.
+            // So remove slot 27 to force to select votes_on_c_fork.
+            blockstore.purge_from_next_slots(next_slot_on_a, next_slot_on_a + truncated_slots);
+            blockstore.purge_slots(
+                next_slot_on_a,
+                next_slot_on_a + truncated_slots,
+                PurgeType::Exact,
+            );
+        } else {
+            info!("Not removing tower!");
+        }
+    }
+
+    info!("Restart validator C again!!!");
+    let val_c_ledger_path = validator_c_info.info.ledger_path.clone();
+    cluster.restart_node(&validator_c_pubkey, validator_c_info);
+
+    // Run validator C only to make it produce and vote on its own fork.
+    let mut votes_on_c_fork = std::collections::BTreeSet::new();
+    for _ in 0..100 {
+        sleep(Duration::from_millis(100));
+
+        let last_vote = last_vote_in_tower(&val_c_ledger_path, &validator_c_pubkey);
+        match last_vote {
+            None => continue,
+            Some(last_vote) => {
+                if last_vote != base_slot {
+                    votes_on_c_fork.insert(last_vote);
+                    if votes_on_c_fork.len() >= 4 {
+                        break;
+                    }
+                }
+            }
+        };
+    }
+    assert!(!votes_on_c_fork.is_empty());
+    info!("collected validator C's votes: {:?}", votes_on_c_fork);
+
+    info!("Restart validator A again!!!");
+    let val_a_ledger_path = validator_a_info.info.ledger_path.clone();
+    cluster.restart_node(&validator_a_pubkey, validator_a_info);
+
+    // monitor for actual votes from validator A
+    let mut bad_vote_detected = false;
+    for _ in 0..100 {
+        sleep(Duration::from_millis(100));
+
+        let last_vote = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey);
+        match last_vote {
+            None => continue,
+            Some(last_vote) => {
+                if votes_on_c_fork.contains(&last_vote) {
+                    bad_vote_detected = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    // an elaborate way of assert!(with_tower && !bad_vote_detected || ...)
+    let expects_optimistic_confirmation_violation = !with_tower;
+    if bad_vote_detected != expects_optimistic_confirmation_violation {
+        if bad_vote_detected {
+            panic!("No violation expected because of persisted tower!");
+        } else {
+            panic!("Violation expected because of removed persisted tower!");
+        }
+    } else if bad_vote_detected {
+        info!("THIS TEST expected violations. And indeed, there was some, because of removed persisted tower.");
+    } else {
+        info!("THIS TEST expected no violation. And indeed, there was none, thanks to persisted tower.");
+    }
+}
+
+#[test]
+#[serial]
+fn test_no_optimistic_confirmation_violation_with_tower() {
+    do_test_optimistic_confirmation_violation_with_or_without_tower(true);
+}
+
+#[test]
+#[serial]
+fn test_optimistic_confirmation_violation_without_tower() {
+    do_test_optimistic_confirmation_violation_with_or_without_tower(false);
 }
 
 fn wait_for_next_snapshot(
