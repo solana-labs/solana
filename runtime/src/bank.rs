@@ -8152,8 +8152,12 @@ mod tests {
                 false,
             );
 
+        assert_eq!(inner_instructions.len(), 2);
         assert!(inner_instructions[0].iter().all(|ix| ix.is_empty()));
-        assert!(transaction_logs.is_empty());
+
+        assert_eq!(transaction_logs.len(), 2);
+        assert!(transaction_logs[0].is_empty(), 2);
+
         assert_eq!(transaction_balances_set.pre_balances.len(), 3);
         assert_eq!(transaction_balances_set.post_balances.len(), 3);
 
