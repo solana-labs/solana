@@ -1,6 +1,6 @@
-const jsonRPCResultBuilder = (name, resultSchema) => ({
+const resultFactory = (name, resultSchema) => ({
     "$id": name,
-    "description": "A JSON RPC 2.0 response",
+    "description": `A JSON RPC 2.0 response for ${name}`,
     "oneOf": [
         { "$ref": "#/definitions/success" },
         { "$ref": "#/definitions/error" }
@@ -9,15 +9,19 @@ const jsonRPCResultBuilder = (name, resultSchema) => ({
         "common": {
             "required": [ "id", "jsonrpc" ],
             "not": { "required": [ "result", "error" ] },
-            "type": "object",
             "properties": {
                 "id": { "type": [ "string"  ] },
                 "jsonrpc": { "enum": [ "2.0" ] }
             }
         },
+        [name]: resultSchema,
         "success": {
-            "required": [ "result" ], "properties": { "result": resultSchema }
-        },
+            "allOf" : [
+            { "$ref": "#/definitions/common" },
+            {
+                "required": [ "result" ], "properties": { "result": { "$ref": `#/definitions/${name}` }, }
+            }
+        ]},
         "error": {
             "allOf" : [
                 { "$ref": "#/definitions/common" },
@@ -25,17 +29,9 @@ const jsonRPCResultBuilder = (name, resultSchema) => ({
                     "required": [ "error" ],
                     "properties": {
                         "error": {
-                            "type": "object",
-                            "required": [ "code", "message" ],
                             "properties": {
-                                "code": {
-                                    "type": "integer",
-                                    "note": [ "unenforceable in some languages" ]
-                                },
-                                "message": { "type": "string" },
-                                "data": {
-                                    "description": "optional, can be anything"
-                                }
+                                "code": {"type": "integer" },
+                                "message": { "type": "string" }
                             }
                         }
                     }
@@ -45,8 +41,105 @@ const jsonRPCResultBuilder = (name, resultSchema) => ({
     }
 });
 
+const contextFactory = (name, valueSchema) => {
+    return resultFactory(name, {
+        "required": [ "context", "value" ],
+        "properties": {
+            "context": { "required": [ "slot" ], "properties": { "slot": { "type": "integer" } } },
+            "value": valueSchema,
+        }
+    })
+};
+
+const notificationFactory = (name, valueSchema) => {
+    return  {
+        "$id": name,
+        "description": `A JSON RPC 2.0 response for ${name}`,
+        "oneOf": [
+            { "$ref": "#/definitions/notification" }
+        ],
+        "definitions": {
+            [name]: valueSchema,
+            "notification": {
+                "required": ["subscription", "result"],
+                "properties": {
+                    "subscription": { "type": "number"},
+                    "result": {
+                        "required": ["context", "value"],
+                        "properties": {
+                            "context": { 
+                                "required": ["slot"],
+                                "properties": { "slot": { "type": "number" } } 
+                            },
+                            "value": { "$ref": `#/definitions/${name}` }
+                        }
+                    }
+                }
+            }
+        }
+    };
+};
+
+const accountInfo = {
+    "required": [ "executable", "lamports", "owner", "data" ],
+    "properties": {
+        "data": { "type": "object" },
+        "executable": { "type": "boolean" },
+        "lamports": { "type": "integer" },
+        "owner": { "type": "string" },
+        "rentEpoch": { "type": "integer" },
+    }
+};
+
+const parsedAccountInfo = {
+    "required": [ "executable", "lamports", "owner", "data" ],
+    "properties": {
+        "data": {
+            "required": [ "space", "program", "parsed" ],
+            "properties": {
+                "parsed": { "type": "object" },
+                "program": { "type": "string" },
+                "space": { "type": "integer" },
+            }
+        },
+        "executable": { "type": "boolean" },
+        "lamports": { "type": "integer" },
+        "owner": { "type": "string" },
+        "rentEpoch": { "type": "integer" },
+    }
+};
+
 module.exports = [
-    jsonRPCResultBuilder('stakeActivation', { 
+    resultFactory('booleanResult', {
+        "type": "boolean"
+    }),
+    resultFactory('numberResult', {
+        "type": "number"
+    }),
+    resultFactory('stringResult', {
+        "type": "string"
+    }),
+    resultFactory('stringArray', {
+        "type": "array",
+        "items": {
+            "type": "string"
+        }
+    }),
+    resultFactory('version', {
+        "required": [ "solana-core" ],
+        "properties": {
+            "solana-core": { "type": "string" },
+            "feature-set": { "type": "number" },
+        }
+    }),
+    contextFactory('largestAccounts', {
+        "required": [ "lamports", "address" ],
+        "properties": {
+            "lamports": { "type" : "number" },
+            "address": { "type" : "string" },
+        }
+    }),
+    resultFactory('stakeActivation', { 
         "required": [ "state", "active", "inactive" ],
         "properties": {
             "state": { "enum": [ 'active','inactive','activating','deactivating', ] },
@@ -54,35 +147,87 @@ module.exports = [
             "inactive": { "type": "integer" },
         }
     }),
-    jsonRPCResultBuilder('accountInfo', { 
-        "required": [ "context", "value" ],
-        "context": { "required": [ "slot" ], "properties": { "slot": { "type": "integer" } } },
-        "value": {
-            "type": "object",
-            "required": [ "executable", "lamports", "owner", "data" ],
+    contextFactory('accountInfo', accountInfo),
+    contextFactory('parsedAccountInfo', parsedAccountInfo),
+    contextFactory('parsedAccounts', {
+        "type": "array",
+        "items": {
+            "required": ["account", "pubkey"],
             "properties": {
-                "data": {
-                    "type": "object",
-                    "required": [ "space", "program", "parsed" ],
-                    "properties": {
-                        "parsed": { "type": "object" },
-                        "program": { "type": "string" },
-                        "space": { "type": "integer" },
-                    }
-                },
-                "executable": { "type": "boolean" },
-                "lamports": { "type": "integer" },
-                "owner": { "type": "string" },
-                "rentEpoch": { "type": "integer" },
+                "pubkey": { "type": "string" },
+                "account": { ...parsedAccountInfo }
             }
         }
     }),
-    jsonRPCResultBuilder('leaderSchedule', {
+    resultFactory('inflationGovernor', {
+        "required": ["foundation","foundationTerm","initial","taper","terminal"],
+        "properties": {
+            "foundation": { "type": "number" },
+            "foundationTerm": { "type": "number" },
+            "initial": { "type": "number" },
+            "taper": { "type": "number" },
+            "terminal": { "type": "number" },
+        }
+    }),
+    resultFactory('epochInfo', {
+        "required": ["epoch", "slotIndex", "slotsInEpoch", "absoluteSlot"],
+        "properties": {
+            "epoch": { "type": "number" },
+            "slotIndex": { "type": "number" },
+            "slotsInEpoch": { "type": "number" },
+            "absoluteSlot": { "type": "number" },
+            "blockHeight": { "type": "number" },
+        }
+    }),
+    resultFactory('epochSchedule', {
+        "required": ["slotsPerEpoch", "leaderScheduleSlotOffset", "warmup", "firstNormalEpoch", "firstNormalSlot"],
+        "properties": {
+            "slotsPerEpoch": { "type": "number" },
+            "leaderScheduleSlotOffset": { "type": "number" },
+            "warmup": { "type": "boolean" },
+            "firstNormalEpoch": { "type": "number" },
+            "firstNormalSlot": { "type": "number" },
+        }
+    }),
+    contextFactory('tokenAccountBalance', {
+        "required": [ "amount", "uiAmount", "decimals" ],
+        "properties": {
+            "amount": { "type": "string" },
+            "uiAmount": { "type": "integer" },
+            "decimals": { "type": "integer" },
+        }
+    }),
+    resultFactory('leaderSchedule', {
         "additionalProperties": {
             "type": "array",
             "items": {
-            "type": "number"
+                "type": "number"
             }
         }
+    }),
+    contextFactory('recentBlockHash', {
+        "required": [ "blockhash", "feeCalculator" ],
+        "properties": {
+            "blockhash": { "type": "string" },
+            "feeCalculator": { 
+                "required": [ "lamportsPerSignature" ],
+                "properties": {
+                    "lamportsPerSignature": { "type": "number"}
+                }
+             },
+        }
+    }),
+    contextFactory('feeCalculator', {
+        "properties": {
+            "feeCalculator": { 
+                "required": [ "lamportsPerSignature" ],
+                "properties": {
+                    "lamportsPerSignature": { "type": "number"}
+                }
+             },
+        }
+    }),
+    notificationFactory('accountNotification', {
+        ...accountInfo
     }),
 ];
