@@ -324,6 +324,8 @@ mod tests {
         assert!(faucet.check_time_request_limit(1));
         faucet.request_current = 3;
         assert!(!faucet.check_time_request_limit(1));
+        faucet.request_current = 1;
+        assert!(!faucet.check_time_request_limit(u64::MAX));
     }
 
     #[test]
