@@ -5,6 +5,7 @@ import {
   useFetchAccountInfo,
   useAccountInfo,
   Account,
+  ProgramData,
 } from "providers/accounts";
 import { StakeAccountSection } from "components/account/StakeAccountSection";
 import { TokenAccountSection } from "components/account/TokenAccountSection";
@@ -28,6 +29,47 @@ import { StakeHistoryCard } from "components/account/StakeHistoryCard";
 import { BlockhashesCard } from "components/account/BlockhashesCard";
 import { ConfigAccountSection } from "components/account/ConfigAccountSection";
 import { KeysCard } from "components/account/KeysCard";
+
+const TABS_LOOKUP: { [id: string]: Tab } = {
+  "spl-token:mint": {
+    slug: "largest",
+    title: "Distribution",
+    path: "/largest",
+  },
+  vote: {
+    slug: "votes",
+    title: "Votes",
+    path: "/votes",
+  },
+  "sysvar:recentBlockhashes": {
+    slug: "blockhashes",
+    title: "Blockhashes",
+    path: "/blockhashes",
+  },
+  "sysvar:slotHashes": {
+    slug: "hashes",
+    title: "Hashes",
+    path: "/hashes",
+  },
+  "sysvar:stakeHistory": {
+    slug: "stake-history",
+    title: "Stake History",
+    path: "/stake-history",
+  },
+  "config:validatorInfo": {
+    slug: "public-keys",
+    title: "Public Keys",
+    path: "/public-keys",
+  },
+};
+
+const TOKEN_TABS_HIDDEN = [
+  "spl-token:mint",
+  "config",
+  "vote",
+  "sysvar",
+  "config",
+];
 
 type Props = { address: string; tab?: string };
 export function AccountDetailsPage({ address, tab }: Props) {
@@ -110,76 +152,7 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
 
   const account = info.data;
   const data = account?.details?.data;
-
-  let tabs: Tab[] = [
-    {
-      slug: "history",
-      title: "History",
-      path: "",
-    },
-  ];
-
-  if (data && data?.program === "spl-token") {
-    if (data.parsed.type === "mint") {
-      tabs.push({
-        slug: "largest",
-        title: "Distribution",
-        path: "/largest",
-      });
-    }
-  } else if (data && data.program === "vote") {
-    tabs.push({
-      slug: "votes",
-      title: "Votes",
-      path: "/votes",
-    });
-  } else if (
-    data &&
-    data.program === "sysvar" &&
-    data.parsed.type === "recentBlockhashes"
-  ) {
-    tabs.push({
-      slug: "blockhashes",
-      title: "Blockhashes",
-      path: "/blockhashes",
-    });
-  } else if (
-    data &&
-    data.program === "sysvar" &&
-    data.parsed.type === "slotHashes"
-  ) {
-    tabs.push({
-      slug: "hashes",
-      title: "Hashes",
-      path: "/hashes",
-    });
-  } else if (
-    data &&
-    data.program === "sysvar" &&
-    data.parsed.type === "stakeHistory"
-  ) {
-    tabs.push({
-      slug: "stake-history",
-      title: "Stake History",
-      path: "/stake-history",
-    });
-  } else if (
-    data &&
-    data.program === "config" &&
-    data.parsed.type === "validatorInfo"
-  ) {
-    tabs.unshift({
-      slug: "public-keys",
-      title: "Public Keys",
-      path: "/public-keys",
-    });
-  } else if (!data || (data && data.program !== "sysvar")) {
-    tabs.push({
-      slug: "tokens",
-      title: "Tokens",
-      path: "/tokens",
-    });
-  }
+  const tabs = getTabs(data);
 
   let moreTab: MoreTabs = "history";
   if (tab && tabs.filter(({ slug }) => slug === tab).length === 0) {
@@ -318,4 +291,43 @@ function MoreSection({
         )}
     </>
   );
+}
+
+function getTabs(data?: ProgramData): Tab[] {
+  const tabs: Tab[] = [
+    {
+      slug: "history",
+      title: "History",
+      path: "",
+    },
+  ];
+
+  const programTypeKey = [
+    data?.program,
+    (data?.parsed as { type: any })?.type,
+  ].join(":");
+
+  if (data && data.program in TABS_LOOKUP) {
+    tabs.push(TABS_LOOKUP[data.program]);
+  }
+
+  if (data && programTypeKey in TABS_LOOKUP) {
+    tabs.push(TABS_LOOKUP[programTypeKey]);
+  }
+
+  if (
+    !data ||
+    !(
+      TOKEN_TABS_HIDDEN.includes(data.program) ||
+      TOKEN_TABS_HIDDEN.includes(programTypeKey)
+    )
+  ) {
+    tabs.push({
+      slug: "tokens",
+      title: "Tokens",
+      path: "/tokens",
+    });
+  }
+
+  return tabs;
 }

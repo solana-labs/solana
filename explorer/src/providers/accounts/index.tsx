@@ -124,8 +124,6 @@ async function fetchAccountInfo(
     const connection = new Connection(url, "single");
     const result = (await connection.getParsedAccountInfo(pubkey)).value;
 
-    //console.log(result);
-
     let lamports, details;
     if (result === null) {
       lamports = 0;
@@ -178,15 +176,11 @@ async function fetchAccountInfo(
             parsed,
           };
         } catch (err) {
-          Sentry.captureException(err, {
-            tags: { url, address: pubkey.toBase58() },
-          });
+          reportError(err, { url, address: pubkey.toBase58() });
           // TODO store error state in Account info
         }
       } else if ("parsed" in result.data) {
         try {
-          console.log(result.data.parsed);
-
           const info = coerce(result.data.parsed, ParsedInfo);
           switch (result.data.program) {
             case "vote":
@@ -217,9 +211,7 @@ async function fetchAccountInfo(
               data = undefined;
           }
         } catch (error) {
-          Sentry.captureException(error, {
-            tags: { url, address: pubkey.toBase58() },
-          });
+          reportError(error, { url, address: pubkey.toBase58() });
         }
       }
 
