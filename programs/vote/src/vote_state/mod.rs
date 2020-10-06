@@ -323,8 +323,9 @@ impl VoteState {
             return Err(VoteError::SlotsMismatch);
         }
         if slot_hashes[j].1 != vote.hash {
+            // UPDATE ci/run-sanity.sh AS WELL WHEN CHANGING THIS LOG FORMAT!
             warn!(
-                "{} dropped vote {:?} failed to match hash {} {}",
+                "{} dropped vote {:?} failed to match hash: {} (vorter) != {} (local)",
                 self.node_pubkey, vote, vote.hash, slot_hashes[j].1
             );
             inc_new_counter_info!("dropped-vote-hash", 1);
