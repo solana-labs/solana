@@ -281,8 +281,7 @@ impl CrdsGossipPull {
     ) {
         requests.into_iter().for_each(|(caller, _)| {
             let key = caller.label().pubkey();
-            let old = crds.insert(caller, now);
-            if let Some(val) = old.ok().and_then(|opt| opt) {
+            if let Ok(Some(val)) = crds.insert(caller, now) {
                 self.purged_values
                     .push_back((val.value_hash, val.local_timestamp));
             }
