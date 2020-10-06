@@ -82,6 +82,7 @@ fn main() {
             "panic",
             "param_passing",
             "rand",
+            "ristretto",
             "sanity",
             "sha256",
             "sysval",
