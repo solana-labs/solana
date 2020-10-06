@@ -31,5 +31,5 @@ wait $pid
 
 $solana_ledger_tool create-snapshot --ledger config/ledger "$snapshot_slot" config/snapshot-ledger
 cp config/ledger/genesis.tar.bz2 config/snapshot-ledger
-$solana_ledger_tool verify --ledger config/snapshot-ledger | tee "ledger-verify.log"
+$solana_ledger_tool verify --ledger config/snapshot-ledger 2>&1 | tee "ledger-verify.log"
 ! grep "failed to match hash" "ledger-verify.log"
