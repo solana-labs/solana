@@ -29,7 +29,7 @@ pub const SUCCESS: u64 = 0;
 
 /// Start address of the memory region used for program heap.
 pub const HEAP_START_ADDRESS: usize = 0x300000000;
-/// Length of the heap memory regionused for program heap.
+/// Length of the heap memory region used for program heap.
 pub const HEAP_LENGTH: usize = 32 * 1024;
 
 /// Declare the entry point of the program and use the default local heap
@@ -82,7 +82,7 @@ unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
             pos = self.start + self.len;
         }
         pos = pos.saturating_sub(layout.size());
-        pos &= !(layout.align().saturating_sub(1));
+        pos &= !(layout.align().wrapping_sub(1));
         if pos < self.start + size_of::<*mut u8>() {
             return null_mut();
         }
@@ -197,21 +197,62 @@ mod test {
 
     #[test]
     fn test_bump_allocator() {
-        // alloc all 128 bytes
-        let heap = vec![0u8; 128];
-        let allocator = BumpAllocator {
-            start: heap.as_ptr() as *const _ as usize,
-            len: heap.len(),
-        };
-        for i in 0..128 - size_of::<*mut u8>() {
-            let ptr = unsafe { allocator.alloc(Layout::from_size_align(1, 1).unwrap()) };
-            assert_eq!(
-                ptr as *const _ as usize,
-                heap.as_ptr() as *const _ as usize + heap.len() - 1 - i
-            );
+        // alloc the entire
+        {
+            let heap = vec![0u8; 128];
+            let allocator = BumpAllocator {
+                start: heap.as_ptr() as *const _ as usize,
+                len: heap.len(),
+            };
+            for i in 0..128 - size_of::<*mut u8>() {
+                let ptr = unsafe {
+                    allocator.alloc(Layout::from_size_align(1, size_of::<u8>()).unwrap())
+                };
+                assert_eq!(
+                    ptr as *const _ as usize,
+                    heap.as_ptr() as *const _ as usize + heap.len() - 1 - i
+                );
+            }
+            assert_eq!(null_mut(), unsafe {
+                allocator.alloc(Layout::from_size_align(1, 1).unwrap())
+            });
         }
-        assert_eq!(null_mut(), unsafe {
-            allocator.alloc(Layout::from_size_align(1, 1).unwrap())
-        });
+        // check alignment
+        {
+            let heap = vec![0u8; 128];
+            let allocator = BumpAllocator {
+                start: heap.as_ptr() as *const _ as usize,
+                len: heap.len(),
+            };
+            let ptr =
+                unsafe { allocator.alloc(Layout::from_size_align(1, size_of::<u8>()).unwrap()) };
+            assert_eq!(0, ptr.align_offset(size_of::<u8>()));
+            let ptr =
+                unsafe { allocator.alloc(Layout::from_size_align(1, size_of::<u16>()).unwrap()) };
+            assert_eq!(0, ptr.align_offset(size_of::<u16>()));
+            let ptr =
+                unsafe { allocator.alloc(Layout::from_size_align(1, size_of::<u32>()).unwrap()) };
+            assert_eq!(0, ptr.align_offset(size_of::<u32>()));
+            let ptr =
+                unsafe { allocator.alloc(Layout::from_size_align(1, size_of::<u64>()).unwrap()) };
+            assert_eq!(0, ptr.align_offset(size_of::<u64>()));
+            let ptr =
+                unsafe { allocator.alloc(Layout::from_size_align(1, size_of::<u128>()).unwrap()) };
+            assert_eq!(0, ptr.align_offset(size_of::<u128>()));
+            let ptr = unsafe { allocator.alloc(Layout::from_size_align(1, 64).unwrap()) };
+            assert_eq!(0, ptr.align_offset(64));
+        }
+        // alloc entire block (minus the pos ptr)
+        {
+            let heap = vec![0u8; 128];
+            let allocator = BumpAllocator {
+                start: heap.as_ptr() as *const _ as usize,
+                len: heap.len(),
+            };
+            let ptr =
+                unsafe { allocator.alloc(Layout::from_size_align(120, size_of::<u8>()).unwrap()) };
+            assert_ne!(ptr, null_mut());
+            assert_eq!(0, ptr.align_offset(size_of::<u64>()));
+        }
     }
 }
