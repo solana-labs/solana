@@ -100,8 +100,9 @@ pub type SnapshotStorages = Vec<SnapshotStorage>;
 // Each slot has a set of storage entries.
 pub(crate) type SlotStores = HashMap<usize, Arc<AccountStorageEntry>>;
 
-type PurgedAccountSlots = HashMap<Pubkey, HashSet<Slot>>;
-type ReclaimedAccounts = HashMap<AppendVecId, HashSet<usize>>;
+type AccountSlots = HashMap<Pubkey, HashSet<Slot>>;
+type AppendVecOffsets = HashMap<AppendVecId, HashSet<usize>>;
+type ReclaimResult = (AccountSlots, AppendVecOffsets);
 
 trait Versioned {
     fn version(&self) -> u64;
@@ -553,7 +554,7 @@ impl AccountsDB {
         &self,
         purges_in_root: Vec<Pubkey>,
         max_clean_root: Option<Slot>,
-    ) -> (PurgedAccountSlots, ReclaimedAccounts) {
+    ) -> ReclaimResult {
         if purges_in_root.is_empty() {
             return (HashMap::new(), HashMap::new());
         }
@@ -578,11 +579,12 @@ impl AccountsDB {
         inc_new_counter_info!("clean-old-root-par-clean-ms", clean_rooted.as_ms() as usize);
 
         let mut measure = Measure::start("clean_old_root_reclaims");
-        let (purged_account_slots, removed_accounts) = self.handle_reclaims(&reclaims, None, false);
+        let mut reclaim_result = (HashMap::new(), HashMap::new());
+        self.handle_reclaims(&reclaims, None, false, Some(&mut reclaim_result));
         measure.stop();
         debug!("{} {}", clean_rooted, measure);
         inc_new_counter_info!("clean-old-root-reclaim-ms", measure.as_ms() as usize);
-        (purged_account_slots, removed_accounts)
+        reclaim_result
     }
 
     fn do_reset_uncleaned_roots(
@@ -839,7 +841,7 @@ impl AccountsDB {
 
         self.handle_dead_keys(dead_keys);
 
-        self.handle_reclaims(&reclaims, None, false);
+        self.handle_reclaims(&reclaims, None, false, None);
 
         reclaims_time.stop();
         datapoint_info!(
@@ -888,13 +890,19 @@ impl AccountsDB {
         reclaims: SlotSlice<AccountInfo>,
         expected_single_dead_slot: Option<Slot>,
         no_dead_slot: bool,
-    ) -> (PurgedAccountSlots, ReclaimedAccounts) {
+        reclaim_result: Option<&mut ReclaimResult>,
+    ) {
         if reclaims.is_empty() {
-            return (HashMap::new(), HashMap::new());
+            return;
         }
-
-        let (dead_slots, removed_accounts) =
-            self.remove_dead_accounts(reclaims, expected_single_dead_slot);
+        let (purged_account_slots, reclaimed_offsets) =
+            if let Some((ref mut x, ref mut y)) = reclaim_result {
+                (Some(x), Some(y))
+            } else {
+                (None, None)
+            };
+        let dead_slots =
+            self.remove_dead_accounts(reclaims, expected_single_dead_slot, reclaimed_offsets);
         if no_dead_slot {
             assert!(dead_slots.is_empty());
         } else if let Some(expected_single_dead_slot) = expected_single_dead_slot {
@@ -903,18 +911,21 @@ impl AccountsDB {
                 assert!(dead_slots.contains(&expected_single_dead_slot));
             }
         }
-        let purged_account_slots = self.process_dead_slots(&dead_slots);
-        (purged_account_slots, removed_accounts)
+        self.process_dead_slots(&dead_slots, purged_account_slots);
     }
 
     // Must be kept private!, does sensitive cleanup that should only be called from
     // supported pipelines in AccountsDb
-    fn process_dead_slots(&self, dead_slots: &HashSet<Slot>) -> PurgedAccountSlots {
+    fn process_dead_slots(
+        &self,
+        dead_slots: &HashSet<Slot>,
+        purged_account_slots: Option<&mut AccountSlots>,
+    ) {
         if dead_slots.is_empty() {
-            return HashMap::new();
+            return;
         }
         let mut clean_dead_slots = Measure::start("reclaims::purge_slots");
-        let purged_account_slots = self.clean_dead_slots(&dead_slots);
+        self.clean_dead_slots(&dead_slots, purged_account_slots);
         clean_dead_slots.stop();
 
         let mut purge_slots = Measure::start("reclaims::purge_slots");
@@ -928,7 +939,6 @@ impl AccountsDB {
             purge_slots,
             dead_slots,
         );
-        purged_account_slots
     }
 
     fn do_shrink_stale_slot(&self, slot: Slot) -> usize {
@@ -1090,7 +1100,7 @@ impl AccountsDB {
             update_index_elapsed = start.as_us();
 
             let mut start = Measure::start("update_index_elapsed");
-            self.handle_reclaims(&reclaims, Some(slot), true);
+            self.handle_reclaims(&reclaims, Some(slot), true, None);
             start.stop();
             handle_reclaims_elapsed = start.as_us();
 
@@ -1492,7 +1502,7 @@ impl AccountsDB {
 
         // 1) Remove old bank hash from self.bank_hashes
         // 2) Purge this slot's storage entries from self.storage
-        self.handle_reclaims(&reclaims, Some(remove_slot), false);
+        self.handle_reclaims(&reclaims, Some(remove_slot), false, None);
         assert!(self.storage.read().unwrap().0.get(&remove_slot).is_none());
     }
 
@@ -2116,15 +2126,17 @@ impl AccountsDB {
         &self,
         reclaims: SlotSlice<AccountInfo>,
         expected_slot: Option<Slot>,
-    ) -> (HashSet<Slot>, ReclaimedAccounts) {
+        mut reclaimed_offsets: Option<&mut AppendVecOffsets>,
+    ) -> HashSet<Slot> {
         let storage = self.storage.read().unwrap();
         let mut dead_slots = HashSet::new();
-        let mut removed_accounts: ReclaimedAccounts = HashMap::new();
         for (slot, account_info) in reclaims {
-            removed_accounts
-                .entry(account_info.store_id)
-                .or_default()
-                .insert(account_info.offset);
+            if let Some(ref mut reclaimed_offsets) = reclaimed_offsets {
+                reclaimed_offsets
+                    .entry(account_info.store_id)
+                    .or_default()
+                    .insert(account_info.offset);
+            }
             if let Some(expected_slot) = expected_slot {
                 assert_eq!(*slot, expected_slot);
             }
@@ -2153,11 +2165,14 @@ impl AccountsDB {
             true
         });
 
-        (dead_slots, removed_accounts)
+        dead_slots
     }
 
-    fn clean_dead_slots(&self, dead_slots: &HashSet<Slot>) -> PurgedAccountSlots {
-        let mut purged_account_slots: PurgedAccountSlots = HashMap::new();
+    fn clean_dead_slots(
+        &self,
+        dead_slots: &HashSet<Slot>,
+        mut purged_account_slots: Option<&mut AccountSlots>,
+    ) {
         {
             let mut measure = Measure::start("clean_dead_slots-ms");
             let storage = self.storage.read().unwrap();
@@ -2190,7 +2205,9 @@ impl AccountsDB {
             };
             let index = self.accounts_index.read().unwrap();
             for (slot, pubkey) in slot_pubkeys {
-                purged_account_slots.entry(pubkey).or_default().insert(slot);
+                if let Some(ref mut purged_account_slots) = purged_account_slots {
+                    purged_account_slots.entry(pubkey).or_default().insert(slot);
+                }
                 index.unref_from_storage(&pubkey);
             }
             drop(index);
@@ -2208,7 +2225,6 @@ impl AccountsDB {
                 bank_hashes.remove(slot);
             }
         }
-        purged_account_slots
     }
 
     fn hash_accounts(
@@ -2309,7 +2325,7 @@ impl AccountsDB {
         //    b)From 1) we know no other slots are included in the "reclaims"
         //
         // From 1) and 2) we guarantee passing Some(slot), true is safe
-        self.handle_reclaims(&reclaims, Some(slot), true);
+        self.handle_reclaims(&reclaims, Some(slot), true, None);
     }
 
     pub fn add_root(&self, slot: Slot) {
@@ -4606,7 +4622,7 @@ pub mod tests {
         let accounts = AccountsDB::new_single();
         let mut dead_slots = HashSet::new();
         dead_slots.insert(10);
-        accounts.clean_dead_slots(&dead_slots);
+        accounts.clean_dead_slots(&dead_slots, None);
     }
 
     #[test]
