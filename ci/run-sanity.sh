@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -ex
 
 cd "$(dirname "$0")/.."
 # shellcheck source=multinode-demo/common.sh
