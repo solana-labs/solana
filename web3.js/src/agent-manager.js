@@ -1,19 +1,31 @@
 // @flow
 
-import {Agent} from 'http';
+import http from 'http';
+import https from 'https';
 
 export const DESTROY_TIMEOUT_MS = 5000;
 
 export class AgentManager {
-  _agent: Agent = AgentManager._newAgent();
+  _agent: http.Agent | https.Agent;
   _activeRequests = 0;
   _destroyTimeout: TimeoutID | null = null;
+  _useHttps: boolean;
 
-  static _newAgent(): Agent {
-    return new Agent({keepAlive: true, maxSockets: 25});
+  static _newAgent(useHttps: boolean): http.Agent | https.Agent {
+    const options = {keepAlive: true, maxSockets: 25};
+    if (useHttps) {
+      return new https.Agent(options);
+    } else {
+      return new http.Agent(options);
+    }
   }
 
-  requestStart(): Agent {
+  constructor(useHttps?: boolean) {
+    this._useHttps = useHttps === true;
+    this._agent = AgentManager._newAgent(this._useHttps);
+  }
+
+  requestStart(): http.Agent | https.Agent {
     // $FlowExpectedError - Don't manage agents in the browser
     if (process.browser) return;
 
@@ -31,7 +43,7 @@ export class AgentManager {
     if (this._activeRequests === 0 && this._destroyTimeout === null) {
       this._destroyTimeout = setTimeout(() => {
         this._agent.destroy();
-        this._agent = AgentManager._newAgent();
+        this._agent = AgentManager._newAgent(this._useHttps);
       }, DESTROY_TIMEOUT_MS);
     }
   }
