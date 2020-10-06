@@ -2515,3 +2515,14 @@ test('root notification', async () => {
   expect(roots[1]).toBeGreaterThan(roots[0]);
   await connection.removeRootChangeListener(subscriptionId);
 });
+
+test('https request', async () => {
+  if (mockRpcEnabled) {
+    console.log('non-live test skipped');
+    return;
+  }
+
+  const connection = new Connection('https://devnet.solana.com');
+  const version = await connection.getVersion();
+  expect(version['solana-core']).toBeTruthy();
+});
