@@ -2268,7 +2268,8 @@ impl RpcSol for RpcSolImpl {
     ) -> Result<String> {
         debug!("send_transaction rpc request received");
         let config = config.unwrap_or_default();
-        let (wire_transaction, transaction) = deserialize_bs58_transaction(data)?;
+        let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base58);
+        let (wire_transaction, transaction) = deserialize_transaction(data, encoding)?;
         let bank = &*meta.bank(None);
         let last_valid_slot = bank
             .get_blockhash_last_valid_slot(&transaction.message.recent_blockhash)
@@ -2313,8 +2314,9 @@ impl RpcSol for RpcSolImpl {
         config: Option<RpcSimulateTransactionConfig>,
     ) -> Result<RpcResponse<RpcSimulateTransactionResult>> {
         debug!("simulate_transaction rpc request received");
-        let (_, transaction) = deserialize_bs58_transaction(data)?;
         let config = config.unwrap_or_default();
+        let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base58);
+        let (_, transaction) = deserialize_transaction(data, encoding)?;
 
         let mut result = if config.sig_verify {
             transaction.verify()
@@ -2600,18 +2602,44 @@ impl RpcSol for RpcSolImpl {
 }
 
 const WORST_CASE_BASE58_TX: usize = 1683; // Golden, bump if PACKET_DATA_SIZE changes
-fn deserialize_bs58_transaction(bs58_transaction: String) -> Result<(Vec<u8>, Transaction)> {
-    if bs58_transaction.len() > WORST_CASE_BASE58_TX {
-        return Err(Error::invalid_params(format!(
-            "encoded transaction too large: {} bytes (max: encoded/raw {}/{})",
-            bs58_transaction.len(),
-            WORST_CASE_BASE58_TX,
-            PACKET_DATA_SIZE,
-        )));
-    }
-    let wire_transaction = bs58::decode(bs58_transaction)
-        .into_vec()
-        .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
+const WORST_CASE_BASE64_TX: usize = 1644; // Golden, bump if PACKET_DATA_SIZE changes
+fn deserialize_transaction(
+    encoded_transaction: String,
+    encoding: UiTransactionEncoding,
+) -> Result<(Vec<u8>, Transaction)> {
+    let wire_transaction = match encoding {
+        UiTransactionEncoding::Base58 => {
+            if encoded_transaction.len() > WORST_CASE_BASE58_TX {
+                return Err(Error::invalid_params(format!(
+                    "encoded transaction too large: {} bytes (max: encoded/raw {}/{})",
+                    encoded_transaction.len(),
+                    WORST_CASE_BASE58_TX,
+                    PACKET_DATA_SIZE,
+                )));
+            }
+            bs58::decode(encoded_transaction)
+                .into_vec()
+                .map_err(|e| Error::invalid_params(format!("{:?}", e)))?
+        }
+        UiTransactionEncoding::Base64 => {
+            if encoded_transaction.len() > WORST_CASE_BASE64_TX {
+                return Err(Error::invalid_params(format!(
+                    "encoded transaction too large: {} bytes (max: encoded/raw {}/{})",
+                    encoded_transaction.len(),
+                    WORST_CASE_BASE64_TX,
+                    PACKET_DATA_SIZE,
+                )));
+            }
+            base64::decode(encoded_transaction)
+                .map_err(|e| Error::invalid_params(format!("{:?}", e)))?
+        }
+        _ => {
+            return Err(Error::invalid_params(format!(
+                "unsupported transaction encoding: {}. Supported encodings: base58, base64",
+                encoding
+            )))
+        }
+    };
     if wire_transaction.len() > PACKET_DATA_SIZE {
         let err = format!(
             "transaction too large: {} bytes (max: {} bytes)",
@@ -5789,7 +5817,52 @@ pub mod tests {
     #[test]
     fn test_worst_case_encoded_tx_goldens() {
         let ff_tx = vec![0xffu8; PACKET_DATA_SIZE];
-        let tx58 = bs58::encode(ff_tx).into_string();
+        let tx58 = bs58::encode(&ff_tx).into_string();
         assert_eq!(tx58.len(), WORST_CASE_BASE58_TX);
+        let tx64 = base64::encode(&ff_tx);
+        assert_eq!(tx64.len(), WORST_CASE_BASE64_TX);
+    }
+
+    #[test]
+    fn test_deserialize_transacion_too_large_payloads_fail() {
+        // +2 because +1 still fits in base64 encoded worst-case
+        let too_big = PACKET_DATA_SIZE + 2;
+        let tx_ser = vec![0xffu8; too_big];
+        let tx58 = bs58::encode(&tx_ser).into_string();
+        let tx58_len = tx58.len();
+        let expect58 = Error::invalid_params(format!(
+            "encoded transaction too large: {} bytes (max: encoded/raw {}/{})",
+            tx58_len, WORST_CASE_BASE58_TX, PACKET_DATA_SIZE,
+        ));
+        assert_eq!(
+            deserialize_transaction(tx58, UiTransactionEncoding::Base58).unwrap_err(),
+            expect58
+        );
+        let tx64 = base64::encode(&tx_ser);
+        let tx64_len = tx64.len();
+        let expect64 = Error::invalid_params(format!(
+            "encoded transaction too large: {} bytes (max: encoded/raw {}/{})",
+            tx64_len, WORST_CASE_BASE64_TX, PACKET_DATA_SIZE,
+        ));
+        assert_eq!(
+            deserialize_transaction(tx64, UiTransactionEncoding::Base64).unwrap_err(),
+            expect64
+        );
+        let too_big = PACKET_DATA_SIZE + 1;
+        let tx_ser = vec![0x00u8; too_big];
+        let tx58 = bs58::encode(&tx_ser).into_string();
+        let expect = Error::invalid_params(format!(
+            "transaction too large: {} bytes (max: {} bytes)",
+            too_big, PACKET_DATA_SIZE
+        ));
+        assert_eq!(
+            deserialize_transaction(tx58, UiTransactionEncoding::Base58).unwrap_err(),
+            expect
+        );
+        let tx64 = base64::encode(&tx_ser);
+        assert_eq!(
+            deserialize_transaction(tx64, UiTransactionEncoding::Base64).unwrap_err(),
+            expect
+        );
     }
 }

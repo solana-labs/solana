@@ -5,7 +5,8 @@ use crate::{
     rpc_config::RpcAccountInfoConfig,
     rpc_config::{
         RpcGetConfirmedSignaturesForAddress2Config, RpcLargestAccountsConfig,
-        RpcProgramAccountsConfig, RpcSendTransactionConfig, RpcTokenAccountsFilter,
+        RpcProgramAccountsConfig, RpcSendTransactionConfig, RpcSimulateTransactionConfig,
+        RpcTokenAccountsFilter,
     },
     rpc_request::{RpcError, RpcRequest, TokenAccountsFilter},
     rpc_response::*,
@@ -46,6 +47,26 @@ use std::{
 
 pub struct RpcClient {
     sender: Box<dyn RpcSender + Send + Sync + 'static>,
+}
+
+fn serialize_encode_transaction(
+    transaction: &Transaction,
+    encoding: UiTransactionEncoding,
+) -> ClientResult<String> {
+    let serialized = serialize(transaction)
+        .map_err(|e| ClientErrorKind::Custom(format!("transaction serialization failed: {}", e)))?;
+    let encoded = match encoding {
+        UiTransactionEncoding::Base58 => bs58::encode(serialized).into_string(),
+        UiTransactionEncoding::Base64 => base64::encode(serialized),
+        _ => {
+            return Err(ClientErrorKind::Custom(format!(
+                "unsupported transaction encoding: {}. Supported encodings: base58, base64",
+                encoding
+            ))
+            .into())
+        }
+    };
+    Ok(encoded)
 }
 
 impl RpcClient {
@@ -112,8 +133,8 @@ impl RpcClient {
         transaction: &Transaction,
         config: RpcSendTransactionConfig,
     ) -> ClientResult<Signature> {
-        let serialized_encoded = bs58::encode(serialize(transaction).unwrap()).into_string();
-
+        let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base58);
+        let serialized_encoded = serialize_encode_transaction(transaction, encoding)?;
         let signature_base58_str: String = self.send(
             RpcRequest::SendTransaction,
             json!([serialized_encoded, config]),
@@ -142,7 +163,21 @@ impl RpcClient {
         transaction: &Transaction,
         sig_verify: bool,
     ) -> RpcResult<RpcSimulateTransactionResult> {
-        let serialized_encoded = bs58::encode(serialize(transaction).unwrap()).into_string();
+        self.simulate_transaction_with_config(
+            transaction,
+            sig_verify,
+            RpcSimulateTransactionConfig::default(),
+        )
+    }
+
+    pub fn simulate_transaction_with_config(
+        &self,
+        transaction: &Transaction,
+        sig_verify: bool,
+        config: RpcSimulateTransactionConfig,
+    ) -> RpcResult<RpcSimulateTransactionResult> {
+        let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base58);
+        let serialized_encoded = serialize_encode_transaction(transaction, encoding)?;
         self.send(
             RpcRequest::SimulateTransaction,
             json!([serialized_encoded, { "sigVerify": sig_verify }]),
