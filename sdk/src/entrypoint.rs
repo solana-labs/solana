@@ -53,7 +53,6 @@ macro_rules! entrypoint {
         };
 
         /// # Safety
-        #[cfg(not(feature = "skip-no-mangle"))]
         #[no_mangle]
         pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
             let (program_id, accounts, instruction_data) =
