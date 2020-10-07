@@ -5,7 +5,6 @@ import bs58 from 'bs58';
 import {parse as urlParse, format as urlFormat} from 'url';
 import fetch from 'node-fetch';
 import jayson from 'jayson/lib/client/browser';
-import {struct} from 'superstruct';
 import {Client as RpcWebSocketClient} from 'rpc-websockets';
 
 import {NonceAccount} from './nonce-account';
@@ -96,50 +95,6 @@ type RpcResponseAndContext<T> = {
   context: Context,
   value: T,
 };
-
-/**
- * @private
- */
-function jsonRpcResultAndContext(resultDescription: any) {
-  return jsonRpcResult({
-    context: struct({
-      slot: 'number',
-    }),
-    value: resultDescription,
-  });
-}
-
-/**
- * @private
- */
-function jsonRpcResult(resultDescription: any) {
-  const jsonRpcVersion = struct.literal('2.0');
-  return struct.union([
-    struct({
-      jsonrpc: jsonRpcVersion,
-      id: 'string',
-      error: 'any',
-    }),
-    struct({
-      jsonrpc: jsonRpcVersion,
-      id: 'string',
-      error: 'null?',
-      result: resultDescription,
-    }),
-  ]);
-}
-
-/**
- * @private
- */
-function notificationResultAndContext(resultDescription: any) {
-  return struct({
-    context: struct({
-      slot: 'number',
-    }),
-    value: resultDescription,
-  });
-}
 
 /**
  * The level of commitment desired when querying state
@@ -506,11 +461,6 @@ function createRpcRequest(url): RpcRequest {
     });
   };
 }
-
-/**
- * Expected JSON RPC response for the "getBalance" message
- */
-const GetBalanceAndContextRpcResult = jsonRpcResultAndContext('number?');
 
 /**
  * Supply
@@ -884,7 +834,7 @@ export class Connection {
   ): Promise<RpcResponseAndContext<number>> {
     const args = this._buildArgs([publicKey.toBase58()], commitment);
     const unsafeRes = await this._rpcRequest('getBalance', args);
-    const res = GetBalanceAndContextRpcResult(unsafeRes);
+    const res = schema.numberContextResult.get(unsafeRes);
     if (res.error) {
       throw new Error(
         'failed to get balance for ' +
@@ -1178,6 +1128,7 @@ export class Connection {
     const args = this._buildArgs([publicKey.toBase58()], commitment, 'base64');
     const unsafeRes = await this._rpcRequest('getAccountInfo', args);
     const res = schema.accountInfo.get(unsafeRes);
+    console.log(res);
     if (schema.accountInfo.isError(res)) {
       throw new Error(
         'failed to get info about account ' +
@@ -1597,7 +1548,7 @@ export class Connection {
   ): Promise<InflationGovernor> {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getInflationGovernor', args);
-    const res = schema.inflationGovernorResult.get(unsafeRes);
+    const res = schema.inflationGovernor.get(unsafeRes);
     if (schema.inflationGovernor.isError(res)) {
       throw new Error('failed to get inflation: ' + res.error.message);
     }

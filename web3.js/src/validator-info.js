@@ -1,10 +1,8 @@
 // @flow
-
-import {struct} from 'superstruct';
-
 import * as Layout from './layout';
 import * as shortvec from './util/shortvec-encoding';
 import {PublicKey} from './publickey';
+import * as schema from './schema/validators';
 
 export const VALIDATOR_INFO_KEY = new PublicKey(
   'Va1idator1nfo111111111111111111111111111111',
@@ -33,13 +31,6 @@ export type Info = {|
   details?: string,
   keybaseUsername?: string,
 |};
-
-const InfoString = struct({
-  name: 'string',
-  website: 'string?',
-  details: 'string?',
-  keybaseUsername: 'string?',
-});
 
 /**
  * ValidatorInfo class
@@ -93,7 +84,7 @@ export class ValidatorInfo {
     if (configKeys[0].publicKey.equals(VALIDATOR_INFO_KEY)) {
       if (configKeys[1].isSigner) {
         const rawInfo = Layout.rustString().decode(Buffer.from(byteArray));
-        const info = InfoString(JSON.parse(rawInfo));
+        const info = schema.info.get(JSON.parse(rawInfo));
         return new ValidatorInfo(configKeys[1].publicKey, info);
       }
     }

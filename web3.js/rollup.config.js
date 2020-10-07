@@ -101,7 +101,6 @@ function generateConfig(configType) {
         'jayson/lib/client/browser',
         'node-fetch',
         'rpc-websockets',
-        'superstruct',
         'tweetnacl',
         'url',
       ];

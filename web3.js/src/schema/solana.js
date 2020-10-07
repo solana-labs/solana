@@ -1,7 +1,6 @@
 const resultFactory = (name, resultSchema, definitions = {}) => ({
     "$id": name,
-    "description": `A JSON RPC 2.0 response for ${name}`,
-    "oneOf": [
+    "anyOf": [
         { "$ref": "#/definitions/success" },
         { "$ref": "#/definitions/error" }
     ],
@@ -9,7 +8,6 @@ const resultFactory = (name, resultSchema, definitions = {}) => ({
         ...definitions,
         "common": {
             required: [ "id", "jsonrpc" ],
-            "not": { required: [ "result", "error" ] },
             properties: {
                 "id": { type: [ "string"  ] },
                 "jsonrpc": { "enum": [ "2.0" ] }
@@ -173,6 +171,16 @@ const confirmedTransactionMeta = {
 }
 
 module.exports = [
+    {
+        ['$id']: 'info',
+        required: ['name'],
+        properties: {
+            name: { type: 'string' },
+            website: { type: 'string' },
+            details: { type: 'string' },
+            keybaseUsername: { type: 'string' },
+        }
+    },
     resultFactory('booleanResult', {
         type: "boolean"
     }),
@@ -181,6 +189,9 @@ module.exports = [
     }),
     resultFactory('stringResult', {
         type: "string"
+    }),
+    contextFactory('numberContextResult', {
+        type: ["number", "null"]
     }),
     resultFactory('stringArray', {
         type: "array",
@@ -515,7 +526,6 @@ module.exports = [
         }
     }),
     notificationFactory('signatureNotification', {
-        required: ['parent', 'slot', 'root'],
         properties: {
             parent: { type: 'number' },
             slot: { type: 'number' },
