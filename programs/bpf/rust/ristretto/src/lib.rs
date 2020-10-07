@@ -4,10 +4,7 @@ pub mod ristretto;
 
 extern crate solana_sdk;
 use crate::ristretto::ristretto_mul;
-use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
-    traits::Identity,
-};
+use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, scalar::Scalar};
 use solana_sdk::{
     account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, info, pubkey::Pubkey,
 };
