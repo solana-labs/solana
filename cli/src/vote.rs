@@ -671,11 +671,11 @@ fn get_vote_account(
 pub fn process_show_vote_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
-    vote_account_pubkey: &Pubkey,
+    vote_account_address: &Pubkey,
     use_lamports_unit: bool,
 ) -> ProcessResult {
     let (vote_account, vote_state) =
-        get_vote_account(rpc_client, vote_account_pubkey, config.commitment)?;
+        get_vote_account(rpc_client, vote_account_address, config.commitment)?;
 
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
 
@@ -696,6 +696,12 @@ pub fn process_show_vote_account(
         }
     }
 
+    let epoch_rewards = Some(crate::stake::fetch_epoch_rewards(
+        rpc_client,
+        vote_account_address,
+        1,
+    )?);
+
     let vote_account_data = CliVoteAccount {
         account_balance: vote_account.lamports,
         validator_identity: vote_state.node_pubkey.to_string(),
@@ -708,6 +714,7 @@ pub fn process_show_vote_account(
         votes,
         epoch_voting_history,
         use_lamports_unit,
+        epoch_rewards,
     };
 
     Ok(config.output_format.formatted_string(&vote_account_data))

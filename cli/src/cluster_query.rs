@@ -713,6 +713,7 @@ pub fn process_get_block(rpc_client: &RpcClient, _config: &CliConfig, slot: Slot
     }
     if !block.rewards.is_empty() {
         block.rewards.sort_by(|a, b| a.pubkey.cmp(&b.pubkey));
+        let mut total_rewards = 0;
         println!("Rewards:",);
         println!(
             "  {:<44}  {:<15}  {:<13}  {:>14}",
@@ -721,6 +722,7 @@ pub fn process_get_block(rpc_client: &RpcClient, _config: &CliConfig, slot: Slot
         for reward in block.rewards {
             let sign = if reward.lamports < 0 { "-" } else { "" };
 
+            total_rewards += reward.lamports;
             println!(
                 "  {:<44}  {:>15}  {}",
                 reward.pubkey,
@@ -741,6 +743,13 @@ pub fn process_get_block(rpc_client: &RpcClient, _config: &CliConfig, slot: Slot
                 }
             );
         }
+
+        let sign = if total_rewards < 0 { "-" } else { "" };
+        println!(
+            "Total Rewards: {}◎{:12.9}",
+            sign,
+            lamports_to_sol(total_rewards.abs() as u64)
+        );
     }
     for (index, transaction_with_meta) in block.transactions.iter().enumerate() {
         println!("Transaction {}:", index);
