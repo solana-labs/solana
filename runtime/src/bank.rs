@@ -1710,7 +1710,8 @@ impl Bank {
             _retryable_transactions,
             _transaction_count,
             _signature_count,
-        ) = self.load_and_execute_transactions(&batch, MAX_PROCESSING_AGE, false);
+        ) = self.load_and_execute_transactions(&batch, MAX_PROCESSING_AGE, false, true);
+
         let transaction_result = executed[0].0.clone().map(|_| ());
         let log_messages = transaction_logs
             .get(0)
@@ -2120,6 +2121,7 @@ impl Bank {
         batch: &TransactionBatch,
         max_age: usize,
         enable_cpi_recording: bool,
+        enable_log_recording: bool,
     ) -> (
         Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)>,
         Vec<TransactionProcessResult>,
@@ -2191,7 +2193,11 @@ impl Bank {
                         None
                     };
 
-                    let log_collector = Some(Rc::new(LogCollector::default()));
+                    let log_collector = if enable_log_recording {
+                        Some(Rc::new(LogCollector::default()))
+                    } else {
+                        None
+                    };
 
                     let process_result = self.message_processor.process_message(
                         tx.message(),
@@ -2204,11 +2210,13 @@ impl Bank {
                         self.feature_set.clone(),
                     );
 
-                    transaction_logs.push(
-                        Rc::try_unwrap(log_collector.unwrap())
-                            .unwrap_or_default()
-                            .into(),
-                    );
+                    if enable_log_recording {
+                        transaction_logs.push(
+                            Rc::try_unwrap(log_collector.unwrap_or_default())
+                                .unwrap_or_default()
+                                .into(),
+                        );
+                    }
 
                     Self::compile_recorded_instructions(
                         &mut inner_instructions,
@@ -2949,6 +2957,7 @@ impl Bank {
         max_age: usize,
         collect_balances: bool,
         enable_cpi_recording: bool,
+        enable_log_recording: bool,
     ) -> (
         TransactionResults,
         TransactionBalancesSet,
@@ -2969,7 +2978,12 @@ impl Bank {
             _,
             tx_count,
             signature_count,
-        ) = self.load_and_execute_transactions(batch, max_age, enable_cpi_recording);
+        ) = self.load_and_execute_transactions(
+            batch,
+            max_age,
+            enable_cpi_recording,
+            enable_log_recording,
+        );
 
         let results = self.commit_transactions(
             batch.transactions(),
@@ -2995,7 +3009,7 @@ impl Bank {
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let batch = self.prepare_batch(txs, None);
-        self.load_execute_and_commit_transactions(&batch, MAX_PROCESSING_AGE, false, false)
+        self.load_execute_and_commit_transactions(&batch, MAX_PROCESSING_AGE, false, false, false)
             .0
             .fee_collection_results
     }
@@ -6373,7 +6387,13 @@ mod tests {
 
         let lock_result = bank.prepare_batch(&pay_alice, None);
         let results_alice = bank
-            .load_execute_and_commit_transactions(&lock_result, MAX_PROCESSING_AGE, false, false)
+            .load_execute_and_commit_transactions(
+                &lock_result,
+                MAX_PROCESSING_AGE,
+                false,
+                false,
+                false,
+            )
             .0
             .fee_collection_results;
         assert_eq!(results_alice[0], Ok(()));
@@ -8150,13 +8170,11 @@ mod tests {
                 MAX_PROCESSING_AGE,
                 true,
                 false,
+                false,
             );
 
-        assert_eq!(inner_instructions.len(), 2);
         assert!(inner_instructions[0].iter().all(|ix| ix.is_empty()));
-
-        assert_eq!(transaction_logs.len(), 2);
-        assert!(transaction_logs[0].is_empty(), 2);
+        assert_eq!(transaction_logs.len(), 0);
 
         assert_eq!(transaction_balances_set.pre_balances.len(), 3);
         assert_eq!(transaction_balances_set.post_balances.len(), 3);

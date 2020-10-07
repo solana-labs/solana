@@ -542,6 +542,7 @@ impl BankingStage {
             batch,
             MAX_PROCESSING_AGE,
             transaction_status_sender.is_some(),
+            transaction_status_sender.is_some(),
         );
         load_execute_time.stop();
 

@@ -109,6 +109,7 @@ fn execute_batch(
             MAX_PROCESSING_AGE,
             transaction_status_sender.is_some(),
             transaction_status_sender.is_some(),
+            transaction_status_sender.is_some(),
         );
 
     bank_utils::find_and_send_votes(batch.transactions(), &tx_results, replay_vote_sender);
@@ -2899,6 +2900,7 @@ pub mod tests {
         ) = batch.bank().load_execute_and_commit_transactions(
             &batch,
             MAX_PROCESSING_AGE,
+            false,
             false,
             false,
         );

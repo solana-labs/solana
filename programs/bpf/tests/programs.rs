@@ -105,8 +105,8 @@ fn process_transaction_and_record_inner(
     let signature = tx.signatures.get(0).unwrap().clone();
     let txs = vec![tx];
     let tx_batch = bank.prepare_batch(&txs, None);
-    let (mut results, _, mut inner) =
-        bank.load_execute_and_commit_transactions(&tx_batch, MAX_PROCESSING_AGE, false, true);
+    let (mut results, _, mut inner, _transaction_logs) =
+        bank.load_execute_and_commit_transactions(&tx_batch, MAX_PROCESSING_AGE, false, true, false);
     let inner_instructions = inner.swap_remove(0);
     let result = results
         .fee_collection_results
