@@ -940,7 +940,7 @@ export class Connection {
   ): Promise<RpcResponseAndContext<TokenAmount>> {
     const args = this._buildArgs([tokenMintAddress.toBase58()], commitment);
     const unsafeRes = await this._rpcRequest('getTokenSupply', args);
-    const res = GetTokenSupplyRpcResult(unsafeRes);
+    const res = schema.tokenAccountBalance.get(unsafeRes);
     if (res.error) {
       throw new Error('failed to get token supply: ' + res.error.message);
     }
