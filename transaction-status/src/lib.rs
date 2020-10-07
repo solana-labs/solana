@@ -21,6 +21,7 @@ use solana_sdk::{
     signature::Signature,
     transaction::{Result, Transaction, TransactionError},
 };
+use std::fmt;
 
 /// A duplicate representation of an Instruction for pretty JSON serialization
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -378,6 +379,14 @@ pub enum UiTransactionEncoding {
     Base58,
     Json,
     JsonParsed,
+}
+
+impl fmt::Display for UiTransactionEncoding {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let v = serde_json::to_value(self).map_err(|_| fmt::Error)?;
+        let s = v.as_str().ok_or(fmt::Error)?;
+        write!(f, "{}", s)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
