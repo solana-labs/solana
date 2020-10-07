@@ -7,6 +7,7 @@ use crate::{
     nonce::check_nonce_account,
     spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
 };
+use chrono::{Local, TimeZone};
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
 use solana_clap_utils::{
     fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
@@ -18,7 +19,8 @@ use solana_clap_utils::{
     ArgConstant,
 };
 use solana_cli_output::{
-    return_signers, CliStakeHistory, CliStakeHistoryEntry, CliStakeState, CliStakeType,
+    return_signers, CliEpochReward, CliStakeHistory, CliStakeHistoryEntry, CliStakeState,
+    CliStakeType,
 };
 use solana_client::{
     blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
@@ -27,7 +29,7 @@ use solana_client::{
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account_utils::StateMut,
-    clock::Clock,
+    clock::{Clock, Epoch, Slot, UnixTimestamp},
     message::Message,
     pubkey::Pubkey,
     system_instruction::SystemError,
@@ -43,7 +45,7 @@ use solana_stake_program::{
     stake_state::{Authorized, Lockup, Meta, StakeAuthorize, StakeState},
 };
 use solana_vote_program::vote_state::VoteState;
-use std::{ops::Deref, sync::Arc};
+use std::{convert::TryInto, ops::Deref, sync::Arc};
 
 pub const STAKE_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
     name: "stake_authority",
@@ -1543,6 +1545,7 @@ pub fn build_stake_state(
                 active_stake: u64_some_if_not_zero(active_stake),
                 activating_stake: u64_some_if_not_zero(activating_stake),
                 deactivating_stake: u64_some_if_not_zero(deactivating_stake),
+                ..CliStakeState::default()
             }
         }
         StakeState::RewardsPool => CliStakeState {
@@ -1577,17 +1580,96 @@ pub fn build_stake_state(
     }
 }
 
+pub(crate) fn fetch_epoch_rewards(
+    rpc_client: &RpcClient,
+    address: &Pubkey,
+    lowest_epoch: Epoch,
+) -> Result<Vec<CliEpochReward>, Box<dyn std::error::Error>> {
+    let mut all_epoch_rewards = vec![];
+
+    let epoch_schedule = rpc_client.get_epoch_schedule()?;
+    let slot = rpc_client.get_slot()?;
+    let first_available_block = rpc_client.get_first_available_block()?;
+
+    let mut epoch = epoch_schedule.get_epoch_and_slot_index(slot).0;
+    let mut epoch_info: Option<(Slot, UnixTimestamp, solana_transaction_status::Rewards)> = None;
+    while epoch > lowest_epoch {
+        let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
+        if first_slot_in_epoch < first_available_block {
+            // RPC node is out of history data
+            break;
+        }
+
+        let first_confirmed_block_in_epoch = *rpc_client
+            .get_confirmed_blocks_with_limit(first_slot_in_epoch, 1)?
+            .get(0)
+            .ok_or_else(|| format!("Unable to fetch first confirmed block for epoch {}", epoch))?;
+
+        let first_confirmed_block = rpc_client.get_confirmed_block_with_encoding(
+            first_confirmed_block_in_epoch,
+            solana_transaction_status::UiTransactionEncoding::Base64,
+        )?;
+
+        let epoch_start_time = if let Some(block_time) = first_confirmed_block.block_time {
+            block_time
+        } else {
+            break;
+        };
+
+        // Rewards for the previous epoch are found in the first confirmed block of the current epoch
+        let previous_epoch_rewards = first_confirmed_block.rewards;
+
+        if let Some((effective_slot, epoch_end_time, epoch_rewards)) = epoch_info {
+            let wall_clock_epoch_duration =
+                { Local.timestamp(epoch_end_time, 0) - Local.timestamp(epoch_start_time, 0) }
+                    .to_std()?
+                    .as_secs_f64();
+
+            const SECONDS_PER_YEAR: f64 = (24 * 60 * 60 * 356) as f64;
+            let percent_of_year = SECONDS_PER_YEAR / wall_clock_epoch_duration;
+
+            if let Some(reward) = epoch_rewards
+                .into_iter()
+                .find(|reward| reward.pubkey == address.to_string())
+            {
+                if reward.post_balance > reward.lamports.try_into().unwrap_or(0) {
+                    let balance_increase_percent = reward.lamports.abs() as f64
+                        / (reward.post_balance as f64 - reward.lamports as f64);
+
+                    all_epoch_rewards.push(CliEpochReward {
+                        epoch,
+                        effective_slot,
+                        amount: reward.lamports.abs() as u64,
+                        post_balance: reward.post_balance,
+                        percent_change: balance_increase_percent,
+                        apr: balance_increase_percent * percent_of_year,
+                    });
+                }
+            }
+        }
+
+        epoch -= 1;
+        epoch_info = Some((
+            first_confirmed_block_in_epoch,
+            epoch_start_time,
+            previous_epoch_rewards,
+        ));
+    }
+
+    Ok(all_epoch_rewards)
+}
+
 pub fn process_show_stake_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
-    stake_account_pubkey: &Pubkey,
+    stake_account_address: &Pubkey,
     use_lamports_unit: bool,
 ) -> ProcessResult {
-    let stake_account = rpc_client.get_account(stake_account_pubkey)?;
+    let stake_account = rpc_client.get_account(stake_account_address)?;
     if stake_account.owner != solana_stake_program::id() {
         return Err(CliError::RpcRequestError(format!(
             "{:?} is not a stake account",
-            stake_account_pubkey,
+            stake_account_address,
         ))
         .into());
     }
@@ -1603,13 +1685,23 @@ pub fn process_show_stake_account(
                 CliError::RpcRequestError("Failed to deserialize clock sysvar".to_string())
             })?;
 
-            let state = build_stake_state(
+            let mut state = build_stake_state(
                 stake_account.lamports,
                 &stake_state,
                 use_lamports_unit,
                 &stake_history,
                 &clock,
             );
+
+            if state.stake_type == CliStakeType::Stake {
+                if let Some(activation_epoch) = state.activation_epoch {
+                    state.epoch_rewards = Some(fetch_epoch_rewards(
+                        rpc_client,
+                        stake_account_address,
+                        activation_epoch,
+                    )?);
+                }
+            }
             Ok(config.output_format.formatted_string(&state))
         }
         Err(err) => Err(CliError::RpcRequestError(format!(
