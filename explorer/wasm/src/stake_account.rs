@@ -113,7 +113,7 @@ pub type Epoch = u64;
 
 #[wasm_bindgen]
 #[repr(transparent)]
-#[derive(Serialize, Deserialize, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Serialize, Debug, Deserialize, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Pubkey([u8; 32]);
 
 #[wasm_bindgen]

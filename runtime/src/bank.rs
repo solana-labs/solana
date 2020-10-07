@@ -71,7 +71,6 @@ use std::{
     mem,
     ops::RangeInclusive,
     path::PathBuf,
-    ptr,
     rc::Rc,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
@@ -478,18 +477,18 @@ pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) is_delta: bool,
 }
 
-impl<'a> PartialEq for BankFieldsToSerialize<'a> {
+impl PartialEq for Bank {
     fn eq(&self, other: &Self) -> bool {
         *self.blockhash_queue.read().unwrap() == *other.blockhash_queue.read().unwrap()
             && self.ancestors == other.ancestors
-            && self.hash == other.hash
+            && *self.hash.read().unwrap() == *other.hash.read().unwrap()
             && self.parent_hash == other.parent_hash
             && self.parent_slot == other.parent_slot
             && *self.hard_forks.read().unwrap() == *other.hard_forks.read().unwrap()
-            && self.transaction_count == other.transaction_count
-            && self.tick_height == other.tick_height
-            && self.signature_count == other.signature_count
-            && self.capitalization == other.capitalization
+            && self.transaction_count.load(Relaxed) == other.transaction_count.load(Relaxed)
+            && self.tick_height.load(Relaxed) == other.tick_height.load(Relaxed)
+            && self.signature_count.load(Relaxed) == other.signature_count.load(Relaxed)
+            && self.capitalization.load(Relaxed) == other.capitalization.load(Relaxed)
             && self.max_tick_height == other.max_tick_height
             && self.hashes_per_tick == other.hashes_per_tick
             && self.ticks_per_slot == other.ticks_per_slot
@@ -501,16 +500,16 @@ impl<'a> PartialEq for BankFieldsToSerialize<'a> {
             && self.epoch == other.epoch
             && self.block_height == other.block_height
             && self.collector_id == other.collector_id
-            && self.collector_fees == other.collector_fees
+            && self.collector_fees.load(Relaxed) == other.collector_fees.load(Relaxed)
             && self.fee_calculator == other.fee_calculator
             && self.fee_rate_governor == other.fee_rate_governor
-            && self.collected_rent == other.collected_rent
+            && self.collected_rent.load(Relaxed) == other.collected_rent.load(Relaxed)
             && self.rent_collector == other.rent_collector
             && self.epoch_schedule == other.epoch_schedule
-            && self.inflation == other.inflation
+            && *self.inflation.read().unwrap() == *other.inflation.read().unwrap()
             && *self.stakes.read().unwrap() == *other.stakes.read().unwrap()
             && self.epoch_stakes == other.epoch_stakes
-            && self.is_delta == other.is_delta
+            && self.is_delta.load(Relaxed) == other.is_delta.load(Relaxed)
     }
 }
 
@@ -3629,13 +3628,6 @@ impl Bank {
                 debug!("Added builtin loader {} under {:?}", name, program_id);
             }
         }
-    }
-
-    pub fn compare_bank(&self, dbank: &Bank) {
-        assert_eq!(
-            self.get_fields_to_serialize(),
-            dbank.get_fields_to_serialize()
-        )
     }
 
     pub fn clean_accounts(&self, skip_last: bool) {
