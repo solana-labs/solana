@@ -47,14 +47,32 @@ fn signer_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help(SIGNER_ARG.help)
 }
 
+pub trait ArgsConfig {
+    fn blockhash_arg<'a, 'b>(&self, arg: Arg<'a, 'b>) -> Arg<'a, 'b> {
+        arg
+    }
+    fn sign_only_arg<'a, 'b>(&self, arg: Arg<'a, 'b>) -> Arg<'a, 'b> {
+        arg
+    }
+    fn signer_arg<'a, 'b>(&self, arg: Arg<'a, 'b>) -> Arg<'a, 'b> {
+        arg
+    }
+}
+
 pub trait OfflineArgs {
-    fn offline_args(self, global: bool) -> Self;
+    fn offline_args(self) -> Self;
+    fn offline_args_config(self, config: &dyn ArgsConfig) -> Self;
 }
 
 impl OfflineArgs for App<'_, '_> {
-    fn offline_args(self, global: bool) -> Self {
-        self.arg(blockhash_arg().global(global))
-            .arg(sign_only_arg().global(global))
-            .arg(signer_arg().global(global))
+    fn offline_args_config(self, config: &dyn ArgsConfig) -> Self {
+        self.arg(config.blockhash_arg(blockhash_arg()))
+            .arg(config.sign_only_arg(sign_only_arg()))
+            .arg(config.signer_arg(signer_arg()))
+    }
+    fn offline_args(self) -> Self {
+        struct NullArgsConfig {}
+        impl ArgsConfig for NullArgsConfig {}
+        self.offline_args_config(&NullArgsConfig {})
     }
 }
