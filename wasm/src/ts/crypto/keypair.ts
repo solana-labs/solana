@@ -1,4 +1,4 @@
-import {getWASM, ensureReady} from './../wrapper';
+import { getWASM, waitReady } from './../wrapper';
 
 export interface KeyPair {
   publicKey: Uint8Array;
@@ -16,17 +16,17 @@ function wrapKeyPair(pair: {
   };
 }
 
-export function generate(): KeyPair {
-  ensureReady();
+export async function generate(): Promise<KeyPair> {
+  await waitReady();
   return wrapKeyPair(getWASM().generateKeyPair());
 }
 
-export function fromSeed(secretKey: Uint8Array): KeyPair {
-  ensureReady();
+export async function fromSeed(secretKey: Uint8Array): Promise<KeyPair> {
+  await waitReady();
   return wrapKeyPair(getWASM().keyPairFromSeed(secretKey));
 }
 
-export function fromSecretKey(secretKey: Uint8Array): KeyPair {
-  ensureReady();
+export async function fromSecretKey(secretKey: Uint8Array): Promise<KeyPair> {
+  await waitReady();
   return wrapKeyPair(getWASM().keyPairFromSecretKey(secretKey));
 }

@@ -1,6 +1,6 @@
-import {getWASM, ensureReady} from './../wrapper';
+import { getWASM, waitReady } from './../wrapper';
 
-export function sha256(data: Uint8Array): Uint8Array {
-  ensureReady();
+export async function sha256(data: Uint8Array): Promise<Uint8Array> {
+  await waitReady();
   return getWASM().sha256(data);
 }

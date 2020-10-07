@@ -1,22 +1,24 @@
 // external references used for comparison
 import nacl from 'tweetnacl';
-import { sha256 } from 'crypto-hash';
+import {sha256} from 'crypto-hash';
 import * as crypto from 'crypto';
 
-import { waitReady, ed25519, hasher } from './../';
+import {waitReady, ed25519, hasher} from './../';
 
 const toHex = (arrayBuffer: ArrayBuffer | SharedArrayBuffer) => {
   return Buffer.from(arrayBuffer).toString('hex');
 };
-
 
 describe('Key generation', () => {
   beforeAll(async () => {
     await waitReady();
   });
 
-  test('secret key should be 64bit and public key should be 32bit', () => {
-    const keypair = ed25519.keypair.generate();
+  test('secret key should be 64bit and public key should be 32bit', async () => {
+    const keypair = await ed25519.keypair.generate();
+    // const keypair = ed25519.keypair.fromSeed(
+    //   Uint8Array.from(Array(32).fill(8))
+    // );
 
     expect(keypair.secretKey).toBeDefined();
     expect(keypair.secretKey.length).toBe(64);
@@ -24,8 +26,8 @@ describe('Key generation', () => {
     expect(keypair.publicKey.length).toBe(32);
   });
 
-  test('given seed should return valid public key', () => {
-    const keypair = ed25519.keypair.fromSeed(
+  test('given seed should return valid public key', async () => {
+    const keypair = await ed25519.keypair.fromSeed(
       Uint8Array.from(Array(32).fill(8)),
     );
 
@@ -38,10 +40,10 @@ describe('Key generation', () => {
     expect(toHex(keypair.publicKey)).toBe(publicKey);
   });
 
-  test('given secret key fromSecretKey should return valid public key', () => {
+  test('given secret key fromSecretKey should return valid public key', async () => {
     const privateKey =
       '08080808080808080808080808080808080808080808080808080808080808081398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca';
-    const keypair = ed25519.keypair.fromSecretKey(
+    const keypair = await ed25519.keypair.fromSecretKey(
       Uint8Array.from(Buffer.from(privateKey, 'hex')),
     );
 
@@ -58,12 +60,12 @@ describe('WASM implementation of Ed25519 should be backwards compatible with twe
     await waitReady();
   });
 
-  test('ed25519.sign should return the same signature as tweetnacl', () => {
-    const keypair = ed25519.keypair.fromSeed(
+  test('ed25519.sign should return the same signature as tweetnacl', async () => {
+    const keypair = await ed25519.keypair.fromSeed(
       Uint8Array.from(Array(32).fill(8)),
     );
     const data = Uint8Array.from(crypto.randomBytes(1024));
-    const actual = ed25519.sign(keypair.publicKey, keypair.secretKey, data);
+    const actual = await ed25519.sign(keypair.publicKey, keypair.secretKey, data);
     const expected = nacl.sign.detached(data, keypair.secretKey);
 
     expect(Buffer.from(actual).toString('base64')).toBe(
@@ -71,32 +73,32 @@ describe('WASM implementation of Ed25519 should be backwards compatible with twe
     );
   });
 
-  test('ed25519.verify should return true for valid signature and false otherwise', () => {
-    const keypair = ed25519.keypair.fromSeed(
+  test('ed25519.verify should return true for valid signature and false otherwise', async () => {
+    const keypair = await ed25519.keypair.fromSeed(
       Uint8Array.from(Array(32).fill(8)),
     );
 
     const data = Uint8Array.from(crypto.randomBytes(1024));
     const signature = nacl.sign.detached(data, keypair.secretKey);
 
-    const valid = ed25519.verify(keypair.publicKey, signature, data);
+    const valid = await ed25519.verify(keypair.publicKey, signature, data);
     expect(valid).toBe(true);
 
-    const invalid = ed25519.verify(keypair.publicKey, new Uint8Array(), data);
+    const invalid = await ed25519.verify(keypair.publicKey, new Uint8Array(), data);
     expect(invalid).toBe(false);
   });
 
-  test('ed25519.isOnCurve should return true for random public key', () => {
-    const keypair = ed25519.keypair.fromSeed(
+  test('ed25519.isOnCurve should return true for random public key', async () => {
+    const keypair = await ed25519.keypair.fromSeed(
       Uint8Array.from(Array(32).fill(8)),
     );
 
-    expect(ed25519.isOnCurve(keypair.publicKey)).toBe(true);
+    expect(await ed25519.isOnCurve(keypair.publicKey)).toBe(true);
   });
 
   test('sha256 should return the same result as crypto-hash', async () => {
     const data = Uint8Array.from(Array(32).fill(8));
     const expected = await sha256(data);
-    expect(hasher.sha256(data)).toBe(expected);
+    expect(await hasher.sha256(data)).toBe(expected);
   });
 });
