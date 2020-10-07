@@ -702,7 +702,8 @@ mod tests {
         if let CellData::Bincode(bincode_block) = deserialized {
             let mut block = block;
             if let Some(meta) = &mut block.transactions[0].meta {
-                meta.inner_instructions = None; // Legacy bincode implementation does not suport inner_instructions
+                meta.inner_instructions = None; // Legacy bincode implementation does not support inner_instructions
+                meta.log_messages = None; // Legacy bincode implementation does not support log_messages
             }
             assert_eq!(block, bincode_block.into());
         } else {
