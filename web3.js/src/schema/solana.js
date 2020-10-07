@@ -18,14 +18,13 @@ const resultFactory = (name, resultSchema, definitions = {}) => ({
             "allOf" : [
             { "$ref": "#/definitions/common" },
             {
-                required: [ "result" ], properties: { "result": { "$ref": `#/definitions/${name}` }, }
+                properties: { "result": { "$ref": `#/definitions/${name}` }, }
             }
         ]},
         "error": {
             "allOf" : [
                 { "$ref": "#/definitions/common" },
                 {
-                    required: [ "error" ],
                     properties: {
                         "error": {
                             properties: {
@@ -132,7 +131,7 @@ const confirmedTransaction = {
             items: { type: 'string' }
         },
         message: {
-            required: ['recentBlockhash', 'header', 'instructions'],
+            required: ['recentBlockhash', 'instructions'],
             properties: {
                 recentBlockhash: { type: 'string' },
                 header: {
@@ -163,7 +162,7 @@ const confirmedTransaction = {
 
 const confirmedTransactionMeta = {
     properties: {
-        err: { type: 'object' },
+        err: { type: ['object', 'null'] },
         fee: { type: 'number' },
         preBalances: { type: 'array', items: { type: 'number'} },
         postBalances: { type: 'array', items: { type: 'number'} },
@@ -286,8 +285,8 @@ module.exports = [
             properties: {
                 "signature": { type: "string" },
                 "slot": { type: "number" },
-                "err": { type: "object" },
-                "memo": { type: "string" }
+                "err": { type: ["object", "null"] },
+                "memo": { type: ["string", "null"] }
             }
         }
     }),
@@ -297,10 +296,10 @@ module.exports = [
             required: ["pubkey"],
             properties: {
                 "pubkey": { type: "string" },
-                "gossip": { type: "string" },
-                "tpu": { type: "string" },
-                "rpc": { type: "string" },
-                "version": { type: "string" },
+                "gossip": { type: ["string", 'null'] },
+                "tpu": { type: ["string", 'null'] },
+                "rpc": { type: ["string", 'null'] },
+                "version": { type: ["string", 'null'] },
             }
         }
     }),
@@ -403,8 +402,8 @@ module.exports = [
             required: ['slot'],
             properties: {
                 slot: { type: 'number' },
-                confirmations: { type: 'number' },
-                err: { type: 'object' }
+                confirmations: { type: ['number', 'null'] },
+                err: { type: ['object', 'null'] }
             }
         }
     }),
@@ -457,14 +456,9 @@ module.exports = [
     }),
     contextFactory('simulateTransaction', {
         properties: {
-            err: {
-                oneOf: [
-                    { type: 'string' },
-                    { type: 'object' }
-                ]
-            },
+            err: { type: ['string', 'object', 'null'},
             logs: {
-                type: 'array',
+                type: ['array', 'null'],
                 items: { type: 'string' },
             }
         }
@@ -534,7 +528,7 @@ module.exports = [
     }),
     notificationFactory('signatureStatusNotification', {
         properties: {
-            err: { type: 'object' }
+            err: { type: ['object', 'null'] }
         }
     }),
     notificationFactory('rootNotification', {
