@@ -7,7 +7,7 @@ export function sign(
   message: Uint8Array,
 ): Uint8Array {
   ensureReady();
-  return getWASM().signED25519(pubkey, seckey, message);
+  return getWASM().signEd25519(pubkey, seckey, message);
 }
 
 export function verify(
@@ -16,10 +16,10 @@ export function verify(
   data: Uint8Array,
 ): boolean {
   ensureReady();
-  return getWASM().verifyED25519(pubkey, signature, data);
+  return getWASM().verifyEd25519(pubkey, signature, data);
 }
 
 export function isOnCurve(pubkey: Uint8Array): boolean {
   ensureReady();
-  return getWASM().isOnCurveED25519(pubkey);
+  return getWASM().isOnCurveEd25519(pubkey);
 }

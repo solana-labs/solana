@@ -1,47 +1,14 @@
 // external references used for comparison
 import nacl from 'tweetnacl';
-import {sha256} from 'crypto-hash';
-import {performance} from 'perf_hooks';
+import { sha256 } from 'crypto-hash';
 import * as crypto from 'crypto';
 
-import {waitReady, ed25519, hasher} from './../';
+import { waitReady, ed25519, hasher } from './../';
 
 const toHex = (arrayBuffer: ArrayBuffer | SharedArrayBuffer) => {
   return Buffer.from(arrayBuffer).toString('hex');
 };
 
-const benchmark = (func: () => void, iterations: number) => {
-  const start = performance.now();
-  for (let i = 0; i < iterations; i++) {
-    func();
-  }
-  const finish = performance.now();
-  return finish - start;
-};
-
-describe('Benchmark in Node.js WASM implementation of ED25519 vs tweetnacl', () => {
-  beforeAll(async () => {
-    await waitReady();
-  });
-
-  // on avg. WASM is 20-25x faster than tweetnacl but I am testing conservative assumption
-  test('WASM sign method should be faster than nacl by at least 15x', () => {
-    const ITERATIONS = 100;
-    const keypair = ed25519.keypair.fromSeed(
-      Uint8Array.from(Array(32).fill(8)),
-    );
-    const data = Uint8Array.from(crypto.randomBytes(1024));
-
-    const wasm = benchmark(() => {
-      ed25519.sign(keypair.publicKey, keypair.secretKey, data);
-    }, ITERATIONS);
-    const mod = benchmark(() => {
-      nacl.sign.detached(data, keypair.secretKey);
-    }, ITERATIONS);
-
-    expect(mod / wasm).toBeGreaterThanOrEqual(15);
-  });
-});
 
 describe('Key generation', () => {
   beforeAll(async () => {
@@ -50,9 +17,6 @@ describe('Key generation', () => {
 
   test('secret key should be 64bit and public key should be 32bit', () => {
     const keypair = ed25519.keypair.generate();
-    // const keypair = ed25519.keypair.fromSeed(
-    //   Uint8Array.from(Array(32).fill(8))
-    // );
 
     expect(keypair.secretKey).toBeDefined();
     expect(keypair.secretKey.length).toBe(64);
@@ -89,7 +53,7 @@ describe('Key generation', () => {
   });
 });
 
-describe('WASM implementation of ED25519 should be backwards compatible with tweetnacl', () => {
+describe('WASM implementation of Ed25519 should be backwards compatible with tweetnacl', () => {
   beforeAll(async () => {
     await waitReady();
   });

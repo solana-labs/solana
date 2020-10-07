@@ -1,7 +1,7 @@
 
 # Solana WebAssembly API
 
-@solana/wasm exposes ED25519 and key generation functions to javascript clients. 
+@solana/wasm exposes Ed25519 and key generation functions to javascript clients. 
 
 ## Installation
 

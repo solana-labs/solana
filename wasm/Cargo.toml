@@ -8,10 +8,7 @@ homepage = "https://solana.com/"
 license = "Apache-2.0"
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
-name = "solana_web3_wasm"
 crate-type = ["cdylib", "rlib"]
 
 [features]
@@ -21,14 +18,14 @@ default = ["console_error_panic_hook"]
 bincode = "1.2.1"
 cfg-if = "0.1.2"
 console_error_panic_hook = { version = "0.1.1", optional = true }
-curve25519-dalek = { version = "2.1.0", optional = false }
+curve25519-dalek = { version = "2.1.0" }
 ed25519-dalek = "=1.0.0-pre.4"
 getrandom = { version = "0.2", features = ["js"] }
 hex = "0.3.2"
 rand = { version = "0.6.5", features=["wasm-bindgen"] }
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.8.2"
-wasm-bindgen = { version = "0.2.68", optional = false, features = ["serde-serialize"] }
+wasm-bindgen = { version = "0.2.68", features = ["serde-serialize"] }
 
 [dependencies.web-sys]
 version = "0.3"
@@ -39,6 +36,6 @@ features = [
 ]
 
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = false
+wasm-opt = true
 
 [workspace]

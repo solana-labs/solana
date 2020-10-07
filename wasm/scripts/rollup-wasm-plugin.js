@@ -257,9 +257,6 @@ async function wasm_pack(cx, state, dir, source, id, options) {
                         const bytes = await response.arrayBuffer();
                         wasm = await WebAssembly.instantiate(bytes, imports);
                     }
-
-                    // TODO: if CJS in the browser load via script ???
-                    // import('@solana/wasm/dist/solana.wasm').then(xyz => xyz());
                     return wasm.instance.exports;
                 }
 
