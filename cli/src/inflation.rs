@@ -57,7 +57,7 @@ pub fn process_inflation_subcommand(
         println!("Rate reduction per year: {:>5.2}%", governor.taper * 100.);
     }
     if governor.foundation_term > 0. {
-        println!("Foundation percentage:   {:>5.2}%", governor.foundation);
+        println!("Foundation percentage:   {:>5.2}%", governor.foundation * 100.);
         println!(
             "Foundation term:         {:.1} years",
             governor.foundation_term
