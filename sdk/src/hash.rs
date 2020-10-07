@@ -103,13 +103,16 @@ impl Hash {
 
 /// Return a Sha256 hash for the given data.
 pub fn hashv(vals: &[&[u8]]) -> Hash {
-    #[cfg(not(feature = "program"))]
+    // Perform the calculation inline, calling this from within a program is
+    // not supported
+    #[cfg(not(all(feature = "program", target_arch = "bpf")))]
     {
         let mut hasher = Hasher::default();
         hasher.hashv(vals);
         hasher.result()
     }
-    #[cfg(feature = "program")]
+    // Call via a system call to perform the calculation
+    #[cfg(all(feature = "program", target_arch = "bpf"))]
     {
         extern "C" {
             fn sol_sha256(vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64;
