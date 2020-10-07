@@ -4,6 +4,10 @@ import { Account, useFetchAccountInfo } from "providers/accounts";
 import { TableCardBody } from "components/common/TableCardBody";
 import { ConfigAccount } from "validators/accounts/config";
 import { AccountAddressRow, AccountHeader } from "components/common/Account";
+import { PublicKey } from "@solana/web3.js";
+import { Address } from "components/common/Address";
+
+const MAX_SLASH_PENALTY = Math.pow(2, 8);
 
 export function ConfigAccountSection({
   account,
@@ -32,6 +36,17 @@ function StakeConfigCard({
   configAccount: ConfigAccount;
 }) {
   const refresh = useFetchAccountInfo();
+
+  const warmupCooldownFormatted = new Intl.NumberFormat("en-US", {
+    style: "percent",
+    maximumFractionDigits: 2,
+  }).format(configAccount.info.warmupCooldownRate);
+
+  const slashPenaltyFormatted = new Intl.NumberFormat("en-US", {
+    style: "percent",
+    maximumFractionDigits: 2,
+  }).format(configAccount.info.slashPenalty / MAX_SLASH_PENALTY);
+
   return (
     <div className="card">
       <AccountHeader
@@ -44,14 +59,12 @@ function StakeConfigCard({
 
         <tr>
           <td>Warmup / Cooldown Rate</td>
-          <td className="text-lg-right">
-            {configAccount.info.warmupCooldownRate}
-          </td>
+          <td className="text-lg-right">{warmupCooldownFormatted}</td>
         </tr>
 
         <tr>
           <td>Slash Penalty</td>
-          <td className="text-lg-right">{configAccount.info.slashPenalty}</td>
+          <td className="text-lg-right">{slashPenaltyFormatted}</td>
         </tr>
       </TableCardBody>
     </div>
@@ -98,7 +111,11 @@ function ValidatorInfoCard({
           <tr>
             <td>Website</td>
             <td className="text-lg-right">
-              <a href={configAccount.info.configData.website}>
+              <a
+                href={configAccount.info.configData.website}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 {configAccount.info.configData.website}
               </a>
             </td>
@@ -110,6 +127,19 @@ function ValidatorInfoCard({
             <td>Details</td>
             <td className="text-lg-right">
               {configAccount.info.configData.details}
+            </td>
+          </tr>
+        )}
+
+        {configAccount.info.keys && configAccount.info.keys.length > 1 && (
+          <tr>
+            <td>Signer</td>
+            <td className="text-lg-right">
+              <Address
+                pubkey={new PublicKey(configAccount.info.keys[1].pubkey)}
+                link
+                alignRight
+              />
             </td>
           </tr>
         )}

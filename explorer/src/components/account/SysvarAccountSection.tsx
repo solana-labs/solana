@@ -4,6 +4,7 @@ import { Account, useFetchAccountInfo } from "providers/accounts";
 import { SysvarAccount } from "validators/accounts/sysvar";
 import { TableCardBody } from "components/common/TableCardBody";
 import { AccountHeader, AccountAddressRow } from "components/common/Account";
+import { displayTimestamp } from "utils/date";
 
 export function SysvarAccountSection({
   account,
@@ -129,6 +130,12 @@ function SysvarAccountSlotHistory({
   sysvarAccount: SysvarAccount;
 }) {
   const refresh = useFetchAccountInfo();
+  const history = Array.from(
+    {
+      length: 100,
+    },
+    (v, k) => sysvarAccount.info.nextSlot - k
+  );
   return (
     <div className="card">
       <AccountHeader
@@ -140,8 +147,17 @@ function SysvarAccountSlotHistory({
         <AccountAddressRow account={account} />
 
         <tr>
-          <td>Next Slot</td>
-          <td className="text-lg-right">{sysvarAccount.info.nextSlot}</td>
+          <td className="align-top">
+            Slot History{" "}
+            <span className="text-muted">(previous 100 slots)</span>
+          </td>
+          <td className="text-lg-right text-monospace">
+            {history.map((val) => (
+              <p key={val} className="mb-0">
+                {val}
+              </p>
+            ))}
+          </td>
         </tr>
       </TableCardBody>
     </div>
@@ -269,8 +285,10 @@ function SysvarAccountClockCard({
         <AccountAddressRow account={account} />
 
         <tr>
-          <td>Unix Timestamp</td>
-          <td className="text-lg-right">{sysvarAccount.info.unixTimestamp}</td>
+          <td>Timestamp</td>
+          <td className="text-lg-right">
+            {displayTimestamp(sysvarAccount.info.unixTimestamp * 1000)}
+          </td>
         </tr>
 
         <tr>
@@ -319,7 +337,7 @@ function SysvarAccountRentCard({
         <tr>
           <td>Exemption Threshold</td>
           <td className="text-lg-right">
-            {sysvarAccount.info.exemptionThreshold}
+            {sysvarAccount.info.exemptionThreshold} years
           </td>
         </tr>
 
@@ -342,6 +360,11 @@ function SysvarAccountRewardsCard({
   sysvarAccount: SysvarAccount;
 }) {
   const refresh = useFetchAccountInfo();
+
+  const validatorPointValueFormatted = new Intl.NumberFormat("en-US", {
+    maximumSignificantDigits: 20,
+  }).format(sysvarAccount.info.validatorPointValue);
+
   return (
     <div className="card">
       <AccountHeader title="Rewards" refresh={() => refresh(account.pubkey)} />
@@ -352,7 +375,7 @@ function SysvarAccountRewardsCard({
         <tr>
           <td>Validator Point Value</td>
           <td className="text-lg-right text-monospace">
-            {sysvarAccount.info.validatorPointValue}
+            {validatorPointValueFormatted} lamports
           </td>
         </tr>
       </TableCardBody>

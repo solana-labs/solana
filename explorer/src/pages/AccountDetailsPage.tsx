@@ -28,7 +28,6 @@ import { SlotHashesCard } from "components/account/SlotHashesCard";
 import { StakeHistoryCard } from "components/account/StakeHistoryCard";
 import { BlockhashesCard } from "components/account/BlockhashesCard";
 import { ConfigAccountSection } from "components/account/ConfigAccountSection";
-import { KeysCard } from "components/account/KeysCard";
 
 const TABS_LOOKUP: { [id: string]: Tab } = {
   "spl-token:mint": {
@@ -55,11 +54,6 @@ const TABS_LOOKUP: { [id: string]: Tab } = {
     slug: "stake-history",
     title: "Stake History",
     path: "/stake-history",
-  },
-  "config:validatorInfo": {
-    slug: "public-keys",
-    title: "Public Keys",
-    path: "/public-keys",
   },
 };
 
@@ -222,8 +216,7 @@ type MoreTabs =
   | "vote-history"
   | "hashes"
   | "stake-history"
-  | "blockhashes"
-  | "public-keys";
+  | "blockhashes";
 
 function MoreSection({
   account,
@@ -269,11 +262,6 @@ function MoreSection({
       {tab === "vote-history" && data?.program === "vote" && (
         <VotesCard voteAccount={data.parsed} />
       )}
-      {tab === "public-keys" &&
-        data?.program === "config" &&
-        data.parsed.type === "validatorInfo" && (
-          <KeysCard configAccount={data.parsed} />
-        )}
       {tab === "hashes" &&
         data?.program === "sysvar" &&
         data.parsed.type === "slotHashes" && (

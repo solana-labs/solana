@@ -13,16 +13,6 @@ export function NonceAccountSection({
   account: Account;
   nonceAccount: NonceAccount;
 }) {
-  return <NonceAccountCard account={account} nonceAccount={nonceAccount} />;
-}
-
-function NonceAccountCard({
-  account,
-  nonceAccount,
-}: {
-  account: Account;
-  nonceAccount: NonceAccount;
-}) {
   const refresh = useFetchAccountInfo();
   return (
     <div className="card">

@@ -26,7 +26,7 @@ export function SlotHashesCard({
           <thead>
             <tr>
               <th className="w-1 text-muted">Slot</th>
-              <th className="text-muted">Hash</th>
+              <th className="text-muted">Blockhash</th>
             </tr>
           </thead>
           <tbody className="list">
