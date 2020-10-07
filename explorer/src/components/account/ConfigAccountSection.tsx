@@ -3,11 +3,7 @@ import React from "react";
 import { Account, useFetchAccountInfo } from "providers/accounts";
 import { TableCardBody } from "components/common/TableCardBody";
 import { ConfigAccount } from "validators/accounts/config";
-import {
-  AccountAddressRow,
-  AccountHeader,
-  AccountOwnerRow,
-} from "components/common/Account";
+import { AccountAddressRow, AccountHeader } from "components/common/Account";
 
 export function ConfigAccountSection({
   account,
@@ -57,8 +53,6 @@ function StakeConfigCard({
           <td>Slash Penalty</td>
           <td className="text-lg-right">{configAccount.info.slashPenalty}</td>
         </tr>
-
-        <AccountOwnerRow account={account} />
       </TableCardBody>
     </div>
   );
@@ -119,8 +113,6 @@ function ValidatorInfoCard({
             </td>
           </tr>
         )}
-
-        <AccountOwnerRow account={account} />
       </TableCardBody>
     </div>
   );

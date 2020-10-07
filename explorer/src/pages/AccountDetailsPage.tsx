@@ -37,9 +37,9 @@ const TABS_LOOKUP: { [id: string]: Tab } = {
     path: "/largest",
   },
   vote: {
-    slug: "votes",
-    title: "Votes",
-    path: "/votes",
+    slug: "vote-history",
+    title: "Vote History",
+    path: "/vote-history",
   },
   "sysvar:recentBlockhashes": {
     slug: "blockhashes",
@@ -219,7 +219,7 @@ type MoreTabs =
   | "history"
   | "tokens"
   | "largest"
-  | "votes"
+  | "vote-history"
   | "hashes"
   | "stake-history"
   | "blockhashes"
@@ -266,7 +266,7 @@ function MoreSection({
       )}
       {tab === "history" && <TransactionHistoryCard pubkey={pubkey} />}
       {tab === "largest" && <TokenLargestAccountsCard pubkey={pubkey} />}
-      {tab === "votes" && data?.program === "vote" && (
+      {tab === "vote-history" && data?.program === "vote" && (
         <VotesCard voteAccount={data.parsed} />
       )}
       {tab === "public-keys" &&

@@ -4,11 +4,7 @@ import { Account, useFetchAccountInfo } from "providers/accounts";
 import { TableCardBody } from "components/common/TableCardBody";
 import { Address } from "components/common/Address";
 import { NonceAccount } from "validators/accounts/nonce";
-import {
-  AccountHeader,
-  AccountAddressRow,
-  AccountOwnerRow,
-} from "components/common/Account";
+import { AccountHeader, AccountAddressRow } from "components/common/Account";
 
 export function NonceAccountSection({
   account,
@@ -59,8 +55,6 @@ function NonceAccountCard({
             signature
           </td>
         </tr>
-
-        <AccountOwnerRow account={account} />
       </TableCardBody>
     </div>
   );

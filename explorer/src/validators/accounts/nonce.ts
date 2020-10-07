@@ -8,7 +8,7 @@ export type NonceAccountInfo = StructType<typeof NonceAccountInfo>;
 export const NonceAccountInfo = pick({
   authority: Pubkey,
   blockhash: string(),
-  feeCalculator: object({
+  feeCalculator: pick({
     lamportsPerSignature: string(),
   }),
 });

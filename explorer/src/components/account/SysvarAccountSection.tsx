@@ -3,11 +3,7 @@ import React from "react";
 import { Account, useFetchAccountInfo } from "providers/accounts";
 import { SysvarAccount } from "validators/accounts/sysvar";
 import { TableCardBody } from "components/common/TableCardBody";
-import {
-  AccountHeader,
-  AccountAddressRow,
-  AccountOwnerRow,
-} from "components/common/Account";
+import { AccountHeader, AccountAddressRow } from "components/common/Account";
 
 export function SysvarAccountSection({
   account,
@@ -99,8 +95,6 @@ function SysvarAccountRecentBlockhashesCard({
 
       <TableCardBody>
         <AccountAddressRow account={account} />
-
-        <AccountOwnerRow account={account} />
       </TableCardBody>
     </div>
   );
@@ -122,8 +116,6 @@ function SysvarAccountSlotHashes({
 
       <TableCardBody>
         <AccountAddressRow account={account} />
-
-        <AccountOwnerRow account={account} />
       </TableCardBody>
     </div>
   );
@@ -151,8 +143,6 @@ function SysvarAccountSlotHistory({
           <td>Next Slot</td>
           <td className="text-lg-right">{sysvarAccount.info.nextSlot}</td>
         </tr>
-
-        <AccountOwnerRow account={account} />
       </TableCardBody>
     </div>
   );
@@ -174,8 +164,6 @@ function SysvarAccountStakeHistory({
 
       <TableCardBody>
         <AccountAddressRow account={account} />
-
-        <AccountOwnerRow account={account} />
       </TableCardBody>
     </div>
   );
@@ -202,8 +190,6 @@ function SysvarAccountFeesCard({
             {sysvarAccount.info.feeCalculator.lamportsPerSignature}
           </td>
         </tr>
-
-        <AccountOwnerRow account={account} />
       </TableCardBody>
     </div>
   );
@@ -228,20 +214,6 @@ function SysvarAccountEpochScheduleCard({
         <AccountAddressRow account={account} />
 
         <tr>
-          <td>First Normal Epoch</td>
-          <td className="text-lg-right">
-            {sysvarAccount.info.firstNormalEpoch}
-          </td>
-        </tr>
-
-        <tr>
-          <td>First Normal Slot</td>
-          <td className="text-lg-right">
-            {sysvarAccount.info.firstNormalSlot}
-          </td>
-        </tr>
-
-        <tr>
           <td>Slots Per Epoch</td>
           <td className="text-lg-right">{sysvarAccount.info.slotsPerEpoch}</td>
         </tr>
@@ -254,13 +226,25 @@ function SysvarAccountEpochScheduleCard({
         </tr>
 
         <tr>
-          <td>Warmup</td>
+          <td>Epoch Warmup Enabled</td>
           <td className="text-lg-right">
             <code>{sysvarAccount.info.warmup ? "true" : "false"}</code>
           </td>
         </tr>
 
-        <AccountOwnerRow account={account} />
+        <tr>
+          <td>First Normal Epoch</td>
+          <td className="text-lg-right">
+            {sysvarAccount.info.firstNormalEpoch}
+          </td>
+        </tr>
+
+        <tr>
+          <td>First Normal Slot</td>
+          <td className="text-lg-right">
+            {sysvarAccount.info.firstNormalSlot}
+          </td>
+        </tr>
       </TableCardBody>
     </div>
   );
@@ -276,10 +260,18 @@ function SysvarAccountClockCard({
   const refresh = useFetchAccountInfo();
   return (
     <div className="card">
-      <AccountHeader title="Clock" refresh={() => refresh(account.pubkey)} />
+      <AccountHeader
+        title="Clock Sysvar"
+        refresh={() => refresh(account.pubkey)}
+      />
 
       <TableCardBody>
         <AccountAddressRow account={account} />
+
+        <tr>
+          <td>Unix Timestamp</td>
+          <td className="text-lg-right">{sysvarAccount.info.unixTimestamp}</td>
+        </tr>
 
         <tr>
           <td>Epoch</td>
@@ -297,8 +289,6 @@ function SysvarAccountClockCard({
           <td>Slot</td>
           <td className="text-lg-right">{sysvarAccount.info.slot}</td>
         </tr>
-
-        <AccountOwnerRow account={account} />
       </TableCardBody>
     </div>
   );
@@ -339,8 +329,6 @@ function SysvarAccountRentCard({
             {sysvarAccount.info.lamportsPerByteYear}
           </td>
         </tr>
-
-        <AccountOwnerRow account={account} />
       </TableCardBody>
     </div>
   );
@@ -367,8 +355,6 @@ function SysvarAccountRewardsCard({
             {sysvarAccount.info.validatorPointValue}
           </td>
         </tr>
-
-        <AccountOwnerRow account={account} />
       </TableCardBody>
     </div>
   );

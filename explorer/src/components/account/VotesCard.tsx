@@ -8,7 +8,7 @@ export function VotesCard({ voteAccount }: { voteAccount: VoteAccount }) {
         <div className="card-header">
           <div className="row align-items-center">
             <div className="col">
-              <h3 className="card-header-title">Votes History</h3>
+              <h3 className="card-header-title">Vote History</h3>
             </div>
           </div>
         </div>
@@ -23,9 +23,9 @@ export function VotesCard({ voteAccount }: { voteAccount: VoteAccount }) {
             </thead>
             <tbody className="list">
               {voteAccount.info.votes.length > 0 &&
-                voteAccount.info.votes.map((vote: Vote, index) =>
-                  renderAccountRow(vote, index)
-                )}
+                voteAccount.info.votes
+                  .reverse()
+                  .map((vote: Vote, index) => renderAccountRow(vote, index))}
             </tbody>
           </table>
         </div>

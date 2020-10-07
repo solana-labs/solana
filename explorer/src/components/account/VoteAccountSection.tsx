@@ -6,11 +6,7 @@ import { TableCardBody } from "components/common/TableCardBody";
 import { Address } from "components/common/Address";
 import { VoteAccount } from "validators/accounts/vote";
 import { displayTimestamp } from "utils/date";
-import {
-  AccountHeader,
-  AccountAddressRow,
-  AccountOwnerRow,
-} from "components/common/Account";
+import { AccountHeader, AccountAddressRow } from "components/common/Account";
 
 export function VoteAccountSection({
   account,
@@ -41,7 +37,10 @@ function VoteAccountCard({
         <AccountAddressRow account={account} />
 
         <tr>
-          <td>Authorized Voters</td>
+          <td>
+            Authorized Voter
+            {voteAccount.info.authorizedVoters.length > 1 ? "s" : ""}
+          </td>
           <td className="text-lg-right">
             {voteAccount.info.authorizedVoters.map((voter) => {
               return (
@@ -85,8 +84,6 @@ function VoteAccountCard({
           <td>Root Slot</td>
           <td className="text-lg-right">{voteAccount.info.rootSlot}</td>
         </tr>
-
-        <AccountOwnerRow account={account} />
       </TableCardBody>
     </div>
   );
