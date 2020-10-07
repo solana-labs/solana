@@ -164,7 +164,7 @@ impl Stake {
 }
 
 #[wasm_bindgen]
-#[derive(Serialize, Deserialize, PartialEq, Clone, Copy)]
+#[derive(Serialize, Debug, Deserialize, PartialEq, Clone, Copy)]
 pub struct Delegation {
     /// to whom the stake is delegated
     voter_pubkey: Pubkey,
