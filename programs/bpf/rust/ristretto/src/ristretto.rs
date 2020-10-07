@@ -1,5 +1,7 @@
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
-use solana_sdk::{entrypoint::SUCCESS, program_error::ProgramError};
+#[cfg(all(feature = "program", target_arch = "bpf"))]
+use solana_sdk::entrypoint::SUCCESS;
+use solana_sdk::program_error::ProgramError;
 
 /// Multiply a ristretto point with a scalar
 ///
