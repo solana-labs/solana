@@ -148,7 +148,7 @@ const ApproveChecked = object({
 const MintToChecked = object({
   account: Pubkey,
   mint: Pubkey,
-  mintAuthority: Pubkey,
+  mintAuthority: optional(Pubkey),
   multisigMintAuthority: optional(Pubkey),
   signers: optional(array(Pubkey)),
   tokenAmount: TokenAmountUi,
