@@ -41,6 +41,10 @@ pub mod no_overflow_rent_distribution {
     solana_sdk::declare_id!("4kpdyrcj5jS47CZb2oJGfVxjYbsMm2Kx97gFyZrxxwXz");
 }
 
+pub mod ristretto_mul_syscall_enabled {
+    solana_sdk::declare_id!("HRe7A6aoxgjKzdjbBv6HTy7tJ4YWqE6tVmYCGho6S9Aq");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -53,6 +57,7 @@ lazy_static! {
         (compute_budget_config2::id(), "1ms compute budget"),
         (sha256_syscall_enabled::id(), "sha256 syscall"),
         (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
+        (ristretto_mul_syscall_enabled::id(), "ristretto multiply syscall"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

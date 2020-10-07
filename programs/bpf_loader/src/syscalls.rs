@@ -1,5 +1,6 @@
 use crate::{alloc, BPFError};
 use alloc::Alloc;
+use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use solana_rbpf::{
     ebpf::{ELF_INSN_DUMP_OFFSET, MM_HEAP_START},
     error::EbpfError,
@@ -7,7 +8,7 @@ use solana_rbpf::{
     vm::{EbpfVm, SyscallObject},
 };
 use solana_runtime::{
-    feature_set::sha256_syscall_enabled,
+    feature_set::{ristretto_mul_syscall_enabled, sha256_syscall_enabled},
     message_processor::MessageProcessor,
     process_instruction::{ComputeMeter, InvokeContext, Logger},
 };
@@ -131,6 +132,17 @@ pub fn register_syscalls<'a>(
         )?;
     }
 
+    if invoke_context.is_feature_active(&ristretto_mul_syscall_enabled::id()) {
+        vm.register_syscall_with_context_ex(
+            "sol_ristretto_mul",
+            Box::new(SyscallRistrettoMul {
+                cost: 0,
+                compute_meter: invoke_context.get_compute_meter(),
+                loader_id,
+            }),
+        )?;
+    }
+
     vm.register_syscall_with_context_ex(
         "sol_create_program_address",
         Box::new(SyscallCreateProgramAddress {
@@ -161,6 +173,7 @@ pub fn register_syscalls<'a>(
     )?;
 
     // Memory allocator
+
     let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
     let heap_region = MemoryRegion::new_from_slice(&heap, MM_HEAP_START);
     vm.register_syscall_with_context_ex(
@@ -509,6 +522,35 @@ impl<'a> SyscallObject<BPFError> for SyscallSha256<'a> {
             }
         }
         hash_result.copy_from_slice(&hasher.result().to_bytes());
+        Ok(0)
+    }
+}
+
+/// Ristretto point multiply
+pub struct SyscallRistrettoMul<'a> {
+    cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BPFError> for SyscallRistrettoMul<'a> {
+    fn call(
+        &mut self,
+        point_addr: u64,
+        scalar_addr: u64,
+        result_addr: u64,
+        _arg4: u64,
+        _arg5: u64,
+        ro_regions: &[MemoryRegion],
+        rw_regions: &[MemoryRegion],
+    ) -> Result<u64, EbpfError<BPFError>> {
+        self.compute_meter.consume(self.cost)?;
+
+        let point = translate_type!(RistrettoPoint, point_addr, ro_regions, self.loader_id)?;
+        let scalar = translate_type!(Scalar, scalar_addr, ro_regions, self.loader_id)?;
+        let result = translate_type_mut!(RistrettoPoint, result_addr, rw_regions, self.loader_id)?;
+
+        *result = point * scalar;
+
         Ok(0)
     }
 }
