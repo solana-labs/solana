@@ -1,5 +1,5 @@
 ---
-title: Ledger Hardware Wallet
+title: Ledger Nano
 ---
 
 This page describes how to use a Ledger Nano S or Nano X to interact with Solana
@@ -179,61 +179,6 @@ the same computer and uniquely identify a keypair from any of them.
 Use the output from the `resolve-signer` command anywhere a `solana` command
 expects a `<KEYPAIR>` entry to use that resolved path as the signer for that
 part of the given transaction.
-
-### Install the Solana Beta App
-
-You're invited to help us test the latest pre-release version of our Ledger app
-on one of the public testnets.
-
-You can use the command-line to install the latest Solana Ledger app release
-before it has been validated by
-the Ledger team and made available via Ledger Live. Note that because the app
-is not installed via Ledger Live, you will need to approve installation from an
-"unsafe" manager, as well as see the message, "This app is not genuine" each
-time you open the app. Once the app is available on Ledger Live, you can
-reinstall the app from there, and the message will no longer be displayed.
-
-**WARNING:** Installing an unsigned Ledger app reduces the security of your
-Ledger device.
-If your client is compromised, an attacker will be able to trick you into
-signing arbitrary transactions with arbitrary derivation paths.
-Only use this installation method if you understand
-the security implications. We strongly recommend that you use a separate
-Ledger device, with no other wallets/apps sharing the same seed phrase.
-
-1. Connect your Ledger device via USB and enter your pin to unlock it
-2. Download and run the Solana Ledger app installer:
-   ```text
-   curl -sSLf https://github.com/solana-labs/ledger-app-solana/releases/download/v0.2.1/install.sh | sh
-   ```
-3. When prompted, approve the "unsafe" manager on your device
-4. When prompted, approve the installation on your device
-5. An installation window appears and your device will display "Processing..."
-6. The app installation is confirmed
-
-#### Installing the Solana Beta App returns an error
-
-If you encounter the following error:
-
-```text
-Traceback (most recent call last):
- File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.7/lib/python3.7/runpy.py", line 193, in _run_module_as_main
-  "__main__", mod_spec)
- File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.7/lib/python3.7/runpy.py", line 85, in _run_code
-  exec(code, run_globals)
- File "ledger-env/lib/python3.7/site-packages/ledgerblue/loadApp.py", line 197, in <module>
-  dongle = getDongle(args.apdu)
- File "ledger-env/lib/python3.7/site-packages/ledgerblue/comm.py", line 216, in getDongle
-  dev.open_path(hidDevicePath)
- File "hid.pyx", line 72, in hid.device.open_path
-OSError: open failed
-```
-
-To fix, check the following:
-
-1. Ensure your Ledger device is connected to USB
-2. Ensure your Ledger device is unlocked and not waiting for you to enter your pin
-3. Ensure the Ledger Live application is not open
 
 ## Troubleshooting
 

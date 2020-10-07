@@ -274,12 +274,14 @@ type SimulatedTransactionResponse = {
  * @property {number} fee The fee charged for processing the transaction
  * @property {Array<number>} preBalances The balances of the transaction accounts before processing
  * @property {Array<number>} postBalances The balances of the transaction accounts after processing
+ * @property {Array<string>} logMessages An array of program log messages emitted during a transaction
  * @property {object|null} err The error result of transaction processing
  */
 type ConfirmedTransactionMeta = {
   fee: number,
   preBalances: Array<number>,
   postBalances: Array<number>,
+  logMessages?: Array<string>,
   err: TransactionError | null,
 };
 
@@ -403,8 +405,8 @@ type ConfirmedBlock = {
   }>,
 };
 
-function createRpcRequest(url): RpcRequest {
-  const agentManager = new AgentManager();
+function createRpcRequest(url: string, useHttps: boolean): RpcRequest {
+  const agentManager = new AgentManager(useHttps);
   const server = jayson(async (request, callback) => {
     const agent = agentManager.requestStart();
     const options = {
@@ -768,8 +770,9 @@ export class Connection {
    */
   constructor(endpoint: string, commitment: ?Commitment) {
     let url = urlParse(endpoint);
+    const useHttps = url.protocol === 'https:';
 
-    this._rpcRequest = createRpcRequest(url.href);
+    this._rpcRequest = createRpcRequest(url.href, useHttps);
     this._commitment = commitment;
     this._blockhashInfo = {
       recentBlockhash: null,
@@ -778,7 +781,7 @@ export class Connection {
       simulatedSignatures: [],
     };
 
-    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    url.protocol = useHttps ? 'wss:' : 'ws:';
     url.host = '';
     // Only shift the port by +1 as a convention for ws(s) only if given endpoint
     // is explictly specifying the endpoint port (HTTP-based RPC), assuming

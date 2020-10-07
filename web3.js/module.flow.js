@@ -155,6 +155,7 @@ declare module '@solana/web3.js' {
     fee: number,
     preBalances: Array<number>,
     postBalances: Array<number>,
+    logMessages?: Array<string>,
     err: TransactionError | null,
   };
 

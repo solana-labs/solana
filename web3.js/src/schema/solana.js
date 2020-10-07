@@ -166,6 +166,7 @@ const confirmedTransactionMeta = {
         fee: { type: 'number' },
         preBalances: { type: 'array', items: { type: 'number'} },
         postBalances: { type: 'array', items: { type: 'number'} },
+        logMessages: { type: 'array', items: { type: 'string'} },
     }
 }
 
@@ -456,7 +457,7 @@ module.exports = [
     }),
     contextFactory('simulateTransaction', {
         properties: {
-            err: { type: ['string', 'object', 'null'},
+            err: { type: ['string', 'object', 'null'] },
             logs: {
                 type: ['array', 'null'],
                 items: { type: 'string' },
