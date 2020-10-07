@@ -1,9 +1,11 @@
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use solana_sdk::{entrypoint::SUCCESS, program_error::ProgramError};
 
-/// Prints a string to stdout
+/// Multiply a ristretto point with a scalar
 ///
-/// @param message - Message to print
+/// @param point - Ristretto point
+/// @param scalar - Scalar to mulitply against
+/// @return - result of the multiplication
 #[inline]
 pub fn ristretto_mul(
     point: &RistrettoPoint,
