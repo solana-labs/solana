@@ -26,6 +26,7 @@ export function BlockhashesCard({
           <table className="table table-sm table-nowrap card-table">
             <thead>
               <tr>
+                <th className="w-1 text-muted">Recency</th>
                 <th className="w-1 text-muted">Blockhash</th>
                 <th className="text-muted">Fee Calculator</th>
               </tr>
@@ -52,6 +53,7 @@ export function BlockhashesCard({
 const renderAccountRow = (entry: RecentBlockhashesEntry, index: number) => {
   return (
     <tr key={index}>
+      <td className="w-1">{index + 1}</td>
       <td className="w-1 text-monospace">{entry.blockhash}</td>
       <td className="">
         {entry.feeCalculator.lamportsPerSignature} lamports per signature
