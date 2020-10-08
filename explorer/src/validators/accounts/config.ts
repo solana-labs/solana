@@ -1,18 +1,15 @@
 import {
   StructType,
-  enums,
   pick,
   array,
   boolean,
   object,
   number,
   string,
-  any,
   record,
+  union,
+  literal,
 } from "superstruct";
-
-export type ConfigAccountType = StructType<typeof ConfigAccountType>;
-export const ConfigAccountType = enums(["stakeConfig", "validatorInfo"]);
 
 export type StakeConfigInfo = StructType<typeof StakeConfigInfo>;
 export const StakeConfigInfo = pick({
@@ -39,8 +36,20 @@ export const ValidatorInfoConfigInfo = pick({
   configData: ValidatorInfoConfigData,
 });
 
-export type ConfigAccount = StructType<typeof ConfigAccount>;
-export const ConfigAccount = object({
-  type: ConfigAccountType,
-  info: any(),
+export type ValidatorInfoAccount = StructType<typeof ValidatorInfoAccount>;
+export const ValidatorInfoAccount = object({
+  type: literal("validatorInfo"),
+  info: ValidatorInfoConfigInfo,
 });
+
+export type StakeConfigInfoAccount = StructType<typeof StakeConfigInfoAccount>;
+export const StakeConfigInfoAccount = object({
+  type: literal("stakeConfig"),
+  info: StakeConfigInfo,
+});
+
+export type ConfigAccount = StructType<typeof ConfigAccount>;
+export const ConfigAccount = union([
+  StakeConfigInfoAccount,
+  ValidatorInfoAccount,
+]);

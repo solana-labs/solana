@@ -19,16 +19,6 @@ export function VoteAccountSection({
   account: Account;
   voteAccount: VoteAccount;
 }) {
-  return <VoteAccountCard account={account} voteAccount={voteAccount} />;
-}
-
-function VoteAccountCard({
-  account,
-  voteAccount,
-}: {
-  account: Account;
-  voteAccount: VoteAccount;
-}) {
   const refresh = useFetchAccountInfo();
   return (
     <div className="card">

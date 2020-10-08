@@ -46,9 +46,9 @@ const TABS_LOOKUP: { [id: string]: Tab } = {
     path: "/blockhashes",
   },
   "sysvar:slotHashes": {
-    slug: "hashes",
-    title: "Hashes",
-    path: "/hashes",
+    slug: "slot-hashes",
+    title: "Slot Hashes",
+    path: "/slot-hashes",
   },
   "sysvar:stakeHistory": {
     slug: "stake-history",
@@ -214,7 +214,7 @@ type MoreTabs =
   | "tokens"
   | "largest"
   | "vote-history"
-  | "hashes"
+  | "slot-hashes"
   | "stake-history"
   | "blockhashes";
 
@@ -262,7 +262,7 @@ function MoreSection({
       {tab === "vote-history" && data?.program === "vote" && (
         <VotesCard voteAccount={data.parsed} />
       )}
-      {tab === "hashes" &&
+      {tab === "slot-hashes" &&
         data?.program === "sysvar" &&
         data.parsed.type === "slotHashes" && (
           <SlotHashesCard sysvarAccount={data.parsed} />

@@ -2,7 +2,11 @@ import React from "react";
 
 import { Account, useFetchAccountInfo } from "providers/accounts";
 import { TableCardBody } from "components/common/TableCardBody";
-import { ConfigAccount } from "validators/accounts/config";
+import {
+  ConfigAccount,
+  StakeConfigInfoAccount,
+  ValidatorInfoAccount,
+} from "validators/accounts/config";
 import {
   AccountAddressRow,
   AccountBalanceRow,
@@ -37,7 +41,7 @@ function StakeConfigCard({
   configAccount,
 }: {
   account: Account;
-  configAccount: ConfigAccount;
+  configAccount: StakeConfigInfoAccount;
 }) {
   const refresh = useFetchAccountInfo();
 
@@ -60,6 +64,7 @@ function StakeConfigCard({
 
       <TableCardBody>
         <AccountAddressRow account={account} />
+        <AccountBalanceRow account={account} />
 
         <tr>
           <td>Warmup / Cooldown Rate</td>
@@ -80,7 +85,7 @@ function ValidatorInfoCard({
   configAccount,
 }: {
   account: Account;
-  configAccount: ConfigAccount;
+  configAccount: ValidatorInfoAccount;
 }) {
   const refresh = useFetchAccountInfo();
   return (
@@ -92,7 +97,6 @@ function ValidatorInfoCard({
 
       <TableCardBody>
         <AccountAddressRow account={account} />
-
         <AccountBalanceRow account={account} />
 
         {configAccount.info.configData.name && (

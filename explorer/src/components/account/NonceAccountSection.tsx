@@ -27,7 +27,6 @@ export function NonceAccountSection({
 
       <TableCardBody>
         <AccountAddressRow account={account} />
-
         <AccountBalanceRow account={account} />
 
         <tr>
