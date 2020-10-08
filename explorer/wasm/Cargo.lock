@@ -98,7 +98,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk-wasm"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "bincode",
  "bs58",

@@ -3,7 +3,7 @@
 
 [package]
 name = "solana-bpf-rust-ristretto"
-version = "1.4.0"
+version = "1.5.0"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -14,7 +14,7 @@ edition = "2018"
 [dependencies]
 curve25519-dalek = "3"
 getrandom = { version = "0.1.14", features = ["dummy"] }
-solana-sdk = { path = "../../../../sdk/", version = "1.4.0", default-features = false }
+solana-sdk = { path = "../../../../sdk/", version = "1.5.0", default-features = false }
 
 [features]
 program = ["solana-sdk/program"]
