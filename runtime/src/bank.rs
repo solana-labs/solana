@@ -1084,7 +1084,7 @@ impl Bank {
         }
 
         let mut ancestors: Vec<_> = roots.into_iter().collect();
-        ancestors.sort();
+        ancestors.sort_unstable();
         ancestors
     }
 
@@ -4236,13 +4236,13 @@ mod tests {
         impl Bank {
             fn epoch_stake_keys(&self) -> Vec<Epoch> {
                 let mut keys: Vec<Epoch> = self.epoch_stakes.keys().copied().collect();
-                keys.sort();
+                keys.sort_unstable();
                 keys
             }
 
             fn epoch_stake_key_info(&self) -> (Epoch, Epoch, usize) {
                 let mut keys: Vec<Epoch> = self.epoch_stakes.keys().copied().collect();
-                keys.sort();
+                keys.sort_unstable();
                 (*keys.first().unwrap(), *keys.last().unwrap(), keys.len())
             }
         }
@@ -9027,7 +9027,7 @@ mod tests {
         let mut consumed_budgets = (0..3)
             .map(|_| bank.process_stale_slot_with_budget(0, force_to_return_alive_account))
             .collect::<Vec<_>>();
-        consumed_budgets.sort();
+        consumed_budgets.sort_unstable();
         // consumed_budgets represents the count of alive accounts in the three slots 0,1,2
         assert_eq!(consumed_budgets, vec![0, 1, 9]);
     }

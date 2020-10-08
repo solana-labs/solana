@@ -1598,7 +1598,7 @@ impl Blockstore {
             .map(|(iter_slot, _)| iter_slot)
             .take(timestamp_sample_range)
             .collect();
-        timestamp_slots.sort();
+        timestamp_slots.sort_unstable();
         get_slots.stop();
         datapoint_info!(
             "blockstore-get-timestamp-slots",
@@ -4299,9 +4299,9 @@ pub mod tests {
         all_shreds.shuffle(&mut thread_rng());
         ledger.insert_shreds(all_shreds, None, false).unwrap();
         let mut result = recvr.try_recv().unwrap();
-        result.sort();
+        result.sort_unstable();
         slots.push(disconnected_slot);
-        slots.sort();
+        slots.sort_unstable();
         assert_eq!(result, slots);
     }
 

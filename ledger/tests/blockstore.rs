@@ -37,7 +37,7 @@ fn test_multiple_threads_insert_shred() {
 
         // Check slot 0 has the correct children
         let mut meta0 = blockstore.meta(0).unwrap().unwrap();
-        meta0.next_slots.sort();
+        meta0.next_slots.sort_unstable();
         let expected_next_slots: Vec<_> = (1..num_threads + 1).collect();
         assert_eq!(meta0.next_slots, expected_next_slots);
 

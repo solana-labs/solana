@@ -54,8 +54,7 @@ _ cargo +"$rust_stable" fmt --all -- --check
 # -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
 _ cargo +"$rust_nightly" clippy \
-  -Zunstable-options --workspace --all-targets \
-  -- --deny=warnings --allow=clippy::stable_sort_primitive
+  -Zunstable-options --workspace --all-targets -- --deny=warnings
 
 cargo_audit_ignores=(
   # failure is officially deprecated/unmaintained

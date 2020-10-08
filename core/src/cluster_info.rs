@@ -657,7 +657,7 @@ impl ClusterInfo {
                 ))
             })
             .collect();
-        current_slots.sort();
+        current_slots.sort_unstable();
         let min_slot: Slot = current_slots
             .iter()
             .map(|((_, s), _)| *s)

@@ -20,7 +20,7 @@ impl HardForks {
         } else {
             self.hard_forks.push((new_slot, 1));
         }
-        self.hard_forks.sort();
+        self.hard_forks.sort_unstable();
     }
 
     // Returns a sorted-by-slot iterator over the registered hark forks

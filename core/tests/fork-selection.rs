@@ -190,7 +190,7 @@ impl Tower {
             .map(|(i, v)| (*scores.get(&v).unwrap_or(&0), v.time, i))
             .collect();
         // highest score, latest vote first
-        best.sort();
+        best.sort_unstable();
         if self.parasite {
             best.reverse();
         }

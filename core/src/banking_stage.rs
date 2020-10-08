@@ -1961,7 +1961,7 @@ mod tests {
 
             assert_eq!(processed_transactions_count, 0,);
 
-            retryable_txs.sort();
+            retryable_txs.sort_unstable();
             let expected: Vec<usize> = (0..transactions.len()).collect();
             assert_eq!(retryable_txs, expected);
         }

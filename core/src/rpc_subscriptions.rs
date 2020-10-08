@@ -737,7 +737,7 @@ impl RpcSubscriptions {
     }
 
     pub fn notify_roots(&self, mut rooted_slots: Vec<Slot>) {
-        rooted_slots.sort();
+        rooted_slots.sort_unstable();
         rooted_slots.into_iter().for_each(|root| {
             self.enqueue_notification(NotificationEntry::Root(root));
         });

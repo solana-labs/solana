@@ -2835,7 +2835,7 @@ pub mod tests {
 
     fn frozen_bank_slots(bank_forks: &BankForks) -> Vec<Slot> {
         let mut slots: Vec<_> = bank_forks.frozen_banks().keys().cloned().collect();
-        slots.sort();
+        slots.sort_unstable();
         slots
     }
 

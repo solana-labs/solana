@@ -2370,7 +2370,7 @@ impl AccountsDB {
         let mut accounts_index = self.accounts_index.write().unwrap();
         let storage = self.storage.read().unwrap();
         let mut slots: Vec<Slot> = storage.0.keys().cloned().collect();
-        slots.sort();
+        slots.sort_unstable();
 
         let mut last_log_update = Instant::now();
         for (index, slot) in slots.iter().enumerate() {
@@ -2467,7 +2467,7 @@ impl AccountsDB {
             .iter()
             .cloned()
             .collect();
-        roots.sort();
+        roots.sort_unstable();
         info!("{}: accounts_index roots: {:?}", label, roots,);
         for (pubkey, list) in &self.accounts_index.read().unwrap().account_maps {
             info!("  key: {}", pubkey);
@@ -2478,13 +2478,13 @@ impl AccountsDB {
     fn print_count_and_status(&self, label: &'static str) {
         let storage = self.storage.read().unwrap();
         let mut slots: Vec<_> = storage.0.keys().cloned().collect();
-        slots.sort();
+        slots.sort_unstable();
         info!("{}: count_and status for {} slots:", label, slots.len());
         for slot in &slots {
             let slot_stores = storage.0.get(slot).unwrap();
 
             let mut ids: Vec<_> = slot_stores.keys().cloned().collect();
-            ids.sort();
+            ids.sort_unstable();
             for id in &ids {
                 let entry = slot_stores.get(id).unwrap();
                 info!(
@@ -4692,7 +4692,7 @@ pub mod tests {
 
         accounts.reset_uncleaned_roots();
         let mut actual_slots = accounts.shrink_candidate_slots.lock().unwrap().clone();
-        actual_slots.sort();
+        actual_slots.sort_unstable();
         assert_eq!(actual_slots, vec![0, 1, 2]);
 
         accounts.accounts_index.write().unwrap().roots.clear();
@@ -4878,7 +4878,7 @@ pub mod tests {
         store_counts.insert(3, (1, HashSet::from_iter(vec![key2])));
         AccountsDB::calc_delete_dependencies(&purges, &mut store_counts);
         let mut stores: Vec<_> = store_counts.keys().cloned().collect();
-        stores.sort();
+        stores.sort_unstable();
         for store in &stores {
             info!(
                 "store: {:?} : {:?}",
