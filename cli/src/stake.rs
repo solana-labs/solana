@@ -29,7 +29,7 @@ use solana_client::{
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account_utils::StateMut,
-    clock::{Clock, Epoch, Slot, UnixTimestamp},
+    clock::{Clock, Epoch, Slot, UnixTimestamp, SECONDS_PER_DAY},
     message::Message,
     pubkey::Pubkey,
     system_instruction::SystemError,
@@ -1620,13 +1620,13 @@ pub(crate) fn fetch_epoch_rewards(
         let previous_epoch_rewards = first_confirmed_block.rewards;
 
         if let Some((effective_slot, epoch_end_time, epoch_rewards)) = epoch_info {
-            let wall_clock_epoch_duration =
+            let wallclock_epoch_duration =
                 { Local.timestamp(epoch_end_time, 0) - Local.timestamp(epoch_start_time, 0) }
                     .to_std()?
                     .as_secs_f64();
 
-            const SECONDS_PER_YEAR: f64 = (24 * 60 * 60 * 356) as f64;
-            let percent_of_year = SECONDS_PER_YEAR / wall_clock_epoch_duration;
+            let wallclock_epochs_per_year =
+                (SECONDS_PER_DAY * 356) as f64 / wallclock_epoch_duration;
 
             if let Some(reward) = epoch_rewards
                 .into_iter()
@@ -1642,7 +1642,7 @@ pub(crate) fn fetch_epoch_rewards(
                         amount: reward.lamports.abs() as u64,
                         post_balance: reward.post_balance,
                         percent_change: balance_increase_percent,
-                        apr: balance_increase_percent * percent_of_year,
+                        apr: balance_increase_percent * wallclock_epochs_per_year,
                     });
                 }
             }
