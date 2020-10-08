@@ -71,6 +71,7 @@ use std::{
     mem,
     ops::RangeInclusive,
     path::PathBuf,
+    ptr,
     rc::Rc,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
@@ -477,8 +478,12 @@ pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) is_delta: bool,
 }
 
+// Can't derive PartialEq because RwLock doesn't implement PartialEq
 impl PartialEq for Bank {
     fn eq(&self, other: &Self) -> bool {
+        if ptr::eq(self, other) {
+            return true;
+        }
         *self.blockhash_queue.read().unwrap() == *other.blockhash_queue.read().unwrap()
             && self.ancestors == other.ancestors
             && *self.hash.read().unwrap() == *other.hash.read().unwrap()
