@@ -1,5 +1,4 @@
 import React from "react";
-
 import { Account, useFetchAccountInfo } from "providers/accounts";
 import {
   SysvarAccount,

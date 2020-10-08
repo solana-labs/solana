@@ -1,5 +1,4 @@
 import React from "react";
-
 import { Account, useFetchAccountInfo } from "providers/accounts";
 import { TableCardBody } from "components/common/TableCardBody";
 import {
