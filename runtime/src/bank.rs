@@ -106,6 +106,8 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
+pub const TRANSACTION_LOG_MESSAGES_BYTES_LIMIT: usize = 100 * 1000;
+
 type BankStatusCache = StatusCache<Result<()>>;
 #[frozen_abi(digest = "EEFPLdPhngiBojqEnDMkoEGjyYYHNWPHnenRf8b9diqd")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
@@ -388,6 +390,9 @@ pub type InnerInstructions = Vec<CompiledInstruction>;
 
 /// A list of instructions that were invoked during each instruction of a transaction
 pub type InnerInstructionsList = Vec<InnerInstructions>;
+
+/// A list of log messages emitted during a transaction
+pub type TransactionLogMessages = Vec<String>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum HashAgeKind {
@@ -1698,22 +1703,22 @@ impl Bank {
 
         let txs = &[transaction];
         let batch = self.prepare_simulation_batch(txs);
-        let log_collector = Rc::new(LogCollector::default());
+
         let (
             _loaded_accounts,
             executed,
             _inner_instructions,
+            transaction_logs,
             _retryable_transactions,
             _transaction_count,
             _signature_count,
-        ) = self.load_and_execute_transactions(
-            &batch,
-            MAX_PROCESSING_AGE,
-            Some(log_collector.clone()),
-            false,
-        );
+        ) = self.load_and_execute_transactions(&batch, MAX_PROCESSING_AGE, false, true);
+
         let transaction_result = executed[0].0.clone().map(|_| ());
-        let log_messages = Rc::try_unwrap(log_collector).unwrap_or_default().into();
+        let log_messages = transaction_logs
+            .get(0)
+            .map_or(vec![], |messages| messages.to_vec());
+
         (transaction_result, log_messages)
     }
 
@@ -2112,17 +2117,34 @@ impl Bank {
         cache.remove(pubkey);
     }
 
+    pub fn truncate_log_messages(
+        log_messages: &mut TransactionLogMessages,
+        max_bytes: usize,
+        truncate_message: String,
+    ) {
+        let mut size = 0;
+        for (i, line) in log_messages.iter().enumerate() {
+            size += line.len();
+            if size > max_bytes {
+                log_messages.truncate(i);
+                log_messages.push(truncate_message);
+                return;
+            }
+        }
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
         batch: &TransactionBatch,
         max_age: usize,
-        log_collector: Option<Rc<LogCollector>>,
         enable_cpi_recording: bool,
+        enable_log_recording: bool,
     ) -> (
         Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)>,
         Vec<TransactionProcessResult>,
         Vec<Option<InnerInstructionsList>>,
+        Vec<TransactionLogMessages>,
         Vec<usize>,
         u64,
         u64,
@@ -2165,6 +2187,8 @@ impl Bank {
         let mut signature_count: u64 = 0;
         let mut inner_instructions: Vec<Option<InnerInstructionsList>> =
             Vec::with_capacity(txs.len());
+        let mut transaction_logs: Vec<TransactionLogMessages> = Vec::with_capacity(txs.len());
+
         let executed: Vec<TransactionProcessResult> = loaded_accounts
             .iter_mut()
             .zip(OrderedIterator::new(txs, batch.iteration_order()))
@@ -2187,6 +2211,12 @@ impl Bank {
                         None
                     };
 
+                    let log_collector = if enable_log_recording {
+                        Some(Rc::new(LogCollector::default()))
+                    } else {
+                        None
+                    };
+
                     let process_result = self.message_processor.process_message(
                         tx.message(),
                         &loader_refcells,
@@ -2197,6 +2227,21 @@ impl Bank {
                         instruction_recorders.as_deref(),
                         self.feature_set.clone(),
                     );
+
+                    if enable_log_recording {
+                        let mut log_messages: TransactionLogMessages =
+                            Rc::try_unwrap(log_collector.unwrap_or_default())
+                                .unwrap_or_default()
+                                .into();
+
+                        Self::truncate_log_messages(
+                            &mut log_messages,
+                            TRANSACTION_LOG_MESSAGES_BYTES_LIMIT,
+                            String::from("<< Transaction log truncated to 100KB >>\n"),
+                        );
+
+                        transaction_logs.push(log_messages);
+                    }
 
                     Self::compile_recorded_instructions(
                         &mut inner_instructions,
@@ -2262,6 +2307,7 @@ impl Bank {
             loaded_accounts,
             executed,
             inner_instructions,
+            transaction_logs,
             retryable_txs,
             tx_count,
             signature_count,
@@ -2936,18 +2982,33 @@ impl Bank {
         max_age: usize,
         collect_balances: bool,
         enable_cpi_recording: bool,
+        enable_log_recording: bool,
     ) -> (
         TransactionResults,
         TransactionBalancesSet,
         Vec<Option<InnerInstructionsList>>,
+        Vec<TransactionLogMessages>,
     ) {
         let pre_balances = if collect_balances {
             self.collect_balances(batch)
         } else {
             vec![]
         };
-        let (mut loaded_accounts, executed, inner_instructions, _, tx_count, signature_count) =
-            self.load_and_execute_transactions(batch, max_age, None, enable_cpi_recording);
+
+        let (
+            mut loaded_accounts,
+            executed,
+            inner_instructions,
+            transaction_logs,
+            _,
+            tx_count,
+            signature_count,
+        ) = self.load_and_execute_transactions(
+            batch,
+            max_age,
+            enable_cpi_recording,
+            enable_log_recording,
+        );
 
         let results = self.commit_transactions(
             batch.transactions(),
@@ -2966,13 +3027,14 @@ impl Bank {
             results,
             TransactionBalancesSet::new(pre_balances, post_balances),
             inner_instructions,
+            transaction_logs,
         )
     }
 
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let batch = self.prepare_batch(txs, None);
-        self.load_execute_and_commit_transactions(&batch, MAX_PROCESSING_AGE, false, false)
+        self.load_execute_and_commit_transactions(&batch, MAX_PROCESSING_AGE, false, false, false)
             .0
             .fee_collection_results
     }
@@ -6350,7 +6412,13 @@ mod tests {
 
         let lock_result = bank.prepare_batch(&pay_alice, None);
         let results_alice = bank
-            .load_execute_and_commit_transactions(&lock_result, MAX_PROCESSING_AGE, false, false)
+            .load_execute_and_commit_transactions(
+                &lock_result,
+                MAX_PROCESSING_AGE,
+                false,
+                false,
+                false,
+            )
             .0
             .fee_collection_results;
         assert_eq!(results_alice[0], Ok(()));
@@ -8121,10 +8189,18 @@ mod tests {
         let txs = vec![tx0, tx1, tx2];
 
         let lock_result = bank0.prepare_batch(&txs, None);
-        let (transaction_results, transaction_balances_set, inner_instructions) = bank0
-            .load_execute_and_commit_transactions(&lock_result, MAX_PROCESSING_AGE, true, false);
+        let (transaction_results, transaction_balances_set, inner_instructions, transaction_logs) =
+            bank0.load_execute_and_commit_transactions(
+                &lock_result,
+                MAX_PROCESSING_AGE,
+                true,
+                false,
+                false,
+            );
 
         assert!(inner_instructions[0].iter().all(|ix| ix.is_empty()));
+        assert_eq!(transaction_logs.len(), 0);
+
         assert_eq!(transaction_balances_set.pre_balances.len(), 3);
         assert_eq!(transaction_balances_set.post_balances.len(), 3);
 
@@ -9395,5 +9471,54 @@ mod tests {
         bank1.rehash();
         let new_bank1_hash = bank1.hash();
         assert_eq!(old_hash, new_bank1_hash);
+    }
+
+    #[test]
+    fn test_truncate_log_messages() {
+        let mut messages = vec![
+            String::from("This is line one\n"),
+            String::from("This is line two\n"),
+            String::from("This is line three\n"),
+        ];
+
+        // messages under limit
+        Bank::truncate_log_messages(
+            &mut messages,
+            10000,
+            String::from("<< Transaction log truncated to 10,000 bytes >>\n"),
+        );
+        assert_eq!(messages.len(), 3);
+
+        // messages truncated to two lines
+        let maxsize = messages.get(0).unwrap().len() + messages.get(1).unwrap().len();
+        Bank::truncate_log_messages(
+            &mut messages,
+            maxsize,
+            String::from("<< Transaction log truncated >>\n"),
+        );
+        assert_eq!(messages.len(), 3);
+        assert_eq!(
+            messages.get(2).unwrap(),
+            "<< Transaction log truncated >>\n"
+        );
+
+        // messages truncated to one line
+        let mut messages = vec![
+            String::from("Line 1\n"),
+            String::from("Line 2\n"),
+            String::from("Line 3\n"),
+        ];
+
+        let maxsize = messages.get(0).unwrap().len() + 4;
+        Bank::truncate_log_messages(
+            &mut messages,
+            maxsize,
+            String::from("<< Transaction log truncated >>\n"),
+        );
+        assert_eq!(messages.len(), 2);
+        assert_eq!(
+            messages.get(1).unwrap(),
+            "<< Transaction log truncated >>\n"
+        );
     }
 }

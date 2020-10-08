@@ -534,13 +534,14 @@ impl BankingStage {
             mut loaded_accounts,
             results,
             inner_instructions,
+            transaction_logs,
             mut retryable_txs,
             tx_count,
             signature_count,
         ) = bank.load_and_execute_transactions(
             batch,
             MAX_PROCESSING_AGE,
-            None,
+            transaction_status_sender.is_some(),
             transaction_status_sender.is_some(),
         );
         load_execute_time.stop();
@@ -580,6 +581,7 @@ impl BankingStage {
                     tx_results.processing_results,
                     TransactionBalancesSet::new(pre_balances, post_balances),
                     inner_instructions,
+                    transaction_logs,
                     sender,
                 );
             }
