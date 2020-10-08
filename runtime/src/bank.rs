@@ -75,15 +75,10 @@ use std::{
     path::PathBuf,
     ptr,
     rc::Rc,
-<<<<<<< HEAD
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
         LockResult, RwLockWriteGuard, {Arc, RwLock, RwLockReadGuard},
     },
-=======
-    sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
-    sync::{Arc, RwLock, RwLockReadGuard},
->>>>>>> daba17a95... Nit, short name (#12195)
 };
 
 // Partial SPL Token v2.0.x declarations inlined to avoid an external dependency on the spl-token crate
@@ -244,10 +239,7 @@ impl Clone for CachedExecutors {
         for (key, (count, executor)) in self.executors.iter() {
             executors.insert(
                 *key,
-                (
-                    AtomicU64::new(count.load(Ordering::Relaxed)),
-                    executor.clone(),
-                ),
+                (AtomicU64::new(count.load(Relaxed)), executor.clone()),
             );
         }
         Self {
@@ -265,7 +257,7 @@ impl CachedExecutors {
     }
     fn get(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         self.executors.get(pubkey).map(|(count, executor)| {
-            count.fetch_add(1, Ordering::Relaxed);
+            count.fetch_add(1, Relaxed);
             executor.clone()
         })
     }
@@ -276,7 +268,7 @@ impl CachedExecutors {
                 let default_key = Pubkey::default();
                 let mut least_key = &default_key;
                 for (key, (count, _)) in self.executors.iter() {
-                    let count = count.load(Ordering::Relaxed);
+                    let count = count.load(Relaxed);
                     if count < least {
                         least = count;
                         least_key = key;
@@ -1173,8 +1165,7 @@ impl Bank {
         );
 
         self.capitalization
-<<<<<<< HEAD
-            .fetch_add(validator_rewards_paid, Ordering::Relaxed);
+            .fetch_add(validator_rewards_paid, Relaxed);
 
         let active_stake = if let Some(stake_history_entry) =
             self.stakes.read().unwrap().history().get(&prev_epoch)
@@ -1196,9 +1187,6 @@ impl Bank {
             ("pre_capitalization", capitalization, i64),
             ("post_capitalization", self.capitalization(), i64)
         );
-=======
-            .fetch_add(validator_rewards_paid, Relaxed);
->>>>>>> daba17a95... Nit, short name (#12195)
     }
 
     /// map stake delegations into resolved (pubkey, account) pairs
@@ -2447,7 +2435,7 @@ impl Bank {
         if validator_stakes.is_empty() {
             // some tests bank.freezes() with bad staking state
             self.capitalization
-                .fetch_sub(rent_to_be_distributed, Ordering::Relaxed);
+                .fetch_sub(rent_to_be_distributed, Relaxed);
             return;
         }
         #[cfg(not(test))]
@@ -2504,8 +2492,7 @@ impl Bank {
                 "There was leftover from rent distribution: {}",
                 leftover_lamports
             );
-            self.capitalization
-                .fetch_sub(leftover_lamports, Ordering::Relaxed);
+            self.capitalization.fetch_sub(leftover_lamports, Relaxed);
         }
     }
 
@@ -2517,31 +2504,17 @@ impl Bank {
             .rent
             .calculate_burn(total_rent_collected);
 
-<<<<<<< HEAD
         debug!(
             "distributed rent: {} (rounded from: {}, burned: {})",
             rent_to_be_distributed, total_rent_collected, burned_portion
         );
-        self.capitalization
-            .fetch_sub(burned_portion, Ordering::Relaxed);
-=======
         self.capitalization.fetch_sub(burned_portion, Relaxed);
->>>>>>> daba17a95... Nit, short name (#12195)
 
         if rent_to_be_distributed == 0 {
             return;
         }
 
-<<<<<<< HEAD
         self.distribute_rent_to_validators(&self.vote_accounts(), rent_to_be_distributed);
-=======
-        let leftover =
-            self.distribute_rent_to_validators(&self.vote_accounts(), rent_to_be_distributed);
-        if leftover != 0 {
-            warn!("There was leftover from rent distribution: {}", leftover);
-            self.capitalization.fetch_sub(leftover, Relaxed);
-        }
->>>>>>> daba17a95... Nit, short name (#12195)
     }
 
     fn collect_rent(
@@ -3818,8 +3791,7 @@ impl Bank {
 
     fn apply_spl_token_v2_multisig_fix(&mut self) {
         if let Some(mut account) = self.get_account(&inline_spl_token_v2_0::id()) {
-            self.capitalization
-                .fetch_sub(account.lamports, Ordering::Relaxed);
+            self.capitalization.fetch_sub(account.lamports, Relaxed);
             account.lamports = 0;
             self.store_account(&inline_spl_token_v2_0::id(), &account);
             self.remove_executor(&inline_spl_token_v2_0::id());
@@ -3967,7 +3939,7 @@ mod tests {
         vote_instruction,
         vote_state::{self, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
     };
-    use std::{result, sync::atomic::Ordering::SeqCst, time::Duration};
+    use std::{result, time::Duration};
 
     #[test]
     fn test_hash_age_kind_is_durable_nonce() {
@@ -7118,48 +7090,6 @@ mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
-=======
-    fn test_bank_entered_epoch_callback() {
-        let (genesis_config, _) = create_genesis_config(500);
-        let mut bank0 = Arc::new(Bank::new(&genesis_config));
-        let callback_count = Arc::new(AtomicU64::new(0));
-
-        Arc::get_mut(&mut bank0)
-            .unwrap()
-            .initiate_entered_epoch_callback({
-                let callback_count = callback_count.clone();
-                Box::new(move |_, _| {
-                    callback_count.fetch_add(1, SeqCst);
-                })
-            });
-
-        // set_entered_eepoc_callbak fires the initial call
-        assert_eq!(callback_count.load(SeqCst), 1);
-
-        let _bank1 =
-            Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0) - 1);
-        // No callback called while within epoch 0
-        assert_eq!(callback_count.load(SeqCst), 1);
-
-        let _bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), bank0.get_slots_in_epoch(0));
-        // Callback called as bank1 is in epoch 1
-        assert_eq!(callback_count.load(SeqCst), 2);
-
-        callback_count.store(0, SeqCst);
-        let _bank1 = Bank::new_from_parent(
-            &bank0,
-            &Pubkey::default(),
-            std::u64::MAX / bank0.ticks_per_slot - 1,
-        );
-        // If the new bank jumps ahead multiple epochs the callback is still only called once.
-        // This was done to keep the callback implementation simpler as new bank will never jump
-        // cross multiple epochs in a real deployment.
-        assert_eq!(callback_count.load(SeqCst), 1);
-    }
-
-    #[test]
->>>>>>> daba17a95... Nit, short name (#12195)
     fn test_is_delta_true() {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let bank = Arc::new(Bank::new(&genesis_config));
