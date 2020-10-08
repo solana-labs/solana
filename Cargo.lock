@@ -4971,6 +4971,7 @@ dependencies = [
  "indicatif",
  "pickledb",
  "serde",
+ "solana-account-decoder",
  "solana-clap-utils",
  "solana-cli-config",
  "solana-client",
@@ -4982,6 +4983,7 @@ dependencies = [
  "solana-stake-program",
  "solana-transaction-status",
  "solana-version",
+ "spl-token",
  "tempfile",
  "thiserror",
 ]
