@@ -20,3 +20,7 @@ pub fn update_token_args(client: &RpcClient, args: &mut DistributeTokensArgs) ->
     }
     Ok(())
 }
+
+pub fn spl_token_amount(amount: f64, decimals: u8) -> u64 {
+    (amount * 10_usize.pow(decimals as u32) as f64) as u64
+}
