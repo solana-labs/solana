@@ -445,7 +445,7 @@ impl BigTable {
         rows.into_iter()
             .next()
             .map(|r| r.1)
-            .ok_or_else(|| Error::RowNotFound)
+            .ok_or(Error::RowNotFound)
     }
 
     /// Store data for one or more `table` rows in the `family_name` Column family

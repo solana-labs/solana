@@ -1012,7 +1012,7 @@ impl ClusterInfo {
                         self.get_lowest_slot_for_node(&x.id, None, |lowest_slot, _| {
                             lowest_slot.lowest <= slot
                         })
-                        .unwrap_or_else(|| /* fallback to legacy behavior */ true)
+                        .unwrap_or(/* fallback to legacy behavior */ true)
                     }
             })
             .collect();

@@ -226,7 +226,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
                 (
                     *slot,
                     self.roots.contains(slot),
-                    self.slot_deltas.get(slot).unwrap_or_else(|| &empty).clone(),
+                    self.slot_deltas.get(slot).unwrap_or(&empty).clone(),
                 )
             })
             .collect()
