@@ -57,6 +57,10 @@ pub mod max_program_call_depth_64 {
     solana_sdk::declare_id!("YCKSgA6XmjtkQrHBQjpyNrX6EMhJPcYcLWMVgWn36iv");
 }
 
+pub mod timestamp_correction {
+    solana_sdk::declare_id!("3zydSLUwuqqsV3wL5wBsaVgyvMox3XTHx7zLEuQf1U2Z");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -72,7 +76,8 @@ lazy_static! {
         (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
         (ristretto_mul_syscall_enabled::id(), "ristretto multiply syscall"),
         (max_invoke_depth_4::id(), "max invoke call depth 4"),
-        (max_program_call_depth_64::id(), "max program call depth 64")
+        (max_program_call_depth_64::id(), "max program call depth 64"),
+        (timestamp_correction::id(), "correct bank timestamps"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
