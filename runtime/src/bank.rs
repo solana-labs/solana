@@ -17,14 +17,7 @@ use crate::{
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     message_processor::{Executors, MessageProcessor},
-<<<<<<< HEAD
-    process_instruction::{
-        ComputeBudget, Executor, ProcessInstruction, ProcessInstructionWithContext,
-    },
-=======
-    nonce_utils,
     process_instruction::{Executor, ProcessInstruction, ProcessInstructionWithContext},
->>>>>>> 74fcb184b... Pipe FeatureSet though InvokeContext (#12536)
     rent_collector::RentCollector,
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},

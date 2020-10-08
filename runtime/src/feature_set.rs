@@ -29,13 +29,12 @@ pub mod bpf_loader2_program {
     solana_sdk::declare_id!("DFBnrgThdzH4W6wZ12uGPoWcMnvfZj11EHnxHcVxLPhD");
 }
 
-<<<<<<< HEAD
 pub mod no_overflow_rent_distribution {
     solana_sdk::declare_id!("4kpdyrcj5jS47CZb2oJGfVxjYbsMm2Kx97gFyZrxxwXz");
-=======
+}
+
 pub mod compute_budget_config2 {
     solana_sdk::declare_id!("HxvjqDSiF5sYdSYuCXsUnS8UeAoWsMT9iGoFP8pgV1mB");
->>>>>>> 74fcb184b... Pipe FeatureSet though InvokeContext (#12536)
 }
 
 lazy_static! {
@@ -47,11 +46,8 @@ lazy_static! {
         (pico_inflation::id(), "pico-inflation"),
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
         (bpf_loader2_program::id(), "bpf_loader2 program"),
-<<<<<<< HEAD
         (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
-=======
         (compute_budget_config2::id(), "1ms compute budget"),
->>>>>>> 74fcb184b... Pipe FeatureSet though InvokeContext (#12536)
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
