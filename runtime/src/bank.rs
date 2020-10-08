@@ -1037,19 +1037,22 @@ impl Bank {
     }
 
     pub fn clock(&self) -> sysvar::clock::Clock {
-        sysvar::clock::Clock {
+        sysvar::clock::Clock::from_account(
+            &self.get_account(&sysvar::clock::id()).unwrap_or_default(),
+        )
+        .unwrap_or_default()
+    }
+
+    fn update_clock(&self) {
+        let clock = sysvar::clock::Clock {
             slot: self.slot,
             unused: Self::get_unused_from_slot(self.slot, self.unused),
             epoch: self.epoch_schedule.get_epoch(self.slot),
             leader_schedule_epoch: self.epoch_schedule.get_leader_schedule_epoch(self.slot),
             unix_timestamp: self.unix_timestamp(),
-        }
-    }
-
-    fn update_clock(&self) {
+        };
         self.update_sysvar_account(&sysvar::clock::id(), |account| {
-            self.clock()
-                .create_account(self.inherit_sysvar_account_balance(account))
+            clock.create_account(self.inherit_sysvar_account_balance(account))
         });
     }
 
