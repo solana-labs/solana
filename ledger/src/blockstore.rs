@@ -5686,6 +5686,7 @@ pub mod tests {
                             pre_balances: pre_balances.clone(),
                             post_balances: post_balances.clone(),
                             inner_instructions: Some(vec![]),
+                            log_messages: Some(vec![]),
                         },
                     )
                     .unwrap();
@@ -5699,6 +5700,7 @@ pub mod tests {
                             pre_balances: pre_balances.clone(),
                             post_balances: post_balances.clone(),
                             inner_instructions: Some(vec![]),
+                            log_messages: Some(vec![]),
                         },
                     )
                     .unwrap();
@@ -5710,6 +5712,7 @@ pub mod tests {
                         pre_balances,
                         post_balances,
                         inner_instructions: Some(vec![]),
+                        log_messages: Some(vec![]),
                     }),
                 }
             })
@@ -6006,6 +6009,7 @@ pub mod tests {
                 index: 0,
                 instructions: vec![CompiledInstruction::new(1, &(), vec![0])],
             }];
+            let log_messages_vec = vec![String::from("Test message\n")];
 
             // result not found
             assert!(transaction_status_cf
@@ -6025,6 +6029,7 @@ pub mod tests {
                         pre_balances: pre_balances_vec.clone(),
                         post_balances: post_balances_vec.clone(),
                         inner_instructions: Some(inner_instructions_vec.clone()),
+                        log_messages: Some(log_messages_vec.clone()),
                     },
                 )
                 .is_ok());
@@ -6036,6 +6041,7 @@ pub mod tests {
                 pre_balances,
                 post_balances,
                 inner_instructions,
+                log_messages,
             } = transaction_status_cf
                 .get((0, Signature::default(), 0))
                 .unwrap()
@@ -6045,6 +6051,7 @@ pub mod tests {
             assert_eq!(pre_balances, pre_balances_vec);
             assert_eq!(post_balances, post_balances_vec);
             assert_eq!(inner_instructions.unwrap(), inner_instructions_vec);
+            assert_eq!(log_messages.unwrap(), log_messages_vec);
 
             // insert value
             assert!(transaction_status_cf
@@ -6056,6 +6063,7 @@ pub mod tests {
                         pre_balances: pre_balances_vec.clone(),
                         post_balances: post_balances_vec.clone(),
                         inner_instructions: Some(inner_instructions_vec.clone()),
+                        log_messages: Some(log_messages_vec.clone()),
                     },
                 )
                 .is_ok());
@@ -6067,6 +6075,7 @@ pub mod tests {
                 pre_balances,
                 post_balances,
                 inner_instructions,
+                log_messages,
             } = transaction_status_cf
                 .get((0, Signature::new(&[2u8; 64]), 9))
                 .unwrap()
@@ -6078,6 +6087,7 @@ pub mod tests {
             assert_eq!(pre_balances, pre_balances_vec);
             assert_eq!(post_balances, post_balances_vec);
             assert_eq!(inner_instructions.unwrap(), inner_instructions_vec);
+            assert_eq!(log_messages.unwrap(), log_messages_vec);
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
@@ -6305,6 +6315,7 @@ pub mod tests {
                 pre_balances: pre_balances_vec,
                 post_balances: post_balances_vec,
                 inner_instructions: Some(vec![]),
+                log_messages: Some(vec![]),
             };
 
             let signature1 = Signature::new(&[1u8; 64]);
@@ -6438,6 +6449,7 @@ pub mod tests {
                     index: 0,
                     instructions: vec![CompiledInstruction::new(1, &(), vec![0])],
                 }]);
+                let log_messages = Some(vec![String::from("Test message\n")]);
                 let signature = transaction.signatures[0];
                 blockstore
                     .transaction_status_cf
@@ -6449,6 +6461,7 @@ pub mod tests {
                             pre_balances: pre_balances.clone(),
                             post_balances: post_balances.clone(),
                             inner_instructions: inner_instructions.clone(),
+                            log_messages: log_messages.clone(),
                         },
                     )
                     .unwrap();
@@ -6460,6 +6473,7 @@ pub mod tests {
                         pre_balances,
                         post_balances,
                         inner_instructions,
+                        log_messages,
                     }),
                 }
             })
@@ -6900,6 +6914,7 @@ pub mod tests {
                             pre_balances: vec![],
                             post_balances: vec![],
                             inner_instructions: Some(vec![]),
+                            log_messages: Some(vec![]),
                         },
                     )
                     .unwrap();
