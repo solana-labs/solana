@@ -22,6 +22,7 @@ use solana_stake_program::{
     stake_instruction::{self, LockupArgs},
     stake_state::{Authorized, Lockup, StakeAuthorize},
 };
+use spl_token_v2_0::solana_program::program_error::ProgramError;
 use std::{
     cmp::{self},
     io,
@@ -83,6 +84,8 @@ pub enum Error {
     MissingLockupAuthority,
     #[error("insufficient funds in {0:?}, requires {1} SOL")]
     InsufficientFunds(FundingSources, f64),
+    #[error("Program error")]
+    ProgramError(#[from] ProgramError),
 }
 
 fn merge_allocations(allocations: &[Allocation]) -> Vec<Allocation> {
@@ -665,6 +668,7 @@ pub async fn test_process_distribute_tokens_with_client(
         transaction_db: transaction_db.clone(),
         output_path: Some(output_path.clone()),
         stake_args: None,
+        spl_token_args: None,
         transfer_amount,
     };
     let confirmations = process_allocations(client, &args).await.unwrap();
@@ -788,6 +792,7 @@ pub async fn test_process_distribute_stake_with_client(
         transaction_db: transaction_db.clone(),
         output_path: Some(output_path.clone()),
         stake_args: Some(stake_args),
+        spl_token_args: None,
         sender_keypair: Box::new(sender_keypair),
         transfer_amount: None,
     };
@@ -1058,6 +1063,7 @@ mod tests {
             transaction_db: "".to_string(),
             output_path: None,
             stake_args: Some(stake_args),
+            spl_token_args: None,
             sender_keypair: Box::new(Keypair::new()),
             transfer_amount: None,
         };
@@ -1106,6 +1112,7 @@ mod tests {
             transaction_db: "".to_string(),
             output_path: None,
             stake_args,
+            spl_token_args: None,
             transfer_amount: None,
         };
         (allocations, args)

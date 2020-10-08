@@ -1,6 +1,6 @@
 use solana_banks_client::start_tcp_client;
 use solana_cli_config::{Config, CONFIG_FILE};
-use solana_tokens::{arg_parser::parse_args, args::Command, commands};
+use solana_tokens::{arg_parser::parse_args, args::Command, commands, spl_token_helpers};
 use std::{env, error::Error, path::Path, process};
 use tokio::runtime::Runtime;
 use url::Url;
@@ -26,7 +26,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut banks_client = runtime.block_on(start_tcp_client(&host_port))?;
 
     match command_args.command {
-        Command::DistributeTokens(args) => {
+        Command::DistributeTokens(mut args) => {
+            runtime.block_on(spl_token_helpers::update_token_args(
+                &mut banks_client,
+                &mut args,
+            ))?;
             runtime.block_on(commands::process_allocations(&mut banks_client, &args))?;
         }
         Command::Balances(args) => {

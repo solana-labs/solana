@@ -4945,6 +4945,7 @@ dependencies = [
  "indicatif",
  "pickledb",
  "serde",
+ "solana-account-decoder",
  "solana-banks-client",
  "solana-banks-server",
  "solana-clap-utils",
@@ -4957,6 +4958,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-version",
+ "spl-token",
  "tempfile",
  "thiserror",
  "tokio 0.3.2",
@@ -5109,9 +5111,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.1.32"
+version = "0.1.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a95dbe2b00920ac4e1524b7442cf5319f01e8fa5742930ac60148882fd7738b"
+checksum = "14a45ec96d6902676708f52d180229ea3933df93eadb3e96e356377d467831b6"
 dependencies = [
  "byteorder",
  "combine",
