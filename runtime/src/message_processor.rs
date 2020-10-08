@@ -788,7 +788,7 @@ mod tests {
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
             None,
-            Arc::new(FeatureSet::default()),
+            Arc::new(FeatureSet::all_enabled()),
         );
 
         // Check call depth increases and has a limit
@@ -1325,7 +1325,7 @@ mod tests {
             None,
             executors.clone(),
             None,
-            Arc::new(FeatureSet::default()),
+            Arc::new(FeatureSet::all_enabled()),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 100);
@@ -1348,7 +1348,7 @@ mod tests {
             None,
             executors.clone(),
             None,
-            Arc::new(FeatureSet::default()),
+            Arc::new(FeatureSet::all_enabled()),
         );
         assert_eq!(
             result,
@@ -1375,7 +1375,7 @@ mod tests {
             None,
             executors,
             None,
-            Arc::new(FeatureSet::default()),
+            Arc::new(FeatureSet::all_enabled()),
         );
         assert_eq!(
             result,
@@ -1485,7 +1485,7 @@ mod tests {
             None,
             executors.clone(),
             None,
-            Arc::new(FeatureSet::default()),
+            Arc::new(FeatureSet::all_enabled()),
         );
         assert_eq!(
             result,
@@ -1512,7 +1512,7 @@ mod tests {
             None,
             executors.clone(),
             None,
-            Arc::new(FeatureSet::default()),
+            Arc::new(FeatureSet::all_enabled()),
         );
         assert_eq!(result, Ok(()));
 
@@ -1536,7 +1536,7 @@ mod tests {
             None,
             executors,
             None,
-            Arc::new(FeatureSet::default()),
+            Arc::new(FeatureSet::all_enabled()),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);
@@ -1613,7 +1613,7 @@ mod tests {
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
             None,
-            Arc::new(FeatureSet::default()),
+            Arc::new(FeatureSet::all_enabled()),
         );
         let metas = vec![
             AccountMeta::new(owned_key, false),
