@@ -23,6 +23,16 @@ pub fn spl_token_v2_0_native_mint() -> Pubkey {
     Pubkey::from_str(&spl_token_v2_0::native_mint::id().to_string()).unwrap()
 }
 
+// A helper function to convert a solana_sdk::pubkey::Pubkey to spl_sdk::pubkey::Pubkey
+pub fn spl_token_v2_0_pubkey(pubkey: &Pubkey) -> SplTokenPubkey {
+    SplTokenPubkey::from_str(&pubkey.to_string()).unwrap()
+}
+
+// A helper function to convert a spl_sdk::pubkey::Pubkey to solana_sdk::pubkey::Pubkey
+pub fn pubkey_from_spl_token_v2_0(pubkey: &SplTokenPubkey) -> Pubkey {
+    Pubkey::from_str(&pubkey.to_string()).unwrap()
+}
+
 pub fn parse_token(
     data: &[u8],
     mint_decimals: Option<u8>,
