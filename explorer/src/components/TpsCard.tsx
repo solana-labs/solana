@@ -3,12 +3,14 @@ import { Bar } from "react-chartjs-2";
 import CountUp from "react-countup";
 import {
   usePerformanceInfo,
-  PERF_UPDATE_SEC, ClusterStatsStatus
+  PERF_UPDATE_SEC,
+  ClusterStatsStatus,
 } from "providers/stats/solanaClusterStats";
 import classNames from "classnames";
 import { TableCardBody } from "components/common/TableCardBody";
 import { ChartOptions, ChartTooltipModel } from "chart.js";
 import { PerformanceInfo } from "providers/stats/solanaPerformanceInfo";
+import { StatsNotReady } from "pages/ClusterStatsPage";
 
 export function TpsCard() {
   return (
@@ -24,12 +26,11 @@ export function TpsCard() {
 function TpsCardBody() {
   const performanceInfo = usePerformanceInfo();
 
-  if (performanceInfo.status === ClusterStatsStatus.Loading) {
+  if (performanceInfo.status !== ClusterStatsStatus.Ready) {
     return (
-      <div className="card-body text-center">
-        <span className="spinner-grow spinner-grow-sm mr-2"></span>
-        Loading
-      </div>
+      <StatsNotReady
+        error={performanceInfo.status === ClusterStatsStatus.Error}
+      />
     );
   }
 

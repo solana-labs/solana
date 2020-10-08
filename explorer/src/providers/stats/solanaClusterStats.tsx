@@ -18,12 +18,13 @@ export const SAMPLE_HISTORY_HOURS = 6;
 export const PERFORMANCE_SAMPLE_INTERVAL = 60000;
 export const TRANSACTION_COUNT_INTERVAL = 5000;
 export const EPOCH_INFO_INTERVAL = 2000;
+export const LOADING_TIMEOUT = 10000;
 
 export enum ClusterStatsStatus {
   Loading,
   Ready,
-  Error
-};
+  Error,
+}
 
 const initialPerformanceInfo: PerformanceInfo = {
   status: ClusterStatsStatus.Loading,
@@ -51,8 +52,14 @@ const initialDashboardInfo: DashboardInfo = {
 };
 
 type SetActive = React.Dispatch<React.SetStateAction<boolean>>;
-const SetActiveContext = React.createContext<
-  { setActive: SetActive } | undefined
+const StatsProviderContext = React.createContext<
+  | {
+      setActive: SetActive;
+      setTimedOut: Function;
+      retry: Function;
+      active: boolean;
+    }
+  | undefined
 >(undefined);
 
 type DashboardState = { info: DashboardInfo };
@@ -60,7 +67,7 @@ const DashboardContext = React.createContext<DashboardState | undefined>(
   undefined
 );
 
-type PerformanceState = { info: PerformanceInfo  };
+type PerformanceState = { info: PerformanceInfo };
 const PerformanceContext = React.createContext<PerformanceState | undefined>(
   undefined
 );
@@ -91,21 +98,26 @@ export function SolanaClusterStatsProvider({ children }: Props) {
 
         dispatchPerformanceInfo({
           type: PerformanceInfoActionType.SetPerfSamples,
-          data: {
-            samples: samples,
-          },
+          data: samples,
         });
 
         dispatchDashboardInfo({
           type: DashboardInfoActionType.SetPerfSamples,
-          data: {
-            samples: samples,
-          },
+          data: samples,
         });
       } catch (error) {
         if (cluster !== Cluster.Custom) {
           reportError(error, { url });
         }
+        dispatchPerformanceInfo({
+          type: PerformanceInfoActionType.SetError,
+          data: error.toString(),
+        });
+        dispatchDashboardInfo({
+          type: DashboardInfoActionType.SetError,
+          data: error.toString(),
+        });
+        setActive(false);
       }
     };
 
@@ -114,14 +126,17 @@ export function SolanaClusterStatsProvider({ children }: Props) {
         const transactionCount = await connection.getTransactionCount();
         dispatchPerformanceInfo({
           type: PerformanceInfoActionType.SetTransactionCount,
-          data: {
-            transactionCount: transactionCount,
-          },
+          data: transactionCount,
         });
       } catch (error) {
         if (cluster !== Cluster.Custom) {
           reportError(error, { url });
         }
+        dispatchPerformanceInfo({
+          type: PerformanceInfoActionType.SetError,
+          data: error.toString(),
+        });
+        setActive(false);
       }
     };
 
@@ -130,14 +145,17 @@ export function SolanaClusterStatsProvider({ children }: Props) {
         const epochInfo = await connection.getEpochInfo();
         dispatchDashboardInfo({
           type: DashboardInfoActionType.SetEpochInfo,
-          data: {
-            epochInfo: epochInfo,
-          },
+          data: epochInfo,
         });
       } catch (error) {
         if (cluster !== Cluster.Custom) {
           reportError(error, { url });
         }
+        dispatchDashboardInfo({
+          type: DashboardInfoActionType.SetError,
+          data: error.toString(),
+        });
+        setActive(false);
       }
     };
 
@@ -165,38 +183,60 @@ export function SolanaClusterStatsProvider({ children }: Props) {
   // Reset when cluster changes
   React.useEffect(() => {
     return () => {
-      dispatchDashboardInfo({
-        type: DashboardInfoActionType.Reset,
-        data: {
-          initialState: initialDashboardInfo,
-        },
-      });
-      dispatchPerformanceInfo({
-        type: PerformanceInfoActionType.Reset,
-        data: {
-          initialState: initialPerformanceInfo,
-        },
-      });
+      resetData();
     };
-  }, [cluster]);
+  }, [url]);
+
+  function resetData() {
+    dispatchDashboardInfo({
+      type: DashboardInfoActionType.Reset,
+      data: initialDashboardInfo,
+    });
+    dispatchPerformanceInfo({
+      type: PerformanceInfoActionType.Reset,
+      data: initialPerformanceInfo,
+    });
+  }
+
+  const setTimedOut = React.useCallback(() => {
+    dispatchDashboardInfo({
+      type: DashboardInfoActionType.SetError,
+      data: "Cluster stats timed out",
+    });
+    dispatchPerformanceInfo({
+      type: PerformanceInfoActionType.SetError,
+      data: "Cluster stats timed out",
+    });
+    if (cluster !== Cluster.Custom) {
+      reportError(new Error("Cluster stats timed out"), { url });
+    }
+    setActive(false);
+  }, [cluster, url]);
+
+  const retry = React.useCallback(() => {
+    resetData();
+    setActive(true);
+  }, []);
 
   return (
-    <SetActiveContext.Provider value={{ setActive }}>
+    <StatsProviderContext.Provider
+      value={{ setActive, setTimedOut, retry, active }}
+    >
       <DashboardContext.Provider value={{ info: dashboardInfo }}>
         <PerformanceContext.Provider value={{ info: performanceInfo }}>
           {children}
         </PerformanceContext.Provider>
       </DashboardContext.Provider>
-    </SetActiveContext.Provider>
+    </StatsProviderContext.Provider>
   );
 }
 
-export function useSetActive() {
-  const context = React.useContext(SetActiveContext);
+export function useStatsProvider() {
+  const context = React.useContext(StatsProviderContext);
   if (!context) {
-    throw new Error(`useSetActive must be used within a StatsProvider`);
+    throw new Error(`useContext must be used within a StatsProvider`);
   }
-  return context.setActive;
+  return context;
 }
 
 export function useDashboardInfo() {

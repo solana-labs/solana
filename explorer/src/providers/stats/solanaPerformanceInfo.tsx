@@ -16,85 +16,90 @@ export type PerformanceInfo = {
 export enum PerformanceInfoActionType {
   SetTransactionCount,
   SetPerfSamples,
-  SetErroredOut,
+  SetError,
   Reset,
 }
 
-export type PerformanceInfoAction = {
-  type: PerformanceInfoActionType;
-  data: {
-    samples?: PerfSample[];
-    transactionCount?: number;
-    initialState?: PerformanceInfo;
-  };
+export type PerformanceInfoActionSetTransactionCount = {
+  type: PerformanceInfoActionType.SetTransactionCount;
+  data: number;
 };
+
+export type PerformanceInfoActionSetPerfSamples = {
+  type: PerformanceInfoActionType.SetPerfSamples;
+  data: PerfSample[];
+};
+
+export type PerformanceInfoActionSetError = {
+  type: PerformanceInfoActionType.SetError;
+  data: string;
+};
+
+export type PerformanceInfoActionReset = {
+  type: PerformanceInfoActionType.Reset;
+  data: PerformanceInfo;
+};
+
+export type PerformanceInfoAction =
+  | PerformanceInfoActionSetTransactionCount
+  | PerformanceInfoActionSetPerfSamples
+  | PerformanceInfoActionSetError
+  | PerformanceInfoActionReset;
 
 export function performanceInfoReducer(
   state: PerformanceInfo,
   action: PerformanceInfoAction
 ) {
-  const status = (state.avgTps === 0 && state.transactionCount === 0) ?
-    ClusterStatsStatus.Ready : ClusterStatsStatus.Loading;
+  const status =
+    state.avgTps !== 0 && state.transactionCount !== 0
+      ? ClusterStatsStatus.Ready
+      : ClusterStatsStatus.Loading;
 
-  if (
-    action.type === PerformanceInfoActionType.SetPerfSamples &&
-    action.data.samples
-  ) {
-    let short = action.data.samples.map((sample) => {
-      return sample.numTransactions / sample.samplePeriodSecs;
-    });
+  switch (action.type) {
+    case PerformanceInfoActionType.SetPerfSamples:
+      let short = action.data.map((sample) => {
+        return sample.numTransactions / sample.samplePeriodSecs;
+      });
 
-    const historyMaxTps = Math.max(...short);
-    const avgTps = short[0];
-    const medium = downsampleByFactor(short, 4);
-    const long = downsampleByFactor(medium, 3);
-    short = round(short.slice(0, 30)).reverse();
+      const historyMaxTps = Math.max(...short);
+      const avgTps = short[0];
+      const medium = downsampleByFactor(short, 4);
+      const long = downsampleByFactor(medium, 3);
+      short = round(short.slice(0, 30)).reverse();
 
-    const perfHistory = {
-      short: short,
-      medium: round(medium.slice(0, 30)).reverse(),
-      long: round(long.slice(0, 30)).reverse(),
-    };
+      const perfHistory = {
+        short: short,
+        medium: round(medium.slice(0, 30)).reverse(),
+        long: round(long.slice(0, 30)).reverse(),
+      };
 
-    return {
-      ...state,
-      historyMaxTps,
-      avgTps,
-      perfHistory,
-      status
-    };
+      return {
+        ...state,
+        historyMaxTps,
+        avgTps,
+        perfHistory,
+        status,
+      };
+    case PerformanceInfoActionType.SetTransactionCount:
+      return {
+        ...state,
+        transactionCount: action.data,
+        status,
+      };
+    case PerformanceInfoActionType.SetError:
+      return {
+        ...state,
+        status: ClusterStatsStatus.Error,
+      };
+    case PerformanceInfoActionType.Reset:
+      return {
+        ...action.data,
+      };
+    default:
+      return {
+        ...state,
+      };
   }
-
-  if (
-    action.type === PerformanceInfoActionType.SetTransactionCount &&
-    action.data.transactionCount
-  ) {
-    return {
-      ...state,
-      transactionCount: action.data.transactionCount,
-      status
-    };
-  }
-
-  if (action.type === PerformanceInfoActionType.SetErroredOut) {
-    return {
-      ...state,
-      status: ClusterStatsStatus.Error
-    };
-  }
-
-  if (
-    action.type === PerformanceInfoActionType.Reset &&
-    action.data.initialState
-  ) {
-    return {
-      ...action.data.initialState,
-    };
-  }
-
-  return {
-    ...state
-  };
 }
 
 function downsampleByFactor(series: number[], factor: number) {

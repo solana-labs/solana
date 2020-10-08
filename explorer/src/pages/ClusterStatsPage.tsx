@@ -1,16 +1,17 @@
 import React from "react";
-
 import { TableCardBody } from "components/common/TableCardBody";
 import { Slot } from "components/common/Slot";
 import {
   ClusterStatsStatus,
   useDashboardInfo,
   usePerformanceInfo,
-  useSetActive,
+  useStatsProvider,
 } from "providers/stats/solanaClusterStats";
 import { slotsToHumanString } from "utils";
 import { useCluster } from "providers/cluster";
 import { TpsCard } from "components/TpsCard";
+
+const CLUSTER_STATS_TIMEOUT = 10000;
 
 export function ClusterStatsPage() {
   return (
@@ -33,7 +34,7 @@ export function ClusterStatsPage() {
 function StatsCardBody() {
   const dashboardInfo = useDashboardInfo();
   const performanceInfo = usePerformanceInfo();
-  const setActive = useSetActive();
+  const { setActive } = useStatsProvider();
   const { cluster } = useCluster();
 
   React.useEffect(() => {
@@ -42,15 +43,13 @@ function StatsCardBody() {
   }, [setActive, cluster]);
 
   if (
-    performanceInfo.status === ClusterStatsStatus.Loading ||
-    dashboardInfo.status === ClusterStatsStatus.Loading
+    performanceInfo.status !== ClusterStatsStatus.Ready ||
+    dashboardInfo.status !== ClusterStatsStatus.Ready
   ) {
-    return (
-      <div className="card-body text-center">
-        <span className="spinner-grow spinner-grow-sm mr-2"></span>
-        Loading
-      </div>
-    );
+    const error =
+      performanceInfo.status === ClusterStatsStatus.Error ||
+      dashboardInfo.status === ClusterStatsStatus.Error;
+    return <StatsNotReady error={error} />;
   }
 
   const { avgBlockTime_1h, avgBlockTime_1min, epochInfo } = dashboardInfo;
@@ -96,5 +95,46 @@ function StatsCardBody() {
         <td className="text-lg-right text-monospace">{epochTimeRemaining} </td>
       </tr>
     </TableCardBody>
+  );
+}
+
+export function StatsNotReady({ error }: { error: boolean }) {
+  const { setTimedOut, retry, active } = useStatsProvider();
+  const { cluster } = useCluster();
+
+  React.useEffect(() => {
+    let timedOut = 0;
+    if (!error) {
+      timedOut = setTimeout(setTimedOut, CLUSTER_STATS_TIMEOUT);
+    }
+    return () => {
+      if (timedOut) {
+        clearTimeout(timedOut);
+      }
+    };
+  }, [setTimedOut, cluster, error]);
+
+  if (error || !active) {
+    return (
+      <div className="card-body text-center">
+        There was a problem loading cluster stats.{" "}
+        <button
+          className="btn btn-white btn-sm"
+          onClick={() => {
+            retry();
+          }}
+        >
+          <span className="fe fe-refresh-cw mr-2"></span>
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card-body text-center">
+      <span className="spinner-grow spinner-grow-sm mr-2"></span>
+      Loading
+    </div>
   );
 }

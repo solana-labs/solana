@@ -17,75 +17,80 @@ export type DashboardInfo = {
 export enum DashboardInfoActionType {
   SetPerfSamples,
   SetEpochInfo,
-  SetErroredOut,
+  SetError,
   Reset,
 }
 
-export type DashboardInfoAction = {
-  type: DashboardInfoActionType;
-  data: {
-    samples?: PerfSample[];
-    epochInfo?: any;
-    initialState?: DashboardInfo;
-  };
+export type DashboardInfoActionSetPerfSamples = {
+  type: DashboardInfoActionType.SetPerfSamples;
+  data: PerfSample[];
 };
+
+export type DashboardInfoActionSetEpochInfo = {
+  type: DashboardInfoActionType.SetEpochInfo;
+  data: any;
+};
+
+export type DashboardInfoActionReset = {
+  type: DashboardInfoActionType.Reset;
+  data: DashboardInfo;
+};
+
+export type DashboardInfoActionSetError = {
+  type: DashboardInfoActionType.SetError;
+  data: string;
+};
+
+export type DashboardInfoAction =
+  | DashboardInfoActionSetPerfSamples
+  | DashboardInfoActionSetEpochInfo
+  | DashboardInfoActionReset
+  | DashboardInfoActionSetError;
 
 export function dashboardInfoReducer(
   state: DashboardInfo,
   action: DashboardInfoAction
 ) {
-  const status = (state.avgBlockTime_1h !== 0 && state.epochInfo.absoluteSlot !== 0) ?
-    ClusterStatsStatus.Ready : ClusterStatsStatus.Loading;
+  const status =
+    state.avgBlockTime_1h !== 0 && state.epochInfo.absoluteSlot !== 0
+      ? ClusterStatsStatus.Ready
+      : ClusterStatsStatus.Loading;
 
-  if (
-    action.type === DashboardInfoActionType.SetPerfSamples &&
-    action.data.samples
-  ) {
-    const samples = action.data.samples.map((sample) => {
-      return sample.samplePeriodSecs / sample.numSlots;
-    });
+  switch (action.type) {
+    case DashboardInfoActionType.SetPerfSamples:
+      const samples = action.data.map((sample) => {
+        return sample.samplePeriodSecs / sample.numSlots;
+      });
 
-    const avgBlockTime_1h =
-      samples.reduce((sum: number, cur: number) => {
-        return sum + cur;
-      }, 0) / 60;
+      const avgBlockTime_1h =
+        samples.reduce((sum: number, cur: number) => {
+          return sum + cur;
+        }, 0) / 60;
 
-    return {
-      ...state,
-      avgBlockTime_1h,
-      avgBlockTime_1min: samples[0],
-      status
-    };
+      return {
+        ...state,
+        avgBlockTime_1h,
+        avgBlockTime_1min: samples[0],
+        status,
+      };
+    case DashboardInfoActionType.SetEpochInfo:
+      return {
+        ...state,
+        epochInfo: action.data,
+        status,
+      };
+    case DashboardInfoActionType.SetError:
+      return {
+        ...state,
+        status: ClusterStatsStatus.Error,
+      };
+    case DashboardInfoActionType.Reset:
+      return {
+        ...action.data,
+      };
+    default:
+      return {
+        ...state,
+      };
   }
-
-  if (
-    action.type === DashboardInfoActionType.SetEpochInfo &&
-    action.data.epochInfo
-  ) {
-    return {
-      ...state,
-      epochInfo: action.data.epochInfo,
-      status
-    };
-  }
-
-  if (action.type === DashboardInfoActionType.SetErroredOut) {
-    return {
-      ...state,
-      status: ClusterStatsStatus.Error
-    };
-  }
-
-  if (
-    action.type === DashboardInfoActionType.Reset &&
-    action.data.initialState
-  ) {
-    return {
-      ...action.data.initialState,
-    };
-  }
-
-  return {
-    ...state
-  };
 }
