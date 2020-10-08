@@ -1,4 +1,8 @@
-#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
+#![cfg_attr(
+    RUSTC_WITH_SPECIALIZATION,
+    allow(incomplete_features),
+    feature(specialization)
+)]
 pub mod accounts;
 pub mod accounts_background_service;
 pub mod accounts_db;

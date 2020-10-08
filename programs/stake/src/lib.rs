@@ -1,4 +1,8 @@
-#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
+#![cfg_attr(
+    RUSTC_WITH_SPECIALIZATION,
+    allow(incomplete_features),
+    feature(specialization)
+)]
 use solana_sdk::genesis_config::GenesisConfig;
 
 pub mod config;
