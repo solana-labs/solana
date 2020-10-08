@@ -1,5 +1,8 @@
-use crate::args::{BalancesArgs, DistributeTokensArgs, StakeArgs, TransactionLogArgs};
-use crate::db::{self, TransactionInfo};
+use crate::{
+    args::{BalancesArgs, DistributeTokensArgs, StakeArgs, TransactionLogArgs},
+    db::{self, TransactionInfo},
+    spl_token_helpers::*,
+};
 use chrono::prelude::*;
 use console::style;
 use csv::{ReaderBuilder, Trim};
@@ -7,6 +10,7 @@ use indexmap::IndexMap;
 use indicatif::{ProgressBar, ProgressStyle};
 use pickledb::PickleDb;
 use serde::{Deserialize, Serialize};
+use solana_account_decoder::parse_token::spl_token_v2_0_pubkey;
 use solana_banks_client::{BanksClient, BanksClientExt};
 use solana_sdk::{
     commitment_config::CommitmentLevel,
@@ -22,6 +26,7 @@ use solana_stake_program::{
     stake_instruction::{self, LockupArgs},
     stake_state::{Authorized, Lockup, StakeAuthorize},
 };
+use solana_transaction_status::parse_token::spl_token_v2_0_instruction;
 use spl_token_v2_0::solana_program::program_error::ProgramError;
 use std::{
     cmp::{self},
@@ -154,12 +159,28 @@ fn distribution_instructions(
     args: &DistributeTokensArgs,
     lockup_date: Option<DateTime<Utc>>,
 ) -> Vec<Instruction> {
-    if args.stake_args.is_none() {
+    if args.stake_args.is_none() && args.spl_token_args.is_none() {
         let from = args.sender_keypair.pubkey();
         let to = allocation.recipient.parse().unwrap();
         let lamports = sol_to_lamports(allocation.amount);
         let instruction = system_instruction::transfer(&from, &to, lamports);
         return vec![instruction];
+    }
+
+    if let Some(spl_token_args) = &args.spl_token_args {
+        let to = allocation.recipient.parse().unwrap();
+        let spl_instruction = spl_token_v2_0::instruction::transfer_checked(
+            &spl_token_v2_0::id(),
+            &spl_token_v2_0_pubkey(&spl_token_args.token_account_address),
+            &spl_token_v2_0_pubkey(&spl_token_args.mint),
+            &spl_token_v2_0_pubkey(&to),
+            &spl_token_v2_0_pubkey(&args.sender_keypair.pubkey()),
+            &[],
+            spl_token_amount(allocation.amount, spl_token_args.decimals),
+            spl_token_args.decimals,
+        )
+        .unwrap();
+        return vec![spl_token_v2_0_instruction(spl_instruction)];
     }
 
     let stake_args = args.stake_args.as_ref().unwrap();
