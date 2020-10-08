@@ -1,6 +1,6 @@
 [package]
 name = "solana-sdk-wasm"
-version = "1.4.0"
+version = "1.5.0"
 description = "Solana SDK Wasm"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
