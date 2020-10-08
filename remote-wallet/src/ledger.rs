@@ -339,6 +339,7 @@ impl RemoteWallet for LedgerWallet {
             .clone()
             .unwrap_or("Unknown")
             .to_string();
+        let host_device_path = dev_info.path().to_string_lossy().to_string();
         let version = self.get_firmware_version()?;
         self.version = version;
         let pubkey_result = self.get_pubkey(&DerivationPath::default(), false);
@@ -350,6 +351,7 @@ impl RemoteWallet for LedgerWallet {
             model,
             manufacturer,
             serial,
+            host_device_path,
             pubkey,
             error,
         })
@@ -521,17 +523,17 @@ pub fn get_ledger_from_info(
             return Err(device.error.clone().unwrap());
         }
     }
-    let mut matches: Vec<(Pubkey, String)> = matches
+    let mut matches: Vec<(String, String)> = matches
         .filter(|&device_info| device_info.error.is_none())
-        .map(|device_info| (device_info.pubkey, device_info.get_pretty_path()))
+        .map(|device_info| (device_info.host_device_path.clone(), device_info.get_pretty_path()))
         .collect();
     if matches.is_empty() {
         return Err(RemoteWalletError::NoDeviceFound);
     }
     matches.sort_by(|a, b| a.1.cmp(&b.1));
-    let (pubkeys, device_paths): (Vec<Pubkey>, Vec<String>) = matches.into_iter().unzip();
+    let (host_device_paths, device_paths): (Vec<Pubkey>, Vec<String>) = matches.into_iter().unzip();
 
-    let wallet_base_pubkey = if pubkeys.len() > 1 {
+    let wallet_host_device_path = if host_device_paths.len() > 1 {
         let selection = Select::with_theme(&ColorfulTheme::default())
             .with_prompt(&format!(
                 "Multiple hardware wallets found. Please select a device for {:?}",
@@ -541,11 +543,11 @@ pub fn get_ledger_from_info(
             .items(&device_paths[..])
             .interact()
             .unwrap();
-        pubkeys[selection]
+        &host_device_paths[selection]
     } else {
-        pubkeys[0]
+        &host_device_paths[0]
     };
-    wallet_manager.get_ledger(&wallet_base_pubkey)
+    wallet_manager.get_ledger(wallet_host_device_path)
 }
 
 //
