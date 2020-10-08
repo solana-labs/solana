@@ -525,13 +525,16 @@ pub fn get_ledger_from_info(
     }
     let mut matches: Vec<(String, String)> = matches
         .filter(|&device_info| device_info.error.is_none())
-        .map(|device_info| (device_info.host_device_path.clone(), device_info.get_pretty_path()))
+        .map(|device_info| {
+            let query_item = format!("{} ({})", device_info.get_pretty_path(), device_info.model,);
+            (device_info.host_device_path.clone(), query_item)
+        })
         .collect();
     if matches.is_empty() {
         return Err(RemoteWalletError::NoDeviceFound);
     }
     matches.sort_by(|a, b| a.1.cmp(&b.1));
-    let (host_device_paths, device_paths): (Vec<Pubkey>, Vec<String>) = matches.into_iter().unzip();
+    let (host_device_paths, items): (Vec<String>, Vec<String>) = matches.into_iter().unzip();
 
     let wallet_host_device_path = if host_device_paths.len() > 1 {
         let selection = Select::with_theme(&ColorfulTheme::default())
@@ -540,7 +543,7 @@ pub fn get_ledger_from_info(
                 keypair_name
             ))
             .default(0)
-            .items(&device_paths[..])
+            .items(&items[..])
             .interact()
             .unwrap();
         &host_device_paths[selection]
