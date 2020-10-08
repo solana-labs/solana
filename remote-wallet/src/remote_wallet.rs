@@ -152,11 +152,14 @@ impl RemoteWalletManager {
 
     /// Get a particular wallet
     #[allow(unreachable_patterns)]
-    pub fn get_ledger(&self, pubkey: &Pubkey) -> Result<Arc<LedgerWallet>, RemoteWalletError> {
+    pub fn get_ledger(
+        &self,
+        host_device_path: &str,
+    ) -> Result<Arc<LedgerWallet>, RemoteWalletError> {
         self.devices
             .read()
             .iter()
-            .find(|device| &device.info.pubkey == pubkey)
+            .find(|device| device.info.host_device_path == host_device_path)
             .ok_or(RemoteWalletError::PubkeyNotFound)
             .and_then(|device| match &device.wallet_type {
                 RemoteWalletType::Ledger(ledger) => Ok(ledger.clone()),
@@ -237,6 +240,8 @@ pub struct RemoteWalletInfo {
     pub manufacturer: String,
     /// RemoteWallet device serial number
     pub serial: String,
+    /// RemoteWallet host device path
+    pub host_device_path: String,
     /// Base pubkey of device at Solana derivation path
     pub pubkey: Pubkey,
     /// Initial read error
@@ -449,6 +454,7 @@ mod tests {
             model: "nano-s".to_string(),
             manufacturer: "ledger".to_string(),
             serial: "".to_string(),
+            host_device_path: "/host/device/path".to_string(),
             pubkey,
             error: None,
         }));
@@ -465,6 +471,7 @@ mod tests {
             model: "nano-s".to_string(),
             manufacturer: "ledger".to_string(),
             serial: "".to_string(),
+            host_device_path: "/host/device/path".to_string(),
             pubkey,
             error: None,
         }));
@@ -481,6 +488,7 @@ mod tests {
             model: "nano-s".to_string(),
             manufacturer: "ledger".to_string(),
             serial: "".to_string(),
+            host_device_path: "/host/device/path".to_string(),
             pubkey,
             error: None,
         }));
@@ -497,6 +505,7 @@ mod tests {
             model: "nano-s".to_string(),
             manufacturer: "ledger".to_string(),
             serial: "".to_string(),
+            host_device_path: "/host/device/path".to_string(),
             pubkey,
             error: None,
         }));
@@ -513,6 +522,7 @@ mod tests {
             model: "nano-s".to_string(),
             manufacturer: "ledger".to_string(),
             serial: "".to_string(),
+            host_device_path: "/host/device/path".to_string(),
             pubkey,
             error: None,
         }));
@@ -531,6 +541,7 @@ mod tests {
             model: "nano-s".to_string(),
             manufacturer: "ledger".to_string(),
             serial: "".to_string(),
+            host_device_path: "/host/device/path".to_string(),
             pubkey: Pubkey::default(),
             error: None,
         }));
@@ -547,6 +558,7 @@ mod tests {
             model: "".to_string(),
             manufacturer: "ledger".to_string(),
             serial: "".to_string(),
+            host_device_path: "/host/device/path".to_string(),
             pubkey: Pubkey::default(),
             error: None,
         }));
@@ -581,6 +593,7 @@ mod tests {
             manufacturer: "Ledger".to_string(),
             model: "Nano S".to_string(),
             serial: "0001".to_string(),
+            host_device_path: "/host/device/path".to_string(),
             pubkey,
             error: None,
         };
@@ -592,6 +605,8 @@ mod tests {
         test_info.model = "Other".to_string();
         assert!(info.matches(&test_info));
         test_info.model = "Nano S".to_string();
+        assert!(info.matches(&test_info));
+        test_info.host_device_path = "/host/device/path".to_string();
         assert!(info.matches(&test_info));
         let another_pubkey = Pubkey::new_rand();
         test_info.pubkey = another_pubkey;
@@ -608,6 +623,7 @@ mod tests {
             model: "nano-s".to_string(),
             manufacturer: "ledger".to_string(),
             serial: "".to_string(),
+            host_device_path: "/host/device/path".to_string(),
             pubkey,
             error: None,
         };
