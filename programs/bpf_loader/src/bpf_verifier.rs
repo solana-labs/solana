@@ -54,11 +54,11 @@ pub enum VerifierError {
     InvalidRegister(usize),
 }
 
-fn check_prog_len(prog: &[u8]) -> Result<(), BPFError> {
+fn check_prog_len(prog: &[u8], is_program_size_cap: bool) -> Result<(), BPFError> {
     if prog.len() % ebpf::INSN_SIZE != 0 {
         return Err(VerifierError::ProgramLengthNotMultiple.into());
     }
-    if prog.len() > ebpf::PROG_MAX_SIZE {
+    if is_program_size_cap && prog.len() > ebpf::PROG_MAX_SIZE {
         return Err(VerifierError::ProgramTooLarge(prog.len() / ebpf::INSN_SIZE).into());
     }
 
@@ -139,8 +139,8 @@ fn check_imm_register(insn: &ebpf::Insn, insn_ptr: usize) -> Result<(), Verifier
 }
 
 #[rustfmt::skip]
-pub fn check(prog: &[u8]) -> Result<(), BPFError> {
-    check_prog_len(prog)?;
+pub fn check(prog: &[u8], is_program_size_cap: bool) -> Result<(), BPFError> {
+    check_prog_len(prog, is_program_size_cap)?;
 
     let mut insn_ptr: usize = 0;
     while insn_ptr * ebpf::INSN_SIZE < prog.len() {
