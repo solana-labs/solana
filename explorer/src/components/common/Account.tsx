@@ -1,6 +1,7 @@
 import React from "react";
 import { Address } from "./Address";
 import { Account } from "providers/accounts";
+import { lamportsToSolString } from "utils";
 
 type AccountHeaderProps = {
   title: string;
@@ -29,6 +30,18 @@ export function AccountAddressRow({ account }: AccountProps) {
       <td>Address</td>
       <td className="text-lg-right">
         <Address pubkey={account.pubkey} alignRight raw />
+      </td>
+    </tr>
+  );
+}
+
+export function AccountBalanceRow({ account }: AccountProps) {
+  const { lamports } = account;
+  return (
+    <tr>
+      <td>Balance (SOL)</td>
+      <td className="text-lg-right text-uppercase">
+        {lamportsToSolString(lamports)}
       </td>
     </tr>
   );

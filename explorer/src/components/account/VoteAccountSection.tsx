@@ -6,7 +6,11 @@ import { TableCardBody } from "components/common/TableCardBody";
 import { Address } from "components/common/Address";
 import { VoteAccount } from "validators/accounts/vote";
 import { displayTimestamp } from "utils/date";
-import { AccountHeader, AccountAddressRow } from "components/common/Account";
+import {
+  AccountHeader,
+  AccountAddressRow,
+  AccountBalanceRow,
+} from "components/common/Account";
 
 export function VoteAccountSection({
   account,
@@ -35,6 +39,7 @@ function VoteAccountCard({
 
       <TableCardBody>
         <AccountAddressRow account={account} />
+        <AccountBalanceRow account={account} />
 
         <tr>
           <td>

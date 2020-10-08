@@ -4,7 +4,11 @@ import { Account, useFetchAccountInfo } from "providers/accounts";
 import { TableCardBody } from "components/common/TableCardBody";
 import { Address } from "components/common/Address";
 import { NonceAccount } from "validators/accounts/nonce";
-import { AccountHeader, AccountAddressRow } from "components/common/Account";
+import {
+  AccountHeader,
+  AccountAddressRow,
+  AccountBalanceRow,
+} from "components/common/Account";
 
 export function NonceAccountSection({
   account,
@@ -23,6 +27,8 @@ export function NonceAccountSection({
 
       <TableCardBody>
         <AccountAddressRow account={account} />
+
+        <AccountBalanceRow account={account} />
 
         <tr>
           <td>Authority</td>

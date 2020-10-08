@@ -3,7 +3,11 @@ import React from "react";
 import { Account, useFetchAccountInfo } from "providers/accounts";
 import { SysvarAccount } from "validators/accounts/sysvar";
 import { TableCardBody } from "components/common/TableCardBody";
-import { AccountHeader, AccountAddressRow } from "components/common/Account";
+import {
+  AccountHeader,
+  AccountAddressRow,
+  AccountBalanceRow,
+} from "components/common/Account";
 import { displayTimestamp } from "utils/date";
 
 export function SysvarAccountSection({
@@ -96,6 +100,7 @@ function SysvarAccountRecentBlockhashesCard({
 
       <TableCardBody>
         <AccountAddressRow account={account} />
+        <AccountBalanceRow account={account} />
       </TableCardBody>
     </div>
   );
@@ -117,6 +122,7 @@ function SysvarAccountSlotHashes({
 
       <TableCardBody>
         <AccountAddressRow account={account} />
+        <AccountBalanceRow account={account} />
       </TableCardBody>
     </div>
   );
@@ -145,6 +151,7 @@ function SysvarAccountSlotHistory({
 
       <TableCardBody>
         <AccountAddressRow account={account} />
+        <AccountBalanceRow account={account} />
 
         <tr>
           <td className="align-top">
@@ -180,6 +187,7 @@ function SysvarAccountStakeHistory({
 
       <TableCardBody>
         <AccountAddressRow account={account} />
+        <AccountBalanceRow account={account} />
       </TableCardBody>
     </div>
   );
@@ -199,6 +207,7 @@ function SysvarAccountFeesCard({
 
       <TableCardBody>
         <AccountAddressRow account={account} />
+        <AccountBalanceRow account={account} />
 
         <tr>
           <td>Lamports Per Signature</td>
@@ -228,6 +237,7 @@ function SysvarAccountEpochScheduleCard({
 
       <TableCardBody>
         <AccountAddressRow account={account} />
+        <AccountBalanceRow account={account} />
 
         <tr>
           <td>Slots Per Epoch</td>
@@ -283,6 +293,7 @@ function SysvarAccountClockCard({
 
       <TableCardBody>
         <AccountAddressRow account={account} />
+        <AccountBalanceRow account={account} />
 
         <tr>
           <td>Timestamp</td>
@@ -326,6 +337,7 @@ function SysvarAccountRentCard({
 
       <TableCardBody>
         <AccountAddressRow account={account} />
+        <AccountBalanceRow account={account} />
 
         <tr>
           <td>Burn Percent</td>
@@ -371,6 +383,7 @@ function SysvarAccountRewardsCard({
 
       <TableCardBody>
         <AccountAddressRow account={account} />
+        <AccountBalanceRow account={account} />
 
         <tr>
           <td>Validator Point Value</td>

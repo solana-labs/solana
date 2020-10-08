@@ -3,7 +3,11 @@ import React from "react";
 import { Account, useFetchAccountInfo } from "providers/accounts";
 import { TableCardBody } from "components/common/TableCardBody";
 import { ConfigAccount } from "validators/accounts/config";
-import { AccountAddressRow, AccountHeader } from "components/common/Account";
+import {
+  AccountAddressRow,
+  AccountBalanceRow,
+  AccountHeader,
+} from "components/common/Account";
 import { PublicKey } from "@solana/web3.js";
 import { Address } from "components/common/Address";
 
@@ -88,6 +92,8 @@ function ValidatorInfoCard({
 
       <TableCardBody>
         <AccountAddressRow account={account} />
+
+        <AccountBalanceRow account={account} />
 
         {configAccount.info.configData.name && (
           <tr>
