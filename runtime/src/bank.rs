@@ -2117,12 +2117,17 @@ impl Bank {
         cache.remove(pubkey);
     }
 
-    pub fn truncate_log_messages(log_messages: &mut TransactionLogMessages, max_bytes: usize) {
+    pub fn truncate_log_messages(
+        log_messages: &mut TransactionLogMessages,
+        max_bytes: usize,
+        truncate_message: String,
+    ) {
         let mut size = 0;
         for (i, line) in log_messages.iter().enumerate() {
             size += line.len();
             if size > max_bytes {
                 log_messages.truncate(i);
+                log_messages.push(truncate_message);
                 return;
             }
         }
@@ -2229,17 +2234,11 @@ impl Bank {
                                 .unwrap_or_default()
                                 .into();
 
-                        let line_count = log_messages.len();
-
                         Self::truncate_log_messages(
                             &mut log_messages,
                             TRANSACTION_LOG_MESSAGES_BYTES_LIMIT,
+                            String::from("<< Transaction log truncated to 100KB >>\n"),
                         );
-
-                        if log_messages.len() != line_count {
-                            log_messages
-                                .push(String::from("<< Transaction log truncated to 100KB >>\n"));
-                        }
 
                         transaction_logs.push(log_messages);
                     }
@@ -9483,13 +9482,25 @@ mod tests {
         ];
 
         // messages under limit
-        Bank::truncate_log_messages(&mut messages, 10000);
+        Bank::truncate_log_messages(
+            &mut messages,
+            10000,
+            String::from("<< Transaction log truncated to 10,000 bytes >>\n"),
+        );
         assert_eq!(messages.len(), 3);
 
         // messages truncated to two lines
         let maxsize = messages.get(0).unwrap().len() + messages.get(1).unwrap().len();
-        Bank::truncate_log_messages(&mut messages, maxsize);
-        assert_eq!(messages.len(), 2);
+        Bank::truncate_log_messages(
+            &mut messages,
+            maxsize,
+            String::from("<< Transaction log truncated >>\n"),
+        );
+        assert_eq!(messages.len(), 3);
+        assert_eq!(
+            messages.get(2).unwrap(),
+            "<< Transaction log truncated >>\n"
+        );
 
         // messages truncated to one line
         let mut messages = vec![
@@ -9499,7 +9510,15 @@ mod tests {
         ];
 
         let maxsize = messages.get(0).unwrap().len() + 4;
-        Bank::truncate_log_messages(&mut messages, maxsize);
-        assert_eq!(messages.len(), 1);
+        Bank::truncate_log_messages(
+            &mut messages,
+            maxsize,
+            String::from("<< Transaction log truncated >>\n"),
+        );
+        assert_eq!(messages.len(), 2);
+        assert_eq!(
+            messages.get(1).unwrap(),
+            "<< Transaction log truncated >>\n"
+        );
     }
 }
