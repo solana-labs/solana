@@ -106,6 +106,8 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
+pub const TRANSACTION_LOG_MESSAGES_BYTES_LIMIT: usize = 100 * 1000;
+
 type BankStatusCache = StatusCache<Result<()>>;
 #[frozen_abi(digest = "EEFPLdPhngiBojqEnDMkoEGjyYYHNWPHnenRf8b9diqd")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
@@ -2115,6 +2117,17 @@ impl Bank {
         cache.remove(pubkey);
     }
 
+    pub fn truncate_log_messages(log_messages: &mut TransactionLogMessages, max_bytes: usize) {
+        let mut size = 0;
+        for (i, line) in log_messages.iter().enumerate() {
+            size += line.len();
+            if size > max_bytes {
+                log_messages.truncate(i);
+                return;
+            }
+        }
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -2211,11 +2224,24 @@ impl Bank {
                     );
 
                     if enable_log_recording {
-                        transaction_logs.push(
+                        let mut log_messages: TransactionLogMessages =
                             Rc::try_unwrap(log_collector.unwrap_or_default())
                                 .unwrap_or_default()
-                                .into(),
+                                .into();
+
+                        let line_count = log_messages.len();
+
+                        Self::truncate_log_messages(
+                            &mut log_messages,
+                            TRANSACTION_LOG_MESSAGES_BYTES_LIMIT,
                         );
+
+                        if log_messages.len() != line_count {
+                            log_messages
+                                .push(String::from("<< Transaction log truncated to 100KB >>\n"));
+                        }
+
+                        transaction_logs.push(log_messages);
                     }
 
                     Self::compile_recorded_instructions(
@@ -9446,5 +9472,34 @@ mod tests {
         bank1.rehash();
         let new_bank1_hash = bank1.hash();
         assert_eq!(old_hash, new_bank1_hash);
+    }
+
+    #[test]
+    fn test_truncate_log_messages() {
+        let mut messages = vec![
+            String::from("This is line one\n"),
+            String::from("This is line two\n"),
+            String::from("This is line three\n"),
+        ];
+
+        // messages under limit
+        Bank::truncate_log_messages(&mut messages, 10000);
+        assert_eq!(messages.len(), 3);
+
+        // messages truncated to two lines
+        let maxsize = messages.get(0).unwrap().len() + messages.get(1).unwrap().len();
+        Bank::truncate_log_messages(&mut messages, maxsize);
+        assert_eq!(messages.len(), 2);
+
+        // messages truncated to one line
+        let mut messages = vec![
+            String::from("Line 1\n"),
+            String::from("Line 2\n"),
+            String::from("Line 3\n"),
+        ];
+
+        let maxsize = messages.get(0).unwrap().len() + 4;
+        Bank::truncate_log_messages(&mut messages, maxsize);
+        assert_eq!(messages.len(), 1);
     }
 }
