@@ -21,6 +21,10 @@ pub mod pico_inflation {
     solana_sdk::declare_id!("GaBtBJvmS4Arjj5W1NmFcyvPjsHN38UGYDq2MDwbs9Qu");
 }
 
+pub mod inflation_kill_switch {
+    solana_sdk::declare_id!("SECCKV5UVUsr8sTVSVAzULjdm87r7mLPaqH2FGZjevR");
+}
+
 pub mod spl_token_v2_multisig_fix {
     solana_sdk::declare_id!("E5JiFDQCwyC6QfT9REFyMpfK2mHcmv1GUDySU1Ue7TYv");
 }
@@ -52,6 +56,7 @@ lazy_static! {
         (secp256k1_program_enabled::id(), "secp256k1 program"),
         (consistent_recent_blockhashes_sysvar::id(), "consistent recentblockhashes sysvar"),
         (pico_inflation::id(), "pico-inflation"),
+        (inflation_kill_switch::id(), "inflation kill switch"),
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
         (bpf_loader2_program::id(), "bpf_loader2 program"),
         (compute_budget_config2::id(), "1ms compute budget"),
