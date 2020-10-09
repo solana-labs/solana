@@ -99,22 +99,12 @@ impl ComputeBudget {
         let mut compute_budget =
         // Original
         ComputeBudget {
-<<<<<<< HEAD
-            max_units: 200_000,
-            log_units: 100,
-            log_64_units: 100,
-            create_program_address_units: 1500,
-            invoke_units: 1000,
-            max_invoke_depth: 2,
-=======
             max_units: 100_000,
             log_units: 0,
             log_64_units: 0,
             create_program_address_units: 0,
             invoke_units: 0,
             max_invoke_depth: 1,
-            sha256_base_cost: 85,
-            sha256_byte_cost: 1,
         };
 
         if feature_set.is_active(&compute_budget_balancing::id()) {
@@ -126,7 +116,6 @@ impl ComputeBudget {
                 invoke_units: 1000,
                 ..compute_budget
             };
->>>>>>> 2cd7cd314... Bump max invoke depth to 4 (#12742)
         }
         if feature_set.is_active(&max_invoke_depth_4::id()) {
             compute_budget = ComputeBudget {

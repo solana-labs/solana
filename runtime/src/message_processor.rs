@@ -416,23 +416,7 @@ impl MessageProcessor {
     }
 
     fn get_compute_budget(feature_set: &FeatureSet) -> ComputeBudget {
-<<<<<<< HEAD
-        if feature_set.is_active(&compute_budget_config2::id()) {
-            ComputeBudget::default()
-        } else {
-            // Original
-            ComputeBudget {
-                max_units: 100_000,
-                log_units: 0,
-                log_64_units: 0,
-                create_program_address_units: 0,
-                invoke_units: 0,
-                max_invoke_depth: 2,
-            }
-        }
-=======
         ComputeBudget::new(feature_set)
->>>>>>> 2cd7cd314... Bump max invoke depth to 4 (#12742)
     }
 
     /// Create the KeyedAccounts that will be passed to the program
