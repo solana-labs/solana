@@ -643,6 +643,43 @@ fn test_program_bpf_invoke() {
     }
 }
 
+#[cfg(feature = "bpf_rust")]
+#[test]
+fn test_program_bpf_call_depth() {
+    solana_logger::setup();
+
+    println!("Test program: solana_bpf_rust_call_depth");
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin_loader(&name, id, entrypoint);
+    let bank_client = BankClient::new(bank);
+    let program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_call_depth",
+    );
+
+    let instruction = Instruction::new(
+        program_id,
+        &(ComputeBudget::default().max_call_depth - 1),
+        vec![],
+    );
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert!(result.is_ok());
+
+    let instruction =
+        Instruction::new(program_id, &ComputeBudget::default().max_call_depth, vec![]);
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert!(result.is_err());
+}
+
 #[test]
 fn assert_instruction_count() {
     solana_logger::setup();
