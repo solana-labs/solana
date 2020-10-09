@@ -275,7 +275,7 @@ function MoreSection({
       {tab === "blockhashes" &&
         data?.program === "sysvar" &&
         data.parsed.type === "recentBlockhashes" && (
-          <BlockhashesCard sysvarAccount={data.parsed} />
+          <BlockhashesCard blockhashes={data.parsed.info} />
         )}
     </>
   );
@@ -290,10 +290,10 @@ function getTabs(data?: ProgramData): Tab[] {
     },
   ];
 
-  const programTypeKey = [
-    data?.program,
-    (data?.parsed as { type: any })?.type,
-  ].join(":");
+  let programTypeKey = "";
+  if (data && "type" in data.parsed) {
+    programTypeKey = `${data.program}:${data.parsed.type}`;
+  }
 
   if (data && data.program in TABS_LOOKUP) {
     tabs.push(TABS_LOOKUP[data.program]);

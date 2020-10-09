@@ -1,16 +1,14 @@
 import React from "react";
 import {
-  SysvarAccount,
   RecentBlockhashesInfo,
   RecentBlockhashesEntry,
 } from "validators/accounts/sysvar";
 
 export function BlockhashesCard({
-  sysvarAccount,
+  blockhashes,
 }: {
-  sysvarAccount: SysvarAccount;
+  blockhashes: RecentBlockhashesInfo;
 }) {
-  const blockhashes = sysvarAccount.info as RecentBlockhashesInfo;
   return (
     <>
       <div className="card">
