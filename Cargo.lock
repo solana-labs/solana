@@ -4659,7 +4659,12 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-account-decoder",
+<<<<<<< HEAD
  "solana-sdk 1.4.0",
+=======
+ "solana-runtime",
+ "solana-sdk 1.5.0",
+>>>>>>> c5c8da1ac... Expose all rewards (fees, rent, voting and staking) in RPC getConfirmedBlock and the cli
  "solana-stake-program",
  "solana-vote-program",
  "spl-memo",

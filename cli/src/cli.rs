@@ -98,7 +98,7 @@ pub enum CliCommand {
     Fees,
     FirstAvailableBlock,
     GetBlock {
-        slot: Slot,
+        slot: Option<Slot>,
     },
     GetBlockTime {
         slot: Option<Slot>,

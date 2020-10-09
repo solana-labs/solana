@@ -69,7 +69,7 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     convert::{TryFrom, TryInto},
-    mem,
+    fmt, mem,
     ops::RangeInclusive,
     path::PathBuf,
     ptr,
@@ -525,8 +525,32 @@ impl PartialEq for Bank {
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, AbiExample, Default, Clone, Copy)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, AbiExample, AbiEnumVisitor, Clone, Copy)]
+pub enum RewardType {
+    Fee,
+    Rent,
+    Staking,
+    Voting,
+}
+
+impl fmt::Display for RewardType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                RewardType::Fee => "fee",
+                RewardType::Rent => "rent",
+                RewardType::Staking => "staking",
+                RewardType::Voting => "voting",
+            }
+        )
+    }
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, AbiExample, Clone, Copy)]
 pub struct RewardInfo {
+    pub reward_type: RewardType,
     pub lamports: i64,     // Reward amount
     pub post_balance: u64, // Account balance in lamports after `lamports` was applied
 }
@@ -613,7 +637,7 @@ pub struct Bank {
     /// Track cluster signature throughput and adjust fee rate
     fee_rate_governor: FeeRateGovernor,
 
-    /// Rent that have been collected
+    /// Rent that has been collected
     collected_rent: AtomicU64,
 
     /// latest rent collector, knows the epoch
@@ -645,8 +669,8 @@ pub struct Bank {
     /// Last time when the cluster info vote listener has synced with this bank
     pub last_vote_sync: AtomicU64,
 
-    /// Rewards that were paid out immediately after this bank was created
-    pub rewards: Option<Vec<(Pubkey, RewardInfo)>>,
+    /// Protocol-level rewards that were distributed by this bank
+    pub rewards: RwLock<Vec<(Pubkey, RewardInfo)>>,
 
     pub skip_drop: AtomicBool,
 
@@ -780,7 +804,7 @@ impl Bank {
             feature_builtins: parent.feature_builtins.clone(),
             hard_forks: parent.hard_forks.clone(),
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Relaxed)),
-            rewards: None,
+            rewards: RwLock::new(vec![]),
             skip_drop: AtomicBool::new(false),
             cluster_type: parent.cluster_type,
             lazy_rent_collection: AtomicBool::new(parent.lazy_rent_collection.load(Relaxed)),
@@ -1168,7 +1192,7 @@ impl Bank {
         });
     }
 
-    // update reward for previous epoch
+    // update rewards based on the previous epoch
     fn update_rewards(&mut self, prev_epoch: Epoch) {
         if prev_epoch == self.epoch() {
             return;
@@ -1216,18 +1240,23 @@ impl Bank {
 
         let validator_rewards_paid =
             self.stakes.read().unwrap().vote_balance_and_staked() - vote_balance_and_staked;
-        if let Some(rewards) = self.rewards.as_ref() {
-            assert_eq!(
-                validator_rewards_paid,
-                u64::try_from(
-                    rewards
-                        .iter()
-                        .map(|(_pubkey, reward_info)| reward_info.lamports)
-                        .sum::<i64>()
-                )
-                .unwrap()
-            );
-        }
+        assert_eq!(
+            validator_rewards_paid,
+            u64::try_from(
+                self.rewards
+                    .read()
+                    .unwrap()
+                    .iter()
+                    .map(|(_address, reward_info)| {
+                        match reward_info.reward_type {
+                            RewardType::Voting | RewardType::Staking => reward_info.lamports,
+                            _ => 0,
+                        }
+                    })
+                    .sum::<i64>()
+            )
+            .unwrap()
+        );
 
         // verify that we didn't pay any more than we expected to
         assert!(validator_rewards >= validator_rewards_paid);
@@ -1318,11 +1347,12 @@ impl Bank {
 
         let point_value = PointValue { rewards, points };
 
-        let mut rewards = HashMap::new();
-
+        let mut rewards = vec![];
         // pay according to point value
         for (vote_pubkey, (stake_group, vote_account)) in stake_delegation_accounts.iter_mut() {
             let mut vote_account_changed = false;
+            let voters_account_pre_balance = vote_account.lamports;
+
             for (stake_pubkey, stake_account) in stake_group.iter_mut() {
                 let redeemed = stake_state::redeem_rewards(
                     stake_account,
@@ -1330,24 +1360,19 @@ impl Bank {
                     &point_value,
                     Some(&stake_history),
                 );
-                if let Ok((stakers_reward, voters_reward)) = redeemed {
+                if let Ok((stakers_reward, _voters_reward)) = redeemed {
                     self.store_account(&stake_pubkey, &stake_account);
                     vote_account_changed = true;
 
-                    if voters_reward > 0 {
-                        let reward_info = rewards
-                            .entry(*vote_pubkey)
-                            .or_insert_with(RewardInfo::default);
-                        reward_info.lamports += voters_reward as i64;
-                        reward_info.post_balance = vote_account.lamports;
-                    }
-
                     if stakers_reward > 0 {
-                        let reward_info = rewards
-                            .entry(*stake_pubkey)
-                            .or_insert_with(RewardInfo::default);
-                        reward_info.lamports += stakers_reward as i64;
-                        reward_info.post_balance = stake_account.lamports;
+                        rewards.push((
+                            *stake_pubkey,
+                            RewardInfo {
+                                reward_type: RewardType::Staking,
+                                lamports: stakers_reward as i64,
+                                post_balance: stake_account.lamports,
+                            },
+                        ));
                     }
                 } else {
                     debug!(
@@ -1358,12 +1383,23 @@ impl Bank {
             }
 
             if vote_account_changed {
+                let post_balance = vote_account.lamports;
+                let lamports = (post_balance - voters_account_pre_balance) as i64;
+                if lamports != 0 {
+                    rewards.push((
+                        *vote_pubkey,
+                        RewardInfo {
+                            reward_type: RewardType::Voting,
+                            lamports,
+                            post_balance,
+                        },
+                    ));
+                }
                 self.store_account(&vote_pubkey, &vote_account);
             }
         }
+        self.rewards.write().unwrap().append(&mut rewards);
 
-        assert_eq!(self.rewards, None);
-        self.rewards = Some(rewards.drain().collect());
         point_value.rewards as f64 / point_value.points as f64
     }
 
@@ -1446,7 +1482,16 @@ impl Bank {
                 "distributed fee: {} (rounded from: {}, burned: {})",
                 unburned, collector_fees, burned
             );
-            self.deposit(&self.collector_id, unburned);
+
+            let post_balance = self.deposit(&self.collector_id, unburned);
+            self.rewards.write().unwrap().push((
+                self.collector_id,
+                RewardInfo {
+                    reward_type: RewardType::Fee,
+                    lamports: unburned as i64,
+                    post_balance,
+                },
+            ));
             self.capitalization.fetch_sub(burned, Relaxed);
         }
     }
@@ -2621,6 +2666,7 @@ impl Bank {
         // holder
         let mut leftover_lamports = rent_to_be_distributed - rent_distributed_in_initial_round;
 
+        let mut rewards = vec![];
         validator_rent_shares
             .into_iter()
             .for_each(|(pubkey, rent_share)| {
@@ -2633,7 +2679,16 @@ impl Bank {
                 let mut account = self.get_account(&pubkey).unwrap_or_default();
                 account.lamports += rent_to_be_paid;
                 self.store_account(&pubkey, &account);
+                rewards.push((
+                    pubkey,
+                    RewardInfo {
+                        reward_type: RewardType::Rent,
+                        lamports: rent_to_be_paid as i64,
+                        post_balance: account.lamports,
+                    },
+                ));
             });
+        self.rewards.write().unwrap().append(&mut rewards);
 
         if enforce_fix {
             assert_eq!(leftover_lamports, 0);
@@ -3224,7 +3279,7 @@ impl Bank {
         }
     }
 
-    pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) {
+    pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) -> u64 {
         let mut account = self.get_account(pubkey).unwrap_or_default();
 
         let should_be_in_new_behavior = match self.cluster_type() {
@@ -3248,6 +3303,7 @@ impl Bank {
 
         account.lamports += lamports;
         self.store_account(pubkey, &account);
+        account.lamports
     }
 
     pub fn accounts(&self) -> Arc<Accounts> {
@@ -4688,8 +4744,26 @@ mod tests {
             previous_capitalization - current_capitalization,
             burned_portion
         );
-        bank.freeze();
+
         assert!(bank.calculate_and_verify_capitalization());
+
+        assert_eq!(
+            rent_to_be_distributed,
+            bank.rewards
+                .read()
+                .unwrap()
+                .iter()
+                .map(|(address, reward)| {
+                    assert_eq!(reward.reward_type, RewardType::Rent);
+                    if *address == validator_2_pubkey {
+                        assert_eq!(reward.post_balance, validator_2_portion + 42 - tweak_2);
+                    } else if *address == validator_3_pubkey {
+                        assert_eq!(reward.post_balance, validator_3_portion + 42);
+                    }
+                    reward.lamports as u64
+                })
+                .sum::<u64>()
+        );
     }
 
     #[test]
@@ -5676,7 +5750,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bank_update_rewards() {
+    fn test_bank_update_vote_stake_rewards() {
         solana_logger::setup();
 
         // create a bank that ticks really slowly...
@@ -5709,7 +5783,7 @@ mod tests {
         bank.lazy_rent_collection.store(true, Relaxed);
 
         assert_eq!(bank.capitalization(), 42 * 1_000_000_000);
-        assert_eq!(bank.rewards, None);
+        assert!(bank.rewards.read().unwrap().is_empty());
 
         let ((vote_id, mut vote_account), (stake_id, stake_account)) =
             crate::stakes::tests::create_staked_node_accounts(1_0000);
@@ -5782,14 +5856,15 @@ mod tests {
 
         // verify validator rewards show up in bank1.rewards vector
         assert_eq!(
-            bank1.rewards,
-            Some(vec![(
+            *bank1.rewards.read().unwrap(),
+            vec![(
                 stake_id,
                 RewardInfo {
+                    reward_type: RewardType::Staking,
                     lamports: (rewards.validator_point_value * validator_points as f64) as i64,
                     post_balance: bank1.get_balance(&stake_id),
                 }
-            )])
+            )]
         );
         bank1.freeze();
         assert!(bank1.calculate_and_verify_capitalization());
@@ -5826,7 +5901,7 @@ mod tests {
         bank.lazy_rent_collection.store(true, Relaxed);
 
         assert_eq!(bank.capitalization(), 42 * 1_000_000_000);
-        assert_eq!(bank.rewards, None);
+        assert!(bank.rewards.read().unwrap().is_empty());
 
         let vote_id = Pubkey::new_rand();
         let mut vote_account = vote_state::create_account(&vote_id, &Pubkey::new_rand(), 50, 100);
@@ -5866,6 +5941,18 @@ mod tests {
 
         bank1.freeze();
         assert!(bank1.calculate_and_verify_capitalization());
+
+        // verify voting and staking rewards are recorded
+        let rewards = bank1.rewards.read().unwrap();
+        rewards
+            .iter()
+            .find(|(_address, reward)| reward.reward_type == RewardType::Voting)
+            .unwrap();
+        rewards
+            .iter()
+            .find(|(_address, reward)| reward.reward_type == RewardType::Staking)
+            .unwrap();
+
         bank1.capitalization()
     }
 
@@ -6127,11 +6214,13 @@ mod tests {
 
         // Test new account
         let key = Keypair::new();
-        bank.deposit(&key.pubkey(), 10);
+        let new_balance = bank.deposit(&key.pubkey(), 10);
+        assert_eq!(new_balance, 10);
         assert_eq!(bank.get_balance(&key.pubkey()), 10);
 
         // Existing account
-        bank.deposit(&key.pubkey(), 3);
+        let new_balance = bank.deposit(&key.pubkey(), 3);
+        assert_eq!(new_balance, 13);
         assert_eq!(bank.get_balance(&key.pubkey()), 13);
     }
 
@@ -6248,6 +6337,18 @@ mod tests {
         // verify capitalization
         assert_eq!(capitalization - expected_fee_burned, bank.capitalization());
 
+        assert_eq!(
+            *bank.rewards.read().unwrap(),
+            vec![(
+                leader,
+                RewardInfo {
+                    reward_type: RewardType::Fee,
+                    lamports: expected_fee_collected as i64,
+                    post_balance: initial_balance + expected_fee_collected,
+                }
+            )]
+        );
+
         // Verify that an InstructionError collects fees, too
         let mut bank = Bank::new_from_parent(&Arc::new(bank), &leader, 1);
         let mut tx =
@@ -6269,6 +6370,18 @@ mod tests {
         assert_eq!(
             bank.get_balance(&leader),
             initial_balance + 2 * expected_fee_collected
+        );
+
+        assert_eq!(
+            *bank.rewards.read().unwrap(),
+            vec![(
+                leader,
+                RewardInfo {
+                    reward_type: RewardType::Fee,
+                    lamports: expected_fee_collected as i64,
+                    post_balance: initial_balance + 2 * expected_fee_collected,
+                }
+            )]
         );
     }
 
