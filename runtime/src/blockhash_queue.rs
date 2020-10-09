@@ -13,7 +13,7 @@ struct HashAge {
 
 /// Low memory overhead, so can be cloned for every checkpoint
 #[frozen_abi(digest = "EwaoLA34VN18E95GvjmkeStUpWqTeBd7FGpd7mppLmEw")]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, AbiExample)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, AbiExample)]
 pub struct BlockhashQueue {
     /// updated whenever an hash is registered
     hash_height: u64,
