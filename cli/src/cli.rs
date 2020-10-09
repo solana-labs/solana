@@ -1146,10 +1146,9 @@ fn process_deploy(
         CliError::DynamicProgramError(format!("Unable to read program file: {}", err))
     })?;
 
-    let exe = EbpfVm::create_executable_from_elf(
+    let _ = EbpfVm::create_executable_from_elf(
         &program_data,
-        Some(|x| bpf_verifier::check(x, true)));
-    exe.map_err(|err| {
+        Some(|x| bpf_verifier::check(x, true))).map_err(|err| {
         CliError::DynamicProgramError(format!("ELF error: {}", err))
     })?;
 
