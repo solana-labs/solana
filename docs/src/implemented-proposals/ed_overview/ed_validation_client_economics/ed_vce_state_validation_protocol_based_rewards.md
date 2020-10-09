@@ -2,7 +2,7 @@
 title: State-validation Protocol-based Rewards
 ---
 
-**Subject to change.**
+**Subject to change. Follow most recent economic discussions in the Solana forums: https://forums.solana.com**
 
 Validator-clients have two functional roles in the Solana network:
 
