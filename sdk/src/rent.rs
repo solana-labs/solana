@@ -24,7 +24,7 @@ pub const DEFAULT_LAMPORTS_PER_BYTE_YEAR: u64 = 1_000_000_000 / 100 * 365 / (102
 pub const DEFAULT_EXEMPTION_THRESHOLD: f64 = 2.0;
 
 /// default percentage of rent to burn (Valid values are 0 to 100)
-pub const DEFAULT_BURN_PERCENT: u8 = 100;
+pub const DEFAULT_BURN_PERCENT: u8 = 50;
 
 /// account storage overhead for calculation of base rent
 pub const ACCOUNT_STORAGE_OVERHEAD: u64 = 128;

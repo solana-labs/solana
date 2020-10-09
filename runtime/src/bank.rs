@@ -8743,6 +8743,7 @@ mod tests {
         );
         genesis_config.creation_time = 0;
         genesis_config.cluster_type = ClusterType::MainnetBeta;
+        genesis_config.rent.burn_percent = 100;
         let mut bank = Arc::new(Bank::new(&genesis_config));
         // Check a few slots, cross an epoch boundary
         assert_eq!(bank.get_slots_in_epoch(0), 32);
