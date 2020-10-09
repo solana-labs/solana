@@ -33,12 +33,16 @@ pub mod bpf_loader2_program {
     solana_sdk::declare_id!("DFBnrgThdzH4W6wZ12uGPoWcMnvfZj11EHnxHcVxLPhD");
 }
 
+pub mod compute_budget_balancing {
+    solana_sdk::declare_id!("HxvjqDSiF5sYdSYuCXsUnS8UeAoWsMT9iGoFP8pgV1mB");
+}
+
 pub mod no_overflow_rent_distribution {
     solana_sdk::declare_id!("4kpdyrcj5jS47CZb2oJGfVxjYbsMm2Kx97gFyZrxxwXz");
 }
 
-pub mod compute_budget_config2 {
-    solana_sdk::declare_id!("HxvjqDSiF5sYdSYuCXsUnS8UeAoWsMT9iGoFP8pgV1mB");
+pub mod max_invoke_depth_4 {
+    solana_sdk::declare_id!("EdM9xggY5y7AhNMskRG8NgGMnaP4JFNsWi8ZZtyT1af5");
 }
 
 lazy_static! {
@@ -52,7 +56,9 @@ lazy_static! {
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
         (bpf_loader2_program::id(), "bpf_loader2 program"),
         (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
-        (compute_budget_config2::id(), "1ms compute budget"),
+        (compute_budget_balancing::id(), "compute budget balancing"),
+        (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
+        (max_invoke_depth_4::id(), "max invoke call depth 4"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
