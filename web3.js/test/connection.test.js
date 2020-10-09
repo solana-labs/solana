@@ -1280,62 +1280,59 @@ test('get supply', async () => {
 });
 
 test('get performance samples', async () => {
-  if (!mockRpcEnabled) {
-    console.log('live test skipped');
-    return;
-  }
-
   const connection = new Connection(url);
 
-  mockRpc.push([
-    url,
-    {
-      method: 'getRecentPerformanceSamples',
-      params: [],
-    },
-    {
-      error: null,
-      result: [
-        {
-          slot: 1234,
-          numTransactions: 1000,
-          numSlots: 60,
-          samplePeriodSecs: 60,
-        },
-      ],
-    },
-  ]);
+  if (mockRpcEnabled) {
+    mockRpc.push([
+      url,
+      {
+        method: 'getRecentPerformanceSamples',
+        params: [],
+      },
+      {
+        error: null,
+        result: [
+          {
+            slot: 1234,
+            numTransactions: 1000,
+            numSlots: 60,
+            samplePeriodSecs: 60,
+          },
+        ],
+      },
+    ]);
+  }
 
   const perfSamples = await connection.getRecentPerformanceSamples();
-  expect(perfSamples.length).toBeGreaterThan(0);
-  expect(perfSamples[0].slot).toBeGreaterThan(0);
-  expect(perfSamples[0].numTransactions).toBeGreaterThan(0);
-  expect(perfSamples[0].numSlots).toBeGreaterThan(0);
-  expect(perfSamples[0].samplePeriodSecs).toBeGreaterThan(0);
+  expect(Array.isArray(perfSamples)).toBe(true);
+
+  if (perfSamples.length > 0) {
+    expect(perfSamples[0].slot).toBeGreaterThan(0);
+    expect(perfSamples[0].numTransactions).toBeGreaterThan(0);
+    expect(perfSamples[0].numSlots).toBeGreaterThan(0);
+    expect(perfSamples[0].samplePeriodSecs).toBeGreaterThan(0);
+  }
 });
 
 test('get performance samples limit too high', async () => {
-  if (!mockRpcEnabled) {
-    console.log('live test skipped');
-    return;
-  }
-
   const connection = new Connection(url);
 
-  mockRpc.push([
-    url,
-    {
-      method: 'getRecentPerformanceSamples',
-      params: [100000],
-    },
-    {
-      error: {
-        code: -32602,
-        message: 'Invalid limit; max 720',
+  if (mockRpcEnabled) {
+    mockRpc.push([
+      url,
+      {
+        method: 'getRecentPerformanceSamples',
+        params: [100000],
       },
-      result: null,
-    },
-  ]);
+      {
+        error: {
+          code: -32602,
+          message: 'Invalid limit; max 720',
+        },
+        result: null,
+      },
+    ]);
+  }
 
   await expect(
     connection.getRecentPerformanceSamples(100000),
