@@ -48,7 +48,8 @@ impl Keypair {
     }
 
     pub fn to_base58_string(&self) -> String {
-        bs58::encode(&self.0.to_bytes()).into_string()
+        // Remove .iter() once we're rust 1.47+
+        bs58::encode(&self.0.to_bytes().iter()).into_string()
     }
 
     pub fn secret(&self) -> &ed25519_dalek::SecretKey {
