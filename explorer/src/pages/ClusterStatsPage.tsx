@@ -127,7 +127,7 @@ export function StatsNotReady({ error }: { error: boolean }) {
           }}
         >
           <span className="fe fe-refresh-cw mr-2"></span>
-          Retry
+          Try Again
         </button>
       </div>
     );
