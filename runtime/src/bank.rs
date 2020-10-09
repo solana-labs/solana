@@ -1051,6 +1051,11 @@ impl Bank {
         {
             if let Some(timestamp_estimate) = self.get_timestamp_estimate() {
                 if timestamp_estimate > unix_timestamp {
+                    datapoint_info!(
+                        "bank-timestamp-correction",
+                        ("from_genesis", unix_timestamp, i64),
+                        ("corrected", timestamp_estimate, i64),
+                    );
                     unix_timestamp = timestamp_estimate
                 }
             }
