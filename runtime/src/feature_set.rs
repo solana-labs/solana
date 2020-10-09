@@ -33,12 +33,27 @@ pub mod bpf_loader2_program {
     solana_sdk::declare_id!("DFBnrgThdzH4W6wZ12uGPoWcMnvfZj11EHnxHcVxLPhD");
 }
 
+<<<<<<< HEAD
+=======
+pub mod compute_budget_balancing {
+    solana_sdk::declare_id!("HxvjqDSiF5sYdSYuCXsUnS8UeAoWsMT9iGoFP8pgV1mB");
+}
+
+pub mod sha256_syscall_enabled {
+    solana_sdk::declare_id!("D7KfP7bZxpkYtD4Pc38t9htgs1k5k47Yhxe4rp6WDVi8");
+}
+
+>>>>>>> 2cd7cd314... Bump max invoke depth to 4 (#12742)
 pub mod no_overflow_rent_distribution {
     solana_sdk::declare_id!("4kpdyrcj5jS47CZb2oJGfVxjYbsMm2Kx97gFyZrxxwXz");
 }
 
 pub mod compute_budget_config2 {
     solana_sdk::declare_id!("HxvjqDSiF5sYdSYuCXsUnS8UeAoWsMT9iGoFP8pgV1mB");
+}
+
+pub mod max_invoke_depth_4 {
+    solana_sdk::declare_id!("EdM9xggY5y7AhNMskRG8NgGMnaP4JFNsWi8ZZtyT1af5");
 }
 
 lazy_static! {
@@ -51,8 +66,16 @@ lazy_static! {
         (inflation_kill_switch::id(), "inflation kill switch"),
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
         (bpf_loader2_program::id(), "bpf_loader2 program"),
+<<<<<<< HEAD
         (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
         (compute_budget_config2::id(), "1ms compute budget"),
+=======
+        (compute_budget_balancing::id(), "compute budget balancing"),
+        (sha256_syscall_enabled::id(), "sha256 syscall"),
+        (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
+        (ristretto_mul_syscall_enabled::id(), "ristretto multiply syscall"),
+        (max_invoke_depth_4::id(), "max invoke call depth 4"),
+>>>>>>> 2cd7cd314... Bump max invoke depth to 4 (#12742)
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

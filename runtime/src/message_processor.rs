@@ -1,5 +1,5 @@
 use crate::{
-    feature_set::{compute_budget_config2, instructions_sysvar_enabled, FeatureSet},
+    feature_set::{instructions_sysvar_enabled, FeatureSet},
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     native_loader::NativeLoader,
@@ -244,7 +244,7 @@ impl ThisInvokeContext {
 }
 impl InvokeContext for ThisInvokeContext {
     fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError> {
-        if self.program_ids.len() >= self.compute_budget.max_invoke_depth {
+        if self.program_ids.len() > self.compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
         }
         if self.program_ids.contains(key) && self.program_ids.last() != Some(key) {
@@ -416,6 +416,7 @@ impl MessageProcessor {
     }
 
     fn get_compute_budget(feature_set: &FeatureSet) -> ComputeBudget {
+<<<<<<< HEAD
         if feature_set.is_active(&compute_budget_config2::id()) {
             ComputeBudget::default()
         } else {
@@ -429,6 +430,9 @@ impl MessageProcessor {
                 max_invoke_depth: 2,
             }
         }
+=======
+        ComputeBudget::new(feature_set)
+>>>>>>> 2cd7cd314... Bump max invoke depth to 4 (#12742)
     }
 
     /// Create the KeyedAccounts that will be passed to the program
