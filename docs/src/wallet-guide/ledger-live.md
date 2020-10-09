@@ -29,18 +29,8 @@ to install the latest version of the Solana App.
 ## Install the Solana App on your Nano
 
 - Open Ledger Live
-<<<<<<< HEAD
-- Currently Ledger Live needs to be in "Developer Mode"
-  (Settings > Experimental Features > Developer Mode) to see our app.
-
-![Enabling Developer Mode](/img/ledger-live-enable-developer-mode.png)
-
-- Go to Manager in the app and find "Solana" in the App Catalog and
-  click Install
-=======
 - Click on "Manager" in the left pane on the app and search for "Solana" in the
 App Catalog, then click "Install".
->>>>>>> 0ef3cac1f... Update docs to show support for Nano X (#12647)
   - Make sure your device is plugged in via USB and is unlocked with its PIN
 - You may be prompted on the Nano to confirm the install of Solana App
 - "Solana" should now show as "Installed" in the Ledger Live Manager
