@@ -106,6 +106,8 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
+pub const TRANSACTION_LOG_MESSAGES_BYTES_LIMIT: usize = 100 * 1000;
+
 type BankStatusCache = StatusCache<Result<()>>;
 #[frozen_abi(digest = "EEFPLdPhngiBojqEnDMkoEGjyYYHNWPHnenRf8b9diqd")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
@@ -389,6 +391,9 @@ pub type InnerInstructions = Vec<CompiledInstruction>;
 /// A list of instructions that were invoked during each instruction of a transaction
 pub type InnerInstructionsList = Vec<InnerInstructions>;
 
+/// A list of log messages emitted during a transaction
+pub type TransactionLogMessages = Vec<String>;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum HashAgeKind {
     Extant,
@@ -443,6 +448,7 @@ pub(crate) struct BankFieldsToDeserialize {
 // This is separated from BankFieldsToDeserialize to avoid cloning by using refs.
 // So, sync fields with BankFieldsToDeserialize!
 // all members are made public to remain Bank private and to make versioned serializer workable on this
+#[derive(Debug)]
 pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) blockhash_queue: &'a RwLock<BlockhashQueue>,
     pub(crate) ancestors: &'a Ancestors,
@@ -475,6 +481,46 @@ pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) stakes: &'a RwLock<Stakes>,
     pub(crate) epoch_stakes: &'a HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
+}
+
+// Can't derive PartialEq because RwLock doesn't implement PartialEq
+impl PartialEq for Bank {
+    fn eq(&self, other: &Self) -> bool {
+        if ptr::eq(self, other) {
+            return true;
+        }
+        *self.blockhash_queue.read().unwrap() == *other.blockhash_queue.read().unwrap()
+            && self.ancestors == other.ancestors
+            && *self.hash.read().unwrap() == *other.hash.read().unwrap()
+            && self.parent_hash == other.parent_hash
+            && self.parent_slot == other.parent_slot
+            && *self.hard_forks.read().unwrap() == *other.hard_forks.read().unwrap()
+            && self.transaction_count.load(Relaxed) == other.transaction_count.load(Relaxed)
+            && self.tick_height.load(Relaxed) == other.tick_height.load(Relaxed)
+            && self.signature_count.load(Relaxed) == other.signature_count.load(Relaxed)
+            && self.capitalization.load(Relaxed) == other.capitalization.load(Relaxed)
+            && self.max_tick_height == other.max_tick_height
+            && self.hashes_per_tick == other.hashes_per_tick
+            && self.ticks_per_slot == other.ticks_per_slot
+            && self.ns_per_slot == other.ns_per_slot
+            && self.genesis_creation_time == other.genesis_creation_time
+            && self.slots_per_year == other.slots_per_year
+            && self.unused == other.unused
+            && self.slot == other.slot
+            && self.epoch == other.epoch
+            && self.block_height == other.block_height
+            && self.collector_id == other.collector_id
+            && self.collector_fees.load(Relaxed) == other.collector_fees.load(Relaxed)
+            && self.fee_calculator == other.fee_calculator
+            && self.fee_rate_governor == other.fee_rate_governor
+            && self.collected_rent.load(Relaxed) == other.collected_rent.load(Relaxed)
+            && self.rent_collector == other.rent_collector
+            && self.epoch_schedule == other.epoch_schedule
+            && *self.inflation.read().unwrap() == *other.inflation.read().unwrap()
+            && *self.stakes.read().unwrap() == *other.stakes.read().unwrap()
+            && self.epoch_stakes == other.epoch_stakes
+            && self.is_delta.load(Relaxed) == other.is_delta.load(Relaxed)
+    }
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, AbiExample, Default, Clone, Copy)]
@@ -878,7 +924,11 @@ impl Bank {
         );
         assert_eq!(bank.epoch_schedule, genesis_config.epoch_schedule);
         assert_eq!(bank.epoch, bank.epoch_schedule.get_epoch(bank.slot));
-
+        bank.fee_rate_governor.lamports_per_signature = bank.fee_calculator.lamports_per_signature;
+        assert_eq!(
+            bank.fee_rate_governor.create_fee_calculator(),
+            bank.fee_calculator
+        );
         bank
     }
 
@@ -1698,22 +1748,22 @@ impl Bank {
 
         let txs = &[transaction];
         let batch = self.prepare_simulation_batch(txs);
-        let log_collector = Rc::new(LogCollector::default());
+
         let (
             _loaded_accounts,
             executed,
             _inner_instructions,
+            transaction_logs,
             _retryable_transactions,
             _transaction_count,
             _signature_count,
-        ) = self.load_and_execute_transactions(
-            &batch,
-            MAX_PROCESSING_AGE,
-            Some(log_collector.clone()),
-            false,
-        );
+        ) = self.load_and_execute_transactions(&batch, MAX_PROCESSING_AGE, false, true);
+
         let transaction_result = executed[0].0.clone().map(|_| ());
-        let log_messages = Rc::try_unwrap(log_collector).unwrap_or_default().into();
+        let log_messages = transaction_logs
+            .get(0)
+            .map_or(vec![], |messages| messages.to_vec());
+
         (transaction_result, log_messages)
     }
 
@@ -2112,17 +2162,34 @@ impl Bank {
         cache.remove(pubkey);
     }
 
+    pub fn truncate_log_messages(
+        log_messages: &mut TransactionLogMessages,
+        max_bytes: usize,
+        truncate_message: String,
+    ) {
+        let mut size = 0;
+        for (i, line) in log_messages.iter().enumerate() {
+            size += line.len();
+            if size > max_bytes {
+                log_messages.truncate(i);
+                log_messages.push(truncate_message);
+                return;
+            }
+        }
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
         batch: &TransactionBatch,
         max_age: usize,
-        log_collector: Option<Rc<LogCollector>>,
         enable_cpi_recording: bool,
+        enable_log_recording: bool,
     ) -> (
         Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)>,
         Vec<TransactionProcessResult>,
         Vec<Option<InnerInstructionsList>>,
+        Vec<TransactionLogMessages>,
         Vec<usize>,
         u64,
         u64,
@@ -2165,6 +2232,8 @@ impl Bank {
         let mut signature_count: u64 = 0;
         let mut inner_instructions: Vec<Option<InnerInstructionsList>> =
             Vec::with_capacity(txs.len());
+        let mut transaction_logs: Vec<TransactionLogMessages> = Vec::with_capacity(txs.len());
+
         let executed: Vec<TransactionProcessResult> = loaded_accounts
             .iter_mut()
             .zip(OrderedIterator::new(txs, batch.iteration_order()))
@@ -2187,6 +2256,12 @@ impl Bank {
                         None
                     };
 
+                    let log_collector = if enable_log_recording {
+                        Some(Rc::new(LogCollector::default()))
+                    } else {
+                        None
+                    };
+
                     let process_result = self.message_processor.process_message(
                         tx.message(),
                         &loader_refcells,
@@ -2197,6 +2272,21 @@ impl Bank {
                         instruction_recorders.as_deref(),
                         self.feature_set.clone(),
                     );
+
+                    if enable_log_recording {
+                        let mut log_messages: TransactionLogMessages =
+                            Rc::try_unwrap(log_collector.unwrap_or_default())
+                                .unwrap_or_default()
+                                .into();
+
+                        Self::truncate_log_messages(
+                            &mut log_messages,
+                            TRANSACTION_LOG_MESSAGES_BYTES_LIMIT,
+                            String::from("<< Transaction log truncated to 100KB >>\n"),
+                        );
+
+                        transaction_logs.push(log_messages);
+                    }
 
                     Self::compile_recorded_instructions(
                         &mut inner_instructions,
@@ -2262,6 +2352,7 @@ impl Bank {
             loaded_accounts,
             executed,
             inner_instructions,
+            transaction_logs,
             retryable_txs,
             tx_count,
             signature_count,
@@ -2936,18 +3027,33 @@ impl Bank {
         max_age: usize,
         collect_balances: bool,
         enable_cpi_recording: bool,
+        enable_log_recording: bool,
     ) -> (
         TransactionResults,
         TransactionBalancesSet,
         Vec<Option<InnerInstructionsList>>,
+        Vec<TransactionLogMessages>,
     ) {
         let pre_balances = if collect_balances {
             self.collect_balances(batch)
         } else {
             vec![]
         };
-        let (mut loaded_accounts, executed, inner_instructions, _, tx_count, signature_count) =
-            self.load_and_execute_transactions(batch, max_age, None, enable_cpi_recording);
+
+        let (
+            mut loaded_accounts,
+            executed,
+            inner_instructions,
+            transaction_logs,
+            _,
+            tx_count,
+            signature_count,
+        ) = self.load_and_execute_transactions(
+            batch,
+            max_age,
+            enable_cpi_recording,
+            enable_log_recording,
+        );
 
         let results = self.commit_transactions(
             batch.transactions(),
@@ -2966,13 +3072,14 @@ impl Bank {
             results,
             TransactionBalancesSet::new(pre_balances, post_balances),
             inner_instructions,
+            transaction_logs,
         )
     }
 
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let batch = self.prepare_batch(txs, None);
-        self.load_execute_and_commit_transactions(&batch, MAX_PROCESSING_AGE, false, false)
+        self.load_execute_and_commit_transactions(&batch, MAX_PROCESSING_AGE, false, false, false)
             .0
             .fee_collection_results
     }
@@ -3590,51 +3697,6 @@ impl Bank {
         }
     }
 
-    pub fn compare_bank(&self, dbank: &Bank) {
-        if ptr::eq(self, dbank) {
-            return;
-        }
-        assert_eq!(self.slot, dbank.slot);
-        assert_eq!(self.collector_id, dbank.collector_id);
-        assert_eq!(self.epoch_schedule, dbank.epoch_schedule);
-        assert_eq!(self.hashes_per_tick, dbank.hashes_per_tick);
-        assert_eq!(self.ticks_per_slot, dbank.ticks_per_slot);
-        assert_eq!(self.parent_hash, dbank.parent_hash);
-        assert_eq!(
-            self.tick_height.load(Relaxed),
-            dbank.tick_height.load(Relaxed)
-        );
-        assert_eq!(self.is_delta.load(Relaxed), dbank.is_delta.load(Relaxed));
-
-        {
-            let bh = self.hash.read().unwrap();
-            let dbh = dbank.hash.read().unwrap();
-            assert_eq!(*bh, *dbh);
-        }
-
-        {
-            let st = self.stakes.read().unwrap();
-            let dst = dbank.stakes.read().unwrap();
-            assert_eq!(*st, *dst);
-        }
-
-        {
-            let bhq = self.blockhash_queue.read().unwrap();
-            let dbhq = dbank.blockhash_queue.read().unwrap();
-            assert_eq!(*bhq, *dbhq);
-        }
-
-        {
-            let sc = self.src.status_cache.read().unwrap();
-            let dsc = dbank.src.status_cache.read().unwrap();
-            assert_eq!(*sc, *dsc);
-        }
-        assert_eq!(
-            self.rc.accounts.bank_hash_at(self.slot),
-            dbank.rc.accounts.bank_hash_at(dbank.slot)
-        );
-    }
-
     pub fn clean_accounts(&self, skip_last: bool) {
         let max_clean_slot = if skip_last {
             // Don't clean the slot we're snapshotting because it may have zero-lamport
@@ -3693,6 +3755,12 @@ impl Bank {
             *self.inflation.write().unwrap() = Inflation::new_fixed(0.0001); // 0.01% inflation
             self.fee_rate_governor.burn_percent = 50; // 50% fee burn
             self.rent_collector.rent.burn_percent = 50; // 50% rent burn
+        }
+
+        if new_feature_activations.contains(&feature_set::inflation_kill_switch::id()) {
+            *self.inflation.write().unwrap() = Inflation::new_disabled();
+            self.fee_rate_governor.burn_percent = 100; // 100% fee burn
+            self.rent_collector.rent.burn_percent = 100; // 100% rent burn
         }
 
         if new_feature_activations.contains(&feature_set::spl_token_v2_multisig_fix::id()) {
@@ -6350,7 +6418,13 @@ mod tests {
 
         let lock_result = bank.prepare_batch(&pay_alice, None);
         let results_alice = bank
-            .load_execute_and_commit_transactions(&lock_result, MAX_PROCESSING_AGE, false, false)
+            .load_execute_and_commit_transactions(
+                &lock_result,
+                MAX_PROCESSING_AGE,
+                false,
+                false,
+                false,
+            )
             .0
             .fee_collection_results;
         assert_eq!(results_alice[0], Ok(()));
@@ -8121,10 +8195,18 @@ mod tests {
         let txs = vec![tx0, tx1, tx2];
 
         let lock_result = bank0.prepare_batch(&txs, None);
-        let (transaction_results, transaction_balances_set, inner_instructions) = bank0
-            .load_execute_and_commit_transactions(&lock_result, MAX_PROCESSING_AGE, true, false);
+        let (transaction_results, transaction_balances_set, inner_instructions, transaction_logs) =
+            bank0.load_execute_and_commit_transactions(
+                &lock_result,
+                MAX_PROCESSING_AGE,
+                true,
+                false,
+                false,
+            );
 
         assert!(inner_instructions[0].iter().all(|ix| ix.is_empty()));
+        assert_eq!(transaction_logs.len(), 0);
+
         assert_eq!(transaction_balances_set.pre_balances.len(), 3);
         assert_eq!(transaction_balances_set.post_balances.len(), 3);
 
@@ -9395,5 +9477,54 @@ mod tests {
         bank1.rehash();
         let new_bank1_hash = bank1.hash();
         assert_eq!(old_hash, new_bank1_hash);
+    }
+
+    #[test]
+    fn test_truncate_log_messages() {
+        let mut messages = vec![
+            String::from("This is line one\n"),
+            String::from("This is line two\n"),
+            String::from("This is line three\n"),
+        ];
+
+        // messages under limit
+        Bank::truncate_log_messages(
+            &mut messages,
+            10000,
+            String::from("<< Transaction log truncated to 10,000 bytes >>\n"),
+        );
+        assert_eq!(messages.len(), 3);
+
+        // messages truncated to two lines
+        let maxsize = messages.get(0).unwrap().len() + messages.get(1).unwrap().len();
+        Bank::truncate_log_messages(
+            &mut messages,
+            maxsize,
+            String::from("<< Transaction log truncated >>\n"),
+        );
+        assert_eq!(messages.len(), 3);
+        assert_eq!(
+            messages.get(2).unwrap(),
+            "<< Transaction log truncated >>\n"
+        );
+
+        // messages truncated to one line
+        let mut messages = vec![
+            String::from("Line 1\n"),
+            String::from("Line 2\n"),
+            String::from("Line 3\n"),
+        ];
+
+        let maxsize = messages.get(0).unwrap().len() + 4;
+        Bank::truncate_log_messages(
+            &mut messages,
+            maxsize,
+            String::from("<< Transaction log truncated >>\n"),
+        );
+        assert_eq!(messages.len(), 2);
+        assert_eq!(
+            messages.get(1).unwrap(),
+            "<< Transaction log truncated >>\n"
+        );
     }
 }

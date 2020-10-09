@@ -105,8 +105,8 @@ fn process_transaction_and_record_inner(
     let signature = tx.signatures.get(0).unwrap().clone();
     let txs = vec![tx];
     let tx_batch = bank.prepare_batch(&txs, None);
-    let (mut results, _, mut inner) =
-        bank.load_execute_and_commit_transactions(&tx_batch, MAX_PROCESSING_AGE, false, true);
+    let (mut results, _, mut inner, _transaction_logs) =
+        bank.load_execute_and_commit_transactions(&tx_batch, MAX_PROCESSING_AGE, false, true, false);
     let inner_instructions = inner.swap_remove(0);
     let result = results
         .fee_collection_results
@@ -483,9 +483,9 @@ fn test_program_bpf_invoke() {
         let (derived_key1, nonce1) =
             Pubkey::find_program_address(&[b"You pass butter"], &invoke_program_id);
         let (derived_key2, nonce2) =
-            Pubkey::find_program_address(&[b"Lil'", b"Bits"], &invoke_program_id);
+            Pubkey::find_program_address(&[b"Lil'", b"Bits"], &invoked_program_id);
         let (derived_key3, nonce3) =
-            Pubkey::find_program_address(&[derived_key2.as_ref()], &invoke_program_id);
+            Pubkey::find_program_address(&[derived_key2.as_ref()], &invoked_program_id);
 
         let mint_pubkey = mint_keypair.pubkey();
         let account_metas = vec![
@@ -531,6 +531,8 @@ fn test_program_bpf_invoke() {
             vec![
                 solana_sdk::system_program::id(),
                 solana_sdk::system_program::id(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),

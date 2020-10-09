@@ -16,8 +16,8 @@ use solana_metrics::{datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
     bank::{
-        Bank, Builtins, InnerInstructionsList, TransactionBalancesSet, TransactionProcessResult,
-        TransactionResults,
+        Bank, InnerInstructionsList, TransactionBalancesSet, TransactionLogMessages,
+        TransactionProcessResult, TransactionResults,
     },
     bank_forks::BankForks,
     bank_utils,
@@ -103,10 +103,11 @@ fn execute_batch(
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
-    let (tx_results, balances, inner_instructions) =
+    let (tx_results, balances, inner_instructions, transaction_logs) =
         batch.bank().load_execute_and_commit_transactions(
             batch,
             MAX_PROCESSING_AGE,
+            transaction_status_sender.is_some(),
             transaction_status_sender.is_some(),
             transaction_status_sender.is_some(),
         );
@@ -127,6 +128,7 @@ fn execute_batch(
             processing_results,
             balances,
             inner_instructions,
+            transaction_logs,
             sender,
         );
     }
@@ -318,7 +320,6 @@ pub struct ProcessOptions {
     pub new_hard_forks: Option<Vec<Slot>>,
     pub frozen_accounts: Vec<Pubkey>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
-    pub additional_builtins: Option<Builtins>,
 }
 
 pub fn process_blockstore(
@@ -342,7 +343,7 @@ pub fn process_blockstore(
         account_paths,
         &opts.frozen_accounts,
         opts.debug_keys.clone(),
-        opts.additional_builtins.as_ref(),
+        Some(&crate::builtins::get(genesis_config.cluster_type)),
     );
     let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");
@@ -1031,6 +1032,7 @@ pub struct TransactionStatusBatch {
     pub statuses: Vec<TransactionProcessResult>,
     pub balances: TransactionBalancesSet,
     pub inner_instructions: Vec<Option<InnerInstructionsList>>,
+    pub transaction_logs: Vec<TransactionLogMessages>,
 }
 
 pub type TransactionStatusSender = Sender<TransactionStatusBatch>;
@@ -1042,6 +1044,7 @@ pub fn send_transaction_status_batch(
     statuses: Vec<TransactionProcessResult>,
     balances: TransactionBalancesSet,
     inner_instructions: Vec<Option<InnerInstructionsList>>,
+    transaction_logs: Vec<TransactionLogMessages>,
     transaction_status_sender: TransactionStatusSender,
 ) {
     let slot = bank.slot();
@@ -1052,6 +1055,7 @@ pub fn send_transaction_status_batch(
         statuses,
         balances,
         inner_instructions,
+        transaction_logs,
     }) {
         trace!(
             "Slot {} transaction_status send batch failed: {:?}",
@@ -2891,9 +2895,11 @@ pub mod tests {
             },
             _balances,
             _inner_instructions,
+            _log_messages,
         ) = batch.bank().load_execute_and_commit_transactions(
             &batch,
             MAX_PROCESSING_AGE,
+            false,
             false,
             false,
         );
