@@ -57,10 +57,19 @@ message CompiledInstruction {
     bytes data = 3;
 }
 
+enum RewardType {
+    Unspecified = 0;
+    Fee = 1;
+    Rent = 2;
+    Staking = 3;
+    Voting = 4;
+}
+
 message Reward {
     string pubkey = 1;
     int64 lamports = 2;
     uint64 post_balance = 3;
+    RewardType reward_type = 4;
 }
 
 message UnixTimestamp {
