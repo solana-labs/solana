@@ -56,9 +56,11 @@ export function dashboardInfoReducer(
         return state;
       }
 
-      const samples = action.data.map((sample) => {
-        return sample.samplePeriodSecs / sample.numSlots;
-      }).slice(0, 60);
+      const samples = action.data
+        .map((sample) => {
+          return sample.samplePeriodSecs / sample.numSlots;
+        })
+        .slice(0, 60);
 
       const samplesInHour = samples.length < 60 ? samples.length : 60;
       const avgBlockTime_1h =
