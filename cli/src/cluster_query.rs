@@ -735,7 +735,7 @@ pub fn process_get_block(rpc_client: &RpcClient, _config: &CliConfig, slot: Slot
                     "          -                 -".to_string()
                 } else {
                     format!(
-                        "◎{:<12.4}  {:>13.4}%",
+                        "◎{:<12.4}  {:>13.9}%",
                         lamports_to_sol(reward.post_balance),
                         reward.lamports.abs() as f64
                             / (reward.post_balance as f64 - reward.lamports as f64)
