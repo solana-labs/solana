@@ -219,7 +219,7 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
     assert_eq!(dbank.get_balance(&key1.pubkey()), 0);
     assert_eq!(dbank.get_balance(&key2.pubkey()), 10);
     assert_eq!(dbank.get_balance(&key3.pubkey()), 0);
-    bank2.compare_bank(&dbank);
+    assert!(bank2 == dbank);
 }
 
 #[cfg(test)]

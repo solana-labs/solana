@@ -68,7 +68,7 @@ pub struct FeeRateGovernor {
     // The current cost of a signature  This amount may increase/decrease over time based on
     // cluster processing load.
     #[serde(skip)]
-    lamports_per_signature: u64,
+    pub lamports_per_signature: u64,
 
     // The target cost of a signature when the cluster is operating around target_signatures_per_slot
     // signatures

@@ -113,7 +113,7 @@ pub type Epoch = u64;
 
 #[wasm_bindgen]
 #[repr(transparent)]
-#[derive(Serialize, Deserialize, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Serialize, Debug, Deserialize, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Pubkey([u8; 32]);
 
 #[wasm_bindgen]
@@ -164,7 +164,7 @@ impl Stake {
 }
 
 #[wasm_bindgen]
-#[derive(Serialize, Deserialize, PartialEq, Clone, Copy)]
+#[derive(Serialize, Debug, Deserialize, PartialEq, Clone, Copy)]
 pub struct Delegation {
     /// to whom the stake is delegated
     voter_pubkey: Pubkey,
