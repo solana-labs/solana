@@ -5,13 +5,13 @@ import { ErrorCard } from "components/common/ErrorCard";
 
 export const SolarweaveDatabase = "solarweave-cache-devnet-testrun4-index";
 
-type Props = { slot: string; blockhash: string };
+type Props = { block: string };
 
-export function BlockDetailsPage({ slot, blockhash }: Props) {
-  let output = <ErrorCard text={`Block is not valid`} />;
+export function BlockDetailsPage({ block }: Props) {
+  let output = <ErrorCard text={`Block ${block} is not valid`} />;
 
-  if (slot || blockhash) {
-    output = <BlockHistoryCard slot={slot} blockhash={blockhash} />;
+  if (block) {
+    output = <BlockHistoryCard block={block} />;
   }
 
   return (

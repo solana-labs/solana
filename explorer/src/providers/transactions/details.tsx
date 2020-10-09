@@ -121,18 +121,25 @@ async function fetchDetails(
     if (tx) {
       transaction = ParseAsTransaction(tx, signature);
     } else {
-      transaction = await new Connection(url).getParsedConfirmedTransaction(
-        signature
-      );
+      throw new Error("Could not retrieve Signature via Solarweave");
     }
 
     fetchStatus = FetchStatus.Fetched;
   } catch (error) {
-    if (cluster !== Cluster.Custom) {
-      reportError(error, { url });
+    try {
+      transaction = await new Connection(url).getParsedConfirmedTransaction(
+        signature
+      );
+
+      fetchStatus = FetchStatus.Fetched;
+    } catch (error) {
+      if (cluster !== Cluster.Custom) {
+        reportError(error, { url });
+      }
+      fetchStatus = FetchStatus.FetchFailed;
     }
-    fetchStatus = FetchStatus.FetchFailed;
   }
+
   dispatch({
     type: ActionType.Update,
     status: fetchStatus,

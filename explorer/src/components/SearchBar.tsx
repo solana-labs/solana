@@ -40,7 +40,7 @@ export function SearchBar() {
             ref={(ref) => (selectRef.current = ref)}
             options={buildOptions(search, cluster)}
             noOptionsMessage={() => "No Results"}
-            placeholder="Search for slots, blocks, accounts, transactions, programs, and tokens"
+            placeholder="Search for blocks, accounts, transactions, programs, and tokens"
             value={resetValue}
             inputValue={search}
             blurInputOnSelect
@@ -191,25 +191,12 @@ function buildOptions(search: string, cluster: Cluster) {
 
   if (!isNaN(Number(search))) {
     options.push({
-      label: "Slot",
+      label: "Block",
       options: [
         {
-          label: `Slot #${search}`,
+          label: `Block #${search}`,
           value: search,
-          pathname: `/slot/${search}`,
-        },
-      ],
-    });
-  }
-
-  if (search.length > 42 && search.length < 45) {
-    options.push({
-      label: "Blockhash",
-      options: [
-        {
-          label: `Blockhash ${search}`,
-          value: search,
-          pathname: `/blockhash/${search}`,
+          pathname: `/block/${search}`,
         },
       ],
     });
@@ -228,6 +215,17 @@ function buildOptions(search: string, cluster: Cluster) {
             label: search,
             value: search,
             pathname: "/address/" + search,
+          },
+        ],
+      });
+
+      options.push({
+        label: "Block",
+        options: [
+          {
+            label: `Blockhash ${search}`,
+            value: search,
+            pathname: `/block/${search}`,
           },
         ],
       });

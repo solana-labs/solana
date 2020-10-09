@@ -2,10 +2,18 @@ import React from "react";
 import * as Sentry from "@sentry/react";
 import * as Cache from "providers/cache";
 import { RetrieveSlot, RetrieveBlockhash } from "@theronin/solarweave";
-import { useCluster, Cluster } from "../cluster";
-import { ActionType, FetchStatus } from "providers/cache";
-import { HistoryProvider } from "./history";
-import { TokensProvider } from "./tokens";
+import { useCluster, Cluster } from "./cluster";
+
+export enum FetchStatus {
+  Fetching,
+  FetchFailed,
+  Fetched,
+}
+
+export enum ActionType {
+  Update,
+  Clear,
+}
 
 type State = Cache.State<Block>;
 type Dispatch = Cache.Dispatch<Block>;
@@ -16,8 +24,8 @@ const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 type BlockProviderProps = { children: React.ReactNode };
 
 export interface Block {
-  BlockData: any;
-  Tags: any;
+  blockData: any;
+  tags: any;
 }
 
 export function BlockProvider({ children }: BlockProviderProps) {
@@ -31,9 +39,7 @@ export function BlockProvider({ children }: BlockProviderProps) {
   return (
     <StateContext.Provider value={state}>
       <DispatchContext.Provider value={dispatch}>
-        <TokensProvider>
-          <HistoryProvider>{children}</HistoryProvider>
-        </TokensProvider>
+        {children}
       </DispatchContext.Provider>
     </StateContext.Provider>
   );
@@ -67,6 +73,11 @@ export async function fetchBlock(
   let result;
   let status = FetchStatus.Fetching;
 
+  let data = {
+    blockData: null,
+    tags: [],
+  };
+
   try {
     if (type === "slot") {
       result = await RetrieveSlot(key, solarweave);
@@ -74,7 +85,13 @@ export async function fetchBlock(
       result = await RetrieveBlockhash(key, solarweave);
     }
 
-    status = FetchStatus.Fetched;
+    if (result) {
+      data.blockData = result.BlockData;
+      data.tags = result.Tags;
+      status = FetchStatus.Fetched;
+    } else {
+      status = FetchStatus.FetchFailed;
+    }
   } catch (error) {
     console.log(error);
     if (cluster !== Cluster.Custom) {
@@ -88,10 +105,7 @@ export async function fetchBlock(
     url,
     key,
     status,
-    data: {
-      BlockData: result?.BlockData,
-      Tags: result?.Tags,
-    },
+    data,
   });
 }
 
@@ -101,7 +115,7 @@ export function useFetchBlock() {
   const dispatch = React.useContext(DispatchContext);
 
   if (!state || !dispatch) {
-    throw new Error(`useBlock must be used within a BlockProvider`);
+    throw new Error(`useFetchBlock must be used within a BlockProvider`);
   }
 
   return React.useCallback(
