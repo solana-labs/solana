@@ -105,8 +105,13 @@ fn process_transaction_and_record_inner(
     let signature = tx.signatures.get(0).unwrap().clone();
     let txs = vec![tx];
     let tx_batch = bank.prepare_batch(&txs, None);
-    let (mut results, _, mut inner, _transaction_logs) =
-        bank.load_execute_and_commit_transactions(&tx_batch, MAX_PROCESSING_AGE, false, true, false);
+    let (mut results, _, mut inner, _transaction_logs) = bank.load_execute_and_commit_transactions(
+        &tx_batch,
+        MAX_PROCESSING_AGE,
+        false,
+        true,
+        false,
+    );
     let inner_instructions = inner.swap_remove(0);
     let result = results
         .fee_collection_results
@@ -641,6 +646,43 @@ fn test_program_bpf_invoke() {
             assert_eq!(i as u8, account.data[i]);
         }
     }
+}
+
+#[cfg(feature = "bpf_rust")]
+#[test]
+fn test_program_bpf_call_depth() {
+    solana_logger::setup();
+
+    println!("Test program: solana_bpf_rust_call_depth");
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin_loader(&name, id, entrypoint);
+    let bank_client = BankClient::new(bank);
+    let program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_call_depth",
+    );
+
+    let instruction = Instruction::new(
+        program_id,
+        &(ComputeBudget::default().max_call_depth - 1),
+        vec![],
+    );
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert!(result.is_ok());
+
+    let instruction =
+        Instruction::new(program_id, &ComputeBudget::default().max_call_depth, vec![]);
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert!(result.is_err());
 }
 
 #[test]
