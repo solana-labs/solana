@@ -3,3 +3,4 @@ pub mod args;
 pub mod commands;
 mod db;
 pub mod spl_token_helpers;
+pub mod token_display;

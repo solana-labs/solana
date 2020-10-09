@@ -2,6 +2,7 @@ use crate::{
     args::{BalancesArgs, DistributeTokensArgs, StakeArgs, TransactionLogArgs},
     db::{self, TransactionInfo},
     spl_token_helpers::*,
+    token_display::Token,
 };
 use chrono::prelude::*;
 use console::style;
@@ -260,7 +261,15 @@ async fn distribute_allocations(
                 Some(allocation.lockup_date.parse::<DateTime<Utc>>().unwrap())
             };
 
-            println!("{:<44}  {:>24.9}", allocation.recipient, allocation.amount);
+            let decimals = if let Some(spl_token_args) = &args.spl_token_args {
+                spl_token_args.decimals as usize
+            } else {
+                9
+            };
+            println!(
+                "{:<44}  {:>24.2$}",
+                allocation.recipient, allocation.amount, decimals
+            );
             let instructions = distribution_instructions(
                 allocation,
                 &new_stake_account_keypair.pubkey(),
@@ -367,10 +376,11 @@ pub async fn process_allocations(
     args: &DistributeTokensArgs,
 ) -> Result<Option<usize>, Error> {
     let mut allocations: Vec<Allocation> = read_allocations(&args.input_csv, args.transfer_amount)?;
+    let is_sol = args.spl_token_args.is_none();
 
-    let starting_total_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
+    let starting_total_tokens = Token::from(allocations.iter().map(|x| x.amount).sum(), is_sol);
     println!(
-        "{} ◎{}",
+        "{} {}",
         style("Total in input_csv:").bold(),
         starting_total_tokens,
     );
@@ -388,27 +398,23 @@ pub async fn process_allocations(
         return Ok(confirmations);
     }
 
-    let distributed_tokens: f64 = transaction_infos.iter().map(|x| x.amount).sum();
-    let undistributed_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
-    println!("{} ◎{}", style("Distributed:").bold(), distributed_tokens,);
+    let distributed_tokens = Token::from(transaction_infos.iter().map(|x| x.amount).sum(), is_sol);
+    let undistributed_tokens = Token::from(allocations.iter().map(|x| x.amount).sum(), is_sol);
+    println!("{} {}", style("Distributed:").bold(), distributed_tokens,);
     println!(
-        "{} ◎{}",
+        "{} {}",
         style("Undistributed:").bold(),
         undistributed_tokens,
     );
     println!(
-        "{} ◎{}",
+        "{} {}",
         style("Total:").bold(),
         distributed_tokens + undistributed_tokens,
     );
 
     println!(
         "{}",
-        style(format!(
-            "{:<44}  {:>24}",
-            "Recipient", "Expected Balance (◎)"
-        ))
-        .bold()
+        style(format!("{:<44}  {:>24}", "Recipient", "Expected Balance",)).bold()
     );
 
     distribute_allocations(client, &mut db, &allocations, args).await?;
