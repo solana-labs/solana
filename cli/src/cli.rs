@@ -1146,11 +1146,8 @@ fn process_deploy(
         CliError::DynamicProgramError(format!("Unable to read program file: {}", err))
     })?;
 
-    let _ = EbpfVm::create_executable_from_elf(
-        &program_data,
-        Some(|x| bpf_verifier::check(x, true))).map_err(|err| {
-        CliError::DynamicProgramError(format!("ELF error: {}", err))
-    })?;
+    EbpfVm::create_executable_from_elf(&program_data, Some(|x| bpf_verifier::check(x, true)))
+        .map_err(|err| CliError::DynamicProgramError(format!("ELF error: {}", err)))?;
 
     let loader_id = if use_deprecated_loader {
         bpf_loader_deprecated::id()
