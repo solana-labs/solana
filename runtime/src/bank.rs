@@ -3757,6 +3757,12 @@ impl Bank {
             self.rent_collector.rent.burn_percent = 50; // 50% rent burn
         }
 
+        if new_feature_activations.contains(&feature_set::inflation_kill_switch::id()) {
+            *self.inflation.write().unwrap() = Inflation::new_disabled();
+            self.fee_rate_governor.burn_percent = 100; // 100% fee burn
+            self.rent_collector.rent.burn_percent = 100; // 100% rent burn
+        }
+
         if new_feature_activations.contains(&feature_set::spl_token_v2_multisig_fix::id()) {
             self.apply_spl_token_v2_multisig_fix();
         }
