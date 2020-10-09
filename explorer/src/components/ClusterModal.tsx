@@ -48,7 +48,7 @@ export function ClusterModal() {
 
 type InputProps = { activeSuffix: string; active: boolean };
 function CustomClusterInput({ activeSuffix, active }: InputProps) {
-  const { customUrl } = useCluster();
+  const { customUrl, solarweaveUrl } = useCluster();
   const updateCustomUrl = useUpdateCustomUrl();
   const [editing, setEditing] = React.useState(false);
   const query = useQuery();
@@ -66,36 +66,66 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
     };
   };
 
-  const onUrlInput = useDebounceCallback((url: string) => {
-    updateCustomUrl(url);
-    if (url.length > 0) {
-      query.set("cluster", "custom");
-      history.push({ ...location, search: query.toString() });
-    }
-  }, 500);
+  const onUrlInput = useDebounceCallback(
+    (url: string, solarweaveUrl: string) => {
+      updateCustomUrl(url, solarweaveUrl);
+      if (url.length > 0) {
+        query.set("cluster", "custom");
+        history.push({ ...location, search: query.toString() });
+      }
+    },
+    500
+  );
 
   const inputTextClass = editing ? "" : "text-muted";
   return (
-    <Link
-      to={(location) => clusterLocation(location)}
-      className="btn input-group input-group-merge p-0"
-    >
-      <input
-        type="text"
-        defaultValue={customUrl}
-        className={`form-control form-control-prepended ${inputTextClass} ${customClass(
-          "border"
-        )}`}
-        onFocus={() => setEditing(true)}
-        onBlur={() => setEditing(false)}
-        onInput={(e) => onUrlInput(e.currentTarget.value)}
-      />
-      <div className="input-group-prepend">
-        <div className={`input-group-text pr-0 ${customClass("border")}`}>
-          <span className={customClass("text") || ""}>Custom:</span>
+    <>
+      <Link
+        to={(location) => clusterLocation(location)}
+        className="btn input-group input-group-merge p-0"
+      >
+        <input
+          type="text"
+          placeholder="Solana RPC URL"
+          defaultValue={customUrl}
+          className={`form-control form-control-prepended ${inputTextClass} ${customClass(
+            "border"
+          )}`}
+          onFocus={() => setEditing(true)}
+          onBlur={() => setEditing(false)}
+          onInput={(e) => onUrlInput(e.currentTarget.value, solarweaveUrl)}
+        />
+
+        <div className="input-group-prepend">
+          <div className={`input-group-text pr-0 ${customClass("border")}`}>
+            <span className={customClass("text") || ""}>Custom:</span>
+          </div>
         </div>
-      </div>
-    </Link>
+      </Link>
+
+      <Link
+        to={(location) => clusterLocation(location)}
+        className="btn input-group input-group-merge p-0"
+      >
+        <input
+          type="text"
+          placeholder="Solarweave Database"
+          defaultValue={solarweaveUrl}
+          className={`form-control form-control-prepended ${inputTextClass} ${customClass(
+            "border"
+          )}`}
+          onFocus={() => setEditing(true)}
+          onBlur={() => setEditing(false)}
+          onInput={(e) => onUrlInput(customUrl, e.currentTarget.value)}
+        />
+
+        <div className="input-group-prepend">
+          <div className={`input-group-text pr-0 ${customClass("border")}`}>
+            <span className={customClass("text") || ""}>Custom:</span>
+          </div>
+        </div>
+      </Link>
+    </>
   );
 }
 

@@ -11,6 +11,7 @@ import { AccountDetailsPage } from "pages/AccountDetailsPage";
 import { ClusterStatsPage } from "pages/ClusterStatsPage";
 import { SupplyPage } from "pages/SupplyPage";
 import { TransactionDetailsPage } from "pages/TransactionDetailsPage";
+import { BlockDetailsPage } from "pages/BlockDetailsPage";
 
 const ADDRESS_ALIASES = ["account", "accounts", "addresses"];
 const TX_ALIASES = ["txs", "txn", "txns", "transaction", "transactions"];
@@ -41,6 +42,20 @@ function App() {
             path={"/tx/:signature"}
             render={({ match }) => (
               <TransactionDetailsPage signature={match.params.signature} />
+            )}
+          />
+          <Route
+            exact
+            path={"/slot/:slot"}
+            render={({ match }) => (
+              <BlockDetailsPage slot={match.params.slot} blockhash={""} />
+            )}
+          />
+          <Route
+            exact
+            path={"/blockhash/:blockhash"}
+            render={({ match }) => (
+              <BlockDetailsPage slot={""} blockhash={match.params.blockhash} />
             )}
           />
           <Route
