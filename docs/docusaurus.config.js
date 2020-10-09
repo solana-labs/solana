@@ -1,3 +1,6 @@
+const math = require('remark-math')
+const katex = require('rehype-katex')
+
 module.exports = {
   title: "Solana Docs",
   tagline:
