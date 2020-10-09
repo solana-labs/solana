@@ -505,8 +505,25 @@ type ConfirmedBlock = {
   }>,
 };
 
+/**
+ * A performance sample
+ *
+ * @typedef {Object} PerfSample
+ * @property {number} slot Slot number of sample
+ * @property {number} numTransactions Number of transactions in a sample window
+ * @property {number} numSlots Number of slots in a sample window
+ * @property {number} samplePeriodSecs Sample window in seconds
+ */
+type PerfSample = {
+  slot: number,
+  numTransactions: number,
+  numSlots: number,
+  samplePeriodSecs: number,
+};
+
 function createRpcRequest(url: string, useHttps: boolean): RpcRequest {
   const agentManager = new AgentManager(useHttps);
+
   const server = jayson(async (request, callback) => {
     const agent = agentManager.requestStart();
     const options = {
@@ -1180,6 +1197,20 @@ const GetRecentBlockhashAndContextRpcResult = jsonRpcResultAndContext(
       lamportsPerSignature: 'number',
     }),
   }),
+);
+
+/*
+ * Expected JSON RPC response for "getRecentPerformanceSamples" message
+ */
+const GetRecentPerformanceSamplesRpcResult = jsonRpcResult(
+  struct.array([
+    struct.pick({
+      slot: 'number',
+      numTransactions: 'number',
+      numSlots: 'number',
+      samplePeriodSecs: 'number',
+    }),
+  ]),
 );
 
 /**
@@ -2321,6 +2352,30 @@ export class Connection {
     if (res.error) {
       throw new Error('failed to get recent blockhash: ' + res.error.message);
     }
+    assert(typeof res.result !== 'undefined');
+    return res.result;
+  }
+
+  /**
+   * Fetch recent performance samples
+   * @return {Promise<Array<PerfSample>>}
+   */
+  async getRecentPerformanceSamples(
+    limit: ?number,
+  ): Promise<Array<PerfSample>> {
+    const args = this._buildArgs(limit ? [limit] : []);
+    const unsafeRes = await this._rpcRequest(
+      'getRecentPerformanceSamples',
+      args,
+    );
+
+    const res = GetRecentPerformanceSamplesRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error(
+        'failed to get recent performance samples: ' + res.error.message,
+      );
+    }
+
     assert(typeof res.result !== 'undefined');
     return res.result;
   }
