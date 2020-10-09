@@ -1,17 +1,11 @@
-import { PerfSample } from "@solana/web3.js";
+import { EpochInfo, PerfSample } from "@solana/web3.js";
 import { ClusterStatsStatus } from "./solanaClusterStats";
 
 export type DashboardInfo = {
   status: ClusterStatsStatus;
   avgBlockTime_1h: number;
   avgBlockTime_1min: number;
-  epochInfo: {
-    absoluteSlot: number;
-    blockHeight: number;
-    epoch: number;
-    slotIndex: number;
-    slotsInEpoch: number;
-  };
+  epochInfo: EpochInfo;
 };
 
 export enum DashboardInfoActionType {
@@ -28,7 +22,7 @@ export type DashboardInfoActionSetPerfSamples = {
 
 export type DashboardInfoActionSetEpochInfo = {
   type: DashboardInfoActionType.SetEpochInfo;
-  data: any;
+  data: EpochInfo;
 };
 
 export type DashboardInfoActionReset = {
@@ -58,14 +52,19 @@ export function dashboardInfoReducer(
 
   switch (action.type) {
     case DashboardInfoActionType.SetPerfSamples:
+      if (action.data.length < 1) {
+        return state;
+      }
+
       const samples = action.data.map((sample) => {
         return sample.samplePeriodSecs / sample.numSlots;
-      });
+      }).slice(0, 60);
 
+      const samplesInHour = samples.length < 60 ? samples.length : 60;
       const avgBlockTime_1h =
         samples.reduce((sum: number, cur: number) => {
           return sum + cur;
-        }, 0) / 60;
+        }, 0) / samplesInHour;
 
       return {
         ...state,
@@ -89,8 +88,6 @@ export function dashboardInfoReducer(
         ...action.data,
       };
     default:
-      return {
-        ...state,
-      };
+      return state;
   }
 }

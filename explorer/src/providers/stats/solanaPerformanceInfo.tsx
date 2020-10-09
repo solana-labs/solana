@@ -57,6 +57,10 @@ export function performanceInfoReducer(
 
   switch (action.type) {
     case PerformanceInfoActionType.SetPerfSamples:
+      if (action.data.length < 1) {
+        return state;
+      }
+
       let short = action.data.map((sample) => {
         return sample.numTransactions / sample.samplePeriodSecs;
       });
@@ -96,9 +100,7 @@ export function performanceInfoReducer(
         ...action.data,
       };
     default:
-      return {
-        ...state,
-      };
+      return state;
   }
 }
 

@@ -96,6 +96,11 @@ export function SolanaClusterStatsProvider({ children }: Props) {
           60 * SAMPLE_HISTORY_HOURS
         );
 
+        if (samples.length < 1) {
+          // no samples to work with (node has no history).
+          return; // we will allow for a timeout instead of throwing an error
+        }
+
         dispatchPerformanceInfo({
           type: PerformanceInfoActionType.SetPerfSamples,
           data: samples,

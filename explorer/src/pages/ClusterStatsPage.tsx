@@ -72,12 +72,14 @@ function StatsCardBody() {
           <Slot slot={absoluteSlot} />
         </td>
       </tr>
-      <tr>
-        <td className="w-100">Block height</td>
-        <td className="text-lg-right text-monospace">
-          <Slot slot={blockHeight} />
-        </td>
-      </tr>
+      {blockHeight !== undefined && (
+        <tr>
+          <td className="w-100">Block height</td>
+          <td className="text-lg-right text-monospace">
+            <Slot slot={blockHeight} />
+          </td>
+        </tr>
+      )}
       <tr>
         <td className="w-100">Block time</td>
         <td className="text-lg-right text-monospace">{averageBlockTime}</td>
