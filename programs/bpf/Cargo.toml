@@ -27,7 +27,7 @@ solana-logger = { path = "../../logger", version = "1.3.16" }
 solana-measure = { path = "../../measure", version = "1.3.16" }
 solana-runtime = { path = "../../runtime", version = "1.3.16" }
 solana-sdk = { path = "../../sdk", version = "1.3.16" }
-solana_rbpf = "=0.1.31"
+solana_rbpf = "=0.1.32"
 
 [[bench]]
 name = "bpf_loader"
@@ -37,6 +37,7 @@ members = [
     "rust/128bit",
     "rust/128bit_dep",
     "rust/alloc",
+    "rust/call_depth",
     "rust/dep_crate",
     "rust/deprecated_loader",
     "rust/dup_accounts",

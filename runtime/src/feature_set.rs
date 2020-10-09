@@ -45,6 +45,10 @@ pub mod max_invoke_depth_4 {
     solana_sdk::declare_id!("EdM9xggY5y7AhNMskRG8NgGMnaP4JFNsWi8ZZtyT1af5");
 }
 
+pub mod max_program_call_depth_64 {
+    solana_sdk::declare_id!("YCKSgA6XmjtkQrHBQjpyNrX6EMhJPcYcLWMVgWn36iv");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -59,6 +63,7 @@ lazy_static! {
         (compute_budget_balancing::id(), "compute budget balancing"),
         (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
         (max_invoke_depth_4::id(), "max invoke call depth 4"),
+        (max_program_call_depth_64::id(), "max program call depth 64")
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
