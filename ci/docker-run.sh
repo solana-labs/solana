@@ -47,7 +47,12 @@ if [[ -n $CI ]]; then
 else
   # Avoid sharing ~/.cargo when building locally to avoid a mixed macOS/Linux
   # ~/.cargo
-  ARGS+=(--volume "$PWD:/home")
+  ARGS+=(
+    --volume "$PWD:/home"
+    --volume "/home/trent/code/solana/solana-2:/solana-2"
+    --volume "/home/trent/code/solana/solana-program-library:/solana-program-library"
+  )
+
 fi
 ARGS+=(--env "HOME=/home" --env "CARGO_HOME=/home/.cargo")
 
