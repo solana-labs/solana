@@ -1,5 +1,5 @@
 ---
-title: State-validation Protocol-based Rewards
+title: Inflation Schedule
 ---
 
 **Subject to change. Follow most recent economic discussions in the Solana forums: https://forums.solana.com**
@@ -54,3 +54,12 @@ The values of *% of Staked SOL* range from $60\% - 90\%$, which we feel covers t
 ![](/img/p_ex_staked_yields.png)
 
 Again, the above shows an example *Staked Yield* that a staker might expect over time on the Solana network with the *Inflation Schedule* as specified. This is an idealized *Staked Yield* as it neglects validator uptime impact on rewards, validator commissions, potential yield throttling  and potential slashing incidents. It additionally ignores that *% of Staked SOL* is dynamic by design - the economic incentives set up by this *Inflation Schedule*.
+
+### Adjusted Staking Yield
+
+A complete appraisal of earning potential from staking tokens should take into account staked *Token Dilution* and its impact on staking yield. For this, we define *adjusted staking yield* as the change in fractional token supply ownership of staked tokens due to the distribution of inflation issuance. I.e. the positive dilutive effects of inflation. 
+
+We can examine the *adjusted staking yield* as a function of the inflation rate and the percent of staked tokens on the network. We can see this plotted for various staking fractions here:
+
+![](/img/p_ex_staked_dilution.png)
+
