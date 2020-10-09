@@ -101,7 +101,7 @@ curl \
 attempts=100
 while true; do
   attempts=$((attempts - 1))
-  if [[ (($attempts == 0)) || ! -d "/proc/$validator_pid" ]]; then
+  if [[ (($attempts == 0)) ]]; then
     handle_error "ledger tool"
   fi
 
