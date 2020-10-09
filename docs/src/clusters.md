@@ -45,6 +45,7 @@ $ solana-validator \
     --dynamic-port-range 8000-8010 \
     --entrypoint entrypoint.devnet.solana.com:8001 \
     --expected-genesis-hash EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG \
+    --wal-recovery-mode skip_any_corrupted_record \
     --limit-ledger-size
 ```
 
@@ -88,6 +89,7 @@ $ solana-validator \
     --dynamic-port-range 8000-8010 \
     --entrypoint entrypoint.testnet.solana.com:8001 \
     --expected-genesis-hash 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY \
+    --wal-recovery-mode skip_any_corrupted_record \
     --limit-ledger-size
 ```
 
@@ -131,9 +133,11 @@ $ solana-validator \
     --no-untrusted-rpc \
     --ledger ~/validator-ledger \
     --rpc-port 8899 \
+    --private-rpc \
     --dynamic-port-range 8000-8010 \
     --entrypoint mainnet-beta.solana.com:8001 \
     --expected-genesis-hash 5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d \
+    --wal-recovery-mode skip_any_corrupted_record \
     --limit-ledger-size
 ```
 
