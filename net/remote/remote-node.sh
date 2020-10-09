@@ -392,6 +392,7 @@ EOF
     fi
 
 cat >> ~/solana/on-reboot <<EOF
+    # $nodeIndex $extraPrimordialStakes
     $maybeSkipAccountsCreation
     nohup multinode-demo/validator.sh ${args[@]} > validator.log.\$now 2>&1 &
     pid=\$!
