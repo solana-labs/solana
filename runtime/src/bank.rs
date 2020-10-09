@@ -1398,10 +1398,9 @@ impl Bank {
             .collect();
         let slot_duration = Duration::from_nanos(self.ns_per_slot as u64);
         let epoch = self.epoch_schedule().get_epoch(self.slot());
-        let stakes = HashMap::new();
-        let stakes = self.epoch_vote_accounts(epoch).unwrap_or(&stakes);
+        let stakes = self.epoch_vote_accounts(epoch)?;
         let stake_weighted_timestamp = calculate_stake_weighted_timestamp(
-            recent_timestamps,
+            &recent_timestamps,
             stakes,
             self.slot(),
             slot_duration,

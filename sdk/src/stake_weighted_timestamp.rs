@@ -10,18 +10,18 @@ use std::{collections::HashMap, time::Duration};
 pub const TIMESTAMP_SLOT_RANGE: usize = 16;
 
 pub fn calculate_stake_weighted_timestamp(
-    unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)>,
+    unique_timestamps: &HashMap<Pubkey, (Slot, UnixTimestamp)>,
     stakes: &HashMap<Pubkey, (u64, Account)>,
     slot: Slot,
     slot_duration: Duration,
 ) -> Option<UnixTimestamp> {
     let (stake_weighted_timestamps_sum, total_stake) = unique_timestamps
-        .into_iter()
+        .iter()
         .filter_map(|(vote_pubkey, (timestamp_slot, timestamp))| {
             let offset = (slot - timestamp_slot) as u32 * slot_duration;
             stakes.get(&vote_pubkey).map(|(stake, _account)| {
                 (
-                    (timestamp as u128 + offset.as_secs() as u128) * *stake as u128,
+                    (*timestamp as u128 + offset.as_secs() as u128) * *stake as u128,
                     stake,
                 )
             })
@@ -96,7 +96,7 @@ pub mod tests {
         .collect();
         assert_eq!(
             calculate_stake_weighted_timestamp(
-                unique_timestamps.clone(),
+                &unique_timestamps,
                 &stakes,
                 slot as Slot,
                 slot_duration
@@ -139,7 +139,7 @@ pub mod tests {
         .collect();
         assert_eq!(
             calculate_stake_weighted_timestamp(
-                unique_timestamps,
+                &unique_timestamps,
                 &stakes,
                 slot as Slot,
                 slot_duration

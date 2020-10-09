@@ -1630,7 +1630,7 @@ impl Blockstore {
 
         let mut calculate_timestamp = Measure::start("calculate_timestamp");
         let stake_weighted_timestamp =
-            calculate_stake_weighted_timestamp(unique_timestamps, stakes, slot, slot_duration)
+            calculate_stake_weighted_timestamp(&unique_timestamps, stakes, slot, slot_duration)
                 .ok_or(BlockstoreError::EmptyEpochStakes)?;
         calculate_timestamp.stop();
         datapoint_info!(
