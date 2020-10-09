@@ -17,7 +17,7 @@ use solana_rbpf::{
     vm::{EbpfVm, Executable, InstructionMeter},
 };
 use solana_runtime::{
-    feature_set::compute_budget_config2,
+    feature_set::compute_budget_balancing,
     process_instruction::{ComputeMeter, Executor, InvokeContext},
 };
 use solana_sdk::{
@@ -101,7 +101,7 @@ pub fn create_and_cache_executor(
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
     bpf_verifier::check(
         elf_bytes,
-        !invoke_context.is_feature_active(&compute_budget_config2::id()),
+        !invoke_context.is_feature_active(&compute_budget_balancing::id()),
     )
     .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e)))?;
     let executor = Arc::new(BPFExecutor { executable });
