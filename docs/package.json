@@ -22,7 +22,9 @@
     "eslint-plugin-react": "^7.20.0",
     "prettier": "^2.0.5",
     "react": "^16.8.4",
-    "react-dom": "^16.8.4"
+    "react-dom": "^16.8.4",
+    "rehype-katex": "^4.0.0",
+    "remark-math": "^4.0.0"
   },
   "browserslist": {
     "production": [
