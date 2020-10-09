@@ -24,9 +24,9 @@ As a first step to understanding the impact of the *Inflation Schedule* on the S
 
 Specifically: 
 
-- *Initial Inflation Rate*: $7-9\%$
-- *Dis-inflation Rate*: $-14-16\%$
-- *Long-term Inflation Rate*: $1-2\%$
+- *Initial Inflation Rate*: 7-9%
+- *Dis-inflation Rate*: -14-16%
+- *Long-term Inflation Rate*: 1-2%
 
 Using these ranges to simulate a number of possible Inflation Schedules, we can explore inflation over time:
 
@@ -39,17 +39,17 @@ From these simulated *Inflation Schedules*, we can also project ranges for token
 
 Finally we can estimate the *Staked Yield* on staked SOL, if we introduce an additional parameter, previously discussed, *% of Staked SOL*: 
 
-$$
-\%~\text{SOL Staked} = \frac{\text{Total SOL Staked}}{\text{Total Current Supply}}
-$$
+
+%~\text{SOL Staked} = \frac{\text{Total SOL Staked}}{\text{Total Current Supply}}
+
 
 In this case, because *% of Staked SOL* is a parameter that must be estimated (unlike the *Inflation Schedule* parameters), it is easier to use specific *Inflation Schedule* parameters and explore a range of *% of Staked SOL*. For the below example, we’ve chosen the middle of the parameter ranges explored above:
 
-- *Initial Inflation Rate*: $8\%$
-- *Dis-inflation Rate*: $-15\%$
-- *Long-term Inflation Rate*: $1.5\%$
+- *Initial Inflation Rate*: 8%
+- *Dis-inflation Rate*: -15%
+- *Long-term Inflation Rate*: 1.5%
 
-The values of *% of Staked SOL* range from $60\% - 90\%$, which we feel covers the likely range we expect to observe, based on feedback from the investor and validator communities as well as what is observed on comparable Proof-of-Stake protocols.
+The values of *% of Staked SOL* range from 60% - 90%, which we feel covers the likely range we expect to observe, based on feedback from the investor and validator communities as well as what is observed on comparable Proof-of-Stake protocols.
 
 ![](/img/p_ex_staked_yields.png)
 
