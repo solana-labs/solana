@@ -502,6 +502,8 @@ type ConfirmedBlock = {
   rewards: Array<{
     pubkey: string,
     lamports: number,
+    postBalance: number | null,
+    rewardType: string | null,
   }>,
 };
 
@@ -1152,6 +1154,8 @@ export const GetConfirmedBlockRpcResult = jsonRpcResult(
           struct({
             pubkey: 'string',
             lamports: 'number',
+            postBalance: struct.union(['number', 'undefined']),
+            rewardType: struct.union(['string', 'undefined']),
           }),
         ]),
       ]),
