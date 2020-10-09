@@ -3,7 +3,7 @@
 # shellcheck source=ci/rust-version.sh
 here=$(dirname "$0")
 
-source "${here}"/../ci/rust-version.sh all
+source "${here}"/ci/rust-version.sh all
 
 toolchain=
 case "$1" in
