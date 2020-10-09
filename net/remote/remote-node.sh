@@ -419,7 +419,7 @@ EOF
         args+=(--keypair config/validator-identity.json)
       fi
 
-      if [[ ${#extraPrimordialStakes} -eq 0 ]]; then
+      if [[ ${extraPrimordialStakes} -eq 0 ]]; then
         multinode-demo/delegate-stake.sh "${args[@]}" "$internalNodesStakeLamports"
       fi
     fi
