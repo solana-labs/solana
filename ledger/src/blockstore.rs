@@ -33,6 +33,7 @@ use solana_sdk::{
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     signature::{Keypair, Signature, Signer},
+    stake_weighted_timestamp::{calculate_stake_weighted_timestamp, TIMESTAMP_SLOT_RANGE},
     timing::timestamp,
     transaction::Transaction,
 };
@@ -77,7 +78,6 @@ thread_local!(static PAR_THREAD_POOL_ALL_CPUS: RefCell<ThreadPool> = RefCell::ne
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
 pub const MAX_TURBINE_PROPAGATION_IN_MS: u64 = 100;
 pub const MAX_TURBINE_DELAY_IN_TICKS: u64 = MAX_TURBINE_PROPAGATION_IN_MS / MS_PER_TICK;
-const TIMESTAMP_SLOT_RANGE: usize = 16;
 
 // An upper bound on maximum number of data shreds we can handle in a slot
 // 32K shreds would allow ~320K peak TPS
@@ -1630,7 +1630,7 @@ impl Blockstore {
 
         let mut calculate_timestamp = Measure::start("calculate_timestamp");
         let stake_weighted_timestamp =
-            calculate_stake_weighted_timestamp(unique_timestamps, stakes, slot, slot_duration)
+            calculate_stake_weighted_timestamp(&unique_timestamps, stakes, slot, slot_duration)
                 .ok_or(BlockstoreError::EmptyEpochStakes)?;
         calculate_timestamp.stop();
         datapoint_info!(
@@ -3130,33 +3130,6 @@ fn slot_has_updates(slot_meta: &SlotMeta, slot_meta_backup: &Option<SlotMeta>) -
         (slot_meta_backup.is_some() && slot_meta_backup.as_ref().unwrap().consumed != slot_meta.consumed))
 }
 
-fn calculate_stake_weighted_timestamp(
-    unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)>,
-    stakes: &HashMap<Pubkey, (u64, Account)>,
-    slot: Slot,
-    slot_duration: Duration,
-) -> Option<UnixTimestamp> {
-    let (stake_weighted_timestamps_sum, total_stake) = unique_timestamps
-        .into_iter()
-        .filter_map(|(vote_pubkey, (timestamp_slot, timestamp))| {
-            let offset = (slot - timestamp_slot) as u32 * slot_duration;
-            stakes.get(&vote_pubkey).map(|(stake, _account)| {
-                (
-                    (timestamp as u128 + offset.as_secs() as u128) * *stake as u128,
-                    stake,
-                )
-            })
-        })
-        .fold((0, 0), |(timestamps, stakes), (timestamp, stake)| {
-            (timestamps + timestamp, stakes + *stake as u128)
-        });
-    if total_stake > 0 {
-        Some((stake_weighted_timestamps_sum / total_stake) as i64)
-    } else {
-        None
-    }
-}
-
 // Creates a new ledger with slot 0 full of ticks (and only ticks).
 //
 // Returns the blockhash that can be used to append entries with.
@@ -3478,7 +3451,6 @@ pub mod tests {
         hash::{self, hash, Hash},
         instruction::CompiledInstruction,
         message::Message,
-        native_token::sol_to_lamports,
         packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
         signature::Signature,
@@ -5887,113 +5859,6 @@ pub mod tests {
                 .is_err());
             assert_eq!(blockstore.get_block_time(*slot).unwrap(), None);
         }
-    }
-
-    #[test]
-    fn test_calculate_stake_weighted_timestamp() {
-        let recent_timestamp: UnixTimestamp = 1_578_909_061;
-        let slot = 5;
-        let slot_duration = Duration::from_millis(400);
-        let expected_offset = (slot * slot_duration).as_secs();
-        let pubkey0 = Pubkey::new_rand();
-        let pubkey1 = Pubkey::new_rand();
-        let pubkey2 = Pubkey::new_rand();
-        let pubkey3 = Pubkey::new_rand();
-        let unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = [
-            (pubkey0, (0, recent_timestamp)),
-            (pubkey1, (0, recent_timestamp)),
-            (pubkey2, (0, recent_timestamp)),
-            (pubkey3, (0, recent_timestamp)),
-        ]
-        .iter()
-        .cloned()
-        .collect();
-
-        let stakes: HashMap<Pubkey, (u64, Account)> = [
-            (
-                pubkey0,
-                (
-                    sol_to_lamports(4_500_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
-                ),
-            ),
-            (
-                pubkey1,
-                (
-                    sol_to_lamports(4_500_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
-                ),
-            ),
-            (
-                pubkey2,
-                (
-                    sol_to_lamports(4_500_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
-                ),
-            ),
-            (
-                pubkey3,
-                (
-                    sol_to_lamports(4_500_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
-                ),
-            ),
-        ]
-        .iter()
-        .cloned()
-        .collect();
-        assert_eq!(
-            calculate_stake_weighted_timestamp(
-                unique_timestamps.clone(),
-                &stakes,
-                slot as Slot,
-                slot_duration
-            ),
-            Some(recent_timestamp + expected_offset as i64)
-        );
-
-        let stakes: HashMap<Pubkey, (u64, Account)> = [
-            (
-                pubkey0,
-                (
-                    sol_to_lamports(15_000_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
-                ),
-            ),
-            (
-                pubkey1,
-                (
-                    sol_to_lamports(1_000_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
-                ),
-            ),
-            (
-                pubkey2,
-                (
-                    sol_to_lamports(1_000_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
-                ),
-            ),
-            (
-                pubkey3,
-                (
-                    sol_to_lamports(1_000_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
-                ),
-            ),
-        ]
-        .iter()
-        .cloned()
-        .collect();
-        assert_eq!(
-            calculate_stake_weighted_timestamp(
-                unique_timestamps,
-                &stakes,
-                slot as Slot,
-                slot_duration
-            ),
-            Some(recent_timestamp + expected_offset as i64)
-        );
     }
 
     #[test]

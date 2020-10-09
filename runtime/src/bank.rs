@@ -57,6 +57,7 @@ use solana_sdk::{
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
+    stake_weighted_timestamp::{calculate_stake_weighted_timestamp, TIMESTAMP_SLOT_RANGE},
     system_transaction,
     sysvar::{self, Sysvar},
     timing::years_as_slots,
@@ -77,6 +78,7 @@ use std::{
         atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
         LockResult, RwLockWriteGuard, {Arc, RwLock, RwLockReadGuard},
     },
+    time::Duration,
 };
 
 // Partial SPL Token v2.0.x declarations inlined to avoid an external dependency on the spl-token crate
@@ -1012,7 +1014,7 @@ impl Bank {
     }
 
     /// computed unix_timestamp at this slot height
-    pub fn unix_timestamp(&self) -> i64 {
+    pub fn unix_timestamp_from_genesis(&self) -> i64 {
         self.genesis_creation_time + ((self.slot as u128 * self.ns_per_slot) / 1_000_000_000) as i64
     }
 
@@ -1035,19 +1037,38 @@ impl Bank {
     }
 
     pub fn clock(&self) -> sysvar::clock::Clock {
-        sysvar::clock::Clock {
+        sysvar::clock::Clock::from_account(
+            &self.get_account(&sysvar::clock::id()).unwrap_or_default(),
+        )
+        .unwrap_or_default()
+    }
+
+    fn update_clock(&self) {
+        let mut unix_timestamp = self.unix_timestamp_from_genesis();
+        if self
+            .feature_set
+            .is_active(&feature_set::timestamp_correction::id())
+        {
+            if let Some(timestamp_estimate) = self.get_timestamp_estimate() {
+                if timestamp_estimate > unix_timestamp {
+                    datapoint_info!(
+                        "bank-timestamp-correction",
+                        ("from_genesis", unix_timestamp, i64),
+                        ("corrected", timestamp_estimate, i64),
+                    );
+                    unix_timestamp = timestamp_estimate
+                }
+            }
+        }
+        let clock = sysvar::clock::Clock {
             slot: self.slot,
             unused: Self::get_unused_from_slot(self.slot, self.unused),
             epoch: self.epoch_schedule.get_epoch(self.slot),
             leader_schedule_epoch: self.epoch_schedule.get_leader_schedule_epoch(self.slot),
-            unix_timestamp: self.unix_timestamp(),
-        }
-    }
-
-    fn update_clock(&self) {
+            unix_timestamp,
+        };
         self.update_sysvar_account(&sysvar::clock::id(), |account| {
-            self.clock()
-                .create_account(self.inherit_sysvar_account_balance(account))
+            clock.create_account(self.inherit_sysvar_account_balance(account))
         });
     }
 
@@ -1359,6 +1380,46 @@ impl Bank {
     pub fn update_recent_blockhashes(&self) {
         let blockhash_queue = self.blockhash_queue.read().unwrap();
         self.update_recent_blockhashes_locked(&blockhash_queue);
+    }
+
+    fn get_timestamp_estimate(&self) -> Option<UnixTimestamp> {
+        let mut get_timestamp_estimate_time = Measure::start("get_timestamp_estimate");
+        let recent_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = self
+            .vote_accounts()
+            .into_iter()
+            .filter_map(|(pubkey, (_, account))| {
+                VoteState::from(&account).and_then(|state| {
+                    let timestamp_slot = state.last_timestamp.slot;
+                    if self.slot().checked_sub(timestamp_slot)? <= TIMESTAMP_SLOT_RANGE as u64 {
+                        Some((
+                            pubkey,
+                            (state.last_timestamp.slot, state.last_timestamp.timestamp),
+                        ))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
+        let slot_duration = Duration::from_nanos(self.ns_per_slot as u64);
+        let epoch = self.epoch_schedule().get_epoch(self.slot());
+        let stakes = self.epoch_vote_accounts(epoch)?;
+        let stake_weighted_timestamp = calculate_stake_weighted_timestamp(
+            &recent_timestamps,
+            stakes,
+            self.slot(),
+            slot_duration,
+        );
+        get_timestamp_estimate_time.stop();
+        datapoint_info!(
+            "bank-timestamp",
+            (
+                "get_timestamp_estimate_us",
+                get_timestamp_estimate_time.as_us(),
+                i64
+            ),
+        );
+        stake_weighted_timestamp
     }
 
     // Distribute collected transaction fees for this slot to collector_id (= current leader).
@@ -3951,7 +4012,8 @@ mod tests {
     use crate::{
         accounts_index::{AccountMap, Ancestors},
         genesis_utils::{
-            create_genesis_config_with_leader, GenesisConfigInfo, BOOTSTRAP_VALIDATOR_LAMPORTS,
+            create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
+            GenesisConfigInfo, ValidatorVoteKeypairs, BOOTSTRAP_VALIDATOR_LAMPORTS,
         },
         process_instruction::InvokeContext,
         status_cache::MAX_CACHE_ENTRIES,
@@ -3980,7 +4042,7 @@ mod tests {
     use solana_vote_program::vote_state::VoteStateVersions;
     use solana_vote_program::{
         vote_instruction,
-        vote_state::{self, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
+        vote_state::{self, BlockTimestamp, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
     };
     use std::{result, time::Duration};
 
@@ -3993,11 +4055,14 @@ mod tests {
     }
 
     #[test]
-    fn test_bank_unix_timestamp() {
+    fn test_bank_unix_timestamp_from_genesis() {
         let (genesis_config, _mint_keypair) = create_genesis_config(1);
         let mut bank = Arc::new(Bank::new(&genesis_config));
 
-        assert_eq!(genesis_config.creation_time, bank.unix_timestamp());
+        assert_eq!(
+            genesis_config.creation_time,
+            bank.unix_timestamp_from_genesis()
+        );
         let slots_per_sec = 1.0
             / (duration_as_s(&genesis_config.poh_config.target_tick_duration)
                 * genesis_config.ticks_per_slot as f32);
@@ -4006,7 +4071,7 @@ mod tests {
             bank = Arc::new(new_from_parent(&bank));
         }
 
-        assert!(bank.unix_timestamp() - genesis_config.creation_time >= 1);
+        assert!(bank.unix_timestamp_from_genesis() - genesis_config.creation_time >= 1);
     }
 
     #[test]
@@ -9383,6 +9448,186 @@ mod tests {
         // Account is now empty, and the account lamports were burnt
         assert_eq!(bank.get_balance(&inline_spl_token_v2_0::id()), 0);
         assert_eq!(bank.capitalization(), original_capitalization - 100);
+    }
+
+    fn update_vote_account_timestamp(timestamp: BlockTimestamp, bank: &Bank, vote_pubkey: &Pubkey) {
+        let mut vote_account = bank.get_account(vote_pubkey).unwrap_or_default();
+        let mut vote_state = VoteState::from(&vote_account).unwrap_or_default();
+        vote_state.last_timestamp = timestamp;
+        let versioned = VoteStateVersions::Current(Box::new(vote_state));
+        VoteState::to(&versioned, &mut vote_account).unwrap();
+        bank.store_account(vote_pubkey, &vote_account);
+    }
+
+    #[test]
+    fn test_get_timestamp_estimate() {
+        let validator_vote_keypairs0 = ValidatorVoteKeypairs::new_rand();
+        let validator_vote_keypairs1 = ValidatorVoteKeypairs::new_rand();
+        let validator_keypairs = vec![&validator_vote_keypairs0, &validator_vote_keypairs1];
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair: _,
+            voting_keypair: _,
+        } = create_genesis_config_with_vote_accounts(
+            1_000_000_000,
+            &validator_keypairs,
+            vec![10_000; 2],
+        );
+        let mut bank = Bank::new(&genesis_config);
+        assert_eq!(bank.get_timestamp_estimate(), Some(0));
+
+        let recent_timestamp: UnixTimestamp = bank.unix_timestamp_from_genesis();
+        update_vote_account_timestamp(
+            BlockTimestamp {
+                slot: bank.slot(),
+                timestamp: recent_timestamp,
+            },
+            &bank,
+            &validator_vote_keypairs0.vote_keypair.pubkey(),
+        );
+        let additional_secs = 2;
+        update_vote_account_timestamp(
+            BlockTimestamp {
+                slot: bank.slot(),
+                timestamp: recent_timestamp + additional_secs,
+            },
+            &bank,
+            &validator_vote_keypairs1.vote_keypair.pubkey(),
+        );
+        assert_eq!(
+            bank.get_timestamp_estimate(),
+            Some(recent_timestamp + additional_secs / 2)
+        );
+
+        for _ in 0..10 {
+            bank = new_from_parent(&Arc::new(bank));
+        }
+        let adjustment = (bank.ns_per_slot as u64 * bank.slot()) / 1_000_000_000;
+        assert_eq!(
+            bank.get_timestamp_estimate(),
+            Some(recent_timestamp + adjustment as i64 + additional_secs / 2)
+        );
+
+        for _ in 0..7 {
+            bank = new_from_parent(&Arc::new(bank));
+        }
+        assert_eq!(bank.get_timestamp_estimate(), None);
+    }
+
+    #[test]
+    fn test_timestamp_correction_feature() {
+        let leader_pubkey = Pubkey::new_rand();
+        let GenesisConfigInfo {
+            mut genesis_config,
+            voting_keypair,
+            ..
+        } = create_genesis_config_with_leader(5, &leader_pubkey, 3);
+        genesis_config
+            .accounts
+            .remove(&feature_set::timestamp_correction::id())
+            .unwrap();
+        let bank = Bank::new(&genesis_config);
+
+        let recent_timestamp: UnixTimestamp = bank.unix_timestamp_from_genesis();
+        let additional_secs = 1;
+        update_vote_account_timestamp(
+            BlockTimestamp {
+                slot: bank.slot(),
+                timestamp: recent_timestamp + additional_secs,
+            },
+            &bank,
+            &voting_keypair.pubkey(),
+        );
+
+        // Bank::new_from_parent should not adjust timestamp before feature activation
+        let mut bank = new_from_parent(&Arc::new(bank));
+        let clock =
+            sysvar::clock::Clock::from_account(&bank.get_account(&sysvar::clock::id()).unwrap())
+                .unwrap();
+        assert_eq!(clock.unix_timestamp, bank.unix_timestamp_from_genesis());
+
+        // Request `timestamp_correction` activation
+        let feature = Feature {
+            activated_at: Some(bank.slot),
+        };
+        bank.store_account(
+            &feature_set::timestamp_correction::id(),
+            &feature.create_account(42),
+        );
+        bank.compute_active_feature_set(true);
+
+        // Now Bank::new_from_parent should adjust timestamp
+        let bank = Arc::new(new_from_parent(&Arc::new(bank)));
+        let clock =
+            sysvar::clock::Clock::from_account(&bank.get_account(&sysvar::clock::id()).unwrap())
+                .unwrap();
+        assert_eq!(
+            clock.unix_timestamp,
+            bank.unix_timestamp_from_genesis() + additional_secs
+        );
+    }
+
+    #[test]
+    fn test_update_clock_timestamp() {
+        let leader_pubkey = Pubkey::new_rand();
+        let GenesisConfigInfo {
+            genesis_config,
+            voting_keypair,
+            ..
+        } = create_genesis_config_with_leader(5, &leader_pubkey, 3);
+        let bank = Bank::new(&genesis_config);
+        assert_eq!(
+            bank.clock().unix_timestamp,
+            bank.unix_timestamp_from_genesis()
+        );
+
+        bank.update_clock();
+        assert_eq!(
+            bank.clock().unix_timestamp,
+            bank.unix_timestamp_from_genesis()
+        );
+
+        update_vote_account_timestamp(
+            BlockTimestamp {
+                slot: bank.slot(),
+                timestamp: bank.unix_timestamp_from_genesis() - 1,
+            },
+            &bank,
+            &voting_keypair.pubkey(),
+        );
+        bank.update_clock();
+        assert_eq!(
+            bank.clock().unix_timestamp,
+            bank.unix_timestamp_from_genesis()
+        );
+
+        update_vote_account_timestamp(
+            BlockTimestamp {
+                slot: bank.slot(),
+                timestamp: bank.unix_timestamp_from_genesis(),
+            },
+            &bank,
+            &voting_keypair.pubkey(),
+        );
+        bank.update_clock();
+        assert_eq!(
+            bank.clock().unix_timestamp,
+            bank.unix_timestamp_from_genesis()
+        );
+
+        update_vote_account_timestamp(
+            BlockTimestamp {
+                slot: bank.slot(),
+                timestamp: bank.unix_timestamp_from_genesis() + 1,
+            },
+            &bank,
+            &voting_keypair.pubkey(),
+        );
+        bank.update_clock();
+        assert_eq!(
+            bank.clock().unix_timestamp,
+            bank.unix_timestamp_from_genesis() + 1
+        );
     }
 
     fn setup_bank_with_removable_zero_lamport_account() -> Arc<Bank> {
