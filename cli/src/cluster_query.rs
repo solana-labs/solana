@@ -1405,12 +1405,12 @@ pub fn process_show_validators(
         .map(|vote_account| vote_account.activated_stake)
         .sum();
 
-    let total_deliquent_stake = vote_accounts
+    let total_delinquent_stake = vote_accounts
         .delinquent
         .iter()
         .map(|vote_account| vote_account.activated_stake)
         .sum();
-    let total_current_stake = total_active_stake - total_deliquent_stake;
+    let total_current_stake = total_active_stake - total_delinquent_stake;
 
     let mut current = vote_accounts.current;
     current.sort_by(|a, b| b.activated_stake.cmp(&a.activated_stake));
@@ -1464,7 +1464,7 @@ pub fn process_show_validators(
     let cli_validators = CliValidators {
         total_active_stake,
         total_current_stake,
-        total_deliquent_stake,
+        total_delinquent_stake,
         current_validators,
         delinquent_validators,
         stake_by_version,
