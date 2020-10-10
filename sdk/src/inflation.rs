@@ -106,8 +106,7 @@ mod tests {
         for year in &[0.1, 0.5, 1.0, DEFAULT_FOUNDATION_TERM, 100.0] {
             let total = inflation.total(*year);
 	    let validator = inflation.validator(*year);
-	    let foundation = inflation.foundation(*year);
-	    
+	    let foundation = inflation.foundation(*year);    
 	    println!("year: {}\ntotal: {}\nvalidator {}\nfoundation: {}\n v+f: {}",
 		     year,
 		     total,

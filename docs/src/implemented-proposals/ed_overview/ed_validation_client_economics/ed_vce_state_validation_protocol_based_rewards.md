@@ -20,7 +20,7 @@ The effective protocol-based annual staking yield \(%\) per epoch received by va
 
 The first factor is a function of protocol parameters only \(i.e. independent of validator behavior in a given epoch\) and results in an inflation schedule designed to incentivize early participation, provide clear monetary stability and provide optimal security in the network.
 
-As a first step to understanding the impact of the *Inflation Schedule* on the Solana economy, we’ve simulated the upper and lower ranges of what token issuance over time might look like given the current ranges of Inflation Schedule parameters under study. 
+As a first step to understanding the impact of the *Inflation Schedule* on the Solana economy, we’ve simulated the upper and lower ranges of what token issuance over time might look like given the current ranges of Inflation Schedule parameters under study.
 
 Specifically:
 
