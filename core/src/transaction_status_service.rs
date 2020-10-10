@@ -56,6 +56,7 @@ impl TransactionStatusService {
             statuses,
             balances,
             inner_instructions,
+            transaction_logs,
         } = write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))?;
 
         let slot = bank.slot();
@@ -65,12 +66,14 @@ impl TransactionStatusService {
             pre_balances,
             post_balances,
             inner_instructions,
+            log_messages,
         ) in izip!(
             OrderedIterator::new(&transactions, iteration_order.as_deref()),
             statuses,
             balances.pre_balances,
             balances.post_balances,
-            inner_instructions
+            inner_instructions,
+            transaction_logs
         ) {
             if Bank::can_commit(&status) && !transaction.signatures.is_empty() {
                 let fee_calculator = match hash_age_kind {
@@ -96,6 +99,8 @@ impl TransactionStatusService {
                         .collect()
                 });
 
+                let log_messages = Some(log_messages);
+
                 blockstore
                     .write_transaction_status(
                         slot,
@@ -108,6 +113,7 @@ impl TransactionStatusService {
                             pre_balances,
                             post_balances,
                             inner_instructions,
+                            log_messages,
                         },
                     )
                     .expect("Expect database write to succeed");
