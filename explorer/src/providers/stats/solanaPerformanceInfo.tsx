@@ -65,17 +65,21 @@ export function performanceInfoReducer(
         return sample.numTransactions / sample.samplePeriodSecs;
       });
 
-      const historyMaxTps = Math.max(...short);
       const avgTps = short[0];
       const medium = downsampleByFactor(short, 4);
       const long = downsampleByFactor(medium, 3);
-      short = round(short.slice(0, 30)).reverse();
 
       const perfHistory = {
-        short: short,
+        short: round(short.slice(0, 30)).reverse(),
         medium: round(medium.slice(0, 30)).reverse(),
         long: round(long.slice(0, 30)).reverse(),
       };
+
+      const historyMaxTps = Math.max(
+        Math.max(...perfHistory.short),
+        Math.max(...perfHistory.medium),
+        Math.max(...perfHistory.long)
+      );
 
       return {
         ...state,
