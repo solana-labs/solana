@@ -36,6 +36,11 @@ if [[ "$UPGRADE_INITIAL_DELAY" -gt 0 ]]; then
   "$NET_SH" sanity
 fi
 
+declare maybeExtraPrimordialStakes
+if [[ -n "$EXTRA_PRIMORDIAL_STAKES" ]]; then
+  maybeExtraPrimordialStakes="--extra-primordial-stakes $EXTRA_PRIMORDIAL_STAKES"
+fi
+
 # Restart validators one by one
 # shellcheck disable=SC2154 # sourced from config above
 for i in "${!validatorIpList[@]}"; do
@@ -47,7 +52,7 @@ for i in "${!validatorIpList[@]}"; do
   declare ipAddress="${validatorIpList[$i]}"
 
   "$NET_SH" stopnode -i "$ipAddress"
-  "$NET_SH" startnode -r -i "$ipAddress"
+  "$NET_SH" startnode -r -i "$ipAddress" ${maybeExtraPrimordialStakes}
 
   # This could be replaced with something based on `solana catchup`
   sleep_if_positive "$UPGRADE_INTERVALIDATOR_DELAY"
