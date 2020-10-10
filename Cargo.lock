@@ -4652,6 +4652,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-account-decoder",
+ "solana-runtime",
  "solana-sdk 1.3.17",
  "solana-stake-program",
  "solana-vote-program",

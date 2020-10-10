@@ -221,6 +221,7 @@ impl From<StoredConfirmedBlockReward> for Reward {
             pubkey,
             lamports,
             post_balance: 0,
+            reward_type: None,
         }
     }
 }

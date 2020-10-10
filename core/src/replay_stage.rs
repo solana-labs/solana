@@ -327,7 +327,6 @@ impl ReplayStage {
                         &bank_forks,
                         &leader_schedule_cache,
                         &subscriptions,
-                        rewards_recorder_sender.clone(),
                         &mut progress,
                         &mut all_pubkeys,
                     );
@@ -349,6 +348,7 @@ impl ReplayStage {
                         &mut heaviest_subtree_fork_choice,
                         &replay_vote_sender,
                         &bank_notification_sender,
+                        &rewards_recorder_sender,
                     );
                     replay_active_banks_time.stop();
                     Self::report_memory(&allocated, "replay_active_banks", start);
@@ -590,7 +590,6 @@ impl ReplayStage {
                             &poh_recorder,
                             &leader_schedule_cache,
                             &subscriptions,
-                            rewards_recorder_sender.clone(),
                             &progress,
                             &retransmit_slots_sender,
                             &mut skipped_slots_info,
@@ -831,7 +830,6 @@ impl ReplayStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         subscriptions: &Arc<RpcSubscriptions>,
-        rewards_recorder_sender: Option<RewardsRecorderSender>,
         progress_map: &ProgressMap,
         retransmit_slots_sender: &RetransmitSlotsSender,
         skipped_slots_info: &mut SkippedSlotsInfo,
@@ -930,7 +928,6 @@ impl ReplayStage {
                 poh_slot,
                 root_slot,
                 my_pubkey,
-                &rewards_recorder_sender,
                 subscriptions,
             );
 
@@ -1234,6 +1231,7 @@ impl ReplayStage {
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         replay_vote_sender: &ReplayVoteSender,
         bank_notification_sender: &Option<BankNotificationSender>,
+        rewards_recorder_sender: &Option<RewardsRecorderSender>,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -1309,6 +1307,8 @@ impl ReplayStage {
                         .send(BankNotification::Frozen(bank.clone()))
                         .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
                 }
+
+                Self::record_rewards(&bank, &rewards_recorder_sender);
             } else {
                 trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",
@@ -1786,7 +1786,6 @@ impl ReplayStage {
         bank_forks: &RwLock<BankForks>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         subscriptions: &Arc<RpcSubscriptions>,
-        rewards_recorder_sender: Option<RewardsRecorderSender>,
         progress: &mut ProgressMap,
         all_pubkeys: &mut PubkeyReferences,
     ) {
@@ -1832,7 +1831,6 @@ impl ReplayStage {
                     child_slot,
                     forks.root(),
                     &leader,
-                    &rewards_recorder_sender,
                     subscriptions,
                 );
                 let empty: Vec<&Pubkey> = vec![];
@@ -1860,21 +1858,18 @@ impl ReplayStage {
         slot: u64,
         root_slot: u64,
         leader: &Pubkey,
-        rewards_recorder_sender: &Option<RewardsRecorderSender>,
         subscriptions: &Arc<RpcSubscriptions>,
     ) -> Bank {
         subscriptions.notify_slot(slot, parent.slot(), root_slot);
-
-        let child_bank = Bank::new_from_parent(parent, leader, slot);
-        Self::record_rewards(&child_bank, &rewards_recorder_sender);
-        child_bank
+        Bank::new_from_parent(parent, leader, slot)
     }
 
     fn record_rewards(bank: &Bank, rewards_recorder_sender: &Option<RewardsRecorderSender>) {
         if let Some(rewards_recorder_sender) = rewards_recorder_sender {
-            if let Some(ref rewards) = bank.rewards {
+            let rewards = bank.rewards.read().unwrap();
+            if !rewards.is_empty() {
                 rewards_recorder_sender
-                    .send((bank.slot(), rewards.iter().copied().collect()))
+                    .send((bank.slot(), rewards.clone()))
                     .unwrap_or_else(|err| warn!("rewards_recorder_sender failed: {:?}", err));
             }
         }
@@ -2124,7 +2119,6 @@ pub(crate) mod tests {
             &bank_forks,
             &leader_schedule_cache,
             &rpc_subscriptions,
-            None,
             &mut progress,
             &mut PubkeyReferences::default(),
         );
@@ -2148,7 +2142,6 @@ pub(crate) mod tests {
             &bank_forks,
             &leader_schedule_cache,
             &rpc_subscriptions,
-            None,
             &mut progress,
             &mut PubkeyReferences::default(),
         );
