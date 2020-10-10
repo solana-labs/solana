@@ -301,7 +301,7 @@ pub struct CliValidatorsStakeByVersion {
 pub struct CliValidators {
     pub total_active_stake: u64,
     pub total_current_stake: u64,
-    pub total_deliquent_stake: u64,
+    pub total_delinquent_stake: u64,
     pub current_validators: Vec<CliValidator>,
     pub delinquent_validators: Vec<CliValidator>,
     pub stake_by_version: BTreeMap<String, CliValidatorsStakeByVersion>,
@@ -360,7 +360,7 @@ impl fmt::Display for CliValidators {
             "Active Stake:",
             &build_balance_message(self.total_active_stake, self.use_lamports_unit, true),
         )?;
-        if self.total_deliquent_stake > 0 {
+        if self.total_delinquent_stake > 0 {
             writeln_name_value(
                 f,
                 "Current Stake:",
@@ -376,11 +376,11 @@ impl fmt::Display for CliValidators {
                 &format!(
                     "{} ({:0.2}%)",
                     &build_balance_message(
-                        self.total_deliquent_stake,
+                        self.total_delinquent_stake,
                         self.use_lamports_unit,
                         true
                     ),
-                    100. * self.total_deliquent_stake as f64 / self.total_active_stake as f64
+                    100. * self.total_delinquent_stake as f64 / self.total_active_stake as f64
                 ),
             )?;
         }
