@@ -145,6 +145,7 @@ fn test_program_bpf_sanity() {
         programs.extend_from_slice(&[
             ("solana_bpf_rust_128bit", true),
             ("solana_bpf_rust_alloc", true),
+            ("solana_bpf_rust_custom_heap", true),
             ("solana_bpf_rust_dep_crate", true),
             ("solana_bpf_rust_external_spend", false),
             ("solana_bpf_rust_iter", true),
@@ -478,9 +479,9 @@ fn test_program_bpf_invoke() {
         let (derived_key1, nonce1) =
             Pubkey::find_program_address(&[b"You pass butter"], &invoke_program_id);
         let (derived_key2, nonce2) =
-            Pubkey::find_program_address(&[b"Lil'", b"Bits"], &invoke_program_id);
+            Pubkey::find_program_address(&[b"Lil'", b"Bits"], &invoked_program_id);
         let (derived_key3, nonce3) =
-            Pubkey::find_program_address(&[derived_key2.as_ref()], &invoke_program_id);
+            Pubkey::find_program_address(&[derived_key2.as_ref()], &invoked_program_id);
 
         let mint_pubkey = mint_keypair.pubkey();
         let account_metas = vec![
@@ -526,6 +527,8 @@ fn test_program_bpf_invoke() {
             vec![
                 solana_sdk::system_program::id(),
                 solana_sdk::system_program::id(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
@@ -636,6 +639,43 @@ fn test_program_bpf_invoke() {
     }
 }
 
+#[cfg(feature = "bpf_rust")]
+#[test]
+fn test_program_bpf_call_depth() {
+    solana_logger::setup();
+
+    println!("Test program: solana_bpf_rust_call_depth");
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin_loader(&name, id, entrypoint);
+    let bank_client = BankClient::new(bank);
+    let program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_call_depth",
+    );
+
+    let instruction = Instruction::new(
+        program_id,
+        &(ComputeBudget::default().max_call_depth - 1),
+        vec![],
+    );
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert!(result.is_ok());
+
+    let instruction =
+        Instruction::new(program_id, &ComputeBudget::default().max_call_depth, vec![]);
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert!(result.is_err());
+}
+
 #[test]
 fn assert_instruction_count() {
     solana_logger::setup();
@@ -660,12 +700,12 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_128bit", 543),
             ("solana_bpf_rust_alloc", 19082),
             ("solana_bpf_rust_dep_crate", 2),
-            ("solana_bpf_rust_external_spend", 485),
+            ("solana_bpf_rust_external_spend", 538),
             ("solana_bpf_rust_iter", 723),
             ("solana_bpf_rust_many_args", 231),
-            ("solana_bpf_rust_noop", 459),
-            ("solana_bpf_rust_param_passing", 54),
-            ("solana_bpf_rust_sanity", 2223),
+            ("solana_bpf_rust_noop", 512),
+            ("solana_bpf_rust_param_passing", 46),
+            ("solana_bpf_rust_sanity", 1989),
         ]);
     }
 

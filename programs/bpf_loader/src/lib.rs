@@ -14,10 +14,10 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use solana_rbpf::{
     error::{EbpfError, UserDefinedError},
     memory_region::MemoryRegion,
-    vm::{EbpfVm, Executable, InstructionMeter},
+    vm::{Config, EbpfVm, Executable, InstructionMeter},
 };
 use solana_runtime::{
-    feature_set::compute_budget_config2,
+    feature_set::compute_budget_balancing,
     process_instruction::{ComputeMeter, Executor, InvokeContext},
 };
 use solana_sdk::{
@@ -101,7 +101,7 @@ pub fn create_and_cache_executor(
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
     bpf_verifier::check(
         elf_bytes,
-        !invoke_context.is_feature_active(&compute_budget_config2::id()),
+        !invoke_context.is_feature_active(&compute_budget_balancing::id()),
     )
     .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e)))?;
     let executor = Arc::new(BPFExecutor { executable });
@@ -116,7 +116,14 @@ pub fn create_vm<'a>(
     parameter_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<(EbpfVm<'a, BPFError>, MemoryRegion), EbpfError<BPFError>> {
-    let mut vm = EbpfVm::new(executable)?;
+    let compute_budget = invoke_context.get_compute_budget();
+    let mut vm = EbpfVm::new(
+        executable,
+        Config {
+            max_call_depth: compute_budget.max_call_depth,
+            stack_frame_size: compute_budget.stack_frame_size,
+        },
+    )?;
     let heap_region =
         syscalls::register_syscalls(loader_id, &mut vm, parameter_accounts, invoke_context)?;
     Ok((vm, heap_region))
@@ -404,7 +411,7 @@ mod tests {
         let input = &mut [0x00];
 
         let executable = EbpfVm::create_executable_from_text_bytes(program, None).unwrap();
-        let mut vm = EbpfVm::<BPFError>::new(executable.as_ref()).unwrap();
+        let mut vm = EbpfVm::<BPFError>::new(executable.as_ref(), Config::default()).unwrap();
         let instruction_meter = TestInstructionMeter { remaining: 10 };
         vm.execute_program_metered(input, &[], &[], instruction_meter)
             .unwrap();
@@ -601,6 +608,8 @@ mod tests {
                 create_program_address_units: 1500,
                 invoke_units: 1000,
                 max_invoke_depth: 2,
+                max_call_depth: 20,
+                stack_frame_size: 4096,
             },
             Rc::new(RefCell::new(Executors::default())),
             None,

@@ -1,5 +1,5 @@
 use crate::{
-    feature_set::{compute_budget_config2, instructions_sysvar_enabled, FeatureSet},
+    feature_set::{instructions_sysvar_enabled, FeatureSet},
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     native_loader::NativeLoader,
@@ -244,7 +244,7 @@ impl ThisInvokeContext {
 }
 impl InvokeContext for ThisInvokeContext {
     fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError> {
-        if self.program_ids.len() >= self.compute_budget.max_invoke_depth {
+        if self.program_ids.len() > self.compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
         }
         if self.program_ids.contains(key) && self.program_ids.last() != Some(key) {
@@ -416,19 +416,7 @@ impl MessageProcessor {
     }
 
     fn get_compute_budget(feature_set: &FeatureSet) -> ComputeBudget {
-        if feature_set.is_active(&compute_budget_config2::id()) {
-            ComputeBudget::default()
-        } else {
-            // Original
-            ComputeBudget {
-                max_units: 100_000,
-                log_units: 0,
-                log_64_units: 0,
-                create_program_address_units: 0,
-                invoke_units: 0,
-                max_invoke_depth: 2,
-            }
-        }
+        ComputeBudget::new(feature_set)
     }
 
     /// Create the KeyedAccounts that will be passed to the program
@@ -788,7 +776,7 @@ mod tests {
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
             None,
-            Arc::new(FeatureSet::default()),
+            Arc::new(FeatureSet::all_enabled()),
         );
 
         // Check call depth increases and has a limit
@@ -1325,7 +1313,7 @@ mod tests {
             None,
             executors.clone(),
             None,
-            Arc::new(FeatureSet::default()),
+            Arc::new(FeatureSet::all_enabled()),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 100);
@@ -1348,7 +1336,7 @@ mod tests {
             None,
             executors.clone(),
             None,
-            Arc::new(FeatureSet::default()),
+            Arc::new(FeatureSet::all_enabled()),
         );
         assert_eq!(
             result,
@@ -1375,7 +1363,7 @@ mod tests {
             None,
             executors,
             None,
-            Arc::new(FeatureSet::default()),
+            Arc::new(FeatureSet::all_enabled()),
         );
         assert_eq!(
             result,
@@ -1485,7 +1473,7 @@ mod tests {
             None,
             executors.clone(),
             None,
-            Arc::new(FeatureSet::default()),
+            Arc::new(FeatureSet::all_enabled()),
         );
         assert_eq!(
             result,
@@ -1512,7 +1500,7 @@ mod tests {
             None,
             executors.clone(),
             None,
-            Arc::new(FeatureSet::default()),
+            Arc::new(FeatureSet::all_enabled()),
         );
         assert_eq!(result, Ok(()));
 
@@ -1536,7 +1524,7 @@ mod tests {
             None,
             executors,
             None,
-            Arc::new(FeatureSet::default()),
+            Arc::new(FeatureSet::all_enabled()),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);
@@ -1613,7 +1601,7 @@ mod tests {
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
             None,
-            Arc::new(FeatureSet::default()),
+            Arc::new(FeatureSet::all_enabled()),
         );
         let metas = vec![
             AccountMeta::new(owned_key, false),

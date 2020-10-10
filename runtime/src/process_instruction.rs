@@ -1,3 +1,6 @@
+use crate::feature_set::{
+    compute_budget_balancing, max_invoke_depth_4, max_program_call_depth_64, FeatureSet,
+};
 use solana_sdk::{
     account::{Account, KeyedAccount},
     instruction::{CompiledInstruction, Instruction, InstructionError},
@@ -87,18 +90,54 @@ pub struct ComputeBudget {
     pub invoke_units: u64,
     /// Maximum cross-program invocation depth allowed including the orignal caller
     pub max_invoke_depth: usize,
+    /// Maximum BPF to BPF call depth
+    pub max_call_depth: usize,
+    /// Size of a stack frame in bytes, must match the size specified in the LLVM BPF backend
+    pub stack_frame_size: usize,
 }
 impl Default for ComputeBudget {
     fn default() -> Self {
-        // Tuned for ~1ms
+        Self::new(&FeatureSet::all_enabled())
+    }
+}
+impl ComputeBudget {
+    pub fn new(feature_set: &FeatureSet) -> Self {
+        let mut compute_budget =
+        // Original
         ComputeBudget {
-            max_units: 200_000,
-            log_units: 100,
-            log_64_units: 100,
-            create_program_address_units: 1500,
-            invoke_units: 1000,
-            max_invoke_depth: 2,
+            max_units: 100_000,
+            log_units: 0,
+            log_64_units: 0,
+            create_program_address_units: 0,
+            invoke_units: 0,
+            max_invoke_depth: 1,
+            max_call_depth: 20,
+            stack_frame_size: 4_096,
+        };
+
+        if feature_set.is_active(&compute_budget_balancing::id()) {
+            compute_budget = ComputeBudget {
+                max_units: 200_000,
+                log_units: 100,
+                log_64_units: 100,
+                create_program_address_units: 1500,
+                invoke_units: 1000,
+                ..compute_budget
+            };
         }
+        if feature_set.is_active(&max_invoke_depth_4::id()) {
+            compute_budget = ComputeBudget {
+                max_invoke_depth: 4,
+                ..compute_budget
+            };
+        }
+        if feature_set.is_active(&max_program_call_depth_64::id()) {
+            compute_budget = ComputeBudget {
+                max_call_depth: 64,
+                ..compute_budget
+            };
+        }
+        compute_budget
     }
 }
 

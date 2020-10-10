@@ -7,7 +7,8 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_transaction_status::{
-    ConfirmedBlock, InnerInstructions, Reward, TransactionStatusMeta, TransactionWithStatusMeta,
+    ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionStatusMeta,
+    TransactionWithStatusMeta,
 };
 use std::convert::{TryFrom, TryInto};
 
@@ -24,6 +25,13 @@ impl From<Reward> for generated::Reward {
             pubkey: reward.pubkey,
             lamports: reward.lamports,
             post_balance: reward.post_balance,
+            reward_type: match reward.reward_type {
+                None => generated::RewardType::Unspecified,
+                Some(RewardType::Fee) => generated::RewardType::Fee,
+                Some(RewardType::Rent) => generated::RewardType::Rent,
+                Some(RewardType::Staking) => generated::RewardType::Staking,
+                Some(RewardType::Voting) => generated::RewardType::Voting,
+            } as i32,
         }
     }
 }
@@ -34,6 +42,14 @@ impl From<generated::Reward> for Reward {
             pubkey: reward.pubkey,
             lamports: reward.lamports,
             post_balance: reward.post_balance,
+            reward_type: match reward.reward_type {
+                0 => None,
+                1 => Some(RewardType::Fee),
+                2 => Some(RewardType::Rent),
+                3 => Some(RewardType::Voting),
+                4 => Some(RewardType::Staking),
+                _ => None,
+            },
         }
     }
 }

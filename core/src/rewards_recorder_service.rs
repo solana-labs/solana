@@ -54,6 +54,7 @@ impl RewardsRecorderService {
                 pubkey: pubkey.to_string(),
                 lamports: reward_info.lamports,
                 post_balance: reward_info.post_balance,
+                reward_type: Some(reward_info.reward_type),
             })
             .collect();
 

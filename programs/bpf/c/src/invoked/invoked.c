@@ -101,6 +101,32 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_assert(!accounts[DERIVED_KEY2_INDEX].is_signer);
     sol_assert(!accounts[DERIVED_KEY2_INDEX].is_signer);
 
+    uint8_t nonce2 = params.data[1];
+    uint8_t nonce3 = params.data[2];
+
+    SolAccountMeta arguments[] = {
+        {accounts[DERIVED_KEY1_INDEX].key, true, false},
+        {accounts[DERIVED_KEY2_INDEX].key, true, true},
+        {accounts[DERIVED_KEY3_INDEX].key, false, true}};
+    uint8_t data[] = {TEST_VERIFY_NESTED_SIGNERS};
+    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                        arguments, SOL_ARRAY_SIZE(arguments),
+                                        data, SOL_ARRAY_SIZE(data)};
+    uint8_t seed1[] = {'L', 'i', 'l', '\''};
+    uint8_t seed2[] = {'B', 'i', 't', 's'};
+    const SolSignerSeed seeds1[] = {{seed1, SOL_ARRAY_SIZE(seed1)},
+                                    {seed2, SOL_ARRAY_SIZE(seed2)},
+                                    {&nonce2, 1}};
+    const SolSignerSeed seeds2[] = {
+        {(uint8_t *)accounts[DERIVED_KEY2_INDEX].key, SIZE_PUBKEY},
+        {&nonce3, 1}};
+    const SolSignerSeeds signers_seeds[] = {{seeds1, SOL_ARRAY_SIZE(seeds1)},
+                                            {seeds2, SOL_ARRAY_SIZE(seeds2)}};
+
+    sol_assert(SUCCESS == sol_invoke_signed(
+                              &instruction, accounts, SOL_ARRAY_SIZE(accounts),
+                              signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
+
     break;
   }
 
@@ -114,6 +140,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_assert(!accounts[DERIVED_KEY1_INDEX].is_signer);
     sol_assert(accounts[DERIVED_KEY2_INDEX].is_signer);
     sol_assert(accounts[DERIVED_KEY2_INDEX].is_signer);
+
     break;
   }
 
@@ -133,6 +160,12 @@ extern uint64_t entrypoint(const uint8_t *input) {
 
     static const int INVOKED_ARGUMENT_INDEX = 0;
     static const int ARGUMENT_INDEX = 1;
+    static const int INVOKED_PROGRAM_INDEX = 2;
+
+    if (!sol_deserialize(input, &params, 3)) {
+      sol_assert(sol_deserialize(input, &params, 2));
+    }
+
     sol_assert(sol_deserialize(input, &params, 2));
 
     sol_assert(accounts[INVOKED_ARGUMENT_INDEX].is_signer);
@@ -141,9 +174,23 @@ extern uint64_t entrypoint(const uint8_t *input) {
     *accounts[INVOKED_ARGUMENT_INDEX].lamports -= 1;
     *accounts[ARGUMENT_INDEX].lamports += 1;
 
-    sol_log("Last invoke");
-    for (int i = 0; i < accounts[INVOKED_ARGUMENT_INDEX].data_len; i++) {
-      accounts[INVOKED_ARGUMENT_INDEX].data[i] = i;
+    if (params.ka_num == 3) {
+      SolAccountMeta arguments[] = {
+          {accounts[INVOKED_ARGUMENT_INDEX].key, true, true},
+          {accounts[ARGUMENT_INDEX].key, true, true}};
+      uint8_t data[] = {TEST_NESTED_INVOKE};
+      const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                          arguments, SOL_ARRAY_SIZE(arguments),
+                                          data, SOL_ARRAY_SIZE(data)};
+
+      sol_log("Invoke again");
+      sol_assert(SUCCESS ==
+                 sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+    } else {
+      sol_log("Last invoked");
+      for (int i = 0; i < accounts[INVOKED_ARGUMENT_INDEX].data_len; i++) {
+        accounts[INVOKED_ARGUMENT_INDEX].data[i] = i;
+      }
     }
     break;
   }
