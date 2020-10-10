@@ -22,7 +22,7 @@ The first factor is a function of protocol parameters only \(i.e. independent of
 
 As a first step to understanding the impact of the *Inflation Schedule* on the Solana economy, we’ve simulated the upper and lower ranges of what token issuance over time might look like given the current ranges of Inflation Schedule parameters under study. 
 
-Specifically: 
+Specifically:
 
 - *Initial Inflation Rate*: 7-9%
 - *Dis-inflation Rate*: -14-16%
@@ -32,12 +32,12 @@ Using these ranges to simulate a number of possible Inflation Schedules, we can 
 
 ![](/img/p_inflation_schedule_ranges_w_comments.png)
 
-In the above graph, the average values of the range are identified to illustrate the contribution of each parameter. 
+In the above graph, the average values of the range are identified to illustrate the contribution of each parameter.
 From these simulated *Inflation Schedules*, we can also project ranges for token issuance over time.
 
 ![](/img/p_total_supply_ranges.png)
 
-Finally we can estimate the *Staked Yield* on staked SOL, if we introduce an additional parameter, previously discussed, *% of Staked SOL*: 
+Finally we can estimate the *Staked Yield* on staked SOL, if we introduce an additional parameter, previously discussed, *% of Staked SOL*:
 
 
 %~\text{SOL Staked} = \frac{\text{Total SOL Staked}}{\text{Total Current Supply}}
@@ -57,9 +57,8 @@ Again, the above shows an example *Staked Yield* that a staker might expect over
 
 ### Adjusted Staking Yield
 
-A complete appraisal of earning potential from staking tokens should take into account staked *Token Dilution* and its impact on staking yield. For this, we define *adjusted staking yield* as the change in fractional token supply ownership of staked tokens due to the distribution of inflation issuance. I.e. the positive dilutive effects of inflation. 
+A complete appraisal of earning potential from staking tokens should take into account staked *Token Dilution* and its impact on staking yield. For this, we define *adjusted staking yield* as the change in fractional token supply ownership of staked tokens due to the distribution of inflation issuance. I.e. the positive dilutive effects of inflation.
 
 We can examine the *adjusted staking yield* as a function of the inflation rate and the percent of staked tokens on the network. We can see this plotted for various staking fractions here:
 
 ![](/img/p_ex_staked_dilution.png)
-
