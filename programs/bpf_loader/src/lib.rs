@@ -14,9 +14,12 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use solana_rbpf::{
     error::{EbpfError, UserDefinedError},
     memory_region::MemoryRegion,
-    vm::{EbpfVm, Executable, InstructionMeter},
+    vm::{Config, EbpfVm, Executable, InstructionMeter},
 };
-use solana_runtime::process_instruction::{ComputeMeter, Executor, InvokeContext};
+use solana_runtime::{
+    feature_set::compute_budget_balancing,
+    process_instruction::{ComputeMeter, Executor, InvokeContext},
+};
 use solana_sdk::{
     account::{is_executable, next_keyed_account, KeyedAccount},
     bpf_loader, bpf_loader_deprecated,
@@ -78,19 +81,29 @@ macro_rules! log{
     };
 }
 
+fn map_ebpf_error(
+    invoke_context: &mut dyn InvokeContext,
+    e: EbpfError<BPFError>,
+) -> InstructionError {
+    let logger = invoke_context.get_logger();
+    log!(logger, "{}", e);
+    InstructionError::InvalidAccountData
+}
+
 pub fn create_and_cache_executor(
     program: &KeyedAccount,
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<Arc<BPFExecutor>, InstructionError> {
-    let executable = EbpfVm::create_executable_from_elf(
-        &program.try_account_ref()?.data,
-        Some(bpf_verifier::check),
+    let executable = EbpfVm::create_executable_from_elf(&program.try_account_ref()?.data, None)
+        .map_err(|e| map_ebpf_error(invoke_context, e))?;
+    let (_, elf_bytes) = executable
+        .get_text_bytes()
+        .map_err(|e| map_ebpf_error(invoke_context, e))?;
+    bpf_verifier::check(
+        elf_bytes,
+        !invoke_context.is_feature_active(&compute_budget_balancing::id()),
     )
-    .map_err(|e| {
-        let logger = invoke_context.get_logger();
-        log!(logger, "{}", e);
-        InstructionError::InvalidAccountData
-    })?;
+    .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e)))?;
     let executor = Arc::new(BPFExecutor { executable });
     invoke_context.add_executor(program.unsigned_key(), executor.clone());
     Ok(executor)
@@ -103,7 +116,14 @@ pub fn create_vm<'a>(
     parameter_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<(EbpfVm<'a, BPFError>, MemoryRegion), EbpfError<BPFError>> {
-    let mut vm = EbpfVm::new(executable)?;
+    let compute_budget = invoke_context.get_compute_budget();
+    let mut vm = EbpfVm::new(
+        executable,
+        Config {
+            max_call_depth: compute_budget.max_call_depth,
+            stack_frame_size: compute_budget.stack_frame_size,
+        },
+    )?;
     let heap_region =
         syscalls::register_syscalls(loader_id, &mut vm, parameter_accounts, invoke_context)?;
     Ok((vm, heap_region))
@@ -271,6 +291,7 @@ mod tests {
     use super::*;
     use rand::Rng;
     use solana_runtime::{
+        feature_set::FeatureSet,
         message_processor::{Executors, ThisInvokeContext},
         process_instruction::{ComputeBudget, Logger, ProcessInstruction},
     };
@@ -313,6 +334,7 @@ mod tests {
     pub struct MockInvokeContext {
         pub key: Pubkey,
         pub logger: MockLogger,
+        pub compute_budget: ComputeBudget,
         pub compute_meter: MockComputeMeter,
     }
     impl Default for MockInvokeContext {
@@ -320,6 +342,7 @@ mod tests {
             MockInvokeContext {
                 key: Pubkey::default(),
                 logger: MockLogger::default(),
+                compute_budget: ComputeBudget::default(),
                 compute_meter: MockComputeMeter {
                     remaining: std::u64::MAX,
                 },
@@ -348,11 +371,8 @@ mod tests {
         fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
             Rc::new(RefCell::new(self.logger.clone()))
         }
-        fn is_cross_program_supported(&self) -> bool {
-            true
-        }
-        fn get_compute_budget(&self) -> ComputeBudget {
-            ComputeBudget::default()
+        fn get_compute_budget(&self) -> &ComputeBudget {
+            &self.compute_budget
         }
         fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
             Rc::new(RefCell::new(self.compute_meter.clone()))
@@ -362,6 +382,9 @@ mod tests {
             None
         }
         fn record_instruction(&self, _instruction: &Instruction) {}
+        fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
+            true
+        }
     }
 
     struct TestInstructionMeter {
@@ -387,9 +410,8 @@ mod tests {
         ];
         let input = &mut [0x00];
 
-        let executable =
-            EbpfVm::create_executable_from_text_bytes(program, Some(bpf_verifier::check)).unwrap();
-        let mut vm = EbpfVm::<BPFError>::new(executable.as_ref()).unwrap();
+        let executable = EbpfVm::create_executable_from_text_bytes(program, None).unwrap();
+        let mut vm = EbpfVm::<BPFError>::new(executable.as_ref(), Config::default()).unwrap();
         let instruction_meter = TestInstructionMeter { remaining: 10 };
         vm.execute_program_metered(input, &[], &[], instruction_meter)
             .unwrap();
@@ -579,7 +601,6 @@ mod tests {
             vec![],
             vec![],
             None,
-            true,
             ComputeBudget {
                 max_units: 1,
                 log_units: 100,
@@ -587,9 +608,12 @@ mod tests {
                 create_program_address_units: 1500,
                 invoke_units: 1000,
                 max_invoke_depth: 2,
+                max_call_depth: 20,
+                stack_frame_size: 4096,
             },
             Rc::new(RefCell::new(Executors::default())),
             None,
+            Arc::new(FeatureSet::default()),
         );
         assert_eq!(
             Err(InstructionError::Custom(194969602)),

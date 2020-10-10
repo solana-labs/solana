@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 #
-# Only proceed if we are on one of the channels passed in when calling this file
+# Only proceed if we are on one of the channels passed in, or a tag build
 #
 
 set -ex
+
+[[ -n $CI_TAG ]] && exit 0
 
 eval "$(ci/channel-info.sh)"
 

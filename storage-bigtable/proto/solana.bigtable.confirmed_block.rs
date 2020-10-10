@@ -59,6 +59,8 @@ pub struct TransactionStatusMeta {
     pub post_balances: ::std::vec::Vec<u64>,
     #[prost(message, repeated, tag = "5")]
     pub inner_instructions: ::std::vec::Vec<InnerInstructions>,
+    #[prost(message, repeated, tag = "6")]
+    pub log_messages: ::std::vec::Vec<String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TransactionError {
@@ -89,9 +91,20 @@ pub struct Reward {
     pub lamports: i64,
     #[prost(uint64, tag = "3")]
     pub post_balance: u64,
+    #[prost(enumeration = "RewardType", tag = "4")]
+    pub reward_type: i32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UnixTimestamp {
     #[prost(int64, tag = "1")]
     pub timestamp: i64,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum RewardType {
+    Unspecified = 0,
+    Fee = 1,
+    Rent = 2,
+    Staking = 3,
+    Voting = 4,
 }

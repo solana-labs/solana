@@ -184,6 +184,7 @@ impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
             pre_balances,
             post_balances,
             inner_instructions: None,
+            log_messages: None,
         }
     }
 }
@@ -221,6 +222,7 @@ impl From<StoredConfirmedBlockReward> for Reward {
             pubkey,
             lamports,
             post_balance: 0,
+            reward_type: None,
         }
     }
 }

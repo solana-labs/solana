@@ -301,7 +301,7 @@ pub struct CliValidatorsStakeByVersion {
 pub struct CliValidators {
     pub total_active_stake: u64,
     pub total_current_stake: u64,
-    pub total_deliquent_stake: u64,
+    pub total_delinquent_stake: u64,
     pub current_validators: Vec<CliValidator>,
     pub delinquent_validators: Vec<CliValidator>,
     pub stake_by_version: BTreeMap<String, CliValidatorsStakeByVersion>,
@@ -360,7 +360,7 @@ impl fmt::Display for CliValidators {
             "Active Stake:",
             &build_balance_message(self.total_active_stake, self.use_lamports_unit, true),
         )?;
-        if self.total_deliquent_stake > 0 {
+        if self.total_delinquent_stake > 0 {
             writeln_name_value(
                 f,
                 "Current Stake:",
@@ -376,11 +376,11 @@ impl fmt::Display for CliValidators {
                 &format!(
                     "{} ({:0.2}%)",
                     &build_balance_message(
-                        self.total_deliquent_stake,
+                        self.total_delinquent_stake,
                         self.use_lamports_unit,
                         true
                     ),
-                    100. * self.total_deliquent_stake as f64 / self.total_active_stake as f64
+                    100. * self.total_delinquent_stake as f64 / self.total_active_stake as f64
                 ),
             )?;
         }
@@ -571,6 +571,48 @@ impl fmt::Display for CliKeyedStakeState {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliEpochReward {
+    pub epoch: Epoch,
+    pub effective_slot: Slot,
+    pub amount: u64,       // lamports
+    pub post_balance: u64, // lamports
+    pub percent_change: f64,
+    pub apr: f64,
+}
+
+fn show_epoch_rewards(
+    f: &mut fmt::Formatter,
+    epoch_rewards: &Option<Vec<CliEpochReward>>,
+) -> fmt::Result {
+    if let Some(epoch_rewards) = epoch_rewards {
+        if epoch_rewards.is_empty() {
+            return Ok(());
+        }
+
+        writeln!(f, "Epoch Rewards:")?;
+        writeln!(
+            f,
+            "  {:<8}  {:<11}  {:<15}  {:<15}  {:>14}  {:>14}",
+            "Epoch", "Reward Slot", "Amount", "New Balance", "Percent Change", "APR"
+        )?;
+        for reward in epoch_rewards {
+            writeln!(
+                f,
+                "  {:<8}  {:<11}  ◎{:<14.9}  ◎{:<14.9}  {:>13.9}%  {:>13.9}%",
+                reward.epoch,
+                reward.effective_slot,
+                lamports_to_sol(reward.amount),
+                lamports_to_sol(reward.post_balance),
+                reward.percent_change,
+                reward.apr,
+            )?;
+        }
+    }
+    Ok(())
+}
+
 #[derive(Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliStakeState {
@@ -600,6 +642,8 @@ pub struct CliStakeState {
     pub activating_stake: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub deactivating_stake: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub epoch_rewards: Option<Vec<CliEpochReward>>,
 }
 
 impl QuietDisplay for CliStakeState {}
@@ -753,13 +797,14 @@ impl fmt::Display for CliStakeState {
                 }
                 show_authorized(f, self.authorized.as_ref().unwrap())?;
                 show_lockup(f, self.lockup.as_ref())?;
+                show_epoch_rewards(f, &self.epoch_rewards)?
             }
         }
         Ok(())
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq)]
 pub enum CliStakeType {
     Stake,
     RewardsPool,
@@ -936,6 +981,8 @@ pub struct CliVoteAccount {
     pub epoch_voting_history: Vec<CliEpochVotingHistory>,
     #[serde(skip_serializing)]
     pub use_lamports_unit: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub epoch_rewards: Option<Vec<CliEpochReward>>,
 }
 
 impl QuietDisplay for CliVoteAccount {}
@@ -980,6 +1027,7 @@ impl fmt::Display for CliVoteAccount {
                 )?;
             }
         }
+        show_epoch_rewards(f, &self.epoch_rewards)?;
         Ok(())
     }
 }

@@ -94,6 +94,7 @@ pub fn register_syscalls<'a>(
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<MemoryRegion, EbpfError<BPFError>> {
     let compute_budget = invoke_context.get_compute_budget();
+
     // Syscall functions common across languages
 
     vm.register_syscall_ex("abort", syscall_abort)?;
@@ -115,36 +116,35 @@ pub fn register_syscalls<'a>(
             logger: invoke_context.get_logger(),
         }),
     )?;
-    if invoke_context.is_cross_program_supported() {
-        vm.register_syscall_with_context_ex(
-            "sol_create_program_address",
-            Box::new(SyscallCreateProgramAddress {
-                cost: compute_budget.create_program_address_units,
-                compute_meter: invoke_context.get_compute_meter(),
-                loader_id,
-            }),
-        )?;
 
-        // Cross-program invocation syscalls
+    vm.register_syscall_with_context_ex(
+        "sol_create_program_address",
+        Box::new(SyscallCreateProgramAddress {
+            cost: compute_budget.create_program_address_units,
+            compute_meter: invoke_context.get_compute_meter(),
+            loader_id,
+        }),
+    )?;
 
-        let invoke_context = Rc::new(RefCell::new(invoke_context));
-        vm.register_syscall_with_context_ex(
-            "sol_invoke_signed_c",
-            Box::new(SyscallInvokeSignedC {
-                callers_keyed_accounts,
-                invoke_context: invoke_context.clone(),
-                loader_id,
-            }),
-        )?;
-        vm.register_syscall_with_context_ex(
-            "sol_invoke_signed_rust",
-            Box::new(SyscallInvokeSignedRust {
-                callers_keyed_accounts,
-                invoke_context: invoke_context.clone(),
-                loader_id,
-            }),
-        )?;
-    }
+    // Cross-program invocation syscalls
+
+    let invoke_context = Rc::new(RefCell::new(invoke_context));
+    vm.register_syscall_with_context_ex(
+        "sol_invoke_signed_c",
+        Box::new(SyscallInvokeSignedC {
+            callers_keyed_accounts,
+            invoke_context: invoke_context.clone(),
+            loader_id,
+        }),
+    )?;
+    vm.register_syscall_with_context_ex(
+        "sol_invoke_signed_rust",
+        Box::new(SyscallInvokeSignedRust {
+            callers_keyed_accounts,
+            invoke_context: invoke_context.clone(),
+            loader_id,
+        }),
+    )?;
 
     // Memory allocator
     let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
@@ -213,6 +213,8 @@ macro_rules! translate_slice_mut {
             && ($vm_addr as u64 as *mut $t).align_offset(align_of::<$t>()) != 0
         {
             Err(SyscallError::UnalignedPointer.into())
+        } else if $len == 0 {
+            Ok(unsafe { from_raw_parts_mut(0x1 as *mut $t, $len as usize) })
         } else {
             match translate_addr::<BPFError>(
                 $vm_addr as u64,
@@ -1047,7 +1049,6 @@ fn call<'a>(
     }
     message_processor.add_loader(bpf_loader::id(), crate::process_instruction);
     message_processor.add_loader(bpf_loader_deprecated::id(), crate::process_instruction);
-    message_processor.set_cross_program_support(invoke_context.is_cross_program_supported());
 
     #[allow(clippy::deref_addrof)]
     match message_processor.process_cross_program_instruction(
@@ -1179,6 +1180,21 @@ mod tests {
 
     #[test]
     fn test_translate_slice() {
+        // zero len
+        let good_data = vec![1u8, 2, 3, 4, 5];
+        let data: Vec<u8> = vec![];
+        assert_eq!(0x1 as *const u8, data.as_ptr());
+        let addr = good_data.as_ptr() as *const _ as u64;
+        let regions = vec![MemoryRegion {
+            addr_host: addr,
+            addr_vm: 100,
+            len: good_data.len() as u64,
+        }];
+        let translated_data =
+            translate_slice!(u8, data.as_ptr(), data.len(), &regions, &bpf_loader::id()).unwrap();
+        assert_eq!(data, translated_data);
+        assert_eq!(0, translated_data.len());
+
         // u8
         let mut data = vec![1u8, 2, 3, 4, 5];
         let addr = data.as_ptr() as *const _ as u64;

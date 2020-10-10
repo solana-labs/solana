@@ -91,9 +91,16 @@ impl fmt::Debug for Version {
 impl Sanitize for Version {}
 
 #[macro_export]
-macro_rules! version {
+macro_rules! semver {
     () => {
         &*format!("{}", $crate::Version::default())
+    };
+}
+
+#[macro_export]
+macro_rules! version {
+    () => {
+        &*format!("{:?}", $crate::Version::default())
     };
 }
 

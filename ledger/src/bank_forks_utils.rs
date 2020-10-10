@@ -66,7 +66,7 @@ pub fn load(
                     compression,
                     genesis_config,
                     process_options.debug_keys.clone(),
-                    process_options.additional_builtins.as_ref(),
+                    Some(&crate::builtins::get(genesis_config.cluster_type)),
                 )
                 .expect("Load from snapshot failed");
 
