@@ -177,13 +177,9 @@ impl Pubkey {
     }
 
     /// Find a valid program address and its corresponding nonce which must be passed
-<<<<<<< HEAD
     /// as an additional seed when calling `create_program_address`
     // #[cfg(not(feature = "program"))]
-=======
-    /// as an additional seed when calling `invoke_signed`
     #[allow(clippy::same_item_push)]
->>>>>>> 9ac8db353... document program address collisions (#12774)
     pub fn find_program_address(seeds: &[&[u8]], program_id: &Pubkey) -> (Pubkey, u8) {
         let mut nonce = [255];
         for _ in 0..std::u8::MAX {
