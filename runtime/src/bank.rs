@@ -9398,102 +9398,6 @@ mod tests {
         assert_eq!(bank.get_balance(&inline_spl_token_v2_0::id()), 0);
         assert_eq!(bank.capitalization(), original_capitalization - 100);
     }
-<<<<<<< HEAD
-=======
-
-    fn setup_bank_with_removable_zero_lamport_account() -> Arc<Bank> {
-        let (genesis_config, _mint_keypair) = create_genesis_config(2000);
-        let bank0 = Bank::new(&genesis_config);
-        bank0.freeze();
-
-        let bank1 = Arc::new(Bank::new_from_parent(
-            &Arc::new(bank0),
-            &Pubkey::default(),
-            1,
-        ));
-
-        let zero_lamport_pubkey = Pubkey::new_rand();
-
-        bank1.add_account_and_update_capitalization(
-            &zero_lamport_pubkey,
-            &Account::new(0, 0, &Pubkey::default()),
-        );
-        // Store another account in a separate AppendVec than `zero_lamport_pubkey`
-        // (guaranteed because of large file size). We need this to ensure slot is
-        // not cleaned up after clean is called, so that the bank hash still exists
-        // when we call rehash() later in this test.
-        let large_account_pubkey = Pubkey::new_rand();
-        bank1.add_account_and_update_capitalization(
-            &large_account_pubkey,
-            &Account::new(
-                1000,
-                bank1.rc.accounts.accounts_db.file_size() as usize,
-                &Pubkey::default(),
-            ),
-        );
-        assert_ne!(
-            bank1
-                .rc
-                .accounts
-                .accounts_db
-                .get_append_vec_id(&large_account_pubkey, 1)
-                .unwrap(),
-            bank1
-                .rc
-                .accounts
-                .accounts_db
-                .get_append_vec_id(&zero_lamport_pubkey, 1)
-                .unwrap()
-        );
-
-        // Make sure rent collection doesn't overwrite `large_account_pubkey`, which
-        // keeps slot 1 alive in the accounts database. Otherwise, slot 1 and it's bank
-        // hash would be removed from accounts, preventing `rehash()` from succeeding
-        bank1.lazy_rent_collection.store(true, Relaxed);
-        bank1.freeze();
-        let bank1_hash = bank1.hash();
-
-        let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
-        bank2.freeze();
-
-        // Set a root so clean will happen on this slot
-        bank1.squash();
-
-        // All accounts other than `zero_lamport_pubkey` should be updated, which
-        // means clean should be able to delete the `zero_lamport_pubkey`
-        bank2.squash();
-
-        // Bank 1 hash should not change
-        bank1.rehash();
-        let new_bank1_hash = bank1.hash();
-        assert_eq!(bank1_hash, new_bank1_hash);
-
-        bank1
-    }
-
-    #[test]
-    fn test_clean_zero_lamport_account_different_hash() {
-        let bank1 = setup_bank_with_removable_zero_lamport_account();
-        let old_hash = bank1.hash();
-
-        // `zero_lamport_pubkey` should have been deleted, hashes will not match
-        bank1.clean_accounts(false);
-        bank1.rehash();
-        let new_bank1_hash = bank1.hash();
-        assert_ne!(old_hash, new_bank1_hash);
-    }
-
-    #[test]
-    fn test_clean_zero_lamport_account_same_hash() {
-        let bank1 = setup_bank_with_removable_zero_lamport_account();
-        let old_hash = bank1.hash();
-
-        // `zero_lamport_pubkey` will not be deleted, hashes will match
-        bank1.clean_accounts(true);
-        bank1.rehash();
-        let new_bank1_hash = bank1.hash();
-        assert_eq!(old_hash, new_bank1_hash);
-    }
 
     #[test]
     fn test_truncate_log_messages() {
@@ -9543,5 +9447,4 @@ mod tests {
             "<< Transaction log truncated >>\n"
         );
     }
->>>>>>> 8f5431551... Store program logs in blockstore / bigtable (TransactionWithStatusMeta) (#12678)
 }
