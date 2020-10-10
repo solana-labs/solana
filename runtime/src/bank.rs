@@ -2676,17 +2676,19 @@ impl Bank {
                 } else {
                     rent_share
                 };
-                let mut account = self.get_account(&pubkey).unwrap_or_default();
-                account.lamports += rent_to_be_paid;
-                self.store_account(&pubkey, &account);
-                rewards.push((
-                    pubkey,
-                    RewardInfo {
-                        reward_type: RewardType::Rent,
-                        lamports: rent_to_be_paid as i64,
-                        post_balance: account.lamports,
-                    },
-                ));
+                if rent_to_be_paid > 0 {
+                    let mut account = self.get_account(&pubkey).unwrap_or_default();
+                    account.lamports += rent_to_be_paid;
+                    self.store_account(&pubkey, &account);
+                    rewards.push((
+                        pubkey,
+                        RewardInfo {
+                            reward_type: RewardType::Rent,
+                            lamports: rent_to_be_paid as i64,
+                            post_balance: account.lamports,
+                        },
+                    ));
+                }
             });
         self.rewards.write().unwrap().append(&mut rewards);
 
