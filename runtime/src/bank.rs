@@ -477,49 +477,6 @@ pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) is_delta: bool,
 }
 
-<<<<<<< HEAD
-#[derive(Debug, PartialEq, Serialize, Deserialize, AbiExample, Default, Clone, Copy)]
-=======
-// Can't derive PartialEq because RwLock doesn't implement PartialEq
-impl PartialEq for Bank {
-    fn eq(&self, other: &Self) -> bool {
-        if ptr::eq(self, other) {
-            return true;
-        }
-        *self.blockhash_queue.read().unwrap() == *other.blockhash_queue.read().unwrap()
-            && self.ancestors == other.ancestors
-            && *self.hash.read().unwrap() == *other.hash.read().unwrap()
-            && self.parent_hash == other.parent_hash
-            && self.parent_slot == other.parent_slot
-            && *self.hard_forks.read().unwrap() == *other.hard_forks.read().unwrap()
-            && self.transaction_count.load(Relaxed) == other.transaction_count.load(Relaxed)
-            && self.tick_height.load(Relaxed) == other.tick_height.load(Relaxed)
-            && self.signature_count.load(Relaxed) == other.signature_count.load(Relaxed)
-            && self.capitalization.load(Relaxed) == other.capitalization.load(Relaxed)
-            && self.max_tick_height == other.max_tick_height
-            && self.hashes_per_tick == other.hashes_per_tick
-            && self.ticks_per_slot == other.ticks_per_slot
-            && self.ns_per_slot == other.ns_per_slot
-            && self.genesis_creation_time == other.genesis_creation_time
-            && self.slots_per_year == other.slots_per_year
-            && self.unused == other.unused
-            && self.slot == other.slot
-            && self.epoch == other.epoch
-            && self.block_height == other.block_height
-            && self.collector_id == other.collector_id
-            && self.collector_fees.load(Relaxed) == other.collector_fees.load(Relaxed)
-            && self.fee_calculator == other.fee_calculator
-            && self.fee_rate_governor == other.fee_rate_governor
-            && self.collected_rent.load(Relaxed) == other.collected_rent.load(Relaxed)
-            && self.rent_collector == other.rent_collector
-            && self.epoch_schedule == other.epoch_schedule
-            && *self.inflation.read().unwrap() == *other.inflation.read().unwrap()
-            && *self.stakes.read().unwrap() == *other.stakes.read().unwrap()
-            && self.epoch_stakes == other.epoch_stakes
-            && self.is_delta.load(Relaxed) == other.is_delta.load(Relaxed)
-    }
-}
-
 #[derive(Debug, PartialEq, Serialize, Deserialize, AbiExample, AbiEnumVisitor, Clone, Copy)]
 pub enum RewardType {
     Fee,
@@ -544,7 +501,6 @@ impl fmt::Display for RewardType {
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, AbiExample, Clone, Copy)]
->>>>>>> c5c8da1ac... Expose all rewards (fees, rent, voting and staking) in RPC getConfirmedBlock and the cli
 pub struct RewardInfo {
     pub reward_type: RewardType,
     pub lamports: i64,     // Reward amount
