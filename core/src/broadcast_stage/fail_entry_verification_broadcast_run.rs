@@ -34,7 +34,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
-        blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
+        blockstore_sender: &Sender<(Arc<[Shred]>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
         let mut receive_results = broadcast_utils::recv_slot_entries(receiver)?;
@@ -52,7 +52,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             info!("Resolving bad shreds");
             let mut shreds = vec![];
             std::mem::swap(&mut shreds, &mut self.good_shreds);
-            blockstore_sender.send((Arc::new(shreds), None))?;
+            blockstore_sender.send((shreds.into(), None))?;
         }
 
         // 3) Convert entries to shreds + generate coding shreds. Set a garbage PoH on the last entry
@@ -98,7 +98,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             (good_last_data_shred, bad_last_data_shred)
         });
 
-        let data_shreds = Arc::new(data_shreds);
+        let data_shreds: Arc<[Shred]> = data_shreds.into();
         blockstore_sender.send((data_shreds.clone(), None))?;
         // 4) Start broadcast step
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
@@ -108,8 +108,8 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         if let Some((good_last_data_shred, bad_last_data_shred)) = last_shreds {
             // Stash away the good shred so we can rewrite them later
             self.good_shreds.extend(good_last_data_shred.clone());
-            let good_last_data_shred = Arc::new(good_last_data_shred);
-            let bad_last_data_shred = Arc::new(bad_last_data_shred);
+            let good_last_data_shred: Arc<[Shred]> = good_last_data_shred.into();
+            let bad_last_data_shred: Arc<[Shred]> = bad_last_data_shred.into();
             // Store the good shred so that blockstore will signal ClusterSlots
             // that the slot is complete
             blockstore_sender.send((good_last_data_shred, None))?;

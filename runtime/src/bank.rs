@@ -664,7 +664,7 @@ pub struct Bank {
     message_processor: MessageProcessor,
 
     /// Builtin programs activated dynamically by feature
-    feature_builtins: Arc<Vec<(Builtin, Pubkey)>>,
+    feature_builtins: Arc<[(Builtin, Pubkey)]>,
 
     /// Last time when the cluster info vote listener has synced with this bank
     pub last_vote_sync: AtomicU64,
@@ -959,7 +959,7 @@ impl Bank {
             epoch_stakes: fields.epoch_stakes,
             is_delta: AtomicBool::new(fields.is_delta),
             message_processor: new(),
-            feature_builtins: new(),
+            feature_builtins: builtins::get().feature_builtins.into(),
             last_vote_sync: new(),
             rewards: new(),
             skip_drop: new(),
@@ -3383,7 +3383,7 @@ impl Bank {
         for builtin in builtins.genesis_builtins {
             self.add_builtin(&builtin.name, builtin.id, builtin.entrypoint);
         }
-        self.feature_builtins = Arc::new(builtins.feature_builtins);
+        self.feature_builtins = builtins.feature_builtins.into();
 
         self.apply_feature_activations(true);
     }

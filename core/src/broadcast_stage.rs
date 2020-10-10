@@ -43,7 +43,7 @@ mod standard_broadcast_run;
 pub(crate) const NUM_INSERT_THREADS: usize = 2;
 pub(crate) type RetransmitSlotsSender = CrossbeamSender<HashMap<Slot, Arc<Bank>>>;
 pub(crate) type RetransmitSlotsReceiver = CrossbeamReceiver<HashMap<Slot, Arc<Bank>>>;
-pub(crate) type RecordReceiver = Receiver<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>;
+pub(crate) type RecordReceiver = Receiver<(Arc<[Shred]>, Option<BroadcastShredBatchInfo>)>;
 pub(crate) type TransmitReceiver = Receiver<(TransmitShreds, Option<BroadcastShredBatchInfo>)>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -104,14 +104,14 @@ impl BroadcastStageType {
     }
 }
 
-pub type TransmitShreds = (Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>);
+pub type TransmitShreds = (Option<Arc<HashMap<Pubkey, u64>>>, Arc<[Shred]>);
 trait BroadcastRun {
     fn run(
         &mut self,
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
-        blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
+        blockstore_sender: &Sender<(Arc<[Shred]>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()>;
     fn transmit(
         &mut self,
@@ -154,7 +154,7 @@ impl BroadcastStage {
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
-        blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
+        blockstore_sender: &Sender<(Arc<[Shred]>, Option<BroadcastShredBatchInfo>)>,
         mut broadcast_stage_run: impl BroadcastRun,
     ) -> BroadcastStageReturnType {
         loop {
@@ -307,21 +307,19 @@ impl BroadcastStage {
             let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
             let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
             let stakes = stakes.map(Arc::new);
-            let data_shreds = Arc::new(
-                blockstore
-                    .get_data_shreds_for_slot(bank.slot(), 0)
-                    .expect("My own shreds must be reconstructable"),
-            );
+            let data_shreds: Arc<[Shred]> = blockstore
+                .get_data_shreds_for_slot(bank.slot(), 0)
+                .expect("My own shreds must be reconstructable")
+                .into();
 
             if !data_shreds.is_empty() {
                 socket_sender.send(((stakes.clone(), data_shreds), None))?;
             }
 
-            let coding_shreds = Arc::new(
-                blockstore
-                    .get_coding_shreds_for_slot(bank.slot(), 0)
-                    .expect("My own shreds must be reconstructable"),
-            );
+            let coding_shreds: Arc<[Shred]> = blockstore
+                .get_coding_shreds_for_slot(bank.slot(), 0)
+                .expect("My own shreds must be reconstructable")
+                .into();
 
             if !coding_shreds.is_empty() {
                 socket_sender.send(((stakes.clone(), coding_shreds), None))?;
@@ -371,7 +369,7 @@ pub fn get_broadcast_peers<S: std::hash::BuildHasher>(
 /// # Remarks
 pub fn broadcast_shreds(
     s: &UdpSocket,
-    shreds: &Arc<Vec<Shred>>,
+    shreds: &Arc<[Shred]>,
     peers_and_stakes: &[(u64, usize)],
     peers: &[ContactInfo],
     last_datapoint_submit: &Arc<AtomicU64>,
@@ -480,11 +478,11 @@ pub mod test {
             coding_shreds.clone(),
             data_shreds
                 .into_iter()
-                .map(|s| (stakes.clone(), Arc::new(vec![s])))
+                .map(|s| (stakes.clone(), vec![s].into()))
                 .collect(),
             coding_shreds
                 .into_iter()
-                .map(|s| (stakes.clone(), Arc::new(vec![s])))
+                .map(|s| (stakes.clone(), vec![s].into()))
                 .collect(),
         )
     }

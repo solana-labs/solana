@@ -38,7 +38,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
     let stakes = Arc::new(stakes);
     let cluster_info = Arc::new(cluster_info);
     let (peers, peers_and_stakes) = get_broadcast_peers(&cluster_info, Some(stakes));
-    let shreds = Arc::new(shreds);
+    let shreds: Arc<[Shred]> = shreds.into();
     let last_datapoint = Arc::new(AtomicU64::new(0));
     bencher.iter(move || {
         let shreds = shreds.clone();

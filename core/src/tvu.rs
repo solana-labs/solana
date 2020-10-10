@@ -150,7 +150,7 @@ impl Tvu {
             leader_schedule_cache,
             blockstore.clone(),
             &cluster_info,
-            Arc::new(retransmit_sockets),
+            retransmit_sockets.into(),
             repair_socket,
             verified_receiver,
             &exit,

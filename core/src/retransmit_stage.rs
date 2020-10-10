@@ -344,7 +344,7 @@ fn retransmit(
 /// * `cluster_info` - This structure needs to be updated and populated by the bank and via gossip.
 /// * `r` - Receive channel for shreds to be retransmitted to all the layer 1 nodes.
 pub fn retransmitter(
-    sockets: Arc<Vec<UdpSocket>>,
+    sockets: Arc<[UdpSocket]>,
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     cluster_info: Arc<ClusterInfo>,
@@ -408,7 +408,7 @@ impl RetransmitStage {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         blockstore: Arc<Blockstore>,
         cluster_info: &Arc<ClusterInfo>,
-        retransmit_sockets: Arc<Vec<UdpSocket>>,
+        retransmit_sockets: Arc<[UdpSocket]>,
         repair_socket: Arc<UdpSocket>,
         verified_receiver: Receiver<Vec<Packets>>,
         exit: &Arc<AtomicBool>,
@@ -537,7 +537,7 @@ mod tests {
         let cluster_info = ClusterInfo::new_with_invalid_keypair(other);
         cluster_info.insert_info(me);
 
-        let retransmit_socket = Arc::new(vec![UdpSocket::bind("0.0.0.0:0").unwrap()]);
+        let retransmit_socket: Arc<_> = vec![UdpSocket::bind("0.0.0.0:0").unwrap()].into();
         let cluster_info = Arc::new(cluster_info);
 
         let (retransmit_sender, retransmit_receiver) = channel();

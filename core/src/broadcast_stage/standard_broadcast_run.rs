@@ -154,7 +154,7 @@ impl StandardBroadcastRun {
         &mut self,
         blockstore: &Arc<Blockstore>,
         socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
-        blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
+        blockstore_sender: &Sender<(Arc<[Shred]>, Option<BroadcastShredBatchInfo>)>,
         receive_results: ReceiveResults,
     ) -> Result<()> {
         let mut receive_elapsed = receive_results.time_elapsed;
@@ -219,7 +219,7 @@ impl StandardBroadcastRun {
                  was interrupted",
                 ),
             });
-            let last_shred = Arc::new(vec![last_shred]);
+            let last_shred: Arc<[Shred]> = vec![last_shred].into();
             socket_sender.send(((stakes.clone(), last_shred.clone()), batch_info.clone()))?;
             blockstore_sender.send((last_shred, batch_info))?;
         }
@@ -242,11 +242,11 @@ impl StandardBroadcastRun {
                 .expect("Start timestamp must exist for a slot if we're broadcasting the slot"),
         });
 
-        let data_shreds = Arc::new(data_shreds);
+        let data_shreds: Arc<[Shred]> = data_shreds.into();
         socket_sender.send(((stakes.clone(), data_shreds.clone()), batch_info.clone()))?;
         blockstore_sender.send((data_shreds.clone(), batch_info.clone()))?;
         let coding_shreds = shredder.data_shreds_to_coding_shreds(&data_shreds[0..last_data_shred]);
-        let coding_shreds = Arc::new(coding_shreds);
+        let coding_shreds: Arc<[Shred]> = coding_shreds.into();
         socket_sender.send(((stakes, coding_shreds.clone()), batch_info.clone()))?;
         blockstore_sender.send((coding_shreds, batch_info))?;
         self.process_shreds_stats.update(&ProcessShredsStats {
@@ -264,7 +264,7 @@ impl StandardBroadcastRun {
     fn insert(
         &mut self,
         blockstore: &Arc<Blockstore>,
-        shreds: Arc<Vec<Shred>>,
+        shreds: Arc<[Shred]>,
         broadcast_shred_batch_info: Option<BroadcastShredBatchInfo>,
     ) -> Result<()> {
         // Insert shreds into blockstore
@@ -301,7 +301,7 @@ impl StandardBroadcastRun {
         sock: &UdpSocket,
         cluster_info: &ClusterInfo,
         stakes: Option<Arc<HashMap<Pubkey, u64>>>,
-        shreds: Arc<Vec<Shred>>,
+        shreds: Arc<[Shred]>,
         broadcast_shred_batch_info: Option<BroadcastShredBatchInfo>,
     ) -> Result<()> {
         const BROADCAST_PEER_UPDATE_INTERVAL_MS: u64 = 1000;
@@ -385,7 +385,7 @@ impl BroadcastRun for StandardBroadcastRun {
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
-        blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
+        blockstore_sender: &Sender<(Arc<[Shred]>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         self.process_receive_results(

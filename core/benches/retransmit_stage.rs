@@ -56,7 +56,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let (packet_sender, packet_receiver) = channel();
     let packet_receiver = Arc::new(Mutex::new(packet_receiver));
     const NUM_THREADS: usize = 2;
-    let sockets = (0..NUM_THREADS)
+    let sockets: Vec<_> = (0..NUM_THREADS)
         .map(|_| UdpSocket::bind("0.0.0.0:0").unwrap())
         .collect();
 
@@ -73,7 +73,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     info!("batches: {}", batches.len());
 
     let retransmitter_handles = retransmitter(
-        Arc::new(sockets),
+        sockets.into(),
         bank_forks,
         &leader_schedule_cache,
         cluster_info,
