@@ -105,17 +105,9 @@ mod tests {
 
         for year in &[0.1, 0.5, 1.0, DEFAULT_FOUNDATION_TERM, 100.0] {
             let total = inflation.total(*year);
-	    let validator = inflation.validator(*year);
-	    let foundation = inflation.foundation(*year);
-	    println!("year: {}\ntotal: {}\nvalidator {}\nfoundation: {}\n v+f: {}",
-		     year,
-		     total,
-		     validator,
-		     foundation,
-		     validator+foundation);
             assert_eq!(
                 total,
-                validator + foundation
+                inflation.validator(*year) + inflation.foundation(*year)
             );
             assert!(total < last);
             assert!(total >= inflation.terminal);
