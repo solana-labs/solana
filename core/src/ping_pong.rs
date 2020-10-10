@@ -67,16 +67,10 @@ where
 }
 
 impl<T> Sanitize for Ping<T> {
-    default fn sanitize(&self) -> Result<(), SanitizeError> {
-        self.from.sanitize()?;
-        self.signature.sanitize()
-    }
-}
-
-impl<T: Sanitize> Sanitize for Ping<T> {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         self.from.sanitize()?;
-        self.token.sanitize()?;
+        // TODO Add self.token.sanitize()?; when rust's
+        // specialization feature becomes stable.
         self.signature.sanitize()
     }
 }
