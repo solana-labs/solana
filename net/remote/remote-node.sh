@@ -46,9 +46,7 @@ airdropsEnabled=true
 if [[ -n $maybeDisableAirdrops ]]; then
   airdropsEnabled=false
 fi
-
-if [[ "$skipSetup" != true ]]; then
-  cat > deployConfig <<EOF
+cat > deployConfig <<EOF
 deployMethod="$deployMethod"
 entrypointIp="$entrypointIp"
 numNodes="$numNodes"
@@ -56,7 +54,6 @@ failOnValidatorBootupFailure=$failOnValidatorBootupFailure
 genesisOptions="$genesisOptions"
 airdropsEnabled=$airdropsEnabled
 EOF
-fi
 
 source net/common.sh
 source multinode-demo/common.sh
@@ -64,8 +61,7 @@ loadConfigFile
 
 initCompleteFile=init-complete-node.log
 
-if [[ "$skipSetup" != true ]]; then
-  cat > ~/solana/on-reboot <<EOF
+cat > ~/solana/on-reboot <<EOF
 #!/usr/bin/env bash
 cd ~/solana
 source scripts/oom-score-adj.sh
@@ -73,8 +69,7 @@ source scripts/oom-score-adj.sh
 now=\$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 ln -sfT validator.log.\$now validator.log
 EOF
-  chmod +x ~/solana/on-reboot
-fi
+chmod +x ~/solana/on-reboot
 
 GPU_CUDA_OK=false
 GPU_FAIL_IF_NONE=false
@@ -105,36 +100,34 @@ local|tar|skip)
 
   ./fetch-perf-libs.sh
 
-if [[ "$skipSetup" != true ]]; then
-  cat >> ~/solana/on-reboot <<EOF
-PATH="$HOME"/.cargo/bin:"$PATH"
-export USE_INSTALL=1
+cat >> ~/solana/on-reboot <<EOF
+  PATH="$HOME"/.cargo/bin:"$PATH"
+  export USE_INSTALL=1
 
-sudo RUST_LOG=info ~solana/.cargo/bin/solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
-echo \$! > sys-tuner.pid
+  sudo RUST_LOG=info ~solana/.cargo/bin/solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
+  echo \$! > sys-tuner.pid
 
-(
-  sudo SOLANA_METRICS_CONFIG="$SOLANA_METRICS_CONFIG" scripts/oom-monitor.sh
-) > oom-monitor.log 2>&1 &
-echo \$! > oom-monitor.pid
-scripts/fd-monitor.sh > fd-monitor.log 2>&1 &
-echo \$! > fd-monitor.pid
-scripts/net-stats.sh  > net-stats.log 2>&1 &
-echo \$! > net-stats.pid
-scripts/iftop.sh  > iftop.log 2>&1 &
-echo \$! > iftop.pid
-scripts/system-stats.sh  > system-stats.log 2>&1 &
-echo \$! > system-stats.pid
+  (
+    sudo SOLANA_METRICS_CONFIG="$SOLANA_METRICS_CONFIG" scripts/oom-monitor.sh
+  ) > oom-monitor.log 2>&1 &
+  echo \$! > oom-monitor.pid
+  scripts/fd-monitor.sh > fd-monitor.log 2>&1 &
+  echo \$! > fd-monitor.pid
+  scripts/net-stats.sh  > net-stats.log 2>&1 &
+  echo \$! > net-stats.pid
+  scripts/iftop.sh  > iftop.log 2>&1 &
+  echo \$! > iftop.pid
+  scripts/system-stats.sh  > system-stats.log 2>&1 &
+  echo \$! > system-stats.pid
 
-if ${GPU_CUDA_OK} && [[ -e /dev/nvidia0 ]]; then
-  echo Selecting solana-validator-cuda
-  export SOLANA_CUDA=1
-elif ${GPU_FAIL_IF_NONE} ; then
-  echo "Expected GPU, found none!"
-  export SOLANA_GPU_MISSING=1
-fi
+  if ${GPU_CUDA_OK} && [[ -e /dev/nvidia0 ]]; then
+    echo Selecting solana-validator-cuda
+    export SOLANA_CUDA=1
+  elif ${GPU_FAIL_IF_NONE} ; then
+    echo "Expected GPU, found none!"
+    export SOLANA_GPU_MISSING=1
+  fi
 EOF
-fi
 
   case $nodeType in
   bootstrap-validator)
@@ -281,22 +274,20 @@ EOF
       --init-complete-file "$initCompleteFile"
     )
 
-    if [[ "$skipSetup" != true && $airdropsEnabled = true ]]; then
-      cat >> ~/solana/on-reboot <<EOF
-./multinode-demo/faucet.sh > faucet.log 2>&1 &
+    if [[ $airdropsEnabled = true ]]; then
+cat >> ~/solana/on-reboot <<EOF
+      ./multinode-demo/faucet.sh > faucet.log 2>&1 &
 EOF
     fi
     # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
     args+=($extraNodeArgs)
 
-    if [[ "$skipSetup" != true ]]; then
-      cat >> ~/solana/on-reboot <<EOF
-nohup ./multinode-demo/bootstrap-validator.sh ${args[@]} > validator.log.\$now 2>&1 &
-pid=\$!
-oom_score_adj "\$pid" 1000
-disown
+cat >> ~/solana/on-reboot <<EOF
+    nohup ./multinode-demo/bootstrap-validator.sh ${args[@]} > validator.log.\$now 2>&1 &
+    pid=\$!
+    oom_score_adj "\$pid" 1000
+    disown
 EOF
-    fi
     ~/solana/on-reboot
 
     if $waitForNodeInit; then
@@ -378,9 +369,9 @@ EOF
       # Typically the blockstreamer node has a static IP/DNS name for hosting
       # the blockexplorer web app, and is a location that somebody would expect
       # to be able to airdrop from
-      if [[ "$skipSetup" != true && $airdropsEnabled = true ]]; then
-        cat >> ~/solana/on-reboot <<EOF
-multinode-demo/faucet.sh > faucet.log 2>&1 &
+      if [[ $airdropsEnabled = true ]]; then
+cat >> ~/solana/on-reboot <<EOF
+        multinode-demo/faucet.sh > faucet.log 2>&1 &
 EOF
       fi
 
@@ -400,15 +391,14 @@ EOF
       maybeSkipAccountsCreation="export SKIP_ACCOUNTS_CREATION=1"
     fi
 
-    if [[ "$skipSetup" != true ]]; then
-      cat >> ~/solana/on-reboot <<EOF
-$maybeSkipAccountsCreation
-nohup multinode-demo/validator.sh ${args[@]} > validator.log.\$now 2>&1 &
-pid=\$!
-oom_score_adj "\$pid" 1000
-disown
+cat >> ~/solana/on-reboot <<EOF
+    # $nodeIndex $extraPrimordialStakes
+    $maybeSkipAccountsCreation
+    nohup multinode-demo/validator.sh ${args[@]} > validator.log.\$now 2>&1 &
+    pid=\$!
+    oom_score_adj "\$pid" 1000
+    disown
 EOF
-    fi
     ~/solana/on-reboot
 
     if $waitForNodeInit; then
