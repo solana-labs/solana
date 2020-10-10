@@ -5,6 +5,7 @@ import {
   useFetchAccountInfo,
   useAccountInfo,
   Account,
+  ProgramData,
 } from "providers/accounts";
 import { StakeAccountSection } from "components/account/StakeAccountSection";
 import { TokenAccountSection } from "components/account/TokenAccountSection";
@@ -19,6 +20,50 @@ import { TransactionHistoryCard } from "components/account/TransactionHistoryCar
 import { TokenHistoryCard } from "components/account/TokenHistoryCard";
 import { TokenLargestAccountsCard } from "components/account/TokenLargestAccountsCard";
 import { TokenRegistry } from "tokenRegistry";
+import { VoteAccountSection } from "components/account/VoteAccountSection";
+import { NonceAccountSection } from "components/account/NonceAccountSection";
+import { VotesCard } from "components/account/VotesCard";
+import { SysvarAccountSection } from "components/account/SysvarAccountSection";
+import { SlotHashesCard } from "components/account/SlotHashesCard";
+import { StakeHistoryCard } from "components/account/StakeHistoryCard";
+import { BlockhashesCard } from "components/account/BlockhashesCard";
+import { ConfigAccountSection } from "components/account/ConfigAccountSection";
+
+const TABS_LOOKUP: { [id: string]: Tab } = {
+  "spl-token:mint": {
+    slug: "largest",
+    title: "Distribution",
+    path: "/largest",
+  },
+  vote: {
+    slug: "vote-history",
+    title: "Vote History",
+    path: "/vote-history",
+  },
+  "sysvar:recentBlockhashes": {
+    slug: "blockhashes",
+    title: "Blockhashes",
+    path: "/blockhashes",
+  },
+  "sysvar:slotHashes": {
+    slug: "slot-hashes",
+    title: "Slot Hashes",
+    path: "/slot-hashes",
+  },
+  "sysvar:stakeHistory": {
+    slug: "stake-history",
+    title: "Stake History",
+    path: "/stake-history",
+  },
+};
+
+const TOKEN_TABS_HIDDEN = [
+  "spl-token:mint",
+  "config",
+  "vote",
+  "sysvar",
+  "config",
+];
 
 type Props = { address: string; tab?: string };
 export function AccountDetailsPage({ address, tab }: Props) {
@@ -101,30 +146,7 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
 
   const account = info.data;
   const data = account?.details?.data;
-
-  let tabs: Tab[] = [
-    {
-      slug: "history",
-      title: "History",
-      path: "",
-    },
-  ];
-
-  if (data && data?.program === "spl-token") {
-    if (data.parsed.type === "mint") {
-      tabs.push({
-        slug: "largest",
-        title: "Distribution",
-        path: "/largest",
-      });
-    }
-  } else {
-    tabs.push({
-      slug: "tokens",
-      title: "Tokens",
-      path: "/tokens",
-    });
-  }
+  const tabs = getTabs(data);
 
   let moreTab: MoreTabs = "history";
   if (tab && tabs.filter(({ slug }) => slug === tab).length === 0) {
@@ -164,6 +186,18 @@ function InfoSection({ account }: { account: Account }) {
     );
   } else if (data && data.program === "spl-token") {
     return <TokenAccountSection account={account} tokenAccount={data.parsed} />;
+  } else if (data && data.program === "nonce") {
+    return <NonceAccountSection account={account} nonceAccount={data.parsed} />;
+  } else if (data && data.program === "vote") {
+    return <VoteAccountSection account={account} voteAccount={data.parsed} />;
+  } else if (data && data.program === "sysvar") {
+    return (
+      <SysvarAccountSection account={account} sysvarAccount={data.parsed} />
+    );
+  } else if (data && data.program === "config") {
+    return (
+      <ConfigAccountSection account={account} configAccount={data.parsed} />
+    );
   } else {
     return <UnknownAccountCard account={account} />;
   }
@@ -175,7 +209,15 @@ type Tab = {
   path: string;
 };
 
-type MoreTabs = "history" | "tokens" | "largest";
+type MoreTabs =
+  | "history"
+  | "tokens"
+  | "largest"
+  | "vote-history"
+  | "slot-hashes"
+  | "stake-history"
+  | "blockhashes";
+
 function MoreSection({
   account,
   tab,
@@ -187,7 +229,7 @@ function MoreSection({
 }) {
   const pubkey = account.pubkey;
   const address = account.pubkey.toBase58();
-
+  const data = account?.details?.data;
   return (
     <>
       <div className="container">
@@ -217,6 +259,63 @@ function MoreSection({
       )}
       {tab === "history" && <TransactionHistoryCard pubkey={pubkey} />}
       {tab === "largest" && <TokenLargestAccountsCard pubkey={pubkey} />}
+      {tab === "vote-history" && data?.program === "vote" && (
+        <VotesCard voteAccount={data.parsed} />
+      )}
+      {tab === "slot-hashes" &&
+        data?.program === "sysvar" &&
+        data.parsed.type === "slotHashes" && (
+          <SlotHashesCard sysvarAccount={data.parsed} />
+        )}
+      {tab === "stake-history" &&
+        data?.program === "sysvar" &&
+        data.parsed.type === "stakeHistory" && (
+          <StakeHistoryCard sysvarAccount={data.parsed} />
+        )}
+      {tab === "blockhashes" &&
+        data?.program === "sysvar" &&
+        data.parsed.type === "recentBlockhashes" && (
+          <BlockhashesCard blockhashes={data.parsed.info} />
+        )}
     </>
   );
+}
+
+function getTabs(data?: ProgramData): Tab[] {
+  const tabs: Tab[] = [
+    {
+      slug: "history",
+      title: "History",
+      path: "",
+    },
+  ];
+
+  let programTypeKey = "";
+  if (data && "type" in data.parsed) {
+    programTypeKey = `${data.program}:${data.parsed.type}`;
+  }
+
+  if (data && data.program in TABS_LOOKUP) {
+    tabs.push(TABS_LOOKUP[data.program]);
+  }
+
+  if (data && programTypeKey in TABS_LOOKUP) {
+    tabs.push(TABS_LOOKUP[programTypeKey]);
+  }
+
+  if (
+    !data ||
+    !(
+      TOKEN_TABS_HIDDEN.includes(data.program) ||
+      TOKEN_TABS_HIDDEN.includes(programTypeKey)
+    )
+  ) {
+    tabs.push({
+      slug: "tokens",
+      title: "Tokens",
+      path: "/tokens",
+    });
+  }
+
+  return tabs;
 }
