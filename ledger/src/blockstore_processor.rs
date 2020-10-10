@@ -16,7 +16,7 @@ use solana_metrics::{datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
     bank::{
-        Bank, InnerInstructionsList, TransactionBalancesSet, TransactionLogMessages, 
+        Bank, InnerInstructionsList, TransactionBalancesSet, TransactionLogMessages,
         TransactionProcessResult, TransactionResults,
     },
     bank_forks::BankForks,
