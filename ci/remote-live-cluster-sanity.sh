@@ -67,6 +67,7 @@ while ! [[ -f cluster-sanity/init-completed ]]; do
   echo "##### validator is starting... (until timeout: $attempts) #####"
   show_log
 done
+echo "##### validator finished starting! #####"
 
 echo "--- Monitoring validator $cluster_label"
 
@@ -91,6 +92,7 @@ while [[ $current_root -le $goal_root ]]; do
   echo "##### validator is running ($current_root/$goal_root)... (until timeout: $attempts) #####"
   show_log
 done
+echo "##### validator finished running! #####"
 
 curl \
   -X POST \
@@ -99,7 +101,7 @@ curl \
   http://localhost:8899
 
 attempts=100
-while true; do
+while [[ -d "/proc/$validator_pid" ]]; do
   attempts=$((attempts - 1))
   if [[ (($attempts == 0)) ]]; then
     handle_error "ledger tool"
@@ -109,6 +111,7 @@ while true; do
   echo "##### ledger-tool is running... (until timeout: $attempts) #####"
   show_log
 done
+echo "##### ledger-tool finished running! #####"
 
 # well, kill $sys_tuner_pid didn't work for some reason, maybe sudo doen't relay signals?
 (set -x && sleep 3 && kill "$tail_pid" && sudo pkill -f solana-sys-tuner) &
