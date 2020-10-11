@@ -6,8 +6,8 @@ use solana_clap_utils::{
 };
 use solana_cli_output::display::format_labeled_address;
 use solana_client::{
-    client_error, rpc_client::RpcClient, rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
-    rpc_response::RpcVoteAccountInfo,
+    client_error, rpc_client::RpcClient, rpc_config::RpcSimulateTransactionConfig,
+    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, rpc_response::RpcVoteAccountInfo,
 };
 use solana_metrics::datapoint_info;
 use solana_notifier::Notifier;
@@ -394,7 +394,13 @@ fn simulate_transactions(
     for (mut transaction, memo) in candidate_transactions {
         transaction.message.recent_blockhash = blockhash;
 
-        let sim_result = rpc_client.simulate_transaction(&transaction, false)?;
+        let sim_result = rpc_client.simulate_transaction_with_config(
+            &transaction,
+            RpcSimulateTransactionConfig {
+                sig_verify: false,
+                ..RpcSimulateTransactionConfig::default()
+            },
+        )?;
         if sim_result.value.err.is_some() {
             trace!(
                 "filtering out transaction due to simulation failure: {:?}: {}",
