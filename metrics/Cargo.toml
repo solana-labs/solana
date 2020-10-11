@@ -13,8 +13,13 @@ env_logger = "0.7.1"
 gethostname = "0.2.1"
 lazy_static = "1.4.0"
 log = "0.4.8"
+<<<<<<< HEAD
 reqwest = { version = "0.10.6", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 solana-sdk = { path = "../sdk", version = "1.4.0" }
+=======
+reqwest = { version = "0.10.8", default-features = false, features = ["blocking", "rustls-tls", "json"] }
+solana-sdk = { path = "../sdk", version = "1.5.0" }
+>>>>>>> 8a119c148... Bump reqwest/rayon to get past `cargo audit`
 
 [dev-dependencies]
 rand = "0.7.0"
