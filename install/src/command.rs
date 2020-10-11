@@ -23,7 +23,7 @@ use std::{
     sync::mpsc,
     time::{Duration, Instant, SystemTime},
 };
-use tempdir::TempDir;
+use tempfile::TempDir;
 use url::Url;
 
 #[derive(Deserialize, Debug)]
@@ -84,7 +84,7 @@ fn download_to_temp(
 
     let url = Url::parse(url).map_err(|err| format!("Unable to parse {}: {}", url, err))?;
 
-    let temp_dir = TempDir::new(clap::crate_name!())?;
+    let temp_dir = TempDir::new()?;
     let temp_file = temp_dir.path().join("download");
 
     let client = reqwest::blocking::Client::new();
