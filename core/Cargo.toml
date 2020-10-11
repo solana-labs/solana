@@ -75,7 +75,7 @@ tokio_01 = { version = "0.1", package = "tokio" }
 tokio_fs_01 = { version = "0.1", package = "tokio-fs" }
 tokio_io_01 = { version = "0.1", package = "tokio-io" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.5.0" }
-trees = "0.2.1"
+trees = "0.3.0"
 
 [dev-dependencies]
 matches = "0.1.6"

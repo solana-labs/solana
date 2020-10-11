@@ -47,7 +47,7 @@ solana-vote-program = { path = "../programs/vote", version = "1.5.0" }
 tempfile = "3.1.0"
 thiserror = "1.0"
 tokio = { version = "0.2.22", features = ["full"] }
-trees = "0.2.1"
+trees = "0.3.0"
 
 [dependencies.rocksdb]
 # Avoid the vendored bzip2 within rocksdb-sys that can cause linker conflicts
