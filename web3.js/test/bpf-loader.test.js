@@ -19,8 +19,6 @@ if (!mockRpcEnabled) {
   jest.setTimeout(120000);
 }
 
-const NUM_RETRIES = 100; /* allow some number of retries */
-
 test('load BPF C program', async () => {
   if (mockRpcEnabled) {
     console.log('non-live test skipped');
@@ -33,14 +31,23 @@ test('load BPF C program', async () => {
   const {feeCalculator} = await connection.getRecentBlockhash();
   const fees =
     feeCalculator.lamportsPerSignature *
-    (BpfLoader.getMinNumSignatures(data.length) + NUM_RETRIES);
-  const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
+    BpfLoader.getMinNumSignatures(data.length);
+  const payerBalance = await connection.getMinimumBalanceForRentExemption(0);
+  const executableBalance = await connection.getMinimumBalanceForRentExemption(
     data.length,
   );
-  const from = await newAccountWithLamports(connection, fees + balanceNeeded);
+  const from = await newAccountWithLamports(
+    connection,
+    payerBalance + fees + executableBalance,
+  );
 
   const program = new Account();
   await BpfLoader.load(connection, from, program, data, BPF_LOADER_PROGRAM_ID);
+
+  // Check that program loading costed exactly `fees + executableBalance`
+  const fromBalance = await connection.getBalance(from.publicKey);
+  expect(fromBalance).toEqual(payerBalance);
+
   const transaction = new Transaction().add({
     keys: [{pubkey: from.publicKey, isSigner: true, isWritable: true}],
     programId: program.publicKey,
@@ -72,18 +79,19 @@ describe('load BPF Rust program', () => {
     const {feeCalculator} = await connection.getRecentBlockhash();
     const fees =
       feeCalculator.lamportsPerSignature *
-      (BpfLoader.getMinNumSignatures(programData.length) + NUM_RETRIES);
-    const balanceNeeded = await connection.getMinimumBalanceForRentExemption(
+      BpfLoader.getMinNumSignatures(programData.length);
+    const payerBalance = await connection.getMinimumBalanceForRentExemption(0);
+    const executableBalance = await connection.getMinimumBalanceForRentExemption(
       programData.length,
     );
 
     payerAccount = await newAccountWithLamports(
       connection,
-      fees + balanceNeeded,
+      payerBalance + fees + executableBalance,
     );
 
     // Create program account with low balance
-    program = await newAccountWithLamports(connection, balanceNeeded - 1);
+    program = await newAccountWithLamports(connection, executableBalance - 1);
 
     // First load will fail part way due to lack of funds
     const insufficientPayerAccount = await newAccountWithLamports(

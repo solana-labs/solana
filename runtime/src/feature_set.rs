@@ -21,6 +21,10 @@ pub mod pico_inflation {
     solana_sdk::declare_id!("GaBtBJvmS4Arjj5W1NmFcyvPjsHN38UGYDq2MDwbs9Qu");
 }
 
+pub mod inflation_kill_switch {
+    solana_sdk::declare_id!("SECCKV5UVUsr8sTVSVAzULjdm87r7mLPaqH2FGZjevR");
+}
+
 pub mod spl_token_v2_multisig_fix {
     solana_sdk::declare_id!("E5JiFDQCwyC6QfT9REFyMpfK2mHcmv1GUDySU1Ue7TYv");
 }
@@ -29,7 +33,7 @@ pub mod bpf_loader2_program {
     solana_sdk::declare_id!("DFBnrgThdzH4W6wZ12uGPoWcMnvfZj11EHnxHcVxLPhD");
 }
 
-pub mod compute_budget_config2 {
+pub mod compute_budget_balancing {
     solana_sdk::declare_id!("HxvjqDSiF5sYdSYuCXsUnS8UeAoWsMT9iGoFP8pgV1mB");
 }
 
@@ -45,6 +49,18 @@ pub mod ristretto_mul_syscall_enabled {
     solana_sdk::declare_id!("HRe7A6aoxgjKzdjbBv6HTy7tJ4YWqE6tVmYCGho6S9Aq");
 }
 
+pub mod max_invoke_depth_4 {
+    solana_sdk::declare_id!("EdM9xggY5y7AhNMskRG8NgGMnaP4JFNsWi8ZZtyT1af5");
+}
+
+pub mod max_program_call_depth_64 {
+    solana_sdk::declare_id!("YCKSgA6XmjtkQrHBQjpyNrX6EMhJPcYcLWMVgWn36iv");
+}
+
+pub mod timestamp_correction {
+    solana_sdk::declare_id!("3zydSLUwuqqsV3wL5wBsaVgyvMox3XTHx7zLEuQf1U2Z");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -52,12 +68,16 @@ lazy_static! {
         (secp256k1_program_enabled::id(), "secp256k1 program"),
         (consistent_recent_blockhashes_sysvar::id(), "consistent recentblockhashes sysvar"),
         (pico_inflation::id(), "pico-inflation"),
+        (inflation_kill_switch::id(), "inflation kill switch"),
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
         (bpf_loader2_program::id(), "bpf_loader2 program"),
-        (compute_budget_config2::id(), "1ms compute budget"),
+        (compute_budget_balancing::id(), "compute budget balancing"),
         (sha256_syscall_enabled::id(), "sha256 syscall"),
         (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
         (ristretto_mul_syscall_enabled::id(), "ristretto multiply syscall"),
+        (max_invoke_depth_4::id(), "max invoke call depth 4"),
+        (max_program_call_depth_64::id(), "max program call depth 64"),
+        (timestamp_correction::id(), "correct bank timestamps"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

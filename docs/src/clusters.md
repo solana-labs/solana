@@ -23,7 +23,7 @@ Explorers:
   - Devnet includes a token faucet for airdrops for application testing
   - Devnet may be subject to ledger resets
   - Devnet typically runs a newer software version than Mainnet Beta
-- Gossip entrypoint for Devnet: `devnet.solana.com:8001`
+- Gossip entrypoint for Devnet: `entrypoint.devnet.solana.com:8001`
 - RPC URL for Devnet: `https://devnet.solana.com`
 
 ##### Example `solana` command-line configuration
@@ -45,6 +45,7 @@ $ solana-validator \
     --dynamic-port-range 8000-8010 \
     --entrypoint entrypoint.devnet.solana.com:8001 \
     --expected-genesis-hash EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG \
+    --wal-recovery-mode skip_any_corrupted_record \
     --limit-ledger-size
 ```
 
@@ -63,7 +64,7 @@ The `--trusted-validator`s is operated by Solana
 - Testnet includes a token faucet for airdrops for application testing
 - Testnet typically runs a newer software release than both Devnet and
   Mainnet Beta
-- Gossip entrypoint for Testnet: `35.203.170.30:8001`
+- Gossip entrypoint for Testnet: `entrypoint.testnet.solana.com:8001`
 - RPC URL for Testnet: `https://testnet.solana.com`
 
 ##### Example `solana` command-line configuration
@@ -88,6 +89,7 @@ $ solana-validator \
     --dynamic-port-range 8000-8010 \
     --entrypoint entrypoint.testnet.solana.com:8001 \
     --expected-genesis-hash 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY \
+    --wal-recovery-mode skip_any_corrupted_record \
     --limit-ledger-size
 ```
 
@@ -131,9 +133,11 @@ $ solana-validator \
     --no-untrusted-rpc \
     --ledger ~/validator-ledger \
     --rpc-port 8899 \
+    --private-rpc \
     --dynamic-port-range 8000-8010 \
     --entrypoint mainnet-beta.solana.com:8001 \
     --expected-genesis-hash 5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d \
+    --wal-recovery-mode skip_any_corrupted_record \
     --limit-ledger-size
 ```
 

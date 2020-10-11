@@ -155,6 +155,13 @@ declare module '@solana/web3.js' {
     }>;
   };
 
+  export type PerfSample = {
+    slot: number;
+    numTransactions: number;
+    numSlots: number;
+    samplePeriodSecs: number;
+  };
+
   export type ConfirmedTransaction = {
     slot: number;
     transaction: Transaction;
@@ -421,6 +428,7 @@ declare module '@solana/web3.js' {
     getRecentBlockhashAndContext(
       commitment?: Commitment,
     ): Promise<RpcResponseAndContext<BlockhashAndFeeCalculator>>;
+    getRecentPerformanceSamples(limit?: number): Promise<Array<PerfSample>>;
     getFeeCalculatorForBlockhash(
       blockhash: Blockhash,
       commitment?: Commitment,

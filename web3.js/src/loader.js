@@ -34,7 +34,12 @@ export class Loader {
    * Can be used to calculate transaction fees
    */
   static getMinNumSignatures(dataLength: number): number {
-    return Math.ceil(dataLength / Loader.chunkSize);
+    return (
+      2 * // Every transaction requires two signatures (payer + program)
+      (Math.ceil(dataLength / Loader.chunkSize) +
+        1 + // Add one for Create transaction
+        1) // Add one for Finalize transaction
+    );
   }
 
   /**

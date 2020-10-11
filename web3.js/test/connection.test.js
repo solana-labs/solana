@@ -1279,6 +1279,66 @@ test('get supply', async () => {
   expect(supply.nonCirculatingAccounts.length).toBeGreaterThan(0);
 });
 
+test('get performance samples', async () => {
+  const connection = new Connection(url);
+
+  if (mockRpcEnabled) {
+    mockRpc.push([
+      url,
+      {
+        method: 'getRecentPerformanceSamples',
+        params: [],
+      },
+      {
+        error: null,
+        result: [
+          {
+            slot: 1234,
+            numTransactions: 1000,
+            numSlots: 60,
+            samplePeriodSecs: 60,
+          },
+        ],
+      },
+    ]);
+  }
+
+  const perfSamples = await connection.getRecentPerformanceSamples();
+  expect(Array.isArray(perfSamples)).toBe(true);
+
+  if (perfSamples.length > 0) {
+    expect(perfSamples[0].slot).toBeGreaterThan(0);
+    expect(perfSamples[0].numTransactions).toBeGreaterThan(0);
+    expect(perfSamples[0].numSlots).toBeGreaterThan(0);
+    expect(perfSamples[0].samplePeriodSecs).toBeGreaterThan(0);
+  }
+});
+
+test('get performance samples limit too high', async () => {
+  const connection = new Connection(url);
+
+  if (mockRpcEnabled) {
+    mockRpc.push([
+      url,
+      {
+        method: 'getRecentPerformanceSamples',
+        params: [100000],
+      },
+      {
+        error: {
+          code: -32602,
+          message: 'Invalid limit; max 720',
+        },
+        result: null,
+      },
+    ]);
+  }
+
+  await expect(
+    connection.getRecentPerformanceSamples(100000),
+  ).rejects.toThrow();
+});
+
 const TOKEN_PROGRAM_ID = new PublicKey(
   'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
 );

@@ -73,8 +73,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .validator(is_slot)
                         .value_name("SLOT")
                         .takes_value(true)
-                        .index(1)
-                        .required(true),
+                        .index(1),
                 ),
         )
         .subcommand(
@@ -363,7 +362,7 @@ pub fn parse_cluster_ping(
 }
 
 pub fn parse_get_block(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
-    let slot = value_t_or_exit!(matches, "slot", Slot);
+    let slot = value_of(matches, "slot");
     Ok(CliCommandInfo {
         command: CliCommand::GetBlock { slot },
         signers: vec![],
@@ -700,7 +699,17 @@ pub fn process_leader_schedule(rpc_client: &RpcClient) -> ProcessResult {
     Ok("".to_string())
 }
 
-pub fn process_get_block(rpc_client: &RpcClient, _config: &CliConfig, slot: Slot) -> ProcessResult {
+pub fn process_get_block(
+    rpc_client: &RpcClient,
+    _config: &CliConfig,
+    slot: Option<Slot>,
+) -> ProcessResult {
+    let slot = if let Some(slot) = slot {
+        slot
+    } else {
+        rpc_client.get_slot()?
+    };
+
     let mut block =
         rpc_client.get_confirmed_block_with_encoding(slot, UiTransactionEncoding::Base64)?;
 
@@ -716,18 +725,23 @@ pub fn process_get_block(rpc_client: &RpcClient, _config: &CliConfig, slot: Slot
         let mut total_rewards = 0;
         println!("Rewards:",);
         println!(
-            "  {:<44}  {:<15}  {:<13}  {:>14}",
-            "Address", "Amount", "New Balance", "Percent Change"
+            "  {:<44}  {:^15}  {:<15}  {:<20}  {:>14}",
+            "Address", "Type", "Amount", "New Balance", "Percent Change"
         );
         for reward in block.rewards {
             let sign = if reward.lamports < 0 { "-" } else { "" };
 
             total_rewards += reward.lamports;
             println!(
-                "  {:<44}  {:>15}  {}",
+                "  {:<44}  {:^15}  {:>15}  {}",
                 reward.pubkey,
+                if let Some(reward_type) = reward.reward_type {
+                    format!("{}", reward_type)
+                } else {
+                    "-".to_string()
+                },
                 format!(
-                    "{}◎{:<14.4}",
+                    "{}◎{:<14.9}",
                     sign,
                     lamports_to_sol(reward.lamports.abs() as u64)
                 ),
@@ -735,7 +749,7 @@ pub fn process_get_block(rpc_client: &RpcClient, _config: &CliConfig, slot: Slot
                     "          -                 -".to_string()
                 } else {
                     format!(
-                        "◎{:<12.4}  {:>13.4}%",
+                        "◎{:<19.9}  {:>13.9}%",
                         lamports_to_sol(reward.post_balance),
                         reward.lamports.abs() as f64
                             / (reward.post_balance as f64 - reward.lamports as f64)
@@ -746,7 +760,7 @@ pub fn process_get_block(rpc_client: &RpcClient, _config: &CliConfig, slot: Slot
 
         let sign = if total_rewards < 0 { "-" } else { "" };
         println!(
-            "Total Rewards: {}◎{:12.9}",
+            "Total Rewards: {}◎{:<12.9}",
             sign,
             lamports_to_sol(total_rewards.abs() as u64)
         );
@@ -1405,12 +1419,12 @@ pub fn process_show_validators(
         .map(|vote_account| vote_account.activated_stake)
         .sum();
 
-    let total_deliquent_stake = vote_accounts
+    let total_delinquent_stake = vote_accounts
         .delinquent
         .iter()
         .map(|vote_account| vote_account.activated_stake)
         .sum();
-    let total_current_stake = total_active_stake - total_deliquent_stake;
+    let total_current_stake = total_active_stake - total_delinquent_stake;
 
     let mut current = vote_accounts.current;
     current.sort_by(|a, b| b.activated_stake.cmp(&a.activated_stake));
@@ -1464,7 +1478,7 @@ pub fn process_show_validators(
     let cli_validators = CliValidators {
         total_active_stake,
         total_current_stake,
-        total_deliquent_stake,
+        total_delinquent_stake,
         current_validators,
         delinquent_validators,
         stake_by_version,

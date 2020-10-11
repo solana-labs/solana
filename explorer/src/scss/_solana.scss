@@ -10,6 +10,20 @@ code, pre {
   color: $black;
 }
 
+ul.log-messages {
+  padding: 0.66rem;
+  margin: 1rem;
+  border-radius: $border-radius;
+  background-color: $gray-200;
+  color: $black;
+  list-style: none;
+  min-height: 12.5rem;
+  max-height: 20rem;
+  overflow: auto;
+  font-size: 0.8125rem;
+  font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
 .popover-container {
   position: relative;
 

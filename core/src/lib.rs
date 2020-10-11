@@ -6,14 +6,10 @@
 //! command-line tools to spin up validators and a Rust library
 //!
 
-#[macro_use]
-extern crate solana_bpf_loader_program;
-
 pub mod accounts_hash_verifier;
 pub mod banking_stage;
 pub mod bigtable_upload_service;
 pub mod broadcast_stage;
-mod builtins;
 pub mod cache_block_time_service;
 pub mod cluster_info_vote_listener;
 pub mod commitment_service;

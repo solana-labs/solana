@@ -178,33 +178,6 @@ extern uint64_t entrypoint(const uint8_t *input) {
                                               SOL_ARRAY_SIZE(signers_seeds)));
     }
 
-    sol_log("Test multiple derived signers");
-    {
-      SolAccountMeta arguments[] = {
-          {accounts[DERIVED_KEY1_INDEX].key, true, false},
-          {accounts[DERIVED_KEY2_INDEX].key, true, true},
-          {accounts[DERIVED_KEY3_INDEX].key, false, true}};
-      uint8_t data[] = {TEST_VERIFY_NESTED_SIGNERS};
-      const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                          arguments, SOL_ARRAY_SIZE(arguments),
-                                          data, SOL_ARRAY_SIZE(data)};
-      uint8_t seed1[] = {'L', 'i', 'l', '\''};
-      uint8_t seed2[] = {'B', 'i', 't', 's'};
-      const SolSignerSeed seeds1[] = {{seed1, SOL_ARRAY_SIZE(seed1)},
-                                      {seed2, SOL_ARRAY_SIZE(seed2)},
-                                      {&nonce2, 1}};
-      const SolSignerSeed seeds2[] = {
-          {(uint8_t *)accounts[DERIVED_KEY2_INDEX].key, SIZE_PUBKEY},
-          {&nonce3, 1}};
-      const SolSignerSeeds signers_seeds[] = {{seeds1, SOL_ARRAY_SIZE(seeds1)},
-                                              {seeds2, SOL_ARRAY_SIZE(seeds2)}};
-
-      sol_assert(SUCCESS == sol_invoke_signed(&instruction, accounts,
-                                              SOL_ARRAY_SIZE(accounts),
-                                              signers_seeds,
-                                              SOL_ARRAY_SIZE(signers_seeds)));
-    }
-
     sol_log("Test readonly with writable account");
     {
       SolAccountMeta arguments[] = {
@@ -227,7 +200,8 @@ extern uint64_t entrypoint(const uint8_t *input) {
 
       SolAccountMeta arguments[] = {
           {accounts[INVOKED_ARGUMENT_INDEX].key, true, true},
-          {accounts[ARGUMENT_INDEX].key, true, true}};
+          {accounts[ARGUMENT_INDEX].key, true, true},
+          {accounts[INVOKED_PROGRAM_DUP_INDEX].key, false, false}};
       uint8_t data[] = {TEST_NESTED_INVOKE};
       const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                           arguments, SOL_ARRAY_SIZE(arguments),
@@ -240,8 +214,9 @@ extern uint64_t entrypoint(const uint8_t *input) {
       sol_assert(SUCCESS ==
                  sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
 
-      sol_assert(*accounts[ARGUMENT_INDEX].lamports == 42 - 5 + 1 + 1);
-      sol_assert(*accounts[INVOKED_ARGUMENT_INDEX].lamports == 10 + 5 - 1 - 1);
+      sol_assert(*accounts[ARGUMENT_INDEX].lamports == 42 - 5 + 1 + 1 + 1 + 1);
+      sol_assert(*accounts[INVOKED_ARGUMENT_INDEX].lamports ==
+                 10 + 5 - 1 - 1 - 1 - 1);
     }
 
     sol_log("Verify data values are retained and updated");
