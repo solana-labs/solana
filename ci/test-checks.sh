@@ -41,7 +41,7 @@ if [[ $CI_BASE_BRANCH = "$EDGE_CHANNEL" ]]; then
     echo "$0:   [tree (for outdated Cargo.lock sync)|check (for compilation error)|update -p foo --precise x.y.z (for your Cargo.toml update)] ..." >&2
     exit "$check_status"
   fi
-    
+
   # Ensure nightly and --benches
   _ scripts/cargo-for-all-lock-files.sh +"$rust_nightly" check --locked --all-targets
 else
@@ -57,7 +57,18 @@ _ cargo +"$rust_nightly" clippy \
   -Zunstable-options --workspace --all-targets \
   -- --deny=warnings --allow=clippy::stable_sort_primitive
 
-_ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit --ignore RUSTSEC-2020-0002 --ignore RUSTSEC-2020-0008
+cargo_audit_ignores=(
+  # failure is officially deprecated/unmaintained
+  #
+  # Blocked on multiple upstream crates removing their `failure` dependency.
+  --ignore RUSTSEC-2020-0036
+
+  # `net2` crate has been deprecated; use `socket2` instead
+  #
+  # Blocked on https://github.com/paritytech/jsonrpc/issues/575
+  --ignore RUSTSEC-2020-0016
+)
+_ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit "${cargo_audit_ignores[@]}"
 
 {
   cd programs/bpf
