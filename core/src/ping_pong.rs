@@ -173,7 +173,7 @@ impl PingCache {
     {
         // Rate limit consecutive pings sent to a remote node.
         let delay = self.ttl / 64;
-        match self.pings.get(&node) {
+        match self.pings.peek(&node) {
             Some(t) if now.saturating_duration_since(*t) < delay => None,
             _ => {
                 let ping = pingf()?;

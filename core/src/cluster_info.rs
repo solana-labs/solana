@@ -1814,6 +1814,8 @@ impl ClusterInfo {
             .read()
             .unwrap()
             .make_timeouts(&stakes, epoch_time_ms);
+        let mut ping_messages = vec![];
+        let mut pong_messages = vec![];
         let mut pull_responses = HashMap::new();
         for (from_addr, packet) in packets {
             match packet {
@@ -1889,34 +1891,15 @@ impl ClusterInfo {
                         ("prune_message", (allocated.get() - start) as i64, i64),
                     );
                 }
-                Protocol::PingMessage(ping) => {
-                    let start = allocated.get();
-                    if !ping.verify() {
-                        inc_new_counter_info!("cluster_info-gossip_ping_msg_verify_fail", 1);
-                    } else if let Some(rsp) = self.handle_ping_message(&ping, &from_addr, recycler)
-                    {
-                        let _ = response_sender.send(rsp);
-                    }
-                    datapoint_debug!(
-                        "solana-gossip-listen-memory",
-                        ("ping_message", (allocated.get() - start) as i64, i64),
-                    );
-                }
-                Protocol::PongMessage(pong) => {
-                    let start = allocated.get();
-                    if pong.verify() {
-                        self.handle_pong_message(&pong, from_addr);
-                    } else {
-                        inc_new_counter_info!("cluster_info-gossip_pong_msg_verify_fail", 1);
-                    }
-                    datapoint_debug!(
-                        "solana-gossip-listen-memory",
-                        ("pong_message", (allocated.get() - start) as i64, i64),
-                    );
-                }
+                Protocol::PingMessage(ping) => ping_messages.push((ping, from_addr)),
+                Protocol::PongMessage(pong) => pong_messages.push((pong, from_addr)),
             }
         }
 
+        if let Some(response) = self.handle_ping_messages(ping_messages, recycler) {
+            let _ = response_sender.send(response);
+        }
+        self.handle_pong_messages(pong_messages, Instant::now());
         for (from, data) in pull_responses {
             self.handle_pull_response(&from, data, &timeouts);
         }
@@ -2180,27 +2163,52 @@ impl ClusterInfo {
         }
     }
 
-    fn handle_ping_message(
+    fn handle_ping_messages(
         &self,
-        ping: &Ping,
-        addr: &SocketAddr,
+        msgs: Vec<(Ping, SocketAddr)>,
         recycler: &PacketsRecycler,
     ) -> Option<Packets> {
-        let pong = Pong::new(ping, &self.keypair).ok()?;
-        let pong = Protocol::PongMessage(pong);
-        let packets = Packets::new_with_recycler_data(
-            recycler,
-            "handle_ping_message",
-            vec![Packet::from_data(addr, pong)],
-        );
-        Some(packets)
+        let num_msgs = msgs.len();
+        let msgs: Vec<_> = msgs.into_iter().filter(|(ping, _)| ping.verify()).collect();
+        if msgs.len() != num_msgs {
+            inc_new_counter_info!(
+                "cluster_info-gossip_ping_msg_verify_fail",
+                num_msgs - msgs.len()
+            );
+        }
+        let packets: Vec<_> = msgs
+            .into_iter()
+            .filter_map(|(ping, addr)| {
+                let pong = Pong::new(&ping, &self.keypair).ok()?;
+                let pong = Protocol::PongMessage(pong);
+                let packet = Packet::from_data(&addr, pong);
+                Some(packet)
+            })
+            .collect();
+        if packets.is_empty() {
+            None
+        } else {
+            let packets =
+                Packets::new_with_recycler_data(recycler, "handle_ping_messages", packets);
+            Some(packets)
+        }
     }
 
-    fn handle_pong_message(&self, pong: &Pong, addr: SocketAddr) {
-        self.ping_cache
-            .write()
-            .unwrap()
-            .add(pong, addr, Instant::now());
+    fn handle_pong_messages(&self, msgs: Vec<(Pong, SocketAddr)>, now: Instant) {
+        let num_msgs = msgs.len();
+        let msgs: Vec<_> = msgs.into_iter().filter(|(pong, _)| pong.verify()).collect();
+        if msgs.len() != num_msgs {
+            inc_new_counter_info!(
+                "cluster_info-gossip_pong_msg_verify_fail",
+                num_msgs - msgs.len()
+            );
+        }
+        if !msgs.is_empty() {
+            let mut ping_cache = self.ping_cache.write().unwrap();
+            for (pong, addr) in msgs {
+                ping_cache.add(&pong, addr, now);
+            }
+        }
     }
 
     fn handle_push_message(
