@@ -56,7 +56,19 @@ _ cargo +"$rust_stable" fmt --all -- --check
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
 _ cargo +"$rust_nightly" clippy -Zunstable-options --workspace --all-targets -- --deny=warnings
 
-_ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit --ignore RUSTSEC-2020-0002 --ignore RUSTSEC-2020-0008
+
+cargo_audit_ignores=(
+  # failure is officially deprecated/unmaintained
+  #
+  # Blocked on multiple upstream crates removing their `failure` dependency.
+  --ignore RUSTSEC-2020-0036
+
+  # `net2` crate has been deprecated; use `socket2` instead
+  #
+  # Blocked on https://github.com/paritytech/jsonrpc/issues/575
+  --ignore RUSTSEC-2020-0016
+)
+_ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit "${cargo_audit_ignores[@]}"
 
 {
   cd programs/bpf
