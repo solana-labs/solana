@@ -161,26 +161,20 @@ impl RpcClient {
     pub fn simulate_transaction(
         &self,
         transaction: &Transaction,
-        sig_verify: bool,
     ) -> RpcResult<RpcSimulateTransactionResult> {
-        self.simulate_transaction_with_config(
-            transaction,
-            sig_verify,
-            RpcSimulateTransactionConfig::default(),
-        )
+        self.simulate_transaction_with_config(transaction, RpcSimulateTransactionConfig::default())
     }
 
     pub fn simulate_transaction_with_config(
         &self,
         transaction: &Transaction,
-        sig_verify: bool,
         config: RpcSimulateTransactionConfig,
     ) -> RpcResult<RpcSimulateTransactionResult> {
         let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base58);
         let serialized_encoded = serialize_encode_transaction(transaction, encoding)?;
         self.send(
             RpcRequest::SimulateTransaction,
-            json!([serialized_encoded, { "sigVerify": sig_verify }]),
+            json!([serialized_encoded, config]),
         )
     }
 
