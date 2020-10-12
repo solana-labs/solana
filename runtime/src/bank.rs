@@ -558,7 +558,7 @@ pub struct RewardInfo {
 /// Manager for the state of all accounts and programs after processing its entries.
 /// AbiExample is needed even without Serialize/Deserialize; actual (de-)serialization
 /// are implemented elsewhere for versioning
-#[derive(AbiExample, Default)]
+#[derive(AbiExample)]
 pub struct Bank {
     /// References to accounts, parent and signature status
     pub rc: BankRc,
@@ -692,6 +692,57 @@ pub struct Bank {
 impl Default for BlockhashQueue {
     fn default() -> Self {
         Self::new(MAX_RECENT_BLOCKHASHES)
+    }
+}
+
+impl Default for Bank {
+    fn default() -> Self {
+        Self {
+            rc: BankRc::default(),
+            src: StatusCacheRc::default(),
+            blockhash_queue: RwLock::default(),
+            ancestors: Ancestors::default(),
+            hash: RwLock::default(),
+            parent_hash: Hash::default(),
+            parent_slot: Slot::default(),
+            hard_forks: Arc::default(),
+            transaction_count: AtomicU64::default(),
+            tick_height: AtomicU64::default(),
+            signature_count: AtomicU64::default(),
+            capitalization: AtomicU64::default(),
+            max_tick_height: u64::default(),
+            hashes_per_tick: Option::default(),
+            ticks_per_slot: u64::default(),
+            ns_per_slot: u128::default(),
+            genesis_creation_time: UnixTimestamp::default(),
+            slots_per_year: f64::default(),
+            unused: u64::default(),
+            slot: Slot::default(),
+            epoch: Epoch::default(),
+            block_height: u64::default(),
+            collector_id: Pubkey::default(),
+            collector_fees: AtomicU64::default(),
+            fee_calculator: FeeCalculator::default(),
+            fee_rate_governor: FeeRateGovernor::default(),
+            collected_rent: AtomicU64::default(),
+            rent_collector: RentCollector::default(),
+            epoch_schedule: EpochSchedule::default(),
+            inflation: Arc::default(),
+            stakes: RwLock::default(),
+            epoch_stakes: HashMap::default(),
+            is_delta: AtomicBool::default(),
+            message_processor: MessageProcessor::default(),
+            feature_builtins: builtins::get().feature_builtins.into(),
+            last_vote_sync: AtomicU64::default(),
+            rewards: RwLock::default(),
+            skip_drop: AtomicBool::default(),
+            cluster_type: Option::default(),
+            lazy_rent_collection: AtomicBool::default(),
+            rewards_pool_pubkeys: Arc::default(),
+            cached_executors: RwLock::default(),
+            transaction_debug_keys: Option::default(),
+            feature_set: Arc::default(),
+        }
     }
 }
 
