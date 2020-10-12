@@ -19,7 +19,7 @@ use thiserror::Error;
 #[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum NativeLoaderError {
     #[error("Entrypoint name in the account data is not a valid UTF-8 string")]
-    InvalidEntrypointName = 0x0aaa_0001,
+    InvalidAccountData = 0x0aaa_0001,
     #[error("Entrypoint was not found in the module")]
     EntrypointNotFound = 0x0aaa_0002,
     #[error("Failed to load the module")]
@@ -132,11 +132,16 @@ impl NativeLoader {
         let params = keyed_accounts_iter.as_slice();
         let name_vec = &program.try_account_ref()?.data;
         let name = match str::from_utf8(name_vec) {
-            Ok(v) => v,
+            Ok(v) => v.trim_end_matches(char::from(0)),
             Err(e) => {
-                panic!("Invalid UTF-8 sequence: {}", e);
+                warn!("Invalid UTF-8 sequence: {}", e);
+                return Err(NativeLoaderError::InvalidAccountData.into());
             }
         };
+        if name.is_empty() {
+            warn!("Empty name string");
+            return Err(NativeLoaderError::InvalidAccountData.into());
+        }
         trace!("Call native {:?}", name);
         if name.ends_with("loader_program") {
             let entrypoint =

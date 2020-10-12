@@ -454,43 +454,49 @@ impl MessageProcessor {
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
-        if native_loader::check_id(&keyed_accounts[0].owner()?) {
-            let root_id = keyed_accounts[0].unsigned_key();
-            for (id, process_instruction) in &self.loaders {
-                if id == root_id {
-                    // Call the program via a builtin loader
-                    return process_instruction(
-                        &root_id,
-                        &keyed_accounts[1..],
-                        instruction_data,
-                        invoke_context,
-                    );
+        if !keyed_accounts.is_empty() {
+            if native_loader::check_id(&keyed_accounts[0].owner()?) {
+                let root_id = keyed_accounts[0].unsigned_key();
+                for (id, process_instruction) in &self.loaders {
+                    if id == root_id {
+                        // Call the program via a builtin loader
+                        return process_instruction(
+                            &root_id,
+                            &keyed_accounts[1..],
+                            instruction_data,
+                            invoke_context,
+                        );
+                    }
                 }
-            }
-            for (id, process_instruction) in &self.programs {
-                if id == root_id {
-                    // Call the builtin program
-                    return process_instruction(&root_id, &keyed_accounts[1..], instruction_data);
+                for (id, process_instruction) in &self.programs {
+                    if id == root_id {
+                        // Call the builtin program
+                        return process_instruction(
+                            &root_id,
+                            &keyed_accounts[1..],
+                            instruction_data,
+                        );
+                    }
                 }
-            }
-            // Call the program via the native loader
-            return self.native_loader.process_instruction(
-                &native_loader::id(),
-                keyed_accounts,
-                instruction_data,
-                invoke_context,
-            );
-        } else {
-            let owner_id = &keyed_accounts[0].owner()?;
-            for (id, process_instruction) in &self.loaders {
-                if id == owner_id {
-                    // Call the program via a builtin loader
-                    return process_instruction(
-                        &owner_id,
-                        keyed_accounts,
-                        instruction_data,
-                        invoke_context,
-                    );
+                // Call the program via the native loader
+                return self.native_loader.process_instruction(
+                    &native_loader::id(),
+                    keyed_accounts,
+                    instruction_data,
+                    invoke_context,
+                );
+            } else {
+                let owner_id = &keyed_accounts[0].owner()?;
+                for (id, process_instruction) in &self.loaders {
+                    if id == owner_id {
+                        // Call the program via a builtin loader
+                        return process_instruction(
+                            &owner_id,
+                            keyed_accounts,
+                            instruction_data,
+                            invoke_context,
+                        );
+                    }
                 }
             }
         }
