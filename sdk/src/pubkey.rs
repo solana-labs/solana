@@ -99,8 +99,29 @@ impl Pubkey {
         ))
     }
 
-    /// Create a program address, valid program address must not be on the
-    /// ed25519 curve
+    /// Create a program address
+    ///
+    /// Program addresses are account keys that only the program has the
+    /// authority to sign.  The address is of the same form as a Solana
+    /// `Pubkey`, except they are ensured to not be on the ed25519 curve and
+    /// thus have no associated private key.  When performing cross-program
+    /// invocations the program can "sign" for the key by calling
+    /// `invoke_signed` and passing the same seeds used to generate the address.
+    /// The runtime will check that indeed the program associated with this
+    /// address is the caller and thus authorized to be the signer.
+    ///
+    /// Because the program address cannot lie on the ed25519 curve there may be
+    /// seed and program id combinations that are invalid.  In these cases an
+    /// extra seed (nonce) can be calculated that results in a point off the
+    /// curve.  Use `find_program_address` to calculate that nonce.
+    ///
+    /// Warning: Because of the way the seeds are hashed there is a potential
+    /// for program address collisions for the same program id.  The seeds are
+    /// hashed sequentially which means that seeds {"abcdef"}, {"abc", "def"},
+    /// and {"ab", "cd", "ef"} will all result in the same program address given
+    /// the same program id.  Since the change of collision is local to a given
+    /// program id the developer of that program must take care to choose seeds
+    /// that do not collide with themselves.
     pub fn create_program_address(
         seeds: &[&[u8]],
         program_id: &Pubkey,
@@ -156,8 +177,7 @@ impl Pubkey {
     }
 
     /// Find a valid program address and its corresponding nonce which must be passed
-    /// as an additional seed when calling `create_program_address`
-    // #[cfg(not(feature = "program"))]
+    /// as an additional seed when calling `invoke_signed`
     #[allow(clippy::same_item_push)]
     pub fn find_program_address(seeds: &[&[u8]], program_id: &Pubkey) -> (Pubkey, u8) {
         let mut nonce = [std::u8::MAX];

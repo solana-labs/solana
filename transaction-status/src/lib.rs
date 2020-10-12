@@ -11,6 +11,7 @@ use crate::{
     parse_accounts::{parse_accounts, ParsedAccount},
     parse_instruction::{parse, ParsedInstruction},
 };
+pub use solana_runtime::bank::RewardType;
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     commitment_config::CommitmentConfig,
@@ -241,6 +242,8 @@ pub struct Reward {
     pub lamports: i64,
     #[serde(deserialize_with = "default_on_eof")]
     pub post_balance: u64, // Account balance in lamports after `lamports` was applied
+    #[serde(default, deserialize_with = "default_on_eof")]
+    pub reward_type: Option<RewardType>,
 }
 
 pub type Rewards = Vec<Reward>;

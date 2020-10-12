@@ -20,6 +20,10 @@ import {
 import * as Cache from "providers/cache";
 import { ActionType, FetchStatus } from "providers/cache";
 import { reportError } from "utils/sentry";
+import { VoteAccount } from "validators/accounts/vote";
+import { NonceAccount } from "validators/accounts/nonce";
+import { SysvarAccount } from "validators/accounts/sysvar";
+import { ConfigAccount } from "validators/accounts/config";
 export { useAccountHistory } from "./history";
 
 export type StakeProgramData = {
@@ -33,7 +37,33 @@ export type TokenProgramData = {
   parsed: TokenAccount;
 };
 
-export type ProgramData = StakeProgramData | TokenProgramData;
+export type VoteProgramData = {
+  program: "vote";
+  parsed: VoteAccount;
+};
+
+export type NonceProgramData = {
+  program: "nonce";
+  parsed: NonceAccount;
+};
+
+export type SysvarProgramData = {
+  program: "sysvar";
+  parsed: SysvarAccount;
+};
+
+export type ConfigProgramData = {
+  program: "config";
+  parsed: ConfigAccount;
+};
+
+export type ProgramData =
+  | StakeProgramData
+  | TokenProgramData
+  | VoteProgramData
+  | NonceProgramData
+  | SysvarProgramData
+  | ConfigProgramData;
 
 export interface Details {
   executable: boolean;
@@ -134,20 +164,54 @@ async function fetchAccountInfo(
           reportError(err, { url, address: pubkey.toBase58() });
           // TODO store error state in Account info
         }
+      } else if (
+        "parsed" in result.data &&
+        result.owner.equals(TOKEN_PROGRAM_ID)
+      ) {
+        try {
+          const info = coerce(result.data.parsed, ParsedInfo);
+          const parsed = coerce(info, TokenAccount);
+          data = {
+            program: "spl-token",
+            parsed,
+          };
+        } catch (err) {
+          reportError(err, { url, address: pubkey.toBase58() });
+          // TODO store error state in Account info
+        }
       } else if ("parsed" in result.data) {
-        if (result.owner.equals(TOKEN_PROGRAM_ID)) {
-          try {
-            const info = coerce(result.data.parsed, ParsedInfo);
-            const parsed = coerce(info, TokenAccount);
-
-            data = {
-              program: "spl-token",
-              parsed,
-            };
-          } catch (err) {
-            reportError(err, { url, address: pubkey.toBase58() });
-            // TODO store error state in Account info
+        try {
+          const info = coerce(result.data.parsed, ParsedInfo);
+          switch (result.data.program) {
+            case "vote":
+              data = {
+                program: result.data.program,
+                parsed: coerce(info, VoteAccount),
+              };
+              break;
+            case "nonce":
+              data = {
+                program: result.data.program,
+                parsed: coerce(info, NonceAccount),
+              };
+              break;
+            case "sysvar":
+              data = {
+                program: result.data.program,
+                parsed: coerce(info, SysvarAccount),
+              };
+              break;
+            case "config":
+              data = {
+                program: result.data.program,
+                parsed: coerce(info, ConfigAccount),
+              };
+              break;
+            default:
+              data = undefined;
           }
+        } catch (error) {
+          reportError(error, { url, address: pubkey.toBase58() });
         }
       }
 
