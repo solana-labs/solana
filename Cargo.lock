@@ -3569,7 +3569,11 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-account-decoder",
+<<<<<<< HEAD
  "solana-budget-program",
+=======
+ "solana-bpf-loader-program",
+>>>>>>> 6bbf6a79b... Check ELF file for errors before deploy (#12741)
  "solana-clap-utils",
  "solana-cli-config",
  "solana-cli-output",
@@ -3587,6 +3591,7 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "solana-vote-signer",
+ "solana_rbpf",
  "tempfile",
  "thiserror",
  "url 2.1.1",
