@@ -512,7 +512,7 @@ impl MessageProcessor {
         accounts: &[Rc<RefCell<Account>>],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
-        if let Some(instruction) = message.instructions.iter().next() {
+        if let Some(instruction) = message.instructions.get(0) {
             // Verify the calling program hasn't misbehaved
             invoke_context.verify_and_update(message, instruction, accounts)?;
 
