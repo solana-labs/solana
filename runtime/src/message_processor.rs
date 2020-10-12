@@ -454,43 +454,49 @@ impl MessageProcessor {
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
-        if native_loader::check_id(&keyed_accounts[0].owner()?) {
-            let root_id = keyed_accounts[0].unsigned_key();
-            for (id, process_instruction) in &self.loaders {
-                if id == root_id {
-                    // Call the program via a builtin loader
-                    return process_instruction(
-                        &root_id,
-                        &keyed_accounts[1..],
-                        instruction_data,
-                        invoke_context,
-                    );
+        if let Some(root_account) = keyed_accounts.iter().next() {
+            if native_loader::check_id(&root_account.owner()?) {
+                let root_id = root_account.unsigned_key();
+                for (id, process_instruction) in &self.loaders {
+                    if id == root_id {
+                        // Call the program via a builtin loader
+                        return process_instruction(
+                            &root_id,
+                            &keyed_accounts[1..],
+                            instruction_data,
+                            invoke_context,
+                        );
+                    }
                 }
-            }
-            for (id, process_instruction) in &self.programs {
-                if id == root_id {
-                    // Call the builtin program
-                    return process_instruction(&root_id, &keyed_accounts[1..], instruction_data);
+                for (id, process_instruction) in &self.programs {
+                    if id == root_id {
+                        // Call the builtin program
+                        return process_instruction(
+                            &root_id,
+                            &keyed_accounts[1..],
+                            instruction_data,
+                        );
+                    }
                 }
-            }
-            // Call the program via the native loader
-            return self.native_loader.process_instruction(
-                &native_loader::id(),
-                keyed_accounts,
-                instruction_data,
-                invoke_context,
-            );
-        } else {
-            let owner_id = &keyed_accounts[0].owner()?;
-            for (id, process_instruction) in &self.loaders {
-                if id == owner_id {
-                    // Call the program via a builtin loader
-                    return process_instruction(
-                        &owner_id,
-                        keyed_accounts,
-                        instruction_data,
-                        invoke_context,
-                    );
+                // Call the program via the native loader
+                return self.native_loader.process_instruction(
+                    &native_loader::id(),
+                    keyed_accounts,
+                    instruction_data,
+                    invoke_context,
+                );
+            } else {
+                let owner_id = &root_account.owner()?;
+                for (id, process_instruction) in &self.loaders {
+                    if id == owner_id {
+                        // Call the program via a builtin loader
+                        return process_instruction(
+                            &owner_id,
+                            keyed_accounts,
+                            instruction_data,
+                            invoke_context,
+                        );
+                    }
                 }
             }
         }
@@ -506,26 +512,29 @@ impl MessageProcessor {
         accounts: &[Rc<RefCell<Account>>],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
-        let instruction = &message.instructions[0];
+        if let Some(instruction) = message.instructions.get(0) {
+            // Verify the calling program hasn't misbehaved
+            invoke_context.verify_and_update(message, instruction, accounts)?;
 
-        // Verify the calling program hasn't misbehaved
-        invoke_context.verify_and_update(message, instruction, accounts)?;
+            // Construct keyed accounts
+            let keyed_accounts =
+                Self::create_keyed_accounts(message, instruction, executable_accounts, accounts)?;
 
-        // Construct keyed accounts
-        let keyed_accounts =
-            Self::create_keyed_accounts(message, instruction, executable_accounts, accounts)?;
+            // Invoke callee
+            invoke_context.push(instruction.program_id(&message.account_keys))?;
+            let mut result =
+                self.process_instruction(&keyed_accounts, &instruction.data, invoke_context);
+            if result.is_ok() {
+                // Verify the called program has not misbehaved
+                result = invoke_context.verify_and_update(message, instruction, accounts);
+            }
+            invoke_context.pop();
 
-        // Invoke callee
-        invoke_context.push(instruction.program_id(&message.account_keys))?;
-        let mut result =
-            self.process_instruction(&keyed_accounts, &instruction.data, invoke_context);
-        if result.is_ok() {
-            // Verify the called program has not misbehaved
-            result = invoke_context.verify_and_update(message, instruction, accounts);
+            result
+        } else {
+            // This function is always called with a valid instruction, if that changes return an error
+            Err(InstructionError::GenericError)
         }
-        invoke_context.pop();
-
-        result
     }
 
     /// Record the initial state of the accounts so that they can be compared
