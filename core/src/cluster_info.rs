@@ -1896,10 +1896,10 @@ impl ClusterInfo {
             }
         }
 
-        if let Some(response) = self.handle_ping_messages(ping_messages, recycler) {
+        if let Some(response) = self.handle_ping_messages(ping_messages.into_iter(), recycler) {
             let _ = response_sender.send(response);
         }
-        self.handle_pong_messages(pong_messages, Instant::now());
+        self.handle_pong_messages(pong_messages.into_iter(), Instant::now());
         for (from, data) in pull_responses {
             self.handle_pull_response(&from, data, &timeouts);
         }
@@ -2163,14 +2163,12 @@ impl ClusterInfo {
         }
     }
 
-    fn handle_ping_messages(
-        &self,
-        msgs: Vec<(Ping, SocketAddr)>,
-        recycler: &PacketsRecycler,
-    ) -> Option<Packets> {
+    fn handle_ping_messages<I>(&self, pings: I, recycler: &PacketsRecycler) -> Option<Packets>
+    where
+        I: Iterator<Item = (Ping, SocketAddr)>,
+    {
         let mut verify_failed = 0;
-        let packets: Vec<_> = msgs
-            .into_iter()
+        let packets: Vec<_> = pings
             .filter_map(|(ping, addr)| {
                 if ping.verify() {
                     let pong = Pong::new(&ping, &self.keypair).ok()?;
@@ -2193,11 +2191,15 @@ impl ClusterInfo {
         }
     }
 
-    fn handle_pong_messages(&self, msgs: Vec<(Pong, SocketAddr)>, now: Instant) {
-        if !msgs.is_empty() {
+    fn handle_pong_messages<I>(&self, pongs: I, now: Instant)
+    where
+        I: Iterator<Item = (Pong, SocketAddr)>,
+    {
+        let mut pongs = pongs.peekable();
+        if pongs.peek().is_some() {
             let mut verify_failed = 0;
             let mut ping_cache = self.ping_cache.write().unwrap();
-            for (pong, addr) in msgs {
+            for (pong, addr) in pongs {
                 if pong.verify() {
                     ping_cache.add(&pong, addr, now);
                 } else {
