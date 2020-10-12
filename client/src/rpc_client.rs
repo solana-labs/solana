@@ -133,7 +133,11 @@ impl RpcClient {
         transaction: &Transaction,
         config: RpcSendTransactionConfig,
     ) -> ClientResult<Signature> {
-        let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base58);
+        let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base64);
+        let config = RpcSendTransactionConfig {
+            encoding: Some(encoding),
+            ..config
+        };
         let serialized_encoded = serialize_encode_transaction(transaction, encoding)?;
         let signature_base58_str: String = self.send(
             RpcRequest::SendTransaction,
@@ -170,7 +174,11 @@ impl RpcClient {
         transaction: &Transaction,
         config: RpcSimulateTransactionConfig,
     ) -> RpcResult<RpcSimulateTransactionResult> {
-        let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base58);
+        let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base64);
+        let config = RpcSimulateTransactionConfig {
+            encoding: Some(encoding),
+            ..config
+        };
         let serialized_encoded = serialize_encode_transaction(transaction, encoding)?;
         self.send(
             RpcRequest::SimulateTransaction,
