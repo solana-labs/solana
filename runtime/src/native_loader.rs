@@ -19,7 +19,7 @@ use thiserror::Error;
 #[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum NativeLoaderError {
     #[error("Entrypoint name in the account data is not a valid UTF-8 string")]
-    InvalidEntrypointName = 0x0aaa_0001,
+    InvalidAccountData = 0x0aaa_0001,
     #[error("Entrypoint was not found in the module")]
     EntrypointNotFound = 0x0aaa_0002,
     #[error("Failed to load the module")]
@@ -56,16 +56,18 @@ pub struct NativeLoader {
     loader_symbol_cache: LoaderSymbolCache,
 }
 impl NativeLoader {
-    fn create_path(name: &str) -> PathBuf {
-        let current_exe = env::current_exe().unwrap_or_else(|e| {
-            panic!("create_path(\"{}\"): current exe not found: {:?}", name, e)
-        });
-        let current_exe_directory = PathBuf::from(current_exe.parent().unwrap_or_else(|| {
-            panic!(
+    fn create_path(name: &str) -> Result<PathBuf, InstructionError> {
+        let current_exe = env::current_exe().map_err(|e| {
+            error!("create_path(\"{}\"): current exe not found: {:?}", name, e);
+            InstructionError::from(NativeLoaderError::EntrypointNotFound)
+        })?;
+        let current_exe_directory = PathBuf::from(current_exe.parent().ok_or_else(|| {
+            error!(
                 "create_path(\"{}\"): no parent directory of {:?}",
-                name, current_exe,
-            )
-        }));
+                name, current_exe
+            );
+            InstructionError::from(NativeLoaderError::FailedToLoad)
+        })?);
 
         let library_file_name = PathBuf::from(PLATFORM_FILE_PREFIX.to_string() + name)
             .with_extension(PLATFORM_FILE_EXTENSION);
@@ -74,10 +76,10 @@ impl NativeLoader {
         // from the deps/ subdirectory
         let file_path = current_exe_directory.join(&library_file_name);
         if file_path.exists() {
-            file_path
+            Ok(file_path)
         } else {
             // `cargo build` places dependent libraries in the deps/ subdirectory
-            current_exe_directory.join("deps").join(library_file_name)
+            Ok(current_exe_directory.join("deps").join(library_file_name))
         }
     }
 
@@ -100,7 +102,7 @@ impl NativeLoader {
         if let Some(entrypoint) = cache.get(name) {
             Ok(entrypoint.clone())
         } else {
-            match Self::library_open(&Self::create_path(&name)) {
+            match Self::library_open(&Self::create_path(&name)?) {
                 Ok(library) => {
                     let result = unsafe { library.get::<T>(name.as_bytes()) };
                     match result {
@@ -109,12 +111,14 @@ impl NativeLoader {
                             Ok(entrypoint)
                         }
                         Err(e) => {
-                            panic!("Unable to find program entrypoint in {:?}: {:?})", name, e);
+                            error!("Unable to find program entrypoint in {:?}: {:?})", name, e);
+                            Err(NativeLoaderError::EntrypointNotFound.into())
                         }
                     }
                 }
                 Err(e) => {
-                    panic!("Failed to load: {:?}", e);
+                    error!("Failed to load: {:?}", e);
+                    Err(NativeLoaderError::FailedToLoad.into())
                 }
             }
         }
@@ -134,9 +138,14 @@ impl NativeLoader {
         let name = match str::from_utf8(name_vec) {
             Ok(v) => v,
             Err(e) => {
-                panic!("Invalid UTF-8 sequence: {}", e);
+                error!("Invalid UTF-8 sequence: {}", e);
+                return Err(NativeLoaderError::InvalidAccountData.into());
             }
         };
+        if name.is_empty() || name.starts_with('\0') {
+            error!("Empty name string");
+            return Err(NativeLoaderError::InvalidAccountData.into());
+        }
         trace!("Call native {:?}", name);
         if name.ends_with("loader_program") {
             let entrypoint =
