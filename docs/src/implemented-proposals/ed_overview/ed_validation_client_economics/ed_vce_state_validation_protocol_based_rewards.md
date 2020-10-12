@@ -1,36 +1,64 @@
 ---
-title: State-validation Protocol-based Rewards
+title: Inflation Schedule
 ---
 
-**Subject to change.**
+**Subject to change. Follow most recent economic discussions in the Solana forums: https://forums.solana.com**
 
 Validator-clients have two functional roles in the Solana network:
 
-- Validate \(vote\) the current global state of that PoH.
-- Be elected as ‘leader’ on a stake-weighted round-robin schedule during which time they are responsible for collecting outstanding transactions and incorporating them into the PoH, thus updating the global state of the network and providing chain continuity.
+- Validate \(vote\) the current global state of their observed PoH.
+- Be elected as ‘leader’ on a stake-weighted round-robin schedule during which time they are responsible for collecting outstanding transactions and incorporating them into their observed PoH, thus updating the global state of the network and providing chain continuity.
 
-Validator-client rewards for these services are to be distributed at the end of each Solana epoch. As previously discussed, compensation for validator-clients is provided via a protocol-based annual inflation rate dispersed in proportion to the stake-weight of each validator \(see below\) along with leader-claimed transaction fees available during each leader rotation. I.e. during the time a given validator-client is elected as leader, it has the opportunity to keep a portion of each transaction fee, less a protocol-specified amount that is destroyed \(see [Validation-client State Transaction Fees](ed_vce_state_validation_transaction_fees.md)\).
+Validator-client rewards for these services are to be distributed at the end of each Solana epoch. As previously discussed, compensation for validator-clients is provided via a commission charged on the protocol-based annual inflation rate dispersed in proportion to the stake-weight of each validator-node \(see below\) along with leader-claimed transaction fees available during each leader rotation. I.e. during the time a given validator-client is elected as leader, it has the opportunity to keep a portion of each transaction fee, less a protocol-specified amount that is destroyed \(see [Validation-client State Transaction Fees](ed_vce_state_validation_transaction_fees.md)\).
 
-The effective protocol-based annual interest rate \(%\) per epoch received by validation-clients is to be a function of:
+The effective protocol-based annual staking yield \(%\) per epoch received by validation-clients is to be a function of:
 
 - the current global inflation rate, derived from the pre-determined dis-inflationary issuance schedule \(see [Validation-client Economics](ed_vce_overview.md)\)
 - the fraction of staked SOLs out of the current total circulating supply,
+- the commission charged by the validation service,
 - the up-time/participation \[% of available slots that validator had opportunity to vote on\] of a given validator over the previous epoch.
 
-The first factor is a function of protocol parameters only \(i.e. independent of validator behavior in a given epoch\) and results in a global validation reward schedule designed to incentivize early participation, provide clear monetary stability and provide optimal security in the network.
+The first factor is a function of protocol parameters only \(i.e. independent of validator behavior in a given epoch\) and results in an inflation schedule designed to incentivize early participation, provide clear monetary stability and provide optimal security in the network.
 
-At any given point in time, a specific validator's interest rate can be determined based on the proportion of circulating supply that is staked by the network and the validator's uptime/activity in the previous epoch. For example, consider a hypothetical instance of the network with an initial circulating token supply of 250MM tokens with an additional 250MM vesting over 3 years. Additionally an inflation rate is specified at network launch of 7.5%, and a disinflationary schedule of 20% decrease in inflation rate per year \(the actual rates to be implemented are to be worked out during the testnet experimentation phase of mainnet launch\). With these broad assumptions, the 10-year inflation rate \(adjusted daily for this example\) is shown in **Figure 1**, while the total circulating token supply is illustrated in **Figure 2**. Neglected in this toy-model is the inflation suppression due to the portion of each transaction fee that is to be destroyed.
+As a first step to understanding the impact of the *Inflation Schedule* on the Solana economy, we’ve simulated the upper and lower ranges of what token issuance over time might look like given the current ranges of Inflation Schedule parameters under study.
 
-![](/img/p_ex_schedule.png)
+Specifically:
 
-**Figure 1:** In this example schedule, the annual inflation rate \[%\] reduces at around 20% per year, until it reaches the long-term, fixed, 1.5% rate.
+- *Initial Inflation Rate*: 7-9%
+- *Dis-inflation Rate*: -14-16%
+- *Long-term Inflation Rate*: 1-2%
 
-![](/img/p_ex_supply.png)
+Using these ranges to simulate a number of possible Inflation Schedules, we can explore inflation over time:
 
-**Figure 2:** The total token supply over a 10-year period, based on an initial 250MM tokens with the disinflationary inflation schedule as shown in **Figure 1**. Over time, the interest rate, at a fixed network staked percentage, will reduce concordant with network inflation. Validation-client interest rates are designed to be higher in the early days of the network to incentivize participation and jumpstart the network economy. As previously mentioned, the inflation rate is expected to stabilize near 1-2% which also results in a fixed, long-term, interest rate to be provided to validator-clients. This value does not represent the total interest available to validator-clients as transaction fees for state-validation are not accounted for here. Given these example parameters, annualized validator-specific interest rates can be determined based on the global fraction of tokens bonded as stake, as well as their uptime/activity in the previous epoch. For the purpose of this example, we assume 100% uptime for all validators and a split in interest-based rewards between validators nodes of 80%/20%. Additionally, the fraction of staked circulating supply is assumed to be constant. Based on these assumptions, an annualized validation-client interest rate schedule as a function of % circulating token supply that is staked is shown in **Figure 3**.
+![](/img/p_inflation_schedule_ranges_w_comments.png)
 
-![](/img/p_ex_interest.png)
+In the above graph, the average values of the range are identified to illustrate the contribution of each parameter.
+From these simulated *Inflation Schedules*, we can also project ranges for token issuance over time.
 
-**Figure 3:** Shown here are example validator interest rates over time, neglecting transaction fees, segmented by fraction of total circulating supply bonded as stake.
+![](/img/p_total_supply_ranges.png)
 
-This epoch-specific protocol-defined interest rate sets an upper limit of _protocol-generated_ annual interest rate \(not absolute total interest rate\) possible to be delivered to any validator-client per epoch. The distributed interest rate per epoch is then discounted from this value based on the participation of the validator-client during the previous epoch.
+Finally we can estimate the *Staked Yield* on staked SOL, if we introduce an additional parameter, previously discussed, *% of Staked SOL*:
+
+
+%~\text{SOL Staked} = \frac{\text{Total SOL Staked}}{\text{Total Current Supply}}
+
+
+In this case, because *% of Staked SOL* is a parameter that must be estimated (unlike the *Inflation Schedule* parameters), it is easier to use specific *Inflation Schedule* parameters and explore a range of *% of Staked SOL*. For the below example, we’ve chosen the middle of the parameter ranges explored above:
+
+- *Initial Inflation Rate*: 8%
+- *Dis-inflation Rate*: -15%
+- *Long-term Inflation Rate*: 1.5%
+
+The values of *% of Staked SOL* range from 60% - 90%, which we feel covers the likely range we expect to observe, based on feedback from the investor and validator communities as well as what is observed on comparable Proof-of-Stake protocols.
+
+![](/img/p_ex_staked_yields.png)
+
+Again, the above shows an example *Staked Yield* that a staker might expect over time on the Solana network with the *Inflation Schedule* as specified. This is an idealized *Staked Yield* as it neglects validator uptime impact on rewards, validator commissions, potential yield throttling  and potential slashing incidents. It additionally ignores that *% of Staked SOL* is dynamic by design - the economic incentives set up by this *Inflation Schedule*.
+
+### Adjusted Staking Yield
+
+A complete appraisal of earning potential from staking tokens should take into account staked *Token Dilution* and its impact on staking yield. For this, we define *adjusted staking yield* as the change in fractional token supply ownership of staked tokens due to the distribution of inflation issuance. I.e. the positive dilutive effects of inflation.
+
+We can examine the *adjusted staking yield* as a function of the inflation rate and the percent of staked tokens on the network. We can see this plotted for various staking fractions here:
+
+![](/img/p_ex_staked_dilution.png)
