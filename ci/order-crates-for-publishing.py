@@ -42,10 +42,10 @@ def get_packages():
         sys.exit(1)
 
     # Order dependencies
-    deleted_dependencies = []
     sorted_dependency_graph = []
     max_iterations = pow(len(dependency_graph),2)
-    while len(deleted_dependencies) < len(dependency_graph):
+    while dependency_graph:
+        deleted_packages = []
         if max_iterations == 0:
             # One day be more helpful and find the actual cycle for the user...
             sys.exit('Error: Circular dependency suspected between these packages: \n {}\n'.format('\n '.join(dependency_graph.keys())))
@@ -53,12 +53,16 @@ def get_packages():
         max_iterations -= 1
 
         for package, dependencies in dependency_graph.items():
+            if package in deleted_packages:
+                continue
             for dependency in dependencies:
                 if dependency in dependency_graph:
                     break
             else:
-                deleted_dependencies.append(package)
+                deleted_packages.append(package)
                 sorted_dependency_graph.append((package, manifest_path[package]))
+
+        dependency_graph = {p: d for p, d in dependency_graph.items() if not p in deleted_packages }
 
 
     return sorted_dependency_graph
