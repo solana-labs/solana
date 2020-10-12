@@ -8686,7 +8686,7 @@ mod tests {
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "HrxvKJxPhzgXgoJ2Rg91acrXWki6SErJk1sfxfTDWsZt"
+                    "6oxxAqridoSSPQ1rnEh8qBhQpMmLUve3X4fsNNr2gExE"
                 );
             }
             if bank.slot == 32 {
