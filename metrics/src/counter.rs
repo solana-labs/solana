@@ -76,7 +76,7 @@ macro_rules! inc_counter_info {
 #[macro_export]
 macro_rules! inc_new_counter {
     ($name:expr, $count:expr, $level:expr, $lograte:expr, $metricsrate:expr) => {{
-        if log_enabled!($level) {
+        if $count != 0 && log_enabled!($level) {
             static mut INC_NEW_COUNTER: $crate::counter::Counter =
                 create_counter!($name, $lograte, $metricsrate);
             static INIT_HOOK: std::sync::Once = std::sync::Once::new();
