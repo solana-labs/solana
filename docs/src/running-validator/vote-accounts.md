@@ -144,3 +144,46 @@ Commission can also be changed later with the
 When setting the commission, only integer values in the set [0-100] are accepted.
 The integer represents the number of percentage points for the commission, so
 creating an account with `--commission 10` will set a 10% commission.
+
+## Key Rotation
+Rotating the vote account authority keys require special handling when dealing
+with a live validator.
+
+### Vote Account Validator Identity
+
+You will need access to the _withdraw authority_ keypair for the vote account to
+change the validator identity.  The follow steps assume that
+`~/withdraw-authority.json` is that keypair.
+
+1. Create the new validator identity keypair, `solana-keygen new -o ~/new-validator-keypair.json`.
+2. Ensure that the new identity account has been funded, `solana transfer ~/new-validator-keypair.json 500`.
+3. Run `solana vote-update-validator ~/vote-account-keypair.json ~/new-validator-keypair.json ~/withdraw-authority.json`
+   to modify the validator identity in your vote account
+4. Restart your validator with the new identity keypair for the `--identity` argument
+
+### Vote Account Authorized Voter
+The _vote authority_ keypair may only be changed at epoch boundaries and
+requires some additional arguments to `solana-validator` for a seamless
+migration.
+
+1. Run `solana epoch-info`.  If there is not much time remaining time in the
+   current epoch, consider waiting for the next epoch to allow your validator
+   plenty of time to restart and catch up.
+2. Create the new vote authority keypair, `solana-keygen new -o ~/new-vote-authority.json`.
+3. Determine the current _vote authority_ keypair by running `solana
+   vote-account ~/vote-account-keypair.json`.  It may be validator's
+   identity account (the default) or some other keypair.  The following steps
+   assume that ` ~/validator-keypair.json` is that keypair.
+4. Run `solana vote-authorize-voter ~/vote-account-keypair.json ~/validator-keypair.json ~/new-vote-authority.json`.
+   The new vote authority is scheduled to become active starting at the next epoch.
+5. `solana-validator` now needs to be restarted with the old and new vote
+   authority keypairs, so that it can smoothly transition at the next epoch. Add
+   the two arguments on restart: `--authorized-voter ~/validator-keypair.json
+   --authorized-voter ~/new-vote-authority.json`
+6. After the cluster reaches the next epoch, restart `solana-validator` again
+   after remove the `--authorized-voter ~/validator-keypair.json` argument, as
+   the old vote authority keypair is no longer required.
+
+
+### Vote Account Authorized Withdrawer
+No special handling is required.  Use the `solana vote-authorize-withdrawer` command as needed.
