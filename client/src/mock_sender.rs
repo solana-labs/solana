@@ -112,7 +112,7 @@ impl RpcSender for MockSender {
                     Signature::new(&[8; 64]).to_string()
                 } else {
                     let tx_str = params.as_array().unwrap()[0].as_str().unwrap().to_string();
-                    let data = bs58::decode(tx_str).into_vec().unwrap();
+                    let data = base64::decode(tx_str).unwrap();
                     let tx: Transaction = bincode::deserialize(&data).unwrap();
                     tx.signatures[0].to_string()
                 };
