@@ -49,6 +49,17 @@ pub mod max_program_call_depth_64 {
     solana_sdk::declare_id!("YCKSgA6XmjtkQrHBQjpyNrX6EMhJPcYcLWMVgWn36iv");
 }
 
+<<<<<<< HEAD
+=======
+pub mod timestamp_correction {
+    solana_sdk::declare_id!("3zydSLUwuqqsV3wL5wBsaVgyvMox3XTHx7zLEuQf1U2Z");
+}
+
+pub mod cumulative_rent_related_fixes {
+    solana_sdk::declare_id!("FtjnuAtJTWwX3Kx9m24LduNEhzaGuuPfDW6e14SX2Fy5");
+}
+
+>>>>>>> 7de7efe96... Add nop feature set for upcoming ported rent fixes (#12841)
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -63,7 +74,13 @@ lazy_static! {
         (compute_budget_balancing::id(), "compute budget balancing"),
         (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
         (max_invoke_depth_4::id(), "max invoke call depth 4"),
+<<<<<<< HEAD
         (max_program_call_depth_64::id(), "max program call depth 64")
+=======
+        (max_program_call_depth_64::id(), "max program call depth 64"),
+        (timestamp_correction::id(), "correct bank timestamps"),
+        (cumulative_rent_related_fixes::id(), "rent fixes (#10206, #10468, #11342)"),
+>>>>>>> 7de7efe96... Add nop feature set for upcoming ported rent fixes (#12841)
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
