@@ -35,6 +35,7 @@ use solana_client::{
 };
 use solana_faucet::faucet::request_airdrop_transaction;
 use solana_ledger::{blockstore::Blockstore, blockstore_db::BlockstoreError, get_tmp_ledger_path};
+use solana_metrics::inc_new_counter_info;
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::{
     accounts::AccountAddressFilter,
@@ -2606,6 +2607,7 @@ fn deserialize_transaction(
 ) -> Result<(Vec<u8>, Transaction)> {
     let wire_transaction = match encoding {
         UiTransactionEncoding::Base58 => {
+            inc_new_counter_info!("rpc-base58_encoded_tx", 1);
             if encoded_transaction.len() > WORST_CASE_BASE58_TX {
                 return Err(Error::invalid_params(format!(
                     "encoded transaction too large: {} bytes (max: encoded/raw {}/{})",
@@ -2619,6 +2621,7 @@ fn deserialize_transaction(
                 .map_err(|e| Error::invalid_params(format!("{:?}", e)))?
         }
         UiTransactionEncoding::Base64 => {
+            inc_new_counter_info!("rpc-base64_encoded_tx", 1);
             if encoded_transaction.len() > WORST_CASE_BASE64_TX {
                 return Err(Error::invalid_params(format!(
                     "encoded transaction too large: {} bytes (max: encoded/raw {}/{})",
