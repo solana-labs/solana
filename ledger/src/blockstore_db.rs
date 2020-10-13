@@ -16,7 +16,8 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::Signature,
 };
-use solana_transaction_status::{Rewards, TransactionStatusMeta};
+use solana_storage_bigtable::convert::generated;
+use solana_transaction_status::TransactionStatusMeta;
 use std::{collections::HashMap, fs, marker::PhantomData, path::Path, sync::Arc};
 use thiserror::Error;
 
@@ -550,8 +551,8 @@ impl SlotColumn for columns::Rewards {}
 impl ColumnName for columns::Rewards {
     const NAME: &'static str = REWARDS_CF;
 }
-impl TypedColumn for columns::Rewards {
-    type Type = Rewards;
+impl ProtobufColumn for columns::Rewards {
+    type Type = generated::Rewards;
 }
 
 impl SlotColumn for columns::Blocktime {}
