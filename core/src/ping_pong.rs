@@ -37,7 +37,7 @@ pub struct PingCache {
     pongs: LruCache<(Pubkey, SocketAddr), Instant>,
     // Hash of ping tokens sent out to remote nodes,
     // pending a pong response back.
-    cache: LruCache<Hash, (Pubkey, SocketAddr)>,
+    pending_cache: LruCache<Hash, (Pubkey, SocketAddr)>,
 }
 
 impl<T: Serialize> Ping<T> {
@@ -137,7 +137,7 @@ impl PingCache {
             ttl,
             pings: LruCache::new(cap),
             pongs: LruCache::new(cap),
-            cache: LruCache::new(cap),
+            pending_cache: LruCache::new(cap),
         }
     }
 
@@ -147,11 +147,11 @@ impl PingCache {
     /// Note: Does not verify the signature.
     pub fn add(&mut self, pong: &Pong, socket: SocketAddr, now: Instant) -> bool {
         let node = (pong.pubkey(), socket);
-        match self.cache.peek(&pong.hash) {
+        match self.pending_cache.peek(&pong.hash) {
             Some(value) if *value == node => {
                 self.pings.pop(&node);
                 self.pongs.put(node, now);
-                self.cache.pop(&pong.hash);
+                self.pending_cache.pop(&pong.hash);
                 true
             }
             _ => false,
@@ -179,7 +179,7 @@ impl PingCache {
                 let ping = pingf()?;
                 let hash = hash::hash(&serialize(&ping.token).ok()?);
                 self.pings.put(node, now);
-                self.cache.put(hash, node);
+                self.pending_cache.put(hash, node);
                 Some(ping)
             }
         }
@@ -203,7 +203,7 @@ impl PingCache {
         T: Serialize,
         F: FnMut() -> Option<Ping<T>>,
     {
-        let (check, ping) = match self.pongs.get(&node) {
+        let (check, should_ping) = match self.pongs.get(&node) {
             None => (false, true),
             Some(t) => {
                 let age = now.saturating_duration_since(*t);
@@ -216,7 +216,7 @@ impl PingCache {
                 (true, age > self.ttl / 8)
             }
         };
-        let ping = if ping {
+        let ping = if should_ping {
             self.maybe_ping(now, node, pingf)
         } else {
             None
@@ -231,7 +231,7 @@ impl Clone for PingCache {
             ttl: self.ttl,
             pings: LruCache::new(self.pings.cap()),
             pongs: LruCache::new(self.pongs.cap()),
-            cache: LruCache::new(self.cache.cap()),
+            pending_cache: LruCache::new(self.pending_cache.cap()),
         };
         for (k, v) in self.pongs.iter() {
             clone.pings.put(*k, *v);
@@ -239,8 +239,8 @@ impl Clone for PingCache {
         for (k, v) in self.pongs.iter() {
             clone.pongs.put(*k, *v);
         }
-        for (k, v) in self.cache.iter() {
-            clone.cache.put(*k, *v);
+        for (k, v) in self.pending_cache.iter() {
+            clone.pending_cache.put(*k, *v);
         }
         clone
     }
