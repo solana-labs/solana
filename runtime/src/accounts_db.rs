@@ -99,7 +99,7 @@ pub type SnapshotStorage = Vec<Arc<AccountStorageEntry>>;
 pub type SnapshotStorages = Vec<SnapshotStorage>;
 
 // Each slot has a set of storage entries.
-pub(crate) type SlotStores = HashMap<usize, Arc<AccountStorageEntry>>;
+pub(crate) type SlotStores = Arc<RwLock<HashMap<usize, Arc<AccountStorageEntry>>>>;
 
 type AccountSlots = HashMap<Pubkey, HashSet<Slot>>;
 type AppendVecOffsets = HashMap<AppendVecId, HashSet<usize>>;
@@ -122,7 +122,7 @@ impl Versioned for (u64, AccountInfo) {
 }
 
 #[derive(Clone, Default, Debug)]
-pub struct AccountStorage(pub DashMap<Slot, Arc<RwLock<SlotStores>>>);
+pub struct AccountStorage(pub DashMap<Slot, SlotStores>);
 
 impl AccountStorage {
     fn get_account_storage_entry(
@@ -135,7 +135,7 @@ impl AccountStorage {
             .and_then(|storage_map| storage_map.value().read().unwrap().get(&store_id).cloned())
     }
 
-    fn get_slot_stores(&self, slot: Slot) -> Option<Arc<RwLock<SlotStores>>> {
+    fn get_slot_stores(&self, slot: Slot) -> Option<SlotStores> {
         self.0.get(&slot).map(|result| result.value().clone())
     }
 
