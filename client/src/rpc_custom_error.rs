@@ -4,12 +4,12 @@ use crate::rpc_response::RpcSimulateTransactionResult;
 use jsonrpc_core::{Error, ErrorCode};
 use solana_sdk::clock::Slot;
 
-const JSON_RPC_SERVER_ERROR_1: i64 = -32001;
-const JSON_RPC_SERVER_ERROR_2: i64 = -32002;
-const JSON_RPC_SERVER_ERROR_3: i64 = -32003;
-const JSON_RPC_SERVER_ERROR_4: i64 = -32004;
-const JSON_RPC_SERVER_ERROR_5: i64 = -32005;
-const JSON_RPC_SERVER_ERROR_6: i64 = -32006;
+pub const JSON_RPC_SERVER_ERROR_BLOCK_CLEANED_UP: i64 = -32001;
+pub const JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE: i64 = -32002;
+pub const JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE: i64 = -32003;
+pub const JSON_RPC_SERVER_ERROR_BLOCK_NOT_AVAILABLE: i64 = -32004;
+pub const JSON_RPC_SERVER_ERROR_NODE_UNHEALTHLY: i64 = -32005;
+pub const JSON_RPC_SERVER_ERROR_TRANSACTION_PRECOMPILE_VERIFICATION_FAILURE: i64 = -32006;
 
 pub enum RpcCustomError {
     BlockCleanedUp {
@@ -35,7 +35,7 @@ impl From<RpcCustomError> for Error {
                 slot,
                 first_available_block,
             } => Self {
-                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_1),
+                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_BLOCK_CLEANED_UP),
                 message: format!(
                     "Block {} cleaned up, does not exist on node. First available block: {}",
                     slot, first_available_block,
@@ -43,27 +43,33 @@ impl From<RpcCustomError> for Error {
                 data: None,
             },
             RpcCustomError::SendTransactionPreflightFailure { message, result } => Self {
-                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_2),
+                code: ErrorCode::ServerError(
+                    JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE,
+                ),
                 message,
                 data: Some(serde_json::json!(result)),
             },
             RpcCustomError::TransactionSignatureVerificationFailure => Self {
-                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_3),
+                code: ErrorCode::ServerError(
+                    JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE,
+                ),
                 message: "Transaction signature verification failure".to_string(),
                 data: None,
             },
             RpcCustomError::BlockNotAvailable { slot } => Self {
-                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_4),
+                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_BLOCK_NOT_AVAILABLE),
                 message: format!("Block not available for slot {}", slot),
                 data: None,
             },
             RpcCustomError::RpcNodeUnhealthy => Self {
-                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_5),
+                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_NODE_UNHEALTHLY),
                 message: "RPC node is unhealthy".to_string(),
                 data: None,
             },
             RpcCustomError::TransactionPrecompileVerificationFailure(e) => Self {
-                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_6),
+                code: ErrorCode::ServerError(
+                    JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE,
+                ),
                 message: format!("Transaction precompile verification failure {:?}", e),
                 data: None,
             },
