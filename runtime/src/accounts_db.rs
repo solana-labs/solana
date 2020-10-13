@@ -1107,11 +1107,12 @@ impl AccountsDB {
             start.stop();
             update_index_elapsed = start.as_us();
 
-            let mut start = Measure::start("update_index_elapsed");
+            let mut start = Measure::start("handle_reclaims_elapsed");
             self.handle_reclaims(&reclaims, Some(slot), true, None);
             start.stop();
             handle_reclaims_elapsed = start.as_us();
 
+            let mut start = Measure::start("write_storage_elapsed");
             if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
                 slot_stores.write().unwrap().retain(|_key, store| {
                     if store.count() == 0 {
@@ -1227,11 +1228,8 @@ impl AccountsDB {
         let mut collector = A::default();
         let accounts_index = self.accounts_index.read().unwrap();
         accounts_index.scan_accounts(ancestors, |pubkey, (account_info, slot)| {
-            let account_storage_entry = self
-                .storage
-                .get_account_storage_entry(slot, account_info.store_id);
-            let account_slot = account_storage_entry
-                .and_then(|account_storage_entry| account_storage_entry.get_account(account_info))
+            let account_slot = self
+                .get_account_from_storage(slot, account_info)
                 .map(|account| (pubkey, account, slot));
             scan_func(&mut collector, account_slot)
         });
@@ -1247,19 +1245,15 @@ impl AccountsDB {
         let mut collector = A::default();
         let accounts_index = self.accounts_index.read().unwrap();
         accounts_index.range_scan_accounts(ancestors, range, |pubkey, (account_info, slot)| {
-            let account_storage_entry = self
-                .storage
-                .get_account_storage_entry(slot, account_info.store_id);
-            let account_slot = account_storage_entry
-                .and_then(|account_storage_entry| account_storage_entry.get_account(account_info))
+            let account_slot = self
+                .get_account_from_storage(slot, account_info)
                 .map(|account| (pubkey, account, slot));
             scan_func(&mut collector, account_slot)
         });
         collector
     }
 
-    /// Scan a specific slot through all the account storage in parallel with sequential read
-    // PERF: Sequentially read each storage entry in parallel
+    /// Scan a specific slot through all the account storage in parallel
     pub fn scan_account_storage<F, B>(&self, slot: Slot, scan_func: F) -> Vec<B>
     where
         F: Fn(&StoredAccount, AppendVecId, &mut B) + Send + Sync,
@@ -1348,6 +1342,14 @@ impl AccountsDB {
     pub fn load_slow(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Option<(Account, Slot)> {
         let accounts_index = self.accounts_index.read().unwrap();
         Self::load(&self.storage, ancestors, &accounts_index, pubkey)
+    }
+
+    fn get_account_from_storage(&self, slot: Slot, account_info: &AccountInfo) -> Option<Account> {
+        let account_storage_entry = self
+            .storage
+            .get_account_storage_entry(slot, account_info.store_id);
+        account_storage_entry
+            .and_then(|account_storage_entry| account_storage_entry.get_account(account_info))
     }
 
     fn find_storage_candidate(&self, slot: Slot) -> Arc<AccountStorageEntry> {
@@ -2139,7 +2141,8 @@ impl AccountsDB {
             {
                 assert_eq!(
                     *slot, store.slot,
-                    "AccountDB::accounts_index corrupted. Storage should only point to one slot"
+                    "AccountDB::accounts_index corrupted. Storage pointed to: {}, expected: {}, should only point to one slot",
+                    store.slot, *slot
                 );
                 let count = store.remove_account();
                 if count == 0 {
@@ -2363,7 +2366,7 @@ impl AccountsDB {
 
     pub fn generate_index(&self) {
         let mut accounts_index = self.accounts_index.write().unwrap();
-        let mut slots: Vec<Slot> = self.storage.all_slots();
+        let mut slots = self.storage.all_slots();
         slots.sort();
 
         let mut last_log_update = Instant::now();
