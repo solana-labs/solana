@@ -8,11 +8,8 @@ use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
 use solana_account_decoder::{UiAccount, UiAccountEncoding};
-<<<<<<< HEAD
-use solana_budget_program::budget_instruction::{self, BudgetError};
-=======
 use solana_bpf_loader_program::bpf_verifier;
->>>>>>> 6bbf6a79b... Check ELF file for errors before deploy (#12741)
+use solana_budget_program::budget_instruction::{self, BudgetError};
 use solana_clap_utils::{
     self,
     commitment::commitment_arg_with_default,
