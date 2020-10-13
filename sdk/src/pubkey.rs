@@ -176,19 +176,10 @@ impl Pubkey {
         }
     }
 
-<<<<<<< HEAD
-    /// Find a valid program address and its corresponding nonce which must be passed
-    /// as an additional seed when calling `create_program_address`
-    // #[cfg(not(feature = "program"))]
-    pub fn find_program_address(seeds: &[&[u8]], program_id: &Pubkey) -> (Pubkey, u8) {
-        let mut nonce = [255];
-=======
     /// Find a valid program address and its corresponding bump seed which must be passed
     /// as an additional seed when calling `invoke_signed`
-    #[allow(clippy::same_item_push)]
     pub fn find_program_address(seeds: &[&[u8]], program_id: &Pubkey) -> (Pubkey, u8) {
         let mut bump_seed = [std::u8::MAX];
->>>>>>> 56211378d... terminology update, nonce to bump seed (#12840)
         for _ in 0..std::u8::MAX {
             {
                 let mut seeds_with_bump = seeds.to_vec();

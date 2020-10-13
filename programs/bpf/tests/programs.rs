@@ -549,7 +549,12 @@ fn test_program_bpf_invoke() {
 
         let instruction = Instruction::new(
             invoke_program_id,
-            &[TEST_PRIVILEGE_ESCALATION_SIGNER, bump_seed1, bump_seed2, bump_seed3],
+            &[
+                TEST_PRIVILEGE_ESCALATION_SIGNER,
+                bump_seed1,
+                bump_seed2,
+                bump_seed3,
+            ],
             account_metas.clone(),
         );
         let message = Message::new(&[instruction], Some(&mint_pubkey));
@@ -577,7 +582,12 @@ fn test_program_bpf_invoke() {
 
         let instruction = Instruction::new(
             invoke_program_id,
-            &[TEST_PRIVILEGE_ESCALATION_WRITABLE, bump_seed1, bump_seed2, bump_seed3],
+            &[
+                TEST_PRIVILEGE_ESCALATION_WRITABLE,
+                bump_seed1,
+                bump_seed2,
+                bump_seed3,
+            ],
             account_metas.clone(),
         );
         let message = Message::new(&[instruction], Some(&mint_pubkey));
@@ -604,7 +614,12 @@ fn test_program_bpf_invoke() {
 
         let instruction = Instruction::new(
             invoke_program_id,
-            &[TEST_PPROGRAM_NOT_EXECUTABLE, bump_seed1, bump_seed2, bump_seed3],
+            &[
+                TEST_PPROGRAM_NOT_EXECUTABLE,
+                bump_seed1,
+                bump_seed2,
+                bump_seed3,
+            ],
             account_metas.clone(),
         );
         let message = Message::new(&[instruction], Some(&mint_pubkey));
