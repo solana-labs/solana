@@ -16,6 +16,7 @@ import {PublicKey} from './src/publickey';
 
 declare module '@solana/web3.js' {
   // === src/publickey.js ===
+  declare export var MAX_SEED_LENGTH: number;
   declare export type PublicKeyNonce = [PublicKey, number];
   declare export class PublicKey {
     constructor(

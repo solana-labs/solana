@@ -1,7 +1,7 @@
 // @flow
 import BN from 'bn.js';
 
-import {PublicKey} from '../src/publickey';
+import {PublicKey, MAX_SEED_LENGTH} from '../src/publickey';
 
 test('invalid', () => {
   expect(() => {
@@ -278,6 +278,13 @@ test('createProgramAddress', async () => {
     programId,
   );
   expect(programAddress.equals(programAddress2)).toBe(false);
+
+  await expect(
+    PublicKey.createProgramAddress(
+      [Buffer.alloc(MAX_SEED_LENGTH + 1)],
+      programId,
+    ),
+  ).rejects.toThrow('Max seed length exceeded');
 
   // https://github.com/solana-labs/solana/issues/11950
   {

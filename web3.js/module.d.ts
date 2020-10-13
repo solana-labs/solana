@@ -3,6 +3,7 @@ declare module '@solana/web3.js' {
   import * as BufferLayout from 'buffer-layout';
 
   // === src/publickey.js ===
+  export const MAX_SEED_LENGTH: number;
   export type PublicKeyNonce = [PublicKey, number];
   export class PublicKey {
     constructor(value: number | string | Buffer | Uint8Array | Array<number>);
