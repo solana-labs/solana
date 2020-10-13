@@ -485,11 +485,11 @@ fn test_program_bpf_invoke() {
         let account = Account::new(84, 0, &solana_sdk::system_program::id());
         bank.store_account(&from_keypair.pubkey(), &account);
 
-        let (derived_key1, nonce1) =
+        let (derived_key1, bump_seed1) =
             Pubkey::find_program_address(&[b"You pass butter"], &invoke_program_id);
-        let (derived_key2, nonce2) =
+        let (derived_key2, bump_seed2) =
             Pubkey::find_program_address(&[b"Lil'", b"Bits"], &invoked_program_id);
-        let (derived_key3, nonce3) =
+        let (derived_key3, bump_seed3) =
             Pubkey::find_program_address(&[derived_key2.as_ref()], &invoked_program_id);
 
         let mint_pubkey = mint_keypair.pubkey();
@@ -511,7 +511,7 @@ fn test_program_bpf_invoke() {
 
         let instruction = Instruction::new(
             invoke_program_id,
-            &[TEST_SUCCESS, nonce1, nonce2, nonce3],
+            &[TEST_SUCCESS, bump_seed1, bump_seed2, bump_seed3],
             account_metas.clone(),
         );
         let message = Message::new(&[instruction], Some(&mint_pubkey));
@@ -553,7 +553,7 @@ fn test_program_bpf_invoke() {
 
         let instruction = Instruction::new(
             invoke_program_id,
-            &[TEST_PRIVILEGE_ESCALATION_SIGNER, nonce1, nonce2, nonce3],
+            &[TEST_PRIVILEGE_ESCALATION_SIGNER, bump_seed1, bump_seed2, bump_seed3],
             account_metas.clone(),
         );
         let message = Message::new(&[instruction], Some(&mint_pubkey));
@@ -581,7 +581,7 @@ fn test_program_bpf_invoke() {
 
         let instruction = Instruction::new(
             invoke_program_id,
-            &[TEST_PRIVILEGE_ESCALATION_WRITABLE, nonce1, nonce2, nonce3],
+            &[TEST_PRIVILEGE_ESCALATION_WRITABLE, bump_seed1, bump_seed2, bump_seed3],
             account_metas.clone(),
         );
         let message = Message::new(&[instruction], Some(&mint_pubkey));
@@ -608,7 +608,7 @@ fn test_program_bpf_invoke() {
 
         let instruction = Instruction::new(
             invoke_program_id,
-            &[TEST_PPROGRAM_NOT_EXECUTABLE, nonce1, nonce2, nonce3],
+            &[TEST_PPROGRAM_NOT_EXECUTABLE, bump_seed1, bump_seed2, bump_seed3],
             account_metas.clone(),
         );
         let message = Message::new(&[instruction], Some(&mint_pubkey));
