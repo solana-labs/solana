@@ -9,7 +9,7 @@ use solana_sdk::{
 };
 use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Reward,
-    TransactionStatus, TransactionStatusMeta, TransactionWithStatusMeta,
+    RewardType, TransactionStatus, TransactionStatusMeta, TransactionWithStatusMeta,
 };
 use std::{collections::HashMap, convert::TryInto};
 use thiserror::Error;
@@ -20,7 +20,7 @@ extern crate serde_derive;
 mod access_token;
 mod bigtable;
 mod compression;
-mod convert;
+pub mod convert;
 mod root_ca_certificate;
 
 use convert::generated;
@@ -233,6 +233,51 @@ impl From<Reward> for StoredConfirmedBlockReward {
             pubkey, lamports, ..
         } = value;
         Self { pubkey, lamports }
+    }
+}
+
+pub type StoredExtendedRewards = Vec<StoredExtendedReward>;
+
+#[derive(Serialize, Deserialize)]
+pub struct StoredExtendedReward {
+    pubkey: String,
+    lamports: i64,
+    post_balance: u64,
+    reward_type: Option<RewardType>,
+}
+
+impl From<StoredExtendedReward> for Reward {
+    fn from(value: StoredExtendedReward) -> Self {
+        let StoredExtendedReward {
+            pubkey,
+            lamports,
+            post_balance,
+            reward_type,
+        } = value;
+        Self {
+            pubkey,
+            lamports,
+            post_balance,
+            reward_type,
+        }
+    }
+}
+
+impl From<Reward> for StoredExtendedReward {
+    fn from(value: Reward) -> Self {
+        let Reward {
+            pubkey,
+            lamports,
+            post_balance,
+            reward_type,
+            ..
+        } = value;
+        Self {
+            pubkey,
+            lamports,
+            post_balance,
+            reward_type,
+        }
     }
 }
 

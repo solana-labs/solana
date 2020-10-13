@@ -73,6 +73,10 @@ message Reward {
     RewardType reward_type = 4;
 }
 
+message Rewards {
+  repeated Reward rewards = 1;
+}
+
 message UnixTimestamp {
     int64 timestamp = 1;
 }
