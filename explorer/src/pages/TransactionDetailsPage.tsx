@@ -264,7 +264,7 @@ function StatusCard({
               )}
             </td>
             <td className="text-lg-right">
-              <Block block={blockhash} alignRight={true} link={true} />
+              <Block block={blockhash} alignRight={true} link={false} />
             </td>
           </tr>
         )}

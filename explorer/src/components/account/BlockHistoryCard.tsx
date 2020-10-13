@@ -48,15 +48,19 @@ export function BlockHistoryCard({ block }: { block: string }) {
                 (tag: any) =>
                   tag.name === "slot" ||
                   tag.name === "parentSlot" ||
-                  tag.name === "blockhash"
+                  tag.name === "blockhash" ||
+                  tag.name === "previousBlockhash"
               )
               .map((tag: any) => {
                 return (
-                  <tr>
+                  <tr key={tag.name}>
                     <td>
                       {tag.name === "slot" ? "Slot" : ""}
                       {tag.name === "parentSlot" ? "Parent Slot" : ""}
                       {tag.name === "blockhash" ? "Blockhash" : ""}
+                      {tag.name === "previousBlockhash"
+                        ? "Previous Blockhash"
+                        : ""}
                     </td>
                     <td className="text-lg-right">
                       {tag.name === "slot" ? (
@@ -74,6 +78,12 @@ export function BlockHistoryCard({ block }: { block: string }) {
                         ""
                       )}
                       {tag.name === "blockhash" ? (
+                        <Block block={tag.value} alignRight={true} />
+                      ) : (
+                        ""
+                      )}
+
+                      {tag.name === "previousBlockhash" ? (
                         <Block block={tag.value} alignRight={true} />
                       ) : (
                         ""

@@ -1,7 +1,7 @@
 import React from "react";
 import * as Sentry from "@sentry/react";
 import * as Cache from "providers/cache";
-import { RetrieveSlot, RetrieveBlockhash } from "@theronin/solarweave";
+import { post } from "superagent";
 import { useCluster, Cluster } from "./cluster";
 
 export enum FetchStatus {
@@ -75,19 +75,34 @@ export async function fetchBlock(
 
   let data = {
     blockData: null,
-    tags: [],
+    tags: [
+      { name: "slot", value: key },
+      { name: "parentSlot", value: "" },
+      { name: "blockhash", value: "" },
+      { name: "previousBlockhash", value: "" },
+    ],
   };
 
   try {
     if (type === "slot") {
-      result = await RetrieveSlot(key, solarweave);
-    } else {
-      result = await RetrieveBlockhash(key, solarweave);
+      const payload = await post(url).send({
+        jsonrpc: "2.0",
+        id: key,
+        method: "getConfirmedBlock",
+        params: [Number(key), "json"],
+      });
+
+      result = payload.body.result;
     }
 
     if (result) {
-      data.blockData = result.BlockData;
-      data.tags = result.Tags;
+      data.blockData = result;
+      data.tags = [
+        { name: "slot", value: key },
+        { name: "parentSlot", value: result.parentSlot },
+        { name: "blockhash", value: result.blockhash },
+        { name: "previousBlockhash", value: result.previousBlockhash },
+      ];
       status = FetchStatus.Fetched;
     } else {
       status = FetchStatus.FetchFailed;

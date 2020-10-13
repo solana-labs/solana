@@ -194,7 +194,7 @@ function buildOptions(search: string, cluster: Cluster) {
       label: "Block",
       options: [
         {
-          label: `Block #${search}`,
+          label: `Slot #${search}`,
           value: search,
           pathname: `/block/${search}`,
         },
@@ -215,17 +215,6 @@ function buildOptions(search: string, cluster: Cluster) {
             label: search,
             value: search,
             pathname: "/address/" + search,
-          },
-        ],
-      });
-
-      options.push({
-        label: "Block",
-        options: [
-          {
-            label: `Blockhash ${search}`,
-            value: search,
-            pathname: `/block/${search}`,
           },
         ],
       });
