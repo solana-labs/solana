@@ -8,6 +8,7 @@ source ci/_
 source ci/rust-version.sh stable
 source ci/rust-version.sh nightly
 eval "$(ci/channel-info.sh)"
+cargo="$(readlink -f "./cargo")"
 
 echo --- build environment
 (
@@ -16,14 +17,14 @@ echo --- build environment
   rustup run "$rust_stable" rustc --version --verbose
   rustup run "$rust_nightly" rustc --version --verbose
 
-  cargo +"$rust_stable" --version --verbose
-  cargo +"$rust_nightly" --version --verbose
+  "$cargo" stable --version --verbose
+  "$cargo" nightly --version --verbose
 
-  cargo +"$rust_stable" clippy --version --verbose
-  cargo +"$rust_nightly" clippy --version --verbose
+  "$cargo" stable clippy --version --verbose
+  "$cargo" nightly clippy --version --verbose
 
   # audit is done only with stable
-  cargo +"$rust_stable" audit --version
+  "$cargo" stable audit --version
 )
 
 export RUST_BACKTRACE=1
@@ -49,11 +50,11 @@ else
 fi
 
 _ ci/order-crates-for-publishing.py
-_ cargo +"$rust_stable" fmt --all -- --check
+_ "$cargo" stable fmt --all -- --check
 
 # -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
-_ cargo +"$rust_nightly" clippy \
+_ "$cargo" nightly clippy \
   -Zunstable-options --workspace --all-targets \
   -- --deny=warnings --allow=clippy::stable_sort_primitive
 
@@ -77,14 +78,14 @@ _ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit "${cargo_audit_ignor
 
 {
   cd programs/bpf
-  _ cargo +"$rust_stable" audit
+  _ "$cargo" stable audit
   for project in rust/*/ ; do
     echo "+++ do_bpf_checks $project"
     (
       cd "$project"
-      _ cargo +"$rust_stable" fmt -- --check
-      _ cargo +"$rust_nightly" test
-      _ cargo +"$rust_nightly" clippy -- --deny=warnings \
+      _ "$cargo" stable fmt -- --check
+      _ "$cargo" nightly test
+      _ "$cargo" nightly clippy -- --deny=warnings \
         --allow=clippy::missing_safety_doc \
         --allow=clippy::stable_sort_primitive
     )

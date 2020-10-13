@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+here="$(dirname "$0")"
+cargo="$(readlink -f "${here}/../cargo")"
+
 set -e
 cargo="$(readlink -f "$(dirname "$0")/../cargo")"
 

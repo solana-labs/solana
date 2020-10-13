@@ -2,6 +2,9 @@
 #
 # |cargo install| of the top-level crate will not install binaries for
 # other workspace crates or native program crates.
+here="$(dirname "$0")"
+cargo="$(readlink -f "${here}../cargo")"
+
 set -e
 
 usage() {
@@ -46,7 +49,6 @@ fi
 
 installDir="$(mkdir -p "$installDir"; cd "$installDir"; pwd)"
 mkdir -p "$installDir/bin/deps"
-cargo=cargo
 
 echo "Install location: $installDir ($buildVariant)"
 
@@ -112,9 +114,9 @@ mkdir -p "$installDir/bin"
 (
   set -x
   # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-  $cargo $maybeRustVersion build $maybeReleaseFlag "${binArgs[@]}"
+  "$cargo" $maybeRustVersion build $maybeReleaseFlag "${binArgs[@]}"
   # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-  $cargo $maybeRustVersion install spl-token-cli --root "$installDir"
+  "$cargo" $maybeRustVersion install spl-token-cli --root "$installDir"
 )
 
 for bin in "${BINS[@]}"; do
