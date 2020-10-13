@@ -2,6 +2,8 @@
 set -e
 cd "$(dirname "$0")/.."
 
+cargo="$(readlink -f "./cargo")"
+
 source ci/_
 
 annotate() {
@@ -34,7 +36,7 @@ NPROC=$((NPROC>14 ? 14 : NPROC))
 echo "Executing $testName"
 case $testName in
 test-stable)
-  _ cargo +"$rust_stable" test --jobs "$NPROC" --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
+  _ "$cargo" stable test --jobs "$NPROC" --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
   ;;
 test-stable-perf)
   # BPF solana-sdk legacy compile test
@@ -42,7 +44,7 @@ test-stable-perf)
 
   # BPF program tests
   _ make -C programs/bpf/c tests
-  _ cargo +"$rust_stable" test \
+  _ "$cargo" stable test \
     --manifest-path programs/bpf/Cargo.toml \
     --no-default-features --features=bpf_c,bpf_rust -- --nocapture
 
@@ -62,13 +64,13 @@ test-stable-perf)
     export SOLANA_CUDA=1
   fi
 
-  _ cargo +"$rust_stable" build --bins ${V:+--verbose}
-  _ cargo +"$rust_stable" test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture
-  _ cargo +"$rust_stable" run --manifest-path poh-bench/Cargo.toml ${V:+--verbose} -- --hashes-per-tick 10
+  _ "$cargo" stable build --bins ${V:+--verbose}
+  _ "$cargo" stable test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture
+  _ "$cargo" stable run --manifest-path poh-bench/Cargo.toml ${V:+--verbose} -- --hashes-per-tick 10
   ;;
 test-local-cluster)
-  _ cargo +"$rust_stable" build --release --bins ${V:+--verbose}
-  _ cargo +"$rust_stable" test --release --package solana-local-cluster ${V:+--verbose} -- --nocapture --test-threads=1
+  _ "$cargo" stable build --release --bins ${V:+--verbose}
+  _ "$cargo" stable test --release --package solana-local-cluster ${V:+--verbose} -- --nocapture --test-threads=1
   exit 0
   ;;
 *)

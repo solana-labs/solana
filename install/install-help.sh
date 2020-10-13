@@ -2,8 +2,9 @@
 set -e
 
 cd "$(dirname "$0")"/..
+cargo="$(readlink -f "./cargo")"
 
-cargo build --package solana-install
+"$cargo" build --package solana-install
 export PATH=$PWD/target/debug:$PATH
 
 echo "\`\`\`manpage"
