@@ -27,6 +27,13 @@ impl HttpSender {
     }
 }
 
+#[derive(Deserialize, Debug)]
+struct RpcErrorObject {
+    code: i64,
+    message: String,
+    /*data field omitted*/
+}
+
 impl RpcSender for HttpSender {
     fn send(&self, request: RpcRequest, params: serde_json::Value) -> Result<serde_json::Value> {
         // Concurrent requests are not supported so reuse the same request id for all requests
@@ -63,11 +70,20 @@ impl RpcSender for HttpSender {
 
                     let json: serde_json::Value = serde_json::from_str(&response.text()?)?;
                     if json["error"].is_object() {
-                        return Err(RpcError::RpcRequestError(format!(
-                            "RPC Error response: {}",
-                            serde_json::to_string(&json["error"]).unwrap()
-                        ))
-                        .into());
+                        return match serde_json::from_value::<RpcErrorObject>(json["error"].clone())
+                        {
+                            Ok(rpc_error_object) => Err(RpcError::RpcResponseError {
+                                code: rpc_error_object.code,
+                                message: rpc_error_object.message,
+                            }
+                            .into()),
+                            Err(err) => Err(RpcError::RpcRequestError(format!(
+                                "Failed to deserialize RPC error response: {} [{}]",
+                                serde_json::to_string(&json["error"]).unwrap(),
+                                err
+                            ))
+                            .into()),
+                        };
                     }
                     return Ok(json["result"].clone());
                 }
