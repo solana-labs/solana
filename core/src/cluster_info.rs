@@ -98,6 +98,7 @@ const MAX_GOSSIP_TRAFFIC: usize = 128_000_000 / PACKET_DATA_SIZE;
 
 /// Keep the number of snapshot hashes a node publishes under MAX_PROTOCOL_PAYLOAD_SIZE
 pub const MAX_SNAPSHOT_HASHES: usize = 16;
+/// Number of bytes in the randomly generated token sent with ping messages.
 const GOSSIP_PING_TOKEN_SIZE: usize = 32;
 const GOSSIP_PING_CACHE_CAPACITY: usize = 16384;
 const GOSSIP_PING_CACHE_TTL: Duration = Duration::from_secs(640);
@@ -230,6 +231,7 @@ struct GossipStats {
     prune_received_cache: Counter,
     prune_message_count: Counter,
     prune_message_len: Counter,
+    pull_request_ping_pong_check_failed_count: Counter,
     purge: Counter,
     epoch_slots_lookup: Counter,
     epoch_slots_push: Counter,
@@ -1952,6 +1954,11 @@ impl ClusterInfo {
                 let ping = Packet::from_data(&node.1, ping);
                 packets.packets.push(ping);
             }
+            if !_check {
+                self.stats
+                    .pull_request_ping_pong_check_failed_count
+                    .add_relaxed(1)
+            }
             // TODO: For backward compatibility, this unconditionally returns
             // true for now. It has to return _check, once nodes start
             // responding to ping messages.
@@ -2520,6 +2527,11 @@ impl ClusterInfo {
                 (
                     "process_pull_requests",
                     self.stats.process_pull_requests.clear(),
+                    i64
+                ),
+                (
+                    "pull_request_ping_pong_check_failed_count",
+                    self.stats.pull_request_ping_pong_check_failed_count.clear(),
                     i64
                 ),
                 (
