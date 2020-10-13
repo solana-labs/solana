@@ -5,7 +5,6 @@ use crate::{
     contact_info::ContactInfo,
     non_circulating_supply::calculate_non_circulating_supply,
     optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-    rpc_error::RpcCustomError,
     rpc_health::*,
     send_transaction_service::{SendTransactionService, TransactionInfo},
     validator::ValidatorExit,
@@ -23,6 +22,7 @@ use solana_account_decoder::{
 };
 use solana_client::{
     rpc_config::*,
+    rpc_custom_error::RpcCustomError,
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
     rpc_request::{
         TokenAccountsFilter, DELINQUENT_VALIDATOR_SLOT_DISTANCE, MAX_GET_CONFIRMED_BLOCKS_RANGE,
