@@ -3310,9 +3310,7 @@ impl Bank {
     pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) -> u64 {
         let mut account = self.get_account(pubkey).unwrap_or_default();
 
-        let should_be_in_new_behavior = self
-            .feature_set
-            .is_active(&feature_set::cumulative_rent_related_fixes::id());
+        let should_be_in_new_behavior = self.rent_fix_enabled();
 
         // don't collect rents if we're in the new behavior;
         // in genral, it's not worthwhile to account for rents outside the runtime (transactions)
@@ -4100,8 +4098,9 @@ mod tests {
     use crate::{
         accounts_index::{AccountMap, Ancestors},
         genesis_utils::{
-            create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
-            GenesisConfigInfo, ValidatorVoteKeypairs, BOOTSTRAP_VALIDATOR_LAMPORTS,
+            activate_all_features, create_genesis_config_with_leader,
+            create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
+            BOOTSTRAP_VALIDATOR_LAMPORTS,
         },
         native_loader::NativeLoaderError,
         process_instruction::InvokeContext,
@@ -5071,7 +5070,8 @@ mod tests {
 
     #[test]
     fn test_rent_eager_across_epoch_with_full_gap() {
-        let (genesis_config, _mint_keypair) = create_genesis_config(1);
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(1);
+        activate_all_features(&mut genesis_config);
 
         let mut bank = Arc::new(Bank::new(&genesis_config));
         assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 32)]);
@@ -5093,7 +5093,8 @@ mod tests {
 
     #[test]
     fn test_rent_eager_across_epoch_with_half_gap() {
-        let (genesis_config, _mint_keypair) = create_genesis_config(1);
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(1);
+        activate_all_features(&mut genesis_config);
 
         let mut bank = Arc::new(Bank::new(&genesis_config));
         assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 32)]);
@@ -5641,7 +5642,8 @@ mod tests {
     fn test_rent_eager_collect_rent_in_partition() {
         solana_logger::setup();
 
-        let (genesis_config, _mint_keypair) = create_genesis_config(1);
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(1);
+        activate_all_features(&mut genesis_config);
 
         let zero_lamport_pubkey = Pubkey::new_rand();
         let rent_due_pubkey = Pubkey::new_rand();
