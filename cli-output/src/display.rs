@@ -197,6 +197,15 @@ pub fn write_transaction<W: io::Write>(
                 )?;
             }
         }
+
+        if let Some(log_messages) = &transaction_status.log_messages {
+            if !log_messages.is_empty() {
+                writeln!(w, "{}Log Messages:", prefix,)?;
+                for log_message in log_messages {
+                    writeln!(w, "{}  {}", prefix, log_message,)?;
+                }
+            }
+        }
     } else {
         writeln!(w, "{}Status: Unavailable", prefix)?;
     }
