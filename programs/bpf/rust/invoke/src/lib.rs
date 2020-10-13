@@ -41,9 +41,9 @@ fn process_instruction(
 ) -> ProgramResult {
     info!("invoke Rust program");
 
-    let nonce1 = instruction_data[1];
-    let nonce2 = instruction_data[2];
-    let nonce3 = instruction_data[3];
+    let bump_seed1 = instruction_data[1];
+    let bump_seed2 = instruction_data[2];
+    let bump_seed3 = instruction_data[3];
 
     match instruction_data[0] {
         TEST_SUCCESS => {
@@ -63,7 +63,11 @@ fn process_instruction(
                     MAX_PERMITTED_DATA_INCREASE as u64,
                     program_id,
                 );
-                invoke_signed(&instruction, accounts, &[&[b"You pass butter", &[nonce1]]])?;
+                invoke_signed(
+                    &instruction,
+                    accounts,
+                    &[&[b"You pass butter", &[bump_seed1]]],
+                )?;
 
                 assert_eq!(accounts[FROM_INDEX].lamports(), from_lamports - 42);
                 assert_eq!(accounts[DERIVED_KEY1_INDEX].lamports(), to_lamports + 42);
@@ -143,7 +147,10 @@ fn process_instruction(
             info!("Test create_program_address");
             {
                 assert_eq!(
-                    &Pubkey::create_program_address(&[b"You pass butter", &[nonce1]], program_id)?,
+                    &Pubkey::create_program_address(
+                        &[b"You pass butter", &[bump_seed1]],
+                        program_id
+                    )?,
                     accounts[DERIVED_KEY1_INDEX].key
                 );
                 assert_eq!(
@@ -167,12 +174,12 @@ fn process_instruction(
                         (accounts[DERIVED_KEY2_INDEX].key, true, false),
                         (accounts[DERIVED_KEY3_INDEX].key, false, false),
                     ],
-                    vec![TEST_DERIVED_SIGNERS, nonce2, nonce3],
+                    vec![TEST_DERIVED_SIGNERS, bump_seed2, bump_seed3],
                 );
                 invoke_signed(
                     &invoked_instruction,
                     accounts,
-                    &[&[b"You pass butter", &[nonce1]]],
+                    &[&[b"You pass butter", &[bump_seed1]]],
                 )?;
             }
 

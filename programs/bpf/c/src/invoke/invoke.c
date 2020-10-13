@@ -31,9 +31,9 @@ extern uint64_t entrypoint(const uint8_t *input) {
     return ERROR_INVALID_ARGUMENT;
   }
 
-  uint8_t nonce1 = params.data[1];
-  uint8_t nonce2 = params.data[2];
-  uint8_t nonce3 = params.data[3];
+  uint8_t bump_seed1 = params.data[1];
+  uint8_t bump_seed2 = params.data[2];
+  uint8_t bump_seed3 = params.data[3];
 
   switch (params.data[0]) {
   case TEST_SUCCESS: {
@@ -54,7 +54,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
       uint8_t seed1[] = {'Y', 'o', 'u', ' ', 'p', 'a', 's', 's',
                          ' ', 'b', 'u', 't', 't', 'e', 'r'};
       const SolSignerSeed seeds1[] = {{seed1, SOL_ARRAY_SIZE(seed1)},
-                                      {&nonce1, 1}};
+                                      {&bump_seed1, 1}};
       const SolSignerSeeds signers_seeds[] = {{seeds1, SOL_ARRAY_SIZE(seeds1)}};
       sol_assert(SUCCESS == sol_invoke_signed(&instruction, accounts,
                                               SOL_ARRAY_SIZE(accounts),
@@ -144,7 +144,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
       uint8_t seed1[] = {'Y', 'o', 'u', ' ', 'p', 'a', 's', 's',
                          ' ', 'b', 'u', 't', 't', 'e', 'r'};
       const SolSignerSeed seeds1[] = {{seed1, SOL_ARRAY_SIZE(seed1)},
-                                      {&nonce1, 1}};
+                                      {&bump_seed1, 1}};
       SolPubkey address;
       sol_assert(SUCCESS ==
                  sol_create_program_address(seeds1, SOL_ARRAY_SIZE(seeds1),
@@ -163,14 +163,14 @@ extern uint64_t entrypoint(const uint8_t *input) {
           {accounts[DERIVED_KEY1_INDEX].key, true, true},
           {accounts[DERIVED_KEY2_INDEX].key, true, false},
           {accounts[DERIVED_KEY3_INDEX].key, false, false}};
-      uint8_t data[] = {TEST_DERIVED_SIGNERS, nonce2, nonce3};
+      uint8_t data[] = {TEST_DERIVED_SIGNERS, bump_seed2, bump_seed3};
       const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                           arguments, SOL_ARRAY_SIZE(arguments),
                                           data, SOL_ARRAY_SIZE(data)};
       uint8_t seed1[] = {'Y', 'o', 'u', ' ', 'p', 'a', 's', 's',
                          ' ', 'b', 'u', 't', 't', 'e', 'r'};
       const SolSignerSeed seeds1[] = {{seed1, SOL_ARRAY_SIZE(seed1)},
-                                      {&nonce1, 1}};
+                                      {&bump_seed1, 1}};
       const SolSignerSeeds signers_seeds[] = {{seeds1, SOL_ARRAY_SIZE(seeds1)}};
       sol_assert(SUCCESS == sol_invoke_signed(&instruction, accounts,
                                               SOL_ARRAY_SIZE(accounts),
