@@ -8,15 +8,22 @@
 
 #include <solana_sdk.h>
 
+#define NUM_KA 1
+
 extern uint64_t entrypoint(const uint8_t *input) {
-  uint8_t *val = (uint8_t *)input;
+  SolAccountInfo ka[NUM_KA];
+  SolParameters params = (SolParameters) { .ka = ka };
+  if (!sol_deserialize(input, &params, SOL_ARRAY_SIZE(ka))) {
+      return ERROR_INVALID_ARGUMENT;
+  }
+  uint8_t *val = (uint8_t *)ka[0].data;
+  size_t current = 1;
   for (uint64_t i = 0; i < UINT64_MAX; i++) {
 
     // Uncomment for raw compute
     {
-      if (*val != 0) {
-        *val = *val + 1;
-      }
+      *val ^= val[current % 10000001] + 13181312;
+      current *= 12345678;
     }
 
     // // Uncomment for SHA256 syscall
