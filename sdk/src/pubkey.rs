@@ -112,8 +112,8 @@ impl Pubkey {
     ///
     /// Because the program address cannot lie on the ed25519 curve there may be
     /// seed and program id combinations that are invalid.  In these cases an
-    /// extra seed (nonce) can be calculated that results in a point off the
-    /// curve.  Use `find_program_address` to calculate that nonce.
+    /// extra seed (bump seed) can be calculated that results in a point off the
+    /// curve.  Use `find_program_address` to calculate that bump seed.
     ///
     /// Warning: Because of the way the seeds are hashed there is a potential
     /// for program address collisions for the same program id.  The seeds are
@@ -176,22 +176,22 @@ impl Pubkey {
         }
     }
 
-    /// Find a valid program address and its corresponding nonce which must be passed
+    /// Find a valid program address and its corresponding bump seed which must be passed
     /// as an additional seed when calling `invoke_signed`
     #[allow(clippy::same_item_push)]
     pub fn find_program_address(seeds: &[&[u8]], program_id: &Pubkey) -> (Pubkey, u8) {
-        let mut nonce = [std::u8::MAX];
+        let mut bump_seed = [std::u8::MAX];
         for _ in 0..std::u8::MAX {
             {
-                let mut seeds_with_nonce = seeds.to_vec();
-                seeds_with_nonce.push(&nonce);
-                if let Ok(address) = Self::create_program_address(&seeds_with_nonce, program_id) {
-                    return (address, nonce[0]);
+                let mut seeds_with_bump = seeds.to_vec();
+                seeds_with_bump.push(&bump_seed);
+                if let Ok(address) = Self::create_program_address(&seeds_with_bump, program_id) {
+                    return (address, bump_seed[0]);
                 }
             }
-            nonce[0] -= 1;
+            bump_seed[0] -= 1;
         }
-        panic!("Unable to find a viable program address nonce");
+        panic!("Unable to find a viable program address bump seed");
     }
 
     #[cfg(not(feature = "program"))]
@@ -411,10 +411,12 @@ mod tests {
     fn test_find_program_address() {
         for _ in 0..1_000 {
             let program_id = Pubkey::new_rand();
-            let (address, nonce) = Pubkey::find_program_address(&[b"Lil'", b"Bits"], &program_id);
+            let (address, bump_seed) =
+                Pubkey::find_program_address(&[b"Lil'", b"Bits"], &program_id);
             assert_eq!(
                 address,
-                Pubkey::create_program_address(&[b"Lil'", b"Bits", &[nonce]], &program_id).unwrap()
+                Pubkey::create_program_address(&[b"Lil'", b"Bits", &[bump_seed]], &program_id)
+                    .unwrap()
             );
         }
     }
