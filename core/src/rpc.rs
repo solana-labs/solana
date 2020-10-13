@@ -548,9 +548,6 @@ impl JsonRpcRequestProcessor {
                 } else {
                     0
                 };
-                let epoch_vote_account = epoch_vote_accounts
-                    .iter()
-                    .any(|(epoch_vote_pubkey, _)| epoch_vote_pubkey == pubkey);
                 RpcVoteAccountInfo {
                     vote_pubkey: (pubkey).to_string(),
                     node_pubkey: vote_state.node_pubkey.to_string(),
@@ -558,7 +555,7 @@ impl JsonRpcRequestProcessor {
                     commission: vote_state.commission,
                     root_slot: vote_state.root_slot.unwrap_or(0),
                     epoch_credits: vote_state.epoch_credits().clone(),
-                    epoch_vote_account,
+                    epoch_vote_account: epoch_vote_accounts.contains_key(pubkey),
                     last_vote,
                 }
             })
