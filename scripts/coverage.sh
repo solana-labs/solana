@@ -9,6 +9,8 @@ set -e
 cd "$(dirname "$0")/.."
 source ci/_
 
+cargo="$(readlink -f "./cargo")"
+
 : "${CI_COMMIT:=local}"
 reportName="lcov-${CI_COMMIT:0:9}"
 
@@ -40,8 +42,6 @@ mkdir -p target/cov
 # Mark the base time for a clean room dir
 touch target/cov/before-test
 
-source ci/rust-version.sh nightly
-
 # Force rebuild of possibly-cached proc macro crates and build.rs because
 # we always want stable coverage for them
 # Don't support odd file names in our repo ever
@@ -52,8 +52,8 @@ if [[ -n $CI || -z $1 ]]; then
     $(git grep -l "proc-macro.*true" :**/Cargo.toml | sed 's|Cargo.toml|src/lib.rs|')
 fi
 
-RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov --no-run "${packages[@]}"
-if RUST_LOG=solana=trace _ cargo +$rust_nightly test --target-dir target/cov "${packages[@]}" 2> target/cov/coverage-stderr.log; then
+RUST_LOG=solana=trace _ "$cargo" nightly test --target-dir target/cov --no-run "${packages[@]}"
+if RUST_LOG=solana=trace _ "$cargo" nightly test --target-dir target/cov "${packages[@]}" 2> target/cov/coverage-stderr.log; then
   test_status=0
 else
   test_status=$?

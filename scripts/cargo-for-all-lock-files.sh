@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+here="$(dirname "$0")"
+cargo="$(readlink -f "${here}/../cargo")"
+
 set -e
 
 shifted_args=()
@@ -37,7 +40,7 @@ for lock_file in $files; do
     echo "--- [$lock_file]: cargo " "${shifted_args[@]}" "$@"
   fi
 
-  if (set -x && cd "$(dirname "$lock_file")" && cargo "${shifted_args[@]}" "$@"); then
+  if (set -x && cd "$(dirname "$lock_file")" && "$cargo" "${shifted_args[@]}" "$@"); then
     # noop
     true
   else
