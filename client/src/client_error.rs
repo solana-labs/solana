@@ -50,10 +50,10 @@ impl Into<TransportError> for ClientErrorKind {
 #[derive(Error, Debug)]
 #[error("{kind}")]
 pub struct ClientError {
-    request: Option<rpc_request::RpcRequest>,
+    pub request: Option<rpc_request::RpcRequest>,
 
     #[source]
-    kind: ClientErrorKind,
+    pub kind: ClientErrorKind,
 }
 
 impl ClientError {
