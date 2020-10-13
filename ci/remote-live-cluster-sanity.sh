@@ -3,8 +3,8 @@
 handle_error() {
   action=$1
   set +e
-  kill "$validator_pid" "$tail_pid"
-  wait "$validator_pid" "$tail_pid"
+  kill "$validator_then_ledger_tool_pid" "$tail_pid"
+  wait "$validator_then_ledger_tool_pid" "$tail_pid"
   echo "--- Error: validator failed to $action"
   exit 1
 }
@@ -52,14 +52,14 @@ sys_tuner_pid=$!
     verify
 ) &> "$validator_log" &
 
-validator_and_ledger_tool_pid=$!
+validator_then_ledger_tool_pid=$!
 tail -F "$validator_log" > cluster-sanity/log-tail 2> /dev/null &
 tail_pid=$!
 
 attempts=100
 while ! [[ -f cluster-sanity/init-completed ]]; do
   attempts=$((attempts - 1))
-  if [[ (($attempts == 0)) || ! -d "/proc/$validator_and_ledger_tool_pid" ]]; then
+  if [[ (($attempts == 0)) || ! -d "/proc/$validator_then_ledger_tool_pid" ]]; then
     handle_error "start"
   fi
 
@@ -83,7 +83,7 @@ goal_root=$((snapshot_slot + 50))
 attempts=100
 while [[ $current_root -le $goal_root ]]; do
   attempts=$((attempts - 1))
-  if [[ (($attempts == 0)) || ! -d "/proc/$validator_and_ledger_tool_pid" ]]; then
+  if [[ (($attempts == 0)) || ! -d "/proc/$validator_then_ledger_tool_pid" ]]; then
     handle_error "root new slots"
   fi
 
@@ -101,7 +101,7 @@ curl \
   http://localhost:8899
 
 attempts=100
-while [[ -d "/proc/$validator_and_ledger_tool_pid" ]]; do
+while [[ -d "/proc/$validator_then_ledger_tool_pid" ]]; do
   attempts=$((attempts - 1))
   if [[ (($attempts == 0)) ]]; then
     handle_error "ledger tool"
@@ -117,4 +117,4 @@ echo "##### ledger-tool finished running! #####"
 (set -x && sleep 3 && kill "$tail_pid" && sudo pkill -f solana-sys-tuner) &
 kill_pid=$!
 
-wait "$validator_and_ledger_tool_pid" "$sys_tuner_pid" "$tail_pid" "$kill_pid"
+wait "$validator_then_ledger_tool_pid" "$sys_tuner_pid" "$tail_pid" "$kill_pid"
