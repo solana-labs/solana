@@ -23,8 +23,12 @@ use solana_cli_output::{
     CliStakeType,
 };
 use solana_client::{
-    blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
-    rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
+    blockhash_query::BlockhashQuery,
+    client_error::{ClientError, ClientErrorKind},
+    nonce_utils,
+    rpc_client::RpcClient,
+    rpc_custom_error,
+    rpc_request::{self, DELINQUENT_VALIDATOR_SLOT_DISTANCE},
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
@@ -1605,10 +1609,26 @@ pub(crate) fn fetch_epoch_rewards(
             .get(0)
             .ok_or_else(|| format!("Unable to fetch first confirmed block for epoch {}", epoch))?;
 
-        let first_confirmed_block = rpc_client.get_confirmed_block_with_encoding(
+        let first_confirmed_block = match rpc_client.get_confirmed_block_with_encoding(
             first_confirmed_block_in_epoch,
             solana_transaction_status::UiTransactionEncoding::Base64,
-        )?;
+        ) {
+            Ok(first_confirmed_block) => first_confirmed_block,
+            Err(ClientError {
+                kind:
+                    ClientErrorKind::RpcError(rpc_request::RpcError::RpcResponseError {
+                        code: rpc_custom_error::JSON_RPC_SERVER_ERROR_BLOCK_NOT_AVAILABLE,
+                        message: _,
+                    }),
+                request: _,
+            }) => {
+                // RPC node doesn't have this block
+                break;
+            }
+            Err(err) => {
+                return Err(err.into());
+            }
+        };
 
         let epoch_start_time = if let Some(block_time) = first_confirmed_block.block_time {
             block_time
