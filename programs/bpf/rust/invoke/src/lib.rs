@@ -144,6 +144,92 @@ fn process_instruction(
                 );
             }
 
+            info!("Test refcell usage");
+            {
+                let writable = INVOKED_ARGUMENT_INDEX;
+                let readable = INVOKED_PROGRAM_INDEX;
+
+                let instruction = create_instruction(
+                    *accounts[INVOKED_PROGRAM_INDEX].key,
+                    &[
+                        (accounts[writable].key, true, true),
+                        (accounts[readable].key, false, false),
+                    ],
+                    vec![TEST_RETURN_ERROR, 1, 2, 3, 4, 5],
+                );
+
+                // success with this account configuration as a check
+                assert_eq!(
+                    invoke(&instruction, accounts),
+                    Err(ProgramError::Custom(42))
+                );
+
+                {
+                    // writable but lamports borrow_mut'd
+                    let _ref_mut = accounts[writable].try_borrow_mut_lamports()?;
+                    assert_eq!(
+                        invoke(&instruction, accounts),
+                        Err(ProgramError::AccountBorrowFailed)
+                    );
+                }
+                {
+                    // writable but data borrow_mut'd
+                    let _ref_mut = accounts[writable].try_borrow_mut_data()?;
+                    assert_eq!(
+                        invoke(&instruction, accounts),
+                        Err(ProgramError::AccountBorrowFailed)
+                    );
+                }
+                {
+                    // writable but lamports borrow'd
+                    let _ref_mut = accounts[writable].try_borrow_lamports()?;
+                    assert_eq!(
+                        invoke(&instruction, accounts),
+                        Err(ProgramError::AccountBorrowFailed)
+                    );
+                }
+                {
+                    // writable but data borrow'd
+                    let _ref_mut = accounts[writable].try_borrow_data()?;
+                    assert_eq!(
+                        invoke(&instruction, accounts),
+                        Err(ProgramError::AccountBorrowFailed)
+                    );
+                }
+                {
+                    // readable but lamports borrow_mut'd
+                    let _ref_mut = accounts[readable].try_borrow_mut_lamports()?;
+                    assert_eq!(
+                        invoke(&instruction, accounts),
+                        Err(ProgramError::AccountBorrowFailed)
+                    );
+                }
+                {
+                    // readable but data borrow_mut'd
+                    let _ref_mut = accounts[readable].try_borrow_mut_data()?;
+                    assert_eq!(
+                        invoke(&instruction, accounts),
+                        Err(ProgramError::AccountBorrowFailed)
+                    );
+                }
+                {
+                    // readable but lamports borrow'd
+                    let _ref_mut = accounts[readable].try_borrow_lamports()?;
+                    assert_eq!(
+                        invoke(&instruction, accounts),
+                        Err(ProgramError::Custom(42))
+                    );
+                }
+                {
+                    // readable but data borrow'd
+                    let _ref_mut = accounts[readable].try_borrow_data()?;
+                    assert_eq!(
+                        invoke(&instruction, accounts),
+                        Err(ProgramError::Custom(42))
+                    );
+                }
+            }
+
             info!("Test create_program_address");
             {
                 assert_eq!(
