@@ -2185,7 +2185,9 @@ impl ClusterInfo {
                 }
             })
             .collect();
-        inc_new_counter_info!("cluster_info-gossip_ping_msg_verify_fail", verify_failed);
+        if verify_failed != 0 {
+            inc_new_counter_info!("cluster_info-gossip_ping_msg_verify_fail", verify_failed);
+        }
         if packets.is_empty() {
             None
         } else {
@@ -2210,7 +2212,9 @@ impl ClusterInfo {
                     verify_failed += 1;
                 }
             }
-            inc_new_counter_info!("cluster_info-gossip_pong_msg_verify_fail", verify_failed);
+            if verify_failed != 0 {
+                inc_new_counter_info!("cluster_info-gossip_pong_msg_verify_fail", verify_failed);
+            }
         }
     }
 
