@@ -180,9 +180,9 @@ migration.
    authority keypairs, so that it can smoothly transition at the next epoch. Add
    the two arguments on restart: `--authorized-voter ~/validator-keypair.json
    --authorized-voter ~/new-vote-authority.json`
-6. After the cluster reaches the next epoch, restart `solana-validator` again
-   after remove the `--authorized-voter ~/validator-keypair.json` argument, as
-   the old vote authority keypair is no longer required.
+6. After the cluster reaches the next epoch, remove the
+   `--authorized-voter ~/validator-keypair.json` argument and restart
+   `solana-validator`, as the old vote authority keypair is no longer required.
 
 
 ### Vote Account Authorized Withdrawer
