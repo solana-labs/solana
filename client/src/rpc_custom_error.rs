@@ -1,5 +1,7 @@
+//! Implementation defined RPC server errors
+
+use crate::rpc_response::RpcSimulateTransactionResult;
 use jsonrpc_core::{Error, ErrorCode};
-use solana_client::rpc_response::RpcSimulateTransactionResult;
 use solana_sdk::clock::Slot;
 
 const JSON_RPC_SERVER_ERROR_1: i64 = -32001;

@@ -140,8 +140,10 @@ impl RpcRequest {
 
 #[derive(Debug, Error)]
 pub enum RpcError {
-    #[error("rpc request error: {0}")]
+    #[error("RPC request error: {0}")]
     RpcRequestError(String),
+    #[error("RPC response error {code}: {message}")]
+    RpcResponseError { code: i64, message: String },
     #[error("parse error: expected {0}")]
     ParseError(String), /* "expected" */
     // Anything in a `ForUser` needs to die.  The caller should be
