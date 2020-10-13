@@ -148,7 +148,10 @@ fn bench_delete_dependencies(bencher: &mut Bencher) {
 fn bench_concurrent_read_write(bencher: &mut Bencher) {
     let num_readers = 5;
     let accounts = Arc::new(Accounts::new(
-        vec![PathBuf::from("concurrent_read_write")],
+        vec![
+            PathBuf::from(std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string()))
+                .join("concurrent_read_write"),
+        ],
         &ClusterType::Development,
     ));
     let num_keys = 1000;
@@ -174,7 +177,7 @@ fn bench_concurrent_read_write(bencher: &mut Bencher) {
                 let mut rng = rand::thread_rng();
                 loop {
                     let i = rng.gen_range(0, num_keys);
-                    accounts.load_slow(&HashMap::new(), &pubkeys[i]);
+                    test::black_box(accounts.load_slow(&HashMap::new(), &pubkeys[i]).unwrap());
                 }
             })
             .unwrap();
