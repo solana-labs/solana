@@ -1929,6 +1929,7 @@ impl AccountsDB {
 
     fn calculate_accounts_hash(
         &self,
+        slot: Slot,
         ancestors: &Ancestors,
         check_hash: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
@@ -1941,7 +1942,8 @@ impl AccountsDB {
         let hashes: Vec<_> = keys
             .par_iter()
             .filter_map(|pubkey| {
-                if let Some((list, index)) = accounts_index.get(pubkey, Some(ancestors), None) {
+                if let Some((list, index)) = accounts_index.get(pubkey, Some(ancestors), Some(slot))
+                {
                     let (slot, account_info) = &list[index];
                     if account_info.lamports != 0 {
                         storage
@@ -2011,7 +2013,9 @@ impl AccountsDB {
     }
 
     pub fn update_accounts_hash(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
-        let (hash, total_lamports) = self.calculate_accounts_hash(ancestors, false).unwrap();
+        let (hash, total_lamports) = self
+            .calculate_accounts_hash(slot, ancestors, false)
+            .unwrap();
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
         bank_hash_info.snapshot_hash = hash;
@@ -2027,7 +2031,7 @@ impl AccountsDB {
         use BankHashVerificationError::*;
 
         let (calculated_hash, calculated_lamports) =
-            self.calculate_accounts_hash(ancestors, true)?;
+            self.calculate_accounts_hash(slot, ancestors, true)?;
 
         if calculated_lamports != total_lamports {
             warn!(
