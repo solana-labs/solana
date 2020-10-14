@@ -88,20 +88,20 @@ macro_rules! to_builtin {
     };
 }
 
-const CUSTOM_ZERO: u64 = to_builtin!(1);
-const INVALID_ARGUMENT: u64 = to_builtin!(2);
-const INVALID_INSTRUCTION_DATA: u64 = to_builtin!(3);
-const INVALID_ACCOUNT_DATA: u64 = to_builtin!(4);
-const ACCOUNT_DATA_TOO_SMALL: u64 = to_builtin!(5);
-const INSUFFICIENT_FUNDS: u64 = to_builtin!(6);
-const INCORRECT_PROGRAM_ID: u64 = to_builtin!(7);
-const MISSING_REQUIRED_SIGNATURES: u64 = to_builtin!(8);
-const ACCOUNT_ALREADY_INITIALIZED: u64 = to_builtin!(9);
-const UNINITIALIZED_ACCOUNT: u64 = to_builtin!(10);
-const NOT_ENOUGH_ACCOUNT_KEYS: u64 = to_builtin!(11);
-const ACCOUNT_BORROW_FAILED: u64 = to_builtin!(12);
-const MAX_SEED_LENGTH_EXCEEDED: u64 = to_builtin!(13);
-const INVALID_SEEDS: u64 = to_builtin!(14);
+pub const CUSTOM_ZERO: u64 = to_builtin!(1);
+pub const INVALID_ARGUMENT: u64 = to_builtin!(2);
+pub const INVALID_INSTRUCTION_DATA: u64 = to_builtin!(3);
+pub const INVALID_ACCOUNT_DATA: u64 = to_builtin!(4);
+pub const ACCOUNT_DATA_TOO_SMALL: u64 = to_builtin!(5);
+pub const INSUFFICIENT_FUNDS: u64 = to_builtin!(6);
+pub const INCORRECT_PROGRAM_ID: u64 = to_builtin!(7);
+pub const MISSING_REQUIRED_SIGNATURES: u64 = to_builtin!(8);
+pub const ACCOUNT_ALREADY_INITIALIZED: u64 = to_builtin!(9);
+pub const UNINITIALIZED_ACCOUNT: u64 = to_builtin!(10);
+pub const NOT_ENOUGH_ACCOUNT_KEYS: u64 = to_builtin!(11);
+pub const ACCOUNT_BORROW_FAILED: u64 = to_builtin!(12);
+pub const MAX_SEED_LENGTH_EXCEEDED: u64 = to_builtin!(13);
+pub const INVALID_SEEDS: u64 = to_builtin!(14);
 
 impl From<ProgramError> for u64 {
     fn from(error: ProgramError) -> Self {
