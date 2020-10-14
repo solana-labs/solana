@@ -1484,14 +1484,16 @@ impl Bank {
             );
 
             let post_balance = self.deposit(&self.collector_id, unburned);
-            self.rewards.write().unwrap().push((
-                self.collector_id,
-                RewardInfo {
-                    reward_type: RewardType::Fee,
-                    lamports: unburned as i64,
-                    post_balance,
-                },
-            ));
+            if unburned != 0 {
+                self.rewards.write().unwrap().push((
+                    self.collector_id,
+                    RewardInfo {
+                        reward_type: RewardType::Fee,
+                        lamports: unburned as i64,
+                        post_balance,
+                    },
+                ));
+            }
             self.capitalization.fetch_sub(burned, Relaxed);
         }
     }
