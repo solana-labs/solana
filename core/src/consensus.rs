@@ -30,11 +30,11 @@ use std::{
 };
 use thiserror::Error;
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, AbiExample)]
 pub enum SwitchForkDecision {
     SwitchProof(Hash),
-    NoSwitch,
-    FailedSwitchThreshold,
+    SameFork,
+    FailedSwitchThreshold(u64, u64),
 }
 
 impl SwitchForkDecision {
@@ -45,8 +45,11 @@ impl SwitchForkDecision {
         authorized_voter_pubkey: &Pubkey,
     ) -> Option<Instruction> {
         match self {
-            SwitchForkDecision::FailedSwitchThreshold => None,
-            SwitchForkDecision::NoSwitch => Some(vote_instruction::vote(
+            SwitchForkDecision::FailedSwitchThreshold(_, total_stake) => {
+                assert_ne!(*total_stake, 0);
+                None
+            }
+            SwitchForkDecision::SameFork => Some(vote_instruction::vote(
                 vote_account_pubkey,
                 authorized_voter_pubkey,
                 vote,
@@ -60,6 +63,10 @@ impl SwitchForkDecision {
                 ))
             }
         }
+    }
+
+    pub fn can_vote(&self) -> bool {
+        !matches!(self, SwitchForkDecision::FailedSwitchThreshold(_, _))
     }
 }
 
@@ -101,6 +108,8 @@ pub struct Tower {
     // This could be emptied after some time; but left intact indefinitely for easier
     // implementation
     stray_restored_slot: Option<Slot>,
+    #[serde(skip)]
+    pub last_switch_threshold_check: Option<(Slot, SwitchForkDecision)>,
 }
 
 impl Default for Tower {
@@ -115,6 +124,7 @@ impl Default for Tower {
             path: PathBuf::default(),
             tmp_path: PathBuf::default(),
             stray_restored_slot: Option::default(),
+            last_switch_threshold_check: Option::default(),
         };
         // VoteState::root_slot is ensured to be Some in Tower
         tower.lockouts.root_slot = Some(Slot::default());
@@ -493,7 +503,7 @@ impl Tower {
         false
     }
 
-    pub(crate) fn check_switch_threshold(
+    fn calculate_check_switch_threshold(
         &self,
         switch_slot: u64,
         ancestors: &HashMap<Slot, HashSet<u64>>,
@@ -520,9 +530,16 @@ impl Tower {
                             // all of them.
                             panic!("no ancestors found with slot: {}", last_voted_slot);
                         } else {
-                            // bank_forks doesn't have corresponding data for the stray restored last vote,
-                            // meaning some inconsistency between saved tower and ledger.
-                            // (newer snapshot, or only a saved tower is moved over to new setup?)
+                            // compare slots not to error! just because of newer snapshots
+                            if self.is_first_switch_check() && switch_slot < last_voted_slot {
+                                error!(
+                                  "{} bank_forks doesn't have corresponding data for the stray restored \
+                                   last vote({}), meaning some inconsistency between saved tower and ledger.",
+                                  self.node_pubkey,
+                                  last_voted_slot
+                                );
+                            }
+                            // (system crash? process crash? newer snapshot, or only a saved tower is moved over to new setup?)
                             &empty_ancestors
                         }
                     });
@@ -532,7 +549,7 @@ impl Tower {
                 if switch_slot == last_voted_slot || switch_slot_ancestors.contains(&last_voted_slot) {
                     // If the `switch_slot is a descendant of the last vote,
                     // no switching proof is necessary
-                    return SwitchForkDecision::NoSwitch;
+                    return SwitchForkDecision::SameFork;
                 }
 
                 // Should never consider switching to an ancestor
@@ -622,10 +639,44 @@ impl Tower {
                 if (locked_out_stake as f64 / total_stake as f64) > SWITCH_FORK_THRESHOLD {
                     SwitchForkDecision::SwitchProof(switch_proof)
                 } else {
-                    SwitchForkDecision::FailedSwitchThreshold
+                    SwitchForkDecision::FailedSwitchThreshold(locked_out_stake, total_stake)
                 }
             })
-            .unwrap_or(SwitchForkDecision::NoSwitch)
+            .unwrap_or(SwitchForkDecision::SameFork)
+    }
+
+    pub(crate) fn check_switch_threshold(
+        &mut self,
+        switch_slot: u64,
+        ancestors: &HashMap<Slot, HashSet<u64>>,
+        descendants: &HashMap<Slot, HashSet<u64>>,
+        progress: &ProgressMap,
+        total_stake: u64,
+        epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
+    ) -> SwitchForkDecision {
+        let decision = self.calculate_check_switch_threshold(
+            switch_slot,
+            ancestors,
+            descendants,
+            progress,
+            total_stake,
+            epoch_vote_accounts,
+        );
+        let new_check = Some((switch_slot, decision.clone()));
+        if new_check != self.last_switch_threshold_check {
+            trace!(
+                "{}: new switch threshold check: slot {}: {:?}",
+                self.node_pubkey,
+                switch_slot,
+                decision,
+            );
+            self.last_switch_threshold_check = new_check;
+        }
+        decision
+    }
+
+    fn is_first_switch_check(&self) -> bool {
+        self.last_switch_threshold_check.is_none()
     }
 
     pub fn check_vote_stake_threshold(
@@ -932,9 +983,9 @@ impl Tower {
             self.lockouts = vote_state;
             self.do_initialize_lockouts(root, |v| v.slot > root);
             trace!(
-                "{} lockouts initialized to {:?}",
+                "Lockouts in tower for {} is initialized using bank {}",
                 self.node_pubkey,
-                self.lockouts
+                bank.slot(),
             );
             assert_eq!(
                 self.lockouts.node_pubkey, self.node_pubkey,
@@ -986,6 +1037,11 @@ impl Tower {
             bincode::serialize_into(&mut file, &saved_tower)?;
             // file.sync_all() hurts performance; pipeline sync-ing and submitting votes to the cluster!
         }
+        trace!(
+            "{} persisted votes: {:?}",
+            node_keypair.pubkey(),
+            self.voted_slots()
+        );
         fs::rename(&new_filename, &filename)?;
         // self.path.parent().sync_all() hurts performance same as the above sync
 
@@ -1045,6 +1101,16 @@ pub enum TowerError {
 
     #[error("The tower is fatally inconsistent with blockstore: {0}")]
     FatallyInconsistent(&'static str),
+}
+
+impl TowerError {
+    pub fn is_file_missing(&self) -> bool {
+        if let TowerError::IOError(io_err) = &self {
+            io_err.kind() == std::io::ErrorKind::NotFound
+        } else {
+            false
+        }
+    }
 }
 
 #[frozen_abi(digest = "Gaxfwvx5MArn52mKZQgzHmDCyn5YfCuTHvp5Et3rFfpp")]
@@ -1267,7 +1333,7 @@ pub mod test {
                 &ancestors,
                 &descendants,
                 &self.progress,
-                &tower,
+                tower,
             );
 
             // Make sure this slot isn't locked out or failing threshold
@@ -1464,11 +1530,11 @@ pub mod test {
     #[test]
     fn test_to_vote_instruction() {
         let vote = Vote::default();
-        let mut decision = SwitchForkDecision::FailedSwitchThreshold;
+        let mut decision = SwitchForkDecision::FailedSwitchThreshold(0, 1);
         assert!(decision
             .to_vote_instruction(vote.clone(), &Pubkey::default(), &Pubkey::default())
             .is_none());
-        decision = SwitchForkDecision::NoSwitch;
+        decision = SwitchForkDecision::SameFork;
         assert_eq!(
             decision.to_vote_instruction(vote.clone(), &Pubkey::default(), &Pubkey::default()),
             Some(vote_instruction::vote(
@@ -1571,7 +1637,7 @@ pub mod test {
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
             ),
-            SwitchForkDecision::NoSwitch
+            SwitchForkDecision::SameFork
         );
 
         // Trying to switch to another fork at 110 should fail
@@ -1584,7 +1650,7 @@ pub mod test {
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
             ),
-            SwitchForkDecision::FailedSwitchThreshold
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
 
         // Adding another validator lockout on a descendant of last vote should
@@ -1599,7 +1665,7 @@ pub mod test {
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
             ),
-            SwitchForkDecision::FailedSwitchThreshold
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
 
         // Adding another validator lockout on an ancestor of last vote should
@@ -1614,7 +1680,7 @@ pub mod test {
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
             ),
-            SwitchForkDecision::FailedSwitchThreshold
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
 
         // Adding another validator lockout on a different fork, but the lockout
@@ -1629,7 +1695,7 @@ pub mod test {
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
             ),
-            SwitchForkDecision::FailedSwitchThreshold
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
 
         // Adding another validator lockout on a different fork, and the lockout
@@ -1646,7 +1712,7 @@ pub mod test {
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
             ),
-            SwitchForkDecision::FailedSwitchThreshold
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
 
         // Adding another validator lockout on a different fork, and the lockout
@@ -1697,7 +1763,7 @@ pub mod test {
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
             ),
-            SwitchForkDecision::FailedSwitchThreshold
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
     }
 
@@ -2365,7 +2431,7 @@ pub mod test {
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
             ),
-            SwitchForkDecision::NoSwitch
+            SwitchForkDecision::SameFork
         );
 
         // Trying to switch to another fork at 110 should fail
@@ -2378,7 +2444,7 @@ pub mod test {
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
             ),
-            SwitchForkDecision::FailedSwitchThreshold
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
 
         vote_simulator.simulate_lockout_interval(111, (10, 49), &other_vote_account);
@@ -2456,7 +2522,7 @@ pub mod test {
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
             ),
-            SwitchForkDecision::FailedSwitchThreshold
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
 
         // Add lockout_interval which should be excluded
@@ -2470,7 +2536,7 @@ pub mod test {
                 total_stake,
                 bank0.epoch_vote_accounts(0).unwrap(),
             ),
-            SwitchForkDecision::FailedSwitchThreshold
+            SwitchForkDecision::FailedSwitchThreshold(0, 20000)
         );
 
         // Add lockout_interval which should not be excluded

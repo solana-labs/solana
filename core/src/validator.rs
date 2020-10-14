@@ -6,7 +6,7 @@ use crate::{
     cluster_info::{ClusterInfo, Node},
     cluster_info_vote_listener::VoteTracker,
     completed_data_sets_service::CompletedDataSetsService,
-    consensus::{reconcile_blockstore_roots_with_tower, Tower, TowerError},
+    consensus::{reconcile_blockstore_roots_with_tower, Tower},
     contact_info::ContactInfo,
     gossip_service::GossipService,
     optimistically_confirmed_bank_tracker::{
@@ -730,12 +730,7 @@ fn post_process_restored_tower(
         .unwrap_or_else(|err| {
             let voting_has_been_active =
                 active_vote_account_exists_in_bank(&bank_forks.working_bank(), &vote_account);
-            let saved_tower_is_missing = if let TowerError::IOError(io_err) = &err {
-                io_err.kind() == std::io::ErrorKind::NotFound
-            } else {
-                false
-            };
-            if !saved_tower_is_missing {
+            if !err.is_file_missing() {
                 datapoint_error!(
                     "tower_error",
                     (
@@ -753,7 +748,7 @@ fn post_process_restored_tower(
                 );
                 process::exit(1);
             }
-            if saved_tower_is_missing && !voting_has_been_active {
+            if err.is_file_missing() && !voting_has_been_active {
                 // Currently, don't protect against spoofed snapshots with no tower at all
                 info!(
                     "Ignoring expected failed tower restore because this is the initial \
