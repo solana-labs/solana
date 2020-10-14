@@ -27,6 +27,7 @@ pub fn invoke_signed(
                     let _ = account_info.try_borrow_lamports()?;
                     let _ = account_info.try_borrow_data()?;
                 }
+                break;
             }
         }
     }
