@@ -275,8 +275,8 @@ where
         for (slot, entries) in storage.into_iter() {
             let sub_map = map.entry(slot).or_insert_with(HashMap::new);
             for entry in entries.into_iter() {
-                let mut entry: AccountStorageEntry = entry.into();
-                entry.slot = slot;
+                let entry: AccountStorageEntry = entry.into();
+                entry.slot.store(slot, Ordering::Relaxed);
                 sub_map.insert(entry.id, Arc::new(entry));
             }
         }

@@ -174,7 +174,7 @@ pub enum BankHashVerificationError {
 pub struct AccountStorageEntry {
     pub(crate) id: AppendVecId,
 
-    pub(crate) slot: Slot,
+    pub(crate) slot: AtomicU64,
 
     /// storage holding the accounts
     pub(crate) accounts: AppendVec,
@@ -203,7 +203,7 @@ impl AccountStorageEntry {
 
         Self {
             id,
-            slot,
+            slot: AtomicU64::new(slot),
             accounts,
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
             approx_store_count: AtomicUsize::new(0),
@@ -213,7 +213,7 @@ impl AccountStorageEntry {
     pub(crate) fn new_empty_map(id: AppendVecId, accounts_current_len: usize) -> Self {
         Self {
             id,
-            slot: 0,
+            slot: AtomicU64::new(0),
             accounts: AppendVec::new_empty_map(accounts_current_len),
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
             approx_store_count: AtomicUsize::new(0),
@@ -241,6 +241,14 @@ impl AccountStorageEntry {
         *count_and_status = (count, status);
     }
 
+    pub fn recycle(&self, slot: Slot) {
+        let mut count_and_status = self.count_and_status.write().unwrap();
+        self.accounts.reset();
+        *count_and_status = (0, AccountStorageStatus::Available);
+        self.slot.store(slot, Ordering::Release);
+        self.approx_store_count.store(0, Ordering::Relaxed);
+    }
+
     pub fn status(&self) -> AccountStorageStatus {
         self.count_and_status.read().unwrap().1
     }
@@ -258,7 +266,7 @@ impl AccountStorageEntry {
     }
 
     pub fn slot(&self) -> Slot {
-        self.slot
+        self.slot.load(Ordering::Acquire)
     }
 
     pub fn append_vec_id(&self) -> AppendVecId {
@@ -321,7 +329,7 @@ impl AccountStorageEntry {
         assert!(
             count > 0,
             "double remove of account in slot: {}/store: {}!!",
-            self.slot,
+            self.slot(),
             self.id
         );
 
@@ -404,6 +412,8 @@ pub struct AccountsDB {
     pub accounts_index: AccountsIndex<AccountInfo>,
 
     pub storage: AccountStorage,
+
+    recycle_stores: RwLock<Vec<Arc<AccountStorageEntry>>>,
 
     /// distribute the accounts across storage lists
     pub next_id: AtomicUsize,
@@ -491,6 +501,7 @@ impl Default for AccountsDB {
         AccountsDB {
             accounts_index: AccountsIndex::default(),
             storage: AccountStorage(DashMap::new()),
+            recycle_stores: RwLock::new(Vec::new()),
             next_id: AtomicUsize::new(0),
             shrink_candidate_slots: Mutex::new(Vec::new()),
             write_version: AtomicU64::new(0),
@@ -1133,7 +1144,9 @@ impl AccountsDB {
         rewrite_elapsed.stop();
 
         let mut drop_storage_entries_elapsed = Measure::start("drop_storage_entries_elapsed");
-        drop(dead_storages);
+        let mut recycle_stores = self.recycle_stores.write().unwrap();
+        recycle_stores.extend(dead_storages);
+        drop(recycle_stores);
         drop_storage_entries_elapsed.stop();
 
         datapoint_info!(
@@ -1419,6 +1432,14 @@ impl AccountsDB {
             }
         }
 
+        let new_store = { self.recycle_stores.write().unwrap().pop() };
+        if let Some(store) = new_store {
+            store.recycle(slot);
+            store.try_available();
+            self.insert_store(slot, store.clone());
+            return store;
+        }
+
         let store = self.create_and_insert_store(slot, self.file_size);
         store.try_available();
         store
@@ -1430,6 +1451,11 @@ impl AccountsDB {
             Arc::new(self.new_storage_entry(slot, &Path::new(&self.paths[path_index]), size));
         let store_for_index = store.clone();
 
+        self.insert_store(slot, store_for_index);
+        store
+    }
+
+    fn insert_store(&self, slot: Slot, store: Arc<AccountStorageEntry>) {
         let slot_storages: SlotStores = self.storage.get_slot_stores(slot).unwrap_or_else(||
             // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
             // which is dropped after this block ends, minimizing time held by the lock.
@@ -1441,11 +1467,7 @@ impl AccountsDB {
                 .or_insert(Arc::new(RwLock::new(HashMap::new())))
                 .clone());
 
-        slot_storages
-            .write()
-            .unwrap()
-            .insert(store.id, store_for_index);
-        store
+        slot_storages.write().unwrap().insert(store.id, store);
     }
 
     pub fn purge_slot(&self, slot: Slot) {
@@ -1475,7 +1497,7 @@ impl AccountsDB {
                         .map(|i| i.accounts.capacity())
                         .sum::<u64>();
                 }
-                all_removed_slot_storages.push(slot_removed_storages);
+                all_removed_slot_storages.push(slot_removed_storages.clone());
             }
         }
         remove_storages_elapsed.stop();
@@ -1485,7 +1507,15 @@ impl AccountsDB {
         let mut drop_storage_entries_elapsed = Measure::start("drop_storage_entries_elapsed");
         // Backing mmaps for removed storages entries explicitly dropped here outside
         // of any locks
-        drop(all_removed_slot_storages);
+        let mut recycle_stores = self.recycle_stores.write().unwrap();
+        for slot_entries in all_removed_slot_storages {
+            if let Ok(entry) = slot_entries.read() {
+                for (_slot, stores) in entry.iter() {
+                    recycle_stores.push(stores.clone());
+                }
+            }
+        }
+        drop(recycle_stores);
         drop_storage_entries_elapsed.stop();
 
         datapoint_info!(
@@ -1850,7 +1880,15 @@ impl AccountsDB {
         }
         info!("total_stores: {}, newest_slot: {}, oldest_slot: {}, max_slot: {} (num={}), min_slot: {} (num={})",
               total_count, newest_slot, oldest_slot, max_slot, max, min_slot, min);
-        datapoint_info!("accounts_db-stores", ("total_count", total_count, i64));
+        datapoint_info!(
+            "accounts_db-stores",
+            ("total_count", total_count, i64),
+            (
+                "recycle_count",
+                self.recycle_stores.read().unwrap().len() as u64,
+                i64
+            ),
+        );
         datapoint_info!(
             "accounts_db-perf-stats",
             (
@@ -2188,9 +2226,9 @@ impl AccountsDB {
                 .get_account_storage_entry(*slot, account_info.store_id)
             {
                 assert_eq!(
-                    *slot, store.slot,
+                    *slot, store.slot(),
                     "AccountDB::accounts_index corrupted. Storage pointed to: {}, expected: {}, should only point to one slot",
-                    store.slot, *slot
+                    store.slot(), *slot
                 );
                 let count = store.remove_account();
                 if count == 0 {
@@ -2236,7 +2274,7 @@ impl AccountsDB {
                         let accounts = store.accounts.accounts(0);
                         accounts
                             .into_iter()
-                            .map(|account| (store.slot, account.meta.pubkey))
+                            .map(|account| (store.slot(), account.meta.pubkey))
                             .collect::<HashSet<(Slot, Pubkey)>>()
                     })
                     .reduce(HashSet::new, |mut reduced, store_pubkeys| {
@@ -2903,6 +2941,7 @@ pub mod tests {
 
     #[test]
     fn test_remove_unrooted_slot_snapshot() {
+        solana_logger::setup();
         let unrooted_slot = 9;
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
         let key = solana_sdk::pubkey::new_rand();
@@ -3097,7 +3136,7 @@ pub mod tests {
             all_storages.extend(slot_storage.read().unwrap().values().cloned())
         }
         for storage in all_storages {
-            *append_vec_histogram.entry(storage.slot).or_insert(0) += 1;
+            *append_vec_histogram.entry(storage.slot()).or_insert(0) += 1;
         }
         for count in append_vec_histogram.values() {
             assert!(*count >= 2);
@@ -4083,11 +4122,9 @@ pub mod tests {
         let storage_entries = accounts_db.get_snapshot_storages(Slot::max_value());
         for storage in storage_entries.iter().flatten() {
             let storage_path = storage.get_path();
-            let output_path = output_dir.as_ref().join(
-                storage_path
-                    .file_name()
-                    .expect("Invalid AppendVec file path"),
-            );
+            let output_path = output_dir
+                .as_ref()
+                .join(AppendVec::new_relative_path(storage.slot(), storage.id));
 
             fs::copy(storage_path, output_path)?;
         }
