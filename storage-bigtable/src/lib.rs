@@ -2,6 +2,7 @@ use log::*;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
+    deserialize_utils::default_on_eof,
     pubkey::Pubkey,
     signature::Signature,
     sysvar::is_sysvar_id,
@@ -242,7 +243,9 @@ pub type StoredExtendedRewards = Vec<StoredExtendedReward>;
 pub struct StoredExtendedReward {
     pubkey: String,
     lamports: i64,
+    #[serde(deserialize_with = "default_on_eof")]
     post_balance: u64,
+    #[serde(deserialize_with = "default_on_eof")]
     reward_type: Option<RewardType>,
 }
 
