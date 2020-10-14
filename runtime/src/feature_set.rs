@@ -67,7 +67,7 @@ lazy_static! {
         (compute_budget_balancing::id(), "compute budget balancing"),
         (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
         (max_invoke_depth_4::id(), "max invoke call depth 4"),
-        (max_program_call_depth_64::id(), "max program call depth 64")
+        (max_program_call_depth_64::id(), "max program call depth 64"),
         (cumulative_rent_related_fixes::id(), "rent fixes (#10206, #10468, #11342)"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
