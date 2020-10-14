@@ -40,6 +40,7 @@ message TransactionStatusMeta {
     repeated uint64 pre_balances = 3;
     repeated uint64 post_balances = 4;
     repeated InnerInstructions inner_instructions = 5;
+    repeated string log_messages = 6;
 }
 
 message TransactionError {
