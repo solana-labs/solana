@@ -2,6 +2,7 @@
 
 extern crate test;
 
+use rand::Rng;
 use solana_runtime::{
     accounts::{create_test_accounts, Accounts},
     bank::*,
@@ -11,7 +12,7 @@ use solana_sdk::{
     genesis_config::{create_genesis_config, ClusterType},
     pubkey::Pubkey,
 };
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, thread::Builder};
 use test::Bencher;
 
 fn deposit_many(bank: &Bank, pubkeys: &mut Vec<Pubkey>, num: usize) {
@@ -140,4 +141,58 @@ fn bench_delete_dependencies(bencher: &mut Bencher) {
     bencher.iter(|| {
         accounts.accounts_db.clean_accounts(None);
     });
+}
+
+#[bench]
+#[ignore]
+fn bench_concurrent_read_write(bencher: &mut Bencher) {
+    let num_readers = 5;
+    let accounts = Arc::new(Accounts::new(
+        vec![
+            PathBuf::from(std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string()))
+                .join("concurrent_read_write"),
+        ],
+        &ClusterType::Development,
+    ));
+    let num_keys = 1000;
+    let slot = 0;
+    accounts.add_root(slot);
+    let pubkeys: Arc<Vec<_>> = Arc::new(
+        (0..num_keys)
+            .map(|_| {
+                let pubkey = Pubkey::new_rand();
+                let account = Account::new(1, 0, &Account::default().owner);
+                accounts.store_slow(slot, &pubkey, &account);
+                pubkey
+            })
+            .collect(),
+    );
+
+    for _ in 0..num_readers {
+        let accounts = accounts.clone();
+        let pubkeys = pubkeys.clone();
+        Builder::new()
+            .name("readers".to_string())
+            .spawn(move || {
+                let mut rng = rand::thread_rng();
+                loop {
+                    let i = rng.gen_range(0, num_keys);
+                    test::black_box(accounts.load_slow(&HashMap::new(), &pubkeys[i]).unwrap());
+                }
+            })
+            .unwrap();
+    }
+
+    let num_new_keys = 1000;
+    let new_accounts: Vec<_> = (0..num_new_keys)
+        .map(|_| Account::new(1, 0, &Account::default().owner))
+        .collect();
+    bencher.iter(|| {
+        for account in &new_accounts {
+            // Write to a different slot than the one being read from. Because
+            // there's a new account pubkey being written to every time, will
+            // compete for the accounts index lock on every store
+            accounts.store_slow(slot + 1, &Pubkey::new_rand(), &account);
+        }
+    })
 }
