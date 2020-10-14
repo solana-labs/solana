@@ -176,7 +176,7 @@ impl CrdsGossip {
     /// process a pull request and create a response
     pub fn process_pull_requests<I>(&mut self, callers: I, now: u64)
     where
-        I: Iterator<Item = CrdsValue>,
+        I: IntoIterator<Item = CrdsValue>,
     {
         self.pull
             .process_pull_requests(&mut self.crds, callers, now);

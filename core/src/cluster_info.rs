@@ -1898,10 +1898,10 @@ impl ClusterInfo {
             }
         }
 
-        if let Some(response) = self.handle_ping_messages(ping_messages.into_iter(), recycler) {
+        if let Some(response) = self.handle_ping_messages(ping_messages, recycler) {
             let _ = response_sender.send(response);
         }
-        self.handle_pong_messages(pong_messages.into_iter(), Instant::now());
+        self.handle_pong_messages(pong_messages, Instant::now());
         for (from, data) in pull_responses {
             self.handle_pull_response(&from, data, &timeouts);
         }
@@ -2176,10 +2176,11 @@ impl ClusterInfo {
 
     fn handle_ping_messages<I>(&self, pings: I, recycler: &PacketsRecycler) -> Option<Packets>
     where
-        I: Iterator<Item = (Ping, SocketAddr)>,
+        I: IntoIterator<Item = (Ping, SocketAddr)>,
     {
         let mut verify_failed = 0;
         let packets: Vec<_> = pings
+            .into_iter()
             .filter_map(|(ping, addr)| {
                 if ping.verify() {
                     let pong = Pong::new(&ping, &self.keypair).ok()?;
@@ -2206,9 +2207,9 @@ impl ClusterInfo {
 
     fn handle_pong_messages<I>(&self, pongs: I, now: Instant)
     where
-        I: Iterator<Item = (Pong, SocketAddr)>,
+        I: IntoIterator<Item = (Pong, SocketAddr)>,
     {
-        let mut pongs = pongs.peekable();
+        let mut pongs = pongs.into_iter().peekable();
         if pongs.peek().is_some() {
             let mut verify_failed = 0;
             let mut ping_cache = self.ping_cache.write().unwrap();
@@ -2918,12 +2919,14 @@ pub fn stake_weight_peers<S: std::hash::BuildHasher>(
 mod tests {
     use super::*;
     use crate::crds_value::{CrdsValue, CrdsValueLabel, Vote as CrdsVote};
+    use itertools::izip;
     use rayon::prelude::*;
     use solana_perf::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, Signer};
     use solana_vote_program::{vote_instruction, vote_state::Vote};
     use std::collections::HashSet;
-    use std::net::{IpAddr, Ipv4Addr};
+    use std::iter::repeat_with;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddrV4};
     use std::sync::Arc;
 
     #[test]
@@ -2963,6 +2966,117 @@ mod tests {
             (1, 0, 0),
             ClusterInfo::handle_pull_response(&cluster_info, &entrypoint_pubkey2, data, &timeouts)
         );
+    }
+
+    fn new_rand_remote_node<R>(rng: &mut R) -> (Keypair, SocketAddr)
+    where
+        R: Rng,
+    {
+        let keypair = Keypair::new();
+        let socket = SocketAddr::V4(SocketAddrV4::new(
+            Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen()),
+            rng.gen(),
+        ));
+        (keypair, socket)
+    }
+
+    #[test]
+    fn test_handle_pong_messages() {
+        let now = Instant::now();
+        let mut rng = rand::thread_rng();
+        let this_node = Arc::new(Keypair::new());
+        let cluster_info = ClusterInfo::new(
+            ContactInfo::new_localhost(&this_node.pubkey(), timestamp()),
+            this_node.clone(),
+        );
+        let remote_nodes: Vec<(Keypair, SocketAddr)> =
+            repeat_with(|| new_rand_remote_node(&mut rng))
+                .take(128)
+                .collect();
+        let pings: Vec<_> = {
+            let mut ping_cache = cluster_info.ping_cache.write().unwrap();
+            let mut pingf = || Ping::new_rand(&mut rng, &this_node).ok();
+            remote_nodes
+                .iter()
+                .map(|(keypair, socket)| {
+                    let node = (keypair.pubkey(), *socket);
+                    let (check, ping) = ping_cache.check(now, node, &mut pingf);
+                    // Assert that initially remote nodes will not pass the
+                    // ping/pong check.
+                    assert!(!check);
+                    ping.unwrap()
+                })
+                .collect()
+        };
+        let pongs: Vec<(Pong, SocketAddr)> = pings
+            .iter()
+            .zip(&remote_nodes)
+            .map(|(ping, (keypair, socket))| (Pong::new(ping, keypair).unwrap(), *socket))
+            .collect();
+        let now = now + Duration::from_millis(1);
+        cluster_info.handle_pong_messages(pongs, now);
+        // Assert that remote nodes now pass the ping/pong check.
+        {
+            let mut ping_cache = cluster_info.ping_cache.write().unwrap();
+            for (keypair, socket) in &remote_nodes {
+                let node = (keypair.pubkey(), *socket);
+                let (check, _) = ping_cache.check(now, node, || -> Option<Ping> { None });
+                assert!(check);
+            }
+        }
+        // Assert that a new random remote node still will not pass the check.
+        {
+            let mut ping_cache = cluster_info.ping_cache.write().unwrap();
+            let (keypair, socket) = new_rand_remote_node(&mut rng);
+            let node = (keypair.pubkey(), socket);
+            let (check, _) = ping_cache.check(now, node, || -> Option<Ping> { None });
+            assert!(!check);
+        }
+    }
+
+    #[test]
+    fn test_handle_ping_messages() {
+        let mut rng = rand::thread_rng();
+        let this_node = Arc::new(Keypair::new());
+        let cluster_info = ClusterInfo::new(
+            ContactInfo::new_localhost(&this_node.pubkey(), timestamp()),
+            this_node.clone(),
+        );
+        let remote_nodes: Vec<(Keypair, SocketAddr)> =
+            repeat_with(|| new_rand_remote_node(&mut rng))
+                .take(128)
+                .collect();
+        let pings: Vec<_> = remote_nodes
+            .iter()
+            .map(|(keypair, _)| Ping::new_rand(&mut rng, keypair).unwrap())
+            .collect();
+        let pongs: Vec<_> = pings
+            .iter()
+            .map(|ping| Pong::new(ping, &this_node).unwrap())
+            .collect();
+        let recycler = PacketsRecycler::default();
+        let packets = cluster_info
+            .handle_ping_messages(
+                pings
+                    .into_iter()
+                    .zip(remote_nodes.iter().map(|(_, socket)| *socket)),
+                &recycler,
+            )
+            .unwrap()
+            .packets;
+        assert_eq!(remote_nodes.len(), packets.len());
+        for (packet, (_, socket), pong) in izip!(
+            packets.into_iter(),
+            remote_nodes.into_iter(),
+            pongs.into_iter()
+        ) {
+            assert_eq!(packet.meta.addr(), socket);
+            let bytes = serialize(&pong).unwrap();
+            match limited_deserialize(&packet.data[..packet.meta.size]).unwrap() {
+                Protocol::PongMessage(pong) => assert_eq!(serialize(&pong).unwrap(), bytes),
+                _ => panic!("invalid packet!"),
+            }
+        }
     }
 
     fn test_crds_values(pubkey: Pubkey) -> Vec<CrdsValue> {

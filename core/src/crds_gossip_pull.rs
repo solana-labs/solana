@@ -275,7 +275,7 @@ impl CrdsGossipPull {
     /// process a pull request
     pub fn process_pull_requests<I>(&mut self, crds: &mut Crds, callers: I, now: u64)
     where
-        I: Iterator<Item = CrdsValue>,
+        I: IntoIterator<Item = CrdsValue>,
     {
         for caller in callers {
             let key = caller.label().pubkey();

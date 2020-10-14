@@ -249,15 +249,153 @@ impl Clone for PingCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
+    use std::iter::repeat_with;
+    use std::net::{Ipv4Addr, SocketAddrV4};
+
+    type Token = [u8; 32];
 
     #[test]
-    fn test_new_rand() {
+    fn test_ping_pong() {
         let mut rng = rand::thread_rng();
         let keypair = Keypair::new();
-        let ping = Ping::<[u8; 32]>::new_rand(&mut rng, &keypair).unwrap();
+        let ping = Ping::<Token>::new_rand(&mut rng, &keypair).unwrap();
         assert!(ping.verify());
+        assert!(ping.sanitize().is_ok());
+
         let pong = Pong::new(&ping, &keypair).unwrap();
         assert!(pong.verify());
+        assert!(pong.sanitize().is_ok());
         assert_eq!(hash::hash(&ping.token), pong.hash);
+    }
+
+    #[test]
+    fn test_ping_cache() {
+        let now = Instant::now();
+        let mut rng = rand::thread_rng();
+        let ttl = Duration::from_millis(256);
+        let mut cache = PingCache::new(ttl, /*cap=*/ 1000);
+        let this_node = Keypair::new();
+        let keypairs: Vec<_> = repeat_with(Keypair::new).take(8).collect();
+        let sockets: Vec<_> = repeat_with(|| {
+            SocketAddr::V4(SocketAddrV4::new(
+                Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen()),
+                rng.gen(),
+            ))
+        })
+        .take(8)
+        .collect();
+        let remote_nodes: Vec<(&Keypair, SocketAddr)> = repeat_with(|| {
+            let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
+            let socket = sockets[rng.gen_range(0, sockets.len())];
+            (keypair, socket)
+        })
+        .take(128)
+        .collect();
+
+        // Initially all checks should fail. The first observation of each node
+        // should create a ping packet.
+        let mut seen_nodes = HashSet::<(Pubkey, SocketAddr)>::new();
+        let pings: Vec<Option<Ping<Token>>> = remote_nodes
+            .iter()
+            .map(|(keypair, socket)| {
+                let node = (keypair.pubkey(), *socket);
+                let pingf = || Ping::<Token>::new_rand(&mut rng, &this_node).ok();
+                let (check, ping) = cache.check(now, node, pingf);
+                assert!(!check);
+                assert_eq!(seen_nodes.insert(node), ping.is_some());
+                ping
+            })
+            .collect();
+
+        let now = now + Duration::from_millis(1);
+        let panic_ping = || -> Option<Ping<Token>> { panic!("this should not happen!") };
+        for ((keypair, socket), ping) in remote_nodes.iter().zip(&pings) {
+            match ping {
+                None => {
+                    // Already have a recent ping packets for nodes, so no new
+                    // ping packet will be generated.
+                    let node = (keypair.pubkey(), *socket);
+                    let (check, ping) = cache.check(now, node, panic_ping);
+                    assert!(check);
+                    assert!(ping.is_none());
+                }
+                Some(ping) => {
+                    let pong = Pong::new(ping, keypair).unwrap();
+                    assert!(cache.add(&pong, *socket, now));
+                }
+            }
+        }
+
+        let now = now + Duration::from_millis(1);
+        // All nodes now have a recent pong packet.
+        for (keypair, socket) in &remote_nodes {
+            let node = (keypair.pubkey(), *socket);
+            let (check, ping) = cache.check(now, node, panic_ping);
+            assert!(check);
+            assert!(ping.is_none());
+        }
+
+        let now = now + ttl / 8;
+        // All nodes still have a valid pong packet, but the cache will create
+        // a new ping packet to extend verification.
+        seen_nodes.clear();
+        for (keypair, socket) in &remote_nodes {
+            let node = (keypair.pubkey(), *socket);
+            let pingf = || Ping::<Token>::new_rand(&mut rng, &this_node).ok();
+            let (check, ping) = cache.check(now, node, pingf);
+            assert!(check);
+            assert_eq!(seen_nodes.insert(node), ping.is_some());
+        }
+
+        let now = now + Duration::from_millis(1);
+        // All nodes still have a valid pong packet, and a very recent ping
+        // packet pending response. So no new ping packet will be created.
+        for (keypair, socket) in &remote_nodes {
+            let node = (keypair.pubkey(), *socket);
+            let (check, ping) = cache.check(now, node, panic_ping);
+            assert!(check);
+            assert!(ping.is_none());
+        }
+
+        let now = now + ttl;
+        // Pong packets are still valid but expired. The first observation of
+        // each node will remove the pong packet from cache and create a new
+        // ping packet.
+        seen_nodes.clear();
+        for (keypair, socket) in &remote_nodes {
+            let node = (keypair.pubkey(), *socket);
+            let pingf = || Ping::<Token>::new_rand(&mut rng, &this_node).ok();
+            let (check, ping) = cache.check(now, node, pingf);
+            if seen_nodes.insert(node) {
+                assert!(check);
+                assert!(ping.is_some());
+            } else {
+                assert!(!check);
+                assert!(ping.is_none());
+            }
+        }
+
+        let now = now + Duration::from_millis(1);
+        // No valid pong packet in the cache. A recent ping packet already
+        // created, so no new one will be created.
+        for (keypair, socket) in &remote_nodes {
+            let node = (keypair.pubkey(), *socket);
+            let (check, ping) = cache.check(now, node, panic_ping);
+            assert!(!check);
+            assert!(ping.is_none());
+        }
+
+        let now = now + ttl / 64;
+        // No valid pong packet in the cache. Another ping packet will be
+        // created for the first observation of each node.
+        seen_nodes.clear();
+        for (keypair, socket) in &remote_nodes {
+            let node = (keypair.pubkey(), *socket);
+            let pingf = || Ping::<Token>::new_rand(&mut rng, &this_node).ok();
+            let (check, ping) = cache.check(now, node, pingf);
+            assert!(!check);
+            assert_eq!(seen_nodes.insert(node), ping.is_some());
+        }
     }
 }
