@@ -503,7 +503,7 @@ impl Tower {
         false
     }
 
-    fn calculate_check_switch_threshold(
+    fn make_check_switch_threshold_decision(
         &self,
         switch_slot: u64,
         ancestors: &HashMap<Slot, HashSet<u64>>,
@@ -533,9 +533,8 @@ impl Tower {
                             // compare slots not to error! just because of newer snapshots
                             if self.is_first_switch_check() && switch_slot < last_voted_slot {
                                 error!(
-                                  "{} bank_forks doesn't have corresponding data for the stray restored \
+                                  "bank_forks doesn't have corresponding data for the stray restored \
                                    last vote({}), meaning some inconsistency between saved tower and ledger.",
-                                  self.node_pubkey,
                                   last_voted_slot
                                 );
                             }
@@ -654,7 +653,7 @@ impl Tower {
         total_stake: u64,
         epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
     ) -> SwitchForkDecision {
-        let decision = self.calculate_check_switch_threshold(
+        let decision = self.make_check_switch_threshold_decision(
             switch_slot,
             ancestors,
             descendants,
@@ -665,8 +664,7 @@ impl Tower {
         let new_check = Some((switch_slot, decision.clone()));
         if new_check != self.last_switch_threshold_check {
             trace!(
-                "{}: new switch threshold check: slot {}: {:?}",
-                self.node_pubkey,
+                "new switch threshold check: slot {}: {:?}",
                 switch_slot,
                 decision,
             );
@@ -1037,11 +1035,7 @@ impl Tower {
             bincode::serialize_into(&mut file, &saved_tower)?;
             // file.sync_all() hurts performance; pipeline sync-ing and submitting votes to the cluster!
         }
-        trace!(
-            "{} persisted votes: {:?}",
-            node_keypair.pubkey(),
-            self.voted_slots()
-        );
+        trace!("persisted votes: {:?}", self.voted_slots());
         fs::rename(&new_filename, &filename)?;
         // self.path.parent().sync_all() hurts performance same as the above sync
 
