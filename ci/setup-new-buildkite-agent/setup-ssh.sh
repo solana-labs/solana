@@ -6,6 +6,11 @@ HERE="$(dirname "$0")"
 source "$HERE"/utils.sh
 
 ensure_env || exit 1
+# This is a last ditch effort to prevent the caller from locking themselves
+# out of the machine. Exiting here will likely leave the system in some
+# half-configured state. To prevent this, duplicate the next line at the top
+# of the entrypoint script.
+check_ssh_authorized_keys || exit 1
 
 set -xe
 # Setup sshd

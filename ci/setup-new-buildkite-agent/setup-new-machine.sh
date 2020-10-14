@@ -7,6 +7,7 @@ SOLANA_ROOT="$HERE"/../..
 source "$HERE"/utils.sh
 
 ensure_env || exit 1
+check_ssh_authorized_keys || exit 1
 
 set -ex
 
