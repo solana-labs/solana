@@ -204,6 +204,7 @@ mod tests {
         {
             let message = make_accounts_hashes_message(&validator1, vec![(0, hash1)]).unwrap();
             cluster_info.push_message(message);
+            cluster_info.flush_push_queue();
         }
         slot_to_hash.insert(0, hash2);
         trusted_validators.insert(validator1.pubkey());
@@ -254,6 +255,7 @@ mod tests {
                 100,
             );
         }
+        cluster_info.flush_push_queue();
         let cluster_hashes = cluster_info
             .get_accounts_hash_for_node(&keypair.pubkey(), |c| c.clone())
             .unwrap();
