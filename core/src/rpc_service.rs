@@ -566,6 +566,7 @@ mod tests {
 
         // No account hashes for any trusted validators == "behind"
         cluster_info.push_accounts_hashes(vec![(1000, Hash::default()), (900, Hash::default())]);
+        cluster_info.flush_push_queue();
         assert_eq!(rm.health_check(), "behind");
         override_health_check.store(true, Ordering::Relaxed);
         assert_eq!(rm.health_check(), "ok");

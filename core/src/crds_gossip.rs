@@ -88,7 +88,20 @@ impl CrdsGossip {
         prune_map
     }
 
-    pub fn new_push_messages(&mut self, now: u64) -> (Pubkey, HashMap<Pubkey, Vec<CrdsValue>>) {
+    pub fn process_push_messages(&mut self, pending_push_messages: Vec<(CrdsValue, u64)>) {
+        for (push_message, timestamp) in pending_push_messages {
+            let _ =
+                self.push
+                    .process_push_message(&mut self.crds, &self.id, push_message, timestamp);
+        }
+    }
+
+    pub fn new_push_messages(
+        &mut self,
+        pending_push_messages: Vec<(CrdsValue, u64)>,
+        now: u64,
+    ) -> (Pubkey, HashMap<Pubkey, Vec<CrdsValue>>) {
+        self.process_push_messages(pending_push_messages);
         let push_messages = self.push.new_push_messages(&self.crds, now);
         (self.id, push_messages)
     }
