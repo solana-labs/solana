@@ -309,7 +309,6 @@ impl Accounts {
         //PERF: hold the lock to scan for the references, but not to clone the accounts
         //TODO: two locks usually leads to deadlocks, should this be one structure?
         let accounts_index = self.accounts_db.accounts_index.read().unwrap();
-        let storage = self.accounts_db.storage.read().unwrap();
 
         let fee_config = FeeConfig {
             secp256k1_program_enabled: feature_set
@@ -334,7 +333,7 @@ impl Accounts {
                     };
 
                     let load_res = self.load_tx_accounts(
-                        &storage,
+                        &self.accounts_db.storage,
                         ancestors,
                         &accounts_index,
                         tx,
@@ -349,7 +348,7 @@ impl Accounts {
                     };
 
                     let load_res = Self::load_loaders(
-                        &storage,
+                        &self.accounts_db.storage,
                         ancestors,
                         &accounts_index,
                         tx,
@@ -1521,10 +1520,9 @@ mod tests {
         let ancestors = vec![(0, 0)].into_iter().collect();
 
         let accounts_index = accounts.accounts_db.accounts_index.read().unwrap();
-        let storage = accounts.accounts_db.storage.read().unwrap();
         assert_eq!(
             Accounts::load_executable_accounts(
-                &storage,
+                &accounts.accounts_db.storage,
                 &ancestors,
                 &accounts_index,
                 &solana_sdk::pubkey::new_rand(),
