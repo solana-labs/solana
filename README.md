@@ -107,3 +107,5 @@ send us that patch!
 # Disclaimer
 
 All claims, content, designs, algorithms, estimates, roadmaps, specifications, and performance measurements described in this project are done with the author's best effort.  It is up to the reader to check and validate their accuracy and truthfulness.  Furthermore nothing in this project constitutes a solicitation for investment.
+
+Any content produced by Solana, or developer resources that Solana provides, are for educational and inspiration purposes only.  Solana does not encourage, induce or sanction the deployment of any such applications in violation of applicable laws or regulations.
