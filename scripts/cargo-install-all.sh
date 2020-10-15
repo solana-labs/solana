@@ -106,13 +106,15 @@ for bin in "${BINS[@]}"; do
   binArgs+=(--bin "$bin")
 done
 
+mkdir -p "$installDir/bin"
+
 (
   set -x
   # shellcheck disable=SC2086 # Don't want to double quote $rust_version
   $cargo $maybeRustVersion build $maybeReleaseFlag "${binArgs[@]}"
+  $cargo install spl-token-cli --root "$installDir"
 )
 
-mkdir -p "$installDir/bin"
 for bin in "${BINS[@]}"; do
   cp -fv "target/$buildVariant/$bin" "$installDir"/bin
 done
