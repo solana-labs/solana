@@ -2529,6 +2529,38 @@ The result field will be a JSON object with the following fields:
 
 #### Example:
 
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}'
+```
+
+Result:
+```json
+{"jsonrpc":"2.0","result":{"solana-core": "1.5.0"},"id":1}
+```
+
+### getVoteAccounts
+
+Returns the account info and associated stake for all the voting accounts in the current bank.
+
+#### Parameters:
+
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+The result field will be a JSON object of `current` and `delinquent` accounts, each containing an array of JSON objects with the following sub fields:
+
+- `votePubkey: <string>` - Vote account public key, as base-58 encoded string
+- `nodePubkey: <string>` - Node public key, as base-58 encoded string
+- `activatedStake: <u64>` - the stake, in lamports, delegated to this vote account and active in this epoch
+- `epochVoteAccount: <bool>` - bool, whether the vote account is staked for this epoch
+- `commission: <number>`, percentage (0-100) of rewards payout owed to the vote account
+- `lastVote: <u64>` - Most recent slot voted on by this vote account
+- `epochCredits: <array>` - History of how many credits earned by the end of each epoch, as an array of arrays containing: `[epoch, credits, previousCredits]`
+
+#### Example:
+Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}
