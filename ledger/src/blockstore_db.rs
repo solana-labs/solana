@@ -16,7 +16,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::Signature,
 };
-use solana_storage_bigtable::convert::generated;
+use solana_storage_proto::convert::generated;
 use solana_transaction_status::TransactionStatusMeta;
 use std::{collections::HashMap, fs, marker::PhantomData, path::Path, sync::Arc};
 use thiserror::Error;

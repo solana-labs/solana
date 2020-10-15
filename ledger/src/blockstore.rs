@@ -37,7 +37,7 @@ use solana_sdk::{
     timing::timestamp,
     transaction::Transaction,
 };
-use solana_storage_bigtable::StoredExtendedRewards;
+use solana_storage_proto::StoredExtendedRewards;
 use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Rewards,
     TransactionStatusMeta, TransactionWithStatusMeta,
@@ -3464,7 +3464,7 @@ pub mod tests {
         signature::Signature,
         transaction::TransactionError,
     };
-    use solana_storage_bigtable::convert::generated;
+    use solana_storage_proto::convert::generated;
     use solana_transaction_status::{InnerInstructions, Reward, Rewards};
     use solana_vote_program::{vote_instruction, vote_state::Vote};
     use std::{iter::FromIterator, time::Duration};

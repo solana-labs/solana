@@ -16,7 +16,7 @@ use std::convert::{TryFrom, TryInto};
 pub mod generated {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        concat!("/proto/solana.bigtable.confirmed_block.rs")
+        concat!("/proto/solana.storage.confirmed_block.rs")
     ));
 }
 

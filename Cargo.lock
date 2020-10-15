@@ -4038,6 +4038,7 @@ dependencies = [
  "solana-sdk 1.5.0",
  "solana-stake-program",
  "solana-storage-bigtable",
+ "solana-storage-proto",
  "solana-transaction-status",
  "solana-vote-program",
  "tempfile",
@@ -4617,10 +4618,23 @@ dependencies = [
  "serde_derive",
  "smpl_jwt",
  "solana-sdk 1.5.0",
+ "solana-storage-proto",
  "solana-transaction-status",
  "thiserror",
  "tonic",
  "zstd",
+]
+
+[[package]]
+name = "solana-storage-proto"
+version = "1.5.0"
+dependencies = [
+ "bincode",
+ "prost",
+ "serde",
+ "serde_derive",
+ "solana-sdk 1.5.0",
+ "solana-transaction-status",
 ]
 
 [[package]]
