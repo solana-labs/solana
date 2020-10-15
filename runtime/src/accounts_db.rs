@@ -4535,6 +4535,19 @@ pub mod tests {
     }
 
     #[test]
+    fn test_storage_finder() {
+        solana_logger::setup();
+        let db = AccountsDB::new_sized(Vec::new(), 16 * 1024);
+        let key = Pubkey::new_rand();
+        let lamports = 100;
+        let data_len = 8190;
+        let account = Account::new(lamports, data_len, &Pubkey::new_rand());
+        // pre-populate with a smaller empty store
+        db.create_and_insert_store(1, 8192);
+        db.store(1, &[(&key, &account)]);
+    }
+
+    #[test]
     fn test_get_snapshot_storages_empty() {
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
         assert!(db.get_snapshot_storages(0).is_empty());
