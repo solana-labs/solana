@@ -446,6 +446,16 @@ struct AccountsStats {
     delta_hash_accumulate_time_total_us: AtomicU64,
     delta_hash_merge_time_total_us: AtomicU64,
     delta_hash_num: AtomicU64,
+
+    last_store_report: AtomicU64,
+    store_hash_accounts: AtomicU64,
+    store_accounts: AtomicU64,
+    store_update_index: AtomicU64,
+    store_handle_reclaims: AtomicU64,
+    store_append_accounts: AtomicU64,
+    store_find_store: AtomicU64,
+    store_num_accounts: AtomicU64,
+    store_total_data: AtomicU64,
 }
 
 fn make_min_priority_thread_pool() -> ThreadPool {
@@ -1739,11 +1749,19 @@ impl AccountsDB {
             })
             .collect();
         let mut infos: Vec<AccountInfo> = Vec::with_capacity(with_meta.len());
+        let mut total_append_accounts_us = 0;
+        let mut total_storage_find_us = 0;
         while infos.len() < with_meta.len() {
+            let mut storage_find = Measure::start("storage_finder");
             let storage = storage_finder(slot);
+            storage_find.stop();
+            total_storage_find_us += storage_find.as_us();
+            let mut append_accounts = Measure::start("append_accounts");
             let rvs = storage
                 .accounts
                 .append_accounts(&with_meta[infos.len()..], &hashes[infos.len()..]);
+            append_accounts.stop();
+            total_append_accounts_us += append_accounts.as_us();
             if rvs.is_empty() {
                 storage.set_status(AccountStorageStatus::Full);
 
@@ -1765,6 +1783,13 @@ impl AccountsDB {
             // restore the state to available
             storage.set_status(AccountStorageStatus::Available);
         }
+        self.stats
+            .store_append_accounts
+            .fetch_add(total_append_accounts_us, Ordering::Relaxed);
+        self.stats
+            .store_find_store
+            .fetch_add(total_storage_find_us, Ordering::Relaxed);
+
         infos
     }
 
@@ -2229,13 +2254,19 @@ impl AccountsDB {
         cluster_type: &ClusterType,
     ) -> Vec<Hash> {
         let mut stats = BankHashStats::default();
+        let mut total_data = 0;
         let hashes: Vec<_> = accounts
             .iter()
             .map(|(pubkey, account)| {
+                total_data += account.data.len();
                 stats.update(account);
                 Self::hash_account(slot, account, pubkey, cluster_type)
             })
             .collect();
+
+        self.stats
+            .store_total_data
+            .fetch_add(total_data as u64, Ordering::Relaxed);
 
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let slot_info = bank_hashes
@@ -2298,6 +2329,7 @@ impl AccountsDB {
     /// Store the account update.
     pub fn store(&self, slot: Slot, accounts: &[(&Pubkey, &Account)]) {
         self.assert_frozen_accounts(accounts);
+        let mut hash_time = Measure::start("hash_accounts");
         let hashes = self.hash_accounts(
             slot,
             accounts,
@@ -2305,12 +2337,86 @@ impl AccountsDB {
                 .cluster_type
                 .expect("Cluster type must be set at initialization"),
         );
+        hash_time.stop();
+        self.stats
+            .store_hash_accounts
+            .fetch_add(hash_time.as_us(), Ordering::Relaxed);
         self.store_with_hashes(slot, accounts, &hashes);
+        self.report_store_timings();
+    }
+
+    fn report_store_timings(&self) {
+        let last = self.stats.last_store_report.load(Ordering::Relaxed);
+        let now = solana_sdk::timing::timestamp();
+        if now - last > 1000
+            && self
+                .stats
+                .last_store_report
+                .compare_and_swap(last, now, Ordering::Relaxed)
+                == last
+        {
+            datapoint_info!(
+                "accounts_db_store_timings",
+                (
+                    "hash_accounts",
+                    self.stats.store_hash_accounts.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "store_accounts",
+                    self.stats.store_accounts.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "update_index",
+                    self.stats.store_update_index.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "handle_reclaims",
+                    self.stats.store_handle_reclaims.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "append_accounts",
+                    self.stats.store_append_accounts.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "find_storage",
+                    self.stats.store_find_store.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "num_accounts",
+                    self.stats.store_num_accounts.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "total_data",
+                    self.stats.store_total_data.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+            );
+        }
     }
 
     fn store_with_hashes(&self, slot: Slot, accounts: &[(&Pubkey, &Account)], hashes: &[Hash]) {
+        self.stats
+            .store_num_accounts
+            .fetch_add(accounts.len() as u64, Ordering::Relaxed);
+        let mut store_accounts_time = Measure::start("store_accounts");
         let infos = self.store_accounts(slot, accounts, hashes);
+        store_accounts_time.stop();
+        self.stats
+            .store_accounts
+            .fetch_add(store_accounts_time.as_us(), Ordering::Relaxed);
+        let mut update_index_time = Measure::start("update_index");
         let reclaims = self.update_index(slot, infos, accounts);
+        update_index_time.stop();
+        self.stats
+            .store_update_index
+            .fetch_add(update_index_time.as_us(), Ordering::Relaxed);
 
         // A store for a single slot should:
         // 1) Only make "reclaims" for the same slot
@@ -2320,7 +2426,12 @@ impl AccountsDB {
         //    b)From 1) we know no other slots are included in the "reclaims"
         //
         // From 1) and 2) we guarantee passing Some(slot), true is safe
+        let mut handle_reclaims_time = Measure::start("handle_reclaims");
         self.handle_reclaims(&reclaims, Some(slot), true, None);
+        handle_reclaims_time.stop();
+        self.stats
+            .store_handle_reclaims
+            .fetch_add(handle_reclaims_time.as_us(), Ordering::Relaxed);
     }
 
     pub fn add_root(&self, slot: Slot) {
