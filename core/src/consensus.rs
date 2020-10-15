@@ -450,10 +450,6 @@ impl Tower {
         self.lockouts.root_slot.unwrap()
     }
 
-    pub fn node_pubkey(&self) -> Pubkey {
-        self.node_pubkey
-    }
-
     // a slot is recent if it's newer than the last vote we have
     pub fn is_recent(&self, slot: Slot) -> bool {
         if let Some(last_voted_slot) = self.lockouts.last_voted_slot() {
