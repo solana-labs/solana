@@ -112,7 +112,8 @@ mkdir -p "$installDir/bin"
   set -x
   # shellcheck disable=SC2086 # Don't want to double quote $rust_version
   $cargo $maybeRustVersion build $maybeReleaseFlag "${binArgs[@]}"
-  $cargo install spl-token-cli --root "$installDir"
+  # shellcheck disable=SC2086 # Don't want to double quote $rust_version
+  $cargo $maybeRustVersion install spl-token-cli --root "$installDir"
 )
 
 for bin in "${BINS[@]}"; do
