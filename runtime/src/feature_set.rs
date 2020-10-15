@@ -65,6 +65,10 @@ pub mod cumulative_rent_related_fixes {
     solana_sdk::declare_id!("FtjnuAtJTWwX3Kx9m24LduNEhzaGuuPfDW6e14SX2Fy5");
 }
 
+pub mod pubkey_log_syscall_enabled {
+    solana_sdk::declare_id!("MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -83,6 +87,7 @@ lazy_static! {
         (max_program_call_depth_64::id(), "max program call depth 64"),
         (timestamp_correction::id(), "correct bank timestamps"),
         (cumulative_rent_related_fixes::id(), "rent fixes (#10206, #10468, #11342)"),
+        (pubkey_log_syscall_enabled::id(), "pubkey log syscall"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

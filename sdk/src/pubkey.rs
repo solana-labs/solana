@@ -202,9 +202,16 @@ impl Pubkey {
     pub fn to_bytes(self) -> [u8; 32] {
         self.0
     }
-}
 
-// TODO localalize this
+    /// Log a `Pubkey` from a program
+    #[cfg(feature = "program")]
+    pub fn log(&self) {
+        extern "C" {
+            fn sol_log_pubkey(pubkey_addr: *const u8);
+        };
+        unsafe { sol_log_pubkey(self.as_ref() as *const _ as *const u8) };
+    }
+}
 
 impl AsRef<[u8]> for Pubkey {
     fn as_ref(&self) -> &[u8] {

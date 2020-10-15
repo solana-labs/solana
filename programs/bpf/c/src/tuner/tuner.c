@@ -9,7 +9,17 @@
 #include <solana_sdk.h>
 
 extern uint64_t entrypoint(const uint8_t *input) {
+<<<<<<< HEAD
   uint8_t *val = (uint8_t *)input;
+=======
+  SolAccountInfo ka[NUM_KA];
+  SolParameters params = (SolParameters){.ka = ka};
+  if (!sol_deserialize(input, &params, SOL_ARRAY_SIZE(ka))) {
+    return ERROR_INVALID_ARGUMENT;
+  }
+  uint8_t *val = (uint8_t *)ka[0].data;
+  size_t current = 1;
+>>>>>>> 3f9e6a600... program log pubkey as base58 (#12901)
   for (uint64_t i = 0; i < UINT64_MAX; i++) {
 
     // Uncomment for raw compute
@@ -27,6 +37,12 @@ extern uint64_t entrypoint(const uint8_t *input) {
 
     //   sol_sha256(bytes, SOL_ARRAY_SIZE(bytes), result);
     //   *val = result[0];
+    // }
+
+    // // Uncomment for Pubkey logging syscall
+    // {
+    //   SolPubkey pubkey;
+    //   sol_log_pubkey(&pubkey);
     // }
   }
   return *val;
