@@ -28,7 +28,7 @@ Here are our recommendations for low, medium, and high end machine specification
 | :------------------ | :---------------------------------------------------- | :--------------------- | :--------------------- | :------------------------------------------------------------------------------------- |
 | CPU                 | AMD Ryzen 3950x                                       | AMD Threadripper 3960x | AMD Threadripper 3990x | Consider a 10Gb-capable motherboard with as many PCIe lanes and m.2 slots as possible. |
 | RAM                 | 16GB                                                  | 64GB                   | 128GB                  |                                                                                        |
-| OS Drive            | Samsung 860 Evo 2TB                                   | Samsung 860 Evo 4TB    | Samsung 860 Evo 4TB    | Or equivalent SSD                                                                      |
+| Ledger Drive        | Samsung 860 Evo 2TB                                   | Samsung 860 Evo 4TB    | Samsung 860 Evo 4TB    | Or equivalent SSD                                                                      |
 | Accounts Drive\(s\) | None                                                  | Samsung 970 Pro 1TB    | 2x Samsung 970 Pro 1TB |                                                                                        |
 | GPU                 | Nvidia 1660ti                                         | Nvidia 2080 Ti         | 2x Nvidia 2080 Ti      | Any number of cuda-capable GPUs are supported on Linux platforms.                      |
 
