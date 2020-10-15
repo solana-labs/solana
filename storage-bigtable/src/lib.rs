@@ -358,7 +358,7 @@ impl LedgerStorage {
                 } else {
                     Ok(Some(ConfirmedTransaction {
                         slot,
-                        transaction: bucket_block_transaction.into(),
+                        transaction: bucket_block_transaction,
                     }))
                 }
             }
