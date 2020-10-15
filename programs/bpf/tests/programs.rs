@@ -440,16 +440,25 @@ fn test_program_bpf_invoke() {
     const TEST_PRIVILEGE_ESCALATION_WRITABLE: u8 = 3;
     const TEST_PPROGRAM_NOT_EXECUTABLE: u8 = 4;
 
+    #[allow(dead_code)]
+    #[derive(Debug)]
+    enum Languages {
+        C,
+        Rust,
+    }
     let mut programs = Vec::new();
     #[cfg(feature = "bpf_c")]
     {
-        programs.extend_from_slice(&[("invoke", "invoked")]);
+        programs.push((Languages::C, "invoke", "invoked"));
     }
     #[cfg(feature = "bpf_rust")]
     {
-        programs.extend_from_slice(&[("solana_bpf_rust_invoke", "solana_bpf_rust_invoked")]);
+        programs.push((
+            Languages::Rust,
+            "solana_bpf_rust_invoke",
+            "solana_bpf_rust_invoked",
+        ));
     }
-
     for program in programs.iter() {
         println!("Test program: {:?}", program);
 
@@ -465,9 +474,9 @@ fn test_program_bpf_invoke() {
         let bank_client = BankClient::new_shared(&bank);
 
         let invoke_program_id =
-            load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program.0);
-        let invoked_program_id =
             load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program.1);
+        let invoked_program_id =
+            load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program.2);
 
         let argument_keypair = Keypair::new();
         let account = Account::new(42, 100, &invoke_program_id);
@@ -527,9 +536,9 @@ fn test_program_bpf_invoke() {
             .iter()
             .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
             .collect();
-        assert_eq!(
-            invoked_programs,
-            vec![
+
+        let expected_invoked_programs = match program.0 {
+            Languages::C => vec![
                 solana_sdk::system_program::id(),
                 solana_sdk::system_program::id(),
                 invoked_program_id.clone(),
@@ -542,8 +551,26 @@ fn test_program_bpf_invoke() {
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
-            ]
-        );
+            ],
+            Languages::Rust => vec![
+                solana_sdk::system_program::id(),
+                solana_sdk::system_program::id(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+                invoked_program_id.clone(),
+            ],
+        };
+        assert_eq!(invoked_programs, expected_invoked_programs);
 
         // failure cases
 

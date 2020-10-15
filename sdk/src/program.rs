@@ -16,6 +16,22 @@ pub fn invoke_signed(
     account_infos: &[AccountInfo],
     signers_seeds: &[&[&[u8]]],
 ) -> ProgramResult {
+    // Check that the account RefCells are consistent with the request
+    for account_meta in instruction.accounts.iter() {
+        for account_info in account_infos.iter() {
+            if account_meta.pubkey == *account_info.key {
+                if account_meta.is_writable {
+                    let _ = account_info.try_borrow_mut_lamports()?;
+                    let _ = account_info.try_borrow_mut_data()?;
+                } else {
+                    let _ = account_info.try_borrow_lamports()?;
+                    let _ = account_info.try_borrow_data()?;
+                }
+                break;
+            }
+        }
+    }
+
     let result = unsafe {
         sol_invoke_signed_rust(
             instruction as *const _ as *const u8,
