@@ -1940,29 +1940,29 @@ impl ClusterInfo {
         now: Instant,
         mut rng: &'a mut R,
         packets: &'a mut Packets,
+        feature_set: Option<&FeatureSet>,
     ) -> impl FnMut(&PullData) -> bool + 'a
     where
         R: Rng + CryptoRng,
     {
+        let check_enabled = matches!(feature_set, Some(feature_set) if
+            feature_set.is_active(&feature_set::pull_request_ping_pong_check::id()));
         let mut cache = HashMap::<(Pubkey, SocketAddr), bool>::new();
         let mut pingf = move || Ping::new_rand(&mut rng, &self.keypair).ok();
         let mut ping_cache = self.ping_cache.write().unwrap();
         let mut hard_check = move |node| {
-            let (_check, ping) = ping_cache.check(now, node, &mut pingf);
+            let (check, ping) = ping_cache.check(now, node, &mut pingf);
             if let Some(ping) = ping {
                 let ping = Protocol::PingMessage(ping);
                 let ping = Packet::from_data(&node.1, ping);
                 packets.packets.push(ping);
             }
-            if !_check {
+            if !check {
                 self.stats
                     .pull_request_ping_pong_check_failed_count
                     .add_relaxed(1)
             }
-            // TODO: For backward compatibility, this unconditionally returns
-            // true for now. It has to return _check, once nodes start
-            // responding to ping messages.
-            true
+            check || !check_enabled
         };
         // Because pull-responses are sent back to packet.meta.addr() of
         // incoming pull-requests, pings are also sent to request.from_addr (as
@@ -1984,11 +1984,6 @@ impl ClusterInfo {
         stakes: &HashMap<Pubkey, u64>,
         feature_set: Option<&FeatureSet>,
     ) -> Packets {
-        if matches!(feature_set, Some(feature_set) if
-                    feature_set.is_active(&feature_set::pull_request_ping_pong_check::id()))
-        {
-            // TODO: add ping-pong check on pull-request addresses.
-        }
         let mut time = Measure::start("handle_pull_requests");
         self.time_gossip_write_lock("process_pull_reqs", &self.stats.process_pull_requests)
             .process_pull_requests(requests.iter().map(|r| r.caller.clone()), timestamp());
@@ -1997,7 +1992,7 @@ impl ClusterInfo {
         let (caller_and_filters, addrs): (Vec<_>, Vec<_>) = {
             let mut rng = rand::thread_rng();
             let check_pull_request =
-                self.check_pull_request(Instant::now(), &mut rng, &mut packets);
+                self.check_pull_request(Instant::now(), &mut rng, &mut packets, feature_set);
             requests
                 .into_iter()
                 .filter(check_pull_request)
