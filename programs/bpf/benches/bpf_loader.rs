@@ -229,8 +229,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     )
     .unwrap();
 
-    let r = vm.execute_program_metered(&mut serialized, &[], &[], instruction_meter.clone());
-    measure.stop();
+    let _ = vm.execute_program_metered(&mut serialized, &[], &[], instruction_meter.clone());    measure.stop();
     assert_eq!(
         0,
         instruction_meter.get_remaining(),

@@ -612,6 +612,7 @@ mod tests {
                 sha256_byte_cost: 1,
                 max_call_depth: 20,
                 stack_frame_size: 4096,
+                log_pubkey_units: 100,
             },
             Rc::new(RefCell::new(Executors::default())),
             None,
