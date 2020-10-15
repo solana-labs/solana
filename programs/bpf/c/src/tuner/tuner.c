@@ -28,6 +28,12 @@ extern uint64_t entrypoint(const uint8_t *input) {
     //   sol_sha256(bytes, SOL_ARRAY_SIZE(bytes), result);
     //   *val = result[0];
     // }
+
+    // // Uncomment for Pubkey logging syscall
+    // {
+    //   SolPubkey pubkey;
+    //   sol_log_pubkey(&pubkey);
+    // }
   }
   return *val;
 }
