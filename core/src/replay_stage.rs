@@ -408,7 +408,7 @@ impl ReplayStage {
                         &ancestors,
                         &descendants,
                         &progress,
-                        &tower,
+                        &mut tower,
                     );
                     select_vote_and_reset_forks_time.stop();
 
@@ -1525,7 +1525,7 @@ impl ReplayStage {
         ancestors: &HashMap<u64, HashSet<u64>>,
         descendants: &HashMap<u64, HashSet<u64>>,
         progress: &ProgressMap,
-        tower: &Tower,
+        tower: &mut Tower,
     ) -> SelectVoteAndResetForkResult {
         // Try to vote on the actual heaviest fork. If the heaviest bank is
         // locked out or fails the threshold check, the validator will:
@@ -1552,7 +1552,7 @@ impl ReplayStage {
                     .epoch_vote_accounts(heaviest_bank.epoch())
                     .expect("Bank epoch vote accounts must contain entry for the bank's own epoch"),
             );
-            if switch_fork_decision == SwitchForkDecision::FailedSwitchThreshold {
+            if let SwitchForkDecision::FailedSwitchThreshold(_, _) = switch_fork_decision {
                 // If we can't switch, then reset to the the next votable
                 // bank on the same fork as our last vote, but don't vote
                 info!(
@@ -1601,7 +1601,7 @@ impl ReplayStage {
             if !is_locked_out
                 && vote_threshold
                 && propagation_confirmed
-                && switch_fork_decision != SwitchForkDecision::FailedSwitchThreshold
+                && switch_fork_decision.can_vote()
             {
                 info!("voting: {} {}", bank.slot(), fork_weight);
                 SelectVoteAndResetForkResult {
