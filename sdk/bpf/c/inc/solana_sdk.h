@@ -540,11 +540,9 @@ static uint64_t sol_invoke(
  *
  * @param key The public key to print
  */
-static void sol_log_key(const SolPubkey *key) {
-  for (int j = 0; j < sizeof(*key); j++) {
-    sol_log_64(0, 0, 0, j, key->x[j]);
-  }
-}
+void sol_log_pubkey(
+    const SolPubkey *pubkey
+);
 
 /**
  * Prints the hexadecimal representation of an array
@@ -564,7 +562,7 @@ static void sol_log_array(const uint8_t *array, int len) {
  */
 static void sol_log_params(const SolParameters *params) {
   sol_log("- Program identifier:");
-  sol_log_key(params->program_id);
+  sol_log_pubkey(params->program_id);
 
   sol_log("- Number of KeyedAccounts");
   sol_log_64(0, 0, 0, 0, params->ka_num);
@@ -574,13 +572,13 @@ static void sol_log_params(const SolParameters *params) {
     sol_log("  - Is writable");
     sol_log_64(0, 0, 0, 0, params->ka[i].is_writable);
     sol_log("  - Key");
-    sol_log_key(params->ka[i].key);
+    sol_log_pubkey(params->ka[i].key);
     sol_log("  - Lamports");
     sol_log_64(0, 0, 0, 0, *params->ka[i].lamports);
     sol_log("  - data");
     sol_log_array(params->ka[i].data, params->ka[i].data_len);
     sol_log("  - Owner");
-    sol_log_key(params->ka[i].owner);
+    sol_log_pubkey(params->ka[i].owner);
     sol_log("  - Executable");
     sol_log_64(0, 0, 0, 0, params->ka[i].executable);
     sol_log("  - Rent Epoch");
