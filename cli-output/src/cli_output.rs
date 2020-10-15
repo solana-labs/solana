@@ -132,7 +132,7 @@ impl fmt::Display for CliBlockProduction {
             "{}",
             style(format!(
                 "  {:<44}  {:>15}  {:>15}  {:>15}  {:>23}",
-                "Identity Pubkey",
+                "Identity",
                 "Leader Slots",
                 "Blocks Produced",
                 "Skipped Slots",
@@ -412,8 +412,8 @@ impl fmt::Display for CliValidators {
             "{}",
             style(format!(
                 "  {:<44}  {:<38}  {}  {}  {}  {:>10}  {:^8}  {}",
-                "Identity Pubkey",
-                "Vote Account Pubkey",
+                "Identity",
+                "Vote Account",
                 "Commission",
                 "Last Vote",
                 "Root Block",
@@ -952,8 +952,8 @@ impl VerboseDisplay for CliValidatorInfo {}
 
 impl fmt::Display for CliValidatorInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln_name_value(f, "Validator Identity Pubkey:", &self.identity_pubkey)?;
-        writeln_name_value(f, "  Info Pubkey:", &self.info_pubkey)?;
+        writeln_name_value(f, "Validator Identity:", &self.identity_pubkey)?;
+        writeln_name_value(f, "  Info Address:", &self.info_pubkey)?;
         for (key, value) in self.info.iter() {
             writeln_name_value(
                 f,
