@@ -8,8 +8,8 @@ import styles from "./styles.module.css";
 
 const features = [
   {
-    title: <>⛏ Build an Application</>,
-    imageUrl: "apps",
+    title: <>⛏ Build Your First App</>,
+    imageUrl: "https://github.com/solana-labs/example-helloworld",
     description: <>Get started building your decentralized app or marketplace.</>,
   },
   {
