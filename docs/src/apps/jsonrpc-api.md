@@ -4,7 +4,9 @@ title: JSON RPC API
 
 Solana nodes accept HTTP requests using the [JSON-RPC 2.0](https://www.jsonrpc.org/specification) specification.
 
-To interact with a Solana node inside a JavaScript application, use the [solana-web3.js](https://github.com/solana-labs/solana-web3.js) library, which gives a convenient interface for the RPC methods.
+To interact with a Solana node inside a JavaScript application, use the
+[solana-web3.js](https://github.com/solana-labs/solana-web3.js) library, which
+gives a convenient interface for the RPC methods.
 
 ## RPC HTTP Endpoint
 
@@ -80,7 +82,8 @@ Unstable methods may see breaking changes in patch releases and may not be suppo
 
 ## Request Formatting
 
-To make a JSON-RPC request, send an HTTP POST request with a `Content-Type: application/json` header. The JSON request data should contain 4 fields:
+To make a JSON-RPC request, send an HTTP POST request with a `Content-Type:
+application/json` header. The JSON request data should contain 4 fields:
 
 - `jsonrpc: <string>`, set to `"2.0"`
 - `id: <number>`, a unique client-generated identifying integer
@@ -90,7 +93,16 @@ To make a JSON-RPC request, send an HTTP POST request with a `Content-Type: appl
 Example using curl:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getBalance", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri"]}' 192.168.1.88:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getBalance",
+    "params": [
+      "83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri"
+    ]
+  }
+'
 ```
 
 The response output will be a JSON object with the following fields:
@@ -126,7 +138,19 @@ maximum lockout.
 The commitment parameter should be included as the last element in the `params` array:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getBalance", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri",{"commitment":"max"}]}' 192.168.1.88:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getBalance",
+    "params": [
+      "83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri",
+      {
+        "commitment": "max"
+      }
+    ]
+  }
+'
 ```
 
 #### Default:
@@ -183,18 +207,90 @@ The result will be an RpcResponse JSON object with `value` equal to:
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getAccountInfo", "params":["vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg",{"encoding": "base58"}]}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getAccountInfo",
+    "params": [
+      "vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg",
+      {
+        "encoding": "base58"
+      }
+    ]
+  }
+'
+```
+Response:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 1
+    },
+    "value": {
+      "data": [
+        "11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHRTPuR3oZ1EioKtYGiYxpxMG5vpbZLsbcBYBEmZZcMKaSoGx9JZeAuWf",
+        "base58"
+      ],
+      "executable": false,
+      "lamports": 1000000000,
+      "owner": "11111111111111111111111111111111",
+      "rentEpoch": 2
+    }
+  },
+  "id": 1
+}
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"data":["11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHRTPuR3oZ1EioKtYGiYxpxMG5vpbZLsbcBYBEmZZcMKaSoGx9JZeAuWf","base58"],"executable":false,"lamports":1000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}},"id":1}
-
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getAccountInfo", "params":["4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA",{"encoding":"json"}]}' http://localhost:8899
-
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"data":{"nonce":{"initialized":{"authority":"Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX","blockhash":"3xLP3jK6dVJwpeGeTDYTwdDK3TKchUf1gYYGHa4sF3XJ","feeCalculator":{"lamportsPerSignature":5000}}}},"executable":false,"lamports":1000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}},"id":1}
+#### Example:
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getAccountInfo",
+    "params": [
+      "4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA",
+      {
+        "encoding": "json"
+      }
+    ]
+  }
+'
+```
+Response:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 1
+    },
+    "value": {
+      "data": {
+        "nonce": {
+          "initialized": {
+            "authority": "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
+            "blockhash": "3xLP3jK6dVJwpeGeTDYTwdDK3TKchUf1gYYGHa4sF3XJ",
+            "feeCalculator": {
+              "lamportsPerSignature": 5000
+            }
+          }
+        }
+      },
+      "executable": false,
+      "lamports": 1000000000,
+      "owner": "11111111111111111111111111111111",
+      "rentEpoch": 2
+    }
+  },
+  "id": 1
+}
 ```
 
 ### getBalance
@@ -212,11 +308,15 @@ Returns the balance of the account of provided Pubkey
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getBalance", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri"]}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0", "id":1, "method":"getBalance", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri"]}
+'
+```
 
-// Result
+Result:
+```json
 {"jsonrpc":"2.0","result":{"context":{"slot":1},"value":0},"id":1}
 ```
 
@@ -239,12 +339,23 @@ The result field will be a JSON object containing:
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getBlockCommitment","params":[5]}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getBlockCommitment","params":[5]}
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"commitment":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,32],"totalStake": 42},"id":1}
+Result:
+```json
+{
+  "jsonrpc":"2.0",
+  "result":{
+    "commitment":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,32],
+    "totalStake": 42
+  },
+  "id":1
+}
 ```
 
 ### getBlockTime
@@ -272,11 +383,15 @@ query a node that is built from genesis and retains the entire ledger.
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getBlockTime","params":[5]}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getBlockTime","params":[5]}
+'
+```
 
-// Result
+Result:
+```json
 {"jsonrpc":"2.0","result":1574721591,"id":1}
 ```
 
@@ -300,12 +415,28 @@ The result field will be an array of JSON objects, each with the following sub f
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getClusterNodes"}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0", "id":1, "method":"getClusterNodes"}
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":[{"gossip":"10.239.6.48:8001","pubkey":"9QzsJf7LPLj8GkXbYT3LFDKqsj2hHG7TA3xinJHu8epQ","rpc":"10.239.6.48:8899","tpu":"10.239.6.48:8856"},"version":"1.0.0 c375ce1f"],"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "gossip": "10.239.6.48:8001",
+      "pubkey": "9QzsJf7LPLj8GkXbYT3LFDKqsj2hHG7TA3xinJHu8epQ",
+      "rpc": "10.239.6.48:8899",
+      "tpu": "10.239.6.48:8856",
+      "version": "1.0.0 c375ce1f"
+    }
+  ],
+  "id": 1
+}
 ```
 
 ### getConfirmedBlock
@@ -347,18 +478,137 @@ The result field will be an object with the following fields:
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "json"]}' localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "json"]}
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"blockTime":null,"blockhash":"3Eq21vXNB5s86c62bVuUfTeaMif1N2kUqRPBmGRJhyTA","parentSlot":429,"previousBlockhash":"mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B","rewards":[],"transactions":[{"meta":{"err":null,"fee":5000,"innerInstructions":[],"postBalances":[499998932500,26858640,1,1,1],"preBalances":[499998937500,26858640,1,1,1],"status":{"Ok":null}},"transaction":{"message":{"accountKeys":["3UVYmECPPMZSCqWKfENfuoTv51fTDTWicX9xmBD2euKe","AjozzgE83A3x1sHNUR64hfH7zaEBWeMaFuAN9kQgujrc","SysvarS1otHashes111111111111111111111111111","SysvarC1ock11111111111111111111111111111111","Vote111111111111111111111111111111111111111"],"header":{"numReadonlySignedAccounts":0,"numReadonlyUnsignedAccounts":3,"numRequiredSignatures":1},"instructions":[{"accounts":[1,2,3,0],"data":"37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1","programIdIndex":4}],"recentBlockhash":"mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B"},"signatures":["2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv"]}}]},"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "blockTime": null,
+    "blockhash": "3Eq21vXNB5s86c62bVuUfTeaMif1N2kUqRPBmGRJhyTA",
+    "parentSlot": 429,
+    "previousBlockhash": "mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B",
+    "rewards": [],
+    "transactions": [
+      {
+        "meta": {
+          "err": null,
+          "fee": 5000,
+          "innerInstructions": [],
+          "postBalances": [
+            499998932500,
+            26858640,
+            1,
+            1,
+            1
+          ],
+          "preBalances": [
+            499998937500,
+            26858640,
+            1,
+            1,
+            1
+          ],
+          "status": {
+            "Ok": null
+          }
+        },
+        "transaction": {
+          "message": {
+            "accountKeys": [
+              "3UVYmECPPMZSCqWKfENfuoTv51fTDTWicX9xmBD2euKe",
+              "AjozzgE83A3x1sHNUR64hfH7zaEBWeMaFuAN9kQgujrc",
+              "SysvarS1otHashes111111111111111111111111111",
+              "SysvarC1ock11111111111111111111111111111111",
+              "Vote111111111111111111111111111111111111111"
+            ],
+            "header": {
+              "numReadonlySignedAccounts": 0,
+              "numReadonlyUnsignedAccounts": 3,
+              "numRequiredSignatures": 1
+            },
+            "instructions": [
+              {
+                "accounts": [
+                  1,
+                  2,
+                  3,
+                  0
+                ],
+                "data": "37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1",
+                "programIdIndex": 4
+              }
+            ],
+            "recentBlockhash": "mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B"
+          },
+          "signatures": [
+            "2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv"
+          ]
+        }
+      }
+    ]
+  },
+  "id": 1
+}
+```
 
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "base64"]}' localhost:8899
+#### Example:
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[430, "base64"]}
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"blockTime":null,"blockhash":"3Eq21vXNB5s86c62bVuUfTeaMif1N2kUqRPBmGRJhyTA","parentSlot":429,"previousBlockhash":"mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B","rewards":[],"transactions":[{"meta":{"err":null,"fee":5000,"innerInstructions":[],"postBalances":[499998932500,26858640,1,1,1],"preBalances":[499998937500,26858640,1,1,1],"status":{"Ok":null}},"transaction":["AVj7dxHlQ9IrvdYVIjuiRFs1jLaDMHixgrv+qtHBwz51L4/ImLZhszwiyEJDIp7xeBSpm/TX5B7mYzxa+fPOMw0BAAMFJMJVqLw+hJYheizSoYlLm53KzgT82cDVmazarqQKG2GQsLgiqktA+a+FDR4/7xnDX7rsusMwryYVUdixfz1B1Qan1RcZLwqvxvJl4/t3zHragsUp0L47E24tAFUgAAAABqfVFxjHdMkoVmOYaR1etoteuKObS21cc1VbIQAAAAAHYUgdNXR0u3xNdiTr072z2DVec9EQQ/wNo1OAAAAAAAtxOUhPBp2WSjUNJEgfvy70BbxI00fZyEPvFHNfxrtEAQQEAQIDADUCAAAAAQAAAAAAAACtAQAAAAAAAAdUE18R96XTJCe+YfRfUp6WP+YKCy/72ucOL8AoBFSpAA==","base64"]}]},"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "blockTime": null,
+    "blockhash": "3Eq21vXNB5s86c62bVuUfTeaMif1N2kUqRPBmGRJhyTA",
+    "parentSlot": 429,
+    "previousBlockhash": "mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B",
+    "rewards": [],
+    "transactions": [
+      {
+        "meta": {
+          "err": null,
+          "fee": 5000,
+          "innerInstructions": [],
+          "postBalances": [
+            499998932500,
+            26858640,
+            1,
+            1,
+            1
+          ],
+          "preBalances": [
+            499998937500,
+            26858640,
+            1,
+            1,
+            1
+          ],
+          "status": {
+            "Ok": null
+          }
+        },
+        "transaction": [
+          "AVj7dxHlQ9IrvdYVIjuiRFs1jLaDMHixgrv+qtHBwz51L4/ImLZhszwiyEJDIp7xeBSpm/TX5B7mYzxa+fPOMw0BAAMFJMJVqLw+hJYheizSoYlLm53KzgT82cDVmazarqQKG2GQsLgiqktA+a+FDR4/7xnDX7rsusMwryYVUdixfz1B1Qan1RcZLwqvxvJl4/t3zHragsUp0L47E24tAFUgAAAABqfVFxjHdMkoVmOYaR1etoteuKObS21cc1VbIQAAAAAHYUgdNXR0u3xNdiTr072z2DVec9EQQ/wNo1OAAAAAAAtxOUhPBp2WSjUNJEgfvy70BbxI00fZyEPvFHNfxrtEAQQEAQIDADUCAAAAAQAAAAAAAACtAQAAAAAAAAdUE18R96XTJCe+YfRfUp6WP+YKCy/72ucOL8AoBFSpAA==",
+          "base64"
+        ]
+      }
+    ]
+  },
+  "id": 1
+}
 ```
 
 #### Transaction Structure
@@ -410,11 +660,15 @@ inclusive.  Max range allowed is 500,000 slots.
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocks","params":[5, 10]}' localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocks","params":[5, 10]}
+'
+```
 
-// Result
+Result:
+```json
 {"jsonrpc":"2.0","result":[5,6,7,8,9,10],"id":1}
 ```
 
@@ -434,11 +688,15 @@ starting at `start_slot` for up to `limit` blocks, inclusive.
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlockWithLimit2","params":[5, 3]}' localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlockWithLimit2","params":[5, 3]}
+'
+```
 
-// Result
+Result:
+```json
 {"jsonrpc":"2.0","result":[5,6,7],"id":1}
 ```
 
@@ -465,14 +723,34 @@ The signatures will be ordered based on the Slot in which they were confirmed in
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedSignaturesForAddress","params":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", 0, 100]}' localhost:8899
-
-// Result
-{"jsonrpc":"2.0","result":{["35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby","4bJdGN8Tt2kLWZ3Fa1dpwPSEkXWWTSszPSf1rRVsCwNjxbbUdwTeiWtmi8soA26YmwnKD4aAxNp8ci1Gjpdv4gsr","4LQ14a7BYY27578Uj8LPCaVhSdJGLn9DJqnUJHpy95FMqdKf9acAhUhecPQNjNUy6VoNFUbvwYkPociFSf87cWbG"]},"id":1}
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getConfirmedSignaturesForAddress",
+    "params": [
+      "6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC",
+      0,
+      100
+    ]
+  }
+'
 ```
 
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    "35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby",
+    "4bJdGN8Tt2kLWZ3Fa1dpwPSEkXWWTSszPSf1rRVsCwNjxbbUdwTeiWtmi8soA26YmwnKD4aAxNp8ci1Gjpdv4gsr",
+    "4LQ14a7BYY27578Uj8LPCaVhSdJGLn9DJqnUJHpy95FMqdKf9acAhUhecPQNjNUy6VoNFUbvwYkPociFSf87cWbG"
+  ],
+  "id": 1
+}
+```
 
 ### getConfirmedSignaturesForAddress2
 
@@ -497,12 +775,37 @@ from newest to oldest transaction:
   * `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
 
 #### Example:
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedSignaturesForAddress2","params":["Vote111111111111111111111111111111111111111", {"limit": 1}]}' localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getConfirmedSignaturesForAddress2",
+    "params": [
+      "Vote111111111111111111111111111111111111111",
+      {
+        "limit": 1
+      }
+    ]
+  }
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":[{"err":null,"memo":null,"signature":"5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv","slot":114}],"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "err": null,
+      "memo": null,
+      "signature": "5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv",
+      "slot": 114
+    }
+  ],
+  "id": 1
+}
 ```
 
 ### getConfirmedTransaction
@@ -532,19 +835,137 @@ N encoding attempts to use program-specific instruction parsers to return more h
       - `"Err": <ERR>` - Transaction failed with TransactionError
 
 #### Example:
-
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedTransaction","params":["2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv", "json"]}' localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getConfirmedTransaction",
+    "params": [
+      "2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv",
+      "json"
+    ]
+  }
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"meta":{"err":null,"fee":5000,"innerInstructions":[],"postBalances":[499998932500,26858640,1,1,1],"preBalances":[499998937500,26858640,1,1,1],"status":{"Ok":null}},"slot":430,"transaction":{"message":{"accountKeys":["3UVYmECPPMZSCqWKfENfuoTv51fTDTWicX9xmBD2euKe","AjozzgE83A3x1sHNUR64hfH7zaEBWeMaFuAN9kQgujrc","SysvarS1otHashes111111111111111111111111111","SysvarC1ock11111111111111111111111111111111","Vote111111111111111111111111111111111111111"],"header":{"numReadonlySignedAccounts":0,"numReadonlyUnsignedAccounts":3,"numRequiredSignatures":1},"instructions":[{"accounts":[1,2,3,0],"data":"37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1","programIdIndex":4}],"recentBlockhash":"mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B"},"signatures":["2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv"]}},"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "meta": {
+      "err": null,
+      "fee": 5000,
+      "innerInstructions": [],
+      "postBalances": [
+        499998932500,
+        26858640,
+        1,
+        1,
+        1
+      ],
+      "preBalances": [
+        499998937500,
+        26858640,
+        1,
+        1,
+        1
+      ],
+      "status": {
+        "Ok": null
+      }
+    },
+    "slot": 430,
+    "transaction": {
+      "message": {
+        "accountKeys": [
+          "3UVYmECPPMZSCqWKfENfuoTv51fTDTWicX9xmBD2euKe",
+          "AjozzgE83A3x1sHNUR64hfH7zaEBWeMaFuAN9kQgujrc",
+          "SysvarS1otHashes111111111111111111111111111",
+          "SysvarC1ock11111111111111111111111111111111",
+          "Vote111111111111111111111111111111111111111"
+        ],
+        "header": {
+          "numReadonlySignedAccounts": 0,
+          "numReadonlyUnsignedAccounts": 3,
+          "numRequiredSignatures": 1
+        },
+        "instructions": [
+          {
+            "accounts": [
+              1,
+              2,
+              3,
+              0
+            ],
+            "data": "37u9WtQpcm6ULa3WRQHmj49EPs4if7o9f1jSRVZpm2dvihR9C8jY4NqEwXUbLwx15HBSNcP1",
+            "programIdIndex": 4
+          }
+        ],
+        "recentBlockhash": "mfcyqEXB3DnHXki6KjjmZck6YjmZLvpAByy2fj4nh6B"
+      },
+      "signatures": [
+        "2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv"
+      ]
+    }
+  },
+  "id": 1
+}
+```
 
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedTransaction","params":["2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv", "base64"]}' localhost:8899
+#### Example:
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getConfirmedTransaction",
+    "params": [
+      "2nBhEBYYvfaAe16UMNqRHre4YNSskvuYgx3M6E4JP1oDYvZEJHvoPzyUidNgNX5r9sTyN1J9UxtbCXy2rqYcuyuv",
+      "base64"
+    ]
+  }
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"meta":{"err":null,"fee":5000,"innerInstructions":[],"postBalances":[499998932500,26858640,1,1,1],"preBalances":[499998937500,26858640,1,1,1],"status":{"Ok":null}},"slot":430,"transaction":["AVj7dxHlQ9IrvdYVIjuiRFs1jLaDMHixgrv+qtHBwz51L4/ImLZhszwiyEJDIp7xeBSpm/TX5B7mYzxa+fPOMw0BAAMFJMJVqLw+hJYheizSoYlLm53KzgT82cDVmazarqQKG2GQsLgiqktA+a+FDR4/7xnDX7rsusMwryYVUdixfz1B1Qan1RcZLwqvxvJl4/t3zHragsUp0L47E24tAFUgAAAABqfVFxjHdMkoVmOYaR1etoteuKObS21cc1VbIQAAAAAHYUgdNXR0u3xNdiTr072z2DVec9EQQ/wNo1OAAAAAAAtxOUhPBp2WSjUNJEgfvy70BbxI00fZyEPvFHNfxrtEAQQEAQIDADUCAAAAAQAAAAAAAACtAQAAAAAAAAdUE18R96XTJCe+YfRfUp6WP+YKCy/72ucOL8AoBFSpAA==","base64"]},"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "meta": {
+      "err": null,
+      "fee": 5000,
+      "innerInstructions": [],
+      "postBalances": [
+        499998932500,
+        26858640,
+        1,
+        1,
+        1
+      ],
+      "preBalances": [
+        499998937500,
+        26858640,
+        1,
+        1,
+        1
+      ],
+      "status": {
+        "Ok": null
+      }
+    },
+    "slot": 430,
+    "transaction": [
+      "AVj7dxHlQ9IrvdYVIjuiRFs1jLaDMHixgrv+qtHBwz51L4/ImLZhszwiyEJDIp7xeBSpm/TX5B7mYzxa+fPOMw0BAAMFJMJVqLw+hJYheizSoYlLm53KzgT82cDVmazarqQKG2GQsLgiqktA+a+FDR4/7xnDX7rsusMwryYVUdixfz1B1Qan1RcZLwqvxvJl4/t3zHragsUp0L47E24tAFUgAAAABqfVFxjHdMkoVmOYaR1etoteuKObS21cc1VbIQAAAAAHYUgdNXR0u3xNdiTr072z2DVec9EQQ/wNo1OAAAAAAAtxOUhPBp2WSjUNJEgfvy70BbxI00fZyEPvFHNfxrtEAQQEAQIDADUCAAAAAQAAAAAAAACtAQAAAAAAAAdUE18R96XTJCe+YfRfUp6WP+YKCy/72ucOL8AoBFSpAA==",
+      "base64"
+    ]
+  },
+  "id": 1
+}
 ```
 
 ### getEpochInfo
@@ -567,12 +988,26 @@ The result field will be an object with the following fields:
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"absoluteSlot":166598,"blockHeight": 166500, "epoch":27,"slotIndex":2790,"slotsInEpoch":8192},"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "absoluteSlot": 166598,
+    "blockHeight": 166500,
+    "epoch": 27,
+    "slotIndex": 2790,
+    "slotsInEpoch": 8192
+  },
+  "id": 1
+}
 ```
 
 ### getEpochSchedule
@@ -595,12 +1030,26 @@ The result field will be an object with the following fields:
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochSchedule"}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getEpochSchedule"}
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"firstNormalEpoch":8,"firstNormalSlot":8160,"leaderScheduleSlotOffset":8192,"slotsPerEpoch":8192,"warmup":true},"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "firstNormalEpoch": 8,
+    "firstNormalSlot": 8160,
+    "leaderScheduleSlotOffset": 8192,
+    "slotsPerEpoch": 8192,
+    "warmup": true
+  },
+  "id": 1
+}
 ```
 
 ### getFeeCalculatorForBlockhash
@@ -622,12 +1071,36 @@ The result will be an RpcResponse JSON object with `value` equal to:
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getFeeCalculatorForBlockhash", "params":["GJxqhuxcgfn5Tcj6y3f8X4FeCDd2RQ6SnEMo1AAxrPRZ"]}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getFeeCalculatorForBlockhash",
+    "params": [
+      "GJxqhuxcgfn5Tcj6y3f8X4FeCDd2RQ6SnEMo1AAxrPRZ"
+    ]
+  }
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":221},"value":{"feeCalculator":{"lamportsPerSignature":5000}}},"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 221
+    },
+    "value": {
+      "feeCalculator": {
+        "lamportsPerSignature": 5000
+      }
+    }
+  },
+  "id": 1
+}
 ```
 
 ### getFeeRateGovernor
@@ -650,12 +1123,33 @@ The `result` field will be an `object` with the following fields:
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getFeeRateGovernor"}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getFeeRateGovernor"}
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":54},"value":{"feeRateGovernor":{"burnPercent":50,"maxLamportsPerSignature":100000,"minLamportsPerSignature":5000,"targetLamportsPerSignature":10000,"targetSignaturesPerSlot":20000}}},"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 54
+    },
+    "value": {
+      "feeRateGovernor": {
+        "burnPercent": 50,
+        "maxLamportsPerSignature": 100000,
+        "minLamportsPerSignature": 5000,
+        "targetLamportsPerSignature": 10000,
+        "targetSignaturesPerSlot": 20000
+      }
+    }
+  },
+  "id": 1
+}
 ```
 
 ### getFees
@@ -678,12 +1172,31 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getFees"}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getFees"}
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"blockhash":"CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR","feeCalculator":{"lamportsPerSignature":5000},"lastValidSlot":297}},"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 1
+    },
+    "value": {
+      "blockhash": "CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR",
+      "feeCalculator": {
+        "lamportsPerSignature": 5000
+      },
+      "lastValidSlot": 297
+    }
+  },
+  "id": 1
+}
 ```
 
 ### getFirstAvailableBlock
@@ -700,11 +1213,15 @@ None
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getFirstAvailableBlock"}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getFirstAvailableBlock"}
+'
+```
 
-// Result
+Result:
+```json
 {"jsonrpc":"2.0","result":250000,"id":1}
 ```
 
@@ -722,11 +1239,15 @@ None
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getGenesisHash"}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getGenesisHash"}
+'
+```
 
-// Result
+Result:
+```json
 {"jsonrpc":"2.0","result":"GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC","id":1}
 ```
 
@@ -746,10 +1267,15 @@ The result field will be a JSON object with the following fields:
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getIdentity"}' http://localhost:8899
-// Result
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getIdentity"}
+'
+```
+
+Result:
+```json
 {"jsonrpc":"2.0","result":{"identity": "2r1F4iWqVcb8M1DbAjQuFpebkQHY9hcVU4WuW2DJBppN"},"id":1}
 ```
 
@@ -773,12 +1299,26 @@ The result field will be a JSON object with the following fields:
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getInflationGovernor"}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getInflationGovernor"}
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"foundation":0.05,"foundationTerm":7.0,"initial":0.15,"taper":0.15,"terminal":0.015},"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "foundation": 0.05,
+    "foundationTerm": 7,
+    "initial": 0.15,
+    "taper": 0.15,
+    "terminal": 0.015
+  },
+  "id": 1
+}
 ```
 
 ### getInflationRate
@@ -800,11 +1340,15 @@ The result field will be a JSON object with the following fields:
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getInflationRate"}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getInflationRate"}
+'
+```
 
-// Result
+Result:
+```json
 {"jsonrpc":"2.0","result":{"epoch":100,"foundation":0.001,"total":0.149,"validator":0.148},"id":1}
 ```
 
@@ -828,12 +1372,98 @@ The result will be an RpcResponse JSON object with `value` equal to an array of:
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getLargestAccounts"}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getLargestAccounts"}
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":54},"value":[{"lamports":999974,"address":"99P8ZgtJYe1buSK8JXkvpLh8xPsCFuLYhz9hQFNw93WJ"},{"lamports":42,"address":"uPwWLo16MVehpyWqsLkK3Ka8nLowWvAHbBChqv2FZeL"},{"lamports":42,"address":"aYJCgU7REfu3XF8b3QhkqgqQvLizx8zxuLBHA25PzDS"},{"lamports":42,"address":"CTvHVtQ4gd4gUcw3bdVgZJJqApXE9nCbbbP4VTS5wE1D"},{"lamports":20,"address":"4fq3xJ6kfrh9RkJQsmVd5gNMvJbuSHfErywvEjNQDPxu"},{"lamports":4,"address":"AXJADheGVp9cruP8WYu46oNkRbeASngN5fPCMVGQqNHa"},{"lamports":2,"address":"8NT8yS6LiwNprgW4yM1jPPow7CwRUotddBVkrkWgYp24"},{"lamports":1,"address":"SysvarEpochSchedu1e111111111111111111111111"},{"lamports":1,"address":"11111111111111111111111111111111"},{"lamports":1,"address":"Stake11111111111111111111111111111111111111"},{"lamports":1,"address":"SysvarC1ock11111111111111111111111111111111"},{"lamports":1,"address":"StakeConfig11111111111111111111111111111111"},{"lamports":1,"address":"SysvarRent111111111111111111111111111111111"},{"lamports":1,"address":"Config1111111111111111111111111111111111111"},{"lamports":1,"address":"SysvarStakeHistory1111111111111111111111111"},{"lamports":1,"address":"SysvarRecentB1ockHashes11111111111111111111"},{"lamports":1,"address":"SysvarFees111111111111111111111111111111111"},{"lamports":1,"address":"Vote111111111111111111111111111111111111111"}]},"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 54
+    },
+    "value": [
+      {
+        "lamports": 999974,
+        "address": "99P8ZgtJYe1buSK8JXkvpLh8xPsCFuLYhz9hQFNw93WJ"
+      },
+      {
+        "lamports": 42,
+        "address": "uPwWLo16MVehpyWqsLkK3Ka8nLowWvAHbBChqv2FZeL"
+      },
+      {
+        "lamports": 42,
+        "address": "aYJCgU7REfu3XF8b3QhkqgqQvLizx8zxuLBHA25PzDS"
+      },
+      {
+        "lamports": 42,
+        "address": "CTvHVtQ4gd4gUcw3bdVgZJJqApXE9nCbbbP4VTS5wE1D"
+      },
+      {
+        "lamports": 20,
+        "address": "4fq3xJ6kfrh9RkJQsmVd5gNMvJbuSHfErywvEjNQDPxu"
+      },
+      {
+        "lamports": 4,
+        "address": "AXJADheGVp9cruP8WYu46oNkRbeASngN5fPCMVGQqNHa"
+      },
+      {
+        "lamports": 2,
+        "address": "8NT8yS6LiwNprgW4yM1jPPow7CwRUotddBVkrkWgYp24"
+      },
+      {
+        "lamports": 1,
+        "address": "SysvarEpochSchedu1e111111111111111111111111"
+      },
+      {
+        "lamports": 1,
+        "address": "11111111111111111111111111111111"
+      },
+      {
+        "lamports": 1,
+        "address": "Stake11111111111111111111111111111111111111"
+      },
+      {
+        "lamports": 1,
+        "address": "SysvarC1ock11111111111111111111111111111111"
+      },
+      {
+        "lamports": 1,
+        "address": "StakeConfig11111111111111111111111111111111"
+      },
+      {
+        "lamports": 1,
+        "address": "SysvarRent111111111111111111111111111111111"
+      },
+      {
+        "lamports": 1,
+        "address": "Config1111111111111111111111111111111111111"
+      },
+      {
+        "lamports": 1,
+        "address": "SysvarStakeHistory1111111111111111111111111"
+      },
+      {
+        "lamports": 1,
+        "address": "SysvarRecentB1ockHashes11111111111111111111"
+      },
+      {
+        "lamports": 1,
+        "address": "SysvarFees111111111111111111111111111111111"
+      },
+      {
+        "lamports": 1,
+        "address": "Vote111111111111111111111111111111111111111"
+      }
+    ]
+  },
+  "id": 1
+}
 ```
 
 ### getLeaderSchedule
@@ -854,12 +1484,22 @@ Returns the leader schedule for an epoch
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getLeaderSchedule"}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getLeaderSchedule"}
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63]},"id":1}
+Result:
+```json
+{
+  "jsonrpc":"2.0",
+  "result":{
+    "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63]
+  },
+  "id":1
+}
 ```
 
 ### getMinimumBalanceForRentExemption
@@ -877,11 +1517,15 @@ Returns minimum balance required to make account rent exempt.
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getMinimumBalanceForRentExemption", "params":[50]}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0", "id":1, "method":"getMinimumBalanceForRentExemption", "params":[50]}
+'
+```
 
-// Result
+Result:
+```json
 {"jsonrpc":"2.0","result":500,"id":1}
 ```
 
@@ -914,18 +1558,118 @@ An array of:
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getMultipleAccounts", "params":[["vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg", "4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA"],{"dataSlice":{"offset":0,"length":0}}]}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getMultipleAccounts",
+    "params": [
+      [
+        "vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg",
+        "4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA"
+      ],
+      {
+        "dataSlice": {
+          "offset": 0,
+          "length": 0
+        }
+      }
+    ]
+  }
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"data":["AAAAAAEAAAACtzNsyJrW0g==","base64"],"executable":false,"lamports":1000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}},{"data":["","base64"],"executable":false,"lamports":5000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}}],"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 1
+    },
+    "value": [
+      {
+        "data": [
+          "AAAAAAEAAAACtzNsyJrW0g==",
+          "base64"
+        ],
+        "executable": false,
+        "lamports": 1000000000,
+        "owner": "11111111111111111111111111111111",
+        "rentEpoch": 2
+      },
+      {
+        "data": [
+          "",
+          "base64"
+        ],
+        "executable": false,
+        "lamports": 5000000000,
+        "owner": "11111111111111111111111111111111",
+        "rentEpoch": 2
+      }
+    ]
+  },
+  "id": 1
+}
+```
 
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getMultipleAccounts", "params":[["vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg", "4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA"],{"encoding": "base58"}]}' http://localhost:8899
+#### Example:
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getMultipleAccounts",
+    "params": [
+      [
+        "vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg",
+        "4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA"
+      ],
+      {
+        "encoding": "base58"
+      }
+    ]
+  }
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"data":["11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHRTPuR3oZ1EioKtYGiYxpxMG5vpbZLsbcBYBEmZZcMKaSoGx9JZeAuWf","base58"],"executable":false,"lamports":1000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}},{"data":["","base58"],"executable":false,"lamports":5000000000,"owner":"11111111111111111111111111111111","rentEpoch":2}}],"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 1
+    },
+    "value": [
+      {
+        "data": [
+          "11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHRTPuR3oZ1EioKtYGiYxpxMG5vpbZLsbcBYBEmZZcMKaSoGx9JZeAuWf",
+          "base58"
+        ],
+        "executable": false,
+        "lamports": 1000000000,
+        "owner": "11111111111111111111111111111111",
+        "rentEpoch": 2
+      },
+      {
+        "data": [
+          "",
+          "base58"
+        ],
+        "executable": false,
+        "lamports": 5000000000,
+        "owner": "11111111111111111111111111111111",
+        "rentEpoch": 2
+      }
+    ]
+  },
+  "id": 1
+}
 ```
 
 ### getProgramAccounts
@@ -962,19 +1706,79 @@ The result field will be an array of JSON objects, which will contain:
    - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
 #### Example:
-
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getProgramAccounts", "params":["4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"]}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0", "id":1, "method":"getProgramAccounts", "params":["4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"]}
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":[{"account":{"data":"2R9jLfiAQ9bgdcw6h8s44439","executable":false,"lamports":15298080,"owner":"4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T","rentEpoch":28},"pubkey":"CxELquR1gPP8wHe33gZ4QxqGB3sZ9RSwsJ2KshVewkFY"}],"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "account": {
+        "data": "2R9jLfiAQ9bgdcw6h8s44439",
+        "executable": false,
+        "lamports": 15298080,
+        "owner": "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
+        "rentEpoch": 28
+      },
+      "pubkey": "CxELquR1gPP8wHe33gZ4QxqGB3sZ9RSwsJ2KshVewkFY"
+    }
+  ],
+  "id": 1
+}
+```
 
-// Request with Filters
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getProgramAccounts", "params":["4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T", {"filters":[{"dataSize": 17},{"memcmp": {"offset": 4, "bytes": "3Mc6vR"}}]}]}' http://localhost:8899
+#### Example:
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getProgramAccounts",
+    "params": [
+      "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
+      {
+        "filters": [
+          {
+            "dataSize": 17
+          },
+          {
+            "memcmp": {
+              "offset": 4,
+              "bytes": "3Mc6vR"
+            }
+          }
+        ]
+      }
+    ]
+  }
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":[{"account":{"data":"2R9jLfiAQ9bgdcw6h8s44439","executable":false,"lamports":15298080,"owner":"4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T","rentEpoch":28},"pubkey":"CxELquR1gPP8wHe33gZ4QxqGB3sZ9RSwsJ2KshVewkFY"}],"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "account": {
+        "data": "2R9jLfiAQ9bgdcw6h8s44439",
+        "executable": false,
+        "lamports": 15298080,
+        "owner": "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
+        "rentEpoch": 28
+      },
+      "pubkey": "CxELquR1gPP8wHe33gZ4QxqGB3sZ9RSwsJ2KshVewkFY"
+    }
+  ],
+  "id": 1
+}
 ```
 
 ### getRecentBlockhash
@@ -995,12 +1799,30 @@ An RpcResponse containing a JSON object consisting of a string blockhash and Fee
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getRecentBlockhash"}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d 'i
+  {"jsonrpc":"2.0","id":1, "method":"getRecentBlockhash"}
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"blockhash":"CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR","feeCalculator":{"lamportsPerSignature":5000}}},"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 1
+    },
+    "value": {
+      "blockhash": "CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR",
+      "feeCalculator": {
+        "lamportsPerSignature": 5000
+      }
+    }
+  },
+  "id": 1
+}
 ```
 
 ### getRecentPerformanceSamples
@@ -1023,13 +1845,46 @@ An array of:
 
 #### Example:
 
+Request:
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getRecentPerformanceSamples", "params": [4]}'
-http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0", "id":1, "method":"getRecentPerformanceSamples", "params": [4]}
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":[{"numSlots":126,"numTransactions":126,"samplePeriodSecs":60,"slot":348125},{"numSlots":126,"numTransactions":126,"samplePeriodSecs":60,"slot":347999},{"numSlots":125,"numTransactions":125,"samplePeriodSecs":60,"slot":347873},{"numSlots":125,"numTransactions":125,"samplePeriodSecs":60,"slot":347748}],"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "numSlots": 126,
+      "numTransactions": 126,
+      "samplePeriodSecs": 60,
+      "slot": 348125
+    },
+    {
+      "numSlots": 126,
+      "numTransactions": 126,
+      "samplePeriodSecs": 60,
+      "slot": 347999
+    },
+    {
+      "numSlots": 125,
+      "numTransactions": 125,
+      "samplePeriodSecs": 60,
+      "slot": 347873
+    },
+    {
+      "numSlots": 125,
+      "numTransactions": 125,
+      "samplePeriodSecs": 60,
+      "slot": 347748
+    }
+  ],
+  "id": 1
+}
 ```
 
 ### getSignatureStatuses
@@ -1064,18 +1919,89 @@ An array of:
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatuses", "params":[["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW", "5j7s6NiJS3JAkvgkoc18WVAsiSaci2pxB2A6ueCJP4tprA2TFg9wSyTLeYouxPBJEMzJinENTkpA52YStRW5Dia7"]]}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getSignatureStatuses",
+    "params": [
+      [
+        "5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW",
+        "5j7s6NiJS3JAkvgkoc18WVAsiSaci2pxB2A6ueCJP4tprA2TFg9wSyTLeYouxPBJEMzJinENTkpA52YStRW5Dia7"
+      ]
+    ]
+  }
+'
+```
 
-// Request with configuration
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatuses", "params":[["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW"], {"searchTransactionHistory": true}]}' http://localhost:8899
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 82
+    },
+    "value": [
+      {
+        "slot": 72,
+        "confirmations": 10,
+        "err": null,
+        "status": {
+          "Ok": null
+        }
+      },
+      null
+    ]
+  },
+  "id": 1
+}
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":82},"value":[{"slot": 72, "confirmations": 10, "err": null, "status": {"Ok": null}}, null]},"id":1}
+#### Example:
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getSignatureStatuses",
+    "params": [
+      [
+        "5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW"
+      ],
+      {
+        "searchTransactionHistory": true
+      }
+    ]
+  }
+'
+```
 
-// Result, first transaction rooted
-{"jsonrpc":"2.0","result":{"context":{"slot":82},"value":[{"slot": 48, "confirmations": null, "err": null, "status": {"Ok": null}}, null]},"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 82
+    },
+    "value": [
+      {
+        "slot": 48,
+        "confirmations": null,
+        "err": null,
+        "status": {
+          "Ok": null
+        }
+      },
+      null
+    ]
+  },
+  "id": 1
+}
 ```
 
 ### getSlot
@@ -1092,11 +2018,15 @@ Returns the current slot the node is processing
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getSlot"}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getSlot"}
+'
+```
 
-// Result
+Result:
+```json
 {"jsonrpc":"2.0","result":1234,"id":1}
 ```
 
@@ -1114,11 +2044,15 @@ Returns the current slot leader
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getSlotLeader"}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getSlotLeader"}
+'
+```
 
-// Result
+Result:
+```json
 {"jsonrpc":"2.0","result":"ENvAW7JScgYq6o4zKZwewtkzzJgDzuJAFxYasvmEQdpS","id":1}
 ```
 
@@ -1142,19 +2076,47 @@ The result will be a JSON object with the following fields:
 * `inactive: <u64>` - stake inactive during the epoch
 
 #### Example:
-
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStakeActivation", "params": ["CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT"]}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getStakeActivation", "params": ["CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT"]}
+'
+```
 
-// Result
+Result:
+```json
 {"jsonrpc":"2.0","result":{"active":197717120,"inactive":0,"state":"active"},"id":1}
+```
 
-// Request with Epoch
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getStakeActivation", "params": ["CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT", {"epoch": 4}]}' http://localhost:8899
+#### Example:
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getStakeActivation",
+    "params": [
+      "CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT",
+      {
+        "epoch": 4
+      }
+    ]
+  }
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"active":124429280,"inactive":73287840,"state":"activating"},"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "active": 124429280,
+    "inactive": 73287840,
+    "state": "activating"
+  },
+  "id": 1
+}
 ```
 
 ### getSupply
@@ -1176,11 +2138,35 @@ The result will be an RpcResponse JSON object with `value` equal to a JSON objec
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSupply"}' http://localhost:8899
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":{"circulating":16000,"nonCirculating":1000000,"nonCirculatingAccounts":["FEy8pTbP5fEoqMV1GdTz83byuA8EKByqYat1PKDgVAq5","9huDUZfxoJ7wGMTffUE7vh1xePqef7gyrLJu9NApncqA","3mi1GmwEE3zo2jmfDuzvjSX9ovRXsDUKHvsntpkhuLJ9","BYxEJTDerkaRWBem3XgnVcdhppktBXa2HbkHPKj2Ui4Z],total:1016000}},"id":1}
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0", "id":1, "method":"getSupply"}
+'
+```
+
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 1114
+    },
+    "value": {
+      "circulating": 16000,
+      "nonCirculating": 1000000,
+      "nonCirculatingAccounts": [
+        "FEy8pTbP5fEoqMV1GdTz83byuA8EKByqYat1PKDgVAq5",
+        "9huDUZfxoJ7wGMTffUE7vh1xePqef7gyrLJu9NApncqA",
+        "3mi1GmwEE3zo2jmfDuzvjSX9ovRXsDUKHvsntpkhuLJ9",
+        "BYxEJTDerkaRWBem3XgnVcdhppktBXa2HbkHPKj2Ui4Z"
+      ],
+      "total": 1016000
+    }
+  },
+  "id": 1
+}
 ```
 
 ### getTokenAccountBalance
@@ -1202,11 +2188,29 @@ The result will be an RpcResponse JSON object with `value` equal to a JSON objec
 
 #### Example:
 
+Request:
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenAccountBalance", "params": ["7fUAJdStEuGbc3sM84cKRL6yYaaSstyLSU4ve5oovLS7"]}' http://localhost:8899
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":{"uiAmount":98.64,"amount":"9864","decimals":2},"id":1}
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0", "id":1, "method":"getTokenAccountBalance", "params": ["7fUAJdStEuGbc3sM84cKRL6yYaaSstyLSU4ve5oovLS7"]}
+'
+```
+
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 1114
+    },
+    "value": {
+      "uiAmount": 98.64,
+      "amount": "9864",
+      "decimals": 2
+    },
+    "id": 1
+  }
+}
 ```
 
 ### getTokenAccountsByDelegate
@@ -1240,10 +2244,62 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
 #### Example:
 
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenAccountsByDelegate", "params": ["4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T", {"programId": "TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o"}, {"encoding": "jsonParsed"}]}' http://localhost:8899
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":[{"data":{"program":"spl-token","parsed":{"accountType":"account","info":{"tokenAmount":{"amount":"1","uiAmount":0.1,"decimals":1},"delegate":"4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T","delegatedAmount":1,"isInitialized":true,"isNative":false,"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E","owner":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}}},"executable":false,"lamports":1726080,"owner":"TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o","rentEpoch":4},"pubkey":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}],"id":1}
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getTokenAccountsByDelegate",
+    "params": [
+      "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
+      {
+        "programId": "TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o"
+      },
+      {
+        "encoding": "jsonParsed"
+      }
+    ]
+  }
+'
+```
+
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 1114
+    },
+    "value": [
+      {
+        "data": {
+          "program": "spl-token",
+          "parsed": {
+            "accountType": "account",
+            "info": {
+              "tokenAmount": {
+                "amount": "1",
+                "uiAmount": 0.1,
+                "decimals": 1
+              },
+              "delegate": "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
+              "delegatedAmount": 1,
+              "isInitialized": true,
+              "isNative": false,
+              "mint": "3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E",
+              "owner": "CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"
+            }
+          }
+        },
+        "executable": false,
+        "lamports": 1726080,
+        "owner": "TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o",
+        "rentEpoch": 4
+      }
+    ]
+  },
+  "id": 1
+}
 ```
 
 ### getTokenAccountsByOwner
@@ -1277,10 +2333,62 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
 #### Example:
 
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenAccountsByOwner", "params": ["4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F", {"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"}, {"encoding": "jsonParsed"}]}' http://localhost:8899
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":[{"data":{"program":"spl-token","parsed":{"accountType":"account","info":{"tokenAmount":{"amount":"1","uiAmount":0.1,"decimals":1},"delegate":null,"delegatedAmount":1,"isInitialized":true,"isNative":false,"mint":"3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E","owner":"4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F"}}},"executable":false,"lamports":1726080,"owner":"TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o","rentEpoch":4},"pubkey":"CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"}],"id":1}
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getTokenAccountsByOwner",
+    "params": [
+      "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F",
+      {
+        "mint": "3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"
+      },
+      {
+        "encoding": "jsonParsed"
+      }
+    ]
+  }
+'
+```
+
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 1114
+    },
+    "value": [
+      {
+        "data": {
+          "program": "spl-token",
+          "parsed": {
+            "accountType": "account",
+            "info": {
+              "tokenAmount": {
+                "amount": "1",
+                "uiAmount": 0.1,
+                "decimals": 1
+              },
+              "delegate": null,
+              "delegatedAmount": 1,
+              "isInitialized": true,
+              "isNative": false,
+              "mint": "3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E",
+              "owner": "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F"
+            }
+          }
+        },
+        "executable": false,
+        "lamports": 1726080,
+        "owner": "TokenSVp5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o",
+        "rentEpoch": 4
+      }
+    ]
+  },
+  "id": 1
+}
 ```
 
 ### getTokenLargestAccounts
@@ -1304,10 +2412,36 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
 #### Example:
 
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenLargestAccounts", "params": ["3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"]}' http://localhost:8899
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":[{"address":"FYjHNoFtSQ5uijKrZFyYAxvEr87hsKXkXcxkcmkBAf4r","amount":"771","decimals":2,"uiAmount":7.71},{"address":"BnsywxTcaYeNUtzrPxQUvzAWxfzZe3ZLUJ4wMMuLESnu","amount":"229","decimals":2,"uiAmount":2.29}],"id":1}
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0", "id":1, "method":"getTokenLargestAccounts", "params": ["3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"]}
+'
+```
+
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 1114
+    },
+    "value": [
+      {
+        "address": "FYjHNoFtSQ5uijKrZFyYAxvEr87hsKXkXcxkcmkBAf4r",
+        "amount": "771",
+        "decimals": 2,
+        "uiAmount": 7.71
+      },
+      {
+        "address": "BnsywxTcaYeNUtzrPxQUvzAWxfzZe3ZLUJ4wMMuLESnu",
+        "amount": "229",
+        "decimals": 2,
+        "uiAmount": 2.29
+      }
+    ]
+  },
+  "id": 1
+}
 ```
 
 ### getTokenSupply
@@ -1330,10 +2464,27 @@ The result will be an RpcResponse JSON object with `value` equal to a JSON objec
 #### Example:
 
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getTokenSupply", "params": ["3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"]}' http://localhost:8899
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":1114},"value":{"uiAmount":1000.0,"amount":"100000","decimals":2},"id":1}
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0", "id":1, "method":"getTokenSupply", "params": ["3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E"]}
+'
+```
+
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 1114
+    },
+    "value": {
+      "uiAmount": 1000,
+      "amount": "100000",
+      "decimals": 2
+    }
+  },
+  "id": 1
+}
 ```
 
 ### getTransactionCount
@@ -1351,10 +2502,14 @@ Returns the current Transaction count from the ledger
 #### Example:
 
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}
+'
 
-// Result
+```
+
+Result:
+```json
 {"jsonrpc":"2.0","result":268,"id":1}
 ```
 
@@ -1375,40 +2530,44 @@ The result field will be a JSON object with the following fields:
 #### Example:
 
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' http://localhost:8899
-// Result
-{"jsonrpc":"2.0","result":{"solana-core": "1.5.0"},"id":1}
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}
+'
 ```
 
-### getVoteAccounts
-
-Returns the account info and associated stake for all the voting accounts in the current bank.
-
-#### Parameters:
-
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-
-#### Results:
-
-The result field will be a JSON object of `current` and `delinquent` accounts, each containing an array of JSON objects with the following sub fields:
-
-- `votePubkey: <string>` - Vote account public key, as base-58 encoded string
-- `nodePubkey: <string>` - Node public key, as base-58 encoded string
-- `activatedStake: <u64>` - the stake, in lamports, delegated to this vote account and active in this epoch
-- `epochVoteAccount: <bool>` - bool, whether the vote account is staked for this epoch
-- `commission: <number>`, percentage (0-100) of rewards payout owed to the vote account
-- `lastVote: <u64>` - Most recent slot voted on by this vote account
-- `epochCredits: <array>` - History of how many credits earned by the end of each epoch, as an array of arrays containing: `[epoch, credits, previousCredits]`
-
-#### Example:
-
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVoteAccounts"}' http://localhost:8899
-
-// Result
-{"jsonrpc":"2.0","result":{"current":[{"commission":0,"epochVoteAccount":true,"epochCredits":[[1,64,0],[2,192,64]],"nodePubkey":"B97CCUW3AEZFGy6uUg6zUdnNYvnVq5VG8PUtb2HayTDD","lastVote":147,"activatedStake":42,"votePubkey":"3ZT31jkAGhUaw8jsy4bTknwBMP8i4Eueh52By4zXcsVw"}],"delinquent":[{"commission":127,"epochVoteAccount":false,"epochCredits":[],"nodePubkey":"6ZPxeQaDo4bkZLRsdNrCzchNQr5LN9QMc9sipXv9Kw8f","lastVote":0,"activatedStake":0,"votePubkey":"CmgCk4aMS7KW1SHX3s9K5tBJ6Yng2LBaC8MFov4wx9sm"}]},"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "current": [
+      {
+        "commission": 0,
+        "epochVoteAccount": true,
+        "epochCredits": [
+          [ 1, 64, 0 ],
+          [ 2, 192, 64 ]
+        ],
+        "nodePubkey": "B97CCUW3AEZFGy6uUg6zUdnNYvnVq5VG8PUtb2HayTDD",
+        "lastVote": 147,
+        "activatedStake": 42,
+        "votePubkey": "3ZT31jkAGhUaw8jsy4bTknwBMP8i4Eueh52By4zXcsVw"
+      }
+    ],
+    "delinquent": [
+      {
+        "commission": 127,
+        "epochVoteAccount": false,
+        "epochCredits": [],
+        "nodePubkey": "6ZPxeQaDo4bkZLRsdNrCzchNQr5LN9QMc9sipXv9Kw8f",
+        "lastVote": 0,
+        "activatedStake": 0,
+        "votePubkey": "CmgCk4aMS7KW1SHX3s9K5tBJ6Yng2LBaC8MFov4wx9sm"
+      }
+    ]
+  },
+  "id": 1
+}
 ```
 
 ### minimumLedgerSlot
@@ -1427,10 +2586,14 @@ None
 #### Example:
 
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"minimumLedgerSlot"}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"minimumLedgerSlot"}
+'
 
-// Result
+```
+
+Result:
+```json
 {"jsonrpc":"2.0","result":1234,"id":1}
 ```
 
@@ -1451,10 +2614,14 @@ Requests an airdrop of lamports to a Pubkey
 #### Example:
 
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"requestAirdrop", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri", 50]}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"requestAirdrop", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri", 50]}
+'
 
-// Result
+```
+
+Result:
+```json
 {"jsonrpc":"2.0","result":"5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW","id":1}
 ```
 
@@ -1484,10 +2651,21 @@ Before submitting, the following preflight checks are performed:
 #### Example:
 
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"sendTransaction", "params":["4hXTCkRzt9WyecNzV1XPgCDfGAZzQKNxLXgynz5QDuWWPSAZBZSHptvWRL3BjCvzUXRdKvHL2b7yGrRQcWyaqsaBCncVG7BFggS8w9snUts67BSh3EqKpXLUm5UMHfD7ZBe9GhARjbNQMLJ1QD3Spr6oMTBU6EhdB4RD8CP2xUxr2u3d6fos36PD98XS6oX8TQjLpsMwncs5DAMiD4nNnR8NBfyghGCWvCVifVwvA8B8TJxE1aiyiv2L429BCWfyzAme5sZW8rDb14NeCQHhZbtNqfXhcp2tAnaAT"]}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sendTransaction",
+    "params": [
+      "4hXTCkRzt9WyecNzV1XPgCDfGAZzQKNxLXgynz5QDuWWPSAZBZSHptvWRL3BjCvzUXRdKvHL2b7yGrRQcWyaqsaBCncVG7BFggS8w9snUts67BSh3EqKpXLUm5UMHfD7ZBe9GhARjbNQMLJ1QD3Spr6oMTBU6EhdB4RD8CP2xUxr2u3d6fos36PD98XS6oX8TQjLpsMwncs5DAMiD4nNnR8NBfyghGCWvCVifVwvA8B8TJxE1aiyiv2L429BCWfyzAme5sZW8rDb14NeCQHhZbtNqfXhcp2tAnaAT"
+    ]
+  }
+'
 
-// Result
+```
+
+Result:
+```json
 {"jsonrpc":"2.0","result":"2id3YC2jK9G5Wo2phDx4gJVAew8DcY5NAojnVuao8rkxwPYPe8cSwE5GzhEgJA2y8fVjDEo6iR6ykBvDxrTQrtpb","id":1}
 ```
 
@@ -1514,11 +2692,35 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
 #### Example:
 
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"simulateTransaction", "params":["4hXTCkRzt9WyecNzV1XPgCDfGAZzQKNxLXgynz5QDuWWPSAZBZSHptvWRL3BjCvzUXRdKvHL2b7yGrRQcWyaqsaBCncVG7BFggS8w9snUts67BSh3EqKpXLUm5UMHfD7ZBe9GhARjbNQMLJ1QD3Spr6oMTBU6EhdB4RD8CP2xUxr2u3d6fos36PD98XS6oX8TQjLpsMwncs5DAMiD4nNnR8NBfyghGCWvCVifVwvA8B8TJxE1aiyiv2L429BCWfyzAme5sZW8rDb14NeCQHhZbtNqfXhcp2tAnaAT"]}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "simulateTransaction",
+    "params": [
+      "4hXTCkRzt9WyecNzV1XPgCDfGAZzQKNxLXgynz5QDuWWPSAZBZSHptvWRL3BjCvzUXRdKvHL2b7yGrRQcWyaqsaBCncVG7BFggS8w9snUts67BSh3EqKpXLUm5UMHfD7ZBe9GhARjbNQMLJ1QD3Spr6oMTBU6EhdB4RD8CP2xUxr2u3d6fos36PD98XS6oX8TQjLpsMwncs5DAMiD4nNnR8NBfyghGCWvCVifVwvA8B8TJxE1aiyiv2L429BCWfyzAme5sZW8rDb14NeCQHhZbtNqfXhcp2tAnaAT"
+    ]
+  }
+'
+```
 
-// Result
-{"jsonrpc":"2.0","result":{"context":{"slot":218},"value":{"err":null,"logs":["BPF program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri success"]},"id":1}
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 218
+    },
+    "value": {
+      "err": null,
+      "logs": [
+        "BPF program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri success"
+      ]
+    }
+  },
+  "id": 1
+}
 ```
 
 ### setLogFilter
@@ -1536,10 +2738,13 @@ Sets the log filter on the validator
 #### Example:
 
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"setLogFilter", "params":["solana_core=debug"]}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"setLogFilter", "params":["solana_core=debug"]}
+'
+```
 
-// Result
+Result:
+```json
 {"jsonrpc":"2.0","result":null,"id":1}
 ```
 
@@ -1558,10 +2763,14 @@ None
 #### Example:
 
 ```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"validatorExit"}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"validatorExit"}
+'
 
-// Result
+```
+
+Result:
+```json
 {"jsonrpc":"2.0","result":true,"id":1}
 ```
 
@@ -1591,22 +2800,42 @@ Subscribe to an account to receive notifications when the lamports or data for a
 
 #### Example:
 
-```bash
-// Request
-{"jsonrpc":"2.0", "id":1, "method":"accountSubscribe", "params":["CM78CPUeXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNH12", {"encoding":"base58"}]}
+Request:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "accountSubscribe",
+  "params": [
+    "CM78CPUeXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNH12",
+    {
+      "encoding": "base64",
+      "commitment": "single"
+    }
+  ]
+}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "accountSubscribe",
+  "params": [
+    "CM78CPUeXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNH12",
+    {
+      "encoding": "jsonParsed"
+    }
+  ]
+}
+```
 
-{"jsonrpc":"2.0", "id":1, "method":"accountSubscribe", "params":["CM78CPUeXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNH12", {"encoding":"base64", "commitment": "single"}]}
-
-{"jsonrpc":"2.0", "id":1, "method":"accountSubscribe", "params":["CM78CPUeXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNH12", {"encoding":"jsonParsed"}]}
-
-// Result
+Result:
+```json
 {"jsonrpc": "2.0","result": 23784,"id": 1}
 ```
 
 #### Notification Format:
 
-```bash
-// Base58 encoding
+Base58 encoding:
+```json
 {
   "jsonrpc": "2.0",
   "method": "accountNotification",
@@ -1626,8 +2855,10 @@ Subscribe to an account to receive notifications when the lamports or data for a
     "subscription": 23784
   }
 }
+```
 
-// Parsed-JSON encoding
+Parsed-JSON encoding:
+```json
 {
   "jsonrpc": "2.0",
   "method": "accountNotification",
@@ -1638,7 +2869,7 @@ Subscribe to an account to receive notifications when the lamports or data for a
       },
       "value": {
         "data": {
-           "program": "nonce"
+           "program": "nonce",
            "parsed": {
               "type": "initialized",
               "info": {
@@ -1675,11 +2906,14 @@ Unsubscribe from account change notifications
 
 #### Example:
 
-```bash
-// Request
+Request:
+```json
 {"jsonrpc":"2.0", "id":1, "method":"accountUnsubscribe", "params":[0]}
 
-// Result
+```
+
+Result:
+```json
 {"jsonrpc": "2.0","result": true,"id": 1}
 ```
 
@@ -1702,22 +2936,58 @@ Subscribe to a program to receive notifications when the lamports or data for a 
 
 #### Example:
 
-```bash
-// Request
-{"jsonrpc":"2.0", "id":1, "method":"programSubscribe", "params":["11111111111111111111111111111111", {"encoding":"base64", "commitment": "single"}]}
+Request:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "programSubscribe",
+  "params": [
+    "11111111111111111111111111111111",
+    {
+      "encoding": "base64",
+      "commitment": "single"
+    }
+  ]
+}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "programSubscribe",
+  "params": [
+    "11111111111111111111111111111111",
+    {
+      "encoding": "jsonParsed"
+    }
+  ]
+}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "programSubscribe",
+  "params": [
+    "11111111111111111111111111111111",
+    {
+      "encoding": "base64",
+      "filters": [
+        {
+          "dataSize": 80
+        }
+      ]
+    }
+  ]
+}
+```
 
-{"jsonrpc":"2.0", "id":1, "method":"programSubscribe", "params":["11111111111111111111111111111111", {"encoding":"jsonParsed"}]}
-
-{"jsonrpc":"2.0", "id":1, "method":"programSubscribe", "params":["11111111111111111111111111111111", {"encoding":"base64", "filters":[{"dataSize":80}]}]}
-
-// Result
+Result:
+```json
 {"jsonrpc": "2.0","result": 24040,"id": 1}
 ```
 
 #### Notification Format:
 
-```bash
-// Base58 encoding
+Base58 encoding:
+```json
 {
   "jsonrpc": "2.0",
   "method": "programNotification",
@@ -1727,7 +2997,7 @@ Subscribe to a program to receive notifications when the lamports or data for a 
         "slot": 5208469
       },
       "value": {
-        "pubkey": "H4vnBqifaSACnKa7acsxstsY1iV1bvJNxsCY7enrd1hq"
+        "pubkey": "H4vnBqifaSACnKa7acsxstsY1iV1bvJNxsCY7enrd1hq",
         "account": {
           "data": ["11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR", "base58"],
           "executable": false,
@@ -1740,8 +3010,10 @@ Subscribe to a program to receive notifications when the lamports or data for a 
     "subscription": 24040
   }
 }
+```
 
-// Parsed-JSON encoding
+Parsed-JSON encoding:
+```json
 {
   "jsonrpc": "2.0",
   "method": "programNotification",
@@ -1751,10 +3023,10 @@ Subscribe to a program to receive notifications when the lamports or data for a 
         "slot": 5208469
       },
       "value": {
-        "pubkey": "H4vnBqifaSACnKa7acsxstsY1iV1bvJNxsCY7enrd1hq"
+        "pubkey": "H4vnBqifaSACnKa7acsxstsY1iV1bvJNxsCY7enrd1hq",
         "account": {
           "data": {
-             "program": "nonce"
+             "program": "nonce",
              "parsed": {
                 "type": "initialized",
                 "info": {
@@ -1792,11 +3064,14 @@ Unsubscribe from program-owned account change notifications
 
 #### Example:
 
-```bash
-// Request
+Request:
+```json
 {"jsonrpc":"2.0", "id":1, "method":"programUnsubscribe", "params":[0]}
 
-// Result
+```
+
+Result:
+```json
 {"jsonrpc": "2.0","result": true,"id": 1}
 ```
 
@@ -1815,18 +3090,36 @@ Subscribe to a transaction signature to receive notification when the transactio
 
 #### Example:
 
-```bash
-// Request
-{"jsonrpc":"2.0", "id":1, "method":"signatureSubscribe", "params":["2EBVM6cB8vAAD93Ktr6Vd8p67XPbQzCJX47MpReuiCXJAtcjaxpvWpcg9Ege1Nr5Tk3a2GFrByT7WPBjdsTycY9b"]}
+Request:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "signatureSubscribe",
+  "params": [
+    "2EBVM6cB8vAAD93Ktr6Vd8p67XPbQzCJX47MpReuiCXJAtcjaxpvWpcg9Ege1Nr5Tk3a2GFrByT7WPBjdsTycY9b"
+  ]
+}
 
-{"jsonrpc":"2.0", "id":1, "method":"signatureSubscribe", "params":["2EBVM6cB8vAAD93Ktr6Vd8p67XPbQzCJX47MpReuiCXJAtcjaxpvWpcg9Ege1Nr5Tk3a2GFrByT7WPBjdsTycY9b", {"commitment": "max"}]}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "signatureSubscribe",
+  "params": [
+    "2EBVM6cB8vAAD93Ktr6Vd8p67XPbQzCJX47MpReuiCXJAtcjaxpvWpcg9Ege1Nr5Tk3a2GFrByT7WPBjdsTycY9b",
+    {
+      "commitment": "max"
+    }
+  ]
+}
+```
 
-// Result
+Result:
+```json
 {"jsonrpc": "2.0","result": 0,"id": 1}
 ```
 
 #### Notification Format:
-
 ```bash
 {
   "jsonrpc": "2.0",
@@ -1859,11 +3152,14 @@ Unsubscribe from signature confirmation notification
 
 #### Example:
 
-```bash
-// Request
+Request:
+```json
 {"jsonrpc":"2.0", "id":1, "method":"signatureUnsubscribe", "params":[0]}
 
-// Result
+```
+
+Result:
+```json
 {"jsonrpc": "2.0","result": true,"id": 1}
 ```
 
@@ -1881,11 +3177,14 @@ None
 
 #### Example:
 
-```bash
-// Request
+Request:
+```json
 {"jsonrpc":"2.0", "id":1, "method":"slotSubscribe"}
 
-// Result
+```
+
+Result:
+```json
 {"jsonrpc": "2.0","result": 0,"id": 1}
 ```
 
@@ -1920,11 +3219,14 @@ Unsubscribe from slot notifications
 
 #### Example:
 
-```bash
-// Request
+Request:
+```json
 {"jsonrpc":"2.0", "id":1, "method":"slotUnsubscribe", "params":[0]}
 
-// Result
+```
+
+Result:
+```json
 {"jsonrpc": "2.0","result": true,"id": 1}
 ```
 
@@ -1942,11 +3244,14 @@ None
 
 #### Example:
 
-```bash
-// Request
+Request:
+```json
 {"jsonrpc":"2.0", "id":1, "method":"rootSubscribe"}
 
-// Result
+```
+
+Result:
+```json
 {"jsonrpc": "2.0","result": 0,"id": 1}
 ```
 
@@ -1979,11 +3284,14 @@ Unsubscribe from root notifications
 
 #### Example:
 
-```bash
-// Request
+Request:
+```json
 {"jsonrpc":"2.0", "id":1, "method":"rootUnsubscribe", "params":[0]}
 
-// Result
+```
+
+Result:
+```json
 {"jsonrpc": "2.0","result": true,"id": 1}
 ```
 
@@ -2003,11 +3311,14 @@ None
 
 #### Example:
 
-```bash
-// Request
+Request:
+```json
 {"jsonrpc":"2.0", "id":1, "method":"voteSubscribe"}
 
-// Result
+```
+
+Result:
+```json
 {"jsonrpc": "2.0","result": 0,"id": 1}
 ```
 
@@ -2015,7 +3326,7 @@ None
 
 The result is the latest vote, containing its hash, a list of voted slots, and an optional timestamp.
 
-```bash
+```json
 {
   "jsonrpc": "2.0",
   "method": "voteNotification",
@@ -2044,10 +3355,12 @@ Unsubscribe from vote notifications
 
 #### Example:
 
-```bash
-// Request
+Request:
+```json
 {"jsonrpc":"2.0", "id":1, "method":"voteUnsubscribe", "params":[0]}
+```
 
-// Result
+Response:
+```json
 {"jsonrpc": "2.0","result": true,"id": 1}
 ```
