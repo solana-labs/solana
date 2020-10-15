@@ -1271,8 +1271,8 @@ fn process_deploy(
             config.commitment,
             config.send_transaction_config,
         );
-        log_instruction_custom_error::<SystemError>(result, &config).map_err(|_| {
-            CliError::DynamicProgramError("Program account allocation failed".to_string())
+        log_instruction_custom_error::<SystemError>(result, &config).map_err(|err| {
+            CliError::DynamicProgramError(format!("Program account allocation failed: {}", err))
         })?;
     }
 
