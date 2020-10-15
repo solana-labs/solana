@@ -7,12 +7,7 @@ use solana_rbpf::{
     vm::{EbpfVm, SyscallObject},
 };
 use solana_runtime::{
-<<<<<<< HEAD
-=======
-    feature_set::{
-        pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled, sha256_syscall_enabled,
-    },
->>>>>>> 3f9e6a600... program log pubkey as base58 (#12901)
+    feature_set::pubkey_log_syscall_enabled,
     message_processor::MessageProcessor,
     process_instruction::{ComputeMeter, InvokeContext, Logger},
 };
@@ -123,8 +118,6 @@ pub fn register_syscalls<'a>(
         }),
     )?;
 
-<<<<<<< HEAD
-=======
     if invoke_context.is_feature_active(&pubkey_log_syscall_enabled::id()) {
         vm.register_syscall_with_context_ex(
             "sol_log_pubkey",
@@ -137,30 +130,6 @@ pub fn register_syscalls<'a>(
         )?;
     }
 
-    if invoke_context.is_feature_active(&sha256_syscall_enabled::id()) {
-        vm.register_syscall_with_context_ex(
-            "sol_sha256",
-            Box::new(SyscallSha256 {
-                sha256_base_cost: compute_budget.sha256_base_cost,
-                sha256_byte_cost: compute_budget.sha256_byte_cost,
-                compute_meter: invoke_context.get_compute_meter(),
-                loader_id,
-            }),
-        )?;
-    }
-
-    if invoke_context.is_feature_active(&ristretto_mul_syscall_enabled::id()) {
-        vm.register_syscall_with_context_ex(
-            "sol_ristretto_mul",
-            Box::new(SyscallRistrettoMul {
-                cost: 0,
-                compute_meter: invoke_context.get_compute_meter(),
-                loader_id,
-            }),
-        )?;
-    }
-
->>>>>>> 3f9e6a600... program log pubkey as base58 (#12901)
     vm.register_syscall_with_context_ex(
         "sol_create_program_address",
         Box::new(SyscallCreateProgramAddress {
@@ -1175,11 +1144,7 @@ fn call<'a>(
 mod tests {
     use super::*;
     use crate::tests::{MockComputeMeter, MockLogger};
-<<<<<<< HEAD
-=======
-    use solana_sdk::hash::hashv;
     use std::str::FromStr;
->>>>>>> 3f9e6a600... program log pubkey as base58 (#12901)
 
     macro_rules! assert_access_violation {
         ($result:expr, $va:expr, $len:expr) => {

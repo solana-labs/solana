@@ -91,13 +91,6 @@ pub struct ComputeBudget {
     pub invoke_units: u64,
     /// Maximum cross-program invocation depth allowed including the original caller
     pub max_invoke_depth: usize,
-<<<<<<< HEAD
-=======
-    /// Base number of compute units consumed to call SHA256
-    pub sha256_base_cost: u64,
-    /// Incremental number of units consumed by SHA256 (based on bytes)
-    pub sha256_byte_cost: u64,
->>>>>>> 3f9e6a600... program log pubkey as base58 (#12901)
     /// Maximum BPF to BPF call depth
     pub max_call_depth: usize,
     /// Size of a stack frame in bytes, must match the size specified in the LLVM BPF backend
