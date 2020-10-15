@@ -21,6 +21,7 @@ use crate::{
         self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, SnapshotHash,
         Version, Vote, MAX_WALLCLOCK,
     },
+    data_budget::DataBudget,
     epoch_slots::EpochSlots,
     result::{Error, Result},
     weighted_shuffle::weighted_shuffle,
@@ -102,12 +103,6 @@ pub enum ClusterInfoError {
     NoLeader,
     BadContactInfo,
     BadGossipAddress,
-}
-#[derive(Clone)]
-pub struct DataBudget {
-    bytes: usize, // amount of bytes we have in the budget to send
-    last_timestamp_ms: u64, // Last time that we upped the bytes count,
-                  // used to detect when to up the bytes budget again
 }
 
 struct GossipWriteLock<'a> {
@@ -252,7 +247,7 @@ pub struct ClusterInfo {
     pub(crate) keypair: Arc<Keypair>,
     /// The network entrypoint
     entrypoint: RwLock<Option<ContactInfo>>,
-    outbound_budget: RwLock<DataBudget>,
+    outbound_budget: DataBudget,
     my_contact_info: RwLock<ContactInfo>,
     id: Pubkey,
     stats: GossipStats,
@@ -407,10 +402,7 @@ impl ClusterInfo {
             gossip: RwLock::new(CrdsGossip::default()),
             keypair,
             entrypoint: RwLock::new(None),
-            outbound_budget: RwLock::new(DataBudget {
-                bytes: 0,
-                last_timestamp_ms: 0,
-            }),
+            outbound_budget: DataBudget::default(),
             my_contact_info: RwLock::new(contact_info),
             id,
             stats: GossipStats::default(),
@@ -437,7 +429,7 @@ impl ClusterInfo {
             gossip: RwLock::new(gossip),
             keypair: self.keypair.clone(),
             entrypoint: RwLock::new(self.entrypoint.read().unwrap().clone()),
-            outbound_budget: RwLock::new(self.outbound_budget.read().unwrap().clone()),
+            outbound_budget: self.outbound_budget.clone_non_atomic(),
             my_contact_info: RwLock::new(my_contact_info),
             id: *new_id,
             stats: GossipStats::default(),
@@ -1796,24 +1788,18 @@ impl ClusterInfo {
         }
     }
 
-    fn update_data_budget(&self, stakes: &HashMap<Pubkey, u64>) {
-        let mut w_outbound_budget = self.outbound_budget.write().unwrap();
-
-        let now = timestamp();
+    fn update_data_budget(&self, num_staked: usize) {
         const INTERVAL_MS: u64 = 100;
         // allow 50kBps per staked validator, epoch slots + votes ~= 1.5kB/slot ~= 4kB/s
         const BYTES_PER_INTERVAL: usize = 5000;
         const MAX_BUDGET_MULTIPLE: usize = 5; // allow budget build-up to 5x the interval default
-
-        if now - w_outbound_budget.last_timestamp_ms > INTERVAL_MS {
-            let len = std::cmp::max(stakes.len(), 2);
-            w_outbound_budget.bytes += len * BYTES_PER_INTERVAL;
-            w_outbound_budget.bytes = std::cmp::min(
-                w_outbound_budget.bytes,
-                MAX_BUDGET_MULTIPLE * len * BYTES_PER_INTERVAL,
-            );
-            w_outbound_budget.last_timestamp_ms = now;
-        }
+        let num_staked = num_staked.max(2);
+        self.outbound_budget.update(INTERVAL_MS, |bytes| {
+            std::cmp::min(
+                bytes + num_staked * BYTES_PER_INTERVAL,
+                MAX_BUDGET_MULTIPLE * num_staked * BYTES_PER_INTERVAL,
+            )
+        });
     }
 
     // Pull requests take an incoming bloom filter of contained entries from a node
@@ -1828,7 +1814,7 @@ impl ClusterInfo {
         let mut caller_and_filters = vec![];
         let mut addrs = vec![];
         let mut time = Measure::start("handle_pull_requests");
-        self.update_data_budget(stakes);
+        self.update_data_budget(stakes.len());
         for pull_data in requests {
             caller_and_filters.push((pull_data.caller, pull_data.filter));
             addrs.push(pull_data.from_addr);
@@ -1908,17 +1894,13 @@ impl ClusterInfo {
             let response = pull_responses[stat.to].0[stat.responses_index].clone();
             let protocol = Protocol::PullResponse(self_id, vec![response]);
             let new_packet = Packet::from_data(&from_addr, protocol);
-            {
-                let mut w_outbound_budget = self.outbound_budget.write().unwrap();
-                if w_outbound_budget.bytes > new_packet.meta.size {
-                    sent.insert(index);
-                    w_outbound_budget.bytes -= new_packet.meta.size;
-                    total_bytes += new_packet.meta.size;
-                    packets.packets.push(new_packet)
-                } else {
-                    inc_new_counter_info!("gossip_pull_request-no_budget", 1);
-                    break;
-                }
+            if self.outbound_budget.take(new_packet.meta.size) {
+                sent.insert(index);
+                total_bytes += new_packet.meta.size;
+                packets.packets.push(new_packet)
+            } else {
+                inc_new_counter_info!("gossip_pull_request-no_budget", 1);
+                break;
             }
         }
         time.stop();
