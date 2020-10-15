@@ -22,8 +22,8 @@ solana-sdk = { path = "../sdk", version = "1.5.0" }
 solana-runtime = { path = "../runtime", version = "1.5.0" }
 solana-stake-program = { path = "../programs/stake", version = "1.5.0" }
 solana-vote-program = { path = "../programs/vote", version = "1.5.0" }
-spl-memo-v1-0 = { package = "spl-memo", version = "=1.0.7", features = ["skip-no-mangle"] }
-spl-token-v2-0 = { package = "spl-token", version = "=2.0.6", features = ["skip-no-mangle"] }
+spl-memo-v1-0 = { package = "spl-memo", version = "=1.0.9" }
+spl-token-v2-0 = { package = "spl-token", version = "=2.0.8" }
 thiserror = "1.0"
 
 [package.metadata.docs.rs]
