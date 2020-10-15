@@ -610,6 +610,7 @@ mod tests {
                 max_invoke_depth: 2,
                 max_call_depth: 20,
                 stack_frame_size: 4096,
+                log_pubkey_units: 100,
             },
             Rc::new(RefCell::new(Executors::default())),
             None,

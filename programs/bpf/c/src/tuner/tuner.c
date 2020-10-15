@@ -18,6 +18,12 @@ extern uint64_t entrypoint(const uint8_t *input) {
         *val = *val + 1;
       }
     }
+
+    // // Uncomment for Pubkey logging syscall
+    // {
+    //   SolPubkey pubkey;
+    //   sol_log_pubkey(&pubkey);
+    // }
   }
   return *val;
 }
