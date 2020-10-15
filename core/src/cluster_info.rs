@@ -2162,11 +2162,14 @@ impl ClusterInfo {
         }
 
         let (stakes, epoch_time_ms) = Self::get_stakes_and_epoch_time(bank_forks);
+        // Using root_bank instead of working_bank here so that an enbaled
+        // feature does not roll back (if the feature happens to get enabled in
+        // a minority fork).
         let feature_set = bank_forks.map(|bank_forks| {
             bank_forks
                 .read()
                 .unwrap()
-                .working_bank()
+                .root_bank()
                 .deref()
                 .feature_set
                 .clone()
