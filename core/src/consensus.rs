@@ -530,15 +530,34 @@ impl Tower {
                             // all of them.
                             panic!("no ancestors found with slot: {}", last_voted_slot);
                         } else {
-                            // compare slots not to error! just because of newer snapshots
+                            // This condition shouldn't occur under normal validator operation, indicating
+                            // something unusual happened.
+                            // Possible causes include: OS/HW crash, validator process crash, only saved tower
+                            // is moved over to a new setup, etc...
+
+                            // However, returning empty ancestors as a fallback here shouldn't result in
+                            // slashing by itself (Note that we couldn't fully preclude any kind of slashing if
+                            // the failure was OS or HW level).
+
+                            // Firstly, lockout is ensured elsewhere.
+
+                            // Also, there is no risk of optimistic conf. violation. Although empty ancestors
+                            // could result in incorrect (= more than actual) locked_out_stake and
+                            // false-positive SwitchProof later in this function, there should be no such a
+                            // heavier fork candidate, first of all, if the last vote (or any of its
+                            // unavailable ancestors) were already optimistically confirmed.
+                            // The only exception is that other validator is already violating it...
                             if self.is_first_switch_check() && switch_slot < last_voted_slot {
-                                error!(
+                                // `switch < last` is needed not to warn! this message just because of using
+                                // newer snapshots on validator restart
+                                let message = format!(
                                   "bank_forks doesn't have corresponding data for the stray restored \
                                    last vote({}), meaning some inconsistency between saved tower and ledger.",
                                   last_voted_slot
                                 );
+                                warn!("{}", message);
+                                datapoint_warn!("tower_warn", ("warn", message, String));
                             }
-                            // (system crash? process crash? newer snapshot, or only a saved tower is moved over to new setup?)
                             &empty_ancestors
                         }
                     });
@@ -614,7 +633,7 @@ impl Tower {
                             }
 
                             // Only count lockouts on slots that are:
-                            // 1) Not ancestors of `last_vote`
+                            // 1) Not ancestors of `last_vote`, meaning being on different fork
                             // 2) Not from before the current root as we can't determine if
                             // anything before the root was an ancestor of `last_vote` or not
                             if !last_vote_ancestors.contains(lockout_interval_start)
