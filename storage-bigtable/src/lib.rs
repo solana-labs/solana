@@ -342,9 +342,7 @@ impl LedgerStorage {
             .await?;
 
         // Load the block and return the transaction
-        let block = bigtable
-            .get_bincode_cell::<StoredConfirmedBlock>("blocks", slot_to_key(slot))
-            .await?;
+        let block = self.get_confirmed_block(slot).await?;
         match block.transactions.into_iter().nth(index as usize) {
             None => {
                 warn!("Transaction info for {} is corrupt", signature);
@@ -360,7 +358,7 @@ impl LedgerStorage {
                 } else {
                     Ok(Some(ConfirmedTransaction {
                         slot,
-                        transaction: bucket_block_transaction.into(),
+                        transaction: bucket_block_transaction,
                     }))
                 }
             }
