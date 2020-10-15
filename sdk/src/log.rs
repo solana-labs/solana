@@ -2,7 +2,7 @@
 
 #![cfg(feature = "program")]
 
-use crate::{account_info::AccountInfo, pubkey::Pubkey};
+use crate::account_info::AccountInfo;
 
 /// Prints a string
 /// There are two forms and are fast
@@ -60,18 +60,6 @@ extern "C" {
 pub fn sol_log_slice(slice: &[u8]) {
     for (i, s) in slice.iter().enumerate() {
         info!(0, 0, 0, i, *s);
-    }
-}
-
-/// Prints a pubkey
-pub trait Log {
-    fn log(&self);
-}
-impl Log for Pubkey {
-    fn log(&self) {
-        for (i, k) in self.to_bytes().iter().enumerate() {
-            info!(0, 0, 0, i, *k);
-        }
     }
 }
 

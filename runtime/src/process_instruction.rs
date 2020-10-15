@@ -1,5 +1,6 @@
 use crate::feature_set::{
-    compute_budget_balancing, max_invoke_depth_4, max_program_call_depth_64, FeatureSet,
+    compute_budget_balancing, max_invoke_depth_4, max_program_call_depth_64,
+    pubkey_log_syscall_enabled, FeatureSet,
 };
 use solana_sdk::{
     account::{Account, KeyedAccount},
@@ -85,15 +86,24 @@ pub struct ComputeBudget {
     pub log_64_units: u64,
     /// Number of compute units consumed by a create_program_address call
     pub create_program_address_units: u64,
-    /// Number of compute units consumed by an invoke call (not including the cost incured by
+    /// Number of compute units consumed by an invoke call (not including the cost incurred by
     /// the called program)
     pub invoke_units: u64,
-    /// Maximum cross-program invocation depth allowed including the orignal caller
+    /// Maximum cross-program invocation depth allowed including the original caller
     pub max_invoke_depth: usize,
+<<<<<<< HEAD
+=======
+    /// Base number of compute units consumed to call SHA256
+    pub sha256_base_cost: u64,
+    /// Incremental number of units consumed by SHA256 (based on bytes)
+    pub sha256_byte_cost: u64,
+>>>>>>> 3f9e6a600... program log pubkey as base58 (#12901)
     /// Maximum BPF to BPF call depth
     pub max_call_depth: usize,
     /// Size of a stack frame in bytes, must match the size specified in the LLVM BPF backend
     pub stack_frame_size: usize,
+    /// Number of compute units consumed by logging a `Pubkey`
+    pub log_pubkey_units: u64,
 }
 impl Default for ComputeBudget {
     fn default() -> Self {
@@ -113,6 +123,7 @@ impl ComputeBudget {
             max_invoke_depth: 1,
             max_call_depth: 20,
             stack_frame_size: 4_096,
+            log_pubkey_units: 0,
         };
 
         if feature_set.is_active(&compute_budget_balancing::id()) {
@@ -134,6 +145,12 @@ impl ComputeBudget {
         if feature_set.is_active(&max_program_call_depth_64::id()) {
             compute_budget = ComputeBudget {
                 max_call_depth: 64,
+                ..compute_budget
+            };
+        }
+        if feature_set.is_active(&pubkey_log_syscall_enabled::id()) {
+            compute_budget = ComputeBudget {
+                log_pubkey_units: 100,
                 ..compute_budget
             };
         }

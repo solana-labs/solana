@@ -7,6 +7,12 @@ use solana_rbpf::{
     vm::{EbpfVm, SyscallObject},
 };
 use solana_runtime::{
+<<<<<<< HEAD
+=======
+    feature_set::{
+        pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled, sha256_syscall_enabled,
+    },
+>>>>>>> 3f9e6a600... program log pubkey as base58 (#12901)
     message_processor::MessageProcessor,
     process_instruction::{ComputeMeter, InvokeContext, Logger},
 };
@@ -117,6 +123,44 @@ pub fn register_syscalls<'a>(
         }),
     )?;
 
+<<<<<<< HEAD
+=======
+    if invoke_context.is_feature_active(&pubkey_log_syscall_enabled::id()) {
+        vm.register_syscall_with_context_ex(
+            "sol_log_pubkey",
+            Box::new(SyscallLogPubkey {
+                cost: compute_budget.log_pubkey_units,
+                compute_meter: invoke_context.get_compute_meter(),
+                logger: invoke_context.get_logger(),
+                loader_id,
+            }),
+        )?;
+    }
+
+    if invoke_context.is_feature_active(&sha256_syscall_enabled::id()) {
+        vm.register_syscall_with_context_ex(
+            "sol_sha256",
+            Box::new(SyscallSha256 {
+                sha256_base_cost: compute_budget.sha256_base_cost,
+                sha256_byte_cost: compute_budget.sha256_byte_cost,
+                compute_meter: invoke_context.get_compute_meter(),
+                loader_id,
+            }),
+        )?;
+    }
+
+    if invoke_context.is_feature_active(&ristretto_mul_syscall_enabled::id()) {
+        vm.register_syscall_with_context_ex(
+            "sol_ristretto_mul",
+            Box::new(SyscallRistrettoMul {
+                cost: 0,
+                compute_meter: invoke_context.get_compute_meter(),
+                loader_id,
+            }),
+        )?;
+    }
+
+>>>>>>> 3f9e6a600... program log pubkey as base58 (#12901)
     vm.register_syscall_with_context_ex(
         "sol_create_program_address",
         Box::new(SyscallCreateProgramAddress {
@@ -368,6 +412,37 @@ impl SyscallObject<BPFError> for SyscallLogU64 {
                 "Program log: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
                 arg1, arg2, arg3, arg4, arg5
             ));
+        }
+        Ok(0)
+    }
+}
+
+/// Log 5 64-bit values
+pub struct SyscallLogPubkey<'a> {
+    cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    logger: Rc<RefCell<dyn Logger>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BPFError> for SyscallLogPubkey<'a> {
+    fn call(
+        &mut self,
+        pubkey_addr: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        ro_regions: &[MemoryRegion],
+        _rw_regions: &[MemoryRegion],
+    ) -> Result<u64, EbpfError<BPFError>> {
+        self.compute_meter.consume(self.cost)?;
+        let mut logger = self
+            .logger
+            .try_borrow_mut()
+            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
+        if logger.log_enabled() {
+            let pubkey = translate_type!(Pubkey, pubkey_addr, ro_regions, self.loader_id)?;
+            logger.log(&format!("Program log: {}", pubkey));
         }
         Ok(0)
     }
@@ -1100,6 +1175,11 @@ fn call<'a>(
 mod tests {
     use super::*;
     use crate::tests::{MockComputeMeter, MockLogger};
+<<<<<<< HEAD
+=======
+    use solana_sdk::hash::hashv;
+    use std::str::FromStr;
+>>>>>>> 3f9e6a600... program log pubkey as base58 (#12901)
 
     macro_rules! assert_access_violation {
         ($result:expr, $va:expr, $len:expr) => {
@@ -1371,6 +1451,55 @@ mod tests {
 
         assert_eq!(log.borrow().len(), 1);
         assert_eq!(log.borrow()[0], "Program log: 0x1, 0x2, 0x3, 0x4, 0x5");
+    }
+
+    #[test]
+    fn test_syscall_sol_pubkey() {
+        let pubkey = Pubkey::from_str("MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN").unwrap();
+        let addr = &pubkey.as_ref()[0] as *const _ as u64;
+
+        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
+            Rc::new(RefCell::new(MockComputeMeter { remaining: 2 }));
+        let log = Rc::new(RefCell::new(vec![]));
+        let logger: Rc<RefCell<dyn Logger>> =
+            Rc::new(RefCell::new(MockLogger { log: log.clone() }));
+        let mut syscall_sol_pubkey = SyscallLogPubkey {
+            cost: 1,
+            compute_meter,
+            logger,
+            loader_id: &bpf_loader::id(),
+        };
+        let ro_regions = &[MemoryRegion {
+            addr_host: addr,
+            addr_vm: 100,
+            len: 32,
+        }];
+        let rw_regions = &[MemoryRegion::default()];
+
+        syscall_sol_pubkey
+            .call(100, 0, 0, 0, 0, ro_regions, rw_regions)
+            .unwrap();
+        assert_eq!(log.borrow().len(), 1);
+        assert_eq!(
+            log.borrow()[0],
+            "Program log: MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN"
+        );
+
+        assert_access_violation!(
+            syscall_sol_pubkey.call(
+                101, // AccessViolation
+                32, 0, 0, 0, ro_regions, rw_regions,
+            ),
+            101,
+            32
+        );
+
+        assert_eq!(
+            Err(EbpfError::UserError(BPFError::SyscallError(
+                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
+            ))),
+            syscall_sol_pubkey.call(100, 32, 0, 0, 0, ro_regions, rw_regions)
+        );
     }
 
     #[test]
