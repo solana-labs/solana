@@ -1174,15 +1174,12 @@ pub fn reconcile_blockstore_roots_with_tower(
                 ),
             })
             .collect();
-        // or check last_root or 0?
-        //assert!(
-        //    !new_roots.is_empty(),
-        //    "at least 1 parent slot must be found"
-        //);
+        assert!(
+            !new_roots.is_empty(),
+            "at least 1 parent slot must be found"
+        );
 
-        if !new_roots.is_empty() {
-            blockstore.set_roots(&new_roots)?
-        }
+        blockstore.set_roots(&new_roots)?
     }
     Ok(())
 }
@@ -2704,7 +2701,6 @@ pub mod test {
     }
 
     #[test]
-    #[ignore]
     #[should_panic(expected = "at least 1 parent slot must be found")]
     fn test_reconcile_blockstore_roots_with_tower_panic_no_parent() {
         solana_logger::setup();
