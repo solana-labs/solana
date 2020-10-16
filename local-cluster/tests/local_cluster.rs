@@ -1621,6 +1621,44 @@ fn last_vote_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> 
     Some(last_vote)
 }
 
+// A bit convoluted test case; but this roughly follows this test theoretical scenario:
+//
+// Step 1: You have validator A + B with 31% and 36% of the stake:
+//
+//  S0 -> S1 -> S2 -> S3 (A + B vote, optimistically confirmed)
+//
+// Step 2: Turn off A + B, and truncate the ledger after slot `S3` (simulate votes not
+// landing in next slot).
+// Start validator C with 33% of the stake with same ledger, but only up to slot S2.
+// Have `C` generate some blocks like:
+//
+// S0 -> S1 -> S2 -> S4
+//
+// Step 3: Then restart `A` which had 31% of the stake. With the tower, from `A`'s
+// perspective it sees:
+//
+// S0 -> S1 -> S2 -> S3 (voted)
+//             |
+//             -> S4 -> S5 (C's vote for S4)
+//
+// The fork choice rule weights look like:
+//
+// S0 -> S1 -> S2 (ABC) -> S3
+//             |
+//             -> S4 (C) -> S5
+//
+// Step 4:
+// Without the persisted tower:
+//    `A` would choose to vote on the fork with `S4 -> S5`. This is true even if `A`
+//    generates a new fork starting at slot `S3` because `C` has more stake than `A`
+//    so `A` will eventually pick the fork `C` is on.
+//
+//    Furthermore `B`'s vote on `S3` is not observable because there are no
+//    descendants of slot `S3`, so that fork will not be chosen over `C`'s fork
+//
+// With the persisted tower:
+//    `A` should not be able to generate a switching proof.
+//
 fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: bool) {
     solana_logger::setup();
 
@@ -1628,7 +1666,8 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     let slots_per_epoch = 2048;
     let node_stakes = vec![31, 36, 33, 0];
 
-    // each pubkeys are prefixed with A, B, C and D.
+    // Each pubkeys are prefixed with A, B, C and D.
+    // D is needed to avoid NoPropagatedConfirmation erorrs
     let validator_keys = vec![
         "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
         "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
@@ -1658,16 +1697,14 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     };
     let mut cluster = LocalCluster::new(&config);
 
-    // 25 <- 26 <- 27
-    //
-    //
-    let base_slot = 26;
-    let next_slot_on_a = 27;
-    let truncated_slots = 100;
+    let base_slot = 26; // S2
+    let next_slot_on_a = 27; // S3
+    let truncated_slots = 100; // just enough to purge all following slots after the S2 and S3
 
     // Immediately kill validator C
     let validator_c_info = cluster.exit_node(&validator_c_pubkey);
 
+    // Step 1:
     // Let validator A, B, (D) run for a while.
     let client = cluster.get_validator_client(&validator_a_pubkey).unwrap();
     loop {
@@ -1692,6 +1729,8 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     }
     let _validator_c_info = cluster.exit_node(&validator_b_pubkey);
 
+    // Step 2:
+    // Stop validator and truncate ledger
     info!("truncate validator C's ledger");
     {
         // first copy from validator A's ledger
@@ -1764,12 +1803,13 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
         }
     }
 
+    // Step 3:
+    // Run validator C only to make it produce and vote on its own fork.
     info!("Restart validator C again!!!");
     let val_c_ledger_path = validator_c_info.info.ledger_path.clone();
     cluster.restart_node(&validator_c_pubkey, validator_c_info);
 
-    // Run validator C only to make it produce and vote on its own fork.
-    let mut votes_on_c_fork = std::collections::BTreeSet::new();
+    let mut votes_on_c_fork = std::collections::BTreeSet::new(); // S4 and S5
     for _ in 0..100 {
         sleep(Duration::from_millis(100));
 
@@ -1789,6 +1829,8 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     assert!(!votes_on_c_fork.is_empty());
     info!("collected validator C's votes: {:?}", votes_on_c_fork);
 
+    // Step 4:
+    // verify whether there was violation or not
     info!("Restart validator A again!!!");
     let val_a_ledger_path = validator_a_info.info.ledger_path.clone();
     cluster.restart_node(&validator_a_pubkey, validator_a_info);
