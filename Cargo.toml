@@ -30,6 +30,7 @@ members = [
     "merkle-tree",
     "stake-o-matic",
     "storage-bigtable",
+    "storage-proto",
     "streamer",
     "measure",
     "metrics",

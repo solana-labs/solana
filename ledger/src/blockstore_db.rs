@@ -2,6 +2,7 @@ use crate::blockstore_meta;
 use bincode::{deserialize, serialize};
 use byteorder::{BigEndian, ByteOrder};
 use log::*;
+use prost::Message;
 pub use rocksdb::Direction as IteratorDirection;
 use rocksdb::{
     self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator, DBRecoveryMode,
@@ -15,7 +16,8 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::Signature,
 };
-use solana_transaction_status::{Rewards, TransactionStatusMeta};
+use solana_storage_proto::convert::generated;
+use solana_transaction_status::TransactionStatusMeta;
 use std::{collections::HashMap, fs, marker::PhantomData, path::Path, sync::Arc};
 use thiserror::Error;
 
@@ -71,6 +73,8 @@ pub enum BlockstoreError {
     TransactionStatusSlotMismatch,
     EmptyEpochStakes,
     NoVoteTimestampsInRange,
+    ProtobufEncodeError(#[from] prost::EncodeError),
+    ProtobufDecodeError(#[from] prost::DecodeError),
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 
@@ -421,6 +425,10 @@ impl TypedColumn for columns::TransactionStatusIndex {
     type Type = blockstore_meta::TransactionStatusIndexMeta;
 }
 
+pub trait ProtobufColumn: Column {
+    type Type: prost::Message + Default;
+}
+
 pub trait SlotColumn<Index = u64> {}
 
 impl<T: SlotColumn> Column for T {
@@ -543,8 +551,8 @@ impl SlotColumn for columns::Rewards {}
 impl ColumnName for columns::Rewards {
     const NAME: &'static str = REWARDS_CF;
 }
-impl TypedColumn for columns::Rewards {
-    type Type = Rewards;
+impl ProtobufColumn for columns::Rewards {
+    type Type = generated::Rewards;
 }
 
 impl SlotColumn for columns::Blocktime {}
@@ -918,6 +926,40 @@ where
 
         self.backend
             .put_cf(self.handle(), &C::key(key), &serialized_value)
+    }
+}
+
+impl<C> LedgerColumn<C>
+where
+    C: ProtobufColumn + ColumnName,
+{
+    pub fn get_protobuf_or_bincode<T: DeserializeOwned + Into<C::Type>>(
+        &self,
+        key: C::Index,
+    ) -> Result<Option<C::Type>> {
+        if let Some(serialized_value) = self.backend.get_cf(self.handle(), &C::key(key))? {
+            let value = match C::Type::decode(&serialized_value[..]) {
+                Ok(value) => value,
+                Err(_) => deserialize::<T>(&serialized_value)?.into(),
+            };
+            Ok(Some(value))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn get_protobuf(&self, key: C::Index) -> Result<Option<C::Type>> {
+        if let Some(serialized_value) = self.backend.get_cf(self.handle(), &C::key(key))? {
+            Ok(Some(C::Type::decode(&serialized_value[..])?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn put_protobuf(&self, key: C::Index, value: &C::Type) -> Result<()> {
+        let mut buf = Vec::with_capacity(value.encoded_len());
+        value.encode(&mut buf)?;
+        self.backend.put_cf(self.handle(), &C::key(key), &buf)
     }
 }
 

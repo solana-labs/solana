@@ -1,7 +1,7 @@
 [package]
-name = "solana-storage-bigtable"
+name = "solana-storage-proto"
 version = "1.5.0"
-description = "Solana Storage BigTable"
+description = "Solana Storage Protobuf Definitions"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
@@ -9,29 +9,16 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-backoff = {version="0.2.1", features = ["tokio"]}
 bincode = "1.2.1"
-bzip2 = "0.3.3"
-enum-iterator = "0.6.0"
-flate2 = "1.0.14"
-goauth = "0.7.2"
-log = "0.4.8"
 prost = "0.6.1"
-prost-types = "0.6.1"
 serde = "1.0.112"
 serde_derive = "1.0.103"
-smpl_jwt = "0.5.0"
 solana-sdk = { path = "../sdk", version = "1.5.0" }
-solana-storage-proto = { path = "../storage-proto", version = "1.5.0" }
 solana-transaction-status = { path = "../transaction-status", version = "1.5.0" }
-thiserror = "1.0"
-futures = "0.3.5"
-tonic = {version="0.3.0", features = ["tls", "transport"]}
-zstd = "0.5.1"
 
 [lib]
 crate-type = ["lib"]
-name = "solana_storage_bigtable"
+name = "solana_storage_proto"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

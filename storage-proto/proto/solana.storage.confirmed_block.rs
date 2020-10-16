@@ -95,6 +95,11 @@ pub struct Reward {
     pub reward_type: i32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Rewards {
+    #[prost(message, repeated, tag = "1")]
+    pub rewards: ::std::vec::Vec<Reward>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UnixTimestamp {
     #[prost(int64, tag = "1")]
     pub timestamp: i64,
