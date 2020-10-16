@@ -54,7 +54,7 @@ impl RentCollector {
         &self,
         address: &Pubkey,
         account: &mut Account,
-        enable_new_behavior: bool,
+        rent_fix_enabled: bool,
     ) -> u64 {
         if account.executable
             || account.rent_epoch > self.epoch
@@ -81,7 +81,7 @@ impl RentCollector {
             if exempt || rent_due != 0 {
                 if account.lamports > rent_due {
                     account.rent_epoch = self.epoch
-                        + if enable_new_behavior && exempt {
+                        + if rent_fix_enabled && exempt {
                             // Rent isn't collected for the next epoch
                             // Make sure to check exempt status later in curent epoch again
                             0

@@ -2586,7 +2586,7 @@ impl Bank {
             &self.rent_collector,
             &self.last_blockhash_with_fee_calculator(),
             self.fix_recent_blockhashes_sysvar_delay(),
-            self.rent_fix_enabled(),
+            self.cumulative_rent_related_fixes_enabled(),
         );
         self.collect_rent(executed, loaded_accounts);
 
@@ -2833,7 +2833,7 @@ impl Bank {
             rent += self.rent_collector.collect_from_existing_account(
                 &pubkey,
                 &mut account,
-                self.rent_fix_enabled(),
+                self.cumulative_rent_related_fixes_enabled(),
             );
             // Store all of them unconditionally to purge old AppendVec,
             // even if collected rent is 0 (= not updated).
@@ -2954,7 +2954,7 @@ impl Bank {
         let should_enable = match self.cluster_type() {
             ClusterType::MainnetBeta => {
                 #[cfg(not(test))]
-                let should_enable = self.rent_fix_enabled();
+                let should_enable = self.cumulative_rent_related_fixes_enabled();
 
                 // needed for test_rent_eager_across_epoch_with_gap_under_multi_epoch_cycle,
                 // which depends on ClusterType::MainnetBeta
@@ -2963,7 +2963,7 @@ impl Bank {
 
                 should_enable
             }
-            _ => self.rent_fix_enabled(),
+            _ => self.cumulative_rent_related_fixes_enabled(),
         };
 
         let mut partitions = vec![];
@@ -3310,18 +3310,18 @@ impl Bank {
     pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) -> u64 {
         let mut account = self.get_account(pubkey).unwrap_or_default();
 
-        let should_be_in_new_behavior = self.rent_fix_enabled();
+        let rent_fix_enabled = self.cumulative_rent_related_fixes_enabled();
 
         // don't collect rents if we're in the new behavior;
         // in genral, it's not worthwhile to account for rents outside the runtime (transactions)
         // there are too many and subtly nuanced modification codepaths
-        if !should_be_in_new_behavior {
+        if !rent_fix_enabled {
             // previously we're too much collecting rents as if it existed since epoch 0...
             self.collected_rent.fetch_add(
                 self.rent_collector.collect_from_existing_account(
                     pubkey,
                     &mut account,
-                    should_be_in_new_behavior,
+                    rent_fix_enabled,
                 ),
                 Relaxed,
             );
@@ -3889,8 +3889,8 @@ impl Bank {
             .is_active(&feature_set::no_overflow_rent_distribution::id())
     }
 
-    pub fn rent_fix_enabled(&self) -> bool {
-        self.feature_set.rent_fix_enabled()
+    pub fn cumulative_rent_related_fixes_enabled(&self) -> bool {
+        self.feature_set.cumulative_rent_related_fixes_enabled()
     }
 
     // This is called from snapshot restore AND for each epoch boundary

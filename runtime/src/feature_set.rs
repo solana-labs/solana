@@ -131,7 +131,7 @@ impl FeatureSet {
         self.active.contains(feature_id)
     }
 
-    pub fn rent_fix_enabled(&self) -> bool {
+    pub fn cumulative_rent_related_fixes_enabled(&self) -> bool {
         self.is_active(&cumulative_rent_related_fixes::id())
     }
 
