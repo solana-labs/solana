@@ -387,17 +387,14 @@ impl Tower {
     pub fn record_bank_vote(&mut self, vote: Vote) -> Option<Slot> {
         let slot = vote.last_voted_slot().unwrap_or(0);
         trace!("{} record_vote for {}", self.node_pubkey, slot);
-        let root_slot = self.root();
+        let old_root = self.root();
         self.lockouts.process_vote_unchecked(&vote);
         self.last_vote = vote;
+        let new_root = self.root();
 
-        datapoint_info!(
-            "tower-vote",
-            ("latest", slot, i64),
-            ("root", self.root(), i64)
-        );
-        if root_slot != self.root() {
-            Some(self.root())
+        datapoint_info!("tower-vote", ("latest", slot, i64), ("root", new_root, i64));
+        if old_root != new_root {
+            Some(new_root)
         } else {
             None
         }
