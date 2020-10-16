@@ -56,6 +56,7 @@ const PAGE_SIZE: u64 = 4 * 1024;
 pub const DEFAULT_FILE_SIZE: u64 = PAGE_SIZE * 1024;
 pub const DEFAULT_NUM_THREADS: u32 = 8;
 pub const DEFAULT_NUM_DIRS: u32 = 4;
+const MAX_RECYCLE_STORES: usize = 5000;
 
 lazy_static! {
     // FROZEN_ACCOUNT_PANIC is used to signal local_cluster that an AccountsDB panic has occurred,
@@ -172,7 +173,7 @@ pub enum BankHashVerificationError {
 /// Persistent storage structure holding the accounts
 #[derive(Debug)]
 pub struct AccountStorageEntry {
-    pub(crate) id: AppendVecId,
+    pub(crate) id: AtomicUsize,
 
     pub(crate) slot: AtomicU64,
 
@@ -202,7 +203,7 @@ impl AccountStorageEntry {
         let accounts = AppendVec::new(&path, true, file_size as usize);
 
         Self {
-            id,
+            id: AtomicUsize::new(id),
             slot: AtomicU64::new(slot),
             accounts,
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
@@ -212,7 +213,7 @@ impl AccountStorageEntry {
 
     pub(crate) fn new_empty_map(id: AppendVecId, accounts_current_len: usize) -> Self {
         Self {
-            id,
+            id: AtomicUsize::new(id),
             slot: AtomicU64::new(0),
             accounts: AppendVec::new_empty_map(accounts_current_len),
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
@@ -241,11 +242,12 @@ impl AccountStorageEntry {
         *count_and_status = (count, status);
     }
 
-    pub fn recycle(&self, slot: Slot) {
+    pub fn recycle(&self, slot: Slot, id: usize) {
         let mut count_and_status = self.count_and_status.write().unwrap();
         self.accounts.reset();
         *count_and_status = (0, AccountStorageStatus::Available);
         self.slot.store(slot, Ordering::Release);
+        self.id.store(id, Ordering::Relaxed);
         self.approx_store_count.store(0, Ordering::Relaxed);
     }
 
@@ -270,7 +272,7 @@ impl AccountStorageEntry {
     }
 
     pub fn append_vec_id(&self) -> AppendVecId {
-        self.id
+        self.id.load(Ordering::Relaxed)
     }
 
     pub fn flush(&self) -> Result<(), IOError> {
@@ -330,7 +332,7 @@ impl AccountStorageEntry {
             count > 0,
             "double remove of account in slot: {}/store: {}!!",
             self.slot(),
-            self.id
+            self.append_vec_id(),
         );
 
         count -= 1;
@@ -1020,7 +1022,7 @@ impl AccountsDB {
                             account.clone_account(),
                             *account.hash,
                             next - start,
-                            (store.id, account.offset),
+                            (store.append_vec_id(), account.offset),
                             account.meta.write_version,
                         ));
                         start = next;
@@ -1066,7 +1068,7 @@ impl AccountsDB {
                 },
             )
             .sum();
-        let aligned_total: u64 = (alive_total + (PAGE_SIZE - 1)) & !(PAGE_SIZE - 1);
+        let aligned_total: u64 = self.page_align(alive_total);
 
         debug!(
             "shrinking: slot: {}, stored_accounts: {} => alive_accounts: {} ({} bytes; aligned to: {})",
@@ -1113,7 +1115,7 @@ impl AccountsDB {
                 slot,
                 &accounts,
                 &hashes,
-                |_| shrunken_store.clone(),
+                |_, _| shrunken_store.clone(),
                 write_versions.into_iter(),
             );
             start.stop();
@@ -1145,8 +1147,13 @@ impl AccountsDB {
 
         let mut drop_storage_entries_elapsed = Measure::start("drop_storage_entries_elapsed");
         let mut recycle_stores = self.recycle_stores.write().unwrap();
-        recycle_stores.extend(dead_storages);
-        drop(recycle_stores);
+        if recycle_stores.len() < MAX_RECYCLE_STORES {
+            recycle_stores.extend(dead_storages);
+            drop(recycle_stores);
+        } else {
+            drop(recycle_stores);
+            drop(dead_storages);
+        }
         drop_storage_entries_elapsed.stop();
 
         datapoint_info!(
@@ -1300,7 +1307,7 @@ impl AccountsDB {
                     let accounts = storage.accounts.accounts(0);
                     let mut retval = B::default();
                     accounts.iter().for_each(|stored_account| {
-                        scan_func(stored_account, storage.id, &mut retval)
+                        scan_func(stored_account, storage.append_vec_id(), &mut retval)
                     });
                     retval
                 })
@@ -1394,7 +1401,7 @@ impl AccountsDB {
             .and_then(|account_storage_entry| account_storage_entry.get_account(account_info))
     }
 
-    fn find_storage_candidate(&self, slot: Slot) -> Arc<AccountStorageEntry> {
+    fn find_storage_candidate(&self, slot: Slot, size: usize) -> Arc<AccountStorageEntry> {
         let mut create_extra = false;
         let slot_stores_lock = self.storage.get_slot_stores(slot);
         if let Some(slot_stores_lock) = slot_stores_lock {
@@ -1416,7 +1423,9 @@ impl AccountsDB {
                 let to_skip = thread_rng().gen_range(0, slot_stores.len());
 
                 for (i, store) in slot_stores.values().cycle().skip(to_skip).enumerate() {
-                    if store.try_available() {
+                    if store.accounts.capacity() - store.accounts.len() as u64 > size as u64
+                        && store.try_available()
+                    {
                         let ret = store.clone();
                         drop(slot_stores);
                         if create_extra {
@@ -1432,11 +1441,21 @@ impl AccountsDB {
             }
         }
 
-        let new_store = { self.recycle_stores.write().unwrap().pop() };
+        let new_store: Option<Arc<AccountStorageEntry>> = {
+            let mut found_store = None;
+            let mut recycle_stores = self.recycle_stores.write().unwrap();
+            for (i, store) in recycle_stores.iter().enumerate() {
+                if store.accounts.capacity() > size as u64 {
+                    found_store = Some(recycle_stores.swap_remove(i));
+                    break;
+                }
+            }
+            found_store
+        };
         if let Some(store) = new_store {
-            store.recycle(slot);
-            store.try_available();
+            store.recycle(slot, self.next_id.fetch_add(1, Ordering::Relaxed));
             self.insert_store(slot, store.clone());
+            store.try_available();
             return store;
         }
 
@@ -1445,10 +1464,31 @@ impl AccountsDB {
         store
     }
 
+    fn page_align(&self, size: u64) -> u64 {
+        (size + (PAGE_SIZE - 1)) & !(PAGE_SIZE - 1)
+    }
+
+    fn get_highest_available_free_storage(&self, slot: Slot) -> u64 {
+        let slot_storage = self.storage.get_slot_stores(slot).unwrap();
+        let mut highest_available = 0;
+        let slot_storage_r = slot_storage.read().unwrap();
+        for (_id, store) in slot_storage_r.iter() {
+            highest_available = std::cmp::max(
+                highest_available,
+                store.accounts.capacity() - store.accounts.len() as u64,
+            );
+        }
+
+        highest_available
+    }
+
     fn create_and_insert_store(&self, slot: Slot, size: u64) -> Arc<AccountStorageEntry> {
         let path_index = thread_rng().gen_range(0, self.paths.len());
-        let store =
-            Arc::new(self.new_storage_entry(slot, &Path::new(&self.paths[path_index]), size));
+        let store = Arc::new(self.new_storage_entry(
+            slot,
+            &Path::new(&self.paths[path_index]),
+            self.page_align(size),
+        ));
         let store_for_index = store.clone();
 
         self.insert_store(slot, store_for_index);
@@ -1467,7 +1507,10 @@ impl AccountsDB {
                 .or_insert(Arc::new(RwLock::new(HashMap::new())))
                 .clone());
 
-        slot_storages.write().unwrap().insert(store.id, store);
+        slot_storages
+            .write()
+            .unwrap()
+            .insert(store.append_vec_id(), store);
     }
 
     pub fn purge_slot(&self, slot: Slot) {
@@ -1509,10 +1552,12 @@ impl AccountsDB {
         // of any locks
         let mut recycle_stores = self.recycle_stores.write().unwrap();
         for slot_entries in all_removed_slot_storages {
-            if let Ok(entry) = slot_entries.read() {
-                for (_slot, stores) in entry.iter() {
-                    recycle_stores.push(stores.clone());
+            let entry = slot_entries.read().unwrap();
+            for (_slot, stores) in entry.iter() {
+                if recycle_stores.len() > MAX_RECYCLE_STORES {
+                    break;
                 }
+                recycle_stores.push(stores.clone());
             }
         }
         drop(recycle_stores);
@@ -1767,7 +1812,7 @@ impl AccountsDB {
             Some(ret)
         });
 
-        let storage_finder = |slot| self.find_storage_candidate(slot);
+        let storage_finder = |slot, size| self.find_storage_candidate(slot, size);
         self.store_accounts_to(
             slot,
             accounts,
@@ -1777,7 +1822,10 @@ impl AccountsDB {
         )
     }
 
-    fn store_accounts_to<F: FnMut(Slot) -> Arc<AccountStorageEntry>, P: Iterator<Item = u64>>(
+    fn store_accounts_to<
+        F: FnMut(Slot, usize) -> Arc<AccountStorageEntry>,
+        P: Iterator<Item = u64>,
+    >(
         &self,
         slot: Slot,
         accounts: &[(&Pubkey, &Account)],
@@ -1809,7 +1857,7 @@ impl AccountsDB {
         let mut total_storage_find_us = 0;
         while infos.len() < with_meta.len() {
             let mut storage_find = Measure::start("storage_finder");
-            let storage = storage_finder(slot);
+            let storage = storage_finder(slot, with_meta[infos.len()].1.data.len());
             storage_find.stop();
             total_storage_find_us += storage_find.as_us();
             let mut append_accounts = Measure::start("append_accounts");
@@ -1821,9 +1869,10 @@ impl AccountsDB {
             if rvs.is_empty() {
                 storage.set_status(AccountStorageStatus::Full);
 
-                // See if an account overflows the default append vec size.
+                // See if an account overflows the append vecs in the slot.
                 let data_len = (with_meta[infos.len()].1.data.len() + 4096) as u64;
-                if data_len > self.file_size {
+                let highest_available = self.get_highest_available_free_storage(slot);
+                if data_len > highest_available {
                     self.create_and_insert_store(slot, data_len * 2);
                 }
                 continue;
@@ -1831,7 +1880,7 @@ impl AccountsDB {
             for (offset, (_, account)) in rvs.iter().zip(&with_meta[infos.len()..]) {
                 storage.add_account();
                 infos.push(AccountInfo {
-                    store_id: storage.id,
+                    store_id: storage.append_vec_id(),
                     offset: *offset,
                     lamports: account.lamports,
                 });
@@ -2622,6 +2671,19 @@ impl AccountsDB {
     pub(crate) fn print_accounts_stats(&self, label: &'static str) {
         self.print_index(label);
         self.print_count_and_status(label);
+        info!("recycle_stores:");
+        let recycle_stores = self.recycle_stores.read().unwrap();
+        for entry in recycle_stores.iter() {
+            info!(
+                "  slot: {} id: {} count_and_status: {:?} approx_store_count: {} len: {} capacity: {}",
+                entry.slot(),
+                entry.append_vec_id(),
+                *entry.count_and_status.read().unwrap(),
+                entry.approx_store_count.load(Ordering::Relaxed),
+                entry.accounts.len(),
+                entry.accounts.capacity(),
+            );
+        }
     }
 
     fn print_index(&self, label: &'static str) {
@@ -4122,9 +4184,10 @@ pub mod tests {
         let storage_entries = accounts_db.get_snapshot_storages(Slot::max_value());
         for storage in storage_entries.iter().flatten() {
             let storage_path = storage.get_path();
-            let output_path = output_dir
-                .as_ref()
-                .join(AppendVec::new_relative_path(storage.slot(), storage.id));
+            let output_path = output_dir.as_ref().join(AppendVec::new_relative_path(
+                storage.slot(),
+                storage.append_vec_id(),
+            ));
 
             fs::copy(storage_path, output_path)?;
         }
