@@ -55,11 +55,41 @@ pub fn check_account_for_multiple_fees_with_commitment(
     messages: &[&Message],
     commitment: CommitmentConfig,
 ) -> Result<(), CliError> {
+    check_account_for_spend_multiple_fees_with_commitment(
+        rpc_client,
+        account_pubkey,
+        0,
+        fee_calculator,
+        messages,
+        commitment,
+    )
+}
+
+pub fn check_account_for_spend_multiple_fees_with_commitment(
+    rpc_client: &RpcClient,
+    account_pubkey: &Pubkey,
+    balance: u64,
+    fee_calculator: &FeeCalculator,
+    messages: &[&Message],
+    commitment: CommitmentConfig,
+) -> Result<(), CliError> {
     let fee = calculate_fee(fee_calculator, messages);
-    if !check_account_for_balance_with_commitment(rpc_client, account_pubkey, fee, commitment)
-        .map_err(Into::<ClientError>::into)?
+    if !check_account_for_balance_with_commitment(
+        rpc_client,
+        account_pubkey,
+        balance + fee,
+        commitment,
+    )
+    .map_err(Into::<ClientError>::into)?
     {
-        return Err(CliError::InsufficientFundsForFee(lamports_to_sol(fee)));
+        if balance > 0 {
+            return Err(CliError::InsufficientFundsForSpendAndFee(
+                lamports_to_sol(balance),
+                lamports_to_sol(fee),
+            ));
+        } else {
+            return Err(CliError::InsufficientFundsForFee(lamports_to_sol(fee)));
+        }
     }
     Ok(())
 }

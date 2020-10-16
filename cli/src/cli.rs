@@ -1166,11 +1166,12 @@ fn process_deploy(
     let signers = [config.signers[0], program_id];
 
     // Check program account to see if partial initialization has occurred
-    let initial_instructions = if let Some(account) = rpc_client
+    let (initial_instructions, balance_needed) = if let Some(account) = rpc_client
         .get_account_with_commitment(&program_id.pubkey(), config.commitment)?
         .value
     {
         let mut instructions: Vec<Instruction> = vec![];
+        let mut balance_needed = 0;
         if account.executable {
             return Err(CliError::DynamicProgramError(
                 "Program account is already executable".to_string(),
@@ -1194,21 +1195,26 @@ fn process_deploy(
             }
         }
         if account.lamports < minimum_balance {
+            let balance = minimum_balance - account.lamports;
             instructions.push(system_instruction::transfer(
                 &config.signers[0].pubkey(),
                 &program_id.pubkey(),
-                minimum_balance - account.lamports,
+                balance,
             ));
+            balance_needed = balance;
         }
-        instructions
+        (instructions, balance_needed)
     } else {
-        vec![system_instruction::create_account(
-            &config.signers[0].pubkey(),
-            &program_id.pubkey(),
+        (
+            vec![system_instruction::create_account(
+                &config.signers[0].pubkey(),
+                &program_id.pubkey(),
+                minimum_balance,
+                program_data.len() as u64,
+                &loader_id,
+            )],
             minimum_balance,
-            program_data.len() as u64,
-            &loader_id,
-        )]
+        )
     };
     let initial_message = if !initial_instructions.is_empty() {
         Some(Message::new(
@@ -1251,9 +1257,10 @@ fn process_deploy(
         .get_recent_blockhash_with_commitment(config.commitment)?
         .value;
 
-    check_account_for_multiple_fees_with_commitment(
+    check_account_for_spend_multiple_fees_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
+        balance_needed,
         &fee_calculator,
         &messages,
         config.commitment,
