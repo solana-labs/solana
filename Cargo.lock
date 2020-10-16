@@ -3976,6 +3976,7 @@ dependencies = [
  "log 0.4.8",
  "matches",
  "num_cpus",
+ "prost",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
@@ -3996,6 +3997,7 @@ dependencies = [
  "solana-sdk 1.4.2",
  "solana-stake-program",
  "solana-storage-bigtable",
+ "solana-storage-proto",
  "solana-transaction-status",
  "solana-vote-program",
  "tempfile",
@@ -4576,11 +4578,28 @@ dependencies = [
  "serde",
  "serde_derive",
  "smpl_jwt",
+<<<<<<< HEAD
  "solana-sdk 1.4.2",
+=======
+ "solana-sdk 1.5.0",
+ "solana-storage-proto",
+>>>>>>> 359707c85... Convert Blockstore Rewards cf to protobuf (#12860)
  "solana-transaction-status",
  "thiserror",
  "tonic",
  "zstd",
+]
+
+[[package]]
+name = "solana-storage-proto"
+version = "1.5.0"
+dependencies = [
+ "bincode",
+ "prost",
+ "serde",
+ "serde_derive",
+ "solana-sdk 1.5.0",
+ "solana-transaction-status",
 ]
 
 [[package]]

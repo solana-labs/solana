@@ -1,3 +1,4 @@
+use crate::StoredExtendedRewards;
 use solana_sdk::{
     hash::Hash,
     instruction::CompiledInstruction,
@@ -15,8 +16,49 @@ use std::convert::{TryFrom, TryInto};
 pub mod generated {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        concat!("/proto/solana.bigtable.confirmed_block.rs")
+        concat!("/proto/solana.storage.confirmed_block.rs")
     ));
+}
+
+impl From<Vec<Reward>> for generated::Rewards {
+    fn from(rewards: Vec<Reward>) -> Self {
+        Self {
+            rewards: rewards.into_iter().map(|r| r.into()).collect(),
+        }
+    }
+}
+
+impl From<generated::Rewards> for Vec<Reward> {
+    fn from(rewards: generated::Rewards) -> Self {
+        rewards.rewards.into_iter().map(|r| r.into()).collect()
+    }
+}
+
+impl From<StoredExtendedRewards> for generated::Rewards {
+    fn from(rewards: StoredExtendedRewards) -> Self {
+        Self {
+            rewards: rewards
+                .into_iter()
+                .map(|r| {
+                    let r: Reward = r.into();
+                    r.into()
+                })
+                .collect(),
+        }
+    }
+}
+
+impl From<generated::Rewards> for StoredExtendedRewards {
+    fn from(rewards: generated::Rewards) -> Self {
+        rewards
+            .rewards
+            .into_iter()
+            .map(|r| {
+                let r: Reward = r.into();
+                r.into()
+            })
+            .collect()
+    }
 }
 
 impl From<Reward> for generated::Reward {

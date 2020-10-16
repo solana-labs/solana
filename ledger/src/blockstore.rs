@@ -37,6 +37,7 @@ use solana_sdk::{
     timing::timestamp,
     transaction::Transaction,
 };
+use solana_storage_proto::StoredExtendedRewards;
 use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Rewards,
     TransactionStatusMeta, TransactionWithStatusMeta,
@@ -1694,7 +1695,11 @@ impl Blockstore {
                 let blockhash = get_last_hash(slot_entries.iter())
                     .unwrap_or_else(|| panic!("Rooted slot {:?} must have blockhash", slot));
 
-                let rewards = self.rewards_cf.get(slot)?.unwrap_or_else(Vec::new);
+                let rewards = self
+                    .rewards_cf
+                    .get_protobuf_or_bincode::<StoredExtendedRewards>(slot)?
+                    .unwrap_or_default()
+                    .into();
                 let block_time = self.blocktime_cf.get(slot)?;
 
                 let block = ConfirmedBlock {
@@ -2256,11 +2261,14 @@ impl Blockstore {
     }
 
     pub fn read_rewards(&self, index: Slot) -> Result<Option<Rewards>> {
-        self.rewards_cf.get(index)
+        self.rewards_cf
+            .get_protobuf_or_bincode::<Rewards>(index)
+            .map(|result| result.map(|option| option.into()))
     }
 
     pub fn write_rewards(&self, index: Slot, rewards: Rewards) -> Result<()> {
-        self.rewards_cf.put(index, &rewards)
+        let rewards = rewards.into();
+        self.rewards_cf.put_protobuf(index, &rewards)
     }
 
     fn get_block_timestamps(&self, slot: Slot) -> Result<Vec<(Pubkey, (Slot, UnixTimestamp))>> {
@@ -3446,7 +3454,7 @@ pub mod tests {
     use bincode::serialize;
     use itertools::Itertools;
     use rand::{seq::SliceRandom, thread_rng};
-    use solana_runtime::bank::Bank;
+    use solana_runtime::bank::{Bank, RewardType};
     use solana_sdk::{
         hash::{self, hash, Hash},
         instruction::CompiledInstruction,
@@ -3456,7 +3464,8 @@ pub mod tests {
         signature::Signature,
         transaction::TransactionError,
     };
-    use solana_transaction_status::InnerInstructions;
+    use solana_storage_proto::convert::generated;
+    use solana_transaction_status::{InnerInstructions, Reward, Rewards};
     use solana_vote_program::{vote_instruction, vote_state::Vote};
     use std::{iter::FromIterator, time::Duration};
 
@@ -7238,5 +7247,45 @@ pub mod tests {
             vec![(0, 0), (1, 1)]
         );
         assert_eq!(completed_data_indexes, vec![0, 1, 3]);
+    }
+
+    #[test]
+    fn test_rewards_protobuf_backward_compatability() {
+        let blockstore_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&blockstore_path).unwrap();
+            let rewards: Rewards = (0..100)
+                .map(|i| Reward {
+                    pubkey: Pubkey::new_rand().to_string(),
+                    lamports: 42 + i,
+                    post_balance: std::u64::MAX,
+                    reward_type: Some(RewardType::Fee),
+                })
+                .collect();
+            let protobuf_rewards: generated::Rewards = rewards.into();
+
+            let deprecated_rewards: StoredExtendedRewards = protobuf_rewards.clone().into();
+            for slot in 0..2 {
+                let data = serialize(&deprecated_rewards).unwrap();
+                blockstore.rewards_cf.put_bytes(slot, &data).unwrap();
+            }
+            for slot in 2..4 {
+                blockstore
+                    .rewards_cf
+                    .put_protobuf(slot, &protobuf_rewards)
+                    .unwrap();
+            }
+            for slot in 0..4 {
+                assert_eq!(
+                    blockstore
+                        .rewards_cf
+                        .get_protobuf_or_bincode::<StoredExtendedRewards>(slot)
+                        .unwrap()
+                        .unwrap(),
+                    protobuf_rewards
+                );
+            }
+        }
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 }
