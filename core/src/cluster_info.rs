@@ -2204,19 +2204,25 @@ impl ClusterInfo {
     where
         I: IntoIterator<Item = (Pong, SocketAddr)>,
     {
-        let mut pongs = pongs.into_iter().peekable();
-        if pongs.peek().is_some() {
-            let mut verify_failed = 0;
-            let mut ping_cache = self.ping_cache.write().unwrap();
-            for (pong, addr) in pongs {
+        let mut verify_failed = 0;
+        let pongs: Vec<_> = pongs
+            .into_iter()
+            .filter(|(pong, _)| {
                 if pong.verify() {
-                    ping_cache.add(&pong, addr, now);
+                    true
                 } else {
                     verify_failed += 1;
+                    false
                 }
-            }
-            if verify_failed != 0 {
-                inc_new_counter_info!("cluster_info-gossip_pong_msg_verify_fail", verify_failed);
+            })
+            .collect();
+        if verify_failed != 0 {
+            inc_new_counter_info!("cluster_info-gossip_pong_msg_verify_fail", verify_failed);
+        }
+        if !pongs.is_empty() {
+            let mut ping_cache = self.ping_cache.write().unwrap();
+            for (pong, addr) in pongs {
+                ping_cache.add(&pong, addr, now);
             }
         }
     }
