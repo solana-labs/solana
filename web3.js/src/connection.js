@@ -2744,11 +2744,12 @@ export class Connection {
 
     const signData = transaction.serializeMessage();
     const wireTransaction = transaction._serialize(signData);
-    const encodedTransaction = bs58.encode(wireTransaction);
-    const args = [encodedTransaction];
+    const encodedTransaction = wireTransaction.toString('base64');
+    const config: any = {encoding: 'base64'};
+    const args = [encodedTransaction, config];
 
     if (signers) {
-      args.push({sigVerify: true});
+      config.sigVerify = true;
     }
 
     const unsafeRes = await this._rpcRequest('simulateTransaction', args);
@@ -2817,7 +2818,7 @@ export class Connection {
     rawTransaction: Buffer | Uint8Array | Array<number>,
     options: ?SendOptions,
   ): Promise<TransactionSignature> {
-    const encodedTransaction = bs58.encode(toBuffer(rawTransaction));
+    const encodedTransaction = toBuffer(rawTransaction).toString('base64');
     const result = await this.sendEncodedTransaction(
       encodedTransaction,
       options,
@@ -2827,13 +2828,14 @@ export class Connection {
 
   /**
    * Send a transaction that has already been signed, serialized into the
-   * wire format, and encoded as a base58 string
+   * wire format, and encoded as a base64 string
    */
   async sendEncodedTransaction(
     encodedTransaction: string,
     options: ?SendOptions,
   ): Promise<TransactionSignature> {
-    const args = [encodedTransaction];
+    const config: any = {encoding: 'base64'};
+    const args = [encodedTransaction, config];
     const skipPreflight = options && options.skipPreflight;
     const preflightCommitment = options && options.preflightCommitment;
 
@@ -2844,9 +2846,9 @@ export class Connection {
     }
 
     if (skipPreflight) {
-      args.push({skipPreflight});
+      config.skipPreflight = skipPreflight;
     } else if (preflightCommitment) {
-      args.push({preflightCommitment});
+      config.preflightCommitment = preflightCommitment;
     }
 
     const unsafeRes = await this._rpcRequest('sendTransaction', args);
