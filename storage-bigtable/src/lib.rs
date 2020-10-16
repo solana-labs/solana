@@ -7,6 +7,7 @@ use solana_sdk::{
     sysvar::is_sysvar_id,
     transaction::{Transaction, TransactionError},
 };
+use solana_storage_proto::convert::generated;
 use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Reward,
     TransactionStatus, TransactionStatusMeta, TransactionWithStatusMeta,
@@ -20,10 +21,7 @@ extern crate serde_derive;
 mod access_token;
 mod bigtable;
 mod compression;
-mod convert;
 mod root_ca_certificate;
-
-use convert::generated;
 
 #[derive(Debug, Error)]
 pub enum Error {
