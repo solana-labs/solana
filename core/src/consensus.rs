@@ -570,9 +570,13 @@ impl Tower {
                     return SwitchForkDecision::SameFork;
                 }
 
-                // Should never consider switching to an ancestor
-                // of your last vote
-                assert!(!last_vote_ancestors.contains(&switch_slot));
+                assert!(
+                    !last_vote_ancestors.contains(&switch_slot),
+                    "Should never consider switching to slot ({}), which is ancestors({:?}) of last vote: {}",
+                    switch_slot,
+                    last_vote_ancestors,
+                    last_voted_slot
+                );
 
                 // By this point, we know the `switch_slot` is on a different fork
                 // (is neither an ancestor nor descendant of `last_vote`), so a
@@ -832,16 +836,17 @@ impl Tower {
         replayed_root: Slot,
         slot_history: &SlotHistory,
     ) -> Result<Self> {
-        info!(
-            "adjusting lockouts (after replay up to {}): {:?}",
-            replayed_root,
-            self.voted_slots()
-        );
-
         // sanity assertions for roots
-        assert_eq!(slot_history.check(replayed_root), Check::Found);
         assert!(self.root().is_some());
         let tower_root = self.root().unwrap();
+        info!(
+            "adjusting lockouts (after replay up to {}): {:?} tower root: {}",
+            replayed_root,
+            self.voted_slots(),
+            tower_root,
+        );
+        assert_eq!(slot_history.check(replayed_root), Check::Found);
+
         // reconcile_blockstore_roots_with_tower() should already have aligned these.
         assert!(
             tower_root <= replayed_root,
