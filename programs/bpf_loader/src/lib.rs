@@ -194,6 +194,11 @@ pub fn process_instruction(
 struct ThisInstructionMeter {
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
 }
+impl ThisInstructionMeter {
+    fn new(compute_meter: Rc<RefCell<dyn ComputeMeter>>) -> Self {
+        Self { compute_meter }
+    }
+}
 impl InstructionMeter for ThisInstructionMeter {
     fn consume(&mut self, amount: u64) {
         // 1 to 1 instruction to compute unit mapping
@@ -245,13 +250,22 @@ impl Executor for BPFExecutor {
             };
 
             log!(logger, "Call BPF program {}", program.unsigned_key());
-            let instruction_meter = ThisInstructionMeter { compute_meter };
-            match vm.execute_program_metered(
+            let instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
+            let before = compute_meter.borrow().get_remaining();
+            let result = vm.execute_program_metered(
                 parameter_bytes.as_slice(),
                 &[],
                 &[heap_region],
                 instruction_meter,
-            ) {
+            );
+            let after = compute_meter.borrow().get_remaining();
+            log!(
+                logger,
+                "BPF program consumed {} of {} units",
+                before - after,
+                before
+            );
+            match result {
                 Ok(status) => {
                     if status != SUCCESS {
                         let error: InstructionError = status.into();
