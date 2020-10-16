@@ -80,7 +80,7 @@ blocks.
 
 Our official release announcements for all kinds releases (normal and security)
 are communicated via a discord channel called
-[`#mb-announcement`](`https://discord.com/channels/428295358100013066/669406841830244375`)
+[`#mb-announcement`](https://discord.com/channels/428295358100013066/669406841830244375)
 (`mb` stands for `mainnet-beta`).
 
 Like normal staked validators, we expect any exchange-operated validators to be
