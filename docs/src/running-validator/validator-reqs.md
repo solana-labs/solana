@@ -34,13 +34,13 @@ Here are our recommendations for low, medium, and high end machine specification
 
 ## Virtual machines on Cloud Platforms
 
-You can run validator on any VMs hosted on cloud computing platforms.
-However, this is not recommended for long-term cost-efficient perspective.
+While you can run a validator on a cloud computing platform, it may not
+be cost-efficient over the long term.
 
-However, it may be convenient to run RPC nodes on VM instances for your internal
+However, it may be convenient to run non-voting api nodes on VM instances for your own internal
 usage. This use case includes exchanges and services built on Solana.
 
-In fact, the offical mainnet-beta API nodes are currently run on GCE
+In fact, the offical mainnet-beta API nodes are currently (Oct. 2020) run on GCE
 `n1-standard-32` (32 vCPUs, 120 GB memory) instances with 2048 GB SSD for
 operational convenience.
 
@@ -53,7 +53,7 @@ especially for the case of running staked validators.
 
 Running validator for live clusters (including mainnet-beta) inside Docker is
 not recommended and generally not supported. This is due to concerns of general
-docker's containerzation overhead and resultant performance degradation uneless
+docker's containerzation overhead and resultant performance degradation unless
 specially configured.
 
 We use docker only for development purpose.

@@ -10,20 +10,17 @@ exchange.
 This section explains various setup topics to run the Solana full node (called
 `solana-validator`).
 
-In short, we highly recommend setting up at least two nodes on high-grade
-computers/cloud instances, timely maintenance for newer versions, and watchful
+We highly recommend setting up at least two nodes on high-grade
+computers/cloud instances, upgrading to newer versions promptly, and keeping an eye on
 service operations with a bundled monitoring tool.
 
-As a result, this setup enables you:
-- to have a trusted gateway of the Solana mainnet-beta network (called the
-  mainnet-beta cluster) to query various information via RPC and to submit
-  transactions for withdrawals
+This setup enables you:
+- to have a trusted gateway to the Solana mainnet-beta cluster to get data and submit withdrawal transactions
 - to have full control over how much historical block data is retained
 - to maintain your service availability even if one node fails
 
-Firstly, our node demands a relatively high computing resource to process
-blocks without delay due to very high TPS without sharding.
-For specific requirements, there is [hardware recommendations](../running-validator/validator-reqs.md).
+Solana nodes demand relatively high computing power to handle our fast blocks and high TPS.
+For specific requirements, please see [hardware recommendations](../running-validator/validator-reqs.md).
 
 To run an api node:
 
@@ -73,19 +70,20 @@ and twillio. For details, run `solana-watchtower --help`.
 solana-watchtower --validator-identity <YOUR VALIDATOR IDENTITY>
 ```
 
-We release newer software versions frequently (around 1 release / a week).
-Sometimes newer version includes incompatible protocol changes, which
-necessitates timely software update to avoid errors in processing newer future
-blocks.
+#### New Software Release Announcements
 
-Our official release announcements for all kinds releases (normal and security)
+We release new software frequently (around 1 release / week).
+Sometimes newer versions include incompatible protocol changes, which
+necessitate timely software update to avoid errors in processing blocks.
+
+Our official release announcements for all kinds of releases (normal and security)
 are communicated via a discord channel called
 [`#mb-announcement`](https://discord.com/channels/428295358100013066/669406841830244375)
 (`mb` stands for `mainnet-beta`).
 
-Like normal staked validators, we expect any exchange-operated validators to be
-updated at your earliest convenience time within a business day or two after
-normal release announcement. For security-related releases, more urgent action
+Like staked validators, we expect any exchange-operated validators to be
+updated at your earliest convenience within a business day or two after
+a normal release announcement. For security-related releases, more urgent action
 may be needed.
 
 ### Ledger Continuity
