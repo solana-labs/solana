@@ -1723,6 +1723,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     let (mut validator_a_finished, mut validator_b_finished) = (false, false);
     while !(validator_a_finished && validator_b_finished) {
         sleep(Duration::from_millis(100));
+
         if let Some(last_vote) = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
             if !validator_a_finished && last_vote >= next_slot_on_a {
                 validator_a_finished = true;
@@ -1783,19 +1784,15 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     for _ in 0..100 {
         sleep(Duration::from_millis(100));
 
-        let last_vote = last_vote_in_tower(&val_c_ledger_path, &validator_c_pubkey);
-        match last_vote {
-            None => continue,
-            Some(last_vote) => {
-                if last_vote != base_slot {
-                    votes_on_c_fork.insert(last_vote);
-                    // Collect 4 votes
-                    if votes_on_c_fork.len() >= 4 {
-                        break;
-                    }
+        if let Some(last_vote) = last_vote_in_tower(&val_c_ledger_path, &validator_c_pubkey) {
+            if last_vote != base_slot {
+                votes_on_c_fork.insert(last_vote);
+                // Collect 4 votes
+                if votes_on_c_fork.len() >= 4 {
+                    break;
                 }
             }
-        };
+        }
     }
     assert!(!votes_on_c_fork.is_empty());
     info!("collected validator C's votes: {:?}", votes_on_c_fork);
@@ -1810,14 +1807,10 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     for _ in 0..100 {
         sleep(Duration::from_millis(100));
 
-        let last_vote = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey);
-        match last_vote {
-            None => continue,
-            Some(last_vote) => {
-                if votes_on_c_fork.contains(&last_vote) {
-                    bad_vote_detected = true;
-                    break;
-                }
+        if let Some(last_vote) = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
+            if votes_on_c_fork.contains(&last_vote) {
+                bad_vote_detected = true;
+                break;
             }
         }
     }
