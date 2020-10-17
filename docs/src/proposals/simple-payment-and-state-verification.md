@@ -61,22 +61,25 @@ A transaction inclusion proof is a data structure that contains a Merkle Path
 from a transaction, through an Entry-Merkle to a Block-Merkle, which is included
 in a Bank-Hash with the required set of validator votes. A chain of PoH Entries
 containing subsequent validator votes, deriving from the Bank-Hash, is the proof
-of confirmation. Clients can examine this ledger data and compute finality using
-Solana's fork selection rules.
+of confirmation.
+
+#### Transaction Merkle
 
 An Entry-Merkle is a Merkle Root including all transactions in a given entry,
-sorted by signature.
+sorted by signature. Each transaction in an entry is already merkled here:
+https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/ledger/src/entry.rs#L205.
+This means we can show a transaction `T` was included in an entry `E`.
 
-A Block-Merkle is the Merkle Root of all the Entry-Merkles sequenced in the block.
+A Block-Merkle is the Merkle Root of all the Entry-Merkles sequenced in the
+block.
 
 ![Block Merkle Diagram](/img/spv-block-merkle.svg)
 
-A Bank-Hash is the hash of the concatenation of the Block-Merkle and Accounts-Hash
+Together the two merkle proofs show a transaction `T` was included in a block
+with bank hash `B`.
 
-![Bank Hash Diagram](/img/spv-bank-hash.svg)
-
-An Accounts-Hash is the hash of the concatentation of the state hashes of each
-account modified during the current slot.
+An Accounts-Hash is the hash of the concatentation of the state hashes of
+each account modified during the current slot.
 
 Transaction status is necessary for the receipt because the state receipt is
 constructed for the block. Two transactions over the same state can appear in
@@ -84,6 +87,103 @@ the block, and therefore, there is no way to infer from just the state whether
 a transaction that is committed to the ledger has succeeded or failed in
 modifying the intended state. It may not be necessary to encode the full status
 code, but a single status bit to indicate the transaction's success.
+
+Currently, the Block-Merkle is not implemented, so to verify `E` was an entry
+in the block with bank hash `B`, we would need to provide all the entry hashes
+in the block. Ideally this Block-Merkle would be implmented, as the alternative
+is very inefficient.
+
+#### Block Headers
+In order to verify transaction inclusion proofs, light clients need to be able
+to infer the topology of the forks in the network
+
+More specifically, the light client will need to track incoming block headers
+such that given two bank hashes for blocks `A` and `B`, they can determine
+whether `A` is an ancestor of `B` (Below section on
+`Optimistic Confirmation Proof` explains why!). Contents of header are the
+fields necessary to compute the bank hash.
+
+A Bank-Hash is the hash of the concatenation of the Block-Merkle and
+Accounts-Hash described in the `Transaction Merkle` section above.
+
+![Bank Hash Diagram](/img/spv-bank-hash.svg)
+
+In the code:
+
+https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/runtime/src/bank.rs#L3468-L3473
+
+```
+        let mut hash = hashv(&[
+            // bank hash of the parent block
+            self.parent_hash.as_ref(),
+            // hash of all the modifed accounts
+            accounts_delta_hash.hash.as_ref(),
+            // Number of signatures processed in this block
+            &signature_count_buf,
+            // Last PoH hash in this block
+            self.last_blockhash().as_ref(),
+        ]);
+```
+
+A good place to implement this logic along existing streaming logic in the
+validator's replay logic: https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/core/src/replay_stage.rs#L1092-L1096
+
+#### Optimistic Confirmation Proof
+
+Currently optimistic confirmation is detected via a listener that monitors
+gossip and the replay pipeline for votes:
+https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3563/core/src/cluster_info_vote_listener.rs#L604-L614.
+
+Each vote is a signed transaction that includes the bank hash of the block the
+validator voted for, i.e. the `B` from the `Transaction Merkle` section above.
+Once a certain threshold `T` of the network has voted on a block, the block is
+considered optimistially confirmed. The votes made by this group of `T`
+validators is needed to show the block with bank hash `B` was optimistically
+confirmed.
+
+However other than some metadata, the signed votes themselves are not
+currently stored anywhere, so they can't be retrieved on demand. These votes
+probably need to be persisted in Rocksdb database, indexed by a key
+`(Slot, Hash, Pubkey)` which represents the slot of the vote, bank hash of the
+vote, and vote account pubkey responsible for the vote.
+
+Together, the transaction merkle and optimistic confirmation proofs can be
+provided over RPC to subscribers by extending the existing signature
+subscrption logic. Clients who subscribe to the "SingleGossip" confirmation
+level are already notified when optimistic confirmation is detected, a flag
+can be provided to signal the two proofs above should also be returned.
+
+It is important to note that optimistcally confirming `B` also implies that all
+ancestor blocks of `B` are also optimistically confirmed, and also that not
+all blocks will be optimistically confirmed.
+
+```
+
+B -> B'
+
+```
+
+So in the example above if a block `B'` is optimisically confirmed, then so is
+`B`. Thus if a transaction was in block `B`, the transaction merkle in the
+proof will be for block `B`, but the votes presented in the proof will be for
+block `B'`. This is why the headers in the `Block headers` section above are
+important, the client will need to verify that `B` is indeed an ancestor of
+`B'`.
+
+#### Proof of Stake Distribution
+
+Once presented with the transaction merkle and optimistic confirmation proofs
+above, a client can verify a transaction `T` was optimistially confirmed in a
+block with bank hash `B`. The last missing piece is how to verify that the
+votes in the optimistic proofs above actually constitute the valid `T`
+percentage of the stake necessay to uphold the safety guarantees of
+"optimistic confirmation".
+
+One way to approach this might be for every epoch, when the stake set changes,
+to write all the stakes to a system account, and then have validators subscribe
+to that system account. Full nodes can then provide a merkle proving that the
+system account state was updated in some block `B`, and then show that the
+block `B` was optimistically confirmed/rooted.
 
 ### Account State Verification
 
