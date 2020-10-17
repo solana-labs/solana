@@ -84,7 +84,23 @@ pub mod entrypoint_deprecated;
 pub mod log;
 pub mod program;
 pub mod program_error;
+
+#[cfg(all(feature = "program", not(target_arch = "bpf")))]
+extern crate lazy_static;
+
+#[cfg(all(feature = "program", not(target_arch = "bpf")))]
 pub mod program_stubs;
+
+// Unused `solana_sdk::program_stubs!()` macro retained for source backwards compatibility with v1.3.x programs
+#[macro_export]
+#[deprecated(
+    since = "1.4.2",
+    note = "program_stubs macro is obsolete and can be safely removed"
+)]
+macro_rules! program_stubs {
+    () => {};
+}
+
 pub mod serialize_utils;
 
 // Modules not usable by on-chain programs
