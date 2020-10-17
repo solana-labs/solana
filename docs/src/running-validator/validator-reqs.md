@@ -32,6 +32,33 @@ Here are our recommendations for low, medium, and high end machine specification
 | Accounts Drive\(s\) | None                                                  | Samsung 970 Pro 1TB    | 2x Samsung 970 Pro 1TB |                                                                                        |
 | GPU                 | Nvidia 1660ti                                         | Nvidia 2080 Ti         | 2x Nvidia 2080 Ti      | Any number of cuda-capable GPUs are supported on Linux platforms.                      |
 
+## Virtual machines on Cloud Platforms
+
+While you can run a validator on a cloud computing platform, it may not
+be cost-efficient over the long term.
+
+However, it may be convenient to run non-voting api nodes on VM instances for
+your own internal usage. This use case includes exchanges and services built on
+Solana.
+
+In fact, the offical mainnet-beta API nodes are currently (Oct. 2020) run on GCE
+`n1-standard-32` (32 vCPUs, 120 GB memory) instances with 2048 GB SSD for
+operational convenience.
+
+For other cloud platforms, select instance types with similar specs.
+
+Also note that egress internet traffic usage may turn out to be high,
+especially for the case of running staked validators.
+
+## Docker
+
+Running validator for live clusters (including mainnet-beta) inside Docker is
+not recommended and generally not supported. This is due to concerns of general
+docker's containerzation overhead and resultant performance degradation unless
+specially configured.
+
+We use docker only for development purpose.
+
 ## Software
 
 - We build and run on Ubuntu 18.04. Some users have had trouble when running on Ubuntu 16.04
