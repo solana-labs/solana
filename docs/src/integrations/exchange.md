@@ -61,10 +61,10 @@ ensure you miss as little data as possible. Running the solana software as a
 systemd service is one great option.
 
 For monitoring, we provide `solana-watchtower`, which can monitor and detect
-whether your validator is healthy and catching up to the cluster. So, it can
-detect unhealthy `solana-validator` even if the process is running. And it
-can directly be configured to alert by means of Slack, telegram, discord
-and twillio. For details, run `solana-watchtower --help`.
+For monitoring, we provide `solana-watchtower`, which can monitor your validator
+and detect with the `solana-validator` process is unhealthy. It
+can directly be configured to alert you via Slack, Telegram, Discord,
+or Twillio. For details, run `solana-watchtower --help`.
 
 ```bash
 solana-watchtower --validator-identity <YOUR VALIDATOR IDENTITY>
