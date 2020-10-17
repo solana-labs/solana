@@ -2121,6 +2121,7 @@ dependencies = [
  "hex",
  "hmac",
  "itertools",
+ "lazy_static",
  "libsecp256k1",
  "log",
  "memmap",

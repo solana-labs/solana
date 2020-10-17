@@ -31,10 +31,16 @@ macro_rules! info {
 /// @param message - Message to print
 #[inline]
 pub fn sol_log(message: &str) {
+    #[cfg(target_arch = "bpf")]
     unsafe {
         sol_log_(message.as_ptr(), message.len() as u64);
     }
+
+    #[cfg(not(target_arch = "bpf"))]
+    crate::program_stubs::sol_log(message);
 }
+
+#[cfg(target_arch = "bpf")]
 extern "C" {
     fn sol_log_(message: *const u8, len: u64);
 }
@@ -45,10 +51,16 @@ extern "C" {
 
 #[inline]
 pub fn sol_log_64(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) {
+    #[cfg(target_arch = "bpf")]
     unsafe {
         sol_log_64_(arg1, arg2, arg3, arg4, arg5);
     }
+
+    #[cfg(not(target_arch = "bpf"))]
+    crate::program_stubs::sol_log_64(arg1, arg2, arg3, arg4, arg5);
 }
+
+#[cfg(target_arch = "bpf")]
 extern "C" {
     fn sol_log_64_(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64);
 }
