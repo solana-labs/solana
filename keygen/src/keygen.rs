@@ -271,6 +271,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Specify the number of words that will be present in the generated seed phrase"),
                 )
                 .arg(
+                    Arg::with_name("language")
+                        .long("language")
+                        .possible_values(&["english", "chinese-simplified", "chinese-traditional", "japanese", "spanish", "korean", "french", "italian"])
+                        .default_value("english")
+                        .value_name("LANGUAGE")
+                        .takes_value(true)
+                        .help("Specify the mnemonic lanaguage that will be present in the generated seed phrase"),
+                )
+                .arg(
                     Arg::with_name("no_passphrase")
                         .long("no-passphrase")
                         .help("Do not prompt for a passphrase"),
@@ -430,7 +439,18 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
 
             let word_count = value_t!(matches.value_of("word_count"), usize).unwrap();
             let mnemonic_type = MnemonicType::for_word_count(word_count)?;
-            let mnemonic = Mnemonic::new(mnemonic_type, Language::English);
+            let language = match matches.value_of("language").unwrap() {
+                "english" => Language::English,
+                "chinese-simplified" => Language::ChineseSimplified,
+                "chinese-traditional" => Language::ChineseTraditional,
+                "japanese" => Language::Japanese,
+                "spanish" => Language::Spanish,
+                "korean" => Language::Korean,
+                "french" => Language::French,
+                "italian" => Language::Italian,
+                _ => unreachable!(),
+            };
+            let mnemonic = Mnemonic::new(mnemonic_type, language);
             let passphrase = if matches.is_present("no_passphrase") {
                 NO_PASSPHRASE.to_string()
             } else {
