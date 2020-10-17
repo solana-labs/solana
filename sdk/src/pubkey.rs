@@ -204,12 +204,17 @@ impl Pubkey {
     }
 
     /// Log a `Pubkey` from a program
-    #[cfg(feature = "program")]
     pub fn log(&self) {
-        extern "C" {
-            fn sol_log_pubkey(pubkey_addr: *const u8);
-        };
-        unsafe { sol_log_pubkey(self.as_ref() as *const _ as *const u8) };
+        #[cfg(all(feature = "program", target_arch = "bpf"))]
+        {
+            extern "C" {
+                fn sol_log_pubkey(pubkey_addr: *const u8);
+            };
+            unsafe { sol_log_pubkey(self.as_ref() as *const _ as *const u8) };
+        }
+
+        #[cfg(all(feature = "program", not(target_arch = "bpf")))]
+        crate::program_stubs::sol_log(&self.to_string());
     }
 }
 
