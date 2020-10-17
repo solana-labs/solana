@@ -84,7 +84,7 @@ export class Secp256k1Instruction {
    * @private
    */
   static checkProgramId(programId: PublicKey) {
-    if (!programId.equals(Secp256kProgram.programId)) {
+    if (!programId.equals(Secp256k1Program.programId)) {
       throw new Error('invalid instruction; programId is not Secp256kProgram');
     }
   }
@@ -141,7 +141,7 @@ export class Secp256k1Program {
 
     return new TransactionInstruction({
       keys: [],
-      programId: Secp256kProgram.programId,
+      programId: Secp256k1Program.programId,
       data: toBuffer(instructionData),
     });
   }
