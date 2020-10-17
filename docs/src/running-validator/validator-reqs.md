@@ -37,8 +37,9 @@ Here are our recommendations for low, medium, and high end machine specification
 While you can run a validator on a cloud computing platform, it may not
 be cost-efficient over the long term.
 
-However, it may be convenient to run non-voting api nodes on VM instances for your own internal
-usage. This use case includes exchanges and services built on Solana.
+However, it may be convenient to run non-voting api nodes on VM instances for
+your own internal usage. This use case includes exchanges and services built on
+Solana.
 
 In fact, the offical mainnet-beta API nodes are currently (Oct. 2020) run on GCE
 `n1-standard-32` (32 vCPUs, 120 GB memory) instances with 2048 GB SSD for

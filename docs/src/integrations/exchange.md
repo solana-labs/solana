@@ -7,20 +7,19 @@ exchange.
 
 ## Node Setup
 
-This section explains various setup topics to run the Solana full node (called
-`solana-validator`).
-
-We highly recommend setting up at least two nodes on high-grade
-computers/cloud instances, upgrading to newer versions promptly, and keeping an eye on
-service operations with a bundled monitoring tool.
+We highly recommend setting up at least two nodes on high-grade computers/cloud
+instances, upgrading to newer versions promptly, and keeping an eye on service
+operations with a bundled monitoring tool.
 
 This setup enables you:
-- to have a trusted gateway to the Solana mainnet-beta cluster to get data and submit withdrawal transactions
+- to have a trusted gateway to the Solana mainnet-beta cluster to get data and
+  submit withdrawal transactions
 - to have full control over how much historical block data is retained
 - to maintain your service availability even if one node fails
 
-Solana nodes demand relatively high computing power to handle our fast blocks and high TPS.
-For specific requirements, please see [hardware recommendations](../running-validator/validator-reqs.md).
+Solana nodes demand relatively high computing power to handle our fast blocks
+and high TPS.  For specific requirements, please see
+[hardware recommendations](../running-validator/validator-reqs.md).
 
 To run an api node:
 
@@ -54,17 +53,17 @@ Optional parameters to consider:
 - `--private-rpc` prevents your RPC port from being published for use by other nodes
 - `--rpc-bind-address` allows you to specify a different IP address to bind the RPC port
 
-### Automatic Restarts, Monitoring and Software update
+### Automatic Restarts and Monitoring
 
 We recommend configuring each of your nodes to restart automatically on exit, to
 ensure you miss as little data as possible. Running the solana software as a
 systemd service is one great option.
 
-For monitoring, we provide `solana-watchtower`, which can monitor and detect
-For monitoring, we provide `solana-watchtower`, which can monitor your validator
-and detect with the `solana-validator` process is unhealthy. It
-can directly be configured to alert you via Slack, Telegram, Discord,
-or Twillio. For details, run `solana-watchtower --help`.
+For monitoring, we provide
+[`solana-watchtower`](https://github.com/solana-labs/solana/blob/master/watchtower/README.md),
+which can monitor your validator and detect with the `solana-validator` process
+is unhealthy. It can directly be configured to alert you via Slack, Telegram,
+Discord, or Twillio. For details, run `solana-watchtower --help`.
 
 ```bash
 solana-watchtower --validator-identity <YOUR VALIDATOR IDENTITY>
@@ -76,15 +75,14 @@ We release new software frequently (around 1 release / week).
 Sometimes newer versions include incompatible protocol changes, which
 necessitate timely software update to avoid errors in processing blocks.
 
-Our official release announcements for all kinds of releases (normal and security)
-are communicated via a discord channel called
+Our official release announcements for all kinds of releases (normal and
+security) are communicated via a discord channel called
 [`#mb-announcement`](https://discord.com/channels/428295358100013066/669406841830244375)
 (`mb` stands for `mainnet-beta`).
 
-Like staked validators, we expect any exchange-operated validators to be
-updated at your earliest convenience within a business day or two after
-a normal release announcement. For security-related releases, more urgent action
-may be needed.
+Like staked validators, we expect any exchange-operated validators to be updated
+at your earliest convenience within a business day or two after a normal release
+announcement. For security-related releases, more urgent action may be needed.
 
 ### Ledger Continuity
 
