@@ -370,6 +370,15 @@ impl LocalCluster {
         validator_pubkey
     }
 
+    pub fn ledger_path(&self, validator_pubkey: &Pubkey) -> std::path::PathBuf {
+        self.validators
+            .get(validator_pubkey)
+            .unwrap()
+            .info
+            .ledger_path
+            .clone()
+    }
+
     fn close(&mut self) {
         self.close_preserve_ledgers();
     }
