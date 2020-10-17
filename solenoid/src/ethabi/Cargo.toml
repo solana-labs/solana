@@ -1,0 +1,25 @@
+[package]
+name = "ethabi"
+version = "12.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+homepage = "https://github.com/paritytech/ethabi"
+license = "MIT/Apache-2.0"
+keywords = ["ethereum", "eth", "abi", "solidity"]
+description = "Easy to use conversion of ethereum contract calls to bytecode."
+edition = "2018"
+
+[dependencies]
+hex = { version = "2.0", package = "rustc-hex" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tiny-keccak = "1.4"
+ethereum-types = "0.9.0"
+uint = "0.8.2"
+
+[dev-dependencies]
+hex-literal = "0.2.1"
+paste = "0.1.6"
+
+[badges]
+travis-ci = { repository = "paritytech/ethabi", branch = "master" }
+coveralls = { repository = "paritytech/ethabi", branch = "master" }
