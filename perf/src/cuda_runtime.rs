@@ -165,6 +165,21 @@ impl<'a, T: Clone + Send + Sync + Default + Sized> IntoParallelIterator for &'a 
     }
 }
 
+impl<T: Clone + Default + Send + Sized> IntoParallelIterator for PinnedVec<T> {
+    type Item = T;
+    type Iter = rayon::vec::IntoIter<T>;
+
+    fn into_par_iter(mut self) -> Self::Iter {
+        if self.pinned {
+            unpin(self.x.as_mut_ptr());
+            self.pinned = false;
+        }
+        self.pinnable = false;
+        self.recycler = None;
+        std::mem::take(&mut self.x).into_par_iter()
+    }
+}
+
 impl<T: Clone + Default + Sized> PinnedVec<T> {
     pub fn reserve_and_pin(&mut self, size: usize) {
         if self.x.capacity() < size {
