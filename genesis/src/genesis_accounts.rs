@@ -254,7 +254,7 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig, mut issued_lampo
         &StakerInfo {
             name: "one thanks",
             staker: "7vEAL3nS9CWmy1q6njUUyHE7Cf5RmyQpND6CsoHjzPiR",
-            lamports: 500_000_000 * LAMPORTS_PER_SOL - issued_lamports,
+            lamports: (500_000_000 * LAMPORTS_PER_SOL).saturating_sub(issued_lamports),
             withdrawer: Some("3FFaheyqtyAXZSYxDzsr5CVKvJuvZD1WE1VEsBtDbRqB"),
         },
         &UNLOCKS_ALL_DAY_ZERO,
