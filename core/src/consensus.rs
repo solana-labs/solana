@@ -387,17 +387,14 @@ impl Tower {
     pub fn record_bank_vote(&mut self, vote: Vote) -> Option<Slot> {
         let slot = vote.last_voted_slot().unwrap_or(0);
         trace!("{} record_vote for {}", self.node_pubkey, slot);
-        let root_slot = self.lockouts.root_slot;
+        let old_root = self.root();
         self.lockouts.process_vote_unchecked(&vote);
         self.last_vote = vote;
+        let new_root = self.root();
 
-        datapoint_info!(
-            "tower-vote",
-            ("latest", slot, i64),
-            ("root", self.lockouts.root_slot.unwrap_or(0), i64)
-        );
-        if root_slot != self.lockouts.root_slot {
-            Some(self.lockouts.root_slot.unwrap())
+        datapoint_info!("tower-vote", ("latest", slot, i64), ("root", new_root, i64));
+        if old_root != new_root {
+            Some(new_root)
         } else {
             None
         }
@@ -446,8 +443,8 @@ impl Tower {
     // which establishes the origin of trust (i.e. root) whether booting from genesis (slot 0) or
     // snapshot (slot N). In other words, there should be no possibility a Tower doesn't have
     // root, unlike young vote accounts.
-    pub fn root(&self) -> Option<Slot> {
-        self.lockouts.root_slot
+    pub fn root(&self) -> Slot {
+        self.lockouts.root_slot.unwrap()
     }
 
     // a slot is recent if it's newer than the last vote we have
@@ -514,7 +511,7 @@ impl Tower {
     ) -> SwitchForkDecision {
         self.last_voted_slot()
             .map(|last_voted_slot| {
-                let root = self.lockouts.root_slot.unwrap_or(0);
+                let root = self.root();
                 let empty_ancestors = HashSet::default();
 
                 let last_vote_ancestors =
@@ -837,8 +834,7 @@ impl Tower {
         slot_history: &SlotHistory,
     ) -> Result<Self> {
         // sanity assertions for roots
-        assert!(self.root().is_some());
-        let tower_root = self.root().unwrap();
+        let tower_root = self.root();
         info!(
             "adjusting lockouts (after replay up to {}): {:?} tower root: {}",
             replayed_root,
@@ -1160,28 +1156,27 @@ pub fn reconcile_blockstore_roots_with_tower(
     tower: &Tower,
     blockstore: &Blockstore,
 ) -> blockstore_db::Result<()> {
-    if let Some(tower_root) = tower.root() {
-        let last_blockstore_root = blockstore.last_root();
-        if last_blockstore_root < tower_root {
-            // Ensure tower_root itself to exist and be marked as rooted in the blockstore
-            // in addition to its ancestors.
-            let new_roots: Vec<_> = AncestorIterator::new_inclusive(tower_root, &blockstore)
-                .take_while(|current| match current.cmp(&last_blockstore_root) {
-                    Ordering::Greater => true,
-                    Ordering::Equal => false,
-                    Ordering::Less => panic!(
-                        "couldn't find a last_blockstore_root upwards from: {}!?",
-                        tower_root
-                    ),
-                })
-                .collect();
-            assert!(
-                !new_roots.is_empty(),
-                "at least 1 parent slot must be found"
-            );
+    let tower_root = tower.root();
+    let last_blockstore_root = blockstore.last_root();
+    if last_blockstore_root < tower_root {
+        // Ensure tower_root itself to exist and be marked as rooted in the blockstore
+        // in addition to its ancestors.
+        let new_roots: Vec<_> = AncestorIterator::new_inclusive(tower_root, &blockstore)
+            .take_while(|current| match current.cmp(&last_blockstore_root) {
+                Ordering::Greater => true,
+                Ordering::Equal => false,
+                Ordering::Less => panic!(
+                    "couldn't find a last_blockstore_root upwards from: {}!?",
+                    tower_root
+                ),
+            })
+            .collect();
+        assert!(
+            !new_roots.is_empty(),
+            "at least 1 parent slot must be found"
+        );
 
-            blockstore.set_roots(&new_roots)?
-        }
+        blockstore.set_roots(&new_roots)?
     }
     Ok(())
 }
@@ -2744,13 +2739,13 @@ pub mod test {
             .unwrap();
 
         assert_eq!(tower.voted_slots(), vec![2, 3]);
-        assert_eq!(tower.root(), Some(replayed_root_slot));
+        assert_eq!(tower.root(), replayed_root_slot);
 
         tower = tower
             .adjust_lockouts_after_replay(replayed_root_slot, &slot_history)
             .unwrap();
         assert_eq!(tower.voted_slots(), vec![2, 3]);
-        assert_eq!(tower.root(), Some(replayed_root_slot));
+        assert_eq!(tower.root(), replayed_root_slot);
     }
 
     #[test]
@@ -2772,7 +2767,7 @@ pub mod test {
             .unwrap();
 
         assert_eq!(tower.voted_slots(), vec![2, 3]);
-        assert_eq!(tower.root(), Some(replayed_root_slot));
+        assert_eq!(tower.root(), replayed_root_slot);
     }
 
     #[test]
@@ -2796,7 +2791,7 @@ pub mod test {
             .unwrap();
 
         assert_eq!(tower.voted_slots(), vec![] as Vec<Slot>);
-        assert_eq!(tower.root(), Some(replayed_root_slot));
+        assert_eq!(tower.root(), replayed_root_slot);
         assert_eq!(tower.stray_restored_slot, None);
     }
 
@@ -2819,7 +2814,7 @@ pub mod test {
             .adjust_lockouts_after_replay(MAX_ENTRIES, &slot_history)
             .unwrap();
         assert_eq!(tower.voted_slots(), vec![] as Vec<Slot>);
-        assert_eq!(tower.root(), Some(MAX_ENTRIES));
+        assert_eq!(tower.root(), MAX_ENTRIES);
     }
 
     #[test]
@@ -2842,7 +2837,7 @@ pub mod test {
             .unwrap();
 
         assert_eq!(tower.voted_slots(), vec![3, 4]);
-        assert_eq!(tower.root(), Some(replayed_root_slot));
+        assert_eq!(tower.root(), replayed_root_slot);
     }
 
     #[test]
@@ -2863,7 +2858,7 @@ pub mod test {
             .unwrap();
 
         assert_eq!(tower.voted_slots(), vec![5, 6]);
-        assert_eq!(tower.root(), Some(replayed_root_slot));
+        assert_eq!(tower.root(), replayed_root_slot);
     }
 
     #[test]
@@ -2907,7 +2902,7 @@ pub mod test {
             .unwrap();
 
         assert_eq!(tower.voted_slots(), vec![3, 4, 5]);
-        assert_eq!(tower.root(), Some(replayed_root_slot));
+        assert_eq!(tower.root(), replayed_root_slot);
     }
 
     #[test]
@@ -2923,7 +2918,7 @@ pub mod test {
             .unwrap();
 
         assert_eq!(tower.voted_slots(), vec![] as Vec<Slot>);
-        assert_eq!(tower.root(), Some(replayed_root_slot));
+        assert_eq!(tower.root(), replayed_root_slot);
     }
 
     #[test]
