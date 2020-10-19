@@ -168,7 +168,7 @@ Many methods that take a commitment parameter return an RpcResponse JSON object 
 
 ## Health Check
 
-Although not a JSON RPC API, a `GET /heath` at the RPC HTTP Endpoint provides a
+Although not a JSON RPC API, a `GET /health` at the RPC HTTP Endpoint provides a
 health-check mechanism for use by load balancers or other network
 infrastructure. This request will always return a HTTP 200 OK response with a body of
 "ok" or "behind" based on the following conditions:
