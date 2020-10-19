@@ -216,8 +216,6 @@ impl BankForks {
                 bank.squash();
                 is_root_bank_squashed = bank_slot == root;
 
-                bank.update_accounts_hash();
-
                 if self.snapshot_config.is_some() && snapshot_request_sender.is_some() {
                     let snapshot_root_bank = self.root_bank().clone();
                     let root_slot = snapshot_root_bank.slot();
