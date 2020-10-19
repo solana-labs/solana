@@ -104,25 +104,25 @@ macro_rules! program_stubs {
 pub mod serialize_utils;
 
 // Modules not usable by on-chain programs
-#[cfg(not(feature = "program"))]
+#[cfg(feature = "everything")]
 pub mod client;
-#[cfg(not(feature = "program"))]
+#[cfg(feature = "everything")]
 pub mod genesis_config;
-#[cfg(not(feature = "program"))]
+#[cfg(feature = "everything")]
 pub mod hard_forks;
-#[cfg(not(feature = "program"))]
+#[cfg(feature = "everything")]
 pub mod secp256k1;
-#[cfg(not(feature = "program"))]
+#[cfg(feature = "everything")]
 pub mod shred_version;
-#[cfg(not(feature = "program"))]
+#[cfg(feature = "everything")]
 pub mod signature;
-#[cfg(not(feature = "program"))]
+#[cfg(feature = "everything")]
 pub mod signers;
-#[cfg(not(feature = "program"))]
+#[cfg(feature = "everything")]
 pub mod system_transaction;
-#[cfg(not(feature = "program"))]
+#[cfg(feature = "everything")]
 pub mod transaction;
-#[cfg(not(feature = "program"))]
+#[cfg(feature = "everything")]
 pub mod transport;
 
 #[macro_use]

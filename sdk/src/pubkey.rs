@@ -1,11 +1,5 @@
-#[cfg(all(feature = "program", target_arch = "bpf"))]
-use crate::entrypoint::SUCCESS;
-#[cfg(not(all(feature = "program", target_arch = "bpf")))]
-use crate::hash::Hasher;
 use crate::{decode_error::DecodeError, hash::hashv};
 use num_derive::{FromPrimitive, ToPrimitive};
-#[cfg(not(feature = "program"))]
-use std::error;
 use std::{convert::TryFrom, fmt, mem, str::FromStr};
 use thiserror::Error;
 
@@ -130,7 +124,7 @@ impl Pubkey {
         // not supported
         #[cfg(not(all(feature = "program", target_arch = "bpf")))]
         {
-            let mut hasher = Hasher::default();
+            let mut hasher = crate::hash::Hasher::default();
             for seed in seeds.iter() {
                 if seed.len() > MAX_SEED_LEN {
                     return Err(PubkeyError::MaxSeedLengthExceeded);
@@ -170,7 +164,7 @@ impl Pubkey {
                 )
             };
             match result {
-                SUCCESS => Ok(Pubkey::new(&bytes)),
+                crate::entrypoint::SUCCESS => Ok(Pubkey::new(&bytes)),
                 _ => Err(result.into()),
             }
         }
@@ -194,7 +188,7 @@ impl Pubkey {
         panic!("Unable to find a viable program address bump seed");
     }
 
-    #[cfg(not(feature = "program"))]
+    #[cfg(feature = "everything")]
     pub fn new_rand() -> Self {
         Self::new(&rand::random::<[u8; 32]>())
     }
@@ -236,8 +230,8 @@ impl fmt::Display for Pubkey {
     }
 }
 
-#[cfg(not(feature = "program"))]
-pub fn write_pubkey_file(outfile: &str, pubkey: Pubkey) -> Result<(), Box<dyn error::Error>> {
+#[cfg(feature = "everything")]
+pub fn write_pubkey_file(outfile: &str, pubkey: Pubkey) -> Result<(), Box<dyn std::error::Error>> {
     use std::io::Write;
 
     let printable = format!("{}", pubkey);
@@ -252,8 +246,8 @@ pub fn write_pubkey_file(outfile: &str, pubkey: Pubkey) -> Result<(), Box<dyn er
     Ok(())
 }
 
-#[cfg(not(feature = "program"))]
-pub fn read_pubkey_file(infile: &str) -> Result<Pubkey, Box<dyn error::Error>> {
+#[cfg(feature = "everything")]
+pub fn read_pubkey_file(infile: &str) -> Result<Pubkey, Box<dyn std::error::Error>> {
     let f = std::fs::File::open(infile.to_string())?;
     let printable: String = serde_json::from_reader(f)?;
     Ok(Pubkey::from_str(&printable)?)
@@ -434,7 +428,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_write_pubkey() -> Result<(), Box<dyn error::Error>> {
+    fn test_read_write_pubkey() -> Result<(), Box<dyn std::error::Error>> {
         let filename = "test_pubkey.json";
         let pubkey = Pubkey::new_rand();
         write_pubkey_file(filename, pubkey)?;
