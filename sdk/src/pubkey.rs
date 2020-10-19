@@ -73,6 +73,12 @@ impl FromStr for Pubkey {
     }
 }
 
+/// New random Pubkey for tests and benchmarks.
+#[cfg(not(feature = "program"))]
+pub fn new_rand() -> Pubkey {
+    Pubkey::new(&rand::random::<[u8; 32]>())
+}
+
 impl Pubkey {
     pub fn new(pubkey_vec: &[u8]) -> Self {
         Self(
@@ -194,8 +200,10 @@ impl Pubkey {
     }
 
     #[cfg(not(feature = "program"))]
+    #[deprecated(since = "1.3.9", note = "Please use 'pubkey::new_rand' instead")]
     pub fn new_rand() -> Self {
-        Self::new(&rand::random::<[u8; 32]>())
+        // Consider removing Pubkey::new_rand() entirely in the v1.5 or v1.6 timeframe
+        new_rand()
     }
 
     pub fn to_bytes(self) -> [u8; 32] {
