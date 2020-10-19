@@ -14,7 +14,7 @@ use test::Bencher;
 #[bench]
 fn bench_hash_as_u64(bencher: &mut Bencher) {
     let mut rng = thread_rng();
-    let hashes: Vec<_> = std::iter::repeat_with(|| Hash::new_rand(&mut rng))
+    let hashes: Vec<_> = std::iter::repeat_with(|| solana_sdk::hash::new_rand(&mut rng))
         .take(1000)
         .collect();
     bencher.iter(|| {
@@ -34,7 +34,7 @@ fn bench_build_crds_filters(bencher: &mut Bencher) {
     for _ in 0..50_000 {
         crds_gossip_pull
             .purged_values
-            .push_back((Hash::new_rand(&mut rng), rng.gen()));
+            .push_back((solana_sdk::hash::new_rand(&mut rng), rng.gen()));
     }
     let mut num_inserts = 0;
     for _ in 0..90_000 {
