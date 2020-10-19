@@ -1,3 +1,4 @@
+// @flow
 import {
   Secp256k1Program,
   Secp256k1Instruction,
@@ -29,18 +30,33 @@ test('decode secp256k1 instruction', () => {
     privateKey = randomBytes(32);
   } while (!privateKeyVerify(privateKey));
 
-  const instruction = program.createSecpInstructionWithPrivateKey({
+  const instruction = program.createInstructionWithPrivateKey({
     privateKey,
     message: Buffer.from('Test message'),
   });
 
   let {
+    numSignatures,
+    signatureOffset,
+    signatureInstructionOffset,
+    ethAddressOffset,
+    ethAddressInstructionIndex,
+    messageDataOffset,
+    messageDataSize,
+    messageInstructionIndex,
     signature,
     ethPublicKey,
     recoveryId,
     message,
   } = Secp256k1Instruction.decodeInstruction(instruction);
 
+  expect(numSignatures).toEqual(1);
+  expect(signatureOffset).toEqual(32);
+  expect(signatureInstructionOffset).toEqual(0);
+  expect(ethAddressOffset).toEqual(12);
+  expect(messageDataOffset).toEqual(97);
+  expect(messageDataSize).toEqual('Test message'.length);
+  expect(messageInstructionIndex).toEqual(0);
   expect(recoveryId > -1).toEqual(true);
   expect(signature.length).toEqual(64);
   expect(ethPublicKey.length).toEqual(20);
@@ -65,7 +81,7 @@ test('live create secp256k1 instruction with public key', async () => {
   const messageHash = createKeccakHash('keccak256').update(message).digest();
   const {signature, recid: recoveryId} = ecdsaSign(messageHash, privateKey);
 
-  const instruction = program.createSecpInstructionWithPublicKey({
+  const instruction = program.createInstructionWithPublicKey({
     publicKey,
     message,
     signature,
@@ -105,7 +121,7 @@ test('live create secp256k1 instruction with private key', async () => {
     privateKey = randomBytes(32);
   } while (!privateKeyVerify(privateKey));
 
-  const instruction = program.createSecpInstructionWithPrivateKey({
+  const instruction = program.createInstructionWithPrivateKey({
     privateKey,
     message: Buffer.from('Test 123'),
   });

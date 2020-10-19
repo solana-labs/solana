@@ -49,33 +49,43 @@ export type CreateSecpInstructionWithPrivateKeyParams = {|
  * @property {number} recoveryId
  */
 export type DecodedSecp256kInstruction = {|
+  numSignatures: number,
+  signatureOffset: number,
+  signatureInstructionOffset: number,
+  ethAddressOffset: number,
+  ethAddressInstructionIndex: number,
+  messageDataOffset: number,
+  messageDataSize: number,
+  messageInstructionIndex: number,
   signature: Buffer,
   ethPublicKey: Buffer,
-  message: Buffer,
   recoveryId: number,
+  message: Buffer,
 |};
+
+const SECP256K1_INSTRUCTION_LAYOUT = BufferLayout.struct([
+  BufferLayout.u8('numSignatures'),
+  BufferLayout.u16('signatureOffset'),
+  BufferLayout.u8('signatureInstructionOffset'),
+  BufferLayout.u16('ethAddressOffset'),
+  BufferLayout.u8('ethAddressInstructionIndex'),
+  BufferLayout.u16('messageDataOffset'),
+  BufferLayout.u16('messageDataSize'),
+  BufferLayout.u8('messageInstructionIndex'),
+  BufferLayout.blob(20, 'ethPublicKey'),
+  BufferLayout.blob(64, 'signature'),
+  BufferLayout.u8('recoveryId'),
+]);
 
 export class Secp256k1Instruction {
   /**
    * Decode a secp256k1 instruction
    */
   static decodeInstruction(instruction: TransactionInstruction) {
-    const layout = BufferLayout.struct([
-      BufferLayout.blob(12, 'offsetData'),
-      BufferLayout.blob(20, 'ethPublicKey'),
-      BufferLayout.blob(64, 'signature'),
-      BufferLayout.u8('recoveryId'),
-    ]);
-
-    const {signature, ethPublicKey, recoveryId} = layout.decode(
-      instruction.data,
-    );
-    const message = instruction.data.slice(97);
-
+    const decoded = SECP256K1_INSTRUCTION_LAYOUT.decode(instruction.data);
+    const message = instruction.data.slice(SECP256K1_INSTRUCTION_LAYOUT.span);
     return {
-      signature,
-      ethPublicKey,
-      recoveryId,
+      ...decoded,
       message,
     };
   }
@@ -101,7 +111,7 @@ export class Secp256k1Program {
   /**
    * Create a secp256k1 instruction with public key
    */
-  createSecpInstructionWithPublicKey(
+  createInstructionWithPublicKey(
     params: CreateSecpInstructionWithPublicKeyParams,
   ): TransactionInstruction {
     const {publicKey, message, signature, recoveryId} = params;
@@ -124,20 +134,28 @@ export class Secp256k1Program {
     const messageDataOffset = signatureOffset + signature.length + 1;
     const numSignatures = 1;
 
-    const instructionData = buildU8intArray([
-      new Uint8Array([numSignatures]),
-      buildUint8ArrayFromUint16Array([signatureOffset]),
-      new Uint8Array([0]),
-      buildUint8ArrayFromUint16Array([ethAddressOffset]),
-      new Uint8Array([0]),
-      buildUint8ArrayFromUint16Array([messageDataOffset]),
-      buildUint8ArrayFromUint16Array([message.length]),
-      new Uint8Array([0]),
-      ethPublicKey,
-      signature,
-      new Uint8Array([recoveryId]),
-      message,
-    ]);
+    const instructionData = Buffer.alloc(
+      SECP256K1_INSTRUCTION_LAYOUT.span + message.length,
+    );
+
+    SECP256K1_INSTRUCTION_LAYOUT.encode(
+      {
+        numSignatures: numSignatures,
+        signatureOffset: signatureOffset,
+        signatureInstructionOffset: 0,
+        ethAddressOffset: ethAddressOffset,
+        ethAddressInstructionIndex: 0,
+        messageDataOffset: messageDataOffset,
+        messageDataSize: message.length,
+        messageInstructionIndex: 0,
+        signature: toBuffer(signature),
+        ethPublicKey: ethPublicKey,
+        recoveryId: recoveryId,
+      },
+      instructionData,
+    );
+
+    instructionData.fill(message, SECP256K1_INSTRUCTION_LAYOUT.span);
 
     return new TransactionInstruction({
       keys: [],
@@ -149,7 +167,7 @@ export class Secp256k1Program {
   /**
    * Create a secp256k1 instruction with private key
    */
-  createSecpInstructionWithPrivateKey(
+  createInstructionWithPrivateKey(
     params: CreateSecpInstructionWithPrivateKeyParams,
   ): TransactionInstruction {
     const {privateKey, message} = params;
@@ -166,7 +184,7 @@ export class Secp256k1Program {
         .digest();
       const {signature, recid: recoveryId} = ecdsaSign(messageHash, privateKey);
 
-      return this.createSecpInstructionWithPublicKey({
+      return this.createInstructionWithPublicKey({
         publicKey,
         message,
         signature,
@@ -185,23 +203,4 @@ export function constructEthPubkey(
     .update(toBuffer(publicKey.slice(1))) // throw away leading byte
     .digest()
     .slice(-HASHED_PUBKEY_SERIALIZED_SIZE);
-}
-
-function buildU8intArray(dataArrays): Uint8Array {
-  const size = dataArrays.reduce((acc, cur) => acc + cur.length, 0);
-
-  const final = new Uint8Array(size);
-
-  let pos = 0;
-  dataArrays.forEach(item => {
-    final.set(item, pos);
-    pos += item.length;
-  });
-
-  return final;
-}
-
-function buildUint8ArrayFromUint16Array(array: Array<number>): Uint8Array {
-  const uint16 = new Uint16Array(array);
-  return new Uint8Array(uint16.buffer, uint16.byteOffset, uint16.byteLength);
 }
