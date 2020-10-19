@@ -833,7 +833,7 @@ mod tests {
     #[test]
     fn test_check_nonce_account() {
         let blockhash = Hash::default();
-        let nonce_pubkey = Pubkey::new_rand();
+        let nonce_pubkey = solana_sdk::pubkey::new_rand();
         let data = Versions::new_current(State::Initialized(nonce::state::Data {
             authority: nonce_pubkey,
             blockhash,
@@ -869,7 +869,7 @@ mod tests {
         }
 
         let data = Versions::new_current(State::Initialized(nonce::state::Data {
-            authority: Pubkey::new_rand(),
+            authority: solana_sdk::pubkey::new_rand(),
             blockhash,
             fee_calculator: FeeCalculator::default(),
         }));

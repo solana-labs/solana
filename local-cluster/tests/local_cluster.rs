@@ -163,7 +163,7 @@ fn test_local_cluster_signature_subscribe() {
         .unwrap();
 
     let mut transaction =
-        system_transaction::transfer(&cluster.funding_keypair, &Pubkey::new_rand(), 10, blockhash);
+        system_transaction::transfer(&cluster.funding_keypair, &solana_sdk::pubkey::new_rand(), 10, blockhash);
 
     let (mut sig_subscribe_client, receiver) = PubsubClient::signature_subscribe(
         &format!("ws://{}", &non_bootstrap_info.rpc_pubsub.to_string()),
@@ -815,7 +815,7 @@ fn generate_frozen_account_panic(mut cluster: LocalCluster, frozen_account: Arc<
             .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
             .unwrap();
         client
-            .async_transfer(1, &frozen_account, &Pubkey::new_rand(), blockhash)
+            .async_transfer(1, &frozen_account, &solana_sdk::pubkey::new_rand(), blockhash)
             .unwrap();
 
         sleep(Duration::from_secs(1));

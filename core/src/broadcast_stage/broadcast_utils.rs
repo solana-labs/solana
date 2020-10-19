@@ -92,7 +92,7 @@ mod tests {
         let bank0 = Arc::new(Bank::new(&genesis_config));
         let tx = system_transaction::transfer(
             &mint_keypair,
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             1,
             genesis_config.hash(),
         );

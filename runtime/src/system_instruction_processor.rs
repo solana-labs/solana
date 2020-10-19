@@ -399,8 +399,8 @@ mod tests {
     #[test]
     fn test_create_account() {
         let new_owner = Pubkey::new(&[9; 32]);
-        let from = Pubkey::new_rand();
-        let to = Pubkey::new_rand();
+        let from = solana_sdk::pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         let from_account = Account::new_ref(100, 0, &system_program::id());
         let to_account = Account::new_ref(0, 0, &Pubkey::default());
 
@@ -429,7 +429,7 @@ mod tests {
     #[test]
     fn test_create_account_with_seed() {
         let new_owner = Pubkey::new(&[9; 32]);
-        let from = Pubkey::new_rand();
+        let from = solana_sdk::pubkey::new_rand();
         let seed = "shiny pepper";
         let to = Pubkey::create_with_seed(&from, seed, &new_owner).unwrap();
 
@@ -462,10 +462,10 @@ mod tests {
 
     #[test]
     fn test_address_create_with_seed_mismatch() {
-        let from = Pubkey::new_rand();
+        let from = solana_sdk::pubkey::new_rand();
         let seed = "dull boy";
-        let to = Pubkey::new_rand();
-        let owner = Pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
+        let owner = solana_sdk::pubkey::new_rand();
 
         assert_eq!(
             Address::create(&to, Some((&from, seed, &owner))),
@@ -476,7 +476,7 @@ mod tests {
     #[test]
     fn test_create_account_with_seed_missing_sig() {
         let new_owner = Pubkey::new(&[9; 32]);
-        let from = Pubkey::new_rand();
+        let from = solana_sdk::pubkey::new_rand();
         let seed = "dull boy";
         let to = Pubkey::create_with_seed(&from, seed, &new_owner).unwrap();
 
@@ -504,10 +504,10 @@ mod tests {
     fn test_create_with_zero_lamports() {
         // create account with zero lamports tranferred
         let new_owner = Pubkey::new(&[9; 32]);
-        let from = Pubkey::new_rand();
-        let from_account = Account::new_ref(100, 1, &Pubkey::new_rand()); // not from system account
+        let from = solana_sdk::pubkey::new_rand();
+        let from_account = Account::new_ref(100, 1, &solana_sdk::pubkey::new_rand()); // not from system account
 
-        let to = Pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         let to_account = Account::new_ref(0, 0, &Pubkey::default());
 
         assert_eq!(
@@ -537,10 +537,10 @@ mod tests {
     fn test_create_negative_lamports() {
         // Attempt to create account with more lamports than remaining in from_account
         let new_owner = Pubkey::new(&[9; 32]);
-        let from = Pubkey::new_rand();
+        let from = solana_sdk::pubkey::new_rand();
         let from_account = Account::new_ref(100, 0, &system_program::id());
 
-        let to = Pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         let to_account = Account::new_ref(0, 0, &Pubkey::default());
 
         let result = create_account(
@@ -558,9 +558,9 @@ mod tests {
     #[test]
     fn test_request_more_than_allowed_data_length() {
         let from_account = Account::new_ref(100, 0, &system_program::id());
-        let from = Pubkey::new_rand();
+        let from = solana_sdk::pubkey::new_rand();
         let to_account = Account::new_ref(0, 0, &system_program::id());
-        let to = Pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
 
         let signers = &[from, to].iter().cloned().collect::<HashSet<_>>();
         let address = &to.into();
@@ -603,11 +603,11 @@ mod tests {
     fn test_create_already_in_use() {
         // Attempt to create system account in account already owned by another program
         let new_owner = Pubkey::new(&[9; 32]);
-        let from = Pubkey::new_rand();
+        let from = solana_sdk::pubkey::new_rand();
         let from_account = Account::new_ref(100, 0, &system_program::id());
 
         let original_program_owner = Pubkey::new(&[5; 32]);
-        let owned_key = Pubkey::new_rand();
+        let owned_key = solana_sdk::pubkey::new_rand();
         let owned_account = Account::new_ref(0, 0, &original_program_owner);
         let unchanged_account = owned_account.clone();
 
@@ -667,10 +667,10 @@ mod tests {
     fn test_create_unsigned() {
         // Attempt to create an account without signing the transfer
         let new_owner = Pubkey::new(&[9; 32]);
-        let from = Pubkey::new_rand();
+        let from = solana_sdk::pubkey::new_rand();
         let from_account = Account::new_ref(100, 0, &system_program::id());
 
-        let owned_key = Pubkey::new_rand();
+        let owned_key = solana_sdk::pubkey::new_rand();
         let owned_account = Account::new_ref(0, 0, &Pubkey::default());
 
         let owned_address = owned_key.into();
@@ -717,10 +717,10 @@ mod tests {
     #[test]
     fn test_create_sysvar_invalid_id() {
         // Attempt to create system account in account already owned by another program
-        let from = Pubkey::new_rand();
+        let from = solana_sdk::pubkey::new_rand();
         let from_account = Account::new_ref(100, 0, &system_program::id());
 
-        let to = Pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         let to_account = Account::new_ref(0, 0, &system_program::id());
 
         let signers = [from, to].iter().cloned().collect::<HashSet<_>>();
@@ -744,10 +744,10 @@ mod tests {
     fn test_create_data_populated() {
         // Attempt to create system account in account with populated data
         let new_owner = Pubkey::new(&[9; 32]);
-        let from = Pubkey::new_rand();
+        let from = solana_sdk::pubkey::new_rand();
         let from_account = Account::new_ref(100, 0, &system_program::id());
 
-        let populated_key = Pubkey::new_rand();
+        let populated_key = solana_sdk::pubkey::new_rand();
         let populated_account = Account {
             data: vec![0, 1, 2, 3],
             ..Account::default()
@@ -774,7 +774,7 @@ mod tests {
 
     #[test]
     fn test_create_from_account_is_nonce_fail() {
-        let nonce = Pubkey::new_rand();
+        let nonce = solana_sdk::pubkey::new_rand();
         let nonce_account = Account::new_ref_data(
             42,
             &nonce::state::Versions::new_current(nonce::State::Initialized(
@@ -784,7 +784,7 @@ mod tests {
         )
         .unwrap();
         let from = KeyedAccount::new(&nonce, true, &nonce_account);
-        let new = Pubkey::new_rand();
+        let new = solana_sdk::pubkey::new_rand();
 
         let new_account = Account::new_ref(0, 0, &system_program::id());
 
@@ -799,7 +799,7 @@ mod tests {
                 &new_address,
                 42,
                 0,
-                &Pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 &signers
             ),
             Err(InstructionError::InvalidArgument),
@@ -810,7 +810,7 @@ mod tests {
     fn test_assign() {
         let new_owner = Pubkey::new(&[9; 32]);
 
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let mut account = Account::new(100, 0, &system_program::id());
 
         assert_eq!(
@@ -843,7 +843,7 @@ mod tests {
     fn test_assign_to_sysvar() {
         let new_owner = sysvar::id();
 
-        let from = Pubkey::new_rand();
+        let from = solana_sdk::pubkey::new_rand();
         let mut from_account = Account::new(100, 0, &system_program::id());
 
         assert_eq!(
@@ -861,13 +861,13 @@ mod tests {
     fn test_process_bogus_instruction() {
         // Attempt to assign with no accounts
         let instruction = SystemInstruction::Assign {
-            owner: Pubkey::new_rand(),
+            owner: solana_sdk::pubkey::new_rand(),
         };
         let data = serialize(&instruction).unwrap();
         let result = process_instruction(&system_program::id(), &[], &data);
         assert_eq!(result, Err(InstructionError::NotEnoughAccountKeys));
 
-        let from = Pubkey::new_rand();
+        let from = solana_sdk::pubkey::new_rand();
         let from_account = Account::new_ref(100, 0, &system_program::id());
         // Attempt to transfer with no destination
         let instruction = SystemInstruction::Transfer { lamports: 0 };
@@ -882,7 +882,7 @@ mod tests {
 
     #[test]
     fn test_transfer_lamports() {
-        let from = Pubkey::new_rand();
+        let from = solana_sdk::pubkey::new_rand();
         let from_account = Account::new_ref(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
         let to = Pubkey::new(&[3; 32]);
         let to_account = Account::new_ref(1, 0, &to); // account owner should not matter
@@ -910,7 +910,7 @@ mod tests {
 
     #[test]
     fn test_transfer_with_seed() {
-        let base = Pubkey::new_rand();
+        let base = solana_sdk::pubkey::new_rand();
         let base_account = Account::new_ref(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
         let from_base_keyed_account = KeyedAccount::new(&base, true, &base_account);
         let from_seed = "42";
@@ -966,7 +966,7 @@ mod tests {
 
     #[test]
     fn test_transfer_lamports_from_nonce_account_fail() {
-        let from = Pubkey::new_rand();
+        let from = solana_sdk::pubkey::new_rand();
         let from_account = Account::new_ref_data(
             100,
             &nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
@@ -1002,7 +1002,7 @@ mod tests {
         let alice_keypair = Keypair::new();
         let alice_pubkey = alice_keypair.pubkey();
         let seed = "seed";
-        let owner = Pubkey::new_rand();
+        let owner = solana_sdk::pubkey::new_rand();
         let alice_with_seed = Pubkey::create_with_seed(&alice_pubkey, seed, &owner).unwrap();
 
         bank_client
@@ -1043,8 +1043,8 @@ mod tests {
         let alice_pubkey = alice_keypair.pubkey();
         let bob_pubkey = bob_keypair.pubkey();
 
-        let program = Pubkey::new_rand();
-        let collector = Pubkey::new_rand();
+        let program = solana_sdk::pubkey::new_rand();
+        let collector = solana_sdk::pubkey::new_rand();
 
         let mint_lamports = 10000;
         let len1 = 123;
@@ -1070,7 +1070,7 @@ mod tests {
         let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
         let bank_client = BankClient::new_shared(&bank);
         bank_client
-            .transfer_and_confirm(50, &alice_keypair, &Pubkey::new_rand())
+            .transfer_and_confirm(50, &alice_keypair, &solana_sdk::pubkey::new_rand())
             .unwrap();
 
         // super fun time; callback chooses to .clean_accounts(None) or not
@@ -1112,7 +1112,7 @@ mod tests {
         let alice_keypair = Keypair::new();
         let alice_pubkey = alice_keypair.pubkey();
         let seed = "seed";
-        let owner = Pubkey::new_rand();
+        let owner = solana_sdk::pubkey::new_rand();
         let alice_with_seed = Pubkey::create_with_seed(&alice_pubkey, seed, &owner).unwrap();
 
         bank_client
@@ -1576,7 +1576,7 @@ mod tests {
             &nonce::state::Versions::new_current(nonce::State::Initialized(
                 nonce::state::Data::default(),
             )),
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
         )
         .unwrap();
         assert_eq!(get_system_account_kind(&nonce_account), None);

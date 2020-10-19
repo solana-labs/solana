@@ -63,7 +63,7 @@ fn test_rpc_send_tx() {
         ledger_path,
         ..
     } = TestValidator::run();
-    let bob_pubkey = Pubkey::new_rand();
+    let bob_pubkey = solana_sdk::pubkey::new_rand();
 
     let req = json_req!("getRecentBlockhash", json!([]));
     let json = post_rpc(req, &leader_data);
@@ -128,7 +128,7 @@ fn test_rpc_invalid_requests() {
         ledger_path,
         ..
     } = TestValidator::run();
-    let bob_pubkey = Pubkey::new_rand();
+    let bob_pubkey = solana_sdk::pubkey::new_rand();
 
     // test invalid get_balance request
     let req = json_req!("getBalance", json!(["invalid9999"]));
@@ -173,7 +173,7 @@ fn test_rpc_subscriptions() {
 
     // Create transaction signatures to subscribe to
     let transactions: Vec<Transaction> = (0..1000)
-        .map(|_| system_transaction::transfer(&alice, &Pubkey::new_rand(), 1, genesis_hash))
+        .map(|_| system_transaction::transfer(&alice, &solana_sdk::pubkey::new_rand(), 1, genesis_hash))
         .collect();
     let mut signature_set: HashSet<String> = transactions
         .iter()

@@ -268,7 +268,7 @@ mod tests {
 
     #[test]
     fn pubkey_fromstr() {
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let mut pubkey_base58_str = bs58::encode(pubkey.0).into_string();
 
         assert_eq!(pubkey_base58_str.parse::<Pubkey>(), Ok(pubkey));
@@ -301,43 +301,43 @@ mod tests {
 
     #[test]
     fn test_create_with_seed() {
-        assert!(Pubkey::create_with_seed(&Pubkey::new_rand(), "☉", &Pubkey::new_rand()).is_ok());
+        assert!(Pubkey::create_with_seed(&solana_sdk::pubkey::new_rand(), "☉", &solana_sdk::pubkey::new_rand()).is_ok());
         assert_eq!(
             Pubkey::create_with_seed(
-                &Pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 from_utf8(&[127; MAX_SEED_LEN + 1]).unwrap(),
-                &Pubkey::new_rand()
+                &solana_sdk::pubkey::new_rand()
             ),
             Err(PubkeyError::MaxSeedLengthExceeded)
         );
         assert!(Pubkey::create_with_seed(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             "\
              \u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\
              ",
-            &Pubkey::new_rand()
+            &solana_sdk::pubkey::new_rand()
         )
         .is_ok());
         // utf-8 abuse ;)
         assert_eq!(
             Pubkey::create_with_seed(
-                &Pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 "\
                  x\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}\
                  ",
-                &Pubkey::new_rand()
+                &solana_sdk::pubkey::new_rand()
             ),
             Err(PubkeyError::MaxSeedLengthExceeded)
         );
 
         assert!(Pubkey::create_with_seed(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             std::str::from_utf8(&[0; MAX_SEED_LEN]).unwrap(),
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
         )
         .is_ok());
 
-        assert!(Pubkey::create_with_seed(&Pubkey::new_rand(), "", &Pubkey::new_rand(),).is_ok());
+        assert!(Pubkey::create_with_seed(&solana_sdk::pubkey::new_rand(), "", &solana_sdk::pubkey::new_rand(),).is_ok());
 
         assert_eq!(
             Pubkey::create_with_seed(
@@ -403,7 +403,7 @@ mod tests {
         // addresses must land off the curve and be unique
         let mut addresses = vec![];
         for _ in 0..1_000 {
-            let program_id = Pubkey::new_rand();
+            let program_id = solana_sdk::pubkey::new_rand();
             let bytes1 = rand::random::<[u8; 10]>();
             let bytes2 = rand::random::<[u8; 32]>();
             if let Ok(program_address) =
@@ -424,7 +424,7 @@ mod tests {
     #[test]
     fn test_find_program_address() {
         for _ in 0..1_000 {
-            let program_id = Pubkey::new_rand();
+            let program_id = solana_sdk::pubkey::new_rand();
             let (address, bump_seed) =
                 Pubkey::find_program_address(&[b"Lil'", b"Bits"], &program_id);
             assert_eq!(
@@ -438,7 +438,7 @@ mod tests {
     #[test]
     fn test_read_write_pubkey() -> Result<(), Box<dyn std::error::Error>> {
         let filename = "test_pubkey.json";
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         write_pubkey_file(filename, pubkey)?;
         let read = read_pubkey_file(filename)?;
         assert_eq!(read, pubkey);
