@@ -34,7 +34,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     const NUM_PEERS: usize = 4;
     let mut peer_sockets = Vec::new();
     for _ in 0..NUM_PEERS {
-        let id = Pubkey::new_rand();
+        let id = solana_sdk::pubkey::new_rand();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut contact_info = ContactInfo::new_localhost(&id, timestamp());
         contact_info.tvu = socket.local_addr().unwrap();

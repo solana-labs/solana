@@ -649,13 +649,13 @@ mod test {
         let mut stakes = HashMap::new();
         let node = CrdsGossipPull::default();
         let me = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         crds.insert(me.clone(), 0).unwrap();
         for i in 1..=30 {
             let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &Pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 0,
             )));
             let id = entry.label().pubkey();
@@ -682,25 +682,25 @@ mod test {
         let gossip = socketaddr!("127.0.0.1:1234");
 
         let me = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
-            id: Pubkey::new_rand(),
+            id: solana_sdk::pubkey::new_rand(),
             shred_version: 123,
             gossip,
             ..ContactInfo::default()
         }));
         let spy = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
-            id: Pubkey::new_rand(),
+            id: solana_sdk::pubkey::new_rand(),
             shred_version: 0,
             gossip,
             ..ContactInfo::default()
         }));
         let node_123 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
-            id: Pubkey::new_rand(),
+            id: solana_sdk::pubkey::new_rand(),
             shred_version: 123,
             gossip,
             ..ContactInfo::default()
         }));
         let node_456 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
-            id: Pubkey::new_rand(),
+            id: solana_sdk::pubkey::new_rand(),
             shred_version: 456,
             gossip,
             ..ContactInfo::default()
@@ -741,12 +741,12 @@ mod test {
         let gossip = socketaddr!("127.0.0.1:1234");
 
         let me = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
-            id: Pubkey::new_rand(),
+            id: solana_sdk::pubkey::new_rand(),
             gossip,
             ..ContactInfo::default()
         }));
         let node_123 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo {
-            id: Pubkey::new_rand(),
+            id: solana_sdk::pubkey::new_rand(),
             gossip,
             ..ContactInfo::default()
         }));
@@ -767,7 +767,7 @@ mod test {
         assert!(options.is_empty());
 
         // Unknown pubkey in gossip_validators -- will pull from nobody
-        gossip_validators.insert(Pubkey::new_rand());
+        gossip_validators.insert(solana_sdk::pubkey::new_rand());
         let options = node.pull_options(
             &crds,
             &me.label().pubkey(),
@@ -898,7 +898,7 @@ mod test {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut crds = Crds::default();
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         let id = entry.label().pubkey();
@@ -933,7 +933,7 @@ mod test {
         );
 
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         crds.insert(new.clone(), 0).unwrap();
@@ -957,19 +957,19 @@ mod test {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut crds = Crds::default();
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         let node_pubkey = entry.label().pubkey();
         let mut node = CrdsGossipPull::default();
         crds.insert(entry.clone(), 0).unwrap();
         let old = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         crds.insert(old.clone(), 0).unwrap();
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         crds.insert(new.clone(), 0).unwrap();
@@ -1000,14 +1000,14 @@ mod test {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut node_crds = Crds::default();
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         let node_pubkey = entry.label().pubkey();
         let node = CrdsGossipPull::default();
         node_crds.insert(entry, 0).unwrap();
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         node_crds.insert(new, 0).unwrap();
@@ -1031,7 +1031,7 @@ mod test {
         assert_eq!(rsp[0].len(), 0);
 
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
         )));
         dest_crds
@@ -1047,7 +1047,7 @@ mod test {
         filters.push(filters[0].clone());
         //should return new value since caller is new
         filters[1].0 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS + 1,
         )));
 
@@ -1063,14 +1063,14 @@ mod test {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut node_crds = Crds::default();
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         let node_pubkey = entry.label().pubkey();
         let node = CrdsGossipPull::default();
         node_crds.insert(entry, 0).unwrap();
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         node_crds.insert(new, 0).unwrap();
@@ -1113,7 +1113,7 @@ mod test {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut node_crds = Crds::default();
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             1,
         )));
         let node_pubkey = entry.label().pubkey();
@@ -1121,14 +1121,14 @@ mod test {
         node_crds.insert(entry, 0).unwrap();
 
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             1,
         )));
         node_crds.insert(new, 0).unwrap();
 
         let mut dest = CrdsGossipPull::default();
         let mut dest_crds = Crds::default();
-        let new_id = Pubkey::new_rand();
+        let new_id = solana_sdk::pubkey::new_rand();
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &new_id, 1,
         )));
@@ -1210,7 +1210,7 @@ mod test {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut node_crds = Crds::default();
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         let node_label = entry.label();
@@ -1218,7 +1218,7 @@ mod test {
         let mut node = CrdsGossipPull::default();
         node_crds.insert(entry, 0).unwrap();
         let old = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         )));
         node_crds.insert(old.clone(), 0).unwrap();
@@ -1330,7 +1330,7 @@ mod test {
         let mut node_crds = Crds::default();
         let mut node = CrdsGossipPull::default();
 
-        let peer_pubkey = Pubkey::new_rand();
+        let peer_pubkey = solana_sdk::pubkey::new_rand();
         let peer_entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(
             ContactInfo::new_localhost(&peer_pubkey, 0),
         ));

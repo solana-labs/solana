@@ -138,7 +138,7 @@ mod tests {
     }
 
     fn create_config_account(keys: Vec<(Pubkey, bool)>) -> (Keypair, RefCell<Account>) {
-        let from_pubkey = Pubkey::new_rand();
+        let from_pubkey = solana_sdk::pubkey::new_rand();
         let config_keypair = Keypair::new();
         let config_pubkey = config_keypair.pubkey();
 
@@ -239,9 +239,9 @@ mod tests {
     #[test]
     fn test_process_store_with_additional_signers() {
         solana_logger::setup();
-        let pubkey = Pubkey::new_rand();
-        let signer0_pubkey = Pubkey::new_rand();
-        let signer1_pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let signer0_pubkey = solana_sdk::pubkey::new_rand();
+        let signer1_pubkey = solana_sdk::pubkey::new_rand();
         let keys = vec![
             (pubkey, false),
             (signer0_pubkey, true),
@@ -275,8 +275,8 @@ mod tests {
     #[test]
     fn test_process_store_without_config_signer() {
         solana_logger::setup();
-        let pubkey = Pubkey::new_rand();
-        let signer0_pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let signer0_pubkey = solana_sdk::pubkey::new_rand();
         let keys = vec![(pubkey, false), (signer0_pubkey, true)];
         let (config_keypair, _) = create_config_account(keys.clone());
         let config_pubkey = config_keypair.pubkey();
@@ -295,8 +295,8 @@ mod tests {
     #[test]
     fn test_process_store_with_bad_additional_signer() {
         solana_logger::setup();
-        let signer0_pubkey = Pubkey::new_rand();
-        let signer1_pubkey = Pubkey::new_rand();
+        let signer0_pubkey = solana_sdk::pubkey::new_rand();
+        let signer1_pubkey = solana_sdk::pubkey::new_rand();
         let signer0_account = RefCell::new(Account::default());
         let signer1_account = RefCell::new(Account::default());
         let keys = vec![(signer0_pubkey, true)];
@@ -332,10 +332,10 @@ mod tests {
     #[test]
     fn test_config_updates() {
         solana_logger::setup();
-        let pubkey = Pubkey::new_rand();
-        let signer0_pubkey = Pubkey::new_rand();
-        let signer1_pubkey = Pubkey::new_rand();
-        let signer2_pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let signer0_pubkey = solana_sdk::pubkey::new_rand();
+        let signer1_pubkey = solana_sdk::pubkey::new_rand();
+        let signer2_pubkey = solana_sdk::pubkey::new_rand();
         let signer0_account = RefCell::new(Account::default());
         let signer1_account = RefCell::new(Account::default());
         let signer2_account = RefCell::new(Account::default());
@@ -417,8 +417,8 @@ mod tests {
     #[test]
     fn test_config_updates_requiring_config() {
         solana_logger::setup();
-        let pubkey = Pubkey::new_rand();
-        let signer0_pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let signer0_pubkey = solana_sdk::pubkey::new_rand();
         let signer0_account = RefCell::new(Account::default());
         let keys = vec![
             (pubkey, false),
@@ -479,8 +479,8 @@ mod tests {
 
     #[test]
     fn test_config_initialize_no_panic() {
-        let from_pubkey = Pubkey::new_rand();
-        let config_pubkey = Pubkey::new_rand();
+        let from_pubkey = solana_sdk::pubkey::new_rand();
+        let config_pubkey = solana_sdk::pubkey::new_rand();
         let instructions =
             config_instruction::create_account::<MyConfig>(&from_pubkey, &config_pubkey, 1, vec![]);
         let accounts = vec![];

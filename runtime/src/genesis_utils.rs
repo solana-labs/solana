@@ -46,7 +46,7 @@ pub struct GenesisConfigInfo {
 }
 
 pub fn create_genesis_config(mint_lamports: u64) -> GenesisConfigInfo {
-    create_genesis_config_with_leader(mint_lamports, &Pubkey::new_rand(), 0)
+    create_genesis_config_with_leader(mint_lamports, &solana_sdk::pubkey::new_rand(), 0)
 }
 
 pub fn create_genesis_config_with_vote_accounts(
@@ -117,7 +117,7 @@ pub fn create_genesis_config_with_leader(
         mint_lamports,
         bootstrap_validator_pubkey,
         &Keypair::new(),
-        &Pubkey::new_rand(),
+        &solana_sdk::pubkey::new_rand(),
         bootstrap_validator_stake_lamports,
         BOOTSTRAP_VALIDATOR_LAMPORTS,
         ClusterType::Development,

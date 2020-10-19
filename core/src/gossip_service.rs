@@ -306,8 +306,8 @@ mod tests {
     #[test]
     fn test_gossip_services_spy() {
         let keypair = Keypair::new();
-        let peer0 = Pubkey::new_rand();
-        let peer1 = Pubkey::new_rand();
+        let peer0 = solana_sdk::pubkey::new_rand();
+        let peer1 = solana_sdk::pubkey::new_rand();
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
         let peer0_info = ContactInfo::new_localhost(&peer0, 0);
         let peer1_info = ContactInfo::new_localhost(&peer1, 0);
@@ -335,7 +335,7 @@ mod tests {
             spy_ref.clone(),
             None,
             Some(0),
-            Some(Pubkey::new_rand()),
+            Some(solana_sdk::pubkey::new_rand()),
             None,
         );
         assert_eq!(met_criteria, false);
@@ -349,7 +349,7 @@ mod tests {
             spy_ref.clone(),
             Some(1),
             Some(0),
-            Some(Pubkey::new_rand()),
+            Some(solana_sdk::pubkey::new_rand()),
             None,
         );
         assert_eq!(met_criteria, false);

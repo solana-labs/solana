@@ -10,7 +10,7 @@ use test::Bencher;
 #[bench]
 fn bench_accounts_index(bencher: &mut Bencher) {
     const NUM_PUBKEYS: usize = 10_000;
-    let pubkeys: Vec<_> = (0..NUM_PUBKEYS).map(|_| Pubkey::new_rand()).collect();
+    let pubkeys: Vec<_> = (0..NUM_PUBKEYS).map(|_| solana_sdk::pubkey::new_rand()).collect();
 
     const NUM_FORKS: u64 = 16;
 

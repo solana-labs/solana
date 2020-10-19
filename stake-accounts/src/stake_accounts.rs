@@ -347,8 +347,8 @@ mod tests {
         let base_keypair = Keypair::new();
         let base_pubkey = base_keypair.pubkey();
         let lamports = rent + 1;
-        let stake_authority_pubkey = Pubkey::new_rand();
-        let withdraw_authority_pubkey = Pubkey::new_rand();
+        let stake_authority_pubkey = solana_sdk::pubkey::new_rand();
+        let withdraw_authority_pubkey = solana_sdk::pubkey::new_rand();
 
         let message = new_stake_account(
             &fee_payer_pubkey,
@@ -406,8 +406,8 @@ mod tests {
             .send_and_confirm_message(&signers, message)
             .unwrap();
 
-        let new_stake_authority_pubkey = Pubkey::new_rand();
-        let new_withdraw_authority_pubkey = Pubkey::new_rand();
+        let new_stake_authority_pubkey = solana_sdk::pubkey::new_rand();
+        let new_withdraw_authority_pubkey = solana_sdk::pubkey::new_rand();
         let messages = authorize_stake_accounts(
             &fee_payer_pubkey,
             &base_pubkey,
@@ -620,8 +620,8 @@ mod tests {
 
         let new_base_keypair = Keypair::new();
         let new_base_pubkey = new_base_keypair.pubkey();
-        let new_stake_authority_pubkey = Pubkey::new_rand();
-        let new_withdraw_authority_pubkey = Pubkey::new_rand();
+        let new_stake_authority_pubkey = solana_sdk::pubkey::new_rand();
+        let new_withdraw_authority_pubkey = solana_sdk::pubkey::new_rand();
         let balances = get_balances(&bank_client, &base_pubkey, num_accounts);
         let messages = move_stake_accounts(
             &fee_payer_pubkey,

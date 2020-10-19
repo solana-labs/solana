@@ -225,7 +225,7 @@ mod tests {
         };
         let info2 = TransactionInfo::default();
         let info3 = TransactionInfo {
-            recipient: Pubkey::new_rand(),
+            recipient: solana_sdk::pubkey::new_rand(),
             ..TransactionInfo::default()
         };
 

@@ -41,11 +41,11 @@ mod test {
 
     #[test]
     fn test_parse_bpf_loader_instructions() {
-        let account_pubkey = Pubkey::new_rand();
-        let program_id = Pubkey::new_rand();
+        let account_pubkey = solana_sdk::pubkey::new_rand();
+        let program_id = solana_sdk::pubkey::new_rand();
         let offset = 4242;
         let bytes = vec![8; 99];
-        let fee_payer = Pubkey::new_rand();
+        let fee_payer = solana_sdk::pubkey::new_rand();
         let account_keys = vec![fee_payer, account_pubkey];
         let missing_account_keys = vec![account_pubkey];
 

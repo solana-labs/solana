@@ -138,7 +138,7 @@ mod tests {
 
         // collect rent on a newly-created account
         let collected = rent_collector.collect_from_created_account(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             &mut created_account,
             true,
         );
@@ -148,7 +148,7 @@ mod tests {
 
         // collect rent on a already-existing account
         let collected = rent_collector.collect_from_existing_account(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand()
             &mut existing_account,
             true,
         );
@@ -168,7 +168,7 @@ mod tests {
         let huge_lamports = 123_456_789_012;
         let tiny_lamports = 789_012;
         let mut collected;
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
 
         account.lamports = huge_lamports;
         assert_eq!(account.rent_epoch, 0);

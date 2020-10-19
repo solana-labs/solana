@@ -594,7 +594,7 @@ mod test {
 
     #[test]
     fn test_should_retransmit_and_persist() {
-        let me_id = Pubkey::new_rand();
+        let me_id = solana_sdk::pubkey::new_rand();
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
         let bank = Arc::new(Bank::new(

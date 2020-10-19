@@ -442,7 +442,7 @@ mod test {
     fn test_parse_token() {
         let mut keys: Vec<Pubkey> = vec![];
         for _ in 0..10 {
-            keys.push(Pubkey::new_rand());
+            keys.push(solana_sdk::pubkey::new_rand());
         }
 
         // Test InitializeMint variations
@@ -1027,7 +1027,7 @@ mod test {
     fn test_token_ix_not_enough_keys() {
         let mut keys: Vec<Pubkey> = vec![];
         for _ in 0..10 {
-            keys.push(Pubkey::new_rand());
+            keys.push(solana_sdk::pubkey::new_rand());
         }
 
         // Test InitializeMint variations

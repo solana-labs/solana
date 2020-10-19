@@ -58,7 +58,7 @@ fn run_dos(
     if !nodes.is_empty() {
         let source = thread_rng().gen_range(0, nodes.len());
         let mut contact = nodes[source].clone();
-        contact.id = Pubkey::new_rand();
+        contact.id = solana_sdk::pubkey::new_rand();
         match data_type.as_str() {
             "repair_highest" => {
                 let slot = 100;
@@ -253,7 +253,7 @@ pub mod test {
 
     #[test]
     fn test_dos() {
-        let nodes = [ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp())];
+        let nodes = [ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp())];
         let entrypoint_addr = nodes[0].gossip;
         run_dos(
             &nodes,

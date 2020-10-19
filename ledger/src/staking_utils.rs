@@ -304,7 +304,7 @@ pub(crate) mod tests {
     #[test]
     fn test_to_staked_nodes() {
         let mut stakes = Vec::new();
-        let node1 = Pubkey::new_rand();
+        let node1 = solana_sdk::pubkey::new_rand();
 
         // Node 1 has stake of 3
         for i in 0..3 {
@@ -321,7 +321,7 @@ pub(crate) mod tests {
         }
 
         // Node 1 has stake of 5
-        let node2 = Pubkey::new_rand();
+        let node2 = solana_sdk::pubkey::new_rand();
 
         stakes.push((
             5,

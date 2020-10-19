@@ -762,8 +762,8 @@ mod tests {
         let mut pre_accounts = vec![];
         let mut accounts = vec![];
         for i in 0..MAX_DEPTH {
-            program_ids.push(Pubkey::new_rand());
-            keys.push(Pubkey::new_rand());
+            program_ids.push(solana_sdk::pubkey::new_rand());
+            keys.push(solana_sdk::pubkey::new_rand());
             accounts.push(Rc::new(RefCell::new(Account::new(
                 i as u64,
                 1,
@@ -867,7 +867,7 @@ mod tests {
 
     #[test]
     fn test_verify_account_references() {
-        let accounts = vec![(Pubkey::new_rand(), RefCell::new(Account::default()))];
+        let accounts = vec![(solana_sdk::pubkey::new_rand(), RefCell::new(Account::default()))];
 
         assert!(MessageProcessor::verify_account_references(&accounts).is_ok());
 
@@ -890,7 +890,7 @@ mod tests {
                 program_id: *program_id,
                 rent: Rent::default(),
                 pre: PreAccount::new(
-                    &Pubkey::new_rand(),
+                    &solana_sdk::pubkey::new_rand(),
                     &Account {
                         owner: *owner,
                         lamports: std::u64::MAX,
@@ -943,8 +943,8 @@ mod tests {
     #[test]
     fn test_verify_account_changes_owner() {
         let system_program_id = system_program::id();
-        let alice_program_id = Pubkey::new_rand();
-        let mallory_program_id = Pubkey::new_rand();
+        let alice_program_id = solana_sdk::pubkey::new_rand();
+        let mallory_program_id = solana_sdk::pubkey::new_rand();
 
         assert_eq!(
             Change::new(&system_program_id, &system_program_id)
@@ -995,8 +995,8 @@ mod tests {
 
     #[test]
     fn test_verify_account_changes_executable() {
-        let owner = Pubkey::new_rand();
-        let mallory_program_id = Pubkey::new_rand();
+        let owner = solana_sdk::pubkey::new_rand();
+        let mallory_program_id = solana_sdk::pubkey::new_rand();
         let system_program_id = system_program::id();
 
         assert_eq!(
@@ -1102,7 +1102,7 @@ mod tests {
 
     #[test]
     fn test_verify_account_changes_data_len() {
-        let alice_program_id = Pubkey::new_rand();
+        let alice_program_id = solana_sdk::pubkey::new_rand();
 
         assert_eq!(
             Change::new(&system_program::id(), &system_program::id())
@@ -1122,8 +1122,8 @@ mod tests {
 
     #[test]
     fn test_verify_account_changes_data() {
-        let alice_program_id = Pubkey::new_rand();
-        let mallory_program_id = Pubkey::new_rand();
+        let alice_program_id = solana_sdk::pubkey::new_rand();
+        let mallory_program_id = solana_sdk::pubkey::new_rand();
 
         assert_eq!(
             Change::new(&alice_program_id, &alice_program_id)
@@ -1151,7 +1151,7 @@ mod tests {
 
     #[test]
     fn test_verify_account_changes_rent_epoch() {
-        let alice_program_id = Pubkey::new_rand();
+        let alice_program_id = solana_sdk::pubkey::new_rand();
 
         assert_eq!(
             Change::new(&alice_program_id, &system_program::id()).verify(),
@@ -1169,8 +1169,8 @@ mod tests {
 
     #[test]
     fn test_verify_account_changes_deduct_lamports_and_reassign_account() {
-        let alice_program_id = Pubkey::new_rand();
-        let bob_program_id = Pubkey::new_rand();
+        let alice_program_id = solana_sdk::pubkey::new_rand();
+        let bob_program_id = solana_sdk::pubkey::new_rand();
 
         // positive test of this capability
         assert_eq!(
@@ -1186,7 +1186,7 @@ mod tests {
 
     #[test]
     fn test_verify_account_changes_lamports() {
-        let alice_program_id = Pubkey::new_rand();
+        let alice_program_id = solana_sdk::pubkey::new_rand();
 
         assert_eq!(
             Change::new(&alice_program_id, &system_program::id())
@@ -1224,7 +1224,7 @@ mod tests {
 
     #[test]
     fn test_verify_account_changes_data_size_changed() {
-        let alice_program_id = Pubkey::new_rand();
+        let alice_program_id = solana_sdk::pubkey::new_rand();
 
         assert_eq!(
             Change::new(&alice_program_id, &system_program::id())
@@ -1299,8 +1299,8 @@ mod tests {
 
         let executors = Rc::new(RefCell::new(Executors::default()));
 
-        let from_pubkey = Pubkey::new_rand();
-        let to_pubkey = Pubkey::new_rand();
+        let from_pubkey = solana_sdk::pubkey::new_rand();
+        let to_pubkey = solana_sdk::pubkey::new_rand();
         let account_metas = vec![
             AccountMeta::new(from_pubkey, true),
             AccountMeta::new_readonly(to_pubkey, false),
@@ -1456,8 +1456,8 @@ mod tests {
 
         let executors = Rc::new(RefCell::new(Executors::default()));
 
-        let from_pubkey = Pubkey::new_rand();
-        let to_pubkey = Pubkey::new_rand();
+        let from_pubkey = solana_sdk::pubkey::new_rand();
+        let to_pubkey = solana_sdk::pubkey::new_rand();
         let dup_pubkey = from_pubkey;
         let account_metas = vec![
             AccountMeta::new(from_pubkey, true),
@@ -1579,8 +1579,8 @@ mod tests {
             Ok(())
         }
 
-        let caller_program_id = Pubkey::new_rand();
-        let callee_program_id = Pubkey::new_rand();
+        let caller_program_id = solana_sdk::pubkey::new_rand();
+        let callee_program_id = solana_sdk::pubkey::new_rand();
         let mut message_processor = MessageProcessor::default();
         message_processor.add_program(callee_program_id, mock_process_instruction);
 
@@ -1588,12 +1588,12 @@ mod tests {
         program_account.executable = true;
         let executable_accounts = vec![(callee_program_id, RefCell::new(program_account))];
 
-        let owned_key = Pubkey::new_rand();
+        let owned_key = solana_sdk::pubkey::new_rand();
         let owned_account = Account::new(42, 1, &callee_program_id);
         let owned_preaccount = PreAccount::new(&owned_key, &owned_account, false, true);
 
-        let not_owned_key = Pubkey::new_rand();
-        let not_owned_account = Account::new(84, 1, &Pubkey::new_rand());
+        let not_owned_key = solana_sdk::pubkey::new_rand();
+        let not_owned_account = Account::new(84, 1, &solana_sdk::pubkey::new_rand());
         let not_owned_preaccount = PreAccount::new(&not_owned_key, &not_owned_account, false, true);
 
         #[allow(unused_mut)]
@@ -1682,7 +1682,7 @@ mod tests {
         ) -> Result<(), InstructionError> {
             Ok(())
         }
-        let program_id = Pubkey::new_rand();
+        let program_id = solana_sdk::pubkey::new_rand();
         message_processor.add_program(program_id, mock_process_instruction);
         message_processor.add_loader(program_id, mock_ix_processor);
 

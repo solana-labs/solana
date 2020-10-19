@@ -879,7 +879,7 @@ pub fn create_test_accounts(
     slot: Slot,
 ) {
     for t in 0..num {
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new((t + 1) as u64, 0, &Account::default().owner);
         accounts.store_slow(slot, &pubkey, &account);
         pubkeys.push(pubkey);
@@ -1102,7 +1102,7 @@ mod tests {
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
 
-        let account = Account::new(1, 1, &Pubkey::new_rand()); // <-- owner is not the system program
+        let account = Account::new(1, 1, &solana_sdk::pubkey::new_rand()); // <-- owner is not the system program
         accounts.push((key0, account));
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
@@ -1496,13 +1496,13 @@ mod tests {
         let accounts = Accounts::new(Vec::new(), &ClusterType::Development);
 
         // Load accounts owned by various programs into AccountsDB
-        let pubkey0 = Pubkey::new_rand();
+        let pubkey0 = solana_sdk::pubkey::new_rand();
         let account0 = Account::new(1, 0, &Pubkey::new(&[2; 32]));
         accounts.store_slow(0, &pubkey0, &account0);
-        let pubkey1 = Pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
         let account1 = Account::new(1, 0, &Pubkey::new(&[2; 32]));
         accounts.store_slow(0, &pubkey1, &account1);
-        let pubkey2 = Pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
         let account2 = Account::new(1, 0, &Pubkey::new(&[3; 32]));
         accounts.store_slow(0, &pubkey2, &account2);
 
@@ -1526,8 +1526,13 @@ mod tests {
             Accounts::load_executable_accounts(
                 &storage,
                 &ancestors,
+<<<<<<< HEAD
                 &accounts_index,
                 &Pubkey::new_rand(),
+=======
+                &accounts.accounts_db.accounts_index,
+                &solana_sdk::pubkey::new_rand(),
+>>>>>>> 7bc073def... Run `codemod --extensions rs Pubkey::new_rand solana_sdk::pubkey::new_rand`
                 &mut error_counters
             ),
             Err(TransactionError::ProgramAccountNotFound)
@@ -1734,7 +1739,7 @@ mod tests {
     fn test_collect_accounts_to_store() {
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
 
         let rent_collector = RentCollector::default();
 
@@ -1853,7 +1858,7 @@ mod tests {
         let zero_account = Account::new(0, 0, &Account::default().owner);
         info!("storing..");
         for i in 0..2_000 {
-            let pubkey = Pubkey::new_rand();
+            let pubkey = solana_sdk::pubkey::new_rand();
             let account = Account::new((i + 1) as u64, 0, &Account::default().owner);
             accounts.store_slow(i, &pubkey, &account);
             accounts.store_slow(i, &old_pubkey, &zero_account);
@@ -1900,7 +1905,7 @@ mod tests {
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0, 1])];
         let tx = Transaction::new_with_compiled_instructions(
             &[&keypair],
-            &[Pubkey::new_rand(), instructions_key],
+            &[solana_sdk::pubkey::new_rand(), instructions_key],
             Hash::default(),
             vec![native_loader::id()],
             instructions,
