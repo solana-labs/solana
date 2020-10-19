@@ -30,8 +30,20 @@ readCargoVariable() {
   echo "Unable to locate $variable in $Cargo_toml" 1>&2
 }
 
-# shellcheck disable=2207
-Cargo_tomls=($(find . -mindepth 2 -name Cargo.toml -not -path './web3.js/examples/*'))
+ignores=(
+  .cache
+  .cargo
+  target
+  web3.js/examples
+)
+
+not_paths=()
+for ignore in "${ignores[@]}"; do
+  not_paths+=(-not -path "*/$ignore/*")
+done
+
+# shellcheck disable=2207,SC2068 # Don't want a positional arg if `not-paths` is empty
+Cargo_tomls=($(find . -mindepth 2 -name Cargo.toml ${not_paths[@]}))
 # shellcheck disable=2207
 markdownFiles=($(find . -name "*.md"))
 
