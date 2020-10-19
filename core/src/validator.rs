@@ -368,19 +368,6 @@ impl Validator {
             leader_schedule_cache.slot_leader_at(bank.slot(), Some(&bank))
         );
 
-        if config.dev_halt_at_slot.is_some() {
-            // Simulate a confirmed root to avoid RPC errors with CommitmentConfig::max() and
-            // to ensure RPC endpoints like getConfirmedBlock, which require a confirmed root, work
-            block_commitment_cache
-                .write()
-                .unwrap()
-                .set_highest_confirmed_root(bank_forks.read().unwrap().root());
-
-            // Park with the RPC service running, ready for inspection!
-            warn!("Validator halted");
-            std::thread::park();
-        }
-
         let poh_config = Arc::new(genesis_config.poh_config.clone());
         let (mut poh_recorder, entry_receiver) = PohRecorder::new_with_clear_signal(
             bank.tick_height(),
@@ -463,6 +450,19 @@ impl Validator {
             } else {
                 (None, None)
             };
+
+        if config.dev_halt_at_slot.is_some() {
+            // Simulate a confirmed root to avoid RPC errors with CommitmentConfig::max() and
+            // to ensure RPC endpoints like getConfirmedBlock, which require a confirmed root, work
+            block_commitment_cache
+                .write()
+                .unwrap()
+                .set_highest_confirmed_root(bank_forks.read().unwrap().root());
+
+            // Park with the RPC service running, ready for inspection!
+            warn!("Validator halted");
+            std::thread::park();
+        }
 
         let ip_echo_server = solana_net_utils::ip_echo_server(node.sockets.ip_echo.unwrap());
 
