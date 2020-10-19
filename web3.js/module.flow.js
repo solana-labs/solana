@@ -973,6 +973,54 @@ declare module '@solana/web3.js' {
     ): AuthorizeNonceParams;
   }
 
+  // === src/secp256k1-program.js ===
+  declare export type CreateSecp256k1InstructionWithPublicKeyParams = {|
+    publicKey: Buffer | Uint8Array | Array<number>,
+    message: Buffer | Uint8Array | Array<number>,
+    signature: Buffer | Uint8Array | Array<number>,
+    recoveryId: number,
+  |};
+
+  declare export type CreateSecp256k1InstructionWithPrivateKeyParams = {|
+    privateKey: Buffer | Uint8Array | Array<number>,
+    message: Buffer | Uint8Array | Array<number>,
+  |};
+
+  declare export type DecodedSecp256k1Instruction = {|
+    numSignatures: number,
+    signatureOffset: number,
+    signatureInstructionOffset: number,
+    ethAddressOffset: number,
+    ethAddressInstructionIndex: number,
+    messageDataOffset: number,
+    messageDataSize: number,
+    messageInstructionIndex: number,
+    signature: Buffer,
+    ethPublicKey: Buffer,
+    recoveryId: number,
+    message: Buffer,
+  |};
+
+  declare export class Secp256k1Instruction {
+    static decodeInstruction(
+      instruction: TransactionInstruction,
+    ): DecodedSecp256k1Instruction;
+
+    static checkProgramId(programId: PublicKey): void;
+  }
+
+  declare export class Secp256k1Program {
+    static get programId(): PublicKey;
+
+    static createInstructionWithPublicKey(
+      params: CreateSecp256k1InstructionWithPublicKeyParams,
+    ): TransactionInstruction;
+
+    static createInstructionWithPrivateKey(
+      params: CreateSecp256k1InstructionWithPrivateKeyParams,
+    ): TransactionInstruction;
+  }
+
   // === src/loader.js ===
   declare export class Loader {
     static getMinNumSignatures(dataLength: number): number;

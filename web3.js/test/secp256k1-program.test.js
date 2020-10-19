@@ -23,14 +23,12 @@ if (!mockRpcEnabled) {
 }
 
 test('decode secp256k1 instruction', () => {
-  const program = new Secp256k1Program();
-
   let privateKey;
   do {
     privateKey = randomBytes(32);
   } while (!privateKeyVerify(privateKey));
 
-  const instruction = program.createInstructionWithPrivateKey({
+  const instruction = Secp256k1Program.createInstructionWithPrivateKey({
     privateKey,
     message: Buffer.from('Test message'),
   });
@@ -69,7 +67,6 @@ test('live create secp256k1 instruction with public key', async () => {
     return;
   }
 
-  const program = new Secp256k1Program();
   const message = Buffer.from('This is a message');
 
   let privateKey;
@@ -81,7 +78,7 @@ test('live create secp256k1 instruction with public key', async () => {
   const messageHash = createKeccakHash('keccak256').update(message).digest();
   const {signature, recid: recoveryId} = ecdsaSign(messageHash, privateKey);
 
-  const instruction = program.createInstructionWithPublicKey({
+  const instruction = Secp256k1Program.createInstructionWithPublicKey({
     publicKey,
     message,
     signature,
@@ -114,14 +111,12 @@ test('live create secp256k1 instruction with private key', async () => {
     return;
   }
 
-  const program = new Secp256k1Program();
-
   let privateKey;
   do {
     privateKey = randomBytes(32);
   } while (!privateKeyVerify(privateKey));
 
-  const instruction = program.createInstructionWithPrivateKey({
+  const instruction = Secp256k1Program.createInstructionWithPrivateKey({
     privateKey,
     message: Buffer.from('Test 123'),
   });

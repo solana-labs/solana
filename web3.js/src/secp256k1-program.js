@@ -81,7 +81,9 @@ export class Secp256k1Instruction {
   /**
    * Decode a secp256k1 instruction
    */
-  static decodeInstruction(instruction: TransactionInstruction) {
+  static decodeInstruction(
+    instruction: TransactionInstruction,
+  ): DecodedSecp256k1Instruction {
     const decoded = SECP256K1_INSTRUCTION_LAYOUT.decode(instruction.data);
     const message = instruction.data.slice(SECP256K1_INSTRUCTION_LAYOUT.span);
     return {
@@ -111,7 +113,7 @@ export class Secp256k1Program {
   /**
    * Create a secp256k1 instruction with public key
    */
-  createInstructionWithPublicKey(
+  static createInstructionWithPublicKey(
     params: CreateSecp256k1InstructionWithPublicKeyParams,
   ): TransactionInstruction {
     const {publicKey, message, signature, recoveryId} = params;
@@ -167,7 +169,7 @@ export class Secp256k1Program {
   /**
    * Create a secp256k1 instruction with private key
    */
-  createInstructionWithPrivateKey(
+  static createInstructionWithPrivateKey(
     params: CreateSecp256k1InstructionWithPrivateKeyParams,
   ): TransactionInstruction {
     const {privateKey, message} = params;
@@ -196,7 +198,7 @@ export class Secp256k1Program {
   }
 }
 
-export function constructEthPubkey(
+function constructEthPubkey(
   publicKey: Buffer | Uint8Array | Array<number>,
 ): Buffer {
   return createKeccakHash('keccak256')
