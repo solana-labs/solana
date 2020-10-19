@@ -40,6 +40,9 @@ test-stable)
   _ cargo +"$rust_stable" test --jobs "$NPROC" --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
   ;;
 test-stable-perf)
+  # BPF solana-sdk legacy compile test
+  ./cargo-build-bpf --manifest-path sdk/Cargo.toml --no-default-features --features program
+
   # BPF program tests
   _ make -C programs/bpf/c tests
   _ cargo +"$rust_stable" test \

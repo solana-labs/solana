@@ -1,12 +1,8 @@
+use crate::info;
 use crate::{decode_error::DecodeError, instruction::InstructionError, pubkey::PubkeyError};
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::convert::TryFrom;
 use thiserror::Error;
-
-#[cfg(feature = "program")]
-use crate::info;
-#[cfg(all(feature = "everything", not(feature = "program")))]
-use log::info;
 
 /// Reasons the program may fail
 #[derive(Clone, Debug, Deserialize, Eq, Error, PartialEq, Serialize)]

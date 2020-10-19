@@ -426,10 +426,7 @@ impl Message {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        instruction::AccountMeta,
-        signature::{Keypair, Signer},
-    };
+    use crate::instruction::AccountMeta;
 
     #[test]
     fn test_message_unique_program_ids() {
@@ -444,7 +441,7 @@ mod tests {
     #[test]
     fn test_message_unique_program_ids_not_adjacent() {
         let program_id0 = Pubkey::default();
-        let program_id1 = solana_sdk::pubkey::new_rand();
+        let program_id1 = Pubkey::new_unique();
         let program_ids = get_program_ids(&[
             Instruction::new(program_id0, &0, vec![]),
             Instruction::new(program_id1, &0, vec![]),
@@ -455,7 +452,7 @@ mod tests {
 
     #[test]
     fn test_message_unique_program_ids_order_preserved() {
-        let program_id0 = solana_sdk::pubkey::new_rand();
+        let program_id0 = Pubkey::new_unique();
         let program_id1 = Pubkey::default(); // Key less than program_id0
         let program_ids = get_program_ids(&[
             Instruction::new(program_id0, &0, vec![]),
@@ -558,7 +555,7 @@ mod tests {
     #[test]
     fn test_message_unique_keys_order_preserved() {
         let program_id = Pubkey::default();
-        let id0 = solana_sdk::pubkey::new_rand();
+        let id0 = Pubkey::new_unique();
         let id1 = Pubkey::default(); // Key less than id0
         let keys = get_keys(
             &[
@@ -574,7 +571,7 @@ mod tests {
     fn test_message_unique_keys_not_adjacent() {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
-        let id1 = solana_sdk::pubkey::new_rand();
+        let id1 = Pubkey::new_unique();
         let keys = get_keys(
             &[
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
@@ -590,7 +587,7 @@ mod tests {
     fn test_message_signed_keys_first() {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
-        let id1 = solana_sdk::pubkey::new_rand();
+        let id1 = Pubkey::new_unique();
         let keys = get_keys(
             &[
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
@@ -619,9 +616,9 @@ mod tests {
     fn test_message_readonly_keys_last() {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default(); // Identical key/program_id should be de-duped
-        let id1 = solana_sdk::pubkey::new_rand();
-        let id2 = solana_sdk::pubkey::new_rand();
-        let id3 = solana_sdk::pubkey::new_rand();
+        let id1 = Pubkey::new_unique();
+        let id2 = Pubkey::new_unique();
+        let id3 = Pubkey::new_unique();
         let keys = get_keys(
             &[
                 Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id0, false)]),
@@ -639,11 +636,10 @@ mod tests {
 
     #[test]
     fn test_message_kitchen_sink() {
-        let program_id0 = solana_sdk::pubkey::new_rand();
-        let program_id1 = solana_sdk::pubkey::new_rand();
+        let program_id0 = Pubkey::new_unique();
+        let program_id1 = Pubkey::new_unique();
         let id0 = Pubkey::default();
-        let keypair1 = Keypair::new();
-        let id1 = keypair1.pubkey();
+        let id1 = Pubkey::new_unique();
         let message = Message::new(
             &[
                 Instruction::new(program_id0, &0, vec![AccountMeta::new(id0, false)]),
@@ -669,7 +665,7 @@ mod tests {
     #[test]
     fn test_message_payer_first() {
         let program_id = Pubkey::default();
-        let payer = solana_sdk::pubkey::new_rand();
+        let payer = Pubkey::new_unique();
         let id0 = Pubkey::default();
 
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]);
@@ -692,8 +688,8 @@ mod tests {
     #[test]
     fn test_message_program_last() {
         let program_id = Pubkey::default();
-        let id0 = solana_sdk::pubkey::new_rand();
-        let id1 = solana_sdk::pubkey::new_rand();
+        let id0 = Pubkey::new_unique();
+        let id1 = Pubkey::new_unique();
         let keys = get_keys(
             &[
                 Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id0, false)]),
@@ -710,8 +706,8 @@ mod tests {
     #[test]
     fn test_program_position() {
         let program_id0 = Pubkey::default();
-        let program_id1 = solana_sdk::pubkey::new_rand();
-        let id = solana_sdk::pubkey::new_rand();
+        let program_id1 = Pubkey::new_unique();
+        let id = Pubkey::new_unique();
         let message = Message::new(
             &[
                 Instruction::new(program_id0, &0, vec![AccountMeta::new(id, false)]),
@@ -726,12 +722,12 @@ mod tests {
 
     #[test]
     fn test_is_writable() {
-        let key0 = solana_sdk::pubkey::new_rand();
-        let key1 = solana_sdk::pubkey::new_rand();
-        let key2 = solana_sdk::pubkey::new_rand();
-        let key3 = solana_sdk::pubkey::new_rand();
-        let key4 = solana_sdk::pubkey::new_rand();
-        let key5 = solana_sdk::pubkey::new_rand();
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let key2 = Pubkey::new_unique();
+        let key3 = Pubkey::new_unique();
+        let key4 = Pubkey::new_unique();
+        let key5 = Pubkey::new_unique();
 
         let message = Message {
             header: MessageHeader {
@@ -754,10 +750,10 @@ mod tests {
     #[test]
     fn test_get_account_keys_by_lock_type() {
         let program_id = Pubkey::default();
-        let id0 = solana_sdk::pubkey::new_rand();
-        let id1 = solana_sdk::pubkey::new_rand();
-        let id2 = solana_sdk::pubkey::new_rand();
-        let id3 = solana_sdk::pubkey::new_rand();
+        let id0 = Pubkey::new_unique();
+        let id1 = Pubkey::new_unique();
+        let id2 = Pubkey::new_unique();
+        let id3 = Pubkey::new_unique();
         let message = Message::new(
             &[
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
@@ -776,12 +772,12 @@ mod tests {
     #[test]
     fn test_decompile_instructions() {
         solana_logger::setup();
-        let program_id0 = solana_sdk::pubkey::new_rand();
-        let program_id1 = solana_sdk::pubkey::new_rand();
-        let id0 = solana_sdk::pubkey::new_rand();
-        let id1 = solana_sdk::pubkey::new_rand();
-        let id2 = solana_sdk::pubkey::new_rand();
-        let id3 = solana_sdk::pubkey::new_rand();
+        let program_id0 = Pubkey::new_unique();
+        let program_id1 = Pubkey::new_unique();
+        let id0 = Pubkey::new_unique();
+        let id1 = Pubkey::new_unique();
+        let id2 = Pubkey::new_unique();
+        let id3 = Pubkey::new_unique();
         let instructions = vec![
             Instruction::new(program_id0, &0, vec![AccountMeta::new(id0, false)]),
             Instruction::new(program_id0, &0, vec![AccountMeta::new(id1, true)]),

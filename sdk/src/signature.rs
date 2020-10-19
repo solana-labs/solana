@@ -1,4 +1,5 @@
 //! The `signature` module provides functionality for public, and private keys.
+#![cfg(feature = "everything")]
 
 use crate::{pubkey::Pubkey, transaction::TransactionError};
 use ed25519_dalek::Signer as DalekSigner;

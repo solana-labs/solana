@@ -9,9 +9,12 @@ license = "Apache-2.0"
 edition = "2018"
 
 [features]
-# On-chain program specific dependencies
+# "program" feature is a legacy feature retained to support v1.3 and older
+# programs.  New development should not use this feature.  Instead use the
+# solana-program-sdk crate
 program = []
-# Everything includes functionality that is not compatible or needed for on-chain programs
+
+# "everything" includes functionality that is not compatible or needed for on-chain programs
 default = [
   "everything"
 ]
@@ -43,12 +46,11 @@ curve25519-dalek = { version = "2.1.0", optional = true }
 generic-array = { version = "0.14.3", default-features = false, features = ["serde", "more_lengths"], optional = true }
 hex = "0.4.2"
 hmac = "0.7.0"
-itertools = { version = "0.9.0" }
-lazy_static = "1.4.0"
-log = { version = "0.4.8" }
+itertools =  "0.9.0"
+log = "0.4.8"
 memmap = { version = "0.7.0", optional = true }
-num-derive = { version = "0.3" }
-num-traits = { version = "0.2" }
+num-derive = "0.3"
+num-traits = "0.2"
 pbkdf2 = { version = "0.3.0", default-features = false }
 rand = { version = "0.7.0", optional = true }
 rand_chacha = { version = "0.2.2", optional = true }
@@ -70,15 +72,12 @@ libsecp256k1 = { version = "0.3.5", optional = true }
 sha3 = { version = "0.9.1", optional = true }
 digest = { version = "0.9.0", optional = true }
 
-[target.'cfg(not(target_arch = "bpf"))'.dependencies]
-curve25519-dalek = { version = "2.1.0" }
-
 [dev-dependencies]
 curve25519-dalek = "2.1.0"
 tiny-bip39 = "0.7.0"
 
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]
-
 [build-dependencies]
 rustc_version = "0.2"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

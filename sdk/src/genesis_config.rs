@@ -1,5 +1,7 @@
 //! The `genesis_config` module is a library for generating the chain's genesis config.
 
+#![cfg(feature = "everything")]
+
 use crate::{
     account::Account,
     clock::{UnixTimestamp, DEFAULT_TICKS_PER_SLOT},

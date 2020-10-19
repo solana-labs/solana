@@ -4380,6 +4380,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-program-sdk"
+version = "1.5.0"
+dependencies = [
+ "assert_matches",
+ "bincode",
+ "bs58",
+ "bv",
+ "curve25519-dalek 2.1.0",
+ "hex",
+ "itertools 0.9.0",
+ "lazy_static",
+ "log 0.4.8",
+ "num-derive",
+ "num-traits",
+ "rand 0.7.3",
+ "rustc_version",
+ "rustversion",
+ "serde",
+ "serde_bytes",
+ "serde_derive",
+ "serde_json",
+ "sha2",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
+ "solana-logger 1.5.0",
+ "solana-sdk-macro 1.5.0",
+ "thiserror",
+]
+
+[[package]]
 name = "solana-ramp-tps"
 version = "1.5.0"
 dependencies = [
@@ -4545,7 +4575,6 @@ dependencies = [
  "hex",
  "hmac",
  "itertools 0.9.0",
- "lazy_static",
  "libsecp256k1",
  "log 0.4.8",
  "memmap",
@@ -4566,6 +4595,7 @@ dependencies = [
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-logger 1.5.0",
+ "solana-program-sdk",
  "solana-sdk-macro 1.5.0",
  "thiserror",
  "tiny-bip39",

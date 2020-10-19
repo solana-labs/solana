@@ -4,47 +4,36 @@
 // Allows macro expansion of `use ::solana_sdk::*` to work within this crate
 extern crate self as solana_sdk;
 
-pub mod account;
-pub mod account_utils;
-pub mod bpf_loader;
-pub mod bpf_loader_deprecated;
+pub use solana_program_sdk::*;
+
 pub mod builtins;
-pub mod clock;
+pub mod client;
 pub mod commitment_config;
-pub mod decode_error;
 pub mod deserialize_utils;
+pub mod entrypoint;
+pub mod entrypoint_deprecated;
 pub mod entrypoint_native;
 pub mod epoch_info;
-pub mod epoch_schedule;
-pub mod fee_calculator;
+pub mod genesis_config;
+pub mod hard_forks;
 pub mod hash;
-pub mod incinerator;
 pub mod inflation;
-pub mod instruction;
-pub mod loader_instruction;
-pub mod message;
+pub mod log;
 pub mod native_loader;
-pub mod native_token;
-pub mod nonce;
 pub mod packet;
 pub mod poh_config;
-pub mod program_option;
-pub mod program_pack;
 pub mod program_utils;
 pub mod pubkey;
-pub mod rent;
 pub mod rpc_port;
-pub mod sanitize;
-pub mod secp256k1_program;
-pub mod short_vec;
-pub mod slot_hashes;
-pub mod slot_history;
-pub mod stake_history;
+pub mod secp256k1;
+pub mod shred_version;
+pub mod signature;
+pub mod signers;
 pub mod stake_weighted_timestamp;
-pub mod system_instruction;
-pub mod system_program;
-pub mod sysvar;
+pub mod system_transaction;
 pub mod timing;
+pub mod transaction;
+pub mod transport;
 
 /// Convenience macro to declare a static public key and functions to interact with it
 ///
@@ -72,53 +61,15 @@ pub use solana_sdk_macro::pubkeys;
 #[rustversion::since(1.46.0)]
 pub use solana_sdk_macro::respan;
 
-// On-chain program specific modules
-pub mod account_info;
-pub mod entrypoint;
-pub mod entrypoint_deprecated;
-pub mod log;
-pub mod program;
-pub mod program_error;
-
-#[cfg(all(feature = "program", not(target_arch = "bpf")))]
-extern crate lazy_static;
-
-#[cfg(all(feature = "program", not(target_arch = "bpf")))]
-pub mod program_stubs;
-
-// Unused `solana_sdk::program_stubs!()` macro retained for source backwards compatibility with v1.3.x programs
+// Unused `solana_sdk::program_stubs!()` macro retained for source backwards compatibility with older programs
 #[macro_export]
 #[deprecated(
-    since = "1.4.2",
+    since = "1.4.3",
     note = "program_stubs macro is obsolete and can be safely removed"
 )]
 macro_rules! program_stubs {
     () => {};
 }
-
-pub mod serialize_utils;
-
-// Modules not usable by on-chain programs
-#[cfg(feature = "everything")]
-pub mod client;
-#[cfg(feature = "everything")]
-pub mod genesis_config;
-#[cfg(feature = "everything")]
-pub mod hard_forks;
-#[cfg(feature = "everything")]
-pub mod secp256k1;
-#[cfg(feature = "everything")]
-pub mod shred_version;
-#[cfg(feature = "everything")]
-pub mod signature;
-#[cfg(feature = "everything")]
-pub mod signers;
-#[cfg(feature = "everything")]
-pub mod system_transaction;
-#[cfg(feature = "everything")]
-pub mod transaction;
-#[cfg(feature = "everything")]
-pub mod transport;
 
 #[macro_use]
 extern crate serde_derive;
