@@ -661,13 +661,8 @@ impl fmt::Display for CliStakeState {
                 if lockup.unix_timestamp != UnixTimestamp::default() {
                     writeln!(
                         f,
-                        "Lockup Timestamp: {} (UnixTimestamp: {})",
-                        DateTime::<Utc>::from_utc(
-                            NaiveDateTime::from_timestamp(lockup.unix_timestamp, 0),
-                            Utc
-                        )
-                        .to_rfc3339_opts(SecondsFormat::Secs, true),
-                        lockup.unix_timestamp
+                        "Lockup Timestamp: {}",
+                        unix_timestamp_to_string(lockup.unix_timestamp)
                     )?;
                 }
                 if lockup.epoch != Epoch::default() {
@@ -1008,7 +1003,12 @@ impl fmt::Display for CliVoteAccount {
                 None => "~".to_string(),
             }
         )?;
-        writeln!(f, "Recent Timestamp: {:?}", self.recent_timestamp)?;
+        writeln!(
+            f,
+            "Recent Timestamp: {} from slot {}",
+            unix_timestamp_to_string(self.recent_timestamp.timestamp),
+            self.recent_timestamp.slot
+        )?;
         if !self.votes.is_empty() {
             writeln!(f, "Recent Votes:")?;
             for vote in &self.votes {
@@ -1093,19 +1093,22 @@ pub struct CliBlockTime {
 impl QuietDisplay for CliBlockTime {}
 impl VerboseDisplay for CliBlockTime {}
 
+fn unix_timestamp_to_string(unix_timestamp: UnixTimestamp) -> String {
+    format!(
+        "{} (UnixTimestamp: {})",
+        match NaiveDateTime::from_timestamp_opt(unix_timestamp, 0) {
+            Some(ndt) =>
+                DateTime::<Utc>::from_utc(ndt, Utc).to_rfc3339_opts(SecondsFormat::Secs, true),
+            None => "unknown".to_string(),
+        },
+        unix_timestamp,
+    )
+}
+
 impl fmt::Display for CliBlockTime {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln_name_value(f, "Block:", &self.slot.to_string())?;
-        writeln_name_value(
-            f,
-            "Date:",
-            &format!(
-                "{} (UnixTimestamp: {})",
-                DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(self.timestamp, 0), Utc)
-                    .to_rfc3339_opts(SecondsFormat::Secs, true),
-                self.timestamp
-            ),
-        )
+        writeln_name_value(f, "Date:", &unix_timestamp_to_string(self.timestamp))
     }
 }
 
