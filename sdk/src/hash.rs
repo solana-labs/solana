@@ -90,7 +90,7 @@ impl Hash {
     }
 
     /// New random hash value for tests and benchmarks.
-    #[cfg(not(feature = "program"))]
+    #[cfg(feature = "everything")]
     pub fn new_rand<R: ?Sized>(rng: &mut R) -> Self
     where
         R: rand::Rng,
