@@ -76,6 +76,17 @@ impl FromStr for Hash {
     }
 }
 
+/// New random hash value for tests and benchmarks.
+#[cfg(not(feature = "program"))]
+pub fn new_rand<R: ?Sized>(rng: &mut R) -> Hash
+where
+    R: rand::Rng,
+{
+    let mut buf = [0u8; HASH_BYTES];
+    rng.fill(&mut buf);
+    Hash::new(&buf)
+}
+
 impl Hash {
     pub fn new(hash_slice: &[u8]) -> Self {
         Hash(<[u8; HASH_BYTES]>::try_from(hash_slice).unwrap())
@@ -91,13 +102,12 @@ impl Hash {
 
     /// New random hash value for tests and benchmarks.
     #[cfg(not(feature = "program"))]
+    #[deprecated(since = "1.3.9", note = "Please use 'hash::new_rand' instead")]
     pub fn new_rand<R: ?Sized>(rng: &mut R) -> Self
     where
         R: rand::Rng,
     {
-        let mut buf = [0u8; HASH_BYTES];
-        rng.fill(&mut buf);
-        Hash::new(&buf)
+        new_rand(rng)
     }
 }
 
