@@ -1804,16 +1804,20 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
 
     // monitor for actual votes from validator A
     let mut bad_vote_detected = false;
+    let mut a_votes = vec![];
     for _ in 0..100 {
         sleep(Duration::from_millis(100));
 
         if let Some(last_vote) = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
+            a_votes.push(last_vote);
             if votes_on_c_fork.contains(&last_vote) {
                 bad_vote_detected = true;
                 break;
             }
         }
     }
+
+    info!("Observed A's votes on: {:?}", a_votes);
 
     // an elaborate way of assert!(with_tower && !bad_vote_detected || ...)
     let expects_optimistic_confirmation_violation = !with_tower;
