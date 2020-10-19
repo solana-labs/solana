@@ -37,15 +37,15 @@ pub fn parse_bpf_loader(
 #[cfg(test)]
 mod test {
     use super::*;
-    use solana_sdk::{message::Message, pubkey::Pubkey};
+    use solana_sdk::{message::Message, pubkey};
 
     #[test]
     fn test_parse_bpf_loader_instructions() {
-        let account_pubkey = solana_sdk::pubkey::new_rand();
-        let program_id = solana_sdk::pubkey::new_rand();
+        let account_pubkey = pubkey::new_rand();
+        let program_id = pubkey::new_rand();
         let offset = 4242;
         let bytes = vec![8; 99];
-        let fee_payer = solana_sdk::pubkey::new_rand();
+        let fee_payer = pubkey::new_rand();
         let account_keys = vec![fee_payer, account_pubkey];
         let missing_account_keys = vec![account_pubkey];
 

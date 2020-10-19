@@ -12,8 +12,7 @@ use solana_runtime::{
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
 };
 use solana_sdk::{
-    commitment_config::CommitmentConfig, pubkey::Pubkey, rpc_port, signature::Signer,
-    system_transaction,
+    commitment_config::CommitmentConfig, rpc_port, signature::Signer, system_transaction,
 };
 use std::{
     fs::remove_dir_all,

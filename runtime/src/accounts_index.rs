@@ -397,6 +397,150 @@ mod tests {
         assert!(found_key);
     }
 
+<<<<<<< HEAD
+=======
+    fn setup_accounts_index_keys(num_pubkeys: usize) -> (AccountsIndex<bool>, Vec<Pubkey>) {
+        let index = AccountsIndex::<bool>::default();
+        let root_slot = 0;
+
+        let mut pubkeys: Vec<Pubkey> = std::iter::repeat_with(|| {
+            let new_pubkey = solana_sdk::pubkey::new_rand();
+            index.upsert(root_slot, &new_pubkey, true, &mut vec![]);
+            new_pubkey
+        })
+        .take(num_pubkeys.saturating_sub(1))
+        .collect();
+
+        if num_pubkeys != 0 {
+            pubkeys.push(Pubkey::default());
+            index.upsert(root_slot, &Pubkey::default(), true, &mut vec![]);
+        }
+
+        index.add_root(root_slot);
+
+        (index, pubkeys)
+    }
+
+    fn run_test_range(
+        index: &AccountsIndex<bool>,
+        pubkeys: &[Pubkey],
+        start_bound: Bound<usize>,
+        end_bound: Bound<usize>,
+    ) {
+        // Exclusive `index_start`
+        let (pubkey_start, index_start) = match start_bound {
+            Unbounded => (Unbounded, 0),
+            Included(i) => (Included(pubkeys[i]), i),
+            Excluded(i) => (Excluded(pubkeys[i]), i + 1),
+        };
+
+        // Exclusive `index_end`
+        let (pubkey_end, index_end) = match end_bound {
+            Unbounded => (Unbounded, pubkeys.len()),
+            Included(i) => (Included(pubkeys[i]), i + 1),
+            Excluded(i) => (Excluded(pubkeys[i]), i),
+        };
+        let pubkey_range = (pubkey_start, pubkey_end);
+
+        let ancestors: Ancestors = HashMap::new();
+        let mut scanned_keys = HashSet::new();
+        index.range_scan_accounts(&ancestors, pubkey_range, |pubkey, _index| {
+            scanned_keys.insert(*pubkey);
+        });
+
+        let mut expected_len = 0;
+        for key in &pubkeys[index_start..index_end] {
+            expected_len += 1;
+            assert!(scanned_keys.contains(key));
+        }
+
+        assert_eq!(scanned_keys.len(), expected_len);
+    }
+
+    fn run_test_range_indexes(
+        index: &AccountsIndex<bool>,
+        pubkeys: &[Pubkey],
+        start: Option<usize>,
+        end: Option<usize>,
+    ) {
+        let start_options = start
+            .map(|i| vec![Included(i), Excluded(i)])
+            .unwrap_or_else(|| vec![Unbounded]);
+        let end_options = end
+            .map(|i| vec![Included(i), Excluded(i)])
+            .unwrap_or_else(|| vec![Unbounded]);
+
+        for start in &start_options {
+            for end in &end_options {
+                run_test_range(index, pubkeys, *start, *end);
+            }
+        }
+    }
+
+    #[test]
+    fn test_range_scan_accounts() {
+        let (index, mut pubkeys) = setup_accounts_index_keys(3 * ITER_BATCH_SIZE);
+        pubkeys.sort();
+
+        run_test_range_indexes(&index, &pubkeys, None, None);
+
+        run_test_range_indexes(&index, &pubkeys, Some(ITER_BATCH_SIZE), None);
+
+        run_test_range_indexes(&index, &pubkeys, None, Some(2 * ITER_BATCH_SIZE as usize));
+
+        run_test_range_indexes(
+            &index,
+            &pubkeys,
+            Some(ITER_BATCH_SIZE as usize),
+            Some(2 * ITER_BATCH_SIZE as usize),
+        );
+
+        run_test_range_indexes(
+            &index,
+            &pubkeys,
+            Some(ITER_BATCH_SIZE as usize),
+            Some(2 * ITER_BATCH_SIZE as usize - 1),
+        );
+
+        run_test_range_indexes(
+            &index,
+            &pubkeys,
+            Some(ITER_BATCH_SIZE - 1 as usize),
+            Some(2 * ITER_BATCH_SIZE as usize + 1),
+        );
+    }
+
+    fn run_test_scan_accounts(num_pubkeys: usize) {
+        let (index, _) = setup_accounts_index_keys(num_pubkeys);
+        let ancestors: Ancestors = HashMap::new();
+
+        let mut scanned_keys = HashSet::new();
+        index.scan_accounts(&ancestors, |pubkey, _index| {
+            scanned_keys.insert(*pubkey);
+        });
+        assert_eq!(scanned_keys.len(), num_pubkeys);
+    }
+
+    #[test]
+    fn test_scan_accounts() {
+        run_test_scan_accounts(0);
+        run_test_scan_accounts(1);
+        run_test_scan_accounts(ITER_BATCH_SIZE * 10);
+        run_test_scan_accounts(ITER_BATCH_SIZE * 10 - 1);
+        run_test_scan_accounts(ITER_BATCH_SIZE * 10 + 1);
+    }
+
+    #[test]
+    fn test_accounts_iter_finished() {
+        let (index, _) = setup_accounts_index_keys(0);
+        let mut iter = index.iter(None::<Range<Pubkey>>);
+        assert!(iter.next().is_none());
+        let mut gc = vec![];
+        index.upsert(0, &solana_sdk::pubkey::new_rand(), true, &mut gc);
+        assert!(iter.next().is_none());
+    }
+
+>>>>>>> 959880db6... Remove unused pubkey::Pubkey imports
     #[test]
     fn test_is_root() {
         let mut index = AccountsIndex::<bool>::default();

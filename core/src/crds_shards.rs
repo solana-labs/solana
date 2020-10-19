@@ -135,14 +135,15 @@ mod test {
     use crate::contact_info::ContactInfo;
     use crate::crds_value::{CrdsData, CrdsValue};
     use rand::{thread_rng, Rng};
-    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::timing::timestamp;
     use std::collections::HashSet;
     use std::ops::Index;
 
     fn new_test_crds_value() -> VersionedCrdsValue {
-        let data =
-            CrdsData::ContactInfo(ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp()));
+        let data = CrdsData::ContactInfo(ContactInfo::new_localhost(
+            &solana_sdk::pubkey::new_rand(),
+            timestamp(),
+        ));
         VersionedCrdsValue::new(timestamp(), CrdsValue::new_unsigned(data))
     }
 

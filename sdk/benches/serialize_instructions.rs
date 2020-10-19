@@ -4,13 +4,13 @@ extern crate test;
 use bincode::{deserialize, serialize};
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::message::Message;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::pubkey;
 use solana_sdk::sysvar::instructions;
 use test::Bencher;
 
 fn make_instructions() -> Vec<Instruction> {
-    let meta = AccountMeta::new(solana_sdk::pubkey::new_rand(), false);
-    let inst = Instruction::new(solana_sdk::pubkey::new_rand(), &[0; 10], vec![meta; 4]);
+    let meta = AccountMeta::new(pubkey::new_rand(), false);
+    let inst = Instruction::new(pubkey::new_rand(), &[0; 10], vec![meta; 4]);
     vec![inst; 4]
 }
 

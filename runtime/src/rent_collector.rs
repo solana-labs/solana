@@ -148,7 +148,7 @@ mod tests {
 
         // collect rent on a already-existing account
         let collected = rent_collector.collect_from_existing_account(
-            &solana_sdk::pubkey::new_rand()
+            &solana_sdk::pubkey::new_rand(),
             &mut existing_account,
             true,
         );

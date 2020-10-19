@@ -2736,8 +2736,11 @@ mod tests {
         //check that a gossip nodes always show up as spies
         let (node, _, _) = ClusterInfo::spy_node(&solana_sdk::pubkey::new_rand(), 0);
         assert!(ClusterInfo::is_spy_node(&node));
-        let (node, _, _) =
-            ClusterInfo::gossip_node(&solana_sdk::pubkey::new_rand(), &"1.1.1.1:1111".parse().unwrap(), 0);
+        let (node, _, _) = ClusterInfo::gossip_node(
+            &solana_sdk::pubkey::new_rand(),
+            &"1.1.1.1:1111".parse().unwrap(),
+            0,
+        );
         assert!(ClusterInfo::is_spy_node(&node));
     }
 
@@ -2955,8 +2958,12 @@ mod tests {
 
         let ip = IpAddr::V4(Ipv4Addr::from(0));
         let port = bind_in_range(ip, port_range).expect("Failed to bind").0;
-        let node =
-            Node::new_with_external_ip(&solana_sdk::pubkey::new_rand(), &socketaddr!(0, port), port_range, ip);
+        let node = Node::new_with_external_ip(
+            &solana_sdk::pubkey::new_rand(),
+            &socketaddr!(0, port),
+            port_range,
+            ip,
+        );
 
         check_node_sockets(&node, ip, port_range);
 

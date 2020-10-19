@@ -4271,8 +4271,12 @@ pub mod tests {
         );
         SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
 
-        let mut bad_transaction =
-            system_transaction::transfer(&mint_keypair, &solana_sdk::pubkey::new_rand(), 42, Hash::default());
+        let mut bad_transaction = system_transaction::transfer(
+            &mint_keypair,
+            &solana_sdk::pubkey::new_rand(),
+            42,
+            Hash::default(),
+        );
 
         // sendTransaction will fail because the blockhash is invalid
         let req = format!(
@@ -4302,8 +4306,12 @@ pub mod tests {
                 r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Transaction failed to sanitize accounts offsets correctly","data":{"err":"SanitizeFailure","logs":[]}},"id":1}"#.to_string(),
             )
         );
-        let mut bad_transaction =
-            system_transaction::transfer(&mint_keypair, &solana_sdk::pubkey::new_rand(), 42, recent_blockhash);
+        let mut bad_transaction = system_transaction::transfer(
+            &mint_keypair,
+            &solana_sdk::pubkey::new_rand(),
+            42,
+            recent_blockhash,
+        );
 
         // sendTransaction will fail due to poor node health
         health.stub_set_health_status(Some(RpcHealthStatus::Behind));
@@ -4397,7 +4405,12 @@ pub mod tests {
 
     #[test]
     fn test_rpc_verify_signature() {
-        let tx = system_transaction::transfer(&Keypair::new(), &solana_sdk::pubkey::new_rand(), 20, hash(&[0]));
+        let tx = system_transaction::transfer(
+            &Keypair::new(),
+            &solana_sdk::pubkey::new_rand(),
+            20,
+            hash(&[0]),
+        );
         assert_eq!(
             verify_signature(&tx.signatures[0].to_string()).unwrap(),
             tx.signatures[0]
@@ -5192,7 +5205,8 @@ pub mod tests {
 
     #[test]
     fn test_token_rpcs() {
-        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&solana_sdk::pubkey::new_rand());
+        let RpcHandler { io, meta, bank, .. } =
+            start_rpc_handler_with_tx(&solana_sdk::pubkey::new_rand());
 
         let mut account_data = vec![0; TokenAccount::get_packed_len()];
         let mint = SplTokenPubkey::new(&[2; 32]);
@@ -5588,7 +5602,8 @@ pub mod tests {
 
     #[test]
     fn test_token_parsing() {
-        let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&solana_sdk::pubkey::new_rand());
+        let RpcHandler { io, meta, bank, .. } =
+            start_rpc_handler_with_tx(&solana_sdk::pubkey::new_rand());
 
         let mut account_data = vec![0; TokenAccount::get_packed_len()];
         let mint = SplTokenPubkey::new(&[2; 32]);

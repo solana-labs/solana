@@ -4,13 +4,13 @@ extern crate test;
 
 use rand::{thread_rng, Rng};
 use solana_runtime::{accounts_db::AccountInfo, accounts_index::AccountsIndex};
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::pubkey;
 use test::Bencher;
 
 #[bench]
 fn bench_accounts_index(bencher: &mut Bencher) {
     const NUM_PUBKEYS: usize = 10_000;
-    let pubkeys: Vec<_> = (0..NUM_PUBKEYS).map(|_| solana_sdk::pubkey::new_rand()).collect();
+    let pubkeys: Vec<_> = (0..NUM_PUBKEYS).map(|_| pubkey::new_rand()).collect();
 
     const NUM_FORKS: u64 = 16;
 

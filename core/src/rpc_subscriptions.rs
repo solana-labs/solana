@@ -1249,8 +1249,11 @@ pub(crate) mod tests {
             .process_transaction(&past_bank_tx)
             .unwrap();
 
-        let next_bank =
-            Bank::new_from_parent(&bank_forks.banks[&0].clone(), &solana_sdk::pubkey::new_rand(), 1);
+        let next_bank = Bank::new_from_parent(
+            &bank_forks.banks[&0].clone(),
+            &solana_sdk::pubkey::new_rand(),
+            1,
+        );
         bank_forks.insert(next_bank);
 
         bank_forks
