@@ -213,7 +213,7 @@ mod tests {
     use super::*;
     use solana_banks_server::banks_server::start_local_server;
     use solana_runtime::{bank::Bank, bank_forks::BankForks, genesis_utils::create_genesis_config};
-    use solana_sdk::{message::Message, pubkey::Pubkey, signature::Signer, system_instruction};
+    use solana_sdk::{message::Message, signature::Signer, system_instruction};
     use std::sync::{Arc, RwLock};
     use tarpc::transport;
     use tokio::{runtime::Runtime, time::delay_for};

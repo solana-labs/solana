@@ -15,8 +15,8 @@ use solana_client::{
 use solana_core::contact_info::ContactInfo;
 use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, test_validator::TestValidator};
 use solana_sdk::{
-    commitment_config::CommitmentConfig, hash::Hash, pubkey::Pubkey, signature::Signer,
-    system_transaction, transaction::Transaction,
+    commitment_config::CommitmentConfig, hash::Hash, signature::Signer, system_transaction,
+    transaction::Transaction,
 };
 use std::{
     collections::HashSet,
@@ -173,7 +173,9 @@ fn test_rpc_subscriptions() {
 
     // Create transaction signatures to subscribe to
     let transactions: Vec<Transaction> = (0..1000)
-        .map(|_| system_transaction::transfer(&alice, &solana_sdk::pubkey::new_rand(), 1, genesis_hash))
+        .map(|_| {
+            system_transaction::transfer(&alice, &solana_sdk::pubkey::new_rand(), 1, genesis_hash)
+        })
         .collect();
     let mut signature_set: HashSet<String> = transactions
         .iter()

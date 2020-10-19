@@ -2872,8 +2872,12 @@ pub mod tests {
         let keypair = Keypair::new();
 
         // Create array of two transactions which throw different errors
-        let account_not_found_tx =
-            system_transaction::transfer(&keypair, &solana_sdk::pubkey::new_rand(), 42, bank.last_blockhash());
+        let account_not_found_tx = system_transaction::transfer(
+            &keypair,
+            &solana_sdk::pubkey::new_rand(),
+            42,
+            bank.last_blockhash(),
+        );
         let account_not_found_sig = account_not_found_tx.signatures[0];
         let mut account_loaded_twice = system_transaction::transfer(
             &mint_keypair,
@@ -2925,7 +2929,11 @@ pub mod tests {
         let bank0 = Arc::new(Bank::new(&genesis_config));
         bank0.freeze();
 
-        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &solana_sdk::pubkey::new_rand(), 1));
+        let bank1 = Arc::new(Bank::new_from_parent(
+            &bank0,
+            &solana_sdk::pubkey::new_rand(),
+            1,
+        ));
 
         // The new blockhash is going to be the hash of the last tick in the block
         let bank_1_blockhash = bank1.last_blockhash();

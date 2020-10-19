@@ -1,5 +1,5 @@
 use solana_runtime::bank::Bank;
-use solana_sdk::{genesis_config::create_genesis_config, hash::hash, pubkey::Pubkey};
+use solana_sdk::{genesis_config::create_genesis_config, hash::hash};
 use std::{sync::Arc, thread::Builder};
 
 #[test]

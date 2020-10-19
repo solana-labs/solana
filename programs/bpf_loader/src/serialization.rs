@@ -264,7 +264,12 @@ mod tests {
     fn test_serialize_parameters() {
         let program_id = solana_sdk::pubkey::new_rand();
         let dup_key = solana_sdk::pubkey::new_rand();
-        let keys = vec![dup_key, dup_key, solana_sdk::pubkey::new_rand(), solana_sdk::pubkey::new_rand()];
+        let keys = vec![
+            dup_key,
+            dup_key,
+            solana_sdk::pubkey::new_rand(),
+            solana_sdk::pubkey::new_rand(),
+        ];
         let accounts = [
             RefCell::new(Account {
                 lamports: 1,

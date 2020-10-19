@@ -253,7 +253,10 @@ pub mod test {
 
     #[test]
     fn test_dos() {
-        let nodes = [ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp())];
+        let nodes = [ContactInfo::new_localhost(
+            &solana_sdk::pubkey::new_rand(),
+            timestamp(),
+        )];
         let entrypoint_addr = nodes[0].gossip;
         run_dos(
             &nodes,

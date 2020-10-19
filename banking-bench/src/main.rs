@@ -20,7 +20,6 @@ use solana_perf::packet::to_packets_chunked;
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{
     hash::Hash,
-    pubkey::Pubkey,
     signature::Keypair,
     signature::Signature,
     system_transaction,

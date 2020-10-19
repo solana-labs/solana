@@ -971,8 +971,10 @@ mod tests {
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(me.clone()));
 
         // Insert two peers on the network
-        let contact_info2 = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let contact_info3 = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
+        let contact_info2 =
+            ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
+        let contact_info3 =
+            ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         cluster_info.insert_info(contact_info2.clone());
         cluster_info.insert_info(contact_info3.clone());
         let serve_repair = ServeRepair::new(cluster_info);

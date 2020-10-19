@@ -4275,7 +4275,12 @@ mod tests {
     fn test_bank_capitalization() {
         let bank = Arc::new(Bank::new(&GenesisConfig {
             accounts: (0..42)
-                .map(|_| (solana_sdk::pubkey::new_rand(), Account::new(42, 0, &Pubkey::default())))
+                .map(|_| {
+                    (
+                        solana_sdk::pubkey::new_rand(),
+                        Account::new(42, 0, &Pubkey::default()),
+                    )
+                })
                 .collect(),
             cluster_type: ClusterType::MainnetBeta,
             ..GenesisConfig::default()
@@ -4852,7 +4857,11 @@ mod tests {
         };
 
         let root_bank = Arc::new(Bank::new(&genesis_config));
-        let bank = create_child_bank_for_rent_test(&root_bank, &genesis_config, solana_sdk::pubkey::new_rand());
+        let bank = create_child_bank_for_rent_test(
+            &root_bank,
+            &genesis_config,
+            solana_sdk::pubkey::new_rand(),
+        );
 
         let account_pubkey = solana_sdk::pubkey::new_rand();
         let account_balance = 1;
@@ -5941,7 +5950,8 @@ mod tests {
         assert!(bank.rewards.read().unwrap().is_empty());
 
         let vote_id = solana_sdk::pubkey::new_rand();
-        let mut vote_account = vote_state::create_account(&vote_id, &solana_sdk::pubkey::new_rand(), 50, 100);
+        let mut vote_account =
+            vote_state::create_account(&vote_id, &solana_sdk::pubkey::new_rand(), 50, 100);
         let (stake_id1, stake_account1) = crate::stakes::tests::create_stake_account(123, &vote_id);
         let (stake_id2, stake_account2) = crate::stakes::tests::create_stake_account(456, &vote_id);
 
@@ -7391,7 +7401,11 @@ mod tests {
         let bank0 = Arc::new(Bank::new(&genesis_config));
 
         // Bank 1
-        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &solana_sdk::pubkey::new_rand(), 1));
+        let bank1 = Arc::new(Bank::new_from_parent(
+            &bank0,
+            &solana_sdk::pubkey::new_rand(),
+            1,
+        ));
         // Bank 2
         let bank2 = Bank::new_from_parent(&bank0, &solana_sdk::pubkey::new_rand(), 2);
 
@@ -8306,7 +8320,11 @@ mod tests {
         let nonce_tx = Transaction::new_signed_with_payer(
             &[
                 system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
-                system_instruction::transfer(&custodian_pubkey, &solana_sdk::pubkey::new_rand(), 100_000),
+                system_instruction::transfer(
+                    &custodian_pubkey,
+                    &solana_sdk::pubkey::new_rand(),
+                    100_000,
+                ),
             ],
             Some(&custodian_pubkey),
             &[&custodian_keypair, &nonce_keypair],
