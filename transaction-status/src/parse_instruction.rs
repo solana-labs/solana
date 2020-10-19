@@ -1,4 +1,4 @@
-use crate::parse_token::parse_token;
+use crate::{parse_bpf_loader::parse_bpf_loader, parse_token::parse_token};
 use inflector::Inflector;
 use serde_json::Value;
 use solana_account_decoder::parse_token::spl_token_id_v2_0;
@@ -10,6 +10,7 @@ use std::{
 use thiserror::Error;
 
 lazy_static! {
+    static ref BPF_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader::id();
     static ref MEMO_PROGRAM_ID: Pubkey =
         Pubkey::from_str(&spl_memo_v1_0::id().to_string()).unwrap();
     static ref TOKEN_PROGRAM_ID: Pubkey = spl_token_id_v2_0();
@@ -17,6 +18,7 @@ lazy_static! {
         let mut m = HashMap::new();
         m.insert(*MEMO_PROGRAM_ID, ParsableProgram::SplMemo);
         m.insert(*TOKEN_PROGRAM_ID, ParsableProgram::SplToken);
+        m.insert(*BPF_LOADER_PROGRAM_ID, ParsableProgram::BpfLoader);
         m
     };
 }
@@ -57,6 +59,7 @@ pub struct ParsedInstructionEnum {
 pub enum ParsableProgram {
     SplMemo,
     SplToken,
+    BpfLoader,
 }
 
 pub fn parse(
@@ -70,6 +73,7 @@ pub fn parse(
     let parsed_json = match program_name {
         ParsableProgram::SplMemo => parse_memo(instruction),
         ParsableProgram::SplToken => serde_json::to_value(parse_token(instruction, account_keys)?)?,
+        ParsableProgram::BpfLoader => serde_json::to_value(parse_bpf_loader(instruction)?)?,
     };
     Ok(ParsedInstruction {
         program: format!("{:?}", program_name).to_kebab_case(),
