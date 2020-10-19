@@ -318,9 +318,10 @@ mod test {
             assert!(bloom.contains(hash_value));
         }
         // Round trip, inserting new hash values.
-        let more_hash_values: Vec<_> = std::iter::repeat_with(|| solana_sdk::hash::new_rand(&mut rng))
-            .take(1000)
-            .collect();
+        let more_hash_values: Vec<_> =
+            std::iter::repeat_with(|| solana_sdk::hash::new_rand(&mut rng))
+                .take(1000)
+                .collect();
         let bloom: AtomicBloom<_> = bloom.into();
         assert_eq!(bloom.num_bits, 9731);
         assert_eq!(bloom.bits.len(), (9731 + 63) / 64);

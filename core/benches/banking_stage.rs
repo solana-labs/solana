@@ -20,7 +20,7 @@ use solana_runtime::bank::Bank;
 use solana_sdk::genesis_config::GenesisConfig;
 use solana_sdk::hash::Hash;
 use solana_sdk::message::Message;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signature::Signature;
 use solana_sdk::signature::Signer;
@@ -56,7 +56,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
     let bank = Arc::new(Bank::new(&genesis_config));
     let ledger_path = get_tmp_ledger_path!();
-    let my_pubkey = solana_sdk::pubkey::new_rand();
+    let my_pubkey = pubkey::new_rand();
     {
         let blockstore = Arc::new(
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
@@ -94,15 +94,15 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
 }
 
 fn make_accounts_txs(txes: usize, mint_keypair: &Keypair, hash: Hash) -> Vec<Transaction> {
-    let to_pubkey = solana_sdk::pubkey::new_rand();
+    let to_pubkey = pubkey::new_rand();
     let dummy = system_transaction::transfer(mint_keypair, &to_pubkey, 1, hash);
     (0..txes)
         .into_par_iter()
         .map(|_| {
             let mut new = dummy.clone();
             let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen()).collect();
-            new.message.account_keys[0] = solana_sdk::pubkey::new_rand();
-            new.message.account_keys[1] = solana_sdk::pubkey::new_rand();
+            new.message.account_keys[0] = pubkey::new_rand();
+            new.message.account_keys[1] = pubkey::new_rand();
             new.signatures = vec![Signature::new(&sig[0..64])];
             new
         })
@@ -117,7 +117,7 @@ fn make_programs_txs(txes: usize, hash: Hash) -> Vec<Transaction> {
             let mut instructions = vec![];
             let from_key = Keypair::new();
             for _ in 1..progs {
-                let to_key = solana_sdk::pubkey::new_rand();
+                let to_key = pubkey::new_rand();
                 instructions.push(system_instruction::transfer(&from_key.pubkey(), &to_key, 1));
             }
             let message = Message::new(&instructions, Some(&from_key.pubkey()));

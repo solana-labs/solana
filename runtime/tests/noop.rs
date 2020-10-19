@@ -1,9 +1,7 @@
 use solana_runtime::{
     bank::Bank, bank_client::BankClient, loader_utils::create_invoke_instruction,
 };
-use solana_sdk::{
-    client::SyncClient, genesis_config::create_genesis_config, pubkey::Pubkey, signature::Signer,
-};
+use solana_sdk::{client::SyncClient, genesis_config::create_genesis_config, signature::Signer};
 
 #[test]
 fn test_program_native_noop() {

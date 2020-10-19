@@ -504,7 +504,6 @@ mod tests {
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_net_utils::find_available_port_in_range;
     use solana_perf::packet::{Meta, Packet, Packets};
-    use solana_sdk::pubkey::Pubkey;
     use std::net::{IpAddr, Ipv4Addr};
 
     #[test]

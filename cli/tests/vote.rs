@@ -12,7 +12,6 @@ use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     account_utils::StateMut,
     commitment_config::CommitmentConfig,
-    pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
 use solana_vote_program::vote_state::{VoteAuthorize, VoteState, VoteStateVersions};

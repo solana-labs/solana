@@ -7,14 +7,14 @@ use solana_core::contact_info::ContactInfo;
 use solana_core::crds::VersionedCrdsValue;
 use solana_core::crds_shards::CrdsShards;
 use solana_core::crds_value::{CrdsData, CrdsValue};
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::pubkey;
 use solana_sdk::timing::timestamp;
 use test::Bencher;
 
 const CRDS_SHARDS_BITS: u32 = 8;
 
 fn new_test_crds_value() -> VersionedCrdsValue {
-    let data = CrdsData::ContactInfo(ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp()));
+    let data = CrdsData::ContactInfo(ContactInfo::new_localhost(&pubkey::new_rand(), timestamp()));
     VersionedCrdsValue::new(timestamp(), CrdsValue::new_unsigned(data))
 }
 

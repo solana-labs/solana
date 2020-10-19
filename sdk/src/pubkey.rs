@@ -301,7 +301,12 @@ mod tests {
 
     #[test]
     fn test_create_with_seed() {
-        assert!(Pubkey::create_with_seed(&solana_sdk::pubkey::new_rand(), "☉", &solana_sdk::pubkey::new_rand()).is_ok());
+        assert!(Pubkey::create_with_seed(
+            &solana_sdk::pubkey::new_rand(),
+            "☉",
+            &solana_sdk::pubkey::new_rand()
+        )
+        .is_ok());
         assert_eq!(
             Pubkey::create_with_seed(
                 &solana_sdk::pubkey::new_rand(),
@@ -337,7 +342,12 @@ mod tests {
         )
         .is_ok());
 
-        assert!(Pubkey::create_with_seed(&solana_sdk::pubkey::new_rand(), "", &solana_sdk::pubkey::new_rand(),).is_ok());
+        assert!(Pubkey::create_with_seed(
+            &solana_sdk::pubkey::new_rand(),
+            "",
+            &solana_sdk::pubkey::new_rand(),
+        )
+        .is_ok());
 
         assert_eq!(
             Pubkey::create_with_seed(

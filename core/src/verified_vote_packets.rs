@@ -59,7 +59,6 @@ mod tests {
     use crate::result::Error;
     use crossbeam_channel::{unbounded, RecvTimeoutError};
     use solana_perf::packet::{Meta, Packet};
-    use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_get_latest_votes() {

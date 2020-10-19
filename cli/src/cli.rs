@@ -2409,7 +2409,10 @@ mod tests {
             .unwrap();
         assert_eq!(signer_info.signers.len(), 1);
         assert_eq!(signer_info.index_of(None), Some(0));
-        assert_eq!(signer_info.index_of(Some(solana_sdk::pubkey::new_rand())), None);
+        assert_eq!(
+            signer_info.index_of(Some(solana_sdk::pubkey::new_rand())),
+            None
+        );
 
         let keypair0 = keypair_from_seed(&[1u8; 32]).unwrap();
         let keypair0_pubkey = keypair0.pubkey();

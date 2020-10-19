@@ -610,7 +610,7 @@ mod tests {
         let root_slot = 0;
 
         let mut pubkeys: Vec<Pubkey> = std::iter::repeat_with(|| {
-            let new_pubkey = Pubkey::new_rand();
+            let new_pubkey = solana_sdk::pubkey::new_rand();
             index.upsert(root_slot, &new_pubkey, true, &mut vec![]);
             new_pubkey
         })
@@ -742,7 +742,7 @@ mod tests {
         let mut iter = index.iter(None::<Range<Pubkey>>);
         assert!(iter.next().is_none());
         let mut gc = vec![];
-        index.upsert(0, &Pubkey::new_rand(), true, &mut gc);
+        index.upsert(0, &solana_sdk::pubkey::new_rand(), true, &mut gc);
         assert!(iter.next().is_none());
     }
 
