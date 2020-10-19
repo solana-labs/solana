@@ -170,12 +170,11 @@ pub fn create_account(lamports: u64) -> RefCell<account::Account> {
 }
 
 /// Convenience function for working with keyed accounts in tests
-#[cfg(feature = "everything")]
 pub fn with_test_keyed_account<F>(lamports: u64, signer: bool, f: F)
 where
     F: Fn(&KeyedAccount),
 {
-    let pubkey = solana_sdk::pubkey::new_rand();
+    let pubkey = Pubkey::new_unique();
     let account = create_account(lamports);
     let keyed_account = KeyedAccount::new(&pubkey, signer, &account);
     f(&keyed_account)

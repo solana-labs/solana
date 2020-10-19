@@ -1,5 +1,3 @@
-#![cfg(feature = "program")]
-
 use crate::{account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction};
 
 /// Invoke a cross-program instruction

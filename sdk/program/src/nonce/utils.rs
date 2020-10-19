@@ -1,4 +1,4 @@
-use solana_sdk::{
+use crate::{
     account::Account,
     account_utils::StateMut,
     fee_calculator::FeeCalculator,
@@ -26,7 +26,7 @@ pub fn fee_calculator_of(account: &Account) -> Option<FeeCalculator> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::{
+    use crate::{
         account_utils::State as AccountUtilsState,
         hash::Hash,
         nonce::{account::with_test_keyed_account, Account as NonceAccount, State},
