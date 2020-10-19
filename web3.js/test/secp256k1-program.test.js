@@ -1,15 +1,12 @@
 // @flow
-import {
-  Secp256k1Program,
-  Secp256k1Instruction,
-  constructEthPubkey,
-} from '../src/secp256k1-program';
-import {privateKeyVerify, ecdsaSign, publicKeyCreate} from 'secp256k1';
+
 import createKeccakHash from 'keccak';
+import secp256k1 from 'secp256k1';
 import {randomBytes} from 'crypto';
+
+import {Secp256k1Program, Secp256k1Instruction} from '../src/secp256k1-program';
 import {mockRpcEnabled} from './__mocks__/node-fetch';
 import {url} from './url';
-
 import {
   Connection,
   Account,
@@ -17,6 +14,8 @@ import {
   LAMPORTS_PER_SOL,
   Transaction,
 } from '../src';
+
+const {privateKeyVerify, ecdsaSign, publicKeyCreate} = secp256k1;
 
 if (!mockRpcEnabled) {
   jest.setTimeout(20000);
@@ -52,6 +51,7 @@ test('decode secp256k1 instruction', () => {
   expect(signatureOffset).toEqual(32);
   expect(signatureInstructionOffset).toEqual(0);
   expect(ethAddressOffset).toEqual(12);
+  expect(ethAddressInstructionIndex).toEqual(0);
   expect(messageDataOffset).toEqual(97);
   expect(messageDataSize).toEqual('Test message'.length);
   expect(messageInstructionIndex).toEqual(0);

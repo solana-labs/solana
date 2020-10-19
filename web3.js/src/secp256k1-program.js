@@ -1,13 +1,15 @@
 // @flow
 
 import * as BufferLayout from 'buffer-layout';
-import {publicKeyCreate, ecdsaSign, publicKeyConvert} from 'secp256k1';
+import secp256k1 from 'secp256k1';
 import createKeccakHash from 'keccak';
-import {PublicKey} from './publickey';
-import {Transaction, TransactionInstruction} from './transaction';
-import {toBuffer} from './util/to-buffer';
 import assert from 'assert';
-import {encodeData, decodeData} from './instruction';
+
+import {PublicKey} from './publickey';
+import {TransactionInstruction} from './transaction';
+import {toBuffer} from './util/to-buffer';
+
+const {publicKeyCreate, ecdsaSign} = secp256k1;
 
 const PRIVATE_KEY_BYTES = 32;
 const PUBLIC_KEY_BYTES = 65;
@@ -157,12 +159,12 @@ export class Secp256k1Program {
       instructionData,
     );
 
-    instructionData.fill(message, SECP256K1_INSTRUCTION_LAYOUT.span);
+    instructionData.fill(toBuffer(message), SECP256K1_INSTRUCTION_LAYOUT.span);
 
     return new TransactionInstruction({
       keys: [],
       programId: Secp256k1Program.programId,
-      data: toBuffer(instructionData),
+      data: instructionData,
     });
   }
 
@@ -198,7 +200,7 @@ export class Secp256k1Program {
   }
 }
 
-function constructEthPubkey(
+export function constructEthPubkey(
   publicKey: Buffer | Uint8Array | Array<number>,
 ): Buffer {
   return createKeccakHash('keccak256')
