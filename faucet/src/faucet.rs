@@ -378,7 +378,7 @@ mod tests {
 
     #[test]
     fn test_faucet_build_airdrop_transaction() {
-        let to = Pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         let blockhash = Hash::default();
         let request = FaucetRequest::GetAirdrop {
             lamports: 2,
@@ -419,7 +419,7 @@ mod tests {
 
     #[test]
     fn test_process_faucet_request() {
-        let to = Pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         let blockhash = Hash::new(&to.as_ref());
         let lamports = 50;
         let req = FaucetRequest::GetAirdrop {

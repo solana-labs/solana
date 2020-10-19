@@ -66,7 +66,7 @@ impl TestValidator {
             mint_lamports,
             &contact_info.id,
             &Keypair::new(),
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             42,
             bootstrap_validator_lamports,
             solana_sdk::genesis_config::ClusterType::Development,

@@ -190,8 +190,8 @@ pub mod tests {
 
     //  set up some dummies for a staked node     ((     vote      )  (     stake     ))
     pub fn create_staked_node_accounts(stake: u64) -> ((Pubkey, Account), (Pubkey, Account)) {
-        let vote_pubkey = Pubkey::new_rand();
-        let vote_account = vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 1);
+        let vote_pubkey = solana_sdk::pubkey::new_rand();
+        let vote_account = vote_state::create_account(&vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1);
         (
             (vote_pubkey, vote_account),
             create_stake_account(stake, &vote_pubkey),
@@ -200,13 +200,13 @@ pub mod tests {
 
     //   add stake to a vote_pubkey                               (   stake    )
     pub fn create_stake_account(stake: u64, vote_pubkey: &Pubkey) -> (Pubkey, Account) {
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         (
             stake_pubkey,
             stake_state::create_account(
                 &stake_pubkey,
                 &vote_pubkey,
-                &vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 1),
+                &vote_state::create_account(&vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1),
                 &Rent::free(),
                 stake,
             ),
@@ -217,8 +217,8 @@ pub mod tests {
         stake: u64,
         epoch: Epoch,
     ) -> ((Pubkey, Account), (Pubkey, Account)) {
-        let vote_pubkey = Pubkey::new_rand();
-        let vote_account = vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 1);
+        let vote_pubkey = solana_sdk::pubkey::new_rand();
+        let vote_account = vote_state::create_account(&vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1);
         (
             (vote_pubkey, vote_account),
             create_warming_stake_account(stake, epoch, &vote_pubkey),
@@ -231,13 +231,13 @@ pub mod tests {
         epoch: Epoch,
         vote_pubkey: &Pubkey,
     ) -> (Pubkey, Account) {
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         (
             stake_pubkey,
             stake_state::create_account_with_activation_epoch(
                 &stake_pubkey,
                 &vote_pubkey,
-                &vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 1),
+                &vote_state::create_account(&vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1),
                 &Rent::free(),
                 stake,
                 epoch,

@@ -2789,7 +2789,7 @@ pub mod tests {
         create_account(&db, &mut pubkeys, 0, 2, DEFAULT_FILE_SIZE as usize / 3, 0);
         assert!(check_storage(&db, 0, 2));
 
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new(1, DEFAULT_FILE_SIZE as usize / 3, &pubkey);
         db.store(1, &[(&pubkey, &account)]);
         db.store(1, &[(&pubkeys[0], &account)]);
@@ -2903,7 +2903,7 @@ pub mod tests {
     fn test_remove_unrooted_slot_snapshot() {
         let unrooted_slot = 9;
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let key = Pubkey::new_rand();
+        let key = solana_sdk::pubkey::new_rand();
         let account0 = Account::new(1, 0, &key);
         db.store(unrooted_slot, &[(&key, &account0)]);
 
@@ -2911,7 +2911,7 @@ pub mod tests {
         db.remove_unrooted_slot(unrooted_slot);
 
         // Add a new root
-        let key2 = Pubkey::new_rand();
+        let key2 = solana_sdk::pubkey::new_rand();
         let new_root = unrooted_slot + 1;
         db.store(new_root, &[(&key2, &account0)]);
         db.add_root(new_root);
@@ -2937,14 +2937,14 @@ pub mod tests {
     ) {
         let ancestors = vec![(slot, 0)].into_iter().collect();
         for t in 0..num {
-            let pubkey = Pubkey::new_rand();
+            let pubkey = solana_sdk::pubkey::new_rand();
             let account = Account::new((t + 1) as u64, space, &Account::default().owner);
             pubkeys.push(pubkey);
             assert!(accounts.load_slow(&ancestors, &pubkey).is_none());
             accounts.store(slot, &[(&pubkey, &account)]);
         }
         for t in 0..num_vote {
-            let pubkey = Pubkey::new_rand();
+            let pubkey = solana_sdk::pubkey::new_rand();
             let account = Account::new((num + t + 1) as u64, space, &solana_vote_program::id());
             pubkeys.push(pubkey);
             let ancestors = vec![(slot, 0)].into_iter().collect();
@@ -3076,7 +3076,7 @@ pub mod tests {
         let accounts = AccountsDB::new_sized(paths, size);
         let mut keys = vec![];
         for i in 0..9 {
-            let key = Pubkey::new_rand();
+            let key = solana_sdk::pubkey::new_rand();
             let account = Account::new(i + 1, size as usize / 4, &key);
             accounts.store(0, &[(&key, &account)]);
             keys.push(key);
@@ -3108,7 +3108,7 @@ pub mod tests {
 
         let count = [0, 1];
         let status = [AccountStorageStatus::Available, AccountStorageStatus::Full];
-        let pubkey1 = Pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
         let account1 = Account::new(1, DEFAULT_FILE_SIZE as usize / 2, &pubkey1);
         accounts.store(0, &[(&pubkey1, &account1)]);
         {
@@ -3119,7 +3119,7 @@ pub mod tests {
             assert_eq!(r_stores[&0].status(), AccountStorageStatus::Available);
         }
 
-        let pubkey2 = Pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
         let account2 = Account::new(1, DEFAULT_FILE_SIZE as usize / 2, &pubkey2);
         accounts.store(0, &[(&pubkey2, &account2)]);
         {
@@ -3199,7 +3199,7 @@ pub mod tests {
         //A slot is purged when a non root bank is cleaned up.  If a slot is behind root but it is
         //not root, it means we are retaining dead banks.
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new(1, 0, &Account::default().owner);
         //store an account
         accounts.store(0, &[(&pubkey, &account)]);
@@ -3280,8 +3280,8 @@ pub mod tests {
         solana_logger::setup();
 
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let pubkey1 = Pubkey::new_rand();
-        let pubkey2 = Pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
         let account = Account::new(1, 1, &Account::default().owner);
         let zero_lamport_account = Account::new(0, 0, &Account::default().owner);
 
@@ -3336,7 +3336,7 @@ pub mod tests {
         solana_logger::setup();
 
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new(1, 0, &Account::default().owner);
         let zero_lamport_account = Account::new(0, 0, &Account::default().owner);
 
@@ -3375,7 +3375,7 @@ pub mod tests {
         solana_logger::setup();
 
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new(1, 0, &Account::default().owner);
         //store an account
         accounts.store(0, &[(&pubkey, &account)]);
@@ -3401,8 +3401,8 @@ pub mod tests {
         solana_logger::setup();
 
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let pubkey1 = Pubkey::new_rand();
-        let pubkey2 = Pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
         let normal_account = Account::new(1, 0, &Account::default().owner);
         let zero_account = Account::new(0, 0, &Account::default().owner);
         //store an account
@@ -3431,8 +3431,8 @@ pub mod tests {
         solana_logger::setup();
 
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let pubkey1 = Pubkey::new_rand();
-        let pubkey2 = Pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
         let normal_account = Account::new(1, 0, &Account::default().owner);
         let zero_account = Account::new(0, 0, &Account::default().owner);
 
@@ -3473,7 +3473,7 @@ pub mod tests {
         solana_logger::setup();
 
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new(1, 0, &Account::default().owner);
         let zero_account = Account::new(0, 0, &Account::default().owner);
 
@@ -3510,7 +3510,7 @@ pub mod tests {
         solana_logger::setup();
 
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new(1, 0, &Account::default().owner);
         //store an account
         accounts.store(0, &[(&pubkey, &account)]);
@@ -3685,10 +3685,10 @@ pub mod tests {
         let owner = Account::default().owner;
 
         let account = Account::new(some_lamport, no_data, &owner);
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
 
         let account2 = Account::new(some_lamport, no_data, &owner);
-        let pubkey2 = Pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
 
         let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
 
@@ -3764,7 +3764,7 @@ pub mod tests {
         let owner = Account::default().owner;
 
         let account = Account::new(some_lamport, no_data, &owner);
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
 
         let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
 
@@ -3824,14 +3824,14 @@ pub mod tests {
         let owner = Account::default().owner;
 
         let account = Account::new(some_lamport, no_data, &owner);
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
 
         let account2 = Account::new(some_lamport + 1, no_data, &owner);
-        let pubkey2 = Pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
 
         let filler_account = Account::new(some_lamport, no_data, &owner);
-        let filler_account_pubkey = Pubkey::new_rand();
+        let filler_account_pubkey = solana_sdk::pubkey::new_rand();
 
         let accounts = AccountsDB::new_single();
 
@@ -3886,9 +3886,9 @@ pub mod tests {
         let account3 = Account::new(some_lamport + 100_002, no_data, &owner);
         let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
 
-        let pubkey = Pubkey::new_rand();
-        let purged_pubkey1 = Pubkey::new_rand();
-        let purged_pubkey2 = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let purged_pubkey1 = solana_sdk::pubkey::new_rand();
+        let purged_pubkey2 = solana_sdk::pubkey::new_rand();
 
         let dummy_account = Account::new(dummy_lamport, no_data, &owner);
         let dummy_pubkey = Pubkey::default();
@@ -3968,7 +3968,7 @@ pub mod tests {
                 std::thread::Builder::new()
                     .name("account-writers".to_string())
                     .spawn(move || {
-                        let pubkey = Pubkey::new_rand();
+                        let pubkey = solana_sdk::pubkey::new_rand();
                         let mut account = Account::new(1, 0, &pubkey);
                         let mut i = 0;
                         loop {
@@ -3999,12 +3999,12 @@ pub mod tests {
         solana_logger::setup();
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
         let key = Pubkey::default();
-        let key0 = Pubkey::new_rand();
+        let key0 = solana_sdk::pubkey::new_rand();
         let account0 = Account::new(1, 0, &key);
 
         db.store(0, &[(&key0, &account0)]);
 
-        let key1 = Pubkey::new_rand();
+        let key1 = solana_sdk::pubkey::new_rand();
         let account1 = Account::new(2, 0, &key);
         db.store(1, &[(&key1, &account1)]);
 
@@ -4033,12 +4033,12 @@ pub mod tests {
         let db = AccountsDB::new_single();
 
         let key = Pubkey::default();
-        let key0 = Pubkey::new_rand();
+        let key0 = solana_sdk::pubkey::new_rand();
         let account0 = Account::new(1, 0, &key);
 
         db.store(0, &[(&key0, &account0)]);
 
-        let key1 = Pubkey::new_rand();
+        let key1 = solana_sdk::pubkey::new_rand();
         let account1 = Account::new(2, 0, &key);
         db.store(1, &[(&key1, &account1)]);
 
@@ -4316,7 +4316,7 @@ pub mod tests {
         solana_logger::setup();
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
 
-        let key = Pubkey::new_rand();
+        let key = solana_sdk::pubkey::new_rand();
         let some_data_len = 0;
         let some_slot: Slot = 0;
         let account = Account::new(1, some_data_len, &key);
@@ -4358,7 +4358,7 @@ pub mod tests {
         solana_logger::setup();
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
 
-        let key = Pubkey::new_rand();
+        let key = solana_sdk::pubkey::new_rand();
         let some_data_len = 0;
         let some_slot: Slot = 0;
         let account = Account::new(1, some_data_len, &key);
@@ -4372,7 +4372,7 @@ pub mod tests {
             Ok(_)
         );
 
-        let native_account_pubkey = Pubkey::new_rand();
+        let native_account_pubkey = solana_sdk::pubkey::new_rand();
         db.store(
             some_slot,
             &[(
@@ -4563,7 +4563,7 @@ pub mod tests {
     #[should_panic(expected = "double remove of account in slot: 0/store: 0!!")]
     fn test_storage_remove_account_double_remove() {
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new(1, 0, &Account::default().owner);
         accounts.store(0, &[(&pubkey, &account)]);
         let storage_entry = accounts
@@ -4594,10 +4594,10 @@ pub mod tests {
         let dummy_account = Account::new(99_999_999, no_data, &owner);
         let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
 
-        let pubkey = Pubkey::new_rand();
-        let dummy_pubkey = Pubkey::new_rand();
-        let purged_pubkey1 = Pubkey::new_rand();
-        let purged_pubkey2 = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let dummy_pubkey = solana_sdk::pubkey::new_rand();
+        let purged_pubkey1 = solana_sdk::pubkey::new_rand();
+        let purged_pubkey2 = solana_sdk::pubkey::new_rand();
 
         let mut current_slot = 0;
         let accounts = AccountsDB::new_single();
@@ -4656,9 +4656,9 @@ pub mod tests {
         let dummy_account = Account::new(dummy_lamport, no_data, &owner);
         let zero_lamport_account = Account::new(zero_lamport, no_data, &owner);
 
-        let pubkey1 = Pubkey::new_rand();
-        let pubkey2 = Pubkey::new_rand();
-        let dummy_pubkey = Pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+        let dummy_pubkey = solana_sdk::pubkey::new_rand();
 
         let mut current_slot = 0;
         let accounts = AccountsDB::new_single();
@@ -4830,7 +4830,7 @@ pub mod tests {
         let accounts = AccountsDB::new_single();
 
         let pubkey_count = 100;
-        let pubkeys: Vec<_> = (0..pubkey_count).map(|_| Pubkey::new_rand()).collect();
+        let pubkeys: Vec<_> = (0..pubkey_count).map(|_| solana_sdk::pubkey::new_rand()).collect();
 
         let some_lamport = 223;
         let no_data = 0;
@@ -4894,7 +4894,7 @@ pub mod tests {
         let accounts = AccountsDB::new_single();
 
         let pubkey_count = 100;
-        let pubkeys: Vec<_> = (0..pubkey_count).map(|_| Pubkey::new_rand()).collect();
+        let pubkeys: Vec<_> = (0..pubkey_count).map(|_| solana_sdk::pubkey::new_rand()).collect();
 
         let some_lamport = 223;
         let no_data = 0;
@@ -5041,7 +5041,7 @@ pub mod tests {
             for current_slot in 0..1000 {
                 while alive_accounts.len() <= 10 {
                     alive_accounts.push((
-                        Pubkey::new_rand(),
+                        solana_sdk::pubkey::new_rand(),
                         Account::new(thread_rng().gen_range(0, 50), 0, &owner),
                     ));
                 }
@@ -5076,7 +5076,7 @@ pub mod tests {
         );
         // any random program data accounts
         assert_eq!(
-            AccountsDB::account_balance_for_capitalization(10, &Pubkey::new_rand(), false),
+            AccountsDB::account_balance_for_capitalization(10, &solana_sdk::pubkey::new_rand(), false),
             10
         );
     }

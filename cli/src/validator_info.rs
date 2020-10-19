@@ -486,7 +486,7 @@ mod tests {
 
     #[test]
     fn test_parse_validator_info() {
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let keys = vec![(validator_info::id(), false), (pubkey, true)];
         let config = ConfigKeys { keys };
 

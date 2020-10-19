@@ -111,8 +111,8 @@ mod test {
 
     #[test]
     fn test_parse_account_data() {
-        let account_pubkey = Pubkey::new_rand();
-        let other_program = Pubkey::new_rand();
+        let account_pubkey = solana_sdk::pubkey::new_rand();
+        let other_program = solana_sdk::pubkey::new_rand();
         let data = vec![0; 4];
         assert!(parse_account_data(&account_pubkey, &other_program, &data, None).is_err());
 

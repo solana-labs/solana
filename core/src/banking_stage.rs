@@ -1246,16 +1246,16 @@ mod tests {
             bank.process_transaction(&fund_tx).unwrap();
 
             // good tx
-            let to = Pubkey::new_rand();
+            let to = solana_sdk::pubkey::new_rand();
             let tx = system_transaction::transfer(&mint_keypair, &to, 1, start_hash);
 
             // good tx, but no verify
-            let to2 = Pubkey::new_rand();
+            let to2 = solana_sdk::pubkey::new_rand();
             let tx_no_ver = system_transaction::transfer(&keypair, &to2, 2, start_hash);
 
             // bad tx, AccountNotFound
             let keypair = Keypair::new();
-            let to3 = Pubkey::new_rand();
+            let to3 = solana_sdk::pubkey::new_rand();
             let tx_anf = system_transaction::transfer(&keypair, &to3, 1, start_hash);
 
             // send 'em over
@@ -1448,9 +1448,9 @@ mod tests {
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
-            let pubkey = Pubkey::new_rand();
+            let pubkey = solana_sdk::pubkey::new_rand();
             let keypair2 = Keypair::new();
-            let pubkey2 = Pubkey::new_rand();
+            let pubkey2 = solana_sdk::pubkey::new_rand();
 
             let transactions = vec![
                 system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
@@ -1528,7 +1528,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
 
         let transactions = vec![
             None,
@@ -1609,7 +1609,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
 
         let transactions = vec![
             system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
@@ -1680,8 +1680,8 @@ mod tests {
 
     #[test]
     fn test_should_process_or_forward_packets() {
-        let my_pubkey = Pubkey::new_rand();
-        let my_pubkey1 = Pubkey::new_rand();
+        let my_pubkey = solana_sdk::pubkey::new_rand();
+        let my_pubkey1 = solana_sdk::pubkey::new_rand();
 
         assert_eq!(
             BankingStage::consume_or_forward_packets(&my_pubkey, None, true, false,),
@@ -1727,7 +1727,7 @@ mod tests {
             ..
         } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
 
         let transactions = vec![system_transaction::transfer(
             &mint_keypair,
@@ -1824,8 +1824,8 @@ mod tests {
             ..
         } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let pubkey = Pubkey::new_rand();
-        let pubkey1 = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
 
         let transactions = vec![
             system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
@@ -1920,7 +1920,7 @@ mod tests {
         } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new(&genesis_config));
 
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
 
         let transactions =
             vec![
@@ -1938,7 +1938,7 @@ mod tests {
                 bank.slot(),
                 Some((4, 4)),
                 bank.ticks_per_slot(),
-                &Pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &Arc::new(PohConfig::default()),
@@ -1978,8 +1978,8 @@ mod tests {
             ..
         } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let pubkey = Pubkey::new_rand();
-        let pubkey1 = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
         let keypair1 = Keypair::new();
 
         let success_tx =

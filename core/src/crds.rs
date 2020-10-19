@@ -361,7 +361,7 @@ mod test {
         }
 
         let mut crds = Crds::default();
-        let pubkeys: Vec<_> = std::iter::repeat_with(Pubkey::new_rand).take(256).collect();
+        let pubkeys: Vec<_> = std::iter::repeat_with(solana_sdk::pubkey::new_rand).take(256).collect();
         let mut rng = thread_rng();
         let mut num_inserts = 0;
         for _ in 0..4096 {
@@ -484,14 +484,14 @@ mod test {
         let v1 = VersionedCrdsValue::new(
             1,
             CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &Pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 0,
             ))),
         );
         let v2 = VersionedCrdsValue::new(
             1,
             CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &Pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 0,
             ))),
         );

@@ -2554,7 +2554,7 @@ pub(crate) mod tests {
             bank.store_account(&pubkey, &leader_vote_account);
         }
 
-        let leader_pubkey = Pubkey::new_rand();
+        let leader_pubkey = solana_sdk::pubkey::new_rand();
         let leader_lamports = 3;
         let genesis_config_info =
             create_genesis_config_with_leader(50, &leader_pubkey, leader_lamports);
@@ -2596,7 +2596,7 @@ pub(crate) mod tests {
             .is_none());
 
         let bank1 = Bank::new_from_parent(&arc_bank0, &Pubkey::default(), arc_bank0.slot() + 1);
-        let _res = bank1.transfer(10, &genesis_config_info.mint_keypair, &Pubkey::new_rand());
+        let _res = bank1.transfer(10, &genesis_config_info.mint_keypair, &solana_sdk::pubkey::new_rand());
         for _ in 0..genesis_config.ticks_per_slot {
             bank1.register_tick(&Hash::default());
         }
@@ -2612,7 +2612,7 @@ pub(crate) mod tests {
         );
 
         let bank2 = Bank::new_from_parent(&arc_bank1, &Pubkey::default(), arc_bank1.slot() + 1);
-        let _res = bank2.transfer(10, &genesis_config_info.mint_keypair, &Pubkey::new_rand());
+        let _res = bank2.transfer(10, &genesis_config_info.mint_keypair, &solana_sdk::pubkey::new_rand());
         for _ in 0..genesis_config.ticks_per_slot {
             bank2.register_tick(&Hash::default());
         }

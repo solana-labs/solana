@@ -1536,7 +1536,7 @@ pub mod test {
                 &mut account.data,
             )
             .expect("serialize state");
-            stakes.push((Pubkey::new_rand(), (*lamports, account)));
+            stakes.push((solana_sdk::pubkey::new_rand(), (*lamports, account)));
         }
         stakes
     }

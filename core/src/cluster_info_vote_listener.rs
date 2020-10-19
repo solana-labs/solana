@@ -898,7 +898,7 @@ mod tests {
         let (vote_tracker, bank, _, _) = setup();
 
         // Check outdated slots are purged with new root
-        let new_voter = Arc::new(Pubkey::new_rand());
+        let new_voter = Arc::new(solana_sdk::pubkey::new_rand());
         // Make separate copy so the original doesn't count toward
         // the ref count, which would prevent cleanup
         let new_voter_ = Arc::new(*new_voter);
@@ -1681,7 +1681,7 @@ mod tests {
     fn run_test_verify_votes_1_pass(hash: Option<Hash>) {
         let vote_tx = test_vote_tx(hash);
         let votes = vec![vote_tx];
-        let labels = vec![CrdsValueLabel::Vote(0, Pubkey::new_rand())];
+        let labels = vec![CrdsValueLabel::Vote(0, solana_sdk::pubkey::new_rand())];
         let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels);
         assert_eq!(vote_txs.len(), 1);
         verify_packets_len(&packets, 1);
@@ -1698,7 +1698,7 @@ mod tests {
         let mut bad_vote = vote_tx.clone();
         bad_vote.signatures[0] = Signature::default();
         let votes = vec![vote_tx.clone(), bad_vote, vote_tx];
-        let label = CrdsValueLabel::Vote(0, Pubkey::new_rand());
+        let label = CrdsValueLabel::Vote(0, solana_sdk::pubkey::new_rand());
         let labels: Vec<_> = (0..votes.len()).map(|_| label.clone()).collect();
         let (vote_txs, packets) = ClusterInfoVoteListener::verify_votes(votes, labels);
         assert_eq!(vote_txs.len(), 2);

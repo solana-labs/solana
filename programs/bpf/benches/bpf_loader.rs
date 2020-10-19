@@ -211,8 +211,8 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
 
     let mut measure = Measure::start("tune");
 
-    let accounts = [RefCell::new(Account::new(1, 10000001, &Pubkey::new_rand()))];
-    let keys = [Pubkey::new_rand()];
+    let accounts = [RefCell::new(Account::new(1, 10000001, &solana_sdk::pubkey::new_rand()))];
+    let keys = [solana_sdk::pubkey::new_rand()];
     let keyed_accounts: Vec<_> = keys
         .iter()
         .zip(&accounts)
@@ -223,7 +223,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     // Serialize account data
     let mut serialized = solana_bpf_loader_program::serialization::serialize_parameters(
         &bpf_loader::id(),
-        &Pubkey::new_rand(),
+        &solana_sdk::pubkey::new_rand(),
         &keyed_accounts,
         &instruction_data,
     )

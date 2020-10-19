@@ -146,7 +146,7 @@ mod tests {
     #[test]
     fn test_tvu_peers_ordering() {
         let cluster = ClusterInfo::new_with_invalid_keypair(ContactInfo::new_localhost(
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
         ));
         cluster.insert_info(ContactInfo::new_with_socketaddr(&SocketAddr::new(

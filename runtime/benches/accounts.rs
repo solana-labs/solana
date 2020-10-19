@@ -23,7 +23,7 @@ use test::Bencher;
 
 fn deposit_many(bank: &Bank, pubkeys: &mut Vec<Pubkey>, num: usize) {
     for t in 0..num {
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new((t + 1) as u64, 0, &Account::default().owner);
         pubkeys.push(pubkey);
         assert!(bank.get_account(&pubkey).is_none());
@@ -137,7 +137,7 @@ fn bench_delete_dependencies(bencher: &mut Bencher) {
     let mut old_pubkey = Pubkey::default();
     let zero_account = Account::new(0, 0, &Account::default().owner);
     for i in 0..1000 {
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new((i + 1) as u64, 0, &Account::default().owner);
         accounts.store_slow(i, &pubkey, &account);
         accounts.store_slow(i, &old_pubkey, &zero_account);
@@ -170,7 +170,7 @@ fn store_accounts_with_possible_contention<F: 'static>(
     let pubkeys: Arc<Vec<_>> = Arc::new(
         (0..num_keys)
             .map(|_| {
-                let pubkey = Pubkey::new_rand();
+                let pubkey = solana_sdk::pubkey::new_rand();
                 let account = Account::new(1, 0, &Account::default().owner);
                 accounts.store_slow(slot, &pubkey, &account);
                 pubkey
@@ -198,7 +198,7 @@ fn store_accounts_with_possible_contention<F: 'static>(
             // Write to a different slot than the one being read from. Because
             // there's a new account pubkey being written to every time, will
             // compete for the accounts index lock on every store
-            accounts.store_slow(slot + 1, &Pubkey::new_rand(), &account);
+            accounts.store_slow(slot + 1, &solana_sdk::pubkey::new_rand(), &account);
         }
     })
 }
