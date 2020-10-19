@@ -1926,6 +1926,7 @@ fn main() {
                     );
                     assert!(bank.is_complete());
                     bank.squash();
+                    bank.force_flush_accounts_cache();
                     bank.clean_accounts(true);
                     bank.update_accounts_hash();
                     if rehash {

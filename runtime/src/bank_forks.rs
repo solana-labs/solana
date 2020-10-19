@@ -174,6 +174,12 @@ impl BankForks {
         highest_confirmed_root: Option<Slot>,
     ) {
         let old_epoch = self.root_bank().epoch();
+        // After setting the root here, we have to ensure that no other banks < root that
+        // are frozen are concurrently replayed. This is because the flush cache logic in
+        // Accounts assumes at this point every unrooted slot `S` < root at this point is
+        // purgeable. If any such slot `S` is still being written to, the `clean_accounts()`
+        // logic may fail an assertion because it does not expect to find any cleanable slots
+        // that still exist in the cache.
         self.root = root;
         let set_root_start = Instant::now();
         let root_bank = self

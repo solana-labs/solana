@@ -25,7 +25,7 @@ fn test_shrink_and_clean() {
             if exit_for_shrink.load(Ordering::Relaxed) {
                 break;
             }
-            accounts_for_shrink.process_stale_slot();
+            accounts_for_shrink.process_stale_slot_v1();
         });
 
         let mut alive_accounts = vec![];

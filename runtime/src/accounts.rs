@@ -1,7 +1,6 @@
 use crate::{
-    accounts_db::{AccountsDB, AppendVecId, BankHashInfo, ErrorCounters},
+    accounts_db::{AccountsDB, AppendVecId, BankHashInfo, ErrorCounters, LoadedAccount},
     accounts_index::{AccountIndex, Ancestors, IndexKey},
-    append_vec::StoredAccount,
     bank::{
         NonceRollbackFull, NonceRollbackInfo, TransactionCheckResult, TransactionExecutionResult,
     },
@@ -447,24 +446,20 @@ impl Accounts {
     }
 
     /// scans underlying accounts_db for this delta (slot) with a map function
-    ///   from StoredAccount to B
+    ///   from LoadedAccount to B
     /// returns only the latest/current version of B for this slot
     fn scan_slot<F, B>(&self, slot: Slot, func: F) -> Vec<B>
     where
-        F: Fn(&StoredAccount) -> Option<B> + Send + Sync,
+        F: Fn(LoadedAccount) -> Option<B> + Send + Sync,
         B: Send + Default,
     {
         let accumulator: Vec<Vec<(Pubkey, u64, B)>> = self.accounts_db.scan_account_storage(
             slot,
-            |stored_account: &StoredAccount,
-             _id: AppendVecId,
-             accum: &mut Vec<(Pubkey, u64, B)>| {
-                if let Some(val) = func(&stored_account) {
-                    accum.push((
-                        stored_account.meta.pubkey,
-                        std::u64::MAX - stored_account.meta.write_version,
-                        val,
-                    ));
+            |stored_account: LoadedAccount, _id: AppendVecId, accum: &mut Vec<(Pubkey, u64, B)>| {
+                let pubkey = *stored_account.pubkey();
+                let write_version = stored_account.write_version();
+                if let Some(val) = func(stored_account) {
+                    accum.push((pubkey, std::u64::MAX - write_version, val));
                 }
             },
         );
@@ -488,11 +483,11 @@ impl Accounts {
         self.scan_slot(slot, |stored_account| {
             let hit = match program_id {
                 None => true,
-                Some(program_id) => stored_account.account_meta.owner == *program_id,
+                Some(program_id) => stored_account.owner() == program_id,
             };
 
             if hit {
-                Some((stored_account.meta.pubkey, stored_account.clone_account()))
+                Some((*stored_account.pubkey(), stored_account.account()))
             } else {
                 None
             }
@@ -680,6 +675,14 @@ impl Accounts {
         self.accounts_db.store(slot, &[(pubkey, account)]);
     }
 
+    pub fn store_slow_cached(&self, slot: Slot, pubkey: &Pubkey, account: &Account) {
+        self.accounts_db.store_cached(slot, &[(pubkey, account)]);
+    }
+
+    pub fn flush_accounts_cache(&self) {
+        self.accounts_db.force_flush_accounts_cache();
+    }
+
     fn is_locked_readonly(&self, key: &Pubkey) -> bool {
         self.readonly_locks
             .read()
@@ -846,7 +849,7 @@ impl Accounts {
     /// Store the accounts into the DB
     // allow(clippy) needed for various gating flags
     #[allow(clippy::too_many_arguments)]
-    pub fn store_accounts(
+    pub fn store_cached(
         &self,
         slot: Slot,
         txs: &[Transaction],
@@ -868,7 +871,7 @@ impl Accounts {
             fix_recent_blockhashes_sysvar_delay,
             rent_fix_enabled,
         );
-        self.accounts_db.store(slot, &accounts_to_store);
+        self.accounts_db.store_cached(slot, &accounts_to_store);
     }
 
     /// Purge a slot if it is not a root
@@ -876,6 +879,7 @@ impl Accounts {
     pub fn purge_slot(&self, slot: Slot) {
         self.accounts_db.purge_slot(slot);
     }
+
     /// Add a slot to root.  Root slots cannot be purged
     pub fn add_root(&self, slot: Slot) {
         self.accounts_db.add_root(slot)
@@ -1029,6 +1033,8 @@ pub fn create_test_accounts(
     }
 }
 
+// Only used by bench, not safe to call otherwise accounts can conflict with the
+// accounts cache!
 pub fn update_accounts(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64) {
     for pubkey in pubkeys {
         let amount = thread_rng().gen_range(0, 10);

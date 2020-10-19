@@ -181,7 +181,9 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
     let key3 = Keypair::new();
     bank2.deposit(&key3.pubkey(), 0);
 
+    bank2.freeze();
     bank2.squash();
+    bank2.force_flush_accounts_cache();
 
     let snapshot_storages = bank2.get_snapshot_storages();
     let mut buf = vec![];
