@@ -51,6 +51,7 @@ pub struct ParsedInstruction {
 pub struct ParsedInstructionEnum {
     #[serde(rename = "type")]
     pub instruction_type: String,
+    #[serde(default, skip_serializing_if = "Value::is_null")]
     pub info: Value,
 }
 
