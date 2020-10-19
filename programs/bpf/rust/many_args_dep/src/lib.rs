@@ -51,8 +51,6 @@ pub fn many_args_sret(
 #[cfg(test)]
 mod test {
     use super::*;
-    // Pull in syscall stubs when building for non-BPF targets
-    solana_sdk::program_stubs!();
 
     #[test]
     fn test_many_args() {
