@@ -133,8 +133,9 @@ mod tests {
     #[test]
     #[should_panic]
     fn show_rent_model() {
-        use crate::{clock::*, sysvar::Sysvar, timing::*};
+        use crate::{clock::*, sysvar::Sysvar};
 
+        const SECONDS_PER_YEAR: f64 = 365.242_199 * 24.0 * 60.0 * 60.0;
         const SLOTS_PER_YEAR: f64 =
             SECONDS_PER_YEAR / (DEFAULT_TICKS_PER_SLOT as f64 / DEFAULT_TICKS_PER_SECOND as f64);
 

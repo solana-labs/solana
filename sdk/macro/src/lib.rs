@@ -17,49 +17,81 @@ use syn::{
     Expr, Ident, LitByte, LitStr, Path, Token,
 };
 
-struct Id(proc_macro2::TokenStream);
-impl Parse for Id {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let token_stream = if input.peek(syn::LitStr) {
-            let id_literal: LitStr = input.parse()?;
-            parse_pubkey(&id_literal)?
-        } else {
-            let expr: Expr = input.parse()?;
-            quote! { #expr }
-        };
+fn parse_id(
+    input: ParseStream,
+    pubkey_type: proc_macro2::TokenStream,
+) -> Result<proc_macro2::TokenStream> {
+    let id = if input.peek(syn::LitStr) {
+        let id_literal: LitStr = input.parse()?;
+        parse_pubkey(&id_literal, &pubkey_type)?
+    } else {
+        let expr: Expr = input.parse()?;
+        quote! { #expr }
+    };
 
-        if !input.is_empty() {
-            let stream: proc_macro2::TokenStream = input.parse()?;
-            return Err(syn::Error::new_spanned(stream, "unexpected token"));
+    if !input.is_empty() {
+        let stream: proc_macro2::TokenStream = input.parse()?;
+        return Err(syn::Error::new_spanned(stream, "unexpected token"));
+    }
+    Ok(id)
+}
+
+fn id_to_tokens(
+    id: &proc_macro2::TokenStream,
+    pubkey_type: proc_macro2::TokenStream,
+    tokens: &mut proc_macro2::TokenStream,
+) {
+    tokens.extend(quote! {
+        /// The static program ID
+        pub static ID: #pubkey_type = #id;
+
+        /// Confirms that a given pubkey is equivalent to the program ID
+        pub fn check_id(id: &#pubkey_type) -> bool {
+            id == &ID
         }
 
-        Ok(Id(token_stream))
+        /// Returns the program ID
+        pub fn id() -> #pubkey_type {
+            ID
+        }
+
+        #[cfg(test)]
+        #[test]
+        fn test_id() {
+            assert!(check_id(&id()));
+        }
+    });
+}
+
+struct Id(proc_macro2::TokenStream);
+
+impl Parse for Id {
+    fn parse(input: ParseStream) -> Result<Self> {
+        parse_id(input, quote! { ::solana_sdk::pubkey::Pubkey }).map(Self)
     }
 }
 
 impl ToTokens for Id {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let id = &self.0;
-        tokens.extend(quote! {
-            /// The static program ID
-            pub static ID: ::solana_sdk::pubkey::Pubkey = #id;
+        id_to_tokens(&self.0, quote! { ::solana_sdk::pubkey::Pubkey }, tokens)
+    }
+}
 
-            /// Confirms that a given pubkey is equivalent to the program ID
-            pub fn check_id(id: &::solana_sdk::pubkey::Pubkey) -> bool {
-                id == &ID
-            }
+struct ProgramSdkId(proc_macro2::TokenStream);
 
-            /// Returns the program ID
-            pub fn id() -> ::solana_sdk::pubkey::Pubkey {
-                ID
-            }
+impl Parse for ProgramSdkId {
+    fn parse(input: ParseStream) -> Result<Self> {
+        parse_id(input, quote! { ::solana_program_sdk::pubkey::Pubkey }).map(Self)
+    }
+}
 
-            #[cfg(test)]
-            #[test]
-            fn test_id() {
-                assert!(check_id(&id()));
-            }
-        });
+impl ToTokens for ProgramSdkId {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        id_to_tokens(
+            &self.0,
+            quote! { ::solana_program_sdk::pubkey::Pubkey },
+            tokens,
+        )
     }
 }
 
@@ -135,7 +167,16 @@ pub fn declare_id(input: TokenStream) -> TokenStream {
     TokenStream::from(quote! {#id})
 }
 
-fn parse_pubkey(id_literal: &LitStr) -> Result<proc_macro2::TokenStream> {
+#[proc_macro]
+pub fn program_sdk_declare_id(input: TokenStream) -> TokenStream {
+    let id = parse_macro_input!(input as ProgramSdkId);
+    TokenStream::from(quote! {#id})
+}
+
+fn parse_pubkey(
+    id_literal: &LitStr,
+    pubkey_type: &proc_macro2::TokenStream,
+) -> Result<proc_macro2::TokenStream> {
     let id_vec = bs58::decode(id_literal.value())
         .into_vec()
         .map_err(|_| syn::Error::new_spanned(&id_literal, "failed to decode base58 string"))?;
@@ -147,7 +188,7 @@ fn parse_pubkey(id_literal: &LitStr) -> Result<proc_macro2::TokenStream> {
     })?;
     let bytes = id_array.iter().map(|b| LitByte::new(*b, Span::call_site()));
     Ok(quote! {
-        ::solana_sdk::pubkey::Pubkey::new_from_array(
+        #pubkey_type::new_from_array(
             [#(#bytes,)*]
         )
     })
@@ -160,11 +201,15 @@ struct Pubkeys {
 }
 impl Parse for Pubkeys {
     fn parse(input: ParseStream) -> Result<Self> {
+        let pubkey_type = quote! {
+            ::solana_sdk::pubkey::Pubkey
+        };
+
         let method = input.parse()?;
         let _comma: Token![,] = input.parse()?;
         let (num, pubkeys) = if input.peek(syn::LitStr) {
             let id_literal: LitStr = input.parse()?;
-            (1, parse_pubkey(&id_literal)?)
+            (1, parse_pubkey(&id_literal, &pubkey_type)?)
         } else if input.peek(Bracket) {
             let pubkey_strings;
             bracketed!(pubkey_strings in input);
@@ -172,7 +217,7 @@ impl Parse for Pubkeys {
                 Punctuated::parse_terminated(&pubkey_strings)?;
             let mut pubkeys: Punctuated<proc_macro2::TokenStream, Token![,]> = Punctuated::new();
             for string in punctuated.iter() {
-                pubkeys.push(parse_pubkey(string)?);
+                pubkeys.push(parse_pubkey(string, &pubkey_type)?);
             }
             (pubkeys.len(), quote! {#pubkeys})
         } else {
@@ -195,15 +240,19 @@ impl ToTokens for Pubkeys {
             num,
             pubkeys,
         } = self;
+
+        let pubkey_type = quote! {
+            ::solana_sdk::pubkey::Pubkey
+        };
         if *num == 1 {
             tokens.extend(quote! {
-                pub fn #method() -> ::solana_sdk::pubkey::Pubkey {
+                pub fn #method() -> #pubkey_type {
                     #pubkeys
                 }
             });
         } else {
             tokens.extend(quote! {
-                pub fn #method() -> ::std::vec::Vec<::solana_sdk::pubkey::Pubkey> {
+                pub fn #method() -> ::std::vec::Vec<#pubkey_type> {
                     vec![#pubkeys]
                 }
             });

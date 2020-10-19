@@ -1,9 +1,8 @@
 //! @brief Syscall stubs when building for programs for non-BPF targets
 
-use crate::{
-    account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction,
-    program_error::ProgramError,
-};
+#![cfg(not(target_arch = "bpf"))]
+
+use crate::{account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction};
 use std::sync::{Arc, RwLock};
 
 lazy_static::lazy_static! {
@@ -27,7 +26,7 @@ pub trait SyscallStubs: Sync + Send {
         _signers_seeds: &[&[&[u8]]],
     ) -> ProgramResult {
         sol_log("SyscallStubs: sol_invoke_signed() not available");
-        Err(ProgramError::InvalidArgument)
+        Ok(())
     }
 }
 

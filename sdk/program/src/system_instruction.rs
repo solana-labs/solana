@@ -491,9 +491,9 @@ mod tests {
 
     #[test]
     fn test_move_many() {
-        let alice_pubkey = solana_sdk::pubkey::new_rand();
-        let bob_pubkey = solana_sdk::pubkey::new_rand();
-        let carol_pubkey = solana_sdk::pubkey::new_rand();
+        let alice_pubkey = Pubkey::new_unique();
+        let bob_pubkey = Pubkey::new_unique();
+        let carol_pubkey = Pubkey::new_unique();
         let to_lamports = vec![(bob_pubkey, 1), (carol_pubkey, 2)];
 
         let instructions = transfer_many(&alice_pubkey, &to_lamports);
@@ -504,8 +504,8 @@ mod tests {
 
     #[test]
     fn test_create_nonce_account() {
-        let from_pubkey = solana_sdk::pubkey::new_rand();
-        let nonce_pubkey = solana_sdk::pubkey::new_rand();
+        let from_pubkey = Pubkey::new_unique();
+        let nonce_pubkey = Pubkey::new_unique();
         let authorized = nonce_pubkey;
         let ixs = create_nonce_account(&from_pubkey, &nonce_pubkey, &authorized, 42);
         assert_eq!(ixs.len(), 2);

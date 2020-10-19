@@ -1,3 +1,5 @@
+#![cfg(feature = "everything")]
+
 use solana_sdk::{
     hard_forks::HardForks,
     hash::{extend_and_hash, Hash},
