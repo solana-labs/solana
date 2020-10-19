@@ -177,7 +177,6 @@ pub enum CliCommand {
         program_location: String,
         address: Option<SignerIndex>,
         use_deprecated_loader: bool,
-        random_address: bool,
     },
     // Stake Commands
     CreateStakeAccount {
@@ -610,14 +609,12 @@ pub fn parse_command(
                 1
             });
             let use_deprecated_loader = matches.is_present("use_deprecated_loader");
-            let random_address = matches.is_present("random_address");
 
             Ok(CliCommandInfo {
                 command: CliCommand::Deploy {
                     program_location: matches.value_of("program_location").unwrap().to_string(),
                     address,
                     use_deprecated_loader,
-                    random_address,
                 },
                 signers,
             })
@@ -1134,16 +1131,12 @@ fn process_deploy(
     program_location: &str,
     address: Option<SignerIndex>,
     use_deprecated_loader: bool,
-    random_address: bool,
 ) -> ProcessResult {
     let new_keypair = Keypair::new(); // Create ephemeral keypair to use for program address, if not provided
     let program_id = if let Some(i) = address {
         config.signers[i]
-    } else if random_address {
-        &new_keypair
     } else {
-        // Clap will enforce one of the previous two conditions
-        unreachable!();
+        &new_keypair
     };
     let mut file = File::open(program_location).map_err(|err| {
         CliError::DynamicProgramError(format!("Unable to open program file: {}", err))
@@ -1584,14 +1577,12 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             program_location,
             address,
             use_deprecated_loader,
-            random_address,
         } => process_deploy(
             &rpc_client,
             config,
             program_location,
             *address,
             *use_deprecated_loader,
-            *random_address,
         ),
 
         // Stake Commands
@@ -2208,17 +2199,10 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("address_signer")
                         .index(2)
-                        .value_name("ADDRESS_KEYPAIR")
+                        .value_name("SIGNER_KEYPAIR")
                         .takes_value(true)
                         .validator(is_valid_signer)
-                        .required_unless("random_address")
-                        .help("The signer for the desired program address. See also: --random-address")
-                )
-                .arg(
-                    Arg::with_name("random_address")
-                        .long("random-address")
-                        .takes_value(false)
-                        .help("Deploy at a random address. WARNING: Deployment cannot be retried!")
+                        .help("The signer for the desired address of the program [default: new random address]")
                 )
                 .arg(
                     Arg::with_name("use_deprecated_loader")
@@ -2581,12 +2565,10 @@ mod tests {
         );
 
         // Test Deploy Subcommand
-        let test_deploy = test_commands.clone().get_matches_from(vec![
-            "test",
-            "deploy",
-            "/Users/test/program.o",
-            "--random-address",
-        ]);
+        let test_deploy =
+            test_commands
+                .clone()
+                .get_matches_from(vec!["test", "deploy", "/Users/test/program.o"]);
         assert_eq!(
             parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
@@ -2594,7 +2576,6 @@ mod tests {
                     program_location: "/Users/test/program.o".to_string(),
                     address: None,
                     use_deprecated_loader: false,
-                    random_address: true,
                 },
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2616,7 +2597,6 @@ mod tests {
                     program_location: "/Users/test/program.o".to_string(),
                     address: Some(1),
                     use_deprecated_loader: false,
-                    random_address: false,
                 },
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2930,7 +2910,6 @@ mod tests {
             program_location: pathbuf.to_str().unwrap().to_string(),
             address: None,
             use_deprecated_loader: false,
-            random_address: true,
         };
         let result = process_command(&config);
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
@@ -2949,7 +2928,6 @@ mod tests {
             program_location: "bad/file/location.so".to_string(),
             address: None,
             use_deprecated_loader: false,
-            random_address: true,
         };
         assert!(process_command(&config).is_err());
     }
