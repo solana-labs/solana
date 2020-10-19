@@ -15,7 +15,9 @@ use solana_core::{
 };
 use solana_download_utils::download_snapshot;
 use solana_ledger::{
-    blockstore::Blockstore, blockstore_db::AccessType, leader_schedule::FixedSchedule,
+    blockstore::{Blockstore, PurgeType},
+    blockstore_db::AccessType,
+    leader_schedule::FixedSchedule,
     leader_schedule::LeaderSchedule,
 };
 use solana_local_cluster::{
@@ -1366,15 +1368,20 @@ fn test_no_voting() {
 
 #[test]
 #[serial]
-fn test_optimistic_confirmation_violation_with_no_tower() {
+fn test_optimistic_confirmation_violation_detection() {
     solana_logger::setup();
     let mut buf = BufferRedirect::stderr().unwrap();
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
     let node_stakes = vec![51, 50];
-    let validator_keys: Vec<_> = iter::repeat_with(|| (Arc::new(Keypair::new()), true))
-        .take(node_stakes.len())
-        .collect();
+    let validator_keys: Vec<_> = vec![
+        "4qhhXNTbKD1a5vxDDLZcHKj7ELNeiivtUBxn3wUK1F5VRsQVP89VUhfXqSfgiFB14GfuBgtrQ96n9NvWQADVkcCg",
+        "3kHBzVwie5vTEaY6nFCPeFT8qDpoXzn7dCEioGRNBTnUDpvwnG85w8Wq63gVWpVTP8k2a8cgcWRjSXyUkEygpXWS",
+    ]
+    .iter()
+    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+    .take(node_stakes.len())
+    .collect();
     let config = ClusterConfig {
         cluster_lamports: 100_000,
         node_stakes: node_stakes.clone(),
@@ -1415,28 +1422,15 @@ fn test_optimistic_confirmation_violation_with_no_tower() {
     // Also, remove saved tower to intentionally make the restarted validator to violate the
     // optimistic confirmation
     {
-        let blockstore = Blockstore::open_with_access_type(
-            &exited_validator_info.info.ledger_path,
-            AccessType::PrimaryOnly,
-            None,
-        )
-        .unwrap_or_else(|e| {
-            panic!(
-                "Failed to open ledger at {:?}, err: {}",
-                exited_validator_info.info.ledger_path, e
-            );
-        });
+        let blockstore = open_blockstore(&exited_validator_info.info.ledger_path);
         info!(
             "Setting slot: {} on main fork as dead, should cause fork",
             prev_voted_slot
         );
+        // marking this voted slot as dead makes the saved tower garbage
+        // effectively. That's because its stray last vote becomes stale (= no
+        // ancestor in bank forks).
         blockstore.set_dead_slot(prev_voted_slot).unwrap();
-
-        std::fs::remove_file(Tower::get_filename(
-            &exited_validator_info.info.ledger_path,
-            &entry_point_id,
-        ))
-        .unwrap();
     }
     cluster.restart_node(&entry_point_id, exited_validator_info);
 
@@ -1467,86 +1461,6 @@ fn test_optimistic_confirmation_violation_with_no_tower() {
     let mut output = String::new();
     buf.read_to_string(&mut output).unwrap();
     assert!(output.contains(&expected_log));
-}
-
-#[test]
-#[serial]
-#[ignore]
-fn test_no_optimistic_confirmation_violation_with_tower() {
-    solana_logger::setup();
-    let mut buf = BufferRedirect::stderr().unwrap();
-
-    // First set up the cluster with 2 nodes
-    let slots_per_epoch = 2048;
-    let node_stakes = vec![51, 50];
-    let validator_keys: Vec<_> = iter::repeat_with(|| (Arc::new(Keypair::new()), true))
-        .take(node_stakes.len())
-        .collect();
-    let config = ClusterConfig {
-        cluster_lamports: 100_000,
-        node_stakes: node_stakes.clone(),
-        validator_configs: vec![ValidatorConfig::default(); node_stakes.len()],
-        validator_keys: Some(validator_keys),
-        slots_per_epoch,
-        stakers_slot_offset: slots_per_epoch,
-        skip_warmup_slots: true,
-        ..ClusterConfig::default()
-    };
-    let mut cluster = LocalCluster::new(&config);
-    let entry_point_id = cluster.entry_point_info.id;
-    // Let the nodes run for a while. Wait for validators to vote on slot `S`
-    // so that the vote on `S-1` is definitely in gossip and optimistic confirmation is
-    // detected on slot `S-1` for sure, then stop the heavier of the two
-    // validators
-    let client = cluster.get_validator_client(&entry_point_id).unwrap();
-    let mut prev_voted_slot = 0;
-    loop {
-        let last_voted_slot = client
-            .get_slot_with_commitment(CommitmentConfig::recent())
-            .unwrap();
-        if last_voted_slot > 50 {
-            if prev_voted_slot == 0 {
-                prev_voted_slot = last_voted_slot;
-            } else {
-                break;
-            }
-        }
-        sleep(Duration::from_millis(100));
-    }
-
-    let exited_validator_info = cluster.exit_node(&entry_point_id);
-
-    // Mark fork as dead on the heavier validator, this should make the fork effectively
-    // dead, even though it was optimistically confirmed. The smaller validator should
-    // create and jump over to a new fork
-    {
-        let blockstore = Blockstore::open_with_access_type(
-            &exited_validator_info.info.ledger_path,
-            AccessType::PrimaryOnly,
-            None,
-        )
-        .unwrap_or_else(|e| {
-            panic!(
-                "Failed to open ledger at {:?}, err: {}",
-                exited_validator_info.info.ledger_path, e
-            );
-        });
-        info!(
-            "Setting slot: {} on main fork as dead, should cause fork",
-            prev_voted_slot
-        );
-        blockstore.set_dead_slot(prev_voted_slot).unwrap();
-    }
-    cluster.restart_node(&entry_point_id, exited_validator_info);
-
-    cluster.check_no_new_roots(400, "test_no_optimistic_confirmation_violation_with_tower");
-
-    // Check to see that validator didn't detected optimistic confirmation for
-    // `prev_voted_slot` failed
-    let expected_log = format!("Optimistic slot {} was not rooted", prev_voted_slot);
-    let mut output = String::new();
-    buf.read_to_string(&mut output).unwrap();
-    assert!(!output.contains(&expected_log));
 }
 
 #[test]
@@ -1597,7 +1511,7 @@ fn test_validator_saves_tower() {
     let validator_info = cluster.exit_node(&validator_id);
     let tower1 = Tower::restore(&ledger_path, &validator_id).unwrap();
     trace!("tower1: {:?}", tower1);
-    assert_eq!(tower1.root(), Some(0));
+    assert_eq!(tower1.root(), 0);
 
     // Restart the validator and wait for a new root
     cluster.restart_node(&validator_id, validator_info);
@@ -1622,7 +1536,7 @@ fn test_validator_saves_tower() {
     let validator_info = cluster.exit_node(&validator_id);
     let tower2 = Tower::restore(&ledger_path, &validator_id).unwrap();
     trace!("tower2: {:?}", tower2);
-    assert_eq!(tower2.root(), Some(last_replayed_root));
+    assert_eq!(tower2.root(), last_replayed_root);
     last_replayed_root = recent_slot;
 
     // Rollback saved tower to `tower1` to simulate a validator starting from a newer snapshot
@@ -1651,11 +1565,11 @@ fn test_validator_saves_tower() {
     let mut validator_info = cluster.exit_node(&validator_id);
     let tower3 = Tower::restore(&ledger_path, &validator_id).unwrap();
     trace!("tower3: {:?}", tower3);
-    assert!(tower3.root().unwrap() > last_replayed_root);
+    assert!(tower3.root() > last_replayed_root);
 
     // Remove the tower file entirely and allow the validator to start without a tower.  It will
     // rebuild tower from its vote account contents
-    fs::remove_file(Tower::get_filename(&ledger_path, &validator_id)).unwrap();
+    remove_tower(&ledger_path, &validator_id);
     validator_info.config.require_tower = false;
 
     cluster.restart_node(&validator_id, validator_info);
@@ -1680,7 +1594,252 @@ fn test_validator_saves_tower() {
     let tower4 = Tower::restore(&ledger_path, &validator_id).unwrap();
     trace!("tower4: {:?}", tower4);
     // should tower4 advance 1 slot compared to tower3????
-    assert_eq!(tower4.root(), tower3.root().map(|s| s + 1));
+    assert_eq!(tower4.root(), tower3.root() + 1);
+}
+
+fn open_blockstore(ledger_path: &Path) -> Blockstore {
+    Blockstore::open_with_access_type(ledger_path, AccessType::PrimaryOnly, None).unwrap_or_else(
+        |e| {
+            panic!("Failed to open ledger at {:?}, err: {}", ledger_path, e);
+        },
+    )
+}
+
+fn purge_slots(blockstore: &Blockstore, start_slot: Slot, slot_count: Slot) {
+    blockstore.purge_from_next_slots(start_slot, start_slot + slot_count);
+    blockstore.purge_slots(start_slot, start_slot + slot_count, PurgeType::Exact);
+}
+
+fn last_vote_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
+    let tower = Tower::restore(&ledger_path, &node_pubkey);
+    if let Err(tower_err) = tower {
+        if tower_err.is_file_missing() {
+            return None;
+        } else {
+            panic!("tower restore failed...: {:?}", tower_err);
+        }
+    }
+    // actually saved tower must have at least one vote.
+    let last_vote = Tower::restore(&ledger_path, &node_pubkey)
+        .unwrap()
+        .last_voted_slot()
+        .unwrap();
+    Some(last_vote)
+}
+
+fn remove_tower(ledger_path: &Path, node_pubkey: &Pubkey) {
+    fs::remove_file(Tower::get_filename(&ledger_path, &node_pubkey)).unwrap();
+}
+
+// A bit convoluted test case; but this roughly follows this test theoretical scenario:
+//
+// Step 1: You have validator A + B with 31% and 36% of the stake:
+//
+//  S0 -> S1 -> S2 -> S3 (A + B vote, optimistically confirmed)
+//
+// Step 2: Turn off A + B, and truncate the ledger after slot `S3` (simulate votes not
+// landing in next slot).
+// Start validator C with 33% of the stake with same ledger, but only up to slot S2.
+// Have `C` generate some blocks like:
+//
+// S0 -> S1 -> S2 -> S4
+//
+// Step 3: Then restart `A` which had 31% of the stake. With the tower, from `A`'s
+// perspective it sees:
+//
+// S0 -> S1 -> S2 -> S3 (voted)
+//             |
+//             -> S4 -> S5 (C's vote for S4)
+//
+// The fork choice rule weights look like:
+//
+// S0 -> S1 -> S2 (ABC) -> S3
+//             |
+//             -> S4 (C) -> S5
+//
+// Step 4:
+// Without the persisted tower:
+//    `A` would choose to vote on the fork with `S4 -> S5`. This is true even if `A`
+//    generates a new fork starting at slot `S3` because `C` has more stake than `A`
+//    so `A` will eventually pick the fork `C` is on.
+//
+//    Furthermore `B`'s vote on `S3` is not observable because there are no
+//    descendants of slot `S3`, so that fork will not be chosen over `C`'s fork
+//
+// With the persisted tower:
+//    `A` should not be able to generate a switching proof.
+//
+fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: bool) {
+    solana_logger::setup();
+
+    // First set up the cluster with 4 nodes
+    let slots_per_epoch = 2048;
+    let node_stakes = vec![31, 36, 33, 0];
+
+    // Each pubkeys are prefixed with A, B, C and D.
+    // D is needed to avoid NoPropagatedConfirmation erorrs
+    let validator_keys = vec![
+        "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+        "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
+        "4mx9yoFBeYasDKBGDWCTWGJdWuJCKbgqmuP8bN9umybCh5Jzngw7KQxe99Rf5uzfyzgba1i65rJW4Wqk7Ab5S8ye",
+        "3zsEPEDsjfEay7te9XqNjRTCE7vwuT6u4DHzBJC19yp7GS8BuNRMRjnpVrKCBzb3d44kxc4KPGSHkCmk6tEfswCg",
+    ]
+    .iter()
+    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+    .take(node_stakes.len())
+    .collect::<Vec<_>>();
+    let validators = validator_keys
+        .iter()
+        .map(|(kp, _)| kp.pubkey())
+        .collect::<Vec<_>>();
+    let (validator_a_pubkey, validator_b_pubkey, validator_c_pubkey) =
+        (validators[0], validators[1], validators[2]);
+
+    let config = ClusterConfig {
+        cluster_lamports: 100_000,
+        node_stakes: node_stakes.clone(),
+        validator_configs: vec![ValidatorConfig::default(); node_stakes.len()],
+        validator_keys: Some(validator_keys),
+        slots_per_epoch,
+        stakers_slot_offset: slots_per_epoch,
+        skip_warmup_slots: true,
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&config);
+
+    let base_slot = 26; // S2
+    let next_slot_on_a = 27; // S3
+    let truncated_slots = 100; // just enough to purge all following slots after the S2 and S3
+
+    let val_a_ledger_path = cluster.ledger_path(&validator_a_pubkey);
+    let val_b_ledger_path = cluster.ledger_path(&validator_b_pubkey);
+    let val_c_ledger_path = cluster.ledger_path(&validator_c_pubkey);
+
+    // Immediately kill validator C
+    let validator_c_info = cluster.exit_node(&validator_c_pubkey);
+
+    // Step 1:
+    // Let validator A, B, (D) run for a while.
+    let (mut validator_a_finished, mut validator_b_finished) = (false, false);
+    while !(validator_a_finished && validator_b_finished) {
+        sleep(Duration::from_millis(100));
+
+        if let Some(last_vote) = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
+            if !validator_a_finished && last_vote >= next_slot_on_a {
+                validator_a_finished = true;
+            }
+        }
+        if let Some(last_vote) = last_vote_in_tower(&val_b_ledger_path, &validator_b_pubkey) {
+            if !validator_b_finished && last_vote >= next_slot_on_a {
+                validator_b_finished = true;
+            }
+        }
+    }
+    // kill them at once after the above loop; otherwise one might stall the other!
+    let validator_a_info = cluster.exit_node(&validator_a_pubkey);
+    let _validator_b_info = cluster.exit_node(&validator_b_pubkey);
+
+    // Step 2:
+    // Stop validator and truncate ledger
+    info!("truncate validator C's ledger");
+    {
+        // first copy from validator A's ledger
+        std::fs::remove_dir_all(&validator_c_info.info.ledger_path).unwrap();
+        let mut opt = fs_extra::dir::CopyOptions::new();
+        opt.copy_inside = true;
+        fs_extra::dir::copy(&val_a_ledger_path, &val_c_ledger_path, &opt).unwrap();
+        // Remove A's tower in the C's new copied ledger
+        remove_tower(&validator_c_info.info.ledger_path, &validator_a_pubkey);
+
+        let blockstore = open_blockstore(&validator_c_info.info.ledger_path);
+        purge_slots(&blockstore, base_slot + 1, truncated_slots);
+    }
+    info!("truncate validator A's ledger");
+    {
+        let blockstore = open_blockstore(&val_a_ledger_path);
+        purge_slots(&blockstore, next_slot_on_a + 1, truncated_slots);
+        if !with_tower {
+            info!("Removing tower!");
+            remove_tower(&val_a_ledger_path, &validator_a_pubkey);
+
+            // Remove next_slot_on_a from ledger to force validator A to select
+            // votes_on_c_fork. Otherwise the validator A will immediately vote
+            // for 27 on restart, because it hasn't gotten the heavier fork from
+            // validator C yet.
+            // Then it will be stuck on 27 unable to switch because C doesn't
+            // have enough stake to generate a switching proof
+            purge_slots(&blockstore, next_slot_on_a, truncated_slots);
+        } else {
+            info!("Not removing tower!");
+        }
+    }
+
+    // Step 3:
+    // Run validator C only to make it produce and vote on its own fork.
+    info!("Restart validator C again!!!");
+    let val_c_ledger_path = validator_c_info.info.ledger_path.clone();
+    cluster.restart_node(&validator_c_pubkey, validator_c_info);
+
+    let mut votes_on_c_fork = std::collections::BTreeSet::new(); // S4 and S5
+    for _ in 0..100 {
+        sleep(Duration::from_millis(100));
+
+        if let Some(last_vote) = last_vote_in_tower(&val_c_ledger_path, &validator_c_pubkey) {
+            if last_vote != base_slot {
+                votes_on_c_fork.insert(last_vote);
+                // Collect 4 votes
+                if votes_on_c_fork.len() >= 4 {
+                    break;
+                }
+            }
+        }
+    }
+    assert!(!votes_on_c_fork.is_empty());
+    info!("collected validator C's votes: {:?}", votes_on_c_fork);
+
+    // Step 4:
+    // verify whether there was violation or not
+    info!("Restart validator A again!!!");
+    cluster.restart_node(&validator_a_pubkey, validator_a_info);
+
+    // monitor for actual votes from validator A
+    let mut bad_vote_detected = false;
+    for _ in 0..100 {
+        sleep(Duration::from_millis(100));
+
+        if let Some(last_vote) = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
+            if votes_on_c_fork.contains(&last_vote) {
+                bad_vote_detected = true;
+                break;
+            }
+        }
+    }
+
+    // an elaborate way of assert!(with_tower && !bad_vote_detected || ...)
+    let expects_optimistic_confirmation_violation = !with_tower;
+    if bad_vote_detected != expects_optimistic_confirmation_violation {
+        if bad_vote_detected {
+            panic!("No violation expected because of persisted tower!");
+        } else {
+            panic!("Violation expected because of removed persisted tower!");
+        }
+    } else if bad_vote_detected {
+        info!("THIS TEST expected violations. And indeed, there was some, because of removed persisted tower.");
+    } else {
+        info!("THIS TEST expected no violation. And indeed, there was none, thanks to persisted tower.");
+    }
+}
+
+#[test]
+#[serial]
+fn test_no_optimistic_confirmation_violation_with_tower() {
+    do_test_optimistic_confirmation_violation_with_or_without_tower(true);
+}
+
+#[test]
+#[serial]
+fn test_optimistic_confirmation_violation_without_tower() {
+    do_test_optimistic_confirmation_violation_with_or_without_tower(false);
 }
 
 fn wait_for_next_snapshot(

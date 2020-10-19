@@ -4043,6 +4043,7 @@ name = "solana-local-cluster"
 version = "1.4.2"
 dependencies = [
  "assert_matches",
+ "fs_extra",
  "gag",
  "itertools 0.9.0",
  "log 0.4.8",
