@@ -16,13 +16,13 @@ const SIGNATURE_OFFSETS_SERIALIZED_SIZE = 11;
 
 /**
  * Create a secp256k1 instruction using a public key params
- * @typedef {Object} CreateSecpInstructionWithPublicKeyParams
+ * @typedef {Object} CreateSecp256k1InstructionWithPublicKeyParams
  * @property {Buffer | Uint8Array | Array<number>} publicKey
  * @property {Buffer | Uint8Array | Array<number>} message
  * @property {Buffer | Uint8Array | Array<number>} signature
  * @property {number} recoveryId
  */
-export type CreateSecpInstructionWithPublicKeyParams = {|
+export type CreateSecp256k1InstructionWithPublicKeyParams = {|
   publicKey: Buffer | Uint8Array | Array<number>,
   message: Buffer | Uint8Array | Array<number>,
   signature: Buffer | Uint8Array | Array<number>,
@@ -31,24 +31,24 @@ export type CreateSecpInstructionWithPublicKeyParams = {|
 
 /**
  * Create a secp256k1 instruction using a private key params
- * @typedef {Object} CreateSecpInstructionWithPrivateKeyParams
+ * @typedef {Object} CreateSecp256k1InstructionWithPrivateKeyParams
  * @property {Buffer | Uint8Array | Array<number>} privateKey
  * @property {Buffer | Uint8Array | Array<number>} message
  */
-export type CreateSecpInstructionWithPrivateKeyParams = {|
+export type CreateSecp256k1InstructionWithPrivateKeyParams = {|
   privateKey: Buffer | Uint8Array | Array<number>,
   message: Buffer | Uint8Array | Array<number>,
 |};
 
 /**
  * A decoded Secp256k instruction
- * @typedef {Object} DecodedSecp256kInstruction
+ * @typedef {Object} DecodedSecp256k1Instruction
  * @property {Buffer} signature
  * @property {Buffer} ethPublicKey
  * @property {Buffer} message
  * @property {number} recoveryId
  */
-export type DecodedSecp256kInstruction = {|
+export type DecodedSecp256k1Instruction = {|
   numSignatures: number,
   signatureOffset: number,
   signatureInstructionOffset: number,
@@ -112,7 +112,7 @@ export class Secp256k1Program {
    * Create a secp256k1 instruction with public key
    */
   createInstructionWithPublicKey(
-    params: CreateSecpInstructionWithPublicKeyParams,
+    params: CreateSecp256k1InstructionWithPublicKeyParams,
   ): TransactionInstruction {
     const {publicKey, message, signature, recoveryId} = params;
 
@@ -168,7 +168,7 @@ export class Secp256k1Program {
    * Create a secp256k1 instruction with private key
    */
   createInstructionWithPrivateKey(
-    params: CreateSecpInstructionWithPrivateKeyParams,
+    params: CreateSecp256k1InstructionWithPrivateKeyParams,
   ): TransactionInstruction {
     const {privateKey, message} = params;
 
