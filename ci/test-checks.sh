@@ -79,7 +79,9 @@ _ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit "${cargo_audit_ignor
       cd "$project"
       _ cargo +"$rust_stable" fmt -- --check
       _ cargo +"$rust_nightly" test
-      _ cargo +"$rust_nightly" clippy -- --deny=warnings --allow=clippy::missing_safety_doc
+      _ cargo +"$rust_nightly" clippy -- --deny=warnings \
+        --allow=clippy::missing_safety_doc \
+        --allow=clippy::stable_sort_primitive
     )
   done
 }
