@@ -60,7 +60,7 @@ impl ForkChoice for BankWeightForkChoice {
         trace!("frozen_banks {}", frozen_banks.len());
         let num_old_banks = frozen_banks
             .iter()
-            .filter(|b| b.slot() < tower.root().unwrap_or(0))
+            .filter(|b| b.slot() < tower.root())
             .count();
 
         let last_voted_slot = tower.last_voted_slot();
