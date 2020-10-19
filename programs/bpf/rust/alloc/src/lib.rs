@@ -85,8 +85,6 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
 #[cfg(test)]
 mod test {
     use super::*;
-    // Pull in syscall stubs when building for non-BPF targets
-    solana_sdk::program_stubs!();
 
     #[test]
     fn test_entrypoint() {

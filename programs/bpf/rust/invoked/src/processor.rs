@@ -194,6 +194,3 @@ fn process_instruction(
 
     Ok(())
 }
-
-// Pull in syscall stubs when building for non-BPF targets
-solana_sdk::program_stubs!();

@@ -365,8 +365,6 @@ fn process_instruction(
 #[cfg(test)]
 mod test {
     use super::*;
-    // Pull in syscall stubs when building for non-BPF targets
-    solana_sdk::program_stubs!();
 
     #[test]
     fn create_program_address_is_defined() {
