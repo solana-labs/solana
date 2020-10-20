@@ -1,7 +1,7 @@
 use digest::Digest;
 use serde_derive::{Deserialize, Serialize};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Secp256k1Error {
     InvalidSignature,
     InvalidRecoveryId,
@@ -38,7 +38,7 @@ fn get_data_slice<'a>(
     size: usize,
 ) -> Result<&'a [u8], Secp256k1Error> {
     let signature_index = instruction_index as usize;
-    if signature_index > instruction_datas.len() {
+    if signature_index >= instruction_datas.len() {
         return Err(Secp256k1Error::InvalidDataOffsets);
     }
     let signature_instruction = &instruction_datas[signature_index];
@@ -72,7 +72,7 @@ pub fn verify_eth_addresses(
 
         // Parse out signature
         let signature_index = offsets.signature_instruction_index as usize;
-        if signature_index > instruction_datas.len() {
+        if signature_index >= instruction_datas.len() {
             return Err(Secp256k1Error::InvalidInstructionDataSize);
         }
         let signature_instruction = instruction_datas[signature_index];
@@ -121,4 +121,147 @@ pub fn verify_eth_addresses(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+
+    fn test_case(num_signatures: u8, offsets: &SecpSignatureOffsets) -> Result<(), Secp256k1Error> {
+        let mut instruction_data = vec![0u8; 1 + SIGNATURE_OFFSETS_SERIALIZED_SIZE];
+        instruction_data[0] = num_signatures;
+        let writer = std::io::Cursor::new(&mut instruction_data[1..]);
+        bincode::serialize_into(writer, &offsets).unwrap();
+
+        verify_eth_addresses(&instruction_data, &[&[0u8; 100]])
+    }
+
+    #[test]
+    fn test_invalid_offsets() {
+        solana_logger::setup();
+
+        let mut instruction_data = vec![0u8; 1 + SIGNATURE_OFFSETS_SERIALIZED_SIZE];
+        let offsets = SecpSignatureOffsets::default();
+        instruction_data[0] = 1;
+        let writer = std::io::Cursor::new(&mut instruction_data[1..]);
+        bincode::serialize_into(writer, &offsets).unwrap();
+        instruction_data.truncate(instruction_data.len() - 1);
+
+        assert_eq!(
+            verify_eth_addresses(&instruction_data, &[&[0u8; 100]]),
+            Err(Secp256k1Error::InvalidInstructionDataSize)
+        );
+
+        let offsets = SecpSignatureOffsets {
+            signature_instruction_index: 1,
+            ..SecpSignatureOffsets::default()
+        };
+        assert_eq!(
+            test_case(1, &offsets),
+            Err(Secp256k1Error::InvalidInstructionDataSize)
+        );
+
+        let offsets = SecpSignatureOffsets {
+            message_instruction_index: 1,
+            ..SecpSignatureOffsets::default()
+        };
+        assert_eq!(
+            test_case(1, &offsets),
+            Err(Secp256k1Error::InvalidDataOffsets)
+        );
+
+        let offsets = SecpSignatureOffsets {
+            eth_address_instruction_index: 1,
+            ..SecpSignatureOffsets::default()
+        };
+        assert_eq!(
+            test_case(1, &offsets),
+            Err(Secp256k1Error::InvalidDataOffsets)
+        );
+    }
+
+    #[test]
+    fn test_message_data_offsets() {
+        let offsets = SecpSignatureOffsets {
+            message_data_offset: 99,
+            message_data_size: 1,
+            ..SecpSignatureOffsets::default()
+        };
+        assert_eq!(
+            test_case(1, &offsets),
+            Err(Secp256k1Error::InvalidSignature)
+        );
+
+        let offsets = SecpSignatureOffsets {
+            message_data_offset: 100,
+            message_data_size: 1,
+            ..SecpSignatureOffsets::default()
+        };
+        assert_eq!(
+            test_case(1, &offsets),
+            Err(Secp256k1Error::InvalidSignature)
+        );
+
+        let offsets = SecpSignatureOffsets {
+            message_data_offset: 100,
+            message_data_size: 1000,
+            ..SecpSignatureOffsets::default()
+        };
+        assert_eq!(
+            test_case(1, &offsets),
+            Err(Secp256k1Error::InvalidSignature)
+        );
+
+        let offsets = SecpSignatureOffsets {
+            message_data_offset: std::u16::MAX,
+            message_data_size: std::u16::MAX,
+            ..SecpSignatureOffsets::default()
+        };
+        assert_eq!(
+            test_case(1, &offsets),
+            Err(Secp256k1Error::InvalidSignature)
+        );
+    }
+
+    #[test]
+    fn test_eth_offset() {
+        let offsets = SecpSignatureOffsets {
+            eth_address_offset: std::u16::MAX,
+            ..SecpSignatureOffsets::default()
+        };
+        assert_eq!(
+            test_case(1, &offsets),
+            Err(Secp256k1Error::InvalidSignature)
+        );
+
+        let offsets = SecpSignatureOffsets {
+            eth_address_offset: 100 - HASHED_PUBKEY_SERIALIZED_SIZE as u16 + 1,
+            ..SecpSignatureOffsets::default()
+        };
+        assert_eq!(
+            test_case(1, &offsets),
+            Err(Secp256k1Error::InvalidSignature)
+        );
+    }
+
+    #[test]
+    fn test_signature_offset() {
+        let offsets = SecpSignatureOffsets {
+            signature_offset: std::u16::MAX,
+            ..SecpSignatureOffsets::default()
+        };
+        assert_eq!(
+            test_case(1, &offsets),
+            Err(Secp256k1Error::InvalidSignature)
+        );
+
+        let offsets = SecpSignatureOffsets {
+            signature_offset: 100 - SIGNATURE_SERIALIZED_SIZE as u16 + 1,
+            ..SecpSignatureOffsets::default()
+        };
+        assert_eq!(
+            test_case(1, &offsets),
+            Err(Secp256k1Error::InvalidSignature)
+        );
+    }
 }
