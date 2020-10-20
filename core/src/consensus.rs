@@ -529,7 +529,7 @@ impl Tower {
                             // all of them.
                             panic!("no ancestors found with slot: {}", last_voted_slot);
                         } else {
-                            // This condition (stale stray last vote) shouldn't occur under normal validator 
+                            // This condition (stale stray last vote) shouldn't occur under normal validator
                             // operation, indicating something unusual happened.
                             // Possible causes include: OS/HW crash, validator process crash, only saved tower
                             // is moved over to a new setup, etc...
