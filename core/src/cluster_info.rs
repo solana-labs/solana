@@ -52,6 +52,7 @@ use solana_perf::packet::{
 };
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::bank_forks::BankForks;
+use solana_runtime::feature_set::{self, FeatureSet};
 use solana_sdk::hash::Hash;
 use solana_sdk::{
     clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_SLOTS_PER_EPOCH},
@@ -1651,6 +1652,7 @@ impl ClusterInfo {
         stakes: &HashMap<Pubkey, u64>,
         packets: Packets,
         response_sender: &PacketSender,
+        feature_set: Option<&FeatureSet>,
         epoch_time_ms: u64,
     ) {
         // iter over the packets, collect pulls separately and process everything else
@@ -1781,7 +1783,7 @@ impl ClusterInfo {
             self.stats
                 .pull_requests_count
                 .add_relaxed(gossip_pull_data.len() as u64);
-            let rsp = self.handle_pull_requests(recycler, gossip_pull_data, stakes);
+            let rsp = self.handle_pull_requests(recycler, gossip_pull_data, stakes, feature_set);
             if let Some(rsp) = rsp {
                 let _ignore_disconnect = response_sender.send(rsp);
             }
@@ -1809,7 +1811,13 @@ impl ClusterInfo {
         recycler: &PacketsRecycler,
         requests: Vec<PullData>,
         stakes: &HashMap<Pubkey, u64>,
+        feature_set: Option<&FeatureSet>,
     ) -> Option<Packets> {
+        if matches!(feature_set, Some(feature_set) if
+                    feature_set.is_active(&feature_set::pull_request_ping_pong_check::id()))
+        {
+            // TODO: add ping-pong check on pull-request addresses.
+        }
         // split the requests into addrs and filters
         let mut caller_and_filters = vec![];
         let mut addrs = vec![];
@@ -2114,12 +2122,13 @@ impl ClusterInfo {
         recycler: &PacketsRecycler,
         response_sender: &PacketSender,
         stakes: HashMap<Pubkey, u64>,
+        feature_set: Option<&FeatureSet>,
         epoch_time_ms: u64,
     ) {
         let sender = response_sender.clone();
         thread_pool.install(|| {
             requests.into_par_iter().for_each_with(sender, |s, reqs| {
-                self.handle_packets(&recycler, &stakes, reqs, s, epoch_time_ms)
+                self.handle_packets(&recycler, &stakes, reqs, s, feature_set, epoch_time_ms)
             });
         });
     }
@@ -2153,13 +2162,25 @@ impl ClusterInfo {
         }
 
         let (stakes, epoch_time_ms) = Self::get_stakes_and_epoch_time(bank_forks);
-
+        // Using root_bank instead of working_bank here so that an enbaled
+        // feature does not roll back (if the feature happens to get enabled in
+        // a minority fork).
+        let feature_set = bank_forks.map(|bank_forks| {
+            bank_forks
+                .read()
+                .unwrap()
+                .root_bank()
+                .deref()
+                .feature_set
+                .clone()
+        });
         self.process_packets(
             requests,
             thread_pool,
             recycler,
             response_sender,
             stakes,
+            feature_set.as_deref(),
             epoch_time_ms,
         );
 
