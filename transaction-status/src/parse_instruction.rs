@@ -1,10 +1,11 @@
 use crate::{
-    parse_bpf_loader::parse_bpf_loader, parse_stake::parse_stake, parse_token::parse_token,
+    parse_bpf_loader::parse_bpf_loader, parse_stake::parse_stake, parse_system::parse_system,
+    parse_token::parse_token,
 };
 use inflector::Inflector;
 use serde_json::Value;
 use solana_account_decoder::parse_token::spl_token_id_v2_0;
-use solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey};
+use solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey, system_program};
 use std::{
     collections::HashMap,
     str::{from_utf8, FromStr},
@@ -16,6 +17,7 @@ lazy_static! {
     static ref MEMO_PROGRAM_ID: Pubkey =
         Pubkey::from_str(&spl_memo_v1_0::id().to_string()).unwrap();
     static ref STAKE_PROGRAM_ID: Pubkey = solana_stake_program::id();
+    static ref SYSTEM_PROGRAM_ID: Pubkey = system_program::id();
     static ref TOKEN_PROGRAM_ID: Pubkey = spl_token_id_v2_0();
     static ref PARSABLE_PROGRAM_IDS: HashMap<Pubkey, ParsableProgram> = {
         let mut m = HashMap::new();
@@ -23,6 +25,7 @@ lazy_static! {
         m.insert(*TOKEN_PROGRAM_ID, ParsableProgram::SplToken);
         m.insert(*BPF_LOADER_PROGRAM_ID, ParsableProgram::BpfLoader);
         m.insert(*STAKE_PROGRAM_ID, ParsableProgram::Stake);
+        m.insert(*SYSTEM_PROGRAM_ID, ParsableProgram::System);
         m
     };
 }
@@ -66,6 +69,7 @@ pub enum ParsableProgram {
     SplToken,
     BpfLoader,
     Stake,
+    System,
 }
 
 pub fn parse(
@@ -83,6 +87,7 @@ pub fn parse(
             serde_json::to_value(parse_bpf_loader(instruction, account_keys)?)?
         }
         ParsableProgram::Stake => serde_json::to_value(parse_stake(instruction, account_keys)?)?,
+        ParsableProgram::System => serde_json::to_value(parse_system(instruction, account_keys)?)?,
     };
     Ok(ParsedInstruction {
         program: format!("{:?}", program_name).to_kebab_case(),
