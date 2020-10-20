@@ -40,7 +40,7 @@
     "react-select": "^3.1.0",
     "solana-sdk-wasm": "file:wasm/pkg",
     "superstruct": "github:solana-labs/superstruct",
-    "typescript": "^3.9.7",
+    "typescript": "^4.0.3",
     "wasm-loader": "^1.3.0"
   },
   "scripts": {
