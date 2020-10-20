@@ -52,15 +52,15 @@ function StatsCardBody() {
     return <StatsNotReady error={error} />;
   }
 
-  const { avgBlockTime_1h, avgBlockTime_1min, epochInfo } = dashboardInfo;
-  const hourlyBlockTime = Math.round(1000 * avgBlockTime_1h);
-  const averageBlockTime = Math.round(1000 * avgBlockTime_1min) + "ms";
+  const { avgSlotTime_1h, avgSlotTime_1min, epochInfo } = dashboardInfo;
+  const hourlySlotTime = Math.round(1000 * avgSlotTime_1h);
+  const averageSlotTime = Math.round(1000 * avgSlotTime_1min) + "ms";
   const { slotIndex, slotsInEpoch } = epochInfo;
   const currentEpoch = epochInfo.epoch.toString();
   const epochProgress = ((100 * slotIndex) / slotsInEpoch).toFixed(1) + "%";
   const epochTimeRemaining = slotsToHumanString(
     slotsInEpoch - slotIndex,
-    hourlyBlockTime
+    hourlySlotTime
   );
   const { blockHeight, absoluteSlot } = epochInfo;
 
@@ -81,8 +81,8 @@ function StatsCardBody() {
         </tr>
       )}
       <tr>
-        <td className="w-100">Block time</td>
-        <td className="text-lg-right text-monospace">{averageBlockTime}</td>
+        <td className="w-100">Slot time</td>
+        <td className="text-lg-right text-monospace">{averageSlotTime}</td>
       </tr>
       <tr>
         <td className="w-100">Epoch</td>

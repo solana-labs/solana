@@ -3,8 +3,8 @@ import { ClusterStatsStatus } from "./solanaClusterStats";
 
 export type DashboardInfo = {
   status: ClusterStatsStatus;
-  avgBlockTime_1h: number;
-  avgBlockTime_1min: number;
+  avgSlotTime_1h: number;
+  avgSlotTime_1min: number;
   epochInfo: EpochInfo;
 };
 
@@ -46,7 +46,7 @@ export function dashboardInfoReducer(
   action: DashboardInfoAction
 ) {
   const status =
-    state.avgBlockTime_1h !== 0 && state.epochInfo.absoluteSlot !== 0
+    state.avgSlotTime_1h !== 0 && state.epochInfo.absoluteSlot !== 0
       ? ClusterStatsStatus.Ready
       : ClusterStatsStatus.Loading;
 
@@ -63,15 +63,15 @@ export function dashboardInfoReducer(
         .slice(0, 60);
 
       const samplesInHour = samples.length < 60 ? samples.length : 60;
-      const avgBlockTime_1h =
+      const avgSlotTime_1h =
         samples.reduce((sum: number, cur: number) => {
           return sum + cur;
         }, 0) / samplesInHour;
 
       return {
         ...state,
-        avgBlockTime_1h,
-        avgBlockTime_1min: samples[0],
+        avgSlotTime_1h,
+        avgSlotTime_1min: samples[0],
         status,
       };
     case DashboardInfoActionType.SetEpochInfo:

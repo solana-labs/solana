@@ -40,8 +40,8 @@ const initialPerformanceInfo: PerformanceInfo = {
 
 const initialDashboardInfo: DashboardInfo = {
   status: ClusterStatsStatus.Loading,
-  avgBlockTime_1h: 0,
-  avgBlockTime_1min: 0,
+  avgSlotTime_1h: 0,
+  avgSlotTime_1min: 0,
   epochInfo: {
     absoluteSlot: 0,
     blockHeight: 0,
