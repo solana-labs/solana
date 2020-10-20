@@ -1445,7 +1445,7 @@ impl AccountsDB {
             let mut found_store = None;
             let mut recycle_stores = self.recycle_stores.write().unwrap();
             for (i, store) in recycle_stores.iter().enumerate() {
-                if store.accounts.capacity() > size as u64 {
+                if Arc::strong_count(store) == 1 && store.accounts.capacity() > size as u64 {
                     found_store = Some(recycle_stores.swap_remove(i));
                     break;
                 }
