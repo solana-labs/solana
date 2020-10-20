@@ -89,6 +89,20 @@ fn parse_memo(instruction: &CompiledInstruction) -> Value {
     Value::String(from_utf8(&instruction.data).unwrap().to_string())
 }
 
+pub(crate) fn check_num_accounts(
+    accounts: &[u8],
+    num: usize,
+    parsable_program: ParsableProgram,
+) -> Result<(), ParseInstructionError> {
+    if accounts.len() < num {
+        Err(ParseInstructionError::InstructionKeyMismatch(
+            parsable_program,
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

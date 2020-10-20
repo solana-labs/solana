@@ -1,4 +1,6 @@
-use crate::parse_instruction::{ParsableProgram, ParseInstructionError, ParsedInstructionEnum};
+use crate::parse_instruction::{
+    check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
+};
 use serde_json::{json, Map, Value};
 use solana_account_decoder::parse_token::token_amount_to_ui_amount;
 use solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey};
@@ -28,11 +30,7 @@ pub fn parse_token(
             mint_authority,
             freeze_authority,
         } => {
-            if instruction.accounts.len() < 2 {
-                return Err(ParseInstructionError::InstructionKeyMismatch(
-                    ParsableProgram::SplToken,
-                ));
-            }
+            check_num_token_accounts(&instruction.accounts, 2)?;
             let mut value = json!({
                 "mint": account_keys[instruction.accounts[0] as usize].to_string(),
                 "decimals": decimals,
@@ -52,11 +50,7 @@ pub fn parse_token(
             })
         }
         TokenInstruction::InitializeAccount => {
-            if instruction.accounts.len() < 4 {
-                return Err(ParseInstructionError::InstructionKeyMismatch(
-                    ParsableProgram::SplToken,
-                ));
-            }
+            check_num_token_accounts(&instruction.accounts, 4)?;
             Ok(ParsedInstructionEnum {
                 instruction_type: "initializeAccount".to_string(),
                 info: json!({
@@ -68,11 +62,7 @@ pub fn parse_token(
             })
         }
         TokenInstruction::InitializeMultisig { m } => {
-            if instruction.accounts.len() < 3 {
-                return Err(ParseInstructionError::InstructionKeyMismatch(
-                    ParsableProgram::SplToken,
-                ));
-            }
+            check_num_token_accounts(&instruction.accounts, 3)?;
             let mut signers: Vec<String> = vec![];
             for i in instruction.accounts[2..].iter() {
                 signers.push(account_keys[*i as usize].to_string());
@@ -88,11 +78,7 @@ pub fn parse_token(
             })
         }
         TokenInstruction::Transfer { amount } => {
-            if instruction.accounts.len() < 3 {
-                return Err(ParseInstructionError::InstructionKeyMismatch(
-                    ParsableProgram::SplToken,
-                ));
-            }
+            check_num_token_accounts(&instruction.accounts, 3)?;
             let mut value = json!({
                 "source": account_keys[instruction.accounts[0] as usize].to_string(),
                 "destination": account_keys[instruction.accounts[1] as usize].to_string(),
@@ -113,11 +99,7 @@ pub fn parse_token(
             })
         }
         TokenInstruction::Approve { amount } => {
-            if instruction.accounts.len() < 3 {
-                return Err(ParseInstructionError::InstructionKeyMismatch(
-                    ParsableProgram::SplToken,
-                ));
-            }
+            check_num_token_accounts(&instruction.accounts, 3)?;
             let mut value = json!({
                 "source": account_keys[instruction.accounts[0] as usize].to_string(),
                 "delegate": account_keys[instruction.accounts[1] as usize].to_string(),
@@ -138,11 +120,7 @@ pub fn parse_token(
             })
         }
         TokenInstruction::Revoke => {
-            if instruction.accounts.len() < 2 {
-                return Err(ParseInstructionError::InstructionKeyMismatch(
-                    ParsableProgram::SplToken,
-                ));
-            }
+            check_num_token_accounts(&instruction.accounts, 2)?;
             let mut value = json!({
                 "source": account_keys[instruction.accounts[0] as usize].to_string(),
             });
@@ -164,11 +142,7 @@ pub fn parse_token(
             authority_type,
             new_authority,
         } => {
-            if instruction.accounts.len() < 2 {
-                return Err(ParseInstructionError::InstructionKeyMismatch(
-                    ParsableProgram::SplToken,
-                ));
-            }
+            check_num_token_accounts(&instruction.accounts, 2)?;
             let owned = match authority_type {
                 AuthorityType::MintTokens | AuthorityType::FreezeAccount => "mint",
                 AuthorityType::AccountOwner | AuthorityType::CloseAccount => "account",
@@ -196,11 +170,7 @@ pub fn parse_token(
             })
         }
         TokenInstruction::MintTo { amount } => {
-            if instruction.accounts.len() < 3 {
-                return Err(ParseInstructionError::InstructionKeyMismatch(
-                    ParsableProgram::SplToken,
-                ));
-            }
+            check_num_token_accounts(&instruction.accounts, 3)?;
             let mut value = json!({
                 "mint": account_keys[instruction.accounts[0] as usize].to_string(),
                 "account": account_keys[instruction.accounts[1] as usize].to_string(),
@@ -221,11 +191,7 @@ pub fn parse_token(
             })
         }
         TokenInstruction::Burn { amount } => {
-            if instruction.accounts.len() < 3 {
-                return Err(ParseInstructionError::InstructionKeyMismatch(
-                    ParsableProgram::SplToken,
-                ));
-            }
+            check_num_token_accounts(&instruction.accounts, 3)?;
             let mut value = json!({
                 "account": account_keys[instruction.accounts[0] as usize].to_string(),
                 "mint": account_keys[instruction.accounts[1] as usize].to_string(),
@@ -246,11 +212,7 @@ pub fn parse_token(
             })
         }
         TokenInstruction::CloseAccount => {
-            if instruction.accounts.len() < 3 {
-                return Err(ParseInstructionError::InstructionKeyMismatch(
-                    ParsableProgram::SplToken,
-                ));
-            }
+            check_num_token_accounts(&instruction.accounts, 3)?;
             let mut value = json!({
                 "account": account_keys[instruction.accounts[0] as usize].to_string(),
                 "destination": account_keys[instruction.accounts[1] as usize].to_string(),
@@ -270,11 +232,7 @@ pub fn parse_token(
             })
         }
         TokenInstruction::FreezeAccount => {
-            if instruction.accounts.len() < 3 {
-                return Err(ParseInstructionError::InstructionKeyMismatch(
-                    ParsableProgram::SplToken,
-                ));
-            }
+            check_num_token_accounts(&instruction.accounts, 3)?;
             let mut value = json!({
                 "account": account_keys[instruction.accounts[0] as usize].to_string(),
                 "mint": account_keys[instruction.accounts[1] as usize].to_string(),
@@ -294,11 +252,7 @@ pub fn parse_token(
             })
         }
         TokenInstruction::ThawAccount => {
-            if instruction.accounts.len() < 3 {
-                return Err(ParseInstructionError::InstructionKeyMismatch(
-                    ParsableProgram::SplToken,
-                ));
-            }
+            check_num_token_accounts(&instruction.accounts, 3)?;
             let mut value = json!({
                 "account": account_keys[instruction.accounts[0] as usize].to_string(),
                 "mint": account_keys[instruction.accounts[1] as usize].to_string(),
@@ -318,11 +272,7 @@ pub fn parse_token(
             })
         }
         TokenInstruction::TransferChecked { amount, decimals } => {
-            if instruction.accounts.len() < 4 {
-                return Err(ParseInstructionError::InstructionKeyMismatch(
-                    ParsableProgram::SplToken,
-                ));
-            }
+            check_num_token_accounts(&instruction.accounts, 4)?;
             let mut value = json!({
                 "source": account_keys[instruction.accounts[0] as usize].to_string(),
                 "mint": account_keys[instruction.accounts[1] as usize].to_string(),
@@ -344,11 +294,7 @@ pub fn parse_token(
             })
         }
         TokenInstruction::ApproveChecked { amount, decimals } => {
-            if instruction.accounts.len() < 4 {
-                return Err(ParseInstructionError::InstructionKeyMismatch(
-                    ParsableProgram::SplToken,
-                ));
-            }
+            check_num_token_accounts(&instruction.accounts, 4)?;
             let mut value = json!({
                 "source": account_keys[instruction.accounts[0] as usize].to_string(),
                 "mint": account_keys[instruction.accounts[1] as usize].to_string(),
@@ -370,11 +316,7 @@ pub fn parse_token(
             })
         }
         TokenInstruction::MintToChecked { amount, decimals } => {
-            if instruction.accounts.len() < 3 {
-                return Err(ParseInstructionError::InstructionKeyMismatch(
-                    ParsableProgram::SplToken,
-                ));
-            }
+            check_num_token_accounts(&instruction.accounts, 3)?;
             let mut value = json!({
                 "mint": account_keys[instruction.accounts[0] as usize].to_string(),
                 "account": account_keys[instruction.accounts[1] as usize].to_string(),
@@ -395,11 +337,7 @@ pub fn parse_token(
             })
         }
         TokenInstruction::BurnChecked { amount, decimals } => {
-            if instruction.accounts.len() < 3 {
-                return Err(ParseInstructionError::InstructionKeyMismatch(
-                    ParsableProgram::SplToken,
-                ));
-            }
+            check_num_token_accounts(&instruction.accounts, 3)?;
             let mut value = json!({
                 "account": account_keys[instruction.accounts[0] as usize].to_string(),
                 "mint": account_keys[instruction.accounts[1] as usize].to_string(),
@@ -466,6 +404,10 @@ fn parse_signers(
             json!(account_keys[accounts[last_nonsigner_index] as usize].to_string()),
         );
     }
+}
+
+fn check_num_token_accounts(accounts: &[u8], num: usize) -> Result<(), ParseInstructionError> {
+    check_num_accounts(accounts, num, ParsableProgram::SplToken)
 }
 
 #[cfg(test)]
