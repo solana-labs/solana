@@ -1630,7 +1630,7 @@ fn purge_slots(blockstore: &Blockstore, start_slot: Slot, slot_count: Slot) {
     blockstore.purge_slots(start_slot, start_slot + slot_count, PurgeType::Exact);
 }
 
-fn last_vote_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
+fn restore_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Tower> {
     let tower = Tower::restore(&ledger_path, &node_pubkey);
     if let Err(tower_err) = tower {
         if tower_err.is_file_missing() {
@@ -1640,11 +1640,15 @@ fn last_vote_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> 
         }
     }
     // actually saved tower must have at least one vote.
-    let last_vote = Tower::restore(&ledger_path, &node_pubkey)
-        .unwrap()
-        .last_voted_slot()
-        .unwrap();
-    Some(last_vote)
+    Tower::restore(&ledger_path, &node_pubkey).ok()
+}
+
+fn last_vote_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
+    restore_tower(ledger_path, node_pubkey).map(|tower| tower.last_voted_slot().unwrap())
+}
+
+fn root_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
+    restore_tower(ledger_path, node_pubkey).map(|tower| tower.root())
 }
 
 fn remove_tower(ledger_path: &Path, node_pubkey: &Pubkey) {
@@ -1862,6 +1866,88 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
         info!("THIS TEST expected violations. And indeed, there was some, because of removed persisted tower.");
     } else {
         info!("THIS TEST expected no violation. And indeed, there was none, thanks to persisted tower.");
+    }
+}
+
+#[test]
+#[serial]
+fn test_future_tower() {
+    solana_logger::setup();
+
+    // First set up the cluster with 4 nodes
+    let slots_per_epoch = 2048;
+    let node_stakes = vec![100];
+
+    let validator_keys = vec![
+        "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+    ]
+    .iter()
+    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+    .take(node_stakes.len())
+    .collect::<Vec<_>>();
+    let validators = validator_keys
+        .iter()
+        .map(|(kp, _)| kp.pubkey())
+        .collect::<Vec<_>>();
+    let validator_a_pubkey = validators[0];
+
+    let config = ClusterConfig {
+        cluster_lamports: 100_000,
+        node_stakes: node_stakes.clone(),
+        validator_configs: vec![ValidatorConfig::default(); node_stakes.len()],
+        validator_keys: Some(validator_keys),
+        slots_per_epoch,
+        stakers_slot_offset: slots_per_epoch,
+        skip_warmup_slots: true,
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&config);
+
+    let val_a_ledger_path = cluster.ledger_path(&validator_a_pubkey);
+
+    loop {
+        sleep(Duration::from_millis(100));
+
+        if let Some(root) = root_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
+            if root >= 15 {
+                break;
+            }
+        }
+    }
+    let validator_a_info = cluster.exit_node(&validator_a_pubkey);
+    {
+        // revert blockstore to effectively create a warped future tower without mangling the tower itself
+        let blockstore = open_blockstore(&val_a_ledger_path);
+        purge_slots(&blockstore, 10, 100);
+    }
+
+    cluster.restart_node(&validator_a_pubkey, validator_a_info);
+
+    let mut newly_rooted = false;
+    for _ in 0..300 {
+        sleep(Duration::from_millis(100));
+
+        if let Some(root) = root_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
+            if root >= 25 {
+                newly_rooted = true;
+                break;
+            }
+        }
+    }
+    let _validator_a_info = cluster.exit_node(&validator_a_pubkey);
+    if newly_rooted {
+        // there should be no forks; i.e. monotonically increasing voted slots
+        let last_vote = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey).unwrap();
+        let blockstore = open_blockstore(&val_a_ledger_path);
+        assert_eq!(
+            AncestorIterator::new(last_vote, &blockstore)
+                .take_while(|a| *a >= 25)
+                .collect::<Vec<_>>(),
+            (25..=58).rev().collect::<Vec<_>>()
+        );
+        info!("validator managed to handle future tower!");
+    } else {
+        panic!("no root detected");
     }
 }
 
