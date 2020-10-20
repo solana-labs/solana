@@ -13,11 +13,14 @@ pub fn parse_token(
 ) -> Result<ParsedInstructionEnum, ParseInstructionError> {
     let token_instruction = TokenInstruction::unpack(&instruction.data)
         .map_err(|_| ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken))?;
-    if instruction.accounts.len() > account_keys.len() {
-        // Runtime should prevent this from ever happening
-        return Err(ParseInstructionError::InstructionKeyMismatch(
-            ParsableProgram::SplToken,
-        ));
+    match instruction.accounts.iter().max() {
+        Some(index) if (*index as usize) < account_keys.len() => {}
+        _ => {
+            // Runtime should prevent this from ever happening
+            return Err(ParseInstructionError::InstructionKeyMismatch(
+                ParsableProgram::SplToken,
+            ));
+        }
     }
     match token_instruction {
         TokenInstruction::InitializeMint {
