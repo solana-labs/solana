@@ -85,6 +85,9 @@ echo --- Creating release tarball
   source ci/rust-version.sh stable
   scripts/cargo-install-all.sh +"$rust_stable" "${RELEASE_BASENAME}"
 
+  mkdir -p "${RELEASE_BASENAME}"/bin/sdk/bpf
+  cp -a sdk/bpf/* "${RELEASE_BASENAME}"/bin/sdk/bpf
+
   tar cvf "${TARBALL_BASENAME}"-$TARGET.tar "${RELEASE_BASENAME}"
   bzip2 "${TARBALL_BASENAME}"-$TARGET.tar
   cp "${RELEASE_BASENAME}"/bin/solana-install-init solana-install-init-$TARGET
