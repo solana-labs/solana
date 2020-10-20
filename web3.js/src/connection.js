@@ -1446,6 +1446,7 @@ export type ConfirmedSignatureInfo = {
  * A connection to a fullnode JSON RPC endpoint
  */
 export class Connection {
+  _rpcEndpoint: string;
   _rpcRequest: RpcRequest;
   _rpcWebSocket: RpcWebSocketClient;
   _rpcWebSocketConnected: boolean = false;
@@ -1487,6 +1488,8 @@ export class Connection {
    * @param commitment optional default commitment level
    */
   constructor(endpoint: string, commitment: ?Commitment) {
+    this._rpcEndpoint = endpoint;
+
     let url = urlParse(endpoint);
     const useHttps = url.protocol === 'https:';
 
