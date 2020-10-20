@@ -38,7 +38,6 @@
     "react-router-dom": "^5.2.0",
     "react-scripts": "3.4.3",
     "react-select": "^3.1.0",
-    "socket.io-client": "^2.3.1",
     "solana-sdk-wasm": "file:wasm/pkg",
     "superstruct": "github:solana-labs/superstruct",
     "typescript": "^3.9.7",
