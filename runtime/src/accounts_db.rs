@@ -447,7 +447,6 @@ struct AccountsStats {
     delta_hash_num: AtomicU64,
 
     last_store_report: AtomicU64,
-    get_slot_stores: AtomicU64,
     store_hash_accounts: AtomicU64,
     store_accounts: AtomicU64,
     store_update_index: AtomicU64,
@@ -1364,12 +1363,7 @@ impl AccountsDB {
 
     fn find_storage_candidate(&self, slot: Slot) -> Arc<AccountStorageEntry> {
         let mut create_extra = false;
-        let mut get_slot_stores = Measure::start("get_slot_stores");
         let slot_stores_lock = self.storage.get_slot_stores(slot);
-        get_slot_stores.stop();
-        self.stats
-            .get_slot_stores
-            .fetch_add(get_slot_stores.as_us(), Ordering::Relaxed);
         if let Some(slot_stores_lock) = slot_stores_lock {
             let slot_stores = slot_stores_lock.read().unwrap();
             if !slot_stores.is_empty() {
@@ -1862,14 +1856,6 @@ impl AccountsDB {
                 self.stats
                     .delta_hash_accumulate_time_total_us
                     .swap(0, Ordering::Relaxed),
-                i64
-            ),
-        );
-        datapoint_info!(
-            "accounts_db_store_timings2",
-            (
-                "get_slot_stores",
-                self.stats.get_slot_stores.swap(0, Ordering::Relaxed),
                 i64
             ),
         );
