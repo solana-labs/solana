@@ -61,8 +61,9 @@ thiserror = "1.0"
 ed25519-dalek = { version = "=1.0.0-pre.4", optional = true }
 solana-crate-features = { path = "../crate-features", version = "1.5.0", optional = true }
 solana-logger = { path = "../logger", version = "1.5.0", optional = true }
+solana-frozen-abi = { path = "../frozen-abi", version = "1.5.0" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "1.5.0" }
 solana-sdk-macro = { path = "macro", version = "1.5.0" }
-solana-sdk-macro-frozen-abi = { path = "macro-frozen-abi", version = "1.5.0" }
 rustversion = "1.0.3"
 libsecp256k1 = { version = "0.3.5", optional = true }
 sha3 = { version = "0.9.1", optional = true }

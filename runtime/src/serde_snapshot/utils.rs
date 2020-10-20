@@ -3,7 +3,7 @@ use serde::{
     Serialize, Serializer,
 };
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
-use solana_sdk::abi_example::IgnoreAsHelper;
+use solana_frozen_abi::abi_example::IgnoreAsHelper;
 
 // consumes an iterator and returns an object that will serialize as a serde seq
 #[allow(dead_code)]

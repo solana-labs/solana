@@ -9,6 +9,6 @@ pub mod vote_transaction;
 extern crate solana_metrics;
 
 #[macro_use]
-extern crate solana_sdk_macro_frozen_abi;
+extern crate solana_frozen_abi_macro;
 
 solana_sdk::declare_id!("Vote111111111111111111111111111111111111111");

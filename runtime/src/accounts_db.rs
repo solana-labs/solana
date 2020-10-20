@@ -469,7 +469,7 @@ fn make_min_priority_thread_pool() -> ThreadPool {
 }
 
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
-impl solana_sdk::abi_example::AbiExample for AccountsDB {
+impl solana_frozen_abi::abi_example::AbiExample for AccountsDB {
     fn example() -> Self {
         let accounts_db = AccountsDB::new_single();
         let key = Pubkey::default();
