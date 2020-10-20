@@ -156,7 +156,7 @@ mod tests {
             .get(&deserialized_bank.slot())
             .unwrap()
             .clone();
-        assert!(*bank == deserialized_bank);
+        assert_eq!(*bank, deserialized_bank);
 
         let slot_snapshot_paths = snapshot_utils::get_snapshot_paths(&snapshot_path);
 

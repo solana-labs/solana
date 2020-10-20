@@ -8,7 +8,7 @@ use solana_sdk::{
     message::Message,
     pubkey::Pubkey,
 };
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
 
 // Prototype of a native loader entry point
 ///
@@ -174,7 +174,7 @@ pub trait Logger {
 }
 
 /// Program executor
-pub trait Executor: Send + Sync {
+pub trait Executor: Debug + Send + Sync {
     /// Execute the program
     fn execute(
         &self,
