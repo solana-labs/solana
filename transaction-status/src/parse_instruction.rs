@@ -74,7 +74,9 @@ pub fn parse(
     let parsed_json = match program_name {
         ParsableProgram::SplMemo => parse_memo(instruction),
         ParsableProgram::SplToken => serde_json::to_value(parse_token(instruction, account_keys)?)?,
-        ParsableProgram::BpfLoader => serde_json::to_value(parse_bpf_loader(instruction)?)?,
+        ParsableProgram::BpfLoader => {
+            serde_json::to_value(parse_bpf_loader(instruction, account_keys)?)?
+        }
     };
     Ok(ParsedInstruction {
         program: format!("{:?}", program_name).to_kebab_case(),
