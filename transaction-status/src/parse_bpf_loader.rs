@@ -9,11 +9,8 @@ pub fn parse_bpf_loader(
     instruction: &CompiledInstruction,
     account_keys: &[Pubkey],
 ) -> Result<ParsedInstructionEnum, ParseInstructionError> {
-    let bpf_loader_instruction: LoaderInstruction =
-        deserialize(&instruction.data).map_err(|err| {
-            println!("{:?}", err);
-            ParseInstructionError::InstructionNotParsable(ParsableProgram::BpfLoader)
-        })?;
+    let bpf_loader_instruction: LoaderInstruction = deserialize(&instruction.data)
+        .map_err(|err| ParseInstructionError::InstructionNotParsable(ParsableProgram::BpfLoader))?;
     if instruction.accounts.is_empty() || instruction.accounts[0] as usize >= account_keys.len() {
         return Err(ParseInstructionError::InstructionKeyMismatch(
             ParsableProgram::BpfLoader,
