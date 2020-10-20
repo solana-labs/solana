@@ -16,6 +16,7 @@ members = [
     "dos",
     "download-utils",
     "faucet",
+    "frozen-abi",
     "perf",
     "validator",
     "genesis",

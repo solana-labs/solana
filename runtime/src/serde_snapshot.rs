@@ -39,7 +39,7 @@ use {
 };
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
-use solana_sdk::abi_example::IgnoreAsHelper;
+use solana_frozen_abi::abi_example::IgnoreAsHelper;
 
 mod common;
 mod future;

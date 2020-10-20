@@ -550,7 +550,7 @@ mod tests {
         test_field2: i8,
     }
 
-    #[frozen_abi(digest = "Hv597t4PieHYvgiXnwRSpKBRTWqteUS4nHZHY6ZxX69v")]
+    #[frozen_abi(digest = "GMeECsxg37a5qznstWXeeX3d6HXs6j12oB4SKaZZuNJk")]
     #[derive(Serialize, AbiExample)]
     struct TestNest {
         nested_field: [TestStruct; 5],
@@ -573,7 +573,7 @@ mod tests {
         VARIANT2(u8, u16),
     }
 
-    #[frozen_abi(digest = "CKxzv7VjyUrNR9fGJpTpKyMBWJM4gepKshCS8oV14T1Q")]
+    #[frozen_abi(digest = "DywMfwKq8HZCbUfTwnemHWMN8LvMZCvipQuLddQ2ywwG")]
     #[derive(Serialize, AbiExample)]
     struct TestVecEnum {
         enums: Vec<TestTupleVariant>,
