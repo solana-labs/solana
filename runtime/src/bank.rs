@@ -17,7 +17,10 @@ use crate::{
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     message_processor::{Executors, MessageProcessor},
-    process_instruction::{Executor, ProcessInstruction, ProcessInstructionWithContext},
+    process_instruction::{
+        ErasedProcessInstruction, ErasedProcessInstructionWithContext, Executor,
+        ProcessInstruction, ProcessInstructionWithContext,
+    },
     rent_collector::RentCollector,
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
@@ -139,7 +142,31 @@ pub enum Entrypoint {
     Loader(ProcessInstructionWithContext),
 }
 
-#[derive(Clone)]
+impl fmt::Debug for Entrypoint {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        #[derive(Debug)]
+        enum EntrypointForDebug {
+            Program(String),
+            Loader(String),
+        }
+        // rustc doesn't compile due to bug without this work around
+        // https://github.com/rust-lang/rust/issues/50280
+        // https://users.rust-lang.org/t/display-function-pointer/17073/2
+        let entrypoint = match self {
+            Entrypoint::Program(instruction) => EntrypointForDebug::Program(format!(
+                "{:p}",
+                *instruction as ErasedProcessInstruction
+            )),
+            Entrypoint::Loader(instruction) => EntrypointForDebug::Loader(format!(
+                "{:p}",
+                *instruction as ErasedProcessInstructionWithContext
+            )),
+        };
+        write!(f, "{:?}", entrypoint)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Builtin {
     pub name: String,
     pub id: Pubkey,
@@ -156,7 +183,7 @@ impl Builtin {
 }
 
 /// Copy-on-write holder of CachedExecutors
-#[derive(AbiExample, Default)]
+#[derive(AbiExample, Debug, Default)]
 struct CowCachedExecutors {
     shared: bool,
     executors: Arc<RwLock<CachedExecutors>>,
@@ -200,7 +227,7 @@ impl AbiExample for Builtin {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Builtins {
     /// Builtin programs that are always available
     pub genesis_builtins: Vec<Builtin>,
@@ -212,6 +239,7 @@ pub struct Builtins {
 const MAX_CACHED_EXECUTORS: usize = 100; // 10 MB assuming programs are around 100k
 
 /// LFU Cache of executors
+#[derive(Debug)]
 struct CachedExecutors {
     max: usize,
     executors: HashMap<Pubkey, (AtomicU64, Arc<dyn Executor>)>,
@@ -289,7 +317,7 @@ impl CachedExecutors {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct BankRc {
     /// where all the Accounts are stored
     pub accounts: Arc<Accounts>,
@@ -330,7 +358,7 @@ impl BankRc {
     }
 }
 
-#[derive(Default, AbiExample)]
+#[derive(Default, Debug, AbiExample)]
 pub struct StatusCacheRc {
     /// where all the Accounts are stored
     /// A cache of signature statuses
@@ -411,7 +439,7 @@ impl HashAgeKind {
 // Bank's common fields shared by all supported snapshot versions for deserialization.
 // Sync fields with BankFieldsToSerialize! This is paired with it.
 // All members are made public to remain Bank's members private and to make versioned deserializer workable on this
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct BankFieldsToDeserialize {
     pub(crate) blockhash_queue: BlockhashQueue,
     pub(crate) ancestors: Ancestors,
@@ -558,7 +586,7 @@ pub struct RewardInfo {
 /// Manager for the state of all accounts and programs after processing its entries.
 /// AbiExample is needed even without Serialize/Deserialize; actual (de-)serialization
 /// are implemented elsewhere for versioning
-#[derive(AbiExample, Default)]
+#[derive(AbiExample, Debug, Default)]
 pub struct Bank {
     /// References to accounts, parent and signature status
     pub rc: BankRc,
@@ -9319,6 +9347,7 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
     struct TestExecutor {}
     impl Executor for TestExecutor {
         fn execute(
@@ -9971,5 +10000,35 @@ mod tests {
                 InstructionError::Custom(NativeLoaderError::InvalidAccountData as u32)
             ))
         );
+    }
+
+    #[test]
+    fn test_debug_bank() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(50000);
+        let mut bank = Bank::new(&genesis_config);
+        bank.finish_init(&genesis_config, None);
+        let debug = format!("{:#?}", bank);
+        assert!(!debug.is_empty());
+    }
+
+    #[test]
+    fn test_debug_entrypoint() {
+        fn mock_process_instruction(
+            _program_id: &Pubkey,
+            _keyed_accounts: &[KeyedAccount],
+            _data: &[u8],
+        ) -> std::result::Result<(), InstructionError> {
+            Ok(())
+        }
+        fn mock_ix_processor(
+            _pubkey: &Pubkey,
+            _ka: &[KeyedAccount],
+            _data: &[u8],
+            _context: &mut dyn InvokeContext,
+        ) -> std::result::Result<(), InstructionError> {
+            Ok(())
+        }
+        assert!(!format!("{:?}", Entrypoint::Program(mock_process_instruction)).is_empty());
+        assert!(!format!("{:?}", Entrypoint::Loader(mock_ix_processor)).is_empty());
     }
 }
