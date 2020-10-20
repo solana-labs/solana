@@ -1,6 +1,6 @@
 use super::common::UnusedAccounts;
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
-use solana_sdk::abi_example::IgnoreAsHelper;
+use solana_frozen_abi::abi_example::IgnoreAsHelper;
 use {super::*, solana_measure::measure::Measure, std::cell::RefCell};
 
 type AccountsDbFields = super::AccountsDbFields<SerializableAccountStorageEntry>;
@@ -13,7 +13,7 @@ pub(super) struct SerializableAccountStorageEntry {
 }
 
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
-impl solana_sdk::abi_example::IgnoreAsHelper for SerializableAccountStorageEntry {}
+impl solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableAccountStorageEntry {}
 
 impl From<&AccountStorageEntry> for SerializableAccountStorageEntry {
     fn from(rhs: &AccountStorageEntry) -> Self {

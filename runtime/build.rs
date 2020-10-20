@@ -1,1 +1,1 @@
-../sdk/build.rs
+../frozen-abi/build.rs

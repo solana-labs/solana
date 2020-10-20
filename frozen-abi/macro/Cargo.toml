@@ -1,7 +1,7 @@
 [package]
-name = "solana-sdk-macro-frozen-abi"
+name = "solana-frozen-abi-macro"
 version = "1.5.0"
-description = "Solana SDK Macro frozen abi"
+description = "Solana Frozen ABI Macro"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 homepage = "https://solana.com/"

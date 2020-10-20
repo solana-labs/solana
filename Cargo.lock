@@ -3753,6 +3753,8 @@ dependencies = [
  "solana-clap-utils",
  "solana-client",
  "solana-faucet",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
  "solana-ledger",
  "solana-logger 1.5.0",
  "solana-measure",
@@ -3763,7 +3765,6 @@ dependencies = [
  "solana-rayon-threadlimit",
  "solana-runtime",
  "solana-sdk 1.5.0",
- "solana-sdk-macro-frozen-abi 1.5.0",
  "solana-stake-program",
  "solana-storage-bigtable",
  "solana-streamer",
@@ -3906,6 +3907,35 @@ dependencies = [
  "solana-version",
  "tokio 0.1.22",
  "tokio-codec",
+]
+
+[[package]]
+name = "solana-frozen-abi"
+version = "1.5.0"
+dependencies = [
+ "bs58",
+ "bv",
+ "generic-array 0.14.3",
+ "log 0.4.8",
+ "memmap",
+ "rustc_version",
+ "serde",
+ "serde_derive",
+ "sha2",
+ "solana-frozen-abi-macro",
+ "solana-logger 1.5.0",
+ "thiserror",
+]
+
+[[package]]
+name = "solana-frozen-abi-macro"
+version = "1.5.0"
+dependencies = [
+ "lazy_static",
+ "proc-macro2 1.0.19",
+ "quote 1.0.6",
+ "rustc_version",
+ "syn 1.0.27",
 ]
 
 [[package]]
@@ -4356,13 +4386,14 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-config-program",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
  "solana-logger 1.5.0",
  "solana-measure",
  "solana-metrics",
  "solana-noop-program",
  "solana-rayon-threadlimit",
  "solana-sdk 1.5.0",
- "solana-sdk-macro-frozen-abi 1.5.0",
  "solana-secp256k1-program",
  "solana-stake-program",
  "solana-vote-program",
@@ -4419,7 +4450,7 @@ dependencies = [
  "solana-crate-features 1.4.0",
  "solana-logger 1.4.0",
  "solana-sdk-macro 1.4.0",
- "solana-sdk-macro-frozen-abi 1.4.0",
+ "solana-sdk-macro-frozen-abi",
  "thiserror",
 ]
 
@@ -4458,9 +4489,10 @@ dependencies = [
  "sha2",
  "sha3",
  "solana-crate-features 1.5.0",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
  "solana-logger 1.5.0",
  "solana-sdk-macro 1.5.0",
- "solana-sdk-macro-frozen-abi 1.5.0",
  "thiserror",
  "tiny-bip39",
 ]
@@ -4494,17 +4526,6 @@ name = "solana-sdk-macro-frozen-abi"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef03519deb55e8cb33aa7be941a13e59de0e437f3a5ce9118c71d96556e5293f"
-dependencies = [
- "lazy_static",
- "proc-macro2 1.0.19",
- "quote 1.0.6",
- "rustc_version",
- "syn 1.0.27",
-]
-
-[[package]]
-name = "solana-sdk-macro-frozen-abi"
-version = "1.5.0"
 dependencies = [
  "lazy_static",
  "proc-macro2 1.0.19",
@@ -4596,10 +4617,11 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-config-program",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
  "solana-logger 1.5.0",
  "solana-metrics",
  "solana-sdk 1.5.0",
- "solana-sdk-macro-frozen-abi 1.5.0",
  "solana-vote-program",
  "thiserror",
 ]
@@ -4769,10 +4791,11 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
  "solana-logger 1.5.0",
  "solana-runtime",
  "solana-sdk 1.5.0",
- "solana-sdk-macro-frozen-abi 1.5.0",
 ]
 
 [[package]]
@@ -4802,10 +4825,11 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
  "solana-logger 1.5.0",
  "solana-metrics",
  "solana-sdk 1.5.0",
- "solana-sdk-macro-frozen-abi 1.5.0",
  "thiserror",
 ]
 

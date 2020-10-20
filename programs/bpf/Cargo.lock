@@ -2018,6 +2018,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-frozen-abi"
+version = "1.5.0"
+dependencies = [
+ "bs58",
+ "bv",
+ "generic-array 0.14.3",
+ "log",
+ "memmap",
+ "rustc_version",
+ "serde",
+ "serde_derive",
+ "sha2",
+ "solana-frozen-abi-macro",
+ "solana-logger",
+ "thiserror",
+]
+
+[[package]]
+name = "solana-frozen-abi-macro"
+version = "1.5.0"
+dependencies = [
+ "lazy_static",
+ "proc-macro2 1.0.19",
+ "quote 1.0.6",
+ "rustc_version",
+ "syn 1.0.27",
+]
+
+[[package]]
 name = "solana-logger"
 version = "1.5.0"
 dependencies = [
@@ -2088,12 +2117,13 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-config-program",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
  "solana-logger",
  "solana-measure",
  "solana-metrics",
  "solana-rayon-threadlimit",
  "solana-sdk",
- "solana-sdk-macro-frozen-abi",
  "solana-secp256k1-program",
  "solana-stake-program",
  "solana-vote-program",
@@ -2139,9 +2169,10 @@ dependencies = [
  "sha2",
  "sha3",
  "solana-crate-features",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
  "solana-logger",
  "solana-sdk-macro",
- "solana-sdk-macro-frozen-abi",
  "thiserror",
 ]
 
@@ -2153,17 +2184,6 @@ dependencies = [
  "proc-macro2 1.0.19",
  "quote 1.0.6",
  "rustversion",
- "syn 1.0.27",
-]
-
-[[package]]
-name = "solana-sdk-macro-frozen-abi"
-version = "1.5.0"
-dependencies = [
- "lazy_static",
- "proc-macro2 1.0.19",
- "quote 1.0.6",
- "rustc_version",
  "syn 1.0.27",
 ]
 
@@ -2192,9 +2212,10 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-config-program",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
  "solana-metrics",
  "solana-sdk",
- "solana-sdk-macro-frozen-abi",
  "solana-vote-program",
  "thiserror",
 ]
@@ -2210,10 +2231,11 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
  "solana-logger",
  "solana-metrics",
  "solana-sdk",
- "solana-sdk-macro-frozen-abi",
  "thiserror",
 ]
 
