@@ -44,7 +44,15 @@ Customize `--ledger` to your desired ledger storage location, and `--rpc-port` t
 The `--entrypoint` and `--expected-genesis-hash` parameters are all specific to the cluster you are joining.
 [Current parameters for Mainnet Beta](../clusters.md#example-solana-validator-command-line-2)
 
-The `--limit-ledger-size` parameter allows you to specify how many ledger [shreds](../terminology.md#shred) your node retains on disk. If you do not include this parameter, the validator will keep the entire ledger until it runs out of disk space. The default value is good for at least a couple days but larger values may be used by adding an argument to `--limit-ledger-size` if desired. Check `solana-validator --help` for the default limit value used by `--limit-ledger-size`
+The `--limit-ledger-size` parameter allows you to specify how many ledger
+[shreds](../terminology.md#shred) your node retains on disk. If you do not
+include this parameter, the validator will keep the entire ledger until it runs
+out of disk space.  The default value attempts to keep the ledger disk usage
+under 500GB.  More or less disk usage may be requested by adding an argument to
+`--limit-ledger-size` if desired. Check `solana-validator --help` for the
+default limit value used by `--limit-ledger-size`.  More information about
+selecting a custom limit value is [available
+here](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
 
 Specifying one or more `--trusted-validator` parameters can protect you from booting from a malicious snapshot. [More on the value of booting with trusted validators](../running-validator/validator-start.md#trusted-validators)
 
