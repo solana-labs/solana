@@ -130,9 +130,8 @@ impl AccountStorage {
         slot: Slot,
         store_id: AppendVecId,
     ) -> Option<Arc<AccountStorageEntry>> {
-        self.0
-            .get(&slot)
-            .and_then(|storage_map| storage_map.value().read().unwrap().get(&store_id).cloned())
+        self.get_slot_stores(slot)
+            .and_then(|storage_map| storage_map.read().unwrap().get(&store_id).cloned())
     }
 
     fn get_slot_stores(&self, slot: Slot) -> Option<SlotStores> {
@@ -448,6 +447,7 @@ struct AccountsStats {
     delta_hash_num: AtomicU64,
 
     last_store_report: AtomicU64,
+    get_slot_stores: AtomicU64,
     store_hash_accounts: AtomicU64,
     store_accounts: AtomicU64,
     store_update_index: AtomicU64,
@@ -1364,7 +1364,12 @@ impl AccountsDB {
 
     fn find_storage_candidate(&self, slot: Slot) -> Arc<AccountStorageEntry> {
         let mut create_extra = false;
+        let mut get_slot_stores = Measure::start("get_slot_stores");
         let slot_stores_lock = self.storage.get_slot_stores(slot);
+        get_slot_stores.stop();
+        self.stats
+            .get_slot_stores
+            .fetch_add(get_slot_stores.as_us(), Ordering::Relaxed);
         if let Some(slot_stores_lock) = slot_stores_lock {
             let slot_stores = slot_stores_lock.read().unwrap();
             if !slot_stores.is_empty() {
@@ -1410,12 +1415,18 @@ impl AccountsDB {
         let store =
             Arc::new(self.new_storage_entry(slot, &Path::new(&self.paths[path_index]), size));
         let store_for_index = store.clone();
-        let slot_storage = self
-            .storage
-            .0
-            .entry(slot)
-            .or_insert(Arc::new(RwLock::new(HashMap::new())));
-        slot_storage
+        let mut slot_storages = self.storage.get_slot_stores(slot);
+        if slot_storages.is_none() {
+            slot_storages = Some(
+                self.storage
+                    .0
+                    .entry(slot)
+                    .or_insert(Arc::new(RwLock::new(HashMap::new())))
+                    .clone(),
+            );
+        }
+        slot_storages
+            .unwrap()
             .write()
             .unwrap()
             .insert(store.id, store_for_index);
@@ -1851,6 +1862,14 @@ impl AccountsDB {
                 self.stats
                     .delta_hash_accumulate_time_total_us
                     .swap(0, Ordering::Relaxed),
+                i64
+            ),
+        );
+        datapoint_info!(
+            "accounts_db_store_timings2",
+            (
+                "get_slot_stores",
+                self.stats.get_slot_stores.swap(0, Ordering::Relaxed),
                 i64
             ),
         );
