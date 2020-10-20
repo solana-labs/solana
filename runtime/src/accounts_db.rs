@@ -1409,18 +1409,23 @@ impl AccountsDB {
         let store =
             Arc::new(self.new_storage_entry(slot, &Path::new(&self.paths[path_index]), size));
         let store_for_index = store.clone();
-        let mut slot_storages = self.storage.get_slot_stores(slot);
-        if slot_storages.is_none() {
-            slot_storages = Some(
-                self.storage
-                    .0
-                    .entry(slot)
-                    .or_insert(Arc::new(RwLock::new(HashMap::new())))
-                    .clone(),
-            );
-        }
+
+        let slot_storages: SlotStores = self
+            .storage
+            .get_slot_stores(slot)
+            .or_else(||
+            // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
+            // which is dropped after this block ends, minimizing time held by the lock.
+            // However, we still want to persist the reference to the `SlotStores` behind
+            // the lock, hence we clone it out, (`SlotStores` is an Arc so is cheap to clone).
+            Some(self.storage
+                .0
+                .entry(slot)
+                .or_insert(Arc::new(RwLock::new(HashMap::new())))
+                .clone()))
+            .unwrap();
+
         slot_storages
-            .unwrap()
             .write()
             .unwrap()
             .insert(store.id, store_for_index);

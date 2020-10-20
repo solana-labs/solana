@@ -12,8 +12,12 @@ use solana_sdk::{
     genesis_config::{create_genesis_config, ClusterType},
     pubkey::Pubkey,
 };
-use std::sync::RwLock;
-use std::{collections::HashMap, path::PathBuf, sync::Arc, thread::Builder};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, RwLock},
+    thread::Builder,
+};
 use test::Bencher;
 
 fn deposit_many(bank: &Bank, pubkeys: &mut Vec<Pubkey>, num: usize) {
