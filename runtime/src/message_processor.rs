@@ -1679,7 +1679,7 @@ mod tests {
             _ka: &[KeyedAccount],
             _data: &[u8],
             _context: &mut dyn InvokeContext,
-        ) -> std::result::Result<(), InstructionError> {
+        ) -> Result<(), InstructionError> {
             Ok(())
         }
         let program_id = Pubkey::new_rand();
