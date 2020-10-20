@@ -170,7 +170,7 @@ pub fn create_account(lamports: u64) -> RefCell<account::Account> {
 }
 
 /// Convenience function for working with keyed accounts in tests
-#[cfg(not(feature = "program"))]
+#[cfg(feature = "everything")]
 pub fn with_test_keyed_account<F>(lamports: u64, signer: bool, f: F)
 where
     F: Fn(&KeyedAccount),

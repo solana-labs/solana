@@ -5,7 +5,7 @@ use thiserror::Error;
 
 #[cfg(feature = "program")]
 use crate::info;
-#[cfg(not(feature = "program"))]
+#[cfg(all(feature = "everything", not(feature = "program")))]
 use log::info;
 
 /// Reasons the program may fail

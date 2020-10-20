@@ -213,9 +213,9 @@ atomic_example_impls! { AtomicI64 }
 atomic_example_impls! { AtomicIsize }
 atomic_example_impls! { AtomicBool }
 
-#[cfg(not(feature = "program"))]
+#[cfg(feature = "everything")]
 use generic_array::{ArrayLength, GenericArray};
-#[cfg(not(feature = "program"))]
+#[cfg(feature = "everything")]
 impl<T: Default, U: ArrayLength<T>> AbiExample for GenericArray<T, U> {
     fn example() -> Self {
         Self::default()
@@ -413,14 +413,14 @@ impl<T: std::cmp::Ord + AbiExample> AbiExample for BTreeSet<T> {
     }
 }
 
-#[cfg(not(feature = "program"))]
+#[cfg(feature = "everything")]
 impl AbiExample for memmap::MmapMut {
     fn example() -> Self {
         memmap::MmapMut::map_anon(1).expect("failed to map the data file")
     }
 }
 
-#[cfg(not(feature = "program"))]
+#[cfg(feature = "everything")]
 impl AbiExample for std::path::PathBuf {
     fn example() -> Self {
         std::path::PathBuf::from(String::example())
