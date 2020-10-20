@@ -45,13 +45,8 @@ export function dashboardInfoReducer(
   state: DashboardInfo,
   action: DashboardInfoAction
 ) {
-  const status =
-    state.avgSlotTime_1h !== 0 && state.epochInfo.absoluteSlot !== 0
-      ? ClusterStatsStatus.Ready
-      : ClusterStatsStatus.Loading;
-
   switch (action.type) {
-    case DashboardInfoActionType.SetPerfSamples:
+    case DashboardInfoActionType.SetPerfSamples: {
       if (action.data.length < 1) {
         return state;
       }
@@ -68,27 +63,43 @@ export function dashboardInfoReducer(
           return sum + cur;
         }, 0) / samplesInHour;
 
+      const status =
+        state.epochInfo.absoluteSlot !== 0
+          ? ClusterStatsStatus.Ready
+          : ClusterStatsStatus.Loading;
+
       return {
         ...state,
         avgSlotTime_1h,
         avgSlotTime_1min: samples[0],
         status,
       };
-    case DashboardInfoActionType.SetEpochInfo:
+    }
+
+    case DashboardInfoActionType.SetEpochInfo: {
+      const status =
+        state.avgSlotTime_1h !== 0
+          ? ClusterStatsStatus.Ready
+          : ClusterStatsStatus.Loading;
+
       return {
         ...state,
         epochInfo: action.data,
         status,
       };
+    }
+
     case DashboardInfoActionType.SetError:
       return {
         ...state,
         status: ClusterStatsStatus.Error,
       };
+
     case DashboardInfoActionType.Reset:
       return {
         ...action.data,
       };
+
     default:
       return state;
   }

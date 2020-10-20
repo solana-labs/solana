@@ -50,13 +50,8 @@ export function performanceInfoReducer(
   state: PerformanceInfo,
   action: PerformanceInfoAction
 ) {
-  const status =
-    state.avgTps !== 0 && state.transactionCount !== 0
-      ? ClusterStatsStatus.Ready
-      : ClusterStatsStatus.Loading;
-
   switch (action.type) {
-    case PerformanceInfoActionType.SetPerfSamples:
+    case PerformanceInfoActionType.SetPerfSamples: {
       if (action.data.length < 1) {
         return state;
       }
@@ -81,6 +76,11 @@ export function performanceInfoReducer(
         Math.max(...perfHistory.long)
       );
 
+      const status =
+        state.transactionCount !== 0
+          ? ClusterStatsStatus.Ready
+          : ClusterStatsStatus.Loading;
+
       return {
         ...state,
         historyMaxTps,
@@ -88,21 +88,32 @@ export function performanceInfoReducer(
         perfHistory,
         status,
       };
-    case PerformanceInfoActionType.SetTransactionCount:
+    }
+
+    case PerformanceInfoActionType.SetTransactionCount: {
+      const status =
+        state.avgTps !== 0
+          ? ClusterStatsStatus.Ready
+          : ClusterStatsStatus.Loading;
+
       return {
         ...state,
         transactionCount: action.data,
         status,
       };
+    }
+
     case PerformanceInfoActionType.SetError:
       return {
         ...state,
         status: ClusterStatsStatus.Error,
       };
+
     case PerformanceInfoActionType.Reset:
       return {
         ...action.data,
       };
+
     default:
       return state;
   }
