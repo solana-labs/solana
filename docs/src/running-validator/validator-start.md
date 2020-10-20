@@ -284,10 +284,17 @@ example, `solana-validator --dynamic-port-range 11000-11010 ...` will restrict
 the validator to ports 11000-11010.
 
 ### Limiting ledger size to conserve disk space
+The `--limit-ledger-size` parameter allows you to specify how many ledger
+[shreds](../terminology.md#shred) your node retains on disk. If you do not
+include this parameter, the validator will keep the entire ledger until it runs
+out of disk space.
 
-The `--limit-ledger-size` argument will instruct the validator to only retain the
-last couple hours of ledger. To retain the full ledger, simply remove that arg.
-
+The default value attempts to keep the ledger disk usage under 500GB.  More or
+less disk usage may be requested by adding an argument to `--limit-ledger-size`
+if desired. Check `solana-validator --help` for the default limit value used by
+`--limit-ledger-size`.  More information about
+selecting a custom limit value is [available
+here](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
 
 ### Systemd Unit
 Running the validator as a systemd unit is one easy way to manage running in the
