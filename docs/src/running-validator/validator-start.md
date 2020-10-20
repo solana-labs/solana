@@ -150,7 +150,7 @@ See [Paper Wallet Usage](../paper-wallet/paper-wallet-usage.md) for more info.
 You can generate a custom vanity keypair using solana-keygen. For instance:
 
 ```bash
-solana-keygen grind --starts-with e1v1s
+solana-keygen grind --starts-with e1v1s:1
 ```
 
 Depending on the string requested, it may take days to find a match...
