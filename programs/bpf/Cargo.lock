@@ -1979,7 +1979,7 @@ dependencies = [
 
 [[package]]
 name = "solana-frozen-abi"
-version = "1.5.0"
+version = "1.4.2"
 dependencies = [
  "bs58",
  "bv",
@@ -1997,7 +1997,7 @@ dependencies = [
 
 [[package]]
 name = "solana-frozen-abi-macro"
-version = "1.5.0"
+version = "1.4.2"
 dependencies = [
  "lazy_static",
  "proc-macro2 1.0.19",
@@ -2147,20 +2147,6 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-name = "solana-sdk-macro-frozen-abi"
-version = "1.4.2"
-dependencies = [
- "lazy_static",
- "proc-macro2 1.0.19",
- "quote 1.0.6",
- "rustc_version",
- "syn 1.0.27",
-]
-
-[[package]]
-=======
->>>>>>> 6858950f7... Remove frozen ABI modules from solana-sdk
 name = "solana-secp256k1-program"
 version = "1.4.2"
 dependencies = [

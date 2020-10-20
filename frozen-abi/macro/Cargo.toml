@@ -1,13 +1,7 @@
 [package]
-<<<<<<< HEAD:sdk/macro-frozen-abi/Cargo.toml
-name = "solana-sdk-macro-frozen-abi"
-version = "1.4.2"
-description = "Solana SDK Macro frozen abi"
-=======
 name = "solana-frozen-abi-macro"
-version = "1.5.0"
+version = "1.4.2"
 description = "Solana Frozen ABI Macro"
->>>>>>> 6858950f7... Remove frozen ABI modules from solana-sdk:frozen-abi/macro/Cargo.toml
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 homepage = "https://solana.com/"
