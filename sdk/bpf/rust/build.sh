@@ -34,6 +34,10 @@ export RUSTFLAGS="
     -C link-arg=-no-threads \
     -C linker=$bpf_sdk/dependencies/llvm-native/bin/ld.lld"
 
+# CARGO may be set if build.sh is run from within cargo, causing
+# incompatibilities between cargo and xargo versions
+unset CARGO
+
 # Setup xargo
 export XARGO_HOME="$bpf_sdk/dependencies/xargo"
 export XARGO_RUST_SRC="$bpf_sdk/dependencies/rust-bpf-sysroot/src"
