@@ -72,7 +72,7 @@ pub fn verify_eth_addresses(
 
         // Parse out signature
         let signature_index = offsets.signature_instruction_index as usize;
-        if signature_index > instruction_datas.len() {
+        if signature_index >= instruction_datas.len() {
             return Err(Secp256k1Error::InvalidInstructionDataSize);
         }
         let signature_instruction = instruction_datas[signature_index];
