@@ -2,6 +2,7 @@ use crate::{
     checks::*, cluster_query::*, feature::*, inflation::*, nonce::*, spend_utils::*, stake::*,
     validator_info::*, vote::*,
 };
+use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use num_traits::FromPrimitive;
@@ -49,7 +50,7 @@ use solana_sdk::{
     loader_instruction,
     message::Message,
     pubkey::{Pubkey, MAX_SEED_LEN},
-    signature::{Keypair, Signature, Signer, SignerError},
+    signature::{keypair_from_seed, Keypair, Signature, Signer, SignerError},
     signers::Signers,
     system_instruction::{self, SystemError},
     system_program,
@@ -1132,7 +1133,48 @@ fn process_deploy(
     address: Option<SignerIndex>,
     use_deprecated_loader: bool,
 ) -> ProcessResult {
-    let new_keypair = Keypair::new(); // Create ephemeral keypair to use for program address, if not provided
+    const WORDS: usize = 12;
+    // Create ephemeral keypair to use for program address, if not provided
+    let mnemonic = Mnemonic::new(MnemonicType::for_word_count(WORDS)?, Language::English);
+    let seed = Seed::new(&mnemonic, "");
+    let new_keypair = keypair_from_seed(seed.as_bytes())?;
+
+    let result = do_process_deploy(
+        rpc_client,
+        config,
+        program_location,
+        address,
+        use_deprecated_loader,
+        new_keypair,
+    );
+
+    if result.is_err() && address.is_none() {
+        let phrase: &str = mnemonic.phrase();
+        let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
+        eprintln!(
+            "{}\nTo reuse this address, recover the ephemeral keypair file with",
+            divider
+        );
+        eprintln!(
+            "`solana-keygen recover` and the following {}-word seed phrase,",
+            WORDS
+        );
+        eprintln!(
+            "then pass it as the [ADDRESS_SIGNER] argument to `solana deploy ...`\n{}\n{}\n{}",
+            divider, phrase, divider
+        );
+    }
+    result
+}
+
+fn do_process_deploy(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    program_location: &str,
+    address: Option<SignerIndex>,
+    use_deprecated_loader: bool,
+    new_keypair: Keypair,
+) -> ProcessResult {
     let program_id = if let Some(i) = address {
         config.signers[i]
     } else {
@@ -2199,7 +2241,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("address_signer")
                         .index(2)
-                        .value_name("SIGNER_KEYPAIR")
+                        .value_name("ADDRESS_SIGNER")
                         .takes_value(true)
                         .validator(is_valid_signer)
                         .help("The signer for the desired address of the program [default: new random address]")
