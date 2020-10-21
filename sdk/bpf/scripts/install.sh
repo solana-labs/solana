@@ -84,19 +84,24 @@ clone() {
 }
 
 # Install xargo
-(
-  set -ex
-  # shellcheck disable=SC2154
-  if [[ -n $rust_stable ]]; then
-    cargo +"$rust_stable" install xargo
-  else
-    cargo install xargo
+version=0.3.22
+if [[ ! -e xargo-$version.md ]] || [[ ! -x bin/xargo ]]; then
+  (
+    args=()
+    # shellcheck disable=SC2154
+    if [[ -n $rust_stable ]]; then
+      args+=(+"$rust_stable")
+    fi
+    args+=(install xargo --version "$version" --root .)
+    set -ex
+    cargo "${args[@]}"
+    ./bin/xargo --version >xargo-$version.md 2>&1
+  )
+  exitcode=$?
+  if [[ $exitcode -ne 0 ]]; then
+    rm -rf xargo-$version.md
+    exit 1
   fi
-  xargo --version >xargo.md 2>&1
-)
-# shellcheck disable=SC2181
-if [[ $? -ne 0 ]]; then
-  exit 1
 fi
 
 # Install Criterion

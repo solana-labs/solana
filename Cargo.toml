@@ -53,6 +53,7 @@ members = [
     "ramp-tps",
     "runtime",
     "sdk",
+    "sdk/cargo-build-bpf",
     "scripts",
     "stake-accounts",
     "stake-monitor",
