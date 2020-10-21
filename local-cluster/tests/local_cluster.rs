@@ -1680,9 +1680,9 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     // Each pubkeys are prefixed with A, B, C and D.
     // D is needed to:
     // 1) Propagate A's votes for S2 to validator C after A shuts down so that
-    // C can avoid NoPropagatedConfirmation erorrs and continue to generate blocks
-    // 2) Provide gosisp discovery for `A` when it restarts because `A` will restart
-    // at a different gossip port than the entrypoint saved in C's gosisp table
+    // C can avoid NoPropagatedConfirmation errors and continue to generate blocks
+    // 2) Provide gossip discovery for `A` when it restarts because `A` will restart
+    // at a different gossip port than the entrypoint saved in C's gossip table
     let validator_keys = vec![
         "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
         "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
