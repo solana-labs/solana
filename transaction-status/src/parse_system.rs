@@ -201,7 +201,6 @@ mod test {
     use solana_sdk::{message::Message, pubkey::Pubkey, system_instruction};
 
     #[test]
-    #[allow(clippy::same_item_push)]
     fn test_parse_system_instruction() {
         let mut keys: Vec<Pubkey> = vec![];
         for _ in 0..6 {
@@ -355,7 +354,6 @@ mod test {
     }
 
     #[test]
-    #[allow(clippy::same_item_push)]
     fn test_parse_system_instruction_nonce() {
         let mut keys: Vec<Pubkey> = vec![];
         for _ in 0..5 {
