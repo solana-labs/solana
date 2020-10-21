@@ -263,19 +263,21 @@ export function useMintAccountInfo(
   address: string | undefined
 ): MintAccountInfo | undefined {
   const accountInfo = useAccountInfo(address);
-  if (address === undefined) return;
+  return React.useMemo(() => {
+    if (address === undefined) return;
 
-  try {
-    const data = accountInfo?.data?.details?.data;
-    if (!data) return;
-    if (data.program !== "spl-token" || data.parsed.type !== "mint") {
-      throw new Error("Expected mint");
+    try {
+      const data = accountInfo?.data?.details?.data;
+      if (!data) return;
+      if (data.program !== "spl-token" || data.parsed.type !== "mint") {
+        throw new Error("Expected mint");
+      }
+
+      return coerce(data.parsed.info, MintAccountInfo);
+    } catch (err) {
+      reportError(err, { address });
     }
-
-    return coerce(data.parsed.info, MintAccountInfo);
-  } catch (err) {
-    reportError(err, { address });
-  }
+  }, [address, accountInfo]);
 }
 
 export function useTokenAccountInfo(
