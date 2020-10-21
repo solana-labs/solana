@@ -6,6 +6,8 @@ extern crate serde_derive;
 pub mod parse_accounts;
 pub mod parse_bpf_loader;
 pub mod parse_instruction;
+pub mod parse_stake;
+pub mod parse_system;
 pub mod parse_token;
 
 use crate::{
