@@ -12,4 +12,4 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
 }
 
 #[macro_use]
-extern crate solana_sdk_macro_frozen_abi;
+extern crate solana_frozen_abi_macro;

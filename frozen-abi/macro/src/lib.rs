@@ -167,7 +167,7 @@ fn derive_abi_sample_enum_type(input: ItemEnum) -> TokenStream {
         #injection
         #[automatically_derived]
         #( #attrs )*
-        impl #impl_generics ::solana_sdk::abi_example::AbiExample for #type_name #ty_generics #where_clause {
+        impl #impl_generics ::solana_frozen_abi::abi_example::AbiExample for #type_name #ty_generics #where_clause {
             fn example() -> Self {
                 ::log::info!(
                     "AbiExample for enum: {}",
@@ -221,13 +221,13 @@ fn derive_abi_sample_struct_type(input: ItemStruct) -> TokenStream {
         #injection
         #[automatically_derived]
         #( #attrs )*
-        impl #impl_generics ::solana_sdk::abi_example::AbiExample for #type_name #ty_generics #where_clause {
+        impl #impl_generics ::solana_frozen_abi::abi_example::AbiExample for #type_name #ty_generics #where_clause {
             fn example() -> Self {
                 ::log::info!(
                     "AbiExample for struct: {}",
                     std::any::type_name::<#type_name #ty_generics>()
                 );
-                use ::solana_sdk::abi_example::AbiExample;
+                use ::solana_frozen_abi::abi_example::AbiExample;
 
                 #type_name #turbofish #sample_fields
             }
@@ -272,11 +272,11 @@ fn do_derive_abi_enum_visitor(input: ItemEnum) -> TokenStream {
 
     let type_str = format!("{}", type_name);
     (quote! {
-        impl #impl_generics ::solana_sdk::abi_example::AbiEnumVisitor for #type_name #ty_generics #where_clause {
-            fn visit_for_abi(&self, digester: &mut ::solana_sdk::abi_digester::AbiDigester) -> ::solana_sdk::abi_digester::DigestResult {
+        impl #impl_generics ::solana_frozen_abi::abi_example::AbiEnumVisitor for #type_name #ty_generics #where_clause {
+            fn visit_for_abi(&self, digester: &mut ::solana_frozen_abi::abi_digester::AbiDigester) -> ::solana_frozen_abi::abi_digester::DigestResult {
                 let enum_name = #type_str;
                 use ::serde::ser::Serialize;
-                use ::solana_sdk::abi_example::AbiExample;
+                use ::solana_frozen_abi::abi_example::AbiExample;
                 digester.update_with_string(format!("enum {} (variants = {})", enum_name, #variant_count));
                 #serialized_variants
                 Ok(digester.create_child())
@@ -310,12 +310,12 @@ fn quote_for_test(
         #[cfg(test)]
         mod #test_mod_ident {
             use super::*;
-            use ::solana_sdk::abi_example::{AbiExample, AbiEnumVisitor};
+            use ::solana_frozen_abi::abi_example::{AbiExample, AbiEnumVisitor};
 
             #[test]
             fn test_abi_digest() {
                 ::solana_logger::setup();
-                let mut digester = ::solana_sdk::abi_digester::AbiDigester::create();
+                let mut digester = ::solana_frozen_abi::abi_digester::AbiDigester::create();
                 let example = <#type_name>::example();
                 let result = <_>::visit_for_abi(&&example, &mut digester);
                 let mut hash = digester.finalize();

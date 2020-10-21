@@ -330,7 +330,7 @@ pub struct BankRc {
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
-use solana_sdk::abi_example::AbiExample;
+use solana_frozen_abi::abi_example::AbiExample;
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for BankRc {
     fn example() -> Self {

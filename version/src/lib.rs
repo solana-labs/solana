@@ -5,7 +5,7 @@ use serde_derive::{Deserialize, Serialize};
 use solana_sdk::sanitize::Sanitize;
 use std::{convert::TryInto, fmt};
 #[macro_use]
-extern crate solana_sdk_macro_frozen_abi;
+extern crate solana_frozen_abi_macro;
 
 // Older version structure used earlier 1.3.x releases
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
