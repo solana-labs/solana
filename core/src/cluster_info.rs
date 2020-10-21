@@ -2173,24 +2173,15 @@ impl ClusterInfo {
     where
         I: IntoIterator<Item = (Ping, SocketAddr)>,
     {
-        let mut verify_failed = 0;
         let packets: Vec<_> = pings
             .into_iter()
             .filter_map(|(ping, addr)| {
-                if ping.verify() {
-                    let pong = Pong::new(&ping, &self.keypair).ok()?;
-                    let pong = Protocol::PongMessage(pong);
-                    let packet = Packet::from_data(&addr, pong);
-                    Some(packet)
-                } else {
-                    verify_failed += 1;
-                    None
-                }
+                let pong = Pong::new(&ping, &self.keypair).ok()?;
+                let pong = Protocol::PongMessage(pong);
+                let packet = Packet::from_data(&addr, pong);
+                Some(packet)
             })
             .collect();
-        if verify_failed != 0 {
-            inc_new_counter_info!("cluster_info-gossip_ping_msg_verify_fail", verify_failed);
-        }
         if packets.is_empty() {
             None
         } else {
@@ -2206,17 +2197,9 @@ impl ClusterInfo {
     {
         let mut pongs = pongs.into_iter().peekable();
         if pongs.peek().is_some() {
-            let mut verify_failed = 0;
             let mut ping_cache = self.ping_cache.write().unwrap();
             for (pong, addr) in pongs {
-                if pong.verify() {
-                    ping_cache.add(&pong, addr, now);
-                } else {
-                    verify_failed += 1;
-                }
-            }
-            if verify_failed != 0 {
-                inc_new_counter_info!("cluster_info-gossip_pong_msg_verify_fail", verify_failed);
+                ping_cache.add(&pong, addr, now);
             }
         }
     }
