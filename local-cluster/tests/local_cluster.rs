@@ -1821,12 +1821,10 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
                 None,
             )
             .unwrap();
-            let ancestors = AncestorIterator::new(last_vote, &blockstore);
-            for a in ancestors {
-                if votes_on_c_fork.contains(&a) {
-                    bad_vote_detected = true;
-                    break;
-                }
+            let mut ancestors = AncestorIterator::new(last_vote, &blockstore);
+            if ancestors.any(|a| votes_on_c_fork.contains(&a)) {
+                bad_vote_detected = true;
+                break;
             }
         }
     }
