@@ -4018,6 +4018,7 @@ dependencies = [
  "futures 0.3.5",
  "futures-util",
  "histogram",
+ "itertools 0.9.0",
  "log 0.4.8",
  "regex",
  "serde_json",
