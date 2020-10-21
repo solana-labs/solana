@@ -230,7 +230,7 @@ fn active_stake_by_feature_set(rpc_client: &RpcClient) -> Result<HashMap<u32, u6
 }
 
 // Feature activation is only allowed when 95% of the active stake is on the current feature set
-fn feature_activation_allowed(rpc_client: &RpcClient) -> Result<bool, ClientError> {
+fn feature_activation_allowed(rpc_client: &RpcClient, quiet: bool) -> Result<bool, ClientError> {
     let my_feature_set = solana_version::Version::default().feature_set;
 
     let active_stake_by_feature_set = active_stake_by_feature_set(rpc_client)?;
@@ -240,8 +240,8 @@ fn feature_activation_allowed(rpc_client: &RpcClient) -> Result<bool, ClientErro
         .map(|percentage| *percentage >= 95)
         .unwrap_or(false);
 
-    if !feature_activation_allowed {
-        println!("\n{}", style("Stake By Feature Set:").bold());
+    if !feature_activation_allowed && !quiet {
+        println!("{}", style("Stake By Feature Set:").bold());
         for (feature_set, percentage) in active_stake_by_feature_set.iter() {
             if *feature_set == 0 {
                 println!("unknown - {}%", percentage);
@@ -258,6 +258,7 @@ fn feature_activation_allowed(rpc_client: &RpcClient) -> Result<bool, ClientErro
                 );
             }
         }
+        println!();
     }
 
     Ok(feature_activation_allowed)
@@ -299,9 +300,10 @@ fn process_status(
         });
     }
 
+    let feature_activation_allowed = feature_activation_allowed(rpc_client, features.len() <= 1)?;
     let feature_set = CliFeatures {
         features,
-        feature_activation_allowed: feature_activation_allowed(rpc_client)?,
+        feature_activation_allowed,
         inactive,
     };
     Ok(config.output_format.formatted_string(&feature_set))
@@ -323,7 +325,7 @@ fn process_activate(
         }
     }
 
-    if !feature_activation_allowed(rpc_client)? {
+    if !feature_activation_allowed(rpc_client, false)? {
         return Err("Feature activation is not allowed at this time".into());
     }
 
