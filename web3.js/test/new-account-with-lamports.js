@@ -30,7 +30,7 @@ export async function newAccountWithLamports(
     account.publicKey,
     lamports,
   );
-  await connection.confirmTransaction(signature, 'single');
+  await connection.confirmTransaction(signature, 'singleGossip');
 
   return account;
 }
