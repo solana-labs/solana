@@ -1214,7 +1214,7 @@ fn main() {
                     .long("batch-size")
                     .value_name("NUM")
                     .takes_value(true)
-                    .default_value("10_000")
+                    .default_value("1_000")
                     .help("Removes at most BATCH_SIZE slots while purging in loop"),
             )
             .arg(
