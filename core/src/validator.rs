@@ -744,7 +744,7 @@ fn post_process_restored_tower(
                 error!("Requested mandatory tower restore failed: {}", err);
                 error!(
                     "And there is an existing vote_account containing actual votes. \
-                       Aborting due to possible conflicting duplicate votes"
+                     Aborting due to possible conflicting duplicate votes",
                 );
                 process::exit(1);
             }

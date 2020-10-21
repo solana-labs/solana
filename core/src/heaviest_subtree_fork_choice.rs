@@ -498,7 +498,7 @@ impl HeaviestSubtreeForkChoice {
                 let heaviest_slot_on_same_voted_fork = self.best_slot(last_voted_slot);
                 if heaviest_slot_on_same_voted_fork.is_none() {
                     if !tower.is_stray_last_vote() {
-                        // Unless last vote is stray, self.bast_slot(last_voted_slot) must return
+                        // Unless last vote is stray and stale, self.bast_slot(last_voted_slot) must return
                         // Some(_), justifying to panic! here.
                         // Also, adjust_lockouts_after_replay() correctly makes last_voted_slot None,
                         // if all saved votes are ancestors of replayed_root_slot. So this code shouldn't be
@@ -507,12 +507,12 @@ impl HeaviestSubtreeForkChoice {
                         // validator has been running, so we must be able to fetch best_slots for all of
                         // them.
                         panic!(
-                            "a bank at last_voted_slot({}) is a frozen bank so must have been\
+                            "a bank at last_voted_slot({}) is a frozen bank so must have been \
                             added to heaviest_subtree_fork_choice at time of freezing",
                             last_voted_slot,
                         )
                     } else {
-                        // fork_infos doesn't have corresponding data for the stray restored last vote,
+                        // fork_infos doesn't have corresponding data for the stale stray last vote,
                         // meaning some inconsistency between saved tower and ledger.
                         // (newer snapshot, or only a saved tower is moved over to new setup?)
                         return None;
