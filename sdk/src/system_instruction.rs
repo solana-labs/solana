@@ -148,7 +148,8 @@ pub enum SystemInstruction {
     /// Change the entity authorized to execute nonce instructions on the account
     ///
     /// # Account references
-    ///   0. [WRITE, SIGNER] Nonce account
+    ///   0. [WRITE] Nonce account
+    ///   1. [SIGNER] Nonce authority
     ///
     /// The `Pubkey` parameter identifies the entity to authorize
     AuthorizeNonceAccount(Pubkey),
