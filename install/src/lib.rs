@@ -160,6 +160,11 @@ pub fn main() -> Result<(), String> {
                         .help(
                         "only display local information, don't check the cluster for new updates",
                     ),
+                )
+                .arg(
+                    Arg::with_name("eval")
+                        .long("eval")
+                        .help("display information in a format that can be used with `eval`"),
                 ),
         )
         .subcommand(
@@ -234,7 +239,8 @@ pub fn main() -> Result<(), String> {
         ("init", Some(matches)) => handle_init(&matches, &config_file),
         ("info", Some(matches)) => {
             let local_info_only = matches.is_present("local_info_only");
-            command::info(config_file, local_info_only).map(|_| ())
+            let eval = matches.is_present("eval");
+            command::info(config_file, local_info_only, eval).map(|_| ())
         }
         ("deploy", Some(matches)) => {
             let from_keypair_file = matches.value_of("from_keypair_file").unwrap();

@@ -568,8 +568,20 @@ fn release_channel_version_url(release_channel: &str) -> String {
     )
 }
 
-pub fn info(config_file: &str, local_info_only: bool) -> Result<Option<UpdateManifest>, String> {
+pub fn info(
+    config_file: &str,
+    local_info_only: bool,
+    eval: bool,
+) -> Result<Option<UpdateManifest>, String> {
     let config = Config::load(config_file)?;
+
+    if eval {
+        println!(
+            "SOLANA_INSTALL_ACTIVE_RELEASE={}",
+            &config.active_release_dir().to_str().unwrap_or("")
+        );
+        return Ok(None);
+    }
 
     println_name_value("Configuration:", &config_file);
     println_name_value(
@@ -753,7 +765,7 @@ fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(src: P, dst: Q) -> std::io::Resul
 
 pub fn update(config_file: &str) -> Result<bool, String> {
     let mut config = Config::load(config_file)?;
-    let update_manifest = info(config_file, false)?;
+    let update_manifest = info(config_file, false, false)?;
 
     let release_dir = if let Some(explicit_release) = &config.explicit_release {
         let (download_url, release_dir) = match explicit_release {
