@@ -41,12 +41,14 @@ use solana_transaction_status::{
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     net::SocketAddr,
+    sync::RwLock,
     thread::sleep,
     time::{Duration, Instant},
 };
 
 pub struct RpcClient {
     sender: Box<dyn RpcSender + Send + Sync + 'static>,
+    default_cluster_transaction_encoding: RwLock<Option<UiTransactionEncoding>>,
 }
 
 fn serialize_encode_transaction(
@@ -73,6 +75,7 @@ impl RpcClient {
     pub fn new_sender<T: RpcSender + Send + Sync + 'static>(sender: T) -> Self {
         Self {
             sender: Box::new(sender),
+            default_cluster_transaction_encoding: RwLock::new(None),
         }
     }
 
@@ -128,12 +131,41 @@ impl RpcClient {
         self.send_transaction_with_config(transaction, RpcSendTransactionConfig::default())
     }
 
+    fn default_cluster_transaction_encoding(&self) -> Result<UiTransactionEncoding, RpcError> {
+        let default_cluster_transaction_encoding =
+            self.default_cluster_transaction_encoding.read().unwrap();
+        if let Some(encoding) = *default_cluster_transaction_encoding {
+            Ok(encoding)
+        } else {
+            drop(default_cluster_transaction_encoding);
+            let cluster_version = self.get_version().map_err(|e| {
+                RpcError::RpcRequestError(format!("cluster version query failed: {}", e))
+            })?;
+            let cluster_version =
+                semver::Version::parse(&cluster_version.solana_core).map_err(|e| {
+                    RpcError::RpcRequestError(format!("failed to parse cluster version: {}", e))
+                })?;
+            // Prefer base64 since 1.3.16
+            let encoding = if cluster_version < semver::Version::new(1, 3, 16) {
+                UiTransactionEncoding::Base58
+            } else {
+                UiTransactionEncoding::Base64
+            };
+            *self.default_cluster_transaction_encoding.write().unwrap() = Some(encoding);
+            Ok(encoding)
+        }
+    }
+
     pub fn send_transaction_with_config(
         &self,
         transaction: &Transaction,
         config: RpcSendTransactionConfig,
     ) -> ClientResult<Signature> {
-        let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base64);
+        let encoding = if let Some(encoding) = config.encoding {
+            encoding
+        } else {
+            self.default_cluster_transaction_encoding()?
+        };
         let config = RpcSendTransactionConfig {
             encoding: Some(encoding),
             ..config
@@ -174,7 +206,11 @@ impl RpcClient {
         transaction: &Transaction,
         config: RpcSimulateTransactionConfig,
     ) -> RpcResult<RpcSimulateTransactionResult> {
-        let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base64);
+        let encoding = if let Some(encoding) = config.encoding {
+            encoding
+        } else {
+            self.default_cluster_transaction_encoding()?
+        };
         let config = RpcSimulateTransactionConfig {
             encoding: Some(encoding),
             ..config
