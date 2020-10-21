@@ -2,6 +2,7 @@ use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg,
     ArgMatches, SubCommand,
 };
+use itertools::Itertools;
 use log::*;
 use regex::Regex;
 use serde_json::json;
@@ -890,6 +891,11 @@ fn main() {
             .arg(&allow_dead_slots_arg)
         )
         .subcommand(
+            SubCommand::with_name("dead-slots")
+            .arg(&starting_slot_arg)
+            .about("Print all of dead slots")
+        )
+        .subcommand(
             SubCommand::with_name("set-dead-slot")
             .about("Mark one or more slots dead")
             .arg(
@@ -1204,11 +1210,26 @@ fn main() {
                     .help("Ending slot to stop purging (inclusive) [default: the highest slot in the ledger]"),
             )
             .arg(
+                Arg::with_name("batch_size")
+                    .long("batch-size")
+                    .value_name("NUM")
+                    .takes_value(true)
+                    .default_value("1000")
+                    .help("Removes at most BATCH_SIZE slots while purging in loop"),
+            )
+            .arg(
                 Arg::with_name("no_compaction")
                     .long("no-compaction")
                     .required(false)
                     .takes_value(false)
                     .help("Skip ledger compaction after purge")
+            )
+            .arg(
+                Arg::with_name("dead_slots_only")
+                    .long("dead-slots-only")
+                    .required(false)
+                    .takes_value(false)
+                    .help("Limit puring to dead slots only")
             )
         )
         .subcommand(
@@ -1444,6 +1465,17 @@ fn main() {
                 std::u64::MAX,
                 true,
             );
+        }
+        ("dead-slots", Some(arg_matches)) => {
+            let blockstore = open_blockstore(
+                &ledger_path,
+                AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
+            );
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            for slot in blockstore.dead_slots_iterator(starting_slot).unwrap() {
+                println!("{}", slot);
+            }
         }
         ("set-dead-slot", Some(arg_matches)) => {
             let slots = values_t_or_exit!(arg_matches, "slots", Slot);
@@ -2045,9 +2077,15 @@ fn main() {
         ("purge", Some(arg_matches)) => {
             let start_slot = value_t_or_exit!(arg_matches, "start_slot", Slot);
             let end_slot = value_t!(arg_matches, "end_slot", Slot).ok();
-            let no_compaction = arg_matches.is_present("no-compaction");
-            let blockstore =
-                open_blockstore(&ledger_path, AccessType::PrimaryOnly, wal_recovery_mode);
+            let no_compaction = arg_matches.is_present("no_compaction");
+            let dead_slots_only = arg_matches.is_present("dead_slots_only");
+            let batch_size = value_t_or_exit!(arg_matches, "batch_size", usize);
+            let access_type = if !no_compaction {
+                AccessType::PrimaryOnly
+            } else {
+                AccessType::PrimaryOnlyForMaintenance
+            };
+            let blockstore = open_blockstore(&ledger_path, access_type, wal_recovery_mode);
 
             let end_slot = match end_slot {
                 Some(end_slot) => end_slot,
@@ -2074,13 +2112,48 @@ fn main() {
                 );
                 exit(1);
             }
-            println!("Purging data from slots {} to {}", start_slot, end_slot);
-            if no_compaction {
-                blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
+            info!(
+                "Purging data from slots {} to {} ({} slots) (skip compaction: {}) (dead slot only: {})",
+                start_slot,
+                end_slot,
+                end_slot - start_slot,
+                no_compaction,
+                dead_slots_only,
+            );
+            let purge_from_blockstore = |start_slot, end_slot| {
+                blockstore.purge_from_next_slots(start_slot, end_slot);
+                if no_compaction {
+                    blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
+                } else {
+                    blockstore.purge_and_compact_slots(start_slot, end_slot);
+                }
+            };
+            if !dead_slots_only {
+                let slots_iter = &(start_slot..=end_slot).chunks(batch_size);
+                for slots in slots_iter {
+                    let slots = slots.collect::<Vec<_>>();
+                    assert!(!slots.is_empty());
+
+                    let start_slot = *slots.first().unwrap();
+                    let end_slot = *slots.last().unwrap();
+                    info!(
+                        "Purging chunked slots from {} to {} ({} slots)",
+                        start_slot,
+                        end_slot,
+                        end_slot - start_slot
+                    );
+                    purge_from_blockstore(start_slot, end_slot);
+                }
             } else {
-                blockstore.purge_and_compact_slots(start_slot, end_slot);
+                let dead_slots_iter = blockstore
+                    .dead_slots_iterator(start_slot)
+                    .unwrap()
+                    .take_while(|s| *s <= end_slot);
+                for dead_slot in dead_slots_iter {
+                    info!("Purging dead slot {}", dead_slot);
+                    purge_from_blockstore(dead_slot, dead_slot);
+                }
             }
-            blockstore.purge_from_next_slots(start_slot, end_slot);
         }
         ("list-roots", Some(arg_matches)) => {
             let blockstore = open_blockstore(
