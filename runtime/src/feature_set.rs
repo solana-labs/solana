@@ -130,6 +130,11 @@ impl FeatureSet {
     pub fn is_active(&self, feature_id: &Pubkey) -> bool {
         self.active.contains(feature_id)
     }
+
+    pub fn cumulative_rent_related_fixes_enabled(&self) -> bool {
+        self.is_active(&cumulative_rent_related_fixes::id())
+    }
+
     /// All features enabled, useful for testing
     pub fn all_enabled() -> Self {
         Self {
