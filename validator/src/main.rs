@@ -154,7 +154,7 @@ fn get_rpc_node(
     let mut retry_reason = None;
     loop {
         sleep(Duration::from_secs(1));
-        info!("\n{}", cluster_info.contact_info_trace());
+        info!("\n{}", cluster_info.rpc_info_trace());
 
         let shred_version = validator_config
             .expected_shred_version
@@ -1059,6 +1059,17 @@ pub fn main() {
                       --entrypoint is not provided [default: 127.0.0.1]"),
         )
         .arg(
+            Arg::with_name("gossip_rpc_addr")
+                .long("gossip-rpc-address")
+                .value_name("HOST:PORT")
+                .takes_value(true)
+                .conflicts_with("private_rpc")
+                .validator(solana_net_utils::is_host_port)
+                .help("RPC address for the node to advertise in gossip. \
+                      Useful for nodes running behind a load balancer or proxy \
+                      [default: use --rpc-bind-address / --rpc-port]"),
+        )
+        .arg(
             Arg::with_name("dynamic_port_range")
                 .long("dynamic-port-range")
                 .value_name("MIN_PORT-MAX_PORT")
@@ -1596,6 +1607,13 @@ pub fn main() {
         })
     });
 
+    let gossip_rpc_addr = matches.value_of("gossip_rpc_addr").map(|addr| {
+        solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
+            eprintln!("failed to parse gossip rpc address: {}", e);
+            exit(1);
+        })
+    });
+
     let logfile = {
         let logfile = matches
             .value_of("logfile")
@@ -1671,7 +1689,12 @@ pub fn main() {
     }
 
     if !private_rpc {
-        if let Some((rpc_addr, rpc_pubsub_addr, rpc_banks_addr)) = validator_config.rpc_addrs {
+        if let Some(gossip_rpc_addr) = gossip_rpc_addr {
+            node.info.rpc = gossip_rpc_addr;
+            node.info.rpc_pubsub = gossip_rpc_addr;
+            node.info.rpc_banks = gossip_rpc_addr;
+        } else if let Some((rpc_addr, rpc_pubsub_addr, rpc_banks_addr)) = validator_config.rpc_addrs
+        {
             node.info.rpc = SocketAddr::new(node.info.gossip.ip(), rpc_addr.port());
             node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), rpc_pubsub_addr.port());
             node.info.rpc_banks = SocketAddr::new(node.info.gossip.ip(), rpc_banks_addr.port());

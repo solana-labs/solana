@@ -1267,14 +1267,16 @@ pub fn process_show_gossip(rpc_client: &RpcClient, config: &CliConfig) -> Proces
         .into_iter()
         .map(|node| {
             format!(
-                "{:15} | {:44} | {:6} | {:5} | {:5} | {}",
+                "{:15} | {:44} | {:6} | {:5} | {:21} | {}",
                 node.gossip
                     .map(|addr| addr.ip().to_string())
                     .unwrap_or_else(|| "none".to_string()),
                 format_labeled_address(&node.pubkey, &config.address_labels),
                 format_port(node.gossip),
                 format_port(node.tpu),
-                format_port(node.rpc),
+                node.rpc
+                    .map(|addr| addr.to_string())
+                    .unwrap_or_else(|| "none".to_string()),
                 node.version.unwrap_or_else(|| "unknown".to_string()),
             )
         })
@@ -1282,9 +1284,9 @@ pub fn process_show_gossip(rpc_client: &RpcClient, config: &CliConfig) -> Proces
 
     Ok(format!(
         "IP Address      | Node identifier                              \
-         | Gossip | TPU   | RPC   | Version\n\
+         | Gossip | TPU   | RPC Address           | Version\n\
          ----------------+----------------------------------------------+\
-         --------+-------+-------+----------------\n\
+         --------+-------+-----------------------+----------------\n\
          {}\n\
          Nodes: {}",
         s.join("\n"),
