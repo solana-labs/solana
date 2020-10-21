@@ -3630,6 +3630,7 @@ dependencies = [
  "solana_rbpf",
  "tempfile",
  "thiserror",
+ "tiny-bip39",
  "url 2.1.1",
 ]
 
