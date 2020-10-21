@@ -95,6 +95,9 @@ name = "banking_stage"
 name = "blockstore"
 
 [[bench]]
+name = "crds"
+
+[[bench]]
 name = "crds_gossip_pull"
 
 [[bench]]
