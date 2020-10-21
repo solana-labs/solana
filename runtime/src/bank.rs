@@ -4021,13 +4021,8 @@ mod tests {
     use crate::{
         accounts_index::{AccountMap, Ancestors},
         genesis_utils::{
-<<<<<<< HEAD
-            create_genesis_config_with_leader, GenesisConfigInfo, BOOTSTRAP_VALIDATOR_LAMPORTS,
-=======
-            activate_all_features, create_genesis_config_with_leader,
-            create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
+            activate_all_features, create_genesis_config_with_leader, GenesisConfigInfo,
             BOOTSTRAP_VALIDATOR_LAMPORTS,
->>>>>>> 608b81b41... Port various rent fixes to runtime feature (#12842)
         },
         native_loader::NativeLoaderError,
         process_instruction::InvokeContext,
