@@ -30,7 +30,7 @@ use solana_sdk::{
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
 use thiserror::Error;
 
 solana_sdk::declare_builtin!(
@@ -214,6 +214,14 @@ impl InstructionMeter for ThisInstructionMeter {
 pub struct BPFExecutor {
     executable: Box<dyn Executable<BPFError>>,
 }
+
+// Well, implement Debug for solana_rbpf::vm::Executable in solana-rbpf...
+impl Debug for BPFExecutor {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "BPFExecutor({:p})", self)
+    }
+}
+
 impl Executor for BPFExecutor {
     fn execute(
         &self,
