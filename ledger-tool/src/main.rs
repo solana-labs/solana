@@ -1214,7 +1214,7 @@ fn main() {
                     .long("batch-size")
                     .value_name("NUM")
                     .takes_value(true)
-                    .default_value("1_000")
+                    .default_value("1000")
                     .help("Removes at most BATCH_SIZE slots while purging in loop"),
             )
             .arg(
@@ -1223,6 +1223,13 @@ fn main() {
                     .required(false)
                     .takes_value(false)
                     .help("Skip ledger compaction after purge")
+            )
+            .arg(
+                Arg::with_name("dead_slots_only")
+                    .long("dead-slots-only")
+                    .required(false)
+                    .takes_value(false)
+                    .help("Limit puring to dead slots only")
             )
         )
         .subcommand(
@@ -2070,8 +2077,9 @@ fn main() {
         ("purge", Some(arg_matches)) => {
             let start_slot = value_t_or_exit!(arg_matches, "start_slot", Slot);
             let end_slot = value_t!(arg_matches, "end_slot", Slot).ok();
-            let batch_size = value_t_or_exit!(arg_matches, "batch_size", usize);
             let no_compaction = arg_matches.is_present("no_compaction");
+            let dead_slots_only = arg_matches.is_present("dead_slots_only");
+            let batch_size = value_t_or_exit!(arg_matches, "batch_size", usize);
             let access_type = if !no_compaction {
                 AccessType::PrimaryOnly
             } else {
@@ -2105,31 +2113,46 @@ fn main() {
                 exit(1);
             }
             info!(
-                "Purging data from slots {} to {} ({} slots) (skip compaction: {})",
+                "Purging data from slots {} to {} ({} slots) (skip compaction: {}) (dead slot only: {})",
                 start_slot,
                 end_slot,
                 end_slot - start_slot,
                 no_compaction,
+                dead_slots_only,
             );
-            for slots in &(start_slot..=end_slot).chunks(batch_size) {
-                let slots = slots.collect::<Vec<_>>();
-                assert!(!slots.is_empty());
-
-                let start_slot = *slots.first().unwrap();
-                let end_slot = *slots.last().unwrap();
-                info!(
-                    "Purging chunked slots from {} to {} ({} slots)",
-                    start_slot,
-                    end_slot,
-                    end_slot - start_slot
-                );
-
+            let purge_from_blockstore = |start_slot, end_slot| {
+                blockstore.purge_from_next_slots(start_slot, end_slot);
                 if no_compaction {
                     blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
                 } else {
                     blockstore.purge_and_compact_slots(start_slot, end_slot);
                 }
-                blockstore.purge_from_next_slots(start_slot, end_slot);
+            };
+            if !dead_slots_only {
+                let slots_iter = &(start_slot..=end_slot).chunks(batch_size);
+                for slots in slots_iter {
+                    let slots = slots.collect::<Vec<_>>();
+                    assert!(!slots.is_empty());
+
+                    let start_slot = *slots.first().unwrap();
+                    let end_slot = *slots.last().unwrap();
+                    info!(
+                        "Purging chunked slots from {} to {} ({} slots)",
+                        start_slot,
+                        end_slot,
+                        end_slot - start_slot
+                    );
+                    purge_from_blockstore(start_slot, end_slot);
+                }
+            } else {
+                let dead_slots_iter = blockstore
+                    .dead_slots_iterator(start_slot)
+                    .unwrap()
+                    .take_while(|s| *s <= end_slot);
+                for dead_slot in dead_slots_iter {
+                    info!("Purging dead slot {}", dead_slot);
+                    purge_from_blockstore(dead_slot, dead_slot);
+                }
             }
         }
         ("list-roots", Some(arg_matches)) => {
