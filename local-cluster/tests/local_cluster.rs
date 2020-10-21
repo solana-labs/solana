@@ -15,6 +15,7 @@ use solana_core::{
 };
 use solana_download_utils::download_snapshot;
 use solana_ledger::{
+    ancestor_iterator::AncestorIterator,
     blockstore::{Blockstore, PurgeType},
     blockstore_db::AccessType,
     leader_schedule::FixedSchedule,
@@ -1677,7 +1678,11 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     let node_stakes = vec![31, 36, 33, 0];
 
     // Each pubkeys are prefixed with A, B, C and D.
-    // D is needed to avoid NoPropagatedConfirmation erorrs
+    // D is needed to:
+    // 1) Propagate A's votes for S2 to validator C after A shuts down so that
+    // C can avoid NoPropagatedConfirmation erorrs and continue to generate blocks
+    // 2) Provide gosisp discovery for `A` when it restarts because `A` will restart
+    // at a different gossip port than the entrypoint saved in C's gosisp table
     let validator_keys = vec![
         "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
         "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
@@ -1810,9 +1815,18 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
 
         if let Some(last_vote) = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
             a_votes.push(last_vote);
-            if votes_on_c_fork.contains(&last_vote) {
-                bad_vote_detected = true;
-                break;
+            let blockstore = Blockstore::open_with_access_type(
+                &val_a_ledger_path,
+                AccessType::TryPrimaryThenSecondary,
+                None,
+            )
+            .unwrap();
+            let ancestors = AncestorIterator::new(last_vote, &blockstore);
+            for a in ancestors {
+                if votes_on_c_fork.contains(&a) {
+                    bad_vote_detected = true;
+                    break;
+                }
             }
         }
     }
