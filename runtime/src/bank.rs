@@ -807,9 +807,7 @@ impl Bank {
             slots_per_year: parent.slots_per_year,
             epoch_schedule,
             collected_rent: AtomicU64::new(0),
-            rent_collector: parent
-                .rent_collector
-                .clone_with_epoch(epoch, parent.cluster_type()),
+            rent_collector: parent.rent_collector.clone_with_epoch(epoch),
             max_tick_height: (slot + 1) * parent.ticks_per_slot,
             block_height: parent.block_height + 1,
             fee_calculator: fee_rate_governor.create_fee_calculator(),
@@ -927,9 +925,7 @@ impl Bank {
             fee_rate_governor: fields.fee_rate_governor,
             collected_rent: AtomicU64::new(fields.collected_rent),
             // clone()-ing is needed to consider a gated behavior in rent_collector
-            rent_collector: fields
-                .rent_collector
-                .clone_with_epoch(fields.epoch, genesis_config.cluster_type),
+            rent_collector: fields.rent_collector.clone_with_epoch(fields.epoch),
             epoch_schedule: fields.epoch_schedule,
             inflation: Arc::new(RwLock::new(fields.inflation)),
             stakes: RwLock::new(fields.stakes),
@@ -1668,7 +1664,6 @@ impl Bank {
             &self.epoch_schedule,
             self.slots_per_year,
             &genesis_config.rent,
-            self.cluster_type(),
         );
 
         // Add additional native programs specified in the genesis config
@@ -2591,6 +2586,7 @@ impl Bank {
             &self.rent_collector,
             &self.last_blockhash_with_fee_calculator(),
             self.fix_recent_blockhashes_sysvar_delay(),
+            self.cumulative_rent_related_fixes_enabled(),
         );
         self.collect_rent(executed, loaded_accounts);
 
@@ -2834,9 +2830,11 @@ impl Bank {
         // parallelize?
         let mut rent = 0;
         for (pubkey, mut account) in accounts {
-            rent += self
-                .rent_collector
-                .collect_from_existing_account(&pubkey, &mut account);
+            rent += self.rent_collector.collect_from_existing_account(
+                &pubkey,
+                &mut account,
+                self.cumulative_rent_related_fixes_enabled(),
+            );
             // Store all of them unconditionally to purge old AppendVec,
             // even if collected rent is 0 (= not updated).
             self.store_account(&pubkey, &account);
@@ -2954,12 +2952,9 @@ impl Bank {
             self.get_epoch_and_slot_index(self.parent_slot());
 
         let should_enable = match self.cluster_type() {
-            ClusterType::Development => true,
-            ClusterType::Devnet => true,
-            ClusterType::Testnet => current_epoch >= 97,
             ClusterType::MainnetBeta => {
                 #[cfg(not(test))]
-                let should_enable = current_epoch >= Epoch::max_value();
+                let should_enable = self.cumulative_rent_related_fixes_enabled();
 
                 // needed for test_rent_eager_across_epoch_with_gap_under_multi_epoch_cycle,
                 // which depends on ClusterType::MainnetBeta
@@ -2968,6 +2963,7 @@ impl Bank {
 
                 should_enable
             }
+            _ => self.cumulative_rent_related_fixes_enabled(),
         };
 
         let mut partitions = vec![];
@@ -3314,21 +3310,19 @@ impl Bank {
     pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) -> u64 {
         let mut account = self.get_account(pubkey).unwrap_or_default();
 
-        let should_be_in_new_behavior = match self.cluster_type() {
-            ClusterType::Development => true,
-            ClusterType::Devnet => true,
-            ClusterType::Testnet => self.epoch() >= 97,
-            ClusterType::MainnetBeta => self.epoch() >= Epoch::max_value(),
-        };
+        let rent_fix_enabled = self.cumulative_rent_related_fixes_enabled();
 
         // don't collect rents if we're in the new behavior;
         // in genral, it's not worthwhile to account for rents outside the runtime (transactions)
         // there are too many and subtly nuanced modification codepaths
-        if !should_be_in_new_behavior {
+        if !rent_fix_enabled {
             // previously we're too much collecting rents as if it existed since epoch 0...
             self.collected_rent.fetch_add(
-                self.rent_collector
-                    .collect_from_existing_account(pubkey, &mut account),
+                self.rent_collector.collect_from_existing_account(
+                    pubkey,
+                    &mut account,
+                    rent_fix_enabled,
+                ),
                 Relaxed,
             );
         }
@@ -3895,6 +3889,10 @@ impl Bank {
             .is_active(&feature_set::no_overflow_rent_distribution::id())
     }
 
+    pub fn cumulative_rent_related_fixes_enabled(&self) -> bool {
+        self.feature_set.cumulative_rent_related_fixes_enabled()
+    }
+
     // This is called from snapshot restore AND for each epoch boundary
     // The entire code path herein must be idempotent
     fn apply_feature_activations(&mut self, init_finish_or_warp: bool) {
@@ -4100,8 +4098,9 @@ mod tests {
     use crate::{
         accounts_index::{AccountMap, Ancestors},
         genesis_utils::{
-            create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
-            GenesisConfigInfo, ValidatorVoteKeypairs, BOOTSTRAP_VALIDATOR_LAMPORTS,
+            activate_all_features, create_genesis_config_with_leader,
+            create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
+            BOOTSTRAP_VALIDATOR_LAMPORTS,
         },
         native_loader::NativeLoaderError,
         process_instruction::InvokeContext,
@@ -5071,7 +5070,8 @@ mod tests {
 
     #[test]
     fn test_rent_eager_across_epoch_with_full_gap() {
-        let (genesis_config, _mint_keypair) = create_genesis_config(1);
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(1);
+        activate_all_features(&mut genesis_config);
 
         let mut bank = Arc::new(Bank::new(&genesis_config));
         assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 32)]);
@@ -5093,7 +5093,8 @@ mod tests {
 
     #[test]
     fn test_rent_eager_across_epoch_with_half_gap() {
-        let (genesis_config, _mint_keypair) = create_genesis_config(1);
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(1);
+        activate_all_features(&mut genesis_config);
 
         let mut bank = Arc::new(Bank::new(&genesis_config));
         assert_eq!(bank.rent_collection_partitions(), vec![(0, 0, 32)]);
@@ -5641,7 +5642,8 @@ mod tests {
     fn test_rent_eager_collect_rent_in_partition() {
         solana_logger::setup();
 
-        let (genesis_config, _mint_keypair) = create_genesis_config(1);
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(1);
+        activate_all_features(&mut genesis_config);
 
         let zero_lamport_pubkey = Pubkey::new_rand();
         let rent_due_pubkey = Pubkey::new_rand();

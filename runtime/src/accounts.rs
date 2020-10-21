@@ -144,6 +144,8 @@ impl Accounts {
             let mut payer_index = None;
             let mut tx_rent: TransactionRent = 0;
             let mut accounts = Vec::with_capacity(message.account_keys.len());
+            let rent_fix_enabled = feature_set.cumulative_rent_related_fixes_enabled();
+
             for (i, key) in message.account_keys.iter().enumerate() {
                 let account = if Self::is_non_loader_key(message, key, i) {
                     if payer_index.is_none() {
@@ -163,7 +165,11 @@ impl Accounts {
                                 .map(|(mut account, _)| {
                                     if message.is_writable(i) {
                                         let rent_due = rent_collector
-                                            .collect_from_existing_account(&key, &mut account);
+                                            .collect_from_existing_account(
+                                                &key,
+                                                &mut account,
+                                                rent_fix_enabled,
+                                            );
                                         (account, rent_due)
                                     } else {
                                         (account, 0)
@@ -720,6 +726,8 @@ impl Accounts {
     }
 
     /// Store the accounts into the DB
+    // allow(clippy) needed for various gating flags
+    #[allow(clippy::too_many_arguments)]
     pub fn store_accounts(
         &self,
         slot: Slot,
@@ -730,6 +738,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
+        rent_fix_enabled: bool,
     ) {
         let accounts_to_store = self.collect_accounts_to_store(
             txs,
@@ -739,6 +748,7 @@ impl Accounts {
             rent_collector,
             last_blockhash_with_fee_calculator,
             fix_recent_blockhashes_sysvar_delay,
+            rent_fix_enabled,
         );
         self.accounts_db.store(slot, &accounts_to_store);
     }
@@ -766,6 +776,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
+        rent_fix_enabled: bool,
     ) -> Vec<(&'a Pubkey, &'a Account)> {
         let mut accounts = Vec::with_capacity(loaded.len());
         for (i, ((raccs, _hash_age_kind), (_, tx))) in loaded
@@ -806,7 +817,11 @@ impl Accounts {
                 );
                 if message.is_writable(i) {
                     if account.rent_epoch == 0 {
-                        acc.2 += rent_collector.collect_from_created_account(&key, account);
+                        acc.2 += rent_collector.collect_from_created_account(
+                            &key,
+                            account,
+                            rent_fix_enabled,
+                        );
                     }
                     accounts.push((key, &*account));
                 }
@@ -1122,7 +1137,6 @@ mod tests {
                 lamports_per_byte_year: 42,
                 ..Rent::default()
             },
-            ClusterType::Development,
         );
         let min_balance = rent_collector.rent.minimum_balance(nonce::State::size());
         let fee_calculator = FeeCalculator::new(min_balance);
@@ -1798,6 +1812,7 @@ mod tests {
             &mut loaded,
             &rent_collector,
             &(Hash::default(), FeeCalculator::default()),
+            true,
             true,
         );
         assert_eq!(collected_accounts.len(), 2);
