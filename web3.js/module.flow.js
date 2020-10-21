@@ -536,6 +536,7 @@ declare module '@solana/web3.js' {
   declare export var SYSVAR_RENT_PUBKEY;
   declare export var SYSVAR_REWARDS_PUBKEY;
   declare export var SYSVAR_STAKE_HISTORY_PUBKEY;
+  declare export var SYSVAR_INSTRUCTIONS_PUBKEY;
 
   // === src/vote-account.js ===
   declare export var VOTE_PROGRAM_ID;

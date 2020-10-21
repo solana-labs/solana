@@ -17,7 +17,7 @@ const HASHED_PUBKEY_SERIALIZED_SIZE = 20;
 const SIGNATURE_OFFSETS_SERIALIZED_SIZE = 11;
 
 /**
- * Create a secp256k1 instruction using a public key params
+ * Create a Secp256k1 instruction using a public key params
  * @typedef {Object} CreateSecp256k1InstructionWithPublicKeyParams
  * @property {Buffer | Uint8Array | Array<number>} publicKey
  * @property {Buffer | Uint8Array | Array<number>} message
@@ -32,7 +32,7 @@ export type CreateSecp256k1InstructionWithPublicKeyParams = {|
 |};
 
 /**
- * Create a secp256k1 instruction using a private key params
+ * Create a Secp256k1 instruction using a private key params
  * @typedef {Object} CreateSecp256k1InstructionWithPrivateKeyParams
  * @property {Buffer | Uint8Array | Array<number>} privateKey
  * @property {Buffer | Uint8Array | Array<number>} message
@@ -43,7 +43,7 @@ export type CreateSecp256k1InstructionWithPrivateKeyParams = {|
 |};
 
 /**
- * A decoded Secp256k instruction
+ * A decoded Secp256k1 instruction
  * @typedef {Object} DecodedSecp256k1Instruction
  * @property {Buffer} signature
  * @property {Buffer} ethPublicKey
@@ -81,7 +81,7 @@ const SECP256K1_INSTRUCTION_LAYOUT = BufferLayout.struct([
 
 export class Secp256k1Instruction {
   /**
-   * Decode a secp256k1 instruction
+   * Decode a Secp256k1 instruction
    */
   static decodeInstruction(
     instruction: TransactionInstruction,
@@ -99,7 +99,7 @@ export class Secp256k1Instruction {
    */
   static checkProgramId(programId: PublicKey) {
     if (!programId.equals(Secp256k1Program.programId)) {
-      throw new Error('invalid instruction; programId is not Secp256kProgram');
+      throw new Error('invalid instruction; programId is not Secp256k1Program');
     }
   }
 }

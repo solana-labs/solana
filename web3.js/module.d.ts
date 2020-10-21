@@ -531,6 +531,7 @@ declare module '@solana/web3.js' {
   export const SYSVAR_RENT_PUBKEY: PublicKey;
   export const SYSVAR_REWARDS_PUBKEY: PublicKey;
   export const SYSVAR_STAKE_HISTORY_PUBKEY: PublicKey;
+  export const SYSVAR_INSTRUCTIONS_PUBKEY: PublicKey;
 
   // === src/vote-account.js ===
   export const VOTE_PROGRAM_ID: PublicKey;

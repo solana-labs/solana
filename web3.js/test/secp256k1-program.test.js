@@ -53,7 +53,7 @@ test('decode secp256k1 instruction', () => {
   expect(ethAddressOffset).toEqual(12);
   expect(ethAddressInstructionIndex).toEqual(0);
   expect(messageDataOffset).toEqual(97);
-  expect(messageDataSize).toEqual('Test message'.length);
+  expect(messageDataSize).toEqual(Buffer.from('Test message').length);
   expect(messageInstructionIndex).toEqual(0);
   expect(recoveryId > -1).toEqual(true);
   expect(signature.length).toEqual(64);
@@ -92,17 +92,10 @@ test('live create secp256k1 instruction with public key', async () => {
   const from = new Account();
   await connection.requestAirdrop(from.publicKey, 2 * LAMPORTS_PER_SOL);
 
-  const transactionSignature = await sendAndConfirmTransaction(
-    connection,
-    transaction,
-    [from],
-    {
-      commitment: 'single',
-      skipPreflight: true,
-    },
-  );
-
-  expect(transactionSignature.length > 0).toEqual(true);
+  await sendAndConfirmTransaction(connection, transaction, [from], {
+    commitment: 'single',
+    skipPreflight: true,
+  });
 });
 
 test('live create secp256k1 instruction with private key', async () => {
@@ -128,15 +121,8 @@ test('live create secp256k1 instruction with private key', async () => {
   const from = new Account();
   await connection.requestAirdrop(from.publicKey, 2 * LAMPORTS_PER_SOL);
 
-  const signature = await sendAndConfirmTransaction(
-    connection,
-    transaction,
-    [from],
-    {
-      commitment: 'single',
-      skipPreflight: true,
-    },
-  );
-
-  expect(signature.length > 0).toEqual(true);
+  await sendAndConfirmTransaction(connection, transaction, [from], {
+    commitment: 'single',
+    skipPreflight: true,
+  });
 });
