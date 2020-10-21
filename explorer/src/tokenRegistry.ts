@@ -26,10 +26,23 @@ const MAINNET_TOKENS: { [key: string]: TokenDetails } = {
   SRMuApVNdxXokk5GT7XD5cUUgXMBCoAz2LHeuAoKWRt: {
     name: "Serum",
     symbol: "SRM",
+    logo: "/tokens/serum-64.png",
+    icon: "/tokens/serum-32.png",
+    website: "https://projectserum.com",
   },
   MSRMcoVyrFxnSgo5uXwone5SKcGhT1KEJMFEkMEWf9L: {
     name: "MegaSerum",
     symbol: "MSRM",
+    logo: "/tokens/serum-64.png",
+    icon: "/tokens/serum-32.png",
+    website: "https://projectserum.com",
+  },
+  EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: {
+    symbol: "USDC",
+    name: "USD Coin",
+    logo: "/tokens/usdc.svg",
+    icon: "/tokens/usdc.svg",
+    website: "https://www.centre.io/",
   },
   "9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E": {
     symbol: "BTC",
