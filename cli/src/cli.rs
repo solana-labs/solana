@@ -2,11 +2,8 @@ use crate::{
     checks::*, cluster_query::*, feature::*, inflation::*, nonce::*, spend_utils::*, stake::*,
     validator_info::*, vote::*,
 };
-<<<<<<< HEAD
-use chrono::prelude::*;
-=======
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
->>>>>>> 2905ccc7e... CLI: Print address ephemeral keypair seed phrase to stderr on deploy failure
+use chrono::prelude::*;
 use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use num_traits::FromPrimitive;
