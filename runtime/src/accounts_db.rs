@@ -130,9 +130,8 @@ impl AccountStorage {
         slot: Slot,
         store_id: AppendVecId,
     ) -> Option<Arc<AccountStorageEntry>> {
-        self.0
-            .get(&slot)
-            .and_then(|storage_map| storage_map.value().read().unwrap().get(&store_id).cloned())
+        self.get_slot_stores(slot)
+            .and_then(|storage_map| storage_map.read().unwrap().get(&store_id).cloned())
     }
 
     fn get_slot_stores(&self, slot: Slot) -> Option<SlotStores> {
@@ -1410,12 +1409,19 @@ impl AccountsDB {
         let store =
             Arc::new(self.new_storage_entry(slot, &Path::new(&self.paths[path_index]), size));
         let store_for_index = store.clone();
-        let slot_storage = self
-            .storage
-            .0
-            .entry(slot)
-            .or_insert(Arc::new(RwLock::new(HashMap::new())));
-        slot_storage
+
+        let slot_storages: SlotStores = self.storage.get_slot_stores(slot).unwrap_or_else(||
+            // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
+            // which is dropped after this block ends, minimizing time held by the lock.
+            // However, we still want to persist the reference to the `SlotStores` behind
+            // the lock, hence we clone it out, (`SlotStores` is an Arc so is cheap to clone).
+            self.storage
+                .0
+                .entry(slot)
+                .or_insert(Arc::new(RwLock::new(HashMap::new())))
+                .clone());
+
+        slot_storages
             .write()
             .unwrap()
             .insert(store.id, store_for_index);

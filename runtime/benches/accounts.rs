@@ -2,6 +2,7 @@
 
 extern crate test;
 
+use dashmap::DashMap;
 use rand::Rng;
 use solana_runtime::{
     accounts::{create_test_accounts, Accounts},
@@ -12,7 +13,12 @@ use solana_sdk::{
     genesis_config::{create_genesis_config, ClusterType},
     pubkey::Pubkey,
 };
-use std::{collections::HashMap, path::PathBuf, sync::Arc, thread::Builder};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, RwLock},
+    thread::Builder,
+};
 use test::Bencher;
 
 fn deposit_many(bank: &Bank, pubkeys: &mut Vec<Pubkey>, num: usize) {
@@ -193,6 +199,56 @@ fn bench_concurrent_read_write(bencher: &mut Bencher) {
             // there's a new account pubkey being written to every time, will
             // compete for the accounts index lock on every store
             accounts.store_slow(slot + 1, &Pubkey::new_rand(), &account);
+        }
+    })
+}
+
+#[bench]
+#[ignore]
+fn bench_dashmap_single_reader_with_n_writers(bencher: &mut Bencher) {
+    let num_readers = 5;
+    let num_keys = 10000;
+    let map = Arc::new(DashMap::new());
+    for i in 0..num_keys {
+        map.insert(i, i);
+    }
+    for _ in 0..num_readers {
+        let map = map.clone();
+        Builder::new()
+            .name("readers".to_string())
+            .spawn(move || loop {
+                test::black_box(map.entry(5).or_insert(2));
+            })
+            .unwrap();
+    }
+    bencher.iter(|| {
+        for _ in 0..num_keys {
+            test::black_box(map.get(&5).unwrap().value());
+        }
+    })
+}
+
+#[bench]
+#[ignore]
+fn bench_rwlock_hashmap_single_reader_with_n_writers(bencher: &mut Bencher) {
+    let num_readers = 5;
+    let num_keys = 10000;
+    let map = Arc::new(RwLock::new(HashMap::new()));
+    for i in 0..num_keys {
+        map.write().unwrap().insert(i, i);
+    }
+    for _ in 0..num_readers {
+        let map = map.clone();
+        Builder::new()
+            .name("readers".to_string())
+            .spawn(move || loop {
+                test::black_box(map.write().unwrap().get(&5));
+            })
+            .unwrap();
+    }
+    bencher.iter(|| {
+        for _ in 0..num_keys {
+            test::black_box(map.read().unwrap().get(&5));
         }
     })
 }
