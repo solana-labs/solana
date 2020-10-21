@@ -59,7 +59,11 @@ impl Blockstore {
             meta.next_slots
                 .retain(|slot| *slot < from_slot || *slot > to_slot);
             if meta.next_slots.len() != original_len {
-                info!("purge_from_next_slots: adjusted meta for slot {}", slot);
+                info!(
+                    "purge_from_next_slots: meta for slot {} no longer refers to slots {:?}",
+                    slot,
+                    from_slot..=to_slot
+                );
                 self.put_meta_bytes(
                     slot,
                     &bincode::serialize(&meta).expect("couldn't update meta"),

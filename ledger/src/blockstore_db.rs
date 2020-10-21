@@ -154,6 +154,7 @@ pub mod columns {
 
 pub enum AccessType {
     PrimaryOnly,
+    PrimaryOnlyForMaintenance, // this indicates no compaction
     TryPrimaryThenSecondary,
 }
 
@@ -217,37 +218,45 @@ impl Rocks {
         fs::create_dir_all(&path)?;
 
         // Use default database options
-        let mut db_options = get_db_options();
+        if matches!(access_type, AccessType::PrimaryOnlyForMaintenance) {
+            warn!("Disabling rocksdb's auto compaction for maintenance bulk ledger update...");
+        }
+        let mut db_options = get_db_options(&access_type);
         if let Some(recovery_mode) = recovery_mode {
             db_options.set_wal_recovery_mode(recovery_mode.into());
         }
 
         // Column family names
-        let meta_cf_descriptor = ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options());
+        let meta_cf_descriptor =
+            ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options(&access_type));
         let dead_slots_cf_descriptor =
-            ColumnFamilyDescriptor::new(DeadSlots::NAME, get_cf_options());
+            ColumnFamilyDescriptor::new(DeadSlots::NAME, get_cf_options(&access_type));
         let duplicate_slots_cf_descriptor =
-            ColumnFamilyDescriptor::new(DuplicateSlots::NAME, get_cf_options());
+            ColumnFamilyDescriptor::new(DuplicateSlots::NAME, get_cf_options(&access_type));
         let erasure_meta_cf_descriptor =
-            ColumnFamilyDescriptor::new(ErasureMeta::NAME, get_cf_options());
-        let orphans_cf_descriptor = ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options());
-        let root_cf_descriptor = ColumnFamilyDescriptor::new(Root::NAME, get_cf_options());
-        let index_cf_descriptor = ColumnFamilyDescriptor::new(Index::NAME, get_cf_options());
+            ColumnFamilyDescriptor::new(ErasureMeta::NAME, get_cf_options(&access_type));
+        let orphans_cf_descriptor =
+            ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options(&access_type));
+        let root_cf_descriptor =
+            ColumnFamilyDescriptor::new(Root::NAME, get_cf_options(&access_type));
+        let index_cf_descriptor =
+            ColumnFamilyDescriptor::new(Index::NAME, get_cf_options(&access_type));
         let shred_data_cf_descriptor =
-            ColumnFamilyDescriptor::new(ShredData::NAME, get_cf_options());
+            ColumnFamilyDescriptor::new(ShredData::NAME, get_cf_options(&access_type));
         let shred_code_cf_descriptor =
-            ColumnFamilyDescriptor::new(ShredCode::NAME, get_cf_options());
+            ColumnFamilyDescriptor::new(ShredCode::NAME, get_cf_options(&access_type));
         let transaction_status_cf_descriptor =
-            ColumnFamilyDescriptor::new(TransactionStatus::NAME, get_cf_options());
+            ColumnFamilyDescriptor::new(TransactionStatus::NAME, get_cf_options(&access_type));
         let address_signatures_cf_descriptor =
-            ColumnFamilyDescriptor::new(AddressSignatures::NAME, get_cf_options());
+            ColumnFamilyDescriptor::new(AddressSignatures::NAME, get_cf_options(&access_type));
         let transaction_status_index_cf_descriptor =
-            ColumnFamilyDescriptor::new(TransactionStatusIndex::NAME, get_cf_options());
-        let rewards_cf_descriptor = ColumnFamilyDescriptor::new(Rewards::NAME, get_cf_options());
+            ColumnFamilyDescriptor::new(TransactionStatusIndex::NAME, get_cf_options(&access_type));
+        let rewards_cf_descriptor =
+            ColumnFamilyDescriptor::new(Rewards::NAME, get_cf_options(&access_type));
         let blocktime_cf_descriptor =
-            ColumnFamilyDescriptor::new(Blocktime::NAME, get_cf_options());
+            ColumnFamilyDescriptor::new(Blocktime::NAME, get_cf_options(&access_type));
         let perf_samples_cf_descriptor =
-            ColumnFamilyDescriptor::new(PerfSamples::NAME, get_cf_options());
+            ColumnFamilyDescriptor::new(PerfSamples::NAME, get_cf_options(&access_type));
 
         let cfs = vec![
             (SlotMeta::NAME, meta_cf_descriptor),
@@ -272,7 +281,7 @@ impl Rocks {
 
         // Open the database
         let db = match access_type {
-            AccessType::PrimaryOnly => Rocks(
+            AccessType::PrimaryOnly | AccessType::PrimaryOnlyForMaintenance => Rocks(
                 DB::open_cf_descriptors(&db_options, path, cfs.into_iter().map(|c| c.1))?,
                 ActualAccessType::Primary,
             ),
@@ -1003,7 +1012,7 @@ impl<'a> WriteBatch<'a> {
     }
 }
 
-fn get_cf_options() -> Options {
+fn get_cf_options(access_type: &AccessType) -> Options {
     let mut options = Options::default();
     // 256 * 8 = 2GB. 6 of these columns should take at most 12GB of RAM
     options.set_max_write_buffer_number(8);
@@ -1017,10 +1026,14 @@ fn get_cf_options() -> Options {
     options.set_level_zero_file_num_compaction_trigger(file_num_compaction_trigger as i32);
     options.set_max_bytes_for_level_base(total_size_base);
     options.set_target_file_size_base(file_size_base);
+    if matches!(access_type, AccessType::PrimaryOnlyForMaintenance) {
+        options.set_disable_auto_compactions(true);
+    }
+
     options
 }
 
-fn get_db_options() -> Options {
+fn get_db_options(access_type: &AccessType) -> Options {
     let mut options = Options::default();
     options.create_if_missing(true);
     options.create_missing_column_families(true);
@@ -1029,6 +1042,9 @@ fn get_db_options() -> Options {
 
     // Set max total wal size to 4G.
     options.set_max_total_wal_size(4 * 1024 * 1024 * 1024);
+    if matches!(access_type, AccessType::PrimaryOnlyForMaintenance) {
+        options.set_disable_auto_compactions(true);
+    }
 
     options
 }
