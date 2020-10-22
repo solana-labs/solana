@@ -306,9 +306,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
     ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
-        //PERF: hold the lock to scan for the references, but not to clone the accounts
-        //TODO: two locks usually leads to deadlocks, should this be one structure?
-        let accounts_index = self.accounts_db.accounts_index.read().unwrap();
+        let accounts_index = &self.accounts_db.accounts_index;
 
         let fee_config = FeeConfig {
             secp256k1_program_enabled: feature_set
@@ -335,7 +333,7 @@ impl Accounts {
                     let load_res = self.load_tx_accounts(
                         &self.accounts_db.storage,
                         ancestors,
-                        &accounts_index,
+                        accounts_index,
                         tx,
                         fee,
                         error_counters,
@@ -350,7 +348,7 @@ impl Accounts {
                     let load_res = Self::load_loaders(
                         &self.accounts_db.storage,
                         ancestors,
-                        &accounts_index,
+                        accounts_index,
                         tx,
                         error_counters,
                     );
@@ -1519,12 +1517,11 @@ mod tests {
         let mut error_counters = ErrorCounters::default();
         let ancestors = vec![(0, 0)].into_iter().collect();
 
-        let accounts_index = accounts.accounts_db.accounts_index.read().unwrap();
         assert_eq!(
             Accounts::load_executable_accounts(
                 &accounts.accounts_db.storage,
                 &ancestors,
-                &accounts_index,
+                &accounts.accounts_db.accounts_index,
                 &Pubkey::new_rand(),
                 &mut error_counters
             ),

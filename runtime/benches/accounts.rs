@@ -149,14 +149,18 @@ fn bench_delete_dependencies(bencher: &mut Bencher) {
     });
 }
 
-#[bench]
-#[ignore]
-fn bench_concurrent_read_write(bencher: &mut Bencher) {
+fn store_accounts_with_possible_contention<F: 'static>(
+    bench_name: &str,
+    bencher: &mut Bencher,
+    reader_f: F,
+) where
+    F: Fn(&Accounts, &[Pubkey]) + Send + Copy,
+{
     let num_readers = 5;
     let accounts = Arc::new(Accounts::new(
         vec![
             PathBuf::from(std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string()))
-                .join("concurrent_read_write"),
+                .join(bench_name),
         ],
         &ClusterType::Development,
     ));
@@ -180,11 +184,7 @@ fn bench_concurrent_read_write(bencher: &mut Bencher) {
         Builder::new()
             .name("readers".to_string())
             .spawn(move || {
-                let mut rng = rand::thread_rng();
-                loop {
-                    let i = rng.gen_range(0, num_keys);
-                    test::black_box(accounts.load_slow(&HashMap::new(), &pubkeys[i]).unwrap());
-                }
+                reader_f(&accounts, &pubkeys);
             })
             .unwrap();
     }
@@ -200,6 +200,30 @@ fn bench_concurrent_read_write(bencher: &mut Bencher) {
             // compete for the accounts index lock on every store
             accounts.store_slow(slot + 1, &Pubkey::new_rand(), &account);
         }
+    })
+}
+
+#[bench]
+#[ignore]
+fn bench_concurrent_read_write(bencher: &mut Bencher) {
+    store_accounts_with_possible_contention(
+        "concurrent_read_write",
+        bencher,
+        |accounts, pubkeys| {
+            let mut rng = rand::thread_rng();
+            loop {
+                let i = rng.gen_range(0, pubkeys.len());
+                test::black_box(accounts.load_slow(&HashMap::new(), &pubkeys[i]).unwrap());
+            }
+        },
+    )
+}
+
+#[bench]
+#[ignore]
+fn bench_concurrent_scan_write(bencher: &mut Bencher) {
+    store_accounts_with_possible_contention("concurrent_scan_write", bencher, |accounts, _| loop {
+        test::black_box(accounts.load_by_program(&HashMap::new(), &Account::default().owner));
     })
 }
 
