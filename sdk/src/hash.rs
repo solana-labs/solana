@@ -100,9 +100,20 @@ impl Hash {
         self.0
     }
 
-    /// New random hash value for tests and benchmarks.
+    /// unique Hash for tests and benchmarks.
+    pub fn new_unique() -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static I: AtomicU64 = AtomicU64::new(1);
+
+        let mut b = [0u8; HASH_BYTES];
+        let i = I.fetch_add(1, Ordering::Relaxed);
+        b[0..8].copy_from_slice(&i.to_le_bytes());
+        Self::new(&b)
+    }
+
+    /// random hash value for tests and benchmarks.
     #[cfg(not(feature = "program"))]
-    #[deprecated(since = "1.3.9", note = "Please use 'hash::new_rand' instead")]
+    #[deprecated(since = "1.3.9", note = "Please use 'Hash::new_unique' instead")]
     pub fn new_rand<R: ?Sized>(rng: &mut R) -> Self
     where
         R: rand::Rng,
@@ -133,6 +144,11 @@ pub fn extend_and_hash(id: &Hash, val: &[u8]) -> Hash {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_new_unique() {
+        assert!(Hash::new_unique() != Hash::new_unique());
+    }
 
     #[test]
     fn test_hash_fromstr() {
