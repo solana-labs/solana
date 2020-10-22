@@ -1805,7 +1805,7 @@ pub mod tests {
     #[test]
     fn test_process_ledger_simple() {
         solana_logger::setup();
-        let leader_pubkey = Pubkey::new_rand();
+        let leader_pubkey = solana_sdk::pubkey::new_rand();
         let mint = 100;
         let hashes_per_tick = 10;
         let GenesisConfigInfo {
@@ -2383,7 +2383,7 @@ pub mod tests {
                     bank.last_blockhash(),
                     1,
                     0,
-                    &Pubkey::new_rand(),
+                    &solana_sdk::pubkey::new_rand(),
                 ));
 
                 next_entry_mut(&mut hash, 0, transactions)
@@ -2532,7 +2532,7 @@ pub mod tests {
             ..
         } = create_genesis_config(11_000);
         let bank = Arc::new(Bank::new(&genesis_config));
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         bank.transfer(1_000, &mint_keypair, &pubkey).unwrap();
         assert_eq!(bank.transaction_count(), 1);
         assert_eq!(bank.get_balance(&pubkey), 1_000);
@@ -2738,7 +2738,7 @@ pub mod tests {
                             bank.last_blockhash(),
                             100,
                             100,
-                            &Pubkey::new_rand(),
+                            &solana_sdk::pubkey::new_rand(),
                         ));
                         transactions
                     })
@@ -2873,11 +2873,11 @@ pub mod tests {
 
         // Create array of two transactions which throw different errors
         let account_not_found_tx =
-            system_transaction::transfer(&keypair, &Pubkey::new_rand(), 42, bank.last_blockhash());
+            system_transaction::transfer(&keypair, &solana_sdk::pubkey::new_rand(), 42, bank.last_blockhash());
         let account_not_found_sig = account_not_found_tx.signatures[0];
         let mut account_loaded_twice = system_transaction::transfer(
             &mint_keypair,
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             42,
             bank.last_blockhash(),
         );
@@ -2925,7 +2925,7 @@ pub mod tests {
         let bank0 = Arc::new(Bank::new(&genesis_config));
         bank0.freeze();
 
-        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::new_rand(), 1));
+        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &solana_sdk::pubkey::new_rand(), 1));
 
         // The new blockhash is going to be the hash of the last tick in the block
         let bank_1_blockhash = bank1.last_blockhash();
@@ -3148,7 +3148,7 @@ pub mod tests {
                             Account::new(1, VoteState::size_of(), &solana_vote_program::id());
                         let versioned = VoteStateVersions::Current(Box::new(vote_state));
                         VoteState::serialize(&versioned, &mut vote_account.data).unwrap();
-                        (Pubkey::new_rand(), (stake, vote_account))
+                        (solana_sdk::pubkey::new_rand(), (stake, vote_account))
                     })
                     .collect_vec()
             };

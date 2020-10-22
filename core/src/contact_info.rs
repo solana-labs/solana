@@ -130,7 +130,7 @@ impl ContactInfo {
         let addr = socketaddr!("224.0.1.255:1000");
         assert!(addr.ip().is_multicast());
         Self {
-            id: Pubkey::new_rand(),
+            id: solana_sdk::pubkey::new_rand(),
             gossip: addr,
             tvu: addr,
             tvu_forwards: addr,

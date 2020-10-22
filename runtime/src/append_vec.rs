@@ -674,7 +674,7 @@ pub mod tests {
         let path = &file.path;
         let mut av = AppendVec::new(&path, true, 1024 * 1024);
 
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let owner = Pubkey::default();
         let data_len = 3 as u64;
         let mut account = Account::new(0, data_len as usize, &owner);

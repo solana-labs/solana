@@ -30,7 +30,7 @@ fn test_cli_timestamp_tx() {
         ledger_path,
         ..
     } = TestValidator::run();
-    let bob_pubkey = Pubkey::new_rand();
+    let bob_pubkey = solana_sdk::pubkey::new_rand();
 
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
@@ -117,7 +117,7 @@ fn test_cli_witness_tx() {
         ledger_path,
         ..
     } = TestValidator::run();
-    let bob_pubkey = Pubkey::new_rand();
+    let bob_pubkey = solana_sdk::pubkey::new_rand();
 
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
@@ -199,7 +199,7 @@ fn test_cli_cancel_tx() {
         ledger_path,
         ..
     } = TestValidator::run();
-    let bob_pubkey = Pubkey::new_rand();
+    let bob_pubkey = solana_sdk::pubkey::new_rand();
 
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
@@ -274,7 +274,7 @@ fn test_offline_pay_tx() {
         ledger_path,
         ..
     } = TestValidator::run();
-    let bob_pubkey = Pubkey::new_rand();
+    let bob_pubkey = solana_sdk::pubkey::new_rand();
 
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
@@ -419,7 +419,7 @@ fn test_nonced_pay_tx() {
     .unwrap()
     .blockhash;
 
-    let bob_pubkey = Pubkey::new_rand();
+    let bob_pubkey = solana_sdk::pubkey::new_rand();
     config.signers = vec![&default_signer];
     config.command = CliCommand::Pay(PayCommand {
         amount: SpendAmount::Some(10),

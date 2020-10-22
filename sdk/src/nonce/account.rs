@@ -175,7 +175,7 @@ pub fn with_test_keyed_account<F>(lamports: u64, signer: bool, f: F)
 where
     F: Fn(&KeyedAccount),
 {
-    let pubkey = Pubkey::new_rand();
+    let pubkey = solana_sdk::pubkey::new_rand();
     let account = create_account(lamports);
     let keyed_account = KeyedAccount::new(&pubkey, signer, &account);
     f(&keyed_account)

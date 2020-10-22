@@ -167,18 +167,18 @@ mod tests {
 
     #[test]
     fn test_budget_instruction_verify() {
-        let alice_pubkey = Pubkey::new_rand();
-        let bob_pubkey = Pubkey::new_rand();
-        let budget_pubkey = Pubkey::new_rand();
+        let alice_pubkey = solana_sdk::pubkey::new_rand();
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
+        let budget_pubkey = solana_sdk::pubkey::new_rand();
         payment(&alice_pubkey, &bob_pubkey, &budget_pubkey, 1); // No panic! indicates success.
     }
 
     #[test]
     #[should_panic]
     fn test_budget_instruction_overspend() {
-        let alice_pubkey = Pubkey::new_rand();
-        let bob_pubkey = Pubkey::new_rand();
-        let budget_pubkey = Pubkey::new_rand();
+        let alice_pubkey = solana_sdk::pubkey::new_rand();
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
+        let budget_pubkey = solana_sdk::pubkey::new_rand();
         let expr = BudgetExpr::new_payment(2, &bob_pubkey);
         create_account(&alice_pubkey, &budget_pubkey, 1, expr);
     }
@@ -186,9 +186,9 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_budget_instruction_underspend() {
-        let alice_pubkey = Pubkey::new_rand();
-        let bob_pubkey = Pubkey::new_rand();
-        let budget_pubkey = Pubkey::new_rand();
+        let alice_pubkey = solana_sdk::pubkey::new_rand();
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
+        let budget_pubkey = solana_sdk::pubkey::new_rand();
         let expr = BudgetExpr::new_payment(1, &bob_pubkey);
         create_account(&alice_pubkey, &budget_pubkey, 2, expr);
     }

@@ -60,7 +60,7 @@ mod tests {
 
     #[test]
     fn test_leader_schedule_via_bank() {
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let genesis_config =
             create_genesis_config_with_leader(0, &pubkey, BOOTSTRAP_VALIDATOR_LAMPORTS)
                 .genesis_config;
@@ -82,7 +82,7 @@ mod tests {
 
     #[test]
     fn test_leader_scheduler1_basic() {
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let genesis_config = create_genesis_config_with_leader(
             BOOTSTRAP_VALIDATOR_LAMPORTS,
             &pubkey,
@@ -95,8 +95,8 @@ mod tests {
 
     #[test]
     fn test_sort_stakes_basic() {
-        let pubkey0 = Pubkey::new_rand();
-        let pubkey1 = Pubkey::new_rand();
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
         let mut stakes = vec![(pubkey0, 1), (pubkey1, 2)];
         sort_stakes(&mut stakes);
         assert_eq!(stakes, vec![(pubkey1, 2), (pubkey0, 1)]);
@@ -104,8 +104,8 @@ mod tests {
 
     #[test]
     fn test_sort_stakes_with_dup() {
-        let pubkey0 = Pubkey::new_rand();
-        let pubkey1 = Pubkey::new_rand();
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
         let mut stakes = vec![(pubkey0, 1), (pubkey1, 2), (pubkey0, 1)];
         sort_stakes(&mut stakes);
         assert_eq!(stakes, vec![(pubkey1, 2), (pubkey0, 1)]);
@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn test_sort_stakes_with_equal_stakes() {
         let pubkey0 = Pubkey::default();
-        let pubkey1 = Pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
         let mut stakes = vec![(pubkey0, 1), (pubkey1, 1)];
         sort_stakes(&mut stakes);
         assert_eq!(stakes, vec![(pubkey1, 1), (pubkey0, 1)]);

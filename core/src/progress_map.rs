@@ -401,7 +401,7 @@ mod test {
     fn test_add_vote_pubkey() {
         let mut stats = PropagatedStats::default();
         let mut all_pubkeys = PubkeyReferences::default();
-        let mut vote_pubkey = Pubkey::new_rand();
+        let mut vote_pubkey = solana_sdk::pubkey::new_rand();
         all_pubkeys.get_or_insert(&vote_pubkey);
 
         // Add a vote pubkey, the number of references in all_pubkeys
@@ -420,7 +420,7 @@ mod test {
         assert_eq!(stats.propagated_validators_stake, 1);
 
         // Adding another pubkey should succeed
-        vote_pubkey = Pubkey::new_rand();
+        vote_pubkey = solana_sdk::pubkey::new_rand();
         stats.add_vote_pubkey(&vote_pubkey, &mut all_pubkeys, 2);
         assert!(stats.propagated_validators.contains(&vote_pubkey));
         assert_eq!(stats.propagated_validators_stake, 3);
@@ -434,7 +434,7 @@ mod test {
     fn test_add_node_pubkey_internal() {
         let num_vote_accounts = 10;
         let staked_vote_accounts = 5;
-        let vote_account_pubkeys: Vec<_> = std::iter::repeat_with(Pubkey::new_rand)
+        let vote_account_pubkeys: Vec<_> = std::iter::repeat_with(solana_sdk::pubkey::new_rand)
             .take(num_vote_accounts)
             .collect();
         let epoch_vote_accounts: HashMap<_, _> = vote_account_pubkeys
@@ -445,7 +445,7 @@ mod test {
 
         let mut stats = PropagatedStats::default();
         let mut all_pubkeys = PubkeyReferences::default();
-        let mut node_pubkey = Pubkey::new_rand();
+        let mut node_pubkey = solana_sdk::pubkey::new_rand();
         all_pubkeys.get_or_insert(&node_pubkey);
 
         // Add a vote pubkey, the number of references in all_pubkeys
@@ -481,7 +481,7 @@ mod test {
 
         // Adding another pubkey with same vote accounts should succeed, but stake
         // shouldn't increase
-        node_pubkey = Pubkey::new_rand();
+        node_pubkey = solana_sdk::pubkey::new_rand();
         stats.add_node_pubkey_internal(
             &node_pubkey,
             &mut all_pubkeys,
@@ -500,8 +500,8 @@ mod test {
 
         // Adding another pubkey with different vote accounts should succeed
         // and increase stake
-        node_pubkey = Pubkey::new_rand();
-        let vote_account_pubkeys: Vec<_> = std::iter::repeat_with(Pubkey::new_rand)
+        node_pubkey = solana_sdk::pubkey::new_rand();
+        let vote_account_pubkeys: Vec<_> = std::iter::repeat_with(solana_sdk::pubkey::new_rand)
             .take(num_vote_accounts)
             .collect();
         let epoch_vote_accounts: HashMap<_, _> = vote_account_pubkeys

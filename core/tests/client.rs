@@ -38,7 +38,7 @@ fn test_rpc_client() {
         ledger_path,
         ..
     } = TestValidator::run();
-    let bob_pubkey = Pubkey::new_rand();
+    let bob_pubkey = solana_sdk::pubkey::new_rand();
 
     let client = RpcClient::new_socket(leader_data.rpc);
 

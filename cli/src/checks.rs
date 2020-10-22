@@ -161,7 +161,7 @@ mod tests {
             context: RpcResponseContext { slot: 1 },
             value: json!(account_balance),
         });
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let fee_calculator = FeeCalculator::new(1);
 
         let pubkey0 = Pubkey::new(&[0; 32]);
@@ -221,7 +221,7 @@ mod tests {
             context: RpcResponseContext { slot: 1 },
             value: json!(account_balance),
         });
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
 
         let mut mocks = HashMap::new();
         mocks.insert(RpcRequest::GetBalance, account_balance_response);
@@ -267,9 +267,9 @@ mod tests {
 
     #[test]
     fn test_check_unique_pubkeys() {
-        let pubkey0 = Pubkey::new_rand();
+        let pubkey0 = solana_sdk::pubkey::new_rand();
         let pubkey_clone = pubkey0;
-        let pubkey1 = Pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
 
         check_unique_pubkeys((&pubkey0, "foo".to_string()), (&pubkey1, "bar".to_string()))
             .expect("unexpected result");
