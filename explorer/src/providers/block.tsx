@@ -1,7 +1,7 @@
 import React from "react";
 import * as Sentry from "@sentry/react";
 import * as Cache from "providers/cache";
-import { post } from "superagent";
+import { Connection } from "@solana/web3.js";
 import { useCluster, Cluster } from "./cluster";
 
 export enum FetchStatus {
@@ -58,10 +58,8 @@ export function useBlock(key: string): Cache.CacheEntry<Block> | undefined {
 export async function fetchBlock(
   dispatch: Dispatch,
   url: string,
-  solarweave: string,
   cluster: Cluster,
-  key: string,
-  type: string
+  key: string
 ) {
   dispatch({
     type: ActionType.Update,
@@ -84,22 +82,14 @@ export async function fetchBlock(
   };
 
   try {
-    if (type === "slot") {
-      const payload = await post(url).send({
-        jsonrpc: "2.0",
-        id: key,
-        method: "getConfirmedBlock",
-        params: [Number(key), "json"],
-      });
-
-      result = payload.body.result;
-    }
+    const connection = new Connection(url, "max");
+    result = await connection.getConfirmedBlock(Number(key));
 
     if (result) {
-      data.blockData = result;
+      data.blockData = result as any;
       data.tags = [
         { name: "slot", value: key },
-        { name: "parentSlot", value: result.parentSlot },
+        { name: "parentSlot", value: result.parentSlot.toString() },
         { name: "blockhash", value: result.blockhash },
         { name: "previousBlockhash", value: result.previousBlockhash },
       ];
@@ -125,7 +115,7 @@ export async function fetchBlock(
 }
 
 export function useFetchBlock() {
-  const { cluster, url, solarweave } = useCluster();
+  const { cluster, url } = useCluster();
   const state = React.useContext(StateContext);
   const dispatch = React.useContext(DispatchContext);
 
@@ -134,12 +124,12 @@ export function useFetchBlock() {
   }
 
   return React.useCallback(
-    (key: string, type: string) => {
+    (key: string) => {
       const entry = state.entries[key];
       if (!entry) {
-        fetchBlock(dispatch, url, solarweave, cluster, key, type);
+        fetchBlock(dispatch, url, cluster, key);
       }
     },
-    [state, dispatch, cluster, url, solarweave]
+    [state, dispatch, cluster, url]
   );
 }

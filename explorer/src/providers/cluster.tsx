@@ -67,25 +67,11 @@ export function clusterUrl(cluster: Cluster, customUrl: string): string {
   }
 }
 
-export function solarweaveUrl(cluster: Cluster, solarweaveUrl: string): string {
-  switch (cluster) {
-    case Cluster.Devnet:
-      return "solana-devnet-solarweave";
-    case Cluster.MainnetBeta:
-      return "solana-mainnet-solarweave";
-    case Cluster.Testnet:
-      return "solana-testnet-solarweave";
-    case Cluster.Custom:
-      return solarweaveUrl;
-  }
-}
-
 export const DEFAULT_CLUSTER = Cluster.MainnetBeta;
 
 interface State {
   cluster: Cluster;
   customUrl: string;
-  solarweaveUrl: string;
   firstAvailableBlock?: number;
   status: ClusterStatus;
 }
@@ -94,7 +80,6 @@ interface Action {
   status: ClusterStatus;
   cluster: Cluster;
   customUrl: string;
-  solarweaveUrl: string;
   firstAvailableBlock?: number;
 }
 
@@ -144,7 +129,6 @@ export function ClusterProvider({ children }: ClusterProviderProps) {
   const [state, dispatch] = React.useReducer(clusterReducer, {
     cluster: DEFAULT_CLUSTER,
     customUrl: "",
-    solarweaveUrl: "",
     status: ClusterStatus.Connecting,
   });
   const [showModal, setShowModal] = React.useState(false);
@@ -164,7 +148,7 @@ export function ClusterProvider({ children }: ClusterProviderProps) {
       }
     }
 
-    updateCluster(dispatch, cluster, state.customUrl, state.solarweaveUrl);
+    updateCluster(dispatch, cluster, state.customUrl);
   }, [cluster, state.customUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -181,14 +165,12 @@ export function ClusterProvider({ children }: ClusterProviderProps) {
 async function updateCluster(
   dispatch: Dispatch,
   cluster: Cluster,
-  customUrl: string,
-  solarweaveUrl: string
+  customUrl: string
 ) {
   dispatch({
     status: ClusterStatus.Connecting,
     cluster,
     customUrl,
-    solarweaveUrl,
   });
 
   try {
@@ -199,7 +181,6 @@ async function updateCluster(
       cluster,
       customUrl,
       firstAvailableBlock,
-      solarweaveUrl,
     });
   } catch (error) {
     if (cluster !== Cluster.Custom) {
@@ -209,7 +190,6 @@ async function updateCluster(
       status: ClusterStatus.Failure,
       cluster,
       customUrl,
-      solarweaveUrl,
     });
   }
 }
@@ -220,8 +200,8 @@ export function useUpdateCustomUrl() {
     throw new Error(`useUpdateCustomUrl must be used within a ClusterProvider`);
   }
 
-  return (customUrl: string, solarweaveUrl: string) => {
-    updateCluster(dispatch, Cluster.Custom, customUrl, solarweaveUrl);
+  return (customUrl: string) => {
+    updateCluster(dispatch, Cluster.Custom, customUrl);
   };
 }
 
@@ -233,7 +213,6 @@ export function useCluster() {
   return {
     ...context,
     url: clusterUrl(context.cluster, context.customUrl),
-    solarweave: solarweaveUrl(context.cluster, context.solarweaveUrl),
     name: clusterName(context.cluster),
   };
 }

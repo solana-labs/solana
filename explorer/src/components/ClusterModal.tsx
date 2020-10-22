@@ -48,7 +48,7 @@ export function ClusterModal() {
 
 type InputProps = { activeSuffix: string; active: boolean };
 function CustomClusterInput({ activeSuffix, active }: InputProps) {
-  const { customUrl, solarweaveUrl } = useCluster();
+  const { customUrl } = useCluster();
   const updateCustomUrl = useUpdateCustomUrl();
   const [editing, setEditing] = React.useState(false);
   const query = useQuery();
@@ -66,16 +66,13 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
     };
   };
 
-  const onUrlInput = useDebounceCallback(
-    (url: string, solarweaveUrl: string) => {
-      updateCustomUrl(url, solarweaveUrl);
-      if (url.length > 0) {
-        query.set("cluster", "custom");
-        history.push({ ...location, search: query.toString() });
-      }
-    },
-    500
-  );
+  const onUrlInput = useDebounceCallback((url: string) => {
+    updateCustomUrl(url);
+    if (url.length > 0) {
+      query.set("cluster", "custom");
+      history.push({ ...location, search: query.toString() });
+    }
+  }, 500);
 
   const inputTextClass = editing ? "" : "text-muted";
   return (
@@ -86,14 +83,13 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
       >
         <input
           type="text"
-          placeholder="Solana RPC URL"
           defaultValue={customUrl}
           className={`form-control form-control-prepended ${inputTextClass} ${customClass(
             "border"
           )}`}
           onFocus={() => setEditing(true)}
           onBlur={() => setEditing(false)}
-          onInput={(e) => onUrlInput(e.currentTarget.value, solarweaveUrl)}
+          onInput={(e) => onUrlInput(e.currentTarget.value)}
         />
 
         <div className="input-group-prepend">

@@ -3,8 +3,6 @@ import React from "react";
 import { BlockHistoryCard } from "components/account/BlockHistoryCard";
 import { ErrorCard } from "components/common/ErrorCard";
 
-export const SolarweaveDatabase = "solarweave-cache-devnet-testrun4-index";
-
 type Props = { block: string };
 
 export function BlockDetailsPage({ block }: Props) {

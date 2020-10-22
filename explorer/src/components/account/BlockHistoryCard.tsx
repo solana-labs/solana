@@ -9,8 +9,7 @@ import { Block } from "components/common/Block";
 export function BlockHistoryCard({ block }: { block: string }) {
   const blockData = useBlock(block);
   const fetchBlock = useFetchBlock();
-  const refresh = () =>
-    fetchBlock(block, isNaN(Number(block)) ? "blockhash" : "slot");
+  const refresh = () => fetchBlock(block);
 
   React.useEffect(() => {
     if (!blockData) refresh();
