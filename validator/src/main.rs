@@ -1059,13 +1059,13 @@ pub fn main() {
                       --entrypoint is not provided [default: 127.0.0.1]"),
         )
         .arg(
-            Arg::with_name("gossip_rpc_addr")
-                .long("gossip-rpc-address")
+            Arg::with_name("public_rpc_addr")
+                .long("public-rpc-address")
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .conflicts_with("private_rpc")
                 .validator(solana_net_utils::is_host_port)
-                .help("RPC address for the node to advertise in gossip. \
+                .help("RPC address for the node to advertise publicly in gossip. \
                       Useful for nodes running behind a load balancer or proxy \
                       [default: use --rpc-bind-address / --rpc-port]"),
         )
@@ -1607,9 +1607,9 @@ pub fn main() {
         })
     });
 
-    let gossip_rpc_addr = matches.value_of("gossip_rpc_addr").map(|addr| {
+    let public_rpc_addr = matches.value_of("public_rpc_addr").map(|addr| {
         solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse gossip rpc address: {}", e);
+            eprintln!("failed to parse public rpc address: {}", e);
             exit(1);
         })
     });
@@ -1689,10 +1689,10 @@ pub fn main() {
     }
 
     if !private_rpc {
-        if let Some(gossip_rpc_addr) = gossip_rpc_addr {
-            node.info.rpc = gossip_rpc_addr;
-            node.info.rpc_pubsub = gossip_rpc_addr;
-            node.info.rpc_banks = gossip_rpc_addr;
+        if let Some(public_rpc_addr) = public_rpc_addr {
+            node.info.rpc = public_rpc_addr;
+            node.info.rpc_pubsub = public_rpc_addr;
+            node.info.rpc_banks = public_rpc_addr;
         } else if let Some((rpc_addr, rpc_pubsub_addr, rpc_banks_addr)) = validator_config.rpc_addrs
         {
             node.info.rpc = SocketAddr::new(node.info.gossip.ip(), rpc_addr.port());

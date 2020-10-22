@@ -1716,8 +1716,11 @@ impl ClusterInfo {
                     thread_mem_usage::datapoint("solana-gossip");
                     if start - last_contact_info_trace > 10000 {
                         // Log contact info every 10 seconds
-                        info!("\n{}", self.contact_info_trace());
-                        info!("\n{}", self.rpc_info_trace());
+                        info!(
+                            "\n{}\n\n{}",
+                            self.contact_info_trace(),
+                            self.rpc_info_trace()
+                        );
                         last_contact_info_trace = start;
                     }
 
