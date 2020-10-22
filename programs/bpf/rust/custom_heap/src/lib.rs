@@ -1,6 +1,6 @@
 //! @brief Example Rust-based BPF that tests out using a custom heap
 
-use solana_sdk::{
+use solana_program_sdk::{
     account_info::AccountInfo,
     entrypoint,
     entrypoint::{ProgramResult, HEAP_LENGTH, HEAP_START_ADDRESS},

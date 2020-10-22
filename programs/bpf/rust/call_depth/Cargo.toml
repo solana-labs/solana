@@ -1,8 +1,10 @@
-
-
 [package]
 name = "solana-bpf-rust-call-depth"
+<<<<<<< HEAD
 version = "1.4.3"
+=======
+version = "1.5.0"
+>>>>>>> fe68f7f78... Port programs to solana-program-sdk
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -11,11 +13,15 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
+<<<<<<< HEAD
 solana-sdk = { path = "../../../../sdk/", version = "1.4.3", default-features = false }
 
 [features]
 program = ["solana-sdk/program"]
 default = ["program", "solana-sdk/default"]
+=======
+solana-program-sdk = { path = "../../../../sdk/program", version = "1.5.0" }
+>>>>>>> fe68f7f78... Port programs to solana-program-sdk
 
 [lib]
 name = "solana_bpf_rust_call_depth"

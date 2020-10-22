@@ -1,6 +1,6 @@
 //! @brief Example Rust-based BPF program that issues a cross-program-invocation
 
-use solana_sdk::{
+use solana_program_sdk::{
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
 };

@@ -1,7 +1,7 @@
 //! @brief Example Rust-based BPF program tests loop iteration
 
-extern crate solana_sdk;
-use solana_sdk::entrypoint::SUCCESS;
+extern crate solana_program_sdk;
+use solana_program_sdk::entrypoint::SUCCESS;
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {

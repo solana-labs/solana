@@ -60,6 +60,7 @@ fn main() {
         let rust_programs = [
             "128bit",
             "alloc",
+            "call_depth",
             "custom_heap",
             "dep_crate",
             "deprecated_loader",

@@ -11,11 +11,15 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
+<<<<<<< HEAD
 solana-sdk = { path = "../../../../sdk/", version = "1.4.3", default-features = false }
+=======
+solana-program-sdk = { path = "../../../../sdk/program", version = "1.5.0" }
+>>>>>>> fe68f7f78... Port programs to solana-program-sdk
 
 [features]
-program = ["solana-sdk/program"]
-default = ["program", "solana-sdk/default"]
+default = ["program"]
+program = []
 
 [lib]
 name = "solana_bpf_rust_invoked"

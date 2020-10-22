@@ -1,7 +1,7 @@
 //! @brief Example Rust-based BPF program tests loop iteration
 
-extern crate solana_sdk;
-use solana_sdk::log::*;
+extern crate solana_program_sdk;
+use solana_program_sdk::log::*;
 
 pub fn many_args(
     arg1: u64,

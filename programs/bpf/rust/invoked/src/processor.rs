@@ -1,7 +1,9 @@
 //! @brief Example Rust-based BPF program that issues a cross-program-invocation
 
+#![cfg(feature = "program")]
+
 use crate::instruction::*;
-use solana_sdk::{
+use solana_program_sdk::{
     account_info::AccountInfo,
     bpf_loader, entrypoint,
     entrypoint::ProgramResult,

@@ -1,7 +1,7 @@
 //! @brief Solana Rust-based BPF program utility functions and types
 
-extern crate solana_sdk;
-use solana_sdk::info;
+extern crate solana_program_sdk;
+use solana_program_sdk::info;
 
 pub fn many_args(
     arg1: u64,
