@@ -1526,13 +1526,8 @@ mod tests {
             Accounts::load_executable_accounts(
                 &storage,
                 &ancestors,
-<<<<<<< HEAD
                 &accounts_index,
-                &Pubkey::new_rand(),
-=======
-                &accounts.accounts_db.accounts_index,
                 &solana_sdk::pubkey::new_rand(),
->>>>>>> 7bc073def... Run `codemod --extensions rs Pubkey::new_rand solana_sdk::pubkey::new_rand`
                 &mut error_counters
             ),
             Err(TransactionError::ProgramAccountNotFound)
