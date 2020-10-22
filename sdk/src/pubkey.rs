@@ -200,10 +200,21 @@ impl Pubkey {
     }
 
     #[cfg(not(feature = "program"))]
-    #[deprecated(since = "1.3.9", note = "Please use 'pubkey::new_rand' instead")]
+    #[deprecated(since = "1.3.9", note = "Please use 'Pubkey::new_unique' instead")]
     pub fn new_rand() -> Self {
-        // Consider removing solana_sdk::pubkey::new_rand() entirely in the v1.5 or v1.6 timeframe
+        // Consider removing Pubkey::new_rand() entirely in the v1.5 or v1.6 timeframe
         new_rand()
+    }
+
+    /// unique Pubkey for tests and benchmarks.
+    pub fn new_unique() -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static I: AtomicU64 = AtomicU64::new(1);
+
+        let mut b = [0u8; 32];
+        let i = I.fetch_add(1, Ordering::Relaxed);
+        b[0..8].copy_from_slice(&i.to_le_bytes());
+        Self::new(&b)
     }
 
     pub fn to_bytes(self) -> [u8; 32] {
@@ -265,6 +276,11 @@ pub fn read_pubkey_file(infile: &str) -> Result<Pubkey, Box<dyn error::Error>> {
 mod tests {
     use super::*;
     use std::{fs::remove_file, str::from_utf8};
+
+    #[test]
+    fn test_new_unique() {
+        assert!(Pubkey::new_unique() != Pubkey::new_unique());
+    }
 
     #[test]
     fn pubkey_fromstr() {
