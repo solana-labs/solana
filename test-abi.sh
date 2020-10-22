@@ -5,4 +5,4 @@
 
 here=$(dirname "$0")
 set -x
-exec "${here}/cargo" nightly test --lib -- test_abi_
+exec "${here}/cargo" nightly test --lib -- test_abi_ --nocapture
