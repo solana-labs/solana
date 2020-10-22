@@ -867,7 +867,10 @@ mod tests {
 
     #[test]
     fn test_verify_account_references() {
-        let accounts = vec![(solana_sdk::pubkey::new_rand(), RefCell::new(Account::default()))];
+        let accounts = vec![(
+            solana_sdk::pubkey::new_rand(),
+            RefCell::new(Account::default()),
+        )];
 
         assert!(MessageProcessor::verify_account_references(&accounts).is_ok());
 

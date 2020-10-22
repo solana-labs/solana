@@ -550,7 +550,11 @@ mod tests {
         let cluster_info = Arc::new(ClusterInfo::default());
         let health_check_slot_distance = 123;
         let override_health_check = Arc::new(AtomicBool::new(false));
-        let trusted_validators = vec![solana_sdk::pubkey::new_rand(), solana_sdk::pubkey::new_rand(), solana_sdk::pubkey::new_rand()];
+        let trusted_validators = vec![
+            solana_sdk::pubkey::new_rand(),
+            solana_sdk::pubkey::new_rand(),
+            solana_sdk::pubkey::new_rand(),
+        ];
 
         let health = Arc::new(RpcHealth::new(
             cluster_info.clone(),

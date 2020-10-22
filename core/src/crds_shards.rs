@@ -141,8 +141,10 @@ mod test {
     use std::ops::Index;
 
     fn new_test_crds_value() -> VersionedCrdsValue {
-        let data =
-            CrdsData::ContactInfo(ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp()));
+        let data = CrdsData::ContactInfo(ContactInfo::new_localhost(
+            &solana_sdk::pubkey::new_rand(),
+            timestamp(),
+        ));
         VersionedCrdsValue::new(timestamp(), CrdsValue::new_unsigned(data))
     }
 

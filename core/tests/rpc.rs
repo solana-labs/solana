@@ -173,7 +173,9 @@ fn test_rpc_subscriptions() {
 
     // Create transaction signatures to subscribe to
     let transactions: Vec<Transaction> = (0..1000)
-        .map(|_| system_transaction::transfer(&alice, &solana_sdk::pubkey::new_rand(), 1, genesis_hash))
+        .map(|_| {
+            system_transaction::transfer(&alice, &solana_sdk::pubkey::new_rand(), 1, genesis_hash)
+        })
         .collect();
     let mut signature_set: HashSet<String> = transactions
         .iter()

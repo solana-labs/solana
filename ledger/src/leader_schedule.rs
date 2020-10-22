@@ -77,7 +77,9 @@ mod tests {
     #[test]
     fn test_leader_schedule_basic() {
         let num_keys = 10;
-        let stakes: Vec<_> = (0..num_keys).map(|i| (solana_sdk::pubkey::new_rand(), i)).collect();
+        let stakes: Vec<_> = (0..num_keys)
+            .map(|i| (solana_sdk::pubkey::new_rand(), i))
+            .collect();
 
         let seed = solana_sdk::pubkey::new_rand();
         let mut seed_bytes = [0u8; 32];
@@ -93,7 +95,9 @@ mod tests {
     #[test]
     fn test_repeated_leader_schedule() {
         let num_keys = 10;
-        let stakes: Vec<_> = (0..num_keys).map(|i| (solana_sdk::pubkey::new_rand(), i)).collect();
+        let stakes: Vec<_> = (0..num_keys)
+            .map(|i| (solana_sdk::pubkey::new_rand(), i))
+            .collect();
 
         let seed = solana_sdk::pubkey::new_rand();
         let mut seed_bytes = [0u8; 32];

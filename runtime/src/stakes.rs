@@ -191,7 +191,8 @@ pub mod tests {
     //  set up some dummies for a staked node     ((     vote      )  (     stake     ))
     pub fn create_staked_node_accounts(stake: u64) -> ((Pubkey, Account), (Pubkey, Account)) {
         let vote_pubkey = solana_sdk::pubkey::new_rand();
-        let vote_account = vote_state::create_account(&vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1);
+        let vote_account =
+            vote_state::create_account(&vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1);
         (
             (vote_pubkey, vote_account),
             create_stake_account(stake, &vote_pubkey),
@@ -218,7 +219,8 @@ pub mod tests {
         epoch: Epoch,
     ) -> ((Pubkey, Account), (Pubkey, Account)) {
         let vote_pubkey = solana_sdk::pubkey::new_rand();
-        let vote_account = vote_state::create_account(&vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1);
+        let vote_account =
+            vote_state::create_account(&vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1);
         (
             (vote_pubkey, vote_account),
             create_warming_stake_account(stake, epoch, &vote_pubkey),

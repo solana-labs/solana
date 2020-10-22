@@ -377,17 +377,20 @@ mod tests {
 
         let sk1 = solana_sdk::pubkey::new_rand();
         let pk1 = solana_sdk::pubkey::new_rand();
-        let mut vote_account1 = vote_state::create_account(&pk1, &solana_sdk::pubkey::new_rand(), 0, 100);
+        let mut vote_account1 =
+            vote_state::create_account(&pk1, &solana_sdk::pubkey::new_rand(), 0, 100);
         let stake_account1 =
             stake_state::create_account(&sk1, &pk1, &vote_account1, &genesis_config.rent, 100);
         let sk2 = solana_sdk::pubkey::new_rand();
         let pk2 = solana_sdk::pubkey::new_rand();
-        let mut vote_account2 = vote_state::create_account(&pk2, &solana_sdk::pubkey::new_rand(), 0, 50);
+        let mut vote_account2 =
+            vote_state::create_account(&pk2, &solana_sdk::pubkey::new_rand(), 0, 50);
         let stake_account2 =
             stake_state::create_account(&sk2, &pk2, &vote_account2, &genesis_config.rent, 50);
         let sk3 = solana_sdk::pubkey::new_rand();
         let pk3 = solana_sdk::pubkey::new_rand();
-        let mut vote_account3 = vote_state::create_account(&pk3, &solana_sdk::pubkey::new_rand(), 0, 1);
+        let mut vote_account3 =
+            vote_state::create_account(&pk3, &solana_sdk::pubkey::new_rand(), 0, 1);
         let stake_account3 = stake_state::create_account(
             &sk3,
             &pk3,
@@ -397,7 +400,8 @@ mod tests {
         );
         let sk4 = solana_sdk::pubkey::new_rand();
         let pk4 = solana_sdk::pubkey::new_rand();
-        let mut vote_account4 = vote_state::create_account(&pk4, &solana_sdk::pubkey::new_rand(), 0, 1);
+        let mut vote_account4 =
+            vote_state::create_account(&pk4, &solana_sdk::pubkey::new_rand(), 0, 1);
         let stake_account4 = stake_state::create_account(
             &sk4,
             &pk4,

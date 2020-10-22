@@ -4371,7 +4371,9 @@ pub mod tests {
         let accounts = AccountsDB::new_single();
 
         let pubkey_count = 100;
-        let pubkeys: Vec<_> = (0..pubkey_count).map(|_| solana_sdk::pubkey::new_rand()).collect();
+        let pubkeys: Vec<_> = (0..pubkey_count)
+            .map(|_| solana_sdk::pubkey::new_rand())
+            .collect();
 
         let some_lamport = 223;
         let no_data = 0;
@@ -4435,7 +4437,9 @@ pub mod tests {
         let accounts = AccountsDB::new_single();
 
         let pubkey_count = 100;
-        let pubkeys: Vec<_> = (0..pubkey_count).map(|_| solana_sdk::pubkey::new_rand()).collect();
+        let pubkeys: Vec<_> = (0..pubkey_count)
+            .map(|_| solana_sdk::pubkey::new_rand())
+            .collect();
 
         let some_lamport = 223;
         let no_data = 0;
@@ -4614,7 +4618,11 @@ pub mod tests {
         );
         // any random program data accounts
         assert_eq!(
-            AccountsDB::account_balance_for_capitalization(10, &solana_sdk::pubkey::new_rand(), false),
+            AccountsDB::account_balance_for_capitalization(
+                10,
+                &solana_sdk::pubkey::new_rand(),
+                false
+            ),
             10
         );
     }

@@ -310,7 +310,10 @@ mod tests {
             faucet_keypair.pubkey(),
             Account::new(10_000, 0, &Pubkey::default()),
         );
-        config.add_account(solana_sdk::pubkey::new_rand(), Account::new(1, 0, &Pubkey::default()));
+        config.add_account(
+            solana_sdk::pubkey::new_rand(),
+            Account::new(1, 0, &Pubkey::default()),
+        );
         config.add_native_instruction_processor("hi".to_string(), solana_sdk::pubkey::new_rand());
 
         assert_eq!(config.accounts.len(), 2);
