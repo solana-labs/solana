@@ -42,33 +42,10 @@ export type CreateSecp256k1InstructionWithPrivateKeyParams = {|
   message: Buffer | Uint8Array | Array<number>,
 |};
 
-/**
- * A decoded Secp256k1 instruction
- * @typedef {Object} DecodedSecp256k1Instruction
- * @property {Buffer} signature
- * @property {Buffer} ethPublicKey
- * @property {Buffer} message
- * @property {number} recoveryId
- */
-export type DecodedSecp256k1Instruction = {|
-  numSignatures: number,
-  signatureOffset: number,
-  signatureInstructionOffset: number,
-  ethAddressOffset: number,
-  ethAddressInstructionIndex: number,
-  messageDataOffset: number,
-  messageDataSize: number,
-  messageInstructionIndex: number,
-  signature: Buffer,
-  ethPublicKey: Buffer,
-  recoveryId: number,
-  message: Buffer,
-|};
-
 const SECP256K1_INSTRUCTION_LAYOUT = BufferLayout.struct([
   BufferLayout.u8('numSignatures'),
   BufferLayout.u16('signatureOffset'),
-  BufferLayout.u8('signatureInstructionOffset'),
+  BufferLayout.u8('signatureInstructionIndex'),
   BufferLayout.u16('ethAddressOffset'),
   BufferLayout.u8('ethAddressInstructionIndex'),
   BufferLayout.u16('messageDataOffset'),
@@ -78,31 +55,6 @@ const SECP256K1_INSTRUCTION_LAYOUT = BufferLayout.struct([
   BufferLayout.blob(64, 'signature'),
   BufferLayout.u8('recoveryId'),
 ]);
-
-export class Secp256k1Instruction {
-  /**
-   * Decode a Secp256k1 instruction
-   */
-  static decodeInstruction(
-    instruction: TransactionInstruction,
-  ): DecodedSecp256k1Instruction {
-    const decoded = SECP256K1_INSTRUCTION_LAYOUT.decode(instruction.data);
-    const message = instruction.data.slice(SECP256K1_INSTRUCTION_LAYOUT.span);
-    return {
-      ...decoded,
-      message,
-    };
-  }
-
-  /**
-   * @private
-   */
-  static checkProgramId(programId: PublicKey) {
-    if (!programId.equals(Secp256k1Program.programId)) {
-      throw new Error('invalid instruction; programId is not Secp256k1Program');
-    }
-  }
-}
 
 export class Secp256k1Program {
   /**
@@ -146,7 +98,7 @@ export class Secp256k1Program {
       {
         numSignatures: numSignatures,
         signatureOffset: signatureOffset,
-        signatureInstructionOffset: 0,
+        signatureInstructionIndex: 0,
         ethAddressOffset: ethAddressOffset,
         ethAddressInstructionIndex: 0,
         messageDataOffset: messageDataOffset,

@@ -987,29 +987,6 @@ declare module '@solana/web3.js' {
     message: Buffer | Uint8Array | Array<number>,
   |};
 
-  declare export type DecodedSecp256k1Instruction = {|
-    numSignatures: number,
-    signatureOffset: number,
-    signatureInstructionOffset: number,
-    ethAddressOffset: number,
-    ethAddressInstructionIndex: number,
-    messageDataOffset: number,
-    messageDataSize: number,
-    messageInstructionIndex: number,
-    signature: Buffer,
-    ethPublicKey: Buffer,
-    recoveryId: number,
-    message: Buffer,
-  |};
-
-  declare export class Secp256k1Instruction {
-    static decodeInstruction(
-      instruction: TransactionInstruction,
-    ): DecodedSecp256k1Instruction;
-
-    static checkProgramId(programId: PublicKey): void;
-  }
-
   declare export class Secp256k1Program {
     static get programId(): PublicKey;
 

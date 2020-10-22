@@ -21,7 +21,7 @@ export {
   SystemProgram,
   SYSTEM_INSTRUCTION_LAYOUTS,
 } from './system-program';
-export {Secp256k1Instruction, Secp256k1Program} from './secp256k1-program';
+export {Secp256k1Program} from './secp256k1-program';
 export {Transaction, TransactionInstruction} from './transaction';
 export {VALIDATOR_INFO_KEY, ValidatorInfo} from './validator-info';
 export {VOTE_PROGRAM_ID, VoteAccount} from './vote-account';
