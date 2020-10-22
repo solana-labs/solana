@@ -70,7 +70,7 @@ module.exports = {
       "apps/jsonrpc-api",
       "apps/javascript-api",
       "apps/builtins",
-      "apps/breaking-changes",
+      "apps/backwards-compatibility",
     ],
     "Integrating": ["integrations/exchange"],
     "Validating": [

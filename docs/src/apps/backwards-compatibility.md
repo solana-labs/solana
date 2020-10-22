@@ -1,5 +1,5 @@
 ---
-title: API Breaking Changes
+title: Backwards Compatibility Policy
 ---
 
 As the Solana developer ecosystem grows, so does the need for clear expectations around
@@ -8,8 +8,15 @@ In a perfect world, Solana development could continue at a very fast pace withou
 causing issues for existing developers. However, some compromises will need to be made
 and so this document attempts to clarify and codify the process for new releases.
 
-Solana API's, SDK's, and CLI tooling are typically tied to validator software releases.
-Validator software releases DO NOT strictly follow semantic versioning.
+### Expectations
+
+- Solana API's, SDK's, and CLI tooling are tied to validator software releases (with a few
+  [exceptions](#exceptions)).
+- Software for a `MINOR` version release will be compatible across all software on the
+  **same** `MINOR` version _regardless_ of `PATCH` version.
+- Solana **DOES NOT** guarantee that software on _different_ `MINOR` version releases
+  will always be compatible.
+- Validator software releases **DO NOT** strictly follow semantic versioning, details below.
 
 ### Release Cadence
 
@@ -19,7 +26,7 @@ updates of a particular minor version release.
 
 #### Minor Releases (1.x.0)
 
-Experimental changes and new proposal implementations are added to new MINOR version
+Experimental changes and new proposal implementations are added to new `MINOR` version
 releases (ex. 1.4.0) and are first run on Solana's Tour de SOL testnet cluster. After
 those changes have proven to be stable, the Mainnet Beta cluster will be updated to the
 new version.
@@ -27,7 +34,7 @@ new version.
 #### Patch Releases (1.0.x)
 
 Low risk features, non-breaking changes, and security and bug fixes are shipped as part
-of PATCH version releases (ex. 1.0.11).
+of `PATCH` version releases (ex. 1.0.11).
 
 ### RPC API
 
