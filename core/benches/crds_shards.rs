@@ -7,7 +7,6 @@ use solana_core::contact_info::ContactInfo;
 use solana_core::crds::VersionedCrdsValue;
 use solana_core::crds_shards::CrdsShards;
 use solana_core::crds_value::{CrdsData, CrdsValue};
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
 use test::Bencher;
 

@@ -37,7 +37,7 @@ pub fn parse_bpf_loader(
 #[cfg(test)]
 mod test {
     use super::*;
-    use solana_sdk::{message::Message, pubkey::Pubkey};
+    use solana_sdk::message::Message;
 
     #[test]
     fn test_parse_bpf_loader_instructions() {

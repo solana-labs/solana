@@ -15,8 +15,8 @@ use solana_client::{
 use solana_core::contact_info::ContactInfo;
 use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, test_validator::TestValidator};
 use solana_sdk::{
-    commitment_config::CommitmentConfig, hash::Hash, pubkey::Pubkey, signature::Signer,
-    system_transaction, transaction::Transaction,
+    commitment_config::CommitmentConfig, hash::Hash, signature::Signer, system_transaction,
+    transaction::Transaction,
 };
 use std::{
     collections::HashSet,

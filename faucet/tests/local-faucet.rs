@@ -2,7 +2,6 @@ use solana_faucet::faucet::{request_airdrop_transaction, run_local_faucet};
 use solana_sdk::{
     hash::Hash,
     message::Message,
-    pubkey::Pubkey,
     signature::{Keypair, Signer},
     system_instruction,
     transaction::Transaction,

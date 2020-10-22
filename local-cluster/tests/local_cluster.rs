@@ -35,7 +35,6 @@ use solana_sdk::{
     genesis_config::ClusterType,
     hash::Hash,
     poh_config::PohConfig,
-    pubkey::Pubkey,
     signature::{Keypair, Signer},
     system_transaction,
 };

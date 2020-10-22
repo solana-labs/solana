@@ -4,7 +4,6 @@ extern crate test;
 use bincode::{deserialize, serialize};
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::message::Message;
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::sysvar::instructions;
 use test::Bencher;
 

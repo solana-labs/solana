@@ -4,7 +4,6 @@ use rand::{thread_rng, Rng};
 use solana_core::{
     contact_info::ContactInfo, gossip_service::discover, serve_repair::RepairProtocol,
 };
-use solana_sdk::pubkey::Pubkey;
 use std::net::{SocketAddr, UdpSocket};
 use std::process::exit;
 use std::time::Instant;

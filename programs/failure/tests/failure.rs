@@ -4,7 +4,6 @@ use solana_runtime::loader_utils::create_invoke_instruction;
 use solana_sdk::client::SyncClient;
 use solana_sdk::genesis_config::create_genesis_config;
 use solana_sdk::instruction::InstructionError;
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signer;
 use solana_sdk::transaction::TransactionError;
 

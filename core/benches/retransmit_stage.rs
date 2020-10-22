@@ -14,7 +14,6 @@ use solana_perf::packet::to_packets_chunked;
 use solana_perf::test_tx::test_tx;
 use solana_runtime::bank::Bank;
 use solana_runtime::bank_forks::BankForks;
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicUsize, Ordering};
