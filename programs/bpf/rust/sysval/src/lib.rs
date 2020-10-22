@@ -1,7 +1,7 @@
 //! @brief Example Rust-based BPF program that tests sysval use
 
-extern crate solana_sdk;
-use solana_sdk::{
+extern crate solana_program_sdk;
+use solana_program_sdk::{
     account_info::AccountInfo,
     clock::DEFAULT_SLOTS_PER_EPOCH,
     entrypoint,
