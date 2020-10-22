@@ -134,7 +134,6 @@ impl From<Delegation> for UiDelegation {
 mod test {
     use super::*;
     use bincode::serialize;
-    use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_parse_stake() {

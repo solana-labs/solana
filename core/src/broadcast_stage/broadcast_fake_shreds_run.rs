@@ -140,7 +140,6 @@ impl BroadcastRun for BroadcastFakeShredsRun {
 mod tests {
     use super::*;
     use crate::contact_info::ContactInfo;
-    use solana_sdk::pubkey::Pubkey;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     #[test]

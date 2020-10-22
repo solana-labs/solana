@@ -20,7 +20,6 @@ use solana_runtime::bank::Bank;
 use solana_sdk::genesis_config::GenesisConfig;
 use solana_sdk::hash::Hash;
 use solana_sdk::message::Message;
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signature::Signature;
 use solana_sdk::signature::Signer;

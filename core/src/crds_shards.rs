@@ -135,7 +135,6 @@ mod test {
     use crate::contact_info::ContactInfo;
     use crate::crds_value::{CrdsData, CrdsValue};
     use rand::{thread_rng, Rng};
-    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::timing::timestamp;
     use std::collections::HashSet;
     use std::ops::Index;

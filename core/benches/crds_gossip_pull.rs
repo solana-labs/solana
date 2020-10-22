@@ -8,7 +8,6 @@ use solana_core::cluster_info::MAX_BLOOM_SIZE;
 use solana_core::crds::Crds;
 use solana_core::crds_gossip_pull::{CrdsFilter, CrdsGossipPull};
 use solana_core::crds_value::CrdsValue;
-use solana_sdk::hash::Hash;
 use test::Bencher;
 
 #[bench]
