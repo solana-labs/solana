@@ -1105,6 +1105,11 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                         let _ = pending_transactions.remove(&signature);
                     }
                 }
+                progress_bar.set_message(&format!(
+                    "[{}/{}] Transactions confirmed",
+                    num_transactions - pending_transactions.len(),
+                    num_transactions
+                ));
             }
 
             if pending_transactions.is_empty() {
