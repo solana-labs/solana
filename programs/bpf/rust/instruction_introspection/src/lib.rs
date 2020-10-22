@@ -1,7 +1,7 @@
 //! @brief Example Rust-based BPF program that exercises instruction introspection
 
-extern crate solana_sdk;
-use solana_sdk::{
+extern crate solana_program_sdk;
+use solana_program_sdk::{
     account_info::next_account_info, account_info::AccountInfo, entrypoint,
     entrypoint::ProgramResult, info, program_error::ProgramError, pubkey::Pubkey,
     sysvar::instructions,

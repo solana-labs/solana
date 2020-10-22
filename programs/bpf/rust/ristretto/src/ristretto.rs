@@ -1,7 +1,5 @@
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
-#[cfg(all(feature = "program", target_arch = "bpf"))]
-use solana_sdk::entrypoint::SUCCESS;
-use solana_sdk::program_error::ProgramError;
+use solana_program_sdk::program_error::ProgramError;
 
 /// Multiply a ristretto point with a scalar
 ///
@@ -15,12 +13,12 @@ pub fn ristretto_mul(
 ) -> Result<RistrettoPoint, ProgramError> {
     // Perform the calculation inline, calling this from within a program is
     // not supported
-    #[cfg(not(all(feature = "program", target_arch = "bpf")))]
+    #[cfg(not(target_arch = "bpf"))]
     {
         Ok(point * scalar)
     }
     // Call via a system call to perform the calculation
-    #[cfg(all(feature = "program", target_arch = "bpf"))]
+    #[cfg(target_arch = "bpf")]
     {
         extern "C" {
             fn sol_ristretto_mul(
@@ -39,7 +37,7 @@ pub fn ristretto_mul(
             )
         };
         match status {
-            SUCCESS => Ok(result),
+            solana_program_sdk::entrypoint::SUCCESS => Ok(result),
             _ => Err(status.into()),
         }
     }

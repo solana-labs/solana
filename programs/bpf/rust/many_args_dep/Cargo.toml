@@ -1,5 +1,3 @@
-
-
 [package]
 name = "solana-bpf-rust-many-args-dep"
 version = "1.5.0"
@@ -11,11 +9,7 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-solana-sdk = { path = "../../../../sdk/", version = "1.5.0", default-features = false }
-
-[features]
-program = ["solana-sdk/program"]
-default = ["program", "solana-sdk/default"]
+solana-program-sdk = { path = "../../../../sdk/program", version = "1.5.0" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
