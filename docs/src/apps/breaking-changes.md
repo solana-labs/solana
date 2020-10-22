@@ -40,6 +40,18 @@ Minor releases:
 - Endpoint / feature deprecation
 - Removal of previous minor version deprecated features
 
+### Program SDK
+
+Patch releases:
+- New APIs
+- Bug fixes
+- Performance improvements
+- Security fixes
+
+Minor releases:
+- Removal of deprecated APIs
+- Backward compatibility breaking changes
+
 ### CLI Tools
 
 Patch releases:
@@ -62,7 +74,7 @@ The release process is as follows:
 
 1. New runtime feature is added to a new release but deactivated by default
 2. Sufficient staked validators upgrade to the new release
-3. Runtime feature switch is activated manually with an instruction and take effect in the next slot
+3. Runtime feature switch is activated manually with an instruction and take effect in the next epoch
 
 ### Infrastructure Changes
 
