@@ -361,7 +361,9 @@ mod test {
         }
 
         let mut crds = Crds::default();
-        let pubkeys: Vec<_> = std::iter::repeat_with(solana_sdk::pubkey::new_rand).take(256).collect();
+        let pubkeys: Vec<_> = std::iter::repeat_with(solana_sdk::pubkey::new_rand)
+            .take(256)
+            .collect();
         let mut rng = thread_rng();
         let mut num_inserts = 0;
         for _ in 0..4096 {
