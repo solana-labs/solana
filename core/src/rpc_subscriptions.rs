@@ -1250,7 +1250,7 @@ pub(crate) mod tests {
             .unwrap();
 
         let next_bank =
-            Bank::new_from_parent(&bank_forks.banks[&0].clone(), &Pubkey::new_rand(), 1);
+            Bank::new_from_parent(&bank_forks.banks[&0].clone(), &solana_sdk::pubkey::new_rand(), 1);
         bank_forks.insert(next_bank);
 
         bank_forks

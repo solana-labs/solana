@@ -584,7 +584,7 @@ pub fn test_process_distribute_tokens_with_client<C: Client>(
         .poll_for_confirmation(&transaction.signatures[0])
         .unwrap();
 
-    let alice_pubkey = Pubkey::new_rand();
+    let alice_pubkey = solana_sdk::pubkey::new_rand();
     let allocation = Allocation {
         recipient: alice_pubkey.to_string(),
         amount: if let Some(amount) = transfer_amount {
@@ -694,7 +694,7 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
         .send_and_confirm_message(message, &signers)
         .unwrap();
 
-    let alice_pubkey = Pubkey::new_rand();
+    let alice_pubkey = solana_sdk::pubkey::new_rand();
     let allocation = Allocation {
         recipient: alice_pubkey.to_string(),
         amount: 1000.0,
@@ -820,7 +820,7 @@ mod tests {
 
     #[test]
     fn test_read_allocations() {
-        let alice_pubkey = Pubkey::new_rand();
+        let alice_pubkey = solana_sdk::pubkey::new_rand();
         let allocation = Allocation {
             recipient: alice_pubkey.to_string(),
             amount: 42.0,
@@ -840,9 +840,9 @@ mod tests {
 
     #[test]
     fn test_read_allocations_transfer_amount() {
-        let pubkey0 = Pubkey::new_rand();
-        let pubkey1 = Pubkey::new_rand();
-        let pubkey2 = Pubkey::new_rand();
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
         let file = NamedTempFile::new().unwrap();
         let input_csv = file.path().to_str().unwrap().to_string();
         let mut wtr = csv::WriterBuilder::new().from_writer(file);
@@ -879,8 +879,8 @@ mod tests {
 
     #[test]
     fn test_apply_previous_transactions() {
-        let alice = Pubkey::new_rand();
-        let bob = Pubkey::new_rand();
+        let alice = solana_sdk::pubkey::new_rand();
+        let bob = solana_sdk::pubkey::new_rand();
         let mut allocations = vec![
             Allocation {
                 recipient: alice.to_string(),
@@ -908,8 +908,8 @@ mod tests {
 
     #[test]
     fn test_has_same_recipient() {
-        let alice_pubkey = Pubkey::new_rand();
-        let bob_pubkey = Pubkey::new_rand();
+        let alice_pubkey = solana_sdk::pubkey::new_rand();
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
         let lockup0 = "2021-01-07T00:00:00Z".to_string();
         let lockup1 = "9999-12-31T23:59:59Z".to_string();
         let alice_alloc = Allocation {
@@ -965,8 +965,8 @@ mod tests {
             amount: 1.0,
             lockup_date: lockup_date_str.to_string(),
         };
-        let stake_account_address = Pubkey::new_rand();
-        let new_stake_account_address = Pubkey::new_rand();
+        let stake_account_address = solana_sdk::pubkey::new_rand();
+        let new_stake_account_address = solana_sdk::pubkey::new_rand();
         let lockup_authority = Keypair::new();
         let stake_args = StakeArgs {
             stake_account_address,
@@ -1016,7 +1016,7 @@ mod tests {
         fee_payer: &str,
         stake_args: Option<StakeArgs>,
     ) -> (Vec<Allocation>, DistributeTokensArgs) {
-        let recipient = Pubkey::new_rand();
+        let recipient = solana_sdk::pubkey::new_rand();
         let allocations = vec![Allocation {
             recipient: recipient.to_string(),
             amount: allocation_amount,
@@ -1267,7 +1267,7 @@ mod tests {
         // Underfunded stake-account
         let expensive_allocation_amount = 5000.0;
         let expensive_allocations = vec![Allocation {
-            recipient: Pubkey::new_rand().to_string(),
+            recipient: solana_sdk::pubkey::new_rand().to_string(),
             amount: expensive_allocation_amount,
             lockup_date: "".to_string(),
         }];

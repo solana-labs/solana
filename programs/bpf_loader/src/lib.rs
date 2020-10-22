@@ -441,8 +441,8 @@ mod tests {
 
     #[test]
     fn test_bpf_loader_write() {
-        let program_id = Pubkey::new_rand();
-        let program_key = Pubkey::new_rand();
+        let program_id = solana_sdk::pubkey::new_rand();
+        let program_key = solana_sdk::pubkey::new_rand();
         let program_account = Account::new_ref(1, 0, &program_id);
         let keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         let instruction_data = bincode::serialize(&LoaderInstruction::Write {
@@ -508,8 +508,8 @@ mod tests {
 
     #[test]
     fn test_bpf_loader_finalize() {
-        let program_id = Pubkey::new_rand();
-        let program_key = Pubkey::new_rand();
+        let program_id = solana_sdk::pubkey::new_rand();
+        let program_key = solana_sdk::pubkey::new_rand();
         let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
         let mut elf = Vec::new();
         let rent = Rent::default();
@@ -572,8 +572,8 @@ mod tests {
 
     #[test]
     fn test_bpf_loader_invoke_main() {
-        let program_id = Pubkey::new_rand();
-        let program_key = Pubkey::new_rand();
+        let program_id = solana_sdk::pubkey::new_rand();
+        let program_key = solana_sdk::pubkey::new_rand();
 
         // Create program account
         let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
@@ -644,7 +644,7 @@ mod tests {
         );
 
         // Case: With duplicate accounts
-        let duplicate_key = Pubkey::new_rand();
+        let duplicate_key = solana_sdk::pubkey::new_rand();
         let parameter_account = Account::new_ref(1, 0, &program_id);
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
@@ -662,8 +662,8 @@ mod tests {
 
     #[test]
     fn test_bpf_loader_serialize_unaligned() {
-        let program_id = Pubkey::new_rand();
-        let program_key = Pubkey::new_rand();
+        let program_id = solana_sdk::pubkey::new_rand();
+        let program_key = solana_sdk::pubkey::new_rand();
 
         // Create program account
         let mut file = File::open("test_elfs/noop_unaligned.so").expect("file open failed");
@@ -688,7 +688,7 @@ mod tests {
         );
 
         // Case: With duplicate accounts
-        let duplicate_key = Pubkey::new_rand();
+        let duplicate_key = solana_sdk::pubkey::new_rand();
         let parameter_account = Account::new_ref(1, 0, &program_id);
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
@@ -706,8 +706,8 @@ mod tests {
 
     #[test]
     fn test_bpf_loader_serialize_aligned() {
-        let program_id = Pubkey::new_rand();
-        let program_key = Pubkey::new_rand();
+        let program_id = solana_sdk::pubkey::new_rand();
+        let program_key = solana_sdk::pubkey::new_rand();
 
         // Create program account
         let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
@@ -732,7 +732,7 @@ mod tests {
         );
 
         // Case: With duplicate accounts
-        let duplicate_key = Pubkey::new_rand();
+        let duplicate_key = solana_sdk::pubkey::new_rand();
         let parameter_account = Account::new_ref(1, 0, &program_id);
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
@@ -774,8 +774,8 @@ mod tests {
     #[test]
     #[ignore]
     fn test_fuzz() {
-        let program_id = Pubkey::new_rand();
-        let program_key = Pubkey::new_rand();
+        let program_id = solana_sdk::pubkey::new_rand();
+        let program_key = solana_sdk::pubkey::new_rand();
 
         // Create program account
         let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");

@@ -447,7 +447,7 @@ mod tests {
 
     #[test]
     fn test_parse_path() {
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let (wallet_info, derivation_path) =
             RemoteWalletInfo::parse_path(format!("usb://ledger/{:?}?key=1/2", pubkey)).unwrap();
         assert!(wallet_info.matches(&RemoteWalletInfo {
@@ -588,7 +588,7 @@ mod tests {
 
     #[test]
     fn test_remote_wallet_info_matches() {
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let info = RemoteWalletInfo {
             manufacturer: "Ledger".to_string(),
             model: "Nano S".to_string(),
@@ -608,7 +608,7 @@ mod tests {
         assert!(info.matches(&test_info));
         test_info.host_device_path = "/host/device/path".to_string();
         assert!(info.matches(&test_info));
-        let another_pubkey = Pubkey::new_rand();
+        let another_pubkey = solana_sdk::pubkey::new_rand();
         test_info.pubkey = another_pubkey;
         assert!(!info.matches(&test_info));
         test_info.pubkey = pubkey;
@@ -617,7 +617,7 @@ mod tests {
 
     #[test]
     fn test_get_pretty_path() {
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let pubkey_str = pubkey.to_string();
         let remote_wallet_info = RemoteWalletInfo {
             model: "nano-s".to_string(),

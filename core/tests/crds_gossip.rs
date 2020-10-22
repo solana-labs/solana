@@ -77,13 +77,13 @@ fn stakes(network: &Network) -> HashMap<Pubkey, u64> {
 
 fn star_network_create(num: usize) -> Network {
     let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-        &Pubkey::new_rand(),
+        &solana_sdk::pubkey::new_rand(),
         0,
     )));
     let mut network: HashMap<_, _> = (1..num)
         .map(|_| {
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &Pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 0,
             )));
             let id = new.label().pubkey();
@@ -104,7 +104,7 @@ fn star_network_create(num: usize) -> Network {
 
 fn rstar_network_create(num: usize) -> Network {
     let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-        &Pubkey::new_rand(),
+        &solana_sdk::pubkey::new_rand(),
         0,
     )));
     let mut origin = CrdsGossip::default();
@@ -114,7 +114,7 @@ fn rstar_network_create(num: usize) -> Network {
     let mut network: HashMap<_, _> = (1..num)
         .map(|_| {
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &Pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 0,
             )));
             let id = new.label().pubkey();
@@ -133,7 +133,7 @@ fn ring_network_create(num: usize) -> Network {
     let mut network: HashMap<_, _> = (0..num)
         .map(|_| {
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &Pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 0,
             )));
             let id = new.label().pubkey();
@@ -171,7 +171,7 @@ fn connected_staked_network_create(stakes: &[u64]) -> Network {
     let mut network: HashMap<_, _> = (0..num)
         .map(|n| {
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &Pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 0,
             )));
             let id = new.label().pubkey();

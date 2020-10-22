@@ -2903,7 +2903,7 @@ mod tests {
             .unwrap();
         assert_eq!(signer_info.signers.len(), 1);
         assert_eq!(signer_info.index_of(None), Some(0));
-        assert_eq!(signer_info.index_of(Some(Pubkey::new_rand())), None);
+        assert_eq!(signer_info.index_of(Some(solana_sdk::pubkey::new_rand())), None);
 
         let keypair0 = keypair_from_seed(&[1u8; 32]).unwrap();
         let keypair0_pubkey = keypair0.pubkey();
@@ -2959,11 +2959,11 @@ mod tests {
     fn test_cli_parse_command() {
         let test_commands = app("test", "desc", "version");
 
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let pubkey_string = format!("{}", pubkey);
-        let witness0 = Pubkey::new_rand();
+        let witness0 = solana_sdk::pubkey::new_rand();
         let witness0_string = format!("{}", witness0);
-        let witness1 = Pubkey::new_rand();
+        let witness1 = solana_sdk::pubkey::new_rand();
         let witness1_string = format!("{}", witness1);
         let dt = Utc.ymd(2018, 9, 19).and_hms(17, 30, 59);
 
@@ -3073,7 +3073,7 @@ mod tests {
         assert!(parse_command(&test_bad_signature, &default_signer, &mut None).is_err());
 
         // Test CreateAddressWithSeed
-        let from_pubkey = Some(Pubkey::new_rand());
+        let from_pubkey = Some(solana_sdk::pubkey::new_rand());
         let from_str = from_pubkey.unwrap().to_string();
         for (name, program_id) in &[
             ("STAKE", solana_stake_program::id()),
@@ -3429,7 +3429,7 @@ mod tests {
         let authority_pubkey = keypair.pubkey();
         let authority_pubkey_string = format!("{}", authority_pubkey);
         let sig = keypair.sign_message(&[0u8]);
-        let signer_arg = format!("{}={}", Pubkey::new_rand(), sig);
+        let signer_arg = format!("{}={}", solana_sdk::pubkey::new_rand(), sig);
         let test_pay = test_commands.clone().get_matches_from(vec![
             "test",
             "pay",
@@ -3542,7 +3542,7 @@ mod tests {
         };
         assert_eq!(process_command(&config).unwrap(), "0.00000005 SOL");
 
-        let process_id = Pubkey::new_rand();
+        let process_id = solana_sdk::pubkey::new_rand();
         config.command = CliCommand::Cancel(process_id);
         assert!(process_command(&config).is_ok());
 
@@ -3565,7 +3565,7 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let new_authorized_pubkey = Pubkey::new_rand();
+        let new_authorized_pubkey = solana_sdk::pubkey::new_rand();
         config.signers = vec![&bob_keypair];
         config.command = CliCommand::VoteAuthorize {
             vote_account_pubkey: bob_pubkey,
@@ -3587,7 +3587,7 @@ mod tests {
 
         let bob_keypair = Keypair::new();
         let bob_pubkey = bob_keypair.pubkey();
-        let custodian = Pubkey::new_rand();
+        let custodian = solana_sdk::pubkey::new_rand();
         config.command = CliCommand::CreateStakeAccount {
             stake_account: 1,
             seed: None,
@@ -3610,8 +3610,8 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let stake_account_pubkey = Pubkey::new_rand();
-        let to_pubkey = Pubkey::new_rand();
+        let stake_account_pubkey = solana_sdk::pubkey::new_rand();
+        let to_pubkey = solana_sdk::pubkey::new_rand();
         config.command = CliCommand::WithdrawStake {
             stake_account_pubkey,
             destination_account_pubkey: to_pubkey,
@@ -3628,7 +3628,7 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let stake_account_pubkey = Pubkey::new_rand();
+        let stake_account_pubkey = solana_sdk::pubkey::new_rand();
         config.command = CliCommand::DeactivateStake {
             stake_account_pubkey,
             stake_authority: 0,
@@ -3641,7 +3641,7 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let stake_account_pubkey = Pubkey::new_rand();
+        let stake_account_pubkey = solana_sdk::pubkey::new_rand();
         let split_stake_account = Keypair::new();
         config.command = CliCommand::SplitStake {
             stake_account_pubkey,
@@ -3659,8 +3659,8 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let stake_account_pubkey = Pubkey::new_rand();
-        let source_stake_account_pubkey = Pubkey::new_rand();
+        let stake_account_pubkey = solana_sdk::pubkey::new_rand();
+        let source_stake_account_pubkey = solana_sdk::pubkey::new_rand();
         let merge_stake_account = Keypair::new();
         config.command = CliCommand::MergeStake {
             stake_account_pubkey,
@@ -3703,7 +3703,7 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let witness = Pubkey::new_rand();
+        let witness = solana_sdk::pubkey::new_rand();
         config.command = CliCommand::Pay(PayCommand {
             amount: SpendAmount::Some(10),
             to: bob_pubkey,
@@ -3714,19 +3714,19 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let process_id = Pubkey::new_rand();
+        let process_id = solana_sdk::pubkey::new_rand();
         config.command = CliCommand::TimeElapsed(bob_pubkey, process_id, dt);
         config.signers = vec![&keypair];
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let witness = Pubkey::new_rand();
+        let witness = solana_sdk::pubkey::new_rand();
         config.command = CliCommand::Witness(bob_pubkey, witness);
         let result = process_command(&config);
         assert!(result.is_ok());
 
         // CreateAddressWithSeed
-        let from_pubkey = Pubkey::new_rand();
+        let from_pubkey = solana_sdk::pubkey::new_rand();
         config.signers = vec![];
         config.command = CliCommand::CreateAddressWithSeed {
             from_pubkey: Some(from_pubkey),
@@ -3739,7 +3739,7 @@ mod tests {
         assert_eq!(address.unwrap(), expected_address.to_string());
 
         // Need airdrop cases
-        let to = Pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         config.signers = vec![&keypair];
         config.command = CliCommand::Airdrop {
             faucet_host: None,
@@ -3753,7 +3753,7 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let witness = Pubkey::new_rand();
+        let witness = solana_sdk::pubkey::new_rand();
         config.command = CliCommand::Witness(bob_pubkey, witness);
         let result = process_command(&config);
         assert!(result.is_ok());

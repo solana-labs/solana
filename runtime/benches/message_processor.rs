@@ -11,10 +11,10 @@ use test::Bencher;
 fn bench_verify_account_changes_data(bencher: &mut Bencher) {
     solana_logger::setup();
 
-    let owner = Pubkey::new_rand();
-    let non_owner = Pubkey::new_rand();
+    let owner = solana_sdk::pubkey::new_rand();
+    let non_owner = solana_sdk::pubkey::new_rand();
     let pre = PreAccount::new(
-        &Pubkey::new_rand(),
+        &solana_sdk::pubkey::new_rand(),
         &Account::new(0, BUFSIZE, &owner),
         true,
         false,
@@ -36,7 +36,7 @@ fn bench_verify_account_changes_data(bencher: &mut Bencher) {
     info!("data compare {} ns/iter", summary.median);
 
     let pre = PreAccount::new(
-        &Pubkey::new_rand(),
+        &solana_sdk::pubkey::new_rand(),
         &Account::new(0, BUFSIZE, &owner),
         true,
         false,

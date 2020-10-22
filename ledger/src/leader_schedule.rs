@@ -64,8 +64,8 @@ mod tests {
 
     #[test]
     fn test_leader_schedule_index() {
-        let pubkey0 = Pubkey::new_rand();
-        let pubkey1 = Pubkey::new_rand();
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
         let leader_schedule = LeaderSchedule {
             slot_leaders: vec![pubkey0, pubkey1],
         };
@@ -77,9 +77,9 @@ mod tests {
     #[test]
     fn test_leader_schedule_basic() {
         let num_keys = 10;
-        let stakes: Vec<_> = (0..num_keys).map(|i| (Pubkey::new_rand(), i)).collect();
+        let stakes: Vec<_> = (0..num_keys).map(|i| (solana_sdk::pubkey::new_rand(), i)).collect();
 
-        let seed = Pubkey::new_rand();
+        let seed = solana_sdk::pubkey::new_rand();
         let mut seed_bytes = [0u8; 32];
         seed_bytes.copy_from_slice(seed.as_ref());
         let len = num_keys * 10;
@@ -93,9 +93,9 @@ mod tests {
     #[test]
     fn test_repeated_leader_schedule() {
         let num_keys = 10;
-        let stakes: Vec<_> = (0..num_keys).map(|i| (Pubkey::new_rand(), i)).collect();
+        let stakes: Vec<_> = (0..num_keys).map(|i| (solana_sdk::pubkey::new_rand(), i)).collect();
 
-        let seed = Pubkey::new_rand();
+        let seed = solana_sdk::pubkey::new_rand();
         let mut seed_bytes = [0u8; 32];
         seed_bytes.copy_from_slice(seed.as_ref());
         let len = num_keys * 10;
@@ -114,8 +114,8 @@ mod tests {
 
     #[test]
     fn test_repeated_leader_schedule_specific() {
-        let alice_pubkey = Pubkey::new_rand();
-        let bob_pubkey = Pubkey::new_rand();
+        let alice_pubkey = solana_sdk::pubkey::new_rand();
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
         let stakes = vec![(alice_pubkey, 2), (bob_pubkey, 1)];
 
         let seed = Pubkey::default();

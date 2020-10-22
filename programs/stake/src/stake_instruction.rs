@@ -623,7 +623,7 @@ mod tests {
             process_instruction(&withdraw(
                 &Pubkey::default(),
                 &Pubkey::default(),
-                &Pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 100,
                 None,
             )),

@@ -9,8 +9,8 @@ use solana_sdk::sysvar::instructions;
 use test::Bencher;
 
 fn make_instructions() -> Vec<Instruction> {
-    let meta = AccountMeta::new(Pubkey::new_rand(), false);
-    let inst = Instruction::new(Pubkey::new_rand(), &[0; 10], vec![meta; 4]);
+    let meta = AccountMeta::new(solana_sdk::pubkey::new_rand(), false);
+    let inst = Instruction::new(solana_sdk::pubkey::new_rand(), &[0; 10], vec![meta; 4]);
     vec![inst; 4]
 }
 

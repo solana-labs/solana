@@ -319,7 +319,7 @@ mod test {
             }]),
         );
 
-        let bad_pubkey = Pubkey::new_rand();
+        let bad_pubkey = solana_sdk::pubkey::new_rand();
         assert!(parse_sysvar(&stake_history_sysvar.data, &bad_pubkey).is_err());
 
         let bad_data = vec![0; 4];

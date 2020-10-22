@@ -502,7 +502,7 @@ mod tests {
             mint_keypair: alice,
             ..
         } = create_genesis_config(10_000);
-        let bob_pubkey = Pubkey::new_rand();
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
         let bank = Bank::new(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
@@ -553,7 +553,7 @@ mod tests {
             .native_instruction_processors
             .push(solana_budget_program!());
 
-        let bob_pubkey = Pubkey::new_rand();
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
         let witness = Keypair::new();
         let contract_funds = Keypair::new();
         let contract_state = Keypair::new();
@@ -752,7 +752,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_account_unsubscribe() {
-        let bob_pubkey = Pubkey::new_rand();
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
         let session = create_session();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));

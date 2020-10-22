@@ -630,27 +630,27 @@ mod tests {
 
         let mut genesis_accounts = HashMap::new();
         genesis_accounts.insert(
-            Pubkey::new_rand().to_string(),
+            solana_sdk::pubkey::new_rand().to_string(),
             Base64Account {
-                owner: Pubkey::new_rand().to_string(),
+                owner: solana_sdk::pubkey::new_rand().to_string(),
                 balance: 2 as u64,
                 executable: false,
                 data: String::from("aGVsbG8="),
             },
         );
         genesis_accounts.insert(
-            Pubkey::new_rand().to_string(),
+            solana_sdk::pubkey::new_rand().to_string(),
             Base64Account {
-                owner: Pubkey::new_rand().to_string(),
+                owner: solana_sdk::pubkey::new_rand().to_string(),
                 balance: 1 as u64,
                 executable: true,
                 data: String::from("aGVsbG8gd29ybGQ="),
             },
         );
         genesis_accounts.insert(
-            Pubkey::new_rand().to_string(),
+            solana_sdk::pubkey::new_rand().to_string(),
             Base64Account {
-                owner: Pubkey::new_rand().to_string(),
+                owner: solana_sdk::pubkey::new_rand().to_string(),
                 balance: 3 as u64,
                 executable: true,
                 data: String::from("bWUgaGVsbG8gdG8gd29ybGQ="),
@@ -703,27 +703,27 @@ mod tests {
         // Test more accounts can be appended
         let mut genesis_accounts1 = HashMap::new();
         genesis_accounts1.insert(
-            Pubkey::new_rand().to_string(),
+            solana_sdk::pubkey::new_rand().to_string(),
             Base64Account {
-                owner: Pubkey::new_rand().to_string(),
+                owner: solana_sdk::pubkey::new_rand().to_string(),
                 balance: 6 as u64,
                 executable: true,
                 data: String::from("eW91IGFyZQ=="),
             },
         );
         genesis_accounts1.insert(
-            Pubkey::new_rand().to_string(),
+            solana_sdk::pubkey::new_rand().to_string(),
             Base64Account {
-                owner: Pubkey::new_rand().to_string(),
+                owner: solana_sdk::pubkey::new_rand().to_string(),
                 balance: 5 as u64,
                 executable: false,
                 data: String::from("bWV0YSBzdHJpbmc="),
             },
         );
         genesis_accounts1.insert(
-            Pubkey::new_rand().to_string(),
+            solana_sdk::pubkey::new_rand().to_string(),
             Base64Account {
-                owner: Pubkey::new_rand().to_string(),
+                owner: solana_sdk::pubkey::new_rand().to_string(),
                 balance: 10 as u64,
                 executable: false,
                 data: String::from("YmFzZTY0IHN0cmluZw=="),
@@ -788,7 +788,7 @@ mod tests {
         genesis_accounts2.insert(
             serde_json::to_string(&account_keypairs[0].to_bytes().to_vec()).unwrap(),
             Base64Account {
-                owner: Pubkey::new_rand().to_string(),
+                owner: solana_sdk::pubkey::new_rand().to_string(),
                 balance: 20 as u64,
                 executable: true,
                 data: String::from("Y2F0IGRvZw=="),
@@ -797,7 +797,7 @@ mod tests {
         genesis_accounts2.insert(
             serde_json::to_string(&account_keypairs[1].to_bytes().to_vec()).unwrap(),
             Base64Account {
-                owner: Pubkey::new_rand().to_string(),
+                owner: solana_sdk::pubkey::new_rand().to_string(),
                 balance: 15 as u64,
                 executable: false,
                 data: String::from("bW9ua2V5IGVsZXBoYW50"),
@@ -806,7 +806,7 @@ mod tests {
         genesis_accounts2.insert(
             serde_json::to_string(&account_keypairs[2].to_bytes().to_vec()).unwrap(),
             Base64Account {
-                owner: Pubkey::new_rand().to_string(),
+                owner: solana_sdk::pubkey::new_rand().to_string(),
                 balance: 30 as u64,
                 executable: true,
                 data: String::from("Y29tYSBtb2Nh"),
