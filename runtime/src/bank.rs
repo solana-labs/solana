@@ -5661,9 +5661,15 @@ mod tests {
 
     impl Bank {
         fn slots_by_pubkey(&self, pubkey: &Pubkey, ancestors: &Ancestors) -> Vec<Slot> {
-            let accounts_index = self.rc.accounts.accounts_db.accounts_index.read().unwrap();
-            let (accounts, _) = accounts_index.get(&pubkey, Some(&ancestors), None).unwrap();
-            accounts
+            let (locked_entry, _) = self
+                .rc
+                .accounts
+                .accounts_db
+                .accounts_index
+                .get(&pubkey, Some(&ancestors), None)
+                .unwrap();
+            locked_entry
+                .slot_list()
                 .iter()
                 .map(|(slot, _)| *slot)
                 .collect::<Vec<Slot>>()
@@ -5776,16 +5782,12 @@ mod tests {
             .accounts
             .accounts_db
             .accounts_index
-            .write()
-            .unwrap()
             .add_root(genesis_bank1.slot() + 1);
         bank1_without_zero
             .rc
             .accounts
             .accounts_db
             .accounts_index
-            .write()
-            .unwrap()
             .purge(&zero_lamport_pubkey);
 
         let some_slot = 1000;
