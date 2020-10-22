@@ -1456,7 +1456,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock("succeeds".to_string());
 
         let key = Keypair::new();
-        let to = Pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         let blockhash = Hash::default();
         let tx = system_transaction::transfer(&key, &to, 50, blockhash);
 
@@ -1509,7 +1509,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock("succeeds".to_string());
 
         let key = Keypair::new();
-        let to = Pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         let blockhash = Hash::default();
         let tx = system_transaction::transfer(&key, &to, 50, blockhash);
         let result = rpc_client.send_and_confirm_transaction(&tx);

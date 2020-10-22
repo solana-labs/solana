@@ -172,7 +172,7 @@ fn full_battery_tests(
     assert_ne!(first_nonce, third_nonce);
 
     // Withdraw from nonce account
-    let payee_pubkey = Pubkey::new_rand();
+    let payee_pubkey = solana_sdk::pubkey::new_rand();
     config_payer.signers = authorized_signers;
     config_payer.command = CliCommand::WithdrawFromNonceAccount {
         nonce_account,

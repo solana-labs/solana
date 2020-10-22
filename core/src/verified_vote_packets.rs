@@ -59,11 +59,10 @@ mod tests {
     use crate::result::Error;
     use crossbeam_channel::{unbounded, RecvTimeoutError};
     use solana_perf::packet::{Meta, Packet};
-    use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_get_latest_votes() {
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let label1 = CrdsValueLabel::Vote(0 as u8, pubkey);
         let label2 = CrdsValueLabel::Vote(1 as u8, pubkey);
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
@@ -107,7 +106,7 @@ mod tests {
     #[test]
     fn test_get_and_process_vote_packets() {
         let (s, r) = unbounded();
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let label1 = CrdsValueLabel::Vote(0 as u8, pubkey);
         let label2 = CrdsValueLabel::Vote(1 as u8, pubkey);
         let mut update_version = 0;

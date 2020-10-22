@@ -276,11 +276,11 @@ fn test_program_bpf_duplicate_accounts() {
         let bank_client = BankClient::new_shared(&bank);
         let program_id = load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
         let payee_account = Account::new(10, 1, &program_id);
-        let payee_pubkey = Pubkey::new_rand();
+        let payee_pubkey = solana_sdk::pubkey::new_rand();
         bank.store_account(&payee_pubkey, &payee_account);
 
         let account = Account::new(10, 1, &program_id);
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account_metas = vec![
             AccountMeta::new(mint_keypair.pubkey(), true),
             AccountMeta::new(payee_pubkey, false),
@@ -763,8 +763,8 @@ fn assert_instruction_count() {
 
     for program in programs.iter() {
         println!("Test program: {:?}", program.0);
-        let program_id = Pubkey::new_rand();
-        let key = Pubkey::new_rand();
+        let program_id = solana_sdk::pubkey::new_rand();
+        let key = solana_sdk::pubkey::new_rand();
         let mut account = RefCell::new(Account::default());
         let parameter_accounts = vec![KeyedAccount::new(&key, false, &mut account)];
         let count = run_program(program.0, &program_id, &parameter_accounts[..], &[]).unwrap();

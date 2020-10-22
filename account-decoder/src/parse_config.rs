@@ -117,7 +117,7 @@ mod test {
             }))
             .unwrap(),
         };
-        let info_pubkey = Pubkey::new_rand();
+        let info_pubkey = solana_sdk::pubkey::new_rand();
         let validator_info_config_account = create_config_account(
             vec![(validator_info::id(), false), (info_pubkey, true)],
             &validator_info,

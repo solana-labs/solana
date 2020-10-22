@@ -1289,7 +1289,7 @@ mod tests {
     #[test]
     fn test_translate_type() {
         // Pubkey
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let addr = &pubkey as *const _ as u64;
         let regions = vec![MemoryRegion {
             addr_host: addr,
@@ -1301,9 +1301,9 @@ mod tests {
 
         // Instruction
         let instruction = Instruction::new(
-            Pubkey::new_rand(),
+            solana_sdk::pubkey::new_rand(),
             &"foobar",
-            vec![AccountMeta::new(Pubkey::new_rand(), false)],
+            vec![AccountMeta::new(solana_sdk::pubkey::new_rand(), false)],
         );
         let addr = &instruction as *const _ as u64;
         let mut regions = vec![MemoryRegion {
@@ -1350,7 +1350,7 @@ mod tests {
         assert_eq!(data, translated_data);
 
         // Pubkeys
-        let mut data = vec![Pubkey::new_rand(); 5];
+        let mut data = vec![solana_sdk::pubkey::new_rand(); 5];
         let addr = data.as_ptr() as *const _ as u64;
         let regions = vec![MemoryRegion {
             addr_host: addr,
@@ -1360,7 +1360,7 @@ mod tests {
         let translated_data =
             translate_slice!(Pubkey, 100, data.len(), &regions, &bpf_loader::id()).unwrap();
         assert_eq!(data, translated_data);
-        data[0] = Pubkey::new_rand(); // Both should point to same place
+        data[0] = solana_sdk::pubkey::new_rand(); // Both should point to same place
         assert_eq!(data, translated_data);
     }
 

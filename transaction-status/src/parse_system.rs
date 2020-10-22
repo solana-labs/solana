@@ -205,7 +205,7 @@ mod test {
     fn test_parse_system_instruction() {
         let mut keys: Vec<Pubkey> = vec![];
         for _ in 0..6 {
-            keys.push(Pubkey::new_rand());
+            keys.push(solana_sdk::pubkey::new_rand());
         }
 
         let lamports = 55;
@@ -359,7 +359,7 @@ mod test {
     fn test_parse_system_instruction_nonce() {
         let mut keys: Vec<Pubkey> = vec![];
         for _ in 0..5 {
-            keys.push(Pubkey::new_rand());
+            keys.push(solana_sdk::pubkey::new_rand());
         }
 
         let instruction = system_instruction::advance_nonce_account(&keys[1], &keys[0]);

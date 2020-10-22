@@ -3475,9 +3475,9 @@ pub mod tests {
         for x in 0..num_entries {
             let transaction = Transaction::new_with_compiled_instructions(
                 &[&Keypair::new()],
-                &[Pubkey::new_rand()],
+                &[solana_sdk::pubkey::new_rand()],
                 Hash::default(),
-                vec![Pubkey::new_rand()],
+                vec![solana_sdk::pubkey::new_rand()],
                 vec![CompiledInstruction::new(1, &(), vec![0])],
             );
             entries.push(next_entry_mut(&mut Hash::default(), 0, vec![transaction]));
@@ -6391,8 +6391,8 @@ pub mod tests {
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
-            let address0 = Pubkey::new_rand();
-            let address1 = Pubkey::new_rand();
+            let address0 = solana_sdk::pubkey::new_rand();
+            let address1 = solana_sdk::pubkey::new_rand();
 
             let slot0 = 10;
             for x in 1..5 {
@@ -6538,7 +6538,7 @@ pub mod tests {
                         &[&Keypair::new()],
                         &[*address],
                         Hash::default(),
-                        vec![Pubkey::new_rand()],
+                        vec![solana_sdk::pubkey::new_rand()],
                         vec![CompiledInstruction::new(1, &(), vec![0])],
                     );
                     entries.push(next_entry_mut(&mut Hash::default(), 0, vec![transaction]));
@@ -6548,8 +6548,8 @@ pub mod tests {
                 entries
             }
 
-            let address0 = Pubkey::new_rand();
-            let address1 = Pubkey::new_rand();
+            let address0 = solana_sdk::pubkey::new_rand();
+            let address1 = solana_sdk::pubkey::new_rand();
 
             for slot in 2..=8 {
                 let entries = make_slot_entries_with_transaction_addresses(&[
@@ -6772,9 +6772,9 @@ pub mod tests {
             for x in 0..4 {
                 let transaction = Transaction::new_with_compiled_instructions(
                     &[&Keypair::new()],
-                    &[Pubkey::new_rand()],
+                    &[solana_sdk::pubkey::new_rand()],
                     Hash::default(),
-                    vec![Pubkey::new_rand()],
+                    vec![solana_sdk::pubkey::new_rand()],
                     vec![CompiledInstruction::new(1, &(), vec![0])],
                 );
                 transaction_status_cf
@@ -6797,9 +6797,9 @@ pub mod tests {
             // Push transaction that will not have matching status, as a test case
             transactions.push(Transaction::new_with_compiled_instructions(
                 &[&Keypair::new()],
-                &[Pubkey::new_rand()],
+                &[solana_sdk::pubkey::new_rand()],
                 Hash::default(),
-                vec![Pubkey::new_rand()],
+                vec![solana_sdk::pubkey::new_rand()],
                 vec![CompiledInstruction::new(1, &(), vec![0])],
             ));
 
@@ -7256,7 +7256,7 @@ pub mod tests {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
             let rewards: Rewards = (0..100)
                 .map(|i| Reward {
-                    pubkey: Pubkey::new_rand().to_string(),
+                    pubkey: solana_sdk::pubkey::new_rand().to_string(),
                     lamports: 42 + i,
                     post_balance: std::u64::MAX,
                     reward_type: Some(RewardType::Fee),

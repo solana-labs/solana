@@ -47,10 +47,10 @@ pub mod tests {
         let slot = 5;
         let slot_duration = Duration::from_millis(400);
         let expected_offset = (slot * slot_duration).as_secs();
-        let pubkey0 = Pubkey::new_rand();
-        let pubkey1 = Pubkey::new_rand();
-        let pubkey2 = Pubkey::new_rand();
-        let pubkey3 = Pubkey::new_rand();
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+        let pubkey3 = solana_sdk::pubkey::new_rand();
         let unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = [
             (pubkey0, (0, recent_timestamp)),
             (pubkey1, (0, recent_timestamp)),

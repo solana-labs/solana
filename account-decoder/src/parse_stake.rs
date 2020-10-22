@@ -134,7 +134,6 @@ impl From<Delegation> for UiDelegation {
 mod test {
     use super::*;
     use bincode::serialize;
-    use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_parse_stake() {
@@ -145,8 +144,8 @@ mod test {
             StakeAccountType::Uninitialized
         );
 
-        let pubkey = Pubkey::new_rand();
-        let custodian = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let custodian = solana_sdk::pubkey::new_rand();
         let authorized = Authorized::auto(&pubkey);
         let lockup = Lockup {
             unix_timestamp: 0,
@@ -180,7 +179,7 @@ mod test {
             })
         );
 
-        let voter_pubkey = Pubkey::new_rand();
+        let voter_pubkey = solana_sdk::pubkey::new_rand();
         let stake = Stake {
             delegation: Delegation {
                 voter_pubkey,
