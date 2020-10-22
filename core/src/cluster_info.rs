@@ -590,6 +590,70 @@ impl ClusterInfo {
             .unwrap_or_else(|| EpochSlots::new(self.id(), timestamp()))
     }
 
+    pub fn rpc_info_trace(&self) -> String {
+        let now = timestamp();
+        let my_pubkey = self.id();
+        let my_shred_version = self.my_shred_version();
+        let nodes: Vec<_> = self
+            .all_peers()
+            .into_iter()
+            .filter_map(|(node, last_updated)| {
+                if !ContactInfo::is_valid_address(&node.rpc) {
+                    info!("invalid rpc: {}", node.rpc.to_string());
+                    return None;
+                }
+
+                let node_version = self.get_node_version(&node.id);
+                if my_shred_version != 0
+                    && (node.shred_version != 0 && node.shred_version != my_shred_version)
+                {
+                    return None;
+                }
+
+                fn addr_to_string(default_ip: &IpAddr, addr: &SocketAddr) -> String {
+                    if ContactInfo::is_valid_address(addr) {
+                        if &addr.ip() == default_ip {
+                            addr.port().to_string()
+                        } else {
+                            addr.to_string()
+                        }
+                    } else {
+                        "none".to_string()
+                    }
+                }
+
+                let rpc_addr = node.rpc.ip();
+                Some(format!(
+                    "{:15} {:2}| {:5} | {:44} |{:^9}| {:5}| {:5}| {:5}| {}\n",
+                    rpc_addr.to_string(),
+                    if node.id == my_pubkey { "me" } else { "" }.to_string(),
+                    now.saturating_sub(last_updated),
+                    node.id.to_string(),
+                    if let Some(node_version) = node_version {
+                        node_version.to_string()
+                    } else {
+                        "-".to_string()
+                    },
+                    addr_to_string(&rpc_addr, &node.rpc),
+                    addr_to_string(&rpc_addr, &node.rpc_pubsub),
+                    addr_to_string(&rpc_addr, &node.rpc_banks),
+                    node.shred_version,
+                ))
+            })
+            .collect();
+
+        format!(
+            "RPC Address       |Age(ms)| Node identifier                              \
+             | Version | RPC  |PubSub| Banks|ShredVer\n\
+             ------------------+-------+----------------------------------------------+---------+\
+             ------+------+------+--------\n\
+             {}\
+             RPC Enabled Nodes: {}",
+            nodes.join(""),
+            nodes.len(),
+        )
+    }
+
     pub fn contact_info_trace(&self) -> String {
         let now = timestamp();
         let mut spy_nodes = 0;
@@ -622,7 +686,7 @@ impl ClusterInfo {
                     }
                     let ip_addr = node.gossip.ip();
                     Some(format!(
-                        "{:15} {:2}| {:5} | {:44} |{:^9}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
+                        "{:15} {:2}| {:5} | {:44} |{:^9}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
                         if ContactInfo::is_valid_address(&node.gossip) {
                             ip_addr.to_string()
                         } else {
@@ -643,9 +707,6 @@ impl ClusterInfo {
                         addr_to_string(&ip_addr, &node.tvu_forwards),
                         addr_to_string(&ip_addr, &node.repair),
                         addr_to_string(&ip_addr, &node.serve_repair),
-                        addr_to_string(&ip_addr, &node.rpc),
-                        addr_to_string(&ip_addr, &node.rpc_pubsub),
-                        addr_to_string(&ip_addr, &node.rpc_banks),
                         node.shred_version,
                     ))
                 }
@@ -654,9 +715,9 @@ impl ClusterInfo {
 
         format!(
             "IP Address        |Age(ms)| Node identifier                              \
-             | Version |Gossip| TPU  |TPUfwd| TVU  |TVUfwd|Repair|ServeR| RPC  |PubSub|ShredVer\n\
+             | Version |Gossip| TPU  |TPUfwd| TVU  |TVUfwd|Repair|ServeR|ShredVer\n\
              ------------------+-------+----------------------------------------------+---------+\
-             ------+------+------+------+------+------+------+------+------+--------\n\
+             ------+------+------+------+------+------+------+--------\n\
              {}\
              Nodes: {}{}{}",
             nodes.join(""),
@@ -1655,7 +1716,11 @@ impl ClusterInfo {
                     thread_mem_usage::datapoint("solana-gossip");
                     if start - last_contact_info_trace > 10000 {
                         // Log contact info every 10 seconds
-                        info!("\n{}", self.contact_info_trace());
+                        info!(
+                            "\n{}\n\n{}",
+                            self.contact_info_trace(),
+                            self.rpc_info_trace()
+                        );
                         last_contact_info_trace = start;
                     }
 
