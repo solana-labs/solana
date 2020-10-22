@@ -531,6 +531,7 @@ declare module '@solana/web3.js' {
   export const SYSVAR_RENT_PUBKEY: PublicKey;
   export const SYSVAR_REWARDS_PUBKEY: PublicKey;
   export const SYSVAR_STAKE_HISTORY_PUBKEY: PublicKey;
+  export const SYSVAR_INSTRUCTIONS_PUBKEY: PublicKey;
 
   // === src/vote-account.js ===
   export const VOTE_PROGRAM_ID: PublicKey;
@@ -964,6 +965,31 @@ declare module '@solana/web3.js' {
     static decodeNonceAuthorize(
       instruction: TransactionInstruction,
     ): AuthorizeNonceParams;
+  }
+
+  // === src/secp256k1-program.js ===
+  export type CreateSecp256k1InstructionWithPublicKeyParams = {
+    publicKey: Buffer | Uint8Array | Array<number>;
+    message: Buffer | Uint8Array | Array<number>;
+    signature: Buffer | Uint8Array | Array<number>;
+    recoveryId: number;
+  };
+
+  export type CreateSecp256k1InstructionWithPrivateKeyParams = {
+    privateKey: Buffer | Uint8Array | Array<number>;
+    message: Buffer | Uint8Array | Array<number>;
+  };
+
+  export class Secp256k1Program {
+    static get programId(): PublicKey;
+
+    static createInstructionWithPublicKey(
+      params: CreateSecp256k1InstructionWithPublicKeyParams,
+    ): TransactionInstruction;
+
+    static createInstructionWithPrivateKey(
+      params: CreateSecp256k1InstructionWithPrivateKeyParams,
+    ): TransactionInstruction;
   }
 
   // === src/loader.js ===
