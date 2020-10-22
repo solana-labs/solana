@@ -94,16 +94,16 @@ fn main() {
                 program
             );
             assert!(Command::new("bash")
-                .current_dir("rust")
-                .args(&["./do.sh", "build", program])
+                .current_dir(format!("rust/{}", program))
+                .args(&["../../../../cargo-build-bpf"])
                 .status()
-                .expect("Error calling do.sh from build.rs")
+                .expect("Error calling cargo-build-bpf from build.rs")
                 .success());
             let src = format!(
-                "target/bpfel-unknown-unknown/release/solana_bpf_rust_{}.so",
+                "rust/{0}/solana_bpf_rust_{0}.so",
                 program,
             );
-            assert!(Command::new("cp")
+            assert!(Command::new("mv")
                 .arg(&src)
                 .arg(&install_dir)
                 .status()
