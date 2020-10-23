@@ -3374,7 +3374,7 @@ dependencies = [
 
 [[package]]
 name = "solana-account-decoder"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "Inflector",
  "base64 0.12.3",
@@ -3386,7 +3386,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-config-program",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-stake-program",
  "solana-vote-program",
  "spl-token",
@@ -3395,23 +3395,23 @@ dependencies = [
 
 [[package]]
 name = "solana-accounts-bench"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "clap",
  "crossbeam-channel",
  "log 0.4.8",
  "rand 0.7.3",
  "rayon",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-measure",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-version",
 ]
 
 [[package]]
 name = "solana-banking-bench"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "clap",
  "crossbeam-channel",
@@ -3421,18 +3421,18 @@ dependencies = [
  "solana-clap-utils",
  "solana-core",
  "solana-ledger",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-measure",
  "solana-perf",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-streamer",
  "solana-version",
 ]
 
 [[package]]
 name = "solana-banks-client"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "async-trait",
  "bincode",
@@ -3440,7 +3440,7 @@ dependencies = [
  "solana-banks-interface",
  "solana-banks-server",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "tarpc",
  "tokio 0.2.22",
  "tokio-serde",
@@ -3448,16 +3448,16 @@ dependencies = [
 
 [[package]]
 name = "solana-banks-interface"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "serde",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "tarpc",
 ]
 
 [[package]]
 name = "solana-banks-server"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bincode",
  "futures 0.3.5",
@@ -3465,7 +3465,7 @@ dependencies = [
  "solana-banks-interface",
  "solana-metrics",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "tarpc",
  "tokio 0.2.22",
  "tokio-serde",
@@ -3473,7 +3473,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bench-exchange"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "clap",
  "itertools 0.9.0",
@@ -3491,21 +3491,21 @@ dependencies = [
  "solana-faucet",
  "solana-genesis",
  "solana-local-cluster",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-metrics",
  "solana-net-utils",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-version",
 ]
 
 [[package]]
 name = "solana-bench-streamer"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "clap",
  "solana-clap-utils",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-net-utils",
  "solana-streamer",
  "solana-version",
@@ -3513,7 +3513,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bench-tps"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bincode",
  "clap",
@@ -3529,18 +3529,18 @@ dependencies = [
  "solana-faucet",
  "solana-genesis",
  "solana-local-cluster",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-version",
 ]
 
 [[package]]
 name = "solana-bpf-loader-program"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bincode",
  "byteorder",
@@ -3550,14 +3550,14 @@ dependencies = [
  "rand 0.7.3",
  "rustversion",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana_rbpf",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-budget-program"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bincode",
  "chrono",
@@ -3567,13 +3567,13 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-cargo-build-bpf"
-version = "1.5.0"
+version = "1.4.3"
 dependencies = [
  "cargo_metadata",
  "clap",
@@ -3581,13 +3581,13 @@ dependencies = [
 
 [[package]]
 name = "solana-clap-utils"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "chrono",
  "clap",
  "rpassword",
  "solana-remote-wallet",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "thiserror",
  "tiny-bip39",
  "url 2.1.1",
@@ -3595,7 +3595,7 @@ dependencies = [
 
 [[package]]
 name = "solana-cli"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "Inflector",
  "bincode",
@@ -3624,11 +3624,11 @@ dependencies = [
  "solana-config-program",
  "solana-core",
  "solana-faucet",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-net-utils",
  "solana-remote-wallet",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-stake-program",
  "solana-transaction-status",
  "solana-version",
@@ -3643,7 +3643,7 @@ dependencies = [
 
 [[package]]
 name = "solana-cli-config"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "dirs",
  "lazy_static",
@@ -3655,7 +3655,7 @@ dependencies = [
 
 [[package]]
 name = "solana-cli-output"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "Inflector",
  "chrono",
@@ -3668,7 +3668,7 @@ dependencies = [
  "solana-account-decoder",
  "solana-clap-utils",
  "solana-client",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-stake-program",
  "solana-transaction-status",
  "solana-vote-program",
@@ -3676,7 +3676,7 @@ dependencies = [
 
 [[package]]
 name = "solana-client"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "assert_matches",
  "base64 0.13.0",
@@ -3695,9 +3695,9 @@ dependencies = [
  "serde_json",
  "solana-account-decoder",
  "solana-clap-utils",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-net-utils",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
@@ -3708,20 +3708,20 @@ dependencies = [
 
 [[package]]
 name = "solana-config-program"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bincode",
  "chrono",
  "log 0.4.8",
  "serde",
  "serde_derive",
- "solana-logger 1.4.2",
- "solana-sdk 1.4.2",
+ "solana-logger 1.4.3",
+ "solana-sdk 1.4.3",
 ]
 
 [[package]]
 name = "solana-core"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "base64 0.12.3",
  "bincode",
@@ -3766,7 +3766,7 @@ dependencies = [
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-ledger",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-measure",
  "solana-merkle-tree",
  "solana-metrics",
@@ -3774,7 +3774,7 @@ dependencies = [
  "solana-perf",
  "solana-rayon-threadlimit",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-stake-program",
  "solana-storage-bigtable",
  "solana-streamer",
@@ -3820,7 +3820,7 @@ dependencies = [
 
 [[package]]
 name = "solana-crate-features"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "backtrace",
  "bytes 0.4.12",
@@ -3842,7 +3842,7 @@ dependencies = [
 
 [[package]]
 name = "solana-dos"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bincode",
  "clap",
@@ -3853,16 +3853,16 @@ dependencies = [
  "solana-client",
  "solana-core",
  "solana-ledger",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-net-utils",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-version",
 ]
 
 [[package]]
 name = "solana-download-utils"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bzip2",
  "console",
@@ -3870,13 +3870,13 @@ dependencies = [
  "log 0.4.8",
  "reqwest",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "tar",
 ]
 
 [[package]]
 name = "solana-exchange-program"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bincode",
  "log 0.4.8",
@@ -3884,24 +3884,24 @@ dependencies = [
  "num-traits",
  "serde",
  "serde_derive",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-metrics",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-failure-program"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
 ]
 
 [[package]]
 name = "solana-faucet"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bincode",
  "byteorder",
@@ -3911,9 +3911,9 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-clap-utils",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-metrics",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-version",
  "tokio 0.1.22",
  "tokio-codec",
@@ -3921,7 +3921,7 @@ dependencies = [
 
 [[package]]
 name = "solana-frozen-abi"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bs58",
  "bv",
@@ -3933,13 +3933,13 @@ dependencies = [
  "serde_derive",
  "sha2",
  "solana-frozen-abi-macro",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-frozen-abi-macro"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "lazy_static",
  "proc-macro2 1.0.19",
@@ -3950,7 +3950,7 @@ dependencies = [
 
 [[package]]
 name = "solana-genesis"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "base64 0.12.3",
  "chrono",
@@ -3962,9 +3962,9 @@ dependencies = [
  "solana-clap-utils",
  "solana-exchange-program",
  "solana-ledger",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-stake-program",
  "solana-version",
  "solana-vest-program",
@@ -3974,21 +3974,21 @@ dependencies = [
 
 [[package]]
 name = "solana-gossip"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "clap",
  "solana-clap-utils",
  "solana-client",
  "solana-core",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-net-utils",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-version",
 ]
 
 [[package]]
 name = "solana-install"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "atty",
  "bincode",
@@ -4009,8 +4009,8 @@ dependencies = [
  "solana-clap-utils",
  "solana-client",
  "solana-config-program",
- "solana-logger 1.4.2",
- "solana-sdk 1.4.2",
+ "solana-logger 1.4.3",
+ "solana-sdk 1.4.3",
  "solana-version",
  "tar",
  "tempfile",
@@ -4021,7 +4021,7 @@ dependencies = [
 
 [[package]]
 name = "solana-keygen"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bs58",
  "clap",
@@ -4030,14 +4030,14 @@ dependencies = [
  "solana-clap-utils",
  "solana-cli-config",
  "solana-remote-wallet",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-version",
  "tiny-bip39",
 ]
 
 [[package]]
 name = "solana-ledger"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "assert_matches",
  "bincode",
@@ -4067,14 +4067,14 @@ dependencies = [
  "sha2",
  "solana-bpf-loader-program",
  "solana-budget-program",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-measure",
  "solana-merkle-tree",
  "solana-metrics",
  "solana-perf",
  "solana-rayon-threadlimit",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-stake-program",
  "solana-storage-bigtable",
  "solana-storage-proto",
@@ -4088,7 +4088,7 @@ dependencies = [
 
 [[package]]
 name = "solana-ledger-tool"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "assert_cmd",
  "bs58",
@@ -4106,10 +4106,10 @@ dependencies = [
  "solana-clap-utils",
  "solana-cli-output",
  "solana-ledger",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-measure",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-stake-program",
  "solana-storage-bigtable",
  "solana-transaction-status",
@@ -4121,7 +4121,7 @@ dependencies = [
 
 [[package]]
 name = "solana-local-cluster"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "assert_matches",
  "fs_extra",
@@ -4138,10 +4138,10 @@ dependencies = [
  "solana-exchange-program",
  "solana-faucet",
  "solana-ledger",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-rayon-threadlimit",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-stake-program",
  "solana-vest-program",
  "solana-vote-program",
@@ -4150,14 +4150,14 @@ dependencies = [
 
 [[package]]
 name = "solana-log-analyzer"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "byte-unit",
  "clap",
  "serde",
  "serde_json",
  "solana-clap-utils",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-version",
 ]
 
@@ -4174,7 +4174,7 @@ dependencies = [
 
 [[package]]
 name = "solana-logger"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "env_logger",
  "lazy_static",
@@ -4183,27 +4183,27 @@ dependencies = [
 
 [[package]]
 name = "solana-measure"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "jemalloc-ctl",
  "jemallocator",
  "log 0.4.8",
  "solana-metrics",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
 ]
 
 [[package]]
 name = "solana-merkle-tree"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "fast-math",
  "hex",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
 ]
 
 [[package]]
 name = "solana-metrics"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "env_logger",
  "gethostname",
@@ -4213,24 +4213,24 @@ dependencies = [
  "reqwest",
  "serial_test",
  "serial_test_derive",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
 ]
 
 [[package]]
 name = "solana-net-shaper"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "clap",
  "rand 0.7.3",
  "serde",
  "serde_json",
  "solana-clap-utils",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
 ]
 
 [[package]]
 name = "solana-net-utils"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bincode",
  "bytes 0.4.12",
@@ -4242,7 +4242,7 @@ dependencies = [
  "serde_derive",
  "socket2",
  "solana-clap-utils",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-version",
  "tokio 0.1.22",
  "tokio-codec",
@@ -4251,16 +4251,16 @@ dependencies = [
 
 [[package]]
 name = "solana-noop-program"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "log 0.4.8",
- "solana-logger 1.4.2",
- "solana-sdk 1.4.2",
+ "solana-logger 1.4.3",
+ "solana-sdk 1.4.3",
 ]
 
 [[package]]
 name = "solana-notifier"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "log 0.4.8",
  "reqwest",
@@ -4269,19 +4269,19 @@ dependencies = [
 
 [[package]]
 name = "solana-ownable"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bincode",
  "num-derive",
  "num-traits",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-perf"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bincode",
  "curve25519-dalek 2.1.0",
@@ -4294,15 +4294,15 @@ dependencies = [
  "rayon",
  "serde",
  "solana-budget-program",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-metrics",
  "solana-rayon-threadlimit",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
 ]
 
 [[package]]
 name = "solana-poh-bench"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "clap",
  "log 0.4.8",
@@ -4310,16 +4310,16 @@ dependencies = [
  "rayon",
  "solana-clap-utils",
  "solana-ledger",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-measure",
  "solana-perf",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-version",
 ]
 
 [[package]]
 name = "solana-ramp-tps"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bzip2",
  "clap",
@@ -4330,18 +4330,18 @@ dependencies = [
  "serde_yaml",
  "solana-client",
  "solana-core",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-metrics",
  "solana-net-utils",
  "solana-notifier",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-stake-program",
  "tar",
 ]
 
 [[package]]
 name = "solana-rayon-threadlimit"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "lazy_static",
  "num_cpus",
@@ -4349,7 +4349,7 @@ dependencies = [
 
 [[package]]
 name = "solana-remote-wallet"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "base32",
  "console",
@@ -4360,14 +4360,14 @@ dependencies = [
  "num-traits",
  "parking_lot 0.10.2",
  "semver 0.9.0",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "thiserror",
  "url 2.1.1",
 ]
 
 [[package]]
 name = "solana-runtime"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "assert_matches",
  "bincode",
@@ -4398,12 +4398,12 @@ dependencies = [
  "solana-config-program",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-measure",
  "solana-metrics",
  "solana-noop-program",
  "solana-rayon-threadlimit",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-secp256k1-program",
  "solana-stake-program",
  "solana-vote-program",
@@ -4416,7 +4416,7 @@ dependencies = [
 
 [[package]]
 name = "solana-scripts"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "csv",
  "serde",
@@ -4466,7 +4466,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "assert_matches",
  "bincode",
@@ -4498,11 +4498,11 @@ dependencies = [
  "serde_json",
  "sha2",
  "sha3",
- "solana-crate-features 1.4.2",
+ "solana-crate-features 1.4.3",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
- "solana-logger 1.4.2",
- "solana-sdk-macro 1.4.2",
+ "solana-logger 1.4.3",
+ "solana-sdk-macro 1.4.3",
  "thiserror",
  "tiny-bip39",
 ]
@@ -4522,7 +4522,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk-macro"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bs58",
  "proc-macro2 1.0.19",
@@ -4546,20 +4546,20 @@ dependencies = [
 
 [[package]]
 name = "solana-secp256k1-program"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bincode",
  "digest 0.9.0",
  "libsecp256k1",
  "rand 0.7.3",
  "sha3",
- "solana-logger 1.4.2",
- "solana-sdk 1.4.2",
+ "solana-logger 1.4.3",
+ "solana-sdk 1.4.3",
 ]
 
 [[package]]
 name = "solana-stake-accounts"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "clap",
  "solana-clap-utils",
@@ -4567,13 +4567,13 @@ dependencies = [
  "solana-client",
  "solana-remote-wallet",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-stake-program",
 ]
 
 [[package]]
 name = "solana-stake-monitor"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "clap",
  "console",
@@ -4587,9 +4587,9 @@ dependencies = [
  "solana-client",
  "solana-core",
  "solana-local-cluster",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-metrics",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-stake-program",
  "solana-transaction-status",
  "solana-version",
@@ -4598,7 +4598,7 @@ dependencies = [
 
 [[package]]
 name = "solana-stake-o-matic"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "clap",
  "log 0.4.8",
@@ -4607,17 +4607,17 @@ dependencies = [
  "solana-cli-config",
  "solana-cli-output",
  "solana-client",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-metrics",
  "solana-notifier",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-stake-program",
  "solana-transaction-status",
 ]
 
 [[package]]
 name = "solana-stake-program"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bincode",
  "log 0.4.8",
@@ -4629,16 +4629,16 @@ dependencies = [
  "solana-config-program",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-metrics",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-vote-program",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-storage-bigtable"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "backoff",
  "bincode",
@@ -4653,7 +4653,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "smpl_jwt",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-storage-proto",
  "solana-transaction-status",
  "thiserror",
@@ -4663,41 +4663,41 @@ dependencies = [
 
 [[package]]
 name = "solana-storage-proto"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bincode",
  "prost",
  "serde",
  "serde_derive",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-transaction-status",
 ]
 
 [[package]]
 name = "solana-streamer"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "libc",
  "log 0.4.8",
  "nix",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-measure",
  "solana-metrics",
  "solana-perf",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-sys-tuner"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "clap",
  "libc",
  "log 0.4.8",
  "nix",
  "solana-clap-utils",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-version",
  "sysctl",
  "unix_socket2",
@@ -4706,7 +4706,7 @@ dependencies = [
 
 [[package]]
 name = "solana-tokens"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bincode",
  "chrono",
@@ -4726,7 +4726,7 @@ dependencies = [
  "solana-core",
  "solana-remote-wallet",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-stake-program",
  "tempfile",
  "thiserror",
@@ -4736,7 +4736,7 @@ dependencies = [
 
 [[package]]
 name = "solana-transaction-status"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "Inflector",
  "base64 0.12.3",
@@ -4748,7 +4748,7 @@ dependencies = [
  "serde_json",
  "solana-account-decoder",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-stake-program",
  "solana-vote-program",
  "spl-memo",
@@ -4758,7 +4758,7 @@ dependencies = [
 
 [[package]]
 name = "solana-upload-perf"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "serde_json",
  "solana-metrics",
@@ -4766,7 +4766,7 @@ dependencies = [
 
 [[package]]
 name = "solana-validator"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "chrono",
  "clap",
@@ -4782,12 +4782,12 @@ dependencies = [
  "solana-download-utils",
  "solana-faucet",
  "solana-ledger",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-metrics",
  "solana-net-utils",
  "solana-perf",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-version",
  "solana-vote-program",
  "solana-vote-signer",
@@ -4795,7 +4795,7 @@ dependencies = [
 
 [[package]]
 name = "solana-version"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "log 0.4.8",
  "rustc_version",
@@ -4803,14 +4803,14 @@ dependencies = [
  "serde_derive",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
 ]
 
 [[package]]
 name = "solana-vest-program"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bincode",
  "chrono",
@@ -4820,13 +4820,13 @@ dependencies = [
  "serde_derive",
  "solana-config-program",
  "solana-runtime",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-vote-program"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "bincode",
  "log 0.4.8",
@@ -4837,15 +4837,15 @@ dependencies = [
  "serde_derive",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-metrics",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-vote-signer"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "clap",
  "jsonrpc-core",
@@ -4855,13 +4855,13 @@ dependencies = [
  "serde_json",
  "solana-clap-utils",
  "solana-metrics",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-version",
 ]
 
 [[package]]
 name = "solana-watchtower"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "clap",
  "humantime 2.0.1",
@@ -4870,10 +4870,10 @@ dependencies = [
  "solana-cli-config",
  "solana-cli-output",
  "solana-client",
- "solana-logger 1.4.2",
+ "solana-logger 1.4.3",
  "solana-metrics",
  "solana-notifier",
- "solana-sdk 1.4.2",
+ "solana-sdk 1.4.3",
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
