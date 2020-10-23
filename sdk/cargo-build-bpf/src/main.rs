@@ -112,7 +112,6 @@ fn build_bpf(config: Config) {
         }
     };
 
-    let legacy_program_feature_present = root_package.features.contains_key("program");
     let root_package_dir = &root_package.manifest_path.parent().unwrap_or_else(|| {
         eprintln!(
             "Unable to get directory of {}",
@@ -141,9 +140,6 @@ fn build_bpf(config: Config) {
     if !config.features.is_empty() {
         println!("Features: {}", config.features.join(" "));
     }
-    if legacy_program_feature_present {
-        println!("Legacy program feature detected");
-    }
 
     let xargo_build = config.bpf_sdk.join("rust/xargo-build.sh");
     let mut spawn_args = vec![];
@@ -154,12 +150,6 @@ fn build_bpf(config: Config) {
     for feature in &config.features {
         spawn_args.push("--features");
         spawn_args.push(feature);
-    }
-    if legacy_program_feature_present {
-        if !config.no_default_features {
-            spawn_args.push("--no-default-features");
-        }
-        spawn_args.push("--features=program");
     }
     spawn(&config.bpf_sdk.join(xargo_build), &spawn_args);
 
