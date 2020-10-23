@@ -20,17 +20,16 @@ depending on your preferred workflow:
   machine by running:
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/solana-labs/solana/LATEST_SOLANA_RELEASE_VERSION/install/solana-install-init.sh | sh -s - LATEST_SOLANA_RELEASE_VERSION
+sh -c "$(curl -sSfL https://release.solana.com/LATEST_SOLANA_RELEASE_VERSION/install)"
 ```
 
-- If you are connecting to a different testnet, you can replace `LATEST_SOLANA_RELEASE_VERSION` with the
-  release tag matching the software version of your desired testnet, or replace it
-  with the named channel `stable`, `beta`, or `edge`.
+- You can replace `LATEST_SOLANA_RELEASE_VERSION` with the release tag matching
+  the software version of your desired release, or use one of the three symbolic
+  channel names: `stable`, `beta`, or `edge`.
 
 - The following output indicates a successful update:
 
 ```text
-looking for latest release
 downloading LATEST_SOLANA_RELEASE_VERSION installer
 Configuration: /home/solana/.config/solana/install/config.yml
 Active release directory: /home/solana/.local/share/solana/install/active_release
@@ -72,7 +71,7 @@ solana --version
   installer into a temporary directory:
 
 ```bash
-curl http://release.solana.com/LATEST_SOLANA_RELEASE_VERSION/solana-install-init-x86_64-pc-windows-msvc.exe --output C:\solana-install-tmp\solana-install-init.exe --create-dirs
+curl https://release.solana.com/LATEST_SOLANA_RELEASE_VERSION/solana-install-init-x86_64-pc-windows-msvc.exe --output C:\solana-install-tmp\solana-install-init.exe --create-dirs
 ```
 
 - Copy and paste the following command, then press Enter to install the latest

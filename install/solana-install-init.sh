@@ -108,7 +108,12 @@ main() {
         exit 1
     fi
 
-    ignore "$solana_install_init" "$@"
+    if [ -z "$1" ]; then
+      #shellcheck disable=SC2086
+      ignore "$solana_install_init" $SOLANA_INSTALL_INIT_ARGS
+    else
+      ignore "$solana_install_init" "$@"
+    fi
     retval=$?
 
     ignore rm "$solana_install_init"
