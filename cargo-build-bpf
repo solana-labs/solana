@@ -2,4 +2,4 @@
 
 here=$(dirname "$0")
 set -x
-exec cargo run --manifest-path $here/sdk/cargo-build-bpf/Cargo.toml -- --bpf-sdk $here/sdk/bpf "$@"
+exec $here/cargo run --manifest-path $here/sdk/cargo-build-bpf/Cargo.toml -- --bpf-sdk $here/sdk/bpf "$@"
