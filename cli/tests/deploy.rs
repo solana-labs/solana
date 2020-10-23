@@ -64,7 +64,7 @@ fn test_cli_deploy_program() {
         program_location: pathbuf.to_str().unwrap().to_string(),
         address: None,
         use_deprecated_loader: false,
-        force_use_program_address: false,
+        allow_excessive_balance: false,
     };
 
     let response = process_command(&config);
@@ -99,7 +99,7 @@ fn test_cli_deploy_program() {
         program_location: pathbuf.to_str().unwrap().to_string(),
         address: Some(1),
         use_deprecated_loader: false,
-        force_use_program_address: false,
+        allow_excessive_balance: false,
     };
     process_command(&config).unwrap();
     let account1 = rpc_client
@@ -131,7 +131,7 @@ fn test_cli_deploy_program() {
         program_location: pathbuf.to_str().unwrap().to_string(),
         address: Some(1),
         use_deprecated_loader: false,
-        force_use_program_address: false,
+        allow_excessive_balance: false,
     };
     process_command(&config).unwrap_err();
 
@@ -140,7 +140,7 @@ fn test_cli_deploy_program() {
         program_location: pathbuf.to_str().unwrap().to_string(),
         address: Some(1),
         use_deprecated_loader: false,
-        force_use_program_address: true,
+        allow_excessive_balance: true,
     };
     process_command(&config).unwrap();
     let account2 = rpc_client

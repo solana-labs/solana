@@ -179,7 +179,7 @@ pub enum CliCommand {
         program_location: String,
         address: Option<SignerIndex>,
         use_deprecated_loader: bool,
-        force_use_program_address: bool,
+        allow_excessive_balance: bool,
     },
     // Stake Commands
     CreateStakeAccount {
@@ -617,7 +617,7 @@ pub fn parse_command(
                     program_location: matches.value_of("program_location").unwrap().to_string(),
                     address,
                     use_deprecated_loader: matches.is_present("use_deprecated_loader"),
-                    force_use_program_address: matches.is_present("force_use_program_address"),
+                    allow_excessive_balance: matches.is_present("allow_excessive_balance"),
                 },
                 signers,
             })
@@ -1134,7 +1134,7 @@ fn process_deploy(
     program_location: &str,
     address: Option<SignerIndex>,
     use_deprecated_loader: bool,
-    force_use_program_address: bool,
+    allow_excessive_balance: bool,
 ) -> ProcessResult {
     const WORDS: usize = 12;
     // Create ephemeral keypair to use for program address, if not provided
@@ -1148,7 +1148,7 @@ fn process_deploy(
         program_location,
         address,
         use_deprecated_loader,
-        force_use_program_address,
+        allow_excessive_balance,
         new_keypair,
     );
 
@@ -1177,7 +1177,7 @@ fn do_process_deploy(
     program_location: &str,
     address: Option<SignerIndex>,
     use_deprecated_loader: bool,
-    force_use_program_address: bool,
+    allow_excessive_balance: bool,
     new_keypair: Keypair,
 ) -> ProcessResult {
     let program_id = if let Some(i) = address {
@@ -1244,7 +1244,7 @@ fn do_process_deploy(
             balance_needed = balance;
         } else if account.lamports > minimum_balance
             && system_program::check_id(&account.owner)
-            && !force_use_program_address
+            && !allow_excessive_balance
         {
             return Err(CliError::DynamicProgramError(format!(
                 "Program account has a balance: {:?}; it may already be in use",
@@ -1633,14 +1633,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             program_location,
             address,
             use_deprecated_loader,
-            force_use_program_address,
+            allow_excessive_balance,
         } => process_deploy(
             &rpc_client,
             config,
             program_location,
             *address,
             *use_deprecated_loader,
-            *force_use_program_address,
+            *allow_excessive_balance,
         ),
 
         // Stake Commands
@@ -2270,11 +2270,10 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Use the deprecated BPF loader")
                 )
                 .arg(
-                    Arg::with_name("force_use_program_address")
-                        .long("force-use-program-address")
+                    Arg::with_name("allow_excessive_balance")
+                        .long("allow-excessive-deploy-account-balance")
                         .takes_value(false)
-                        .hidden(true) // Don't document this argument to discourage its use
-                        .help("Use the designated program id, even if it already holds a balance of SOL")
+                        .help("Use the designated program id, even if the account already holds a large balance of SOL")
                 )
                 .arg(commitment_arg_with_default("max")),
         )
@@ -2644,7 +2643,7 @@ mod tests {
                     program_location: "/Users/test/program.o".to_string(),
                     address: None,
                     use_deprecated_loader: false,
-                    force_use_program_address: false,
+                    allow_excessive_balance: false,
                 },
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2666,7 +2665,7 @@ mod tests {
                     program_location: "/Users/test/program.o".to_string(),
                     address: Some(1),
                     use_deprecated_loader: false,
-                    force_use_program_address: false,
+                    allow_excessive_balance: false,
                 },
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2980,7 +2979,7 @@ mod tests {
             program_location: pathbuf.to_str().unwrap().to_string(),
             address: None,
             use_deprecated_loader: false,
-            force_use_program_address: false,
+            allow_excessive_balance: false,
         };
         let result = process_command(&config);
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
@@ -2999,7 +2998,7 @@ mod tests {
             program_location: "bad/file/location.so".to_string(),
             address: None,
             use_deprecated_loader: false,
-            force_use_program_address: false,
+            allow_excessive_balance: false,
         };
         assert!(process_command(&config).is_err());
     }
