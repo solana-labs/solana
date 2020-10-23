@@ -670,9 +670,18 @@ declare module '@solana/web3.js' {
     compileMessage(): Message;
     serializeMessage(): Buffer;
     sign(...signers: Array<Account>): void;
+    signWithFeePayer(feePayer: Account, ...signers: Array<Account>): void;
     partialSign(...partialSigners: Array<Account>): void;
+    partialSignWithFeePayer(
+      feePayer: Account,
+      ...partialSigners: Array<Account>
+    ): void;
     addSignature(pubkey: PublicKey, signature: Buffer): void;
     setSigners(...signers: Array<PublicKey>): void;
+    setSignersWithFeePayer(
+      feePayer: PublicKey,
+      ...signers: Array<PublicKey>
+    ): void;
     verifySignatures(): boolean;
     serialize(config?: SerializeConfig): Buffer;
   }

@@ -489,3 +489,60 @@ test('externally signed stake delegate', () => {
   tx.addSignature(from.publicKey, signature);
   expect(tx.verifySignatures()).toBe(true);
 });
+
+test('with fee payer variants', () => {
+  const account1 = new Account();
+  const account2 = new Account();
+  const feePayer = new Account();
+  const recentBlockhash = account1.publicKey.toBase58(); // Fake recentBlockhash
+  var transfer = new Transaction();
+  transfer.add(
+    SystemProgram.transfer({
+      fromPubkey: account1.publicKey,
+      toPubkey: account2.publicKey,
+      lamports: 123,
+    }),
+  );
+  transfer.add(
+    SystemProgram.transfer({
+      fromPubkey: account2.publicKey,
+      toPubkey: account1.publicKey,
+      lamports: 123,
+    }),
+  );
+
+  var transaction = new Transaction({recentBlockhash}).add(transfer);
+  transaction.sign(feePayer, account1, account2);
+  expect(transaction.signatures.length).toEqual(3);
+  expect(transaction.signatures[0].signature).not.toBeNull();
+  expect(transaction.signatures[1].signature).not.toBeNull();
+  expect(transaction.signatures[2].signature).not.toBeNull();
+  var transaction2 = new Transaction({recentBlockhash}).add(transfer);
+  transaction2.signWithFeePayer(feePayer, account1, account2);
+  expect(transaction).toEqual(transaction2);
+
+  transaction = new Transaction({recentBlockhash}).add(transfer);
+  transaction.setSigners(
+    feePayer.publicKey,
+    account1.publicKey,
+    account2.publicKey,
+  );
+  expect(transaction.signatures.length).toEqual(3);
+  expect(transaction.signatures[0].signature).toBeNull();
+  expect(transaction.signatures[1].signature).toBeNull();
+  expect(transaction.signatures[2].signature).toBeNull();
+  transaction2 = new Transaction({recentBlockhash}).add(transfer);
+  transaction2.setSignersWithFeePayer(
+    feePayer.publicKey,
+    account1.publicKey,
+    account2.publicKey,
+  );
+  expect(transaction).toEqual(transaction2);
+
+  transaction.partialSign(feePayer, account1);
+  expect(transaction.signatures[0].signature).not.toBeNull();
+  expect(transaction.signatures[1].signature).not.toBeNull();
+  expect(transaction.signatures[2].signature).toBeNull();
+  transaction2.partialSignWithFeePayer(feePayer, account1);
+  expect(transaction).toEqual(transaction2);
+});

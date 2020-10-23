@@ -368,6 +368,17 @@ export class Transaction {
   }
 
   /**
+   * Specify the public keys which will be used to sign the Transaction
+   * with an explicit signer
+   *
+   * Signatures can be added with either `partialSign` or `addSignature`
+   */
+  setSignersWithFeePayer(feePayer: PublicKey, ...signers: Array<PublicKey>) {
+    const allSigners = [feePayer, ...signers];
+    this.setSigners(...allSigners);
+  }
+
+  /**
    * Specify the public keys which will be used to sign the Transaction.
    * The first signer will be used as the transaction fee payer account.
    *
@@ -390,6 +401,23 @@ export class Transaction {
         }
       })
       .map(publicKey => ({signature: null, publicKey}));
+  }
+
+  /**
+   * Sign the Transaction with the specified accounts. Multiple signatures may
+   * be applied to a Transaction. The first signature is considered "primary"
+   * and is used when testing for Transaction confirmation. The transaction fee
+   * payer is explicitly specified.
+   *
+   * Transaction fields should not be modified after the first call to `sign`,
+   * as doing so may invalidate the signature and cause the Transaction to be
+   * rejected.
+   *
+   * The Transaction must be assigned a valid `recentBlockhash` before invoking this method
+   */
+  signWithFeePayer(feePayer: Account, ...signers: Array<Account>) {
+    const allSigners = [feePayer, ...signers];
+    this.sign(...allSigners);
   }
 
   /**
@@ -426,6 +454,17 @@ export class Transaction {
       }));
 
     this.partialSign(...signers);
+  }
+
+  /**
+   * Partially sign a transaction with the specified accounts. All accounts must
+   * correspond to a public key that was previously provided to `setSigners`.
+   *
+   * All the caveats from the `sign` method apply to `partialSign`
+   */
+  partialSignWithFeePayer(feePayer: Account, ...signers: Array<Account>) {
+    const allSigners = [feePayer, ...signers];
+    this.partialSign(...allSigners);
   }
 
   /**
