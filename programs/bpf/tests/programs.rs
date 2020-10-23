@@ -54,7 +54,9 @@ fn load_bpf_program(
     name: &str,
 ) -> Pubkey {
     let path = create_bpf_path(name);
-    let mut file = File::open(path).unwrap();
+    let mut file = File::open(&path).unwrap_or_else(|err| {
+        panic!("Failed to open {}: {}", path.display(), err);
+    });
     let mut elf = Vec::new();
     file.read_to_end(&mut elf).unwrap();
     load_program(bank_client, payer_keypair, loader_id, elf)
