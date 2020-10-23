@@ -125,6 +125,9 @@ if [[ -d target/perf-libs ]]; then
   cp -a target/perf-libs "$installDir"/bin/perf-libs
 fi
 
+mkdir -p "$installDir"/bin/sdk/bpf
+cp -a sdk/bpf/* "$installDir"/bin/sdk/bpf
+
 (
   set -x
   # deps dir can be empty
