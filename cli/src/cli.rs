@@ -64,6 +64,7 @@ use solana_stake_program::{
 use solana_transaction_status::{EncodedTransaction, UiTransactionEncoding};
 use solana_vote_program::vote_state::VoteAuthorize;
 use std::{
+    cmp::min,
     collections::HashMap,
     error,
     fmt::Write as FmtWrite,
@@ -1046,7 +1047,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
             leader_schedule_epoch = epoch_info.epoch;
         }
         let tpu_address = get_leader_tpu(
-            epoch_info.slot_index,
+            min(epoch_info.slot_index + 1, epoch_info.slots_in_epoch),
             leader_schedule.as_ref(),
             cluster_nodes.as_ref(),
         );
