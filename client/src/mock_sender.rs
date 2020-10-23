@@ -6,6 +6,7 @@ use crate::{
 };
 use serde_json::{json, Number, Value};
 use solana_sdk::{
+    epoch_info::EpochInfo,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     instruction::InstructionError,
     signature::Signature,
@@ -57,6 +58,13 @@ impl RpcSender for MockSender {
                     Value::String(PUBKEY.to_string()),
                     serde_json::to_value(FeeCalculator::default()).unwrap(),
                 ),
+            })?,
+            RpcRequest::GetEpochInfo => serde_json::to_value(EpochInfo {
+                epoch: 1,
+                slot_index: 2,
+                slots_in_epoch: 32,
+                absolute_slot: 34,
+                block_height: 34,
             })?,
             RpcRequest::GetFeeCalculatorForBlockhash => {
                 let value = if self.url == "blockhash_expired" {
