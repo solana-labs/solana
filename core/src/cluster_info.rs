@@ -599,7 +599,6 @@ impl ClusterInfo {
             .into_iter()
             .filter_map(|(node, last_updated)| {
                 if !ContactInfo::is_valid_address(&node.rpc) {
-                    info!("invalid rpc: {}", node.rpc.to_string());
                     return None;
                 }
 
