@@ -1033,6 +1033,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
     let mut leader_schedule: Option<RpcLeaderSchedule> = None;
     let mut leader_schedule_epoch = 0;
     let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let cluster_nodes = rpc_client.get_cluster_nodes().ok();
 
     loop {
         let mut status_retries = 15;
@@ -1044,8 +1045,11 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                 .get_leader_schedule_with_commitment(Some(epoch_info.absolute_slot), commitment)?;
             leader_schedule_epoch = epoch_info.epoch;
         }
-        let tpu_address =
-            get_leader_tpu(rpc_client, epoch_info.slot_index, leader_schedule.as_ref());
+        let tpu_address = get_leader_tpu(
+            epoch_info.slot_index,
+            leader_schedule.as_ref(),
+            cluster_nodes.as_ref(),
+        );
 
         // Send all transactions
         let mut pending_transactions = HashMap::new();
