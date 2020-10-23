@@ -232,7 +232,12 @@ impl CrdsGossip {
         self.pull.make_timeouts(&self.id, stakes, epoch_ms)
     }
 
-    pub fn purge(&mut self, now: u64, timeouts: &HashMap<Pubkey, u64>) -> usize {
+    pub fn purge(
+        &mut self,
+        thread_pool: &ThreadPool,
+        now: u64,
+        timeouts: &HashMap<Pubkey, u64>,
+    ) -> usize {
         let mut rv = 0;
         if now > self.push.msg_timeout {
             let min = now - self.push.msg_timeout;
@@ -247,7 +252,9 @@ impl CrdsGossip {
             let min = self.pull.crds_timeout;
             assert_eq!(timeouts[&self.id], std::u64::MAX);
             assert_eq!(timeouts[&Pubkey::default()], min);
-            rv = self.pull.purge_active(&mut self.crds, now, &timeouts);
+            rv = self
+                .pull
+                .purge_active(thread_pool, &mut self.crds, now, &timeouts);
         }
         if now > 5 * self.pull.crds_timeout {
             let min = now - 5 * self.pull.crds_timeout;

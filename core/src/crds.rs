@@ -28,6 +28,7 @@ use crate::crds_shards::CrdsShards;
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use bincode::serialize;
 use indexmap::map::{Entry, IndexMap};
+use rayon::{prelude::*, ThreadPool};
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
@@ -176,37 +177,40 @@ impl Crds {
     /// * timeouts - Pubkey specific timeouts with Pubkey::default() as the default timeout.
     pub fn find_old_labels(
         &self,
+        thread_pool: &ThreadPool,
         now: u64,
         timeouts: &HashMap<Pubkey, u64>,
     ) -> Vec<CrdsValueLabel> {
         let default_timeout = *timeouts
             .get(&Pubkey::default())
             .expect("must have default timeout");
-        self.table
-            .iter()
-            .filter_map(|(k, v)| {
-                let timeout = timeouts.get(&k.pubkey()).unwrap_or(&default_timeout);
-                if v.local_timestamp.saturating_add(*timeout) <= now {
-                    Some(k)
-                } else {
-                    None
-                }
-            })
-            .cloned()
-            .collect()
+        thread_pool.install(|| {
+            self.table
+                .par_iter()
+                .with_min_len(1024)
+                .filter_map(|(k, v)| {
+                    let timeout = timeouts.get(&k.pubkey()).unwrap_or(&default_timeout);
+                    if v.local_timestamp.saturating_add(*timeout) <= now {
+                        Some(k.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
     }
 
-    pub fn remove(&mut self, key: &CrdsValueLabel) {
-        if let Some((index, _, value)) = self.table.swap_remove_full(key) {
-            assert!(self.shards.remove(index, &value));
-            // The previously last element in the table is now moved to the
-            // 'index' position. Shards need to be updated accordingly.
-            if index < self.table.len() {
-                let value = self.table.index(index);
-                assert!(self.shards.remove(self.table.len(), value));
-                assert!(self.shards.insert(index, value));
-            }
+    pub fn remove(&mut self, key: &CrdsValueLabel) -> Option<VersionedCrdsValue> {
+        let (index, _, value) = self.table.swap_remove_full(key)?;
+        assert!(self.shards.remove(index, &value));
+        // The previously last element in the table is now moved to the
+        // 'index' position. Shards need to be updated accordingly.
+        if index < self.table.len() {
+            let value = self.table.index(index);
+            assert!(self.shards.remove(self.table.len(), value));
+            assert!(self.shards.insert(index, value));
         }
+        Some(value)
     }
 }
 
@@ -216,6 +220,7 @@ mod test {
     use crate::contact_info::ContactInfo;
     use crate::crds_value::CrdsData;
     use rand::{thread_rng, Rng};
+    use rayon::ThreadPoolBuilder;
 
     #[test]
     fn test_insert() {
@@ -288,48 +293,67 @@ mod test {
     }
     #[test]
     fn test_find_old_records_default() {
+        let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut crds = Crds::default();
         let val = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
         assert_eq!(crds.insert(val.clone(), 1), Ok(None));
         let mut set = HashMap::new();
         set.insert(Pubkey::default(), 0);
-        assert!(crds.find_old_labels(0, &set).is_empty());
+        assert!(crds.find_old_labels(&thread_pool, 0, &set).is_empty());
         set.insert(Pubkey::default(), 1);
-        assert_eq!(crds.find_old_labels(2, &set), vec![val.label()]);
+        assert_eq!(
+            crds.find_old_labels(&thread_pool, 2, &set),
+            vec![val.label()]
+        );
         set.insert(Pubkey::default(), 2);
-        assert_eq!(crds.find_old_labels(4, &set), vec![val.label()]);
+        assert_eq!(
+            crds.find_old_labels(&thread_pool, 4, &set),
+            vec![val.label()]
+        );
     }
     #[test]
     fn test_find_old_records_with_override() {
+        let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut rng = thread_rng();
         let mut crds = Crds::default();
         let mut timeouts = HashMap::new();
         let val = CrdsValue::new_rand(&mut rng);
         timeouts.insert(Pubkey::default(), 3);
         assert_eq!(crds.insert(val.clone(), 0), Ok(None));
-        assert!(crds.find_old_labels(2, &timeouts).is_empty());
+        assert!(crds.find_old_labels(&thread_pool, 2, &timeouts).is_empty());
         timeouts.insert(val.pubkey(), 1);
-        assert_eq!(crds.find_old_labels(2, &timeouts), vec![val.label()]);
+        assert_eq!(
+            crds.find_old_labels(&thread_pool, 2, &timeouts),
+            vec![val.label()]
+        );
         timeouts.insert(val.pubkey(), u64::MAX);
-        assert!(crds.find_old_labels(2, &timeouts).is_empty());
+        assert!(crds.find_old_labels(&thread_pool, 2, &timeouts).is_empty());
         timeouts.insert(Pubkey::default(), 1);
-        assert!(crds.find_old_labels(2, &timeouts).is_empty());
+        assert!(crds.find_old_labels(&thread_pool, 2, &timeouts).is_empty());
         timeouts.remove(&val.pubkey());
-        assert_eq!(crds.find_old_labels(2, &timeouts), vec![val.label()]);
+        assert_eq!(
+            crds.find_old_labels(&thread_pool, 2, &timeouts),
+            vec![val.label()]
+        );
     }
     #[test]
     fn test_remove_default() {
+        let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut crds = Crds::default();
         let val = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
         assert_matches!(crds.insert(val.clone(), 1), Ok(_));
         let mut set = HashMap::new();
         set.insert(Pubkey::default(), 1);
-        assert_eq!(crds.find_old_labels(2, &set), vec![val.label()]);
+        assert_eq!(
+            crds.find_old_labels(&thread_pool, 2, &set),
+            vec![val.label()]
+        );
         crds.remove(&val.label());
-        assert!(crds.find_old_labels(2, &set).is_empty());
+        assert!(crds.find_old_labels(&thread_pool, 2, &set).is_empty());
     }
     #[test]
     fn test_find_old_records_staked() {
+        let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut crds = Crds::default();
         let val = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
         assert_eq!(crds.insert(val.clone(), 1), Ok(None));
@@ -337,20 +361,26 @@ mod test {
         //now < timestamp
         set.insert(Pubkey::default(), 0);
         set.insert(val.pubkey(), 0);
-        assert!(crds.find_old_labels(0, &set).is_empty());
+        assert!(crds.find_old_labels(&thread_pool, 0, &set).is_empty());
 
         //pubkey shouldn't expire since its timeout is MAX
         set.insert(val.pubkey(), std::u64::MAX);
-        assert!(crds.find_old_labels(2, &set).is_empty());
+        assert!(crds.find_old_labels(&thread_pool, 2, &set).is_empty());
 
         //default has max timeout, but pubkey should still expire
         set.insert(Pubkey::default(), std::u64::MAX);
         set.insert(val.pubkey(), 1);
-        assert_eq!(crds.find_old_labels(2, &set), vec![val.label()]);
+        assert_eq!(
+            crds.find_old_labels(&thread_pool, 2, &set),
+            vec![val.label()]
+        );
 
         set.insert(val.pubkey(), 2);
-        assert!(crds.find_old_labels(2, &set).is_empty());
-        assert_eq!(crds.find_old_labels(3, &set), vec![val.label()]);
+        assert!(crds.find_old_labels(&thread_pool, 2, &set).is_empty());
+        assert_eq!(
+            crds.find_old_labels(&thread_pool, 3, &set),
+            vec![val.label()]
+        );
     }
 
     #[test]
@@ -396,6 +426,7 @@ mod test {
 
     #[test]
     fn test_remove_staked() {
+        let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut crds = Crds::default();
         let val = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
         assert_matches!(crds.insert(val.clone(), 1), Ok(_));
@@ -404,9 +435,12 @@ mod test {
         //default has max timeout, but pubkey should still expire
         set.insert(Pubkey::default(), std::u64::MAX);
         set.insert(val.pubkey(), 1);
-        assert_eq!(crds.find_old_labels(2, &set), vec![val.label()]);
+        assert_eq!(
+            crds.find_old_labels(&thread_pool, 2, &set),
+            vec![val.label()]
+        );
         crds.remove(&val.label());
-        assert!(crds.find_old_labels(2, &set).is_empty());
+        assert!(crds.find_old_labels(&thread_pool, 2, &set).is_empty());
     }
 
     #[test]
