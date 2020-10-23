@@ -1,7 +1,8 @@
 use crate::{
-    checks::*, cluster_query::*, feature::*, inflation::*, nonce::*, spend_utils::*, stake::*,
-    validator_info::*, vote::*,
+    checks::*, cluster_query::*, feature::*, inflation::*, nonce::*, send_tpu::*, spend_utils::*,
+    stake::*, validator_info::*, vote::*,
 };
+use bincode::serialize;
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
@@ -32,7 +33,7 @@ use solana_client::{
     rpc_client::RpcClient,
     rpc_config::{RpcLargestAccountsFilter, RpcSendTransactionConfig},
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
-    rpc_response::RpcKeyedAccount,
+    rpc_response::{RpcKeyedAccount, RpcLeaderSchedule},
 };
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -42,7 +43,7 @@ use solana_rbpf::vm::EbpfVm;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
-    clock::{Epoch, Slot, DEFAULT_TICKS_PER_SECOND},
+    clock::{Epoch, Slot},
     commitment_config::CommitmentConfig,
     decode_error::DecodeError,
     hash::Hash,
@@ -64,12 +65,13 @@ use solana_stake_program::{
 use solana_transaction_status::{EncodedTransaction, UiTransactionEncoding};
 use solana_vote_program::vote_state::VoteAuthorize;
 use std::{
+    cmp::min,
     collections::HashMap,
     error,
     fmt::Write as FmtWrite,
     fs::File,
     io::{Read, Write},
-    net::{IpAddr, SocketAddr},
+    net::{IpAddr, SocketAddr, UdpSocket},
     str::FromStr,
     sync::Arc,
     thread::sleep,
@@ -1031,33 +1033,50 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
 ) -> Result<(), Box<dyn error::Error>> {
     let progress_bar = new_spinner_progress_bar();
     let mut send_retries = 5;
+    let mut leader_schedule: Option<RpcLeaderSchedule> = None;
+    let mut leader_schedule_epoch = 0;
+    let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let cluster_nodes = rpc_client.get_cluster_nodes().ok();
+
     loop {
         let mut status_retries = 15;
+
+        progress_bar.set_message("Finding leader node...");
+        let epoch_info = rpc_client.get_epoch_info_with_commitment(commitment)?;
+        if epoch_info.epoch > leader_schedule_epoch || leader_schedule.is_none() {
+            leader_schedule = rpc_client
+                .get_leader_schedule_with_commitment(Some(epoch_info.absolute_slot), commitment)?;
+            leader_schedule_epoch = epoch_info.epoch;
+        }
+        let tpu_address = get_leader_tpu(
+            min(epoch_info.slot_index + 1, epoch_info.slots_in_epoch),
+            leader_schedule.as_ref(),
+            cluster_nodes.as_ref(),
+        );
 
         // Send all transactions
         let mut pending_transactions = HashMap::new();
         let num_transactions = transactions.len();
         for transaction in transactions {
-            if cfg!(not(test)) {
-                // Delay ~1 tick between write transactions in an attempt to reduce AccountInUse errors
-                // when all the write transactions modify the same program account (eg, deploying a
-                // new program)
-                sleep(Duration::from_millis(1000 / DEFAULT_TICKS_PER_SECOND));
+            if let Some(tpu_address) = tpu_address {
+                let wire_transaction =
+                    serialize(&transaction).expect("serialization should succeed");
+                send_transaction_tpu(&send_socket, &tpu_address, &wire_transaction);
+            } else {
+                let _result = rpc_client
+                    .send_transaction_with_config(
+                        &transaction,
+                        RpcSendTransactionConfig {
+                            preflight_commitment: Some(commitment.commitment),
+                            ..RpcSendTransactionConfig::default()
+                        },
+                    )
+                    .ok();
             }
-
-            let _result = rpc_client
-                .send_transaction_with_config(
-                    &transaction,
-                    RpcSendTransactionConfig {
-                        preflight_commitment: Some(commitment.commitment),
-                        ..RpcSendTransactionConfig::default()
-                    },
-                )
-                .ok();
             pending_transactions.insert(transaction.signatures[0], transaction);
 
             progress_bar.set_message(&format!(
-                "[{}/{}] Transactions sent",
+                "[{}/{}] Total Transactions sent",
                 pending_transactions.len(),
                 num_transactions
             ));
@@ -1093,6 +1112,11 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                         let _ = pending_transactions.remove(&signature);
                     }
                 }
+                progress_bar.set_message(&format!(
+                    "[{}/{}] Transactions confirmed",
+                    num_transactions - pending_transactions.len(),
+                    num_transactions
+                ));
             }
 
             if pending_transactions.is_empty() {
