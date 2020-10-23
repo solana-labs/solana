@@ -29,6 +29,11 @@ if ! command -v readelf > /dev/null; then
   exit 1
 fi
 
+set -e
+out_dir=$(dirname "$dump")
+if [[ ! -d $out_dir ]]; then
+  mkdir -p "$out_dir"
+fi
 dump_mangled=$dump.mangled
 
 (
