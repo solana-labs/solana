@@ -110,13 +110,22 @@ fn calculate_bounded_stake_weighted_timestamp(
         let poh_estimate_offset = slot.saturating_sub(epoch_start_slot) as u32 * slot_duration;
         let estimate_offset =
             Duration::from_secs(estimate.saturating_sub(epoch_start_timestamp) as u64);
-        let delta = if estimate_offset > poh_estimate_offset {
-            estimate_offset - poh_estimate_offset
-        } else {
-            poh_estimate_offset - estimate_offset
-        };
-        if delta > poh_estimate_offset * MAX_ALLOWABLE_DRIFT_PERCENTAGE / 100 {
-            estimate = epoch_start_timestamp + poh_estimate_offset.as_secs() as i64;
+        let max_allowable_drift = poh_estimate_offset * MAX_ALLOWABLE_DRIFT_PERCENTAGE / 100;
+        if estimate_offset > poh_estimate_offset
+            && estimate_offset - poh_estimate_offset > max_allowable_drift
+        {
+            // estimate offset since the start of the epoch is higher than
+            // `MAX_ALLOWABLE_DRIFT_PERCENTAGE`
+            estimate = epoch_start_timestamp
+                + poh_estimate_offset.as_secs() as i64
+                + max_allowable_drift.as_secs() as i64;
+        } else if estimate_offset < poh_estimate_offset
+            && poh_estimate_offset - estimate_offset > max_allowable_drift
+        {
+            // estimate offset since the start of the epoch is lower than
+            // `MAX_ALLOWABLE_DRIFT_PERCENTAGE`
+            estimate = epoch_start_timestamp + poh_estimate_offset.as_secs() as i64
+                - max_allowable_drift.as_secs() as i64;
         }
     }
     Some(estimate)
@@ -503,7 +512,7 @@ pub mod tests {
             Some((0, epoch_start_timestamp)),
         )
         .unwrap();
-        assert_eq!(bounded, poh_estimate);
+        assert_eq!(bounded, poh_estimate + acceptable_delta);
 
         // Test when stake-weighted median is too low
         let unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = [
@@ -523,7 +532,7 @@ pub mod tests {
             Some((0, epoch_start_timestamp)),
         )
         .unwrap();
-        assert_eq!(bounded, poh_estimate);
+        assert_eq!(bounded, poh_estimate - acceptable_delta);
 
         // Test stake-weighted median within bounds
         let unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = [

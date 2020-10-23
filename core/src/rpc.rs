@@ -2703,6 +2703,7 @@ pub mod tests {
         message::Message,
         nonce, rpc_port,
         signature::{Keypair, Signer},
+        stake_weighted_timestamp::EstimateType,
         system_program, system_transaction,
         timing::slot_duration_from_slots_per_year,
         transaction::{self, TransactionError},
