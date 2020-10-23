@@ -55,7 +55,7 @@ fn test_cli_deploy_program() {
         faucet_host: None,
         faucet_port: faucet_addr.port(),
         pubkey: None,
-        lamports: 3 * minimum_balance_for_rent_exemption, // min balance for rent exemption for two programs + leftover for tx processing
+        lamports: 4 * minimum_balance_for_rent_exemption, // min balance for rent exemption for three programs + leftover for tx processing
     };
     config.signers = vec![&keypair];
     process_command(&config).unwrap();
@@ -64,6 +64,7 @@ fn test_cli_deploy_program() {
         program_location: pathbuf.to_str().unwrap().to_string(),
         address: None,
         use_deprecated_loader: false,
+        allow_excessive_balance: false,
     };
 
     let response = process_command(&config);
@@ -98,6 +99,7 @@ fn test_cli_deploy_program() {
         program_location: pathbuf.to_str().unwrap().to_string(),
         address: Some(1),
         use_deprecated_loader: false,
+        allow_excessive_balance: false,
     };
     process_command(&config).unwrap();
     let account1 = rpc_client
@@ -112,6 +114,44 @@ fn test_cli_deploy_program() {
 
     // Attempt to redeploy to the same address
     process_command(&config).unwrap_err();
+
+    // Attempt to deploy to account with excess balance
+    let custom_address_keypair = Keypair::new();
+    config.command = CliCommand::Airdrop {
+        faucet_host: None,
+        faucet_port: faucet_addr.port(),
+        pubkey: None,
+        lamports: 2 * minimum_balance_for_rent_exemption, // Anything over minimum_balance_for_rent_exemption should trigger err
+    };
+    config.signers = vec![&custom_address_keypair];
+    process_command(&config).unwrap();
+
+    config.signers = vec![&keypair, &custom_address_keypair];
+    config.command = CliCommand::Deploy {
+        program_location: pathbuf.to_str().unwrap().to_string(),
+        address: Some(1),
+        use_deprecated_loader: false,
+        allow_excessive_balance: false,
+    };
+    process_command(&config).unwrap_err();
+
+    // Use forcing parameter to deploy to account with excess balance
+    config.command = CliCommand::Deploy {
+        program_location: pathbuf.to_str().unwrap().to_string(),
+        address: Some(1),
+        use_deprecated_loader: false,
+        allow_excessive_balance: true,
+    };
+    process_command(&config).unwrap();
+    let account2 = rpc_client
+        .get_account_with_commitment(&custom_address_keypair.pubkey(), CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
+    assert_eq!(account2.lamports, 2 * minimum_balance_for_rent_exemption);
+    assert_eq!(account2.owner, bpf_loader::id());
+    assert_eq!(account2.executable, true);
+    assert_eq!(account0.data, account2.data);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
