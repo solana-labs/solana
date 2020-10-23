@@ -14,4 +14,10 @@ fi
 bpf_sdk=$(cd "$(dirname "$0")/.." && pwd)
 # shellcheck source=sdk/bpf/env.sh
 source "$bpf_sdk"/env.sh
+
+set -e
+out_dir=$(dirname "$so_stripped")
+if [[ ! -d $out_dir ]]; then
+  mkdir -p "$out_dir"
+fi
 "$bpf_sdk"/dependencies/llvm-native/bin/llvm-objcopy --strip-all "$so" "$so_stripped"
