@@ -59,7 +59,9 @@ use solana_sdk::{
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
-    stake_weighted_timestamp::{calculate_stake_weighted_timestamp, TIMESTAMP_SLOT_RANGE},
+    stake_weighted_timestamp::{
+        calculate_stake_weighted_timestamp, EstimateType, TIMESTAMP_SLOT_RANGE,
+    },
     system_transaction,
     sysvar::{self},
     timing::years_as_slots,
@@ -1079,7 +1081,9 @@ impl Bank {
             .feature_set
             .is_active(&feature_set::timestamp_correction::id())
         {
-            if let Some(timestamp_estimate) = self.get_timestamp_estimate() {
+            if let Some(timestamp_estimate) =
+                self.get_timestamp_estimate(EstimateType::Unbounded, None)
+            {
                 if timestamp_estimate > unix_timestamp {
                     datapoint_info!(
                         "bank-timestamp-correction",
@@ -1440,7 +1444,11 @@ impl Bank {
         self.update_recent_blockhashes_locked(&blockhash_queue);
     }
 
-    fn get_timestamp_estimate(&self) -> Option<UnixTimestamp> {
+    fn get_timestamp_estimate(
+        &self,
+        estimate_type: EstimateType,
+        epoch_start_timestamp: Option<(Slot, UnixTimestamp)>,
+    ) -> Option<UnixTimestamp> {
         let mut get_timestamp_estimate_time = Measure::start("get_timestamp_estimate");
         let recent_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = self
             .vote_accounts()
@@ -1467,6 +1475,8 @@ impl Bank {
             stakes,
             self.slot(),
             slot_duration,
+            estimate_type,
+            epoch_start_timestamp,
         );
         get_timestamp_estimate_time.stop();
         datapoint_info!(
@@ -9661,7 +9671,10 @@ mod tests {
             vec![10_000; 2],
         );
         let mut bank = Bank::new(&genesis_config);
-        assert_eq!(bank.get_timestamp_estimate(), Some(0));
+        assert_eq!(
+            bank.get_timestamp_estimate(EstimateType::Unbounded, None),
+            Some(0)
+        );
 
         let recent_timestamp: UnixTimestamp = bank.unix_timestamp_from_genesis();
         update_vote_account_timestamp(
@@ -9682,7 +9695,7 @@ mod tests {
             &validator_vote_keypairs1.vote_keypair.pubkey(),
         );
         assert_eq!(
-            bank.get_timestamp_estimate(),
+            bank.get_timestamp_estimate(EstimateType::Unbounded, None),
             Some(recent_timestamp + additional_secs / 2)
         );
 
@@ -9691,14 +9704,17 @@ mod tests {
         }
         let adjustment = (bank.ns_per_slot as u64 * bank.slot()) / 1_000_000_000;
         assert_eq!(
-            bank.get_timestamp_estimate(),
+            bank.get_timestamp_estimate(EstimateType::Unbounded, None),
             Some(recent_timestamp + adjustment as i64 + additional_secs / 2)
         );
 
         for _ in 0..7 {
             bank = new_from_parent(&Arc::new(bank));
         }
-        assert_eq!(bank.get_timestamp_estimate(), None);
+        assert_eq!(
+            bank.get_timestamp_estimate(EstimateType::Unbounded, None),
+            None
+        );
     }
 
     #[test]
