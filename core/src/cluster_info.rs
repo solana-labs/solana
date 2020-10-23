@@ -2080,25 +2080,33 @@ impl ClusterInfo {
         stakes: &HashMap<Pubkey, u64>,
         epoch_time_ms: u64,
     ) {
-        type HashMap = std::collections::HashMap<Pubkey, Vec<CrdsValue>>;
         if responses.is_empty() {
             return;
         }
-        fn extend(hash_map: &mut HashMap, (from, mut data): (Pubkey, Vec<CrdsValue>)) {
-            match hash_map.entry(from) {
+        fn extend<K, V>(hash_map: &mut HashMap<K, Vec<V>>, (key, mut value): (K, Vec<V>))
+        where
+            K: Eq + std::hash::Hash,
+        {
+            match hash_map.entry(key) {
                 Entry::Occupied(mut entry) => {
-                    let value = entry.get_mut();
-                    if value.len() < data.len() {
-                        std::mem::swap(value, &mut data);
+                    let entry_value = entry.get_mut();
+                    if entry_value.len() < value.len() {
+                        std::mem::swap(entry_value, &mut value);
                     }
-                    value.extend(data);
+                    entry_value.extend(value);
                 }
                 Entry::Vacant(entry) => {
-                    entry.insert(data);
+                    entry.insert(value);
                 }
             }
         }
-        fn merge(mut hash_map: HashMap, other: HashMap) -> HashMap {
+        fn merge<K, V>(
+            mut hash_map: HashMap<K, Vec<V>>,
+            other: HashMap<K, Vec<V>>,
+        ) -> HashMap<K, Vec<V>>
+        where
+            K: Eq + std::hash::Hash,
+        {
             if hash_map.len() < other.len() {
                 return merge(other, hash_map);
             }
