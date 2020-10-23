@@ -1664,6 +1664,7 @@ impl ClusterInfo {
 
     fn handle_purge(
         self: &Arc<Self>,
+        thread_pool: &ThreadPool,
         bank_forks: &Option<Arc<RwLock<BankForks>>>,
         stakes: &HashMap<Pubkey, u64>,
     ) {
@@ -1681,7 +1682,7 @@ impl ClusterInfo {
         let timeouts = self.gossip.read().unwrap().make_timeouts(stakes, timeout);
         let num_purged = self
             .time_gossip_write_lock("purge", &self.stats.purge)
-            .purge(timestamp(), &timeouts);
+            .purge(thread_pool, timestamp(), &timeouts);
         inc_new_counter_info!("cluster_info-purge-count", num_purged);
     }
 
@@ -1742,7 +1743,7 @@ impl ClusterInfo {
                         return;
                     }
 
-                    self.handle_purge(&bank_forks, &stakes);
+                    self.handle_purge(&thread_pool, &bank_forks, &stakes);
 
                     self.handle_adopt_shred_version(&mut adopt_shred_version);
 
