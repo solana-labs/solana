@@ -1541,6 +1541,8 @@ impl ClusterInfo {
         self.stats
             .new_pull_requests_count
             .add_relaxed(pulls.len() as u64);
+        // There are at most 2 unique peers here: The randomly
+        // selected pull peer, and possibly also the entrypoint.
         let peers: Vec<Pubkey> = pulls.iter().map(|(peer, _, _, _)| *peer).dedup().collect();
         {
             let mut gossip =
