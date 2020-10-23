@@ -33,7 +33,9 @@ use solana_sdk::{
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     signature::{Keypair, Signature, Signer},
-    stake_weighted_timestamp::{calculate_stake_weighted_timestamp, TIMESTAMP_SLOT_RANGE},
+    stake_weighted_timestamp::{
+        calculate_stake_weighted_timestamp, EstimateType, TIMESTAMP_SLOT_RANGE,
+    },
     timing::timestamp,
     transaction::Transaction,
 };
@@ -1638,9 +1640,15 @@ impl Blockstore {
         }
 
         let mut calculate_timestamp = Measure::start("calculate_timestamp");
-        let stake_weighted_timestamp =
-            calculate_stake_weighted_timestamp(&unique_timestamps, stakes, slot, slot_duration)
-                .ok_or(BlockstoreError::EmptyEpochStakes)?;
+        let stake_weighted_timestamp = calculate_stake_weighted_timestamp(
+            &unique_timestamps,
+            stakes,
+            slot,
+            slot_duration,
+            EstimateType::Unbounded,
+            None,
+        )
+        .ok_or(BlockstoreError::EmptyEpochStakes)?;
         calculate_timestamp.stop();
         datapoint_info!(
             "blockstore-get-block-time",
