@@ -1242,7 +1242,10 @@ fn do_process_deploy(
                 balance,
             ));
             balance_needed = balance;
-        } else if account.lamports > minimum_balance && !force_use_program_address {
+        } else if account.lamports > minimum_balance
+            && system_program::check_id(&account.owner)
+            && !force_use_program_address
+        {
             return Err(CliError::DynamicProgramError(format!(
                 "Program account has a balance: {:?}; it may already be in use",
                 Sol(account.lamports)
