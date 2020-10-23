@@ -766,6 +766,7 @@ declare module '@solana/web3.js' {
     ): Transaction;
     static delegate(params: DelegateStakeParams): Transaction;
     static authorize(params: AuthorizeStakeParams): Transaction;
+    static authorizeWithSeed(params: AuthorizeWithSeedStakeParams): Transaction;
     static split(params: SplitStakeParams): Transaction;
     static withdraw(params: WithdrawStakeParams): Transaction;
     static deactivate(params: DeactivateStakeParams): Transaction;
@@ -797,6 +798,9 @@ declare module '@solana/web3.js' {
     static decodeAuthorize(
       instruction: TransactionInstruction,
     ): AuthorizeStakeParams;
+    static decodeAuthorizeWithSeed(
+      instruction: TransactionInstruction,
+    ): AuthorizeWithSeedStakeParams;
     static decodeSplit(instruction: TransactionInstruction): SplitStakeParams;
     static decodeWithdraw(
       instruction: TransactionInstruction,
