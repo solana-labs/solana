@@ -41,7 +41,7 @@ test-stable)
   ;;
 test-stable-perf)
   # BPF solana-sdk legacy compile test
-  ./cargo-build-bpf --manifest-path sdk/Cargo.toml --no-default-features --features program
+  ./cargo-build-bpf --manifest-path sdk/Cargo.toml
 
   # BPF program tests
   _ make -C programs/bpf/c tests
