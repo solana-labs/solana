@@ -95,6 +95,9 @@ serum_dex() {
 
     "$solana_dir"/cargo-build-bpf \
       --manifest-path dex/Cargo.toml --no-default-features --features program
+
+    "$solana_dir"/cargo stable test \
+      --manifest-path dex/Cargo.toml --no-default-features --features program
   )
 }
 
