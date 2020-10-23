@@ -1114,7 +1114,16 @@ impl Bank {
                         ("from_genesis", unix_timestamp, i64),
                         ("corrected", timestamp_estimate, i64),
                     );
-                    unix_timestamp = timestamp_estimate
+                    unix_timestamp = timestamp_estimate;
+
+                    let ancestor_timestamp = self.clock().unix_timestamp;
+                    if self
+                        .feature_set
+                        .is_active(&feature_set::timestamp_bounding::id())
+                        && timestamp_estimate < ancestor_timestamp
+                    {
+                        unix_timestamp = ancestor_timestamp;
+                    }
                 }
             }
         }
@@ -9924,7 +9933,7 @@ mod tests {
             voting_keypair,
             ..
         } = create_genesis_config_with_leader(5, &leader_pubkey, 3);
-        let bank = Bank::new(&genesis_config);
+        let mut bank = Bank::new(&genesis_config);
         assert_eq!(
             bank.clock().unix_timestamp,
             bank.unix_timestamp_from_genesis()
@@ -9976,6 +9985,22 @@ mod tests {
         assert_eq!(
             bank.clock().unix_timestamp,
             bank.unix_timestamp_from_genesis() + 1
+        );
+
+        // Timestamp cannot go backward from ancestor Bank to child
+        bank = new_from_parent(&Arc::new(bank));
+        update_vote_account_timestamp(
+            BlockTimestamp {
+                slot: bank.slot(),
+                timestamp: bank.unix_timestamp_from_genesis() - 1,
+            },
+            &bank,
+            &voting_keypair.pubkey(),
+        );
+        bank.update_clock(None);
+        assert_eq!(
+            bank.clock().unix_timestamp,
+            bank.unix_timestamp_from_genesis()
         );
     }
 
