@@ -1081,8 +1081,32 @@ impl Bank {
             .feature_set
             .is_active(&feature_set::timestamp_correction::id())
         {
+            let (estimate_type, epoch_start_timestamp) =
+                if let Some(timestamp_bounding_activation_slot) = self
+                    .feature_set
+                    .activated_slot(&feature_set::timestamp_bounding::id())
+                {
+                    // This check avoids a chicken-egg problem with epoch_start_timestamp, which is
+                    // needed for timestamp bounding, but isn't yet corrected for the activation slot
+                    let epoch_start_timestamp = if self.slot() > timestamp_bounding_activation_slot
+                    {
+                        let epoch = if let Some(epoch) = parent_epoch {
+                            epoch
+                        } else {
+                            self.epoch()
+                        };
+                        let first_slot_in_epoch =
+                            self.epoch_schedule.get_first_slot_in_epoch(epoch);
+                        Some((first_slot_in_epoch, self.clock().epoch_start_timestamp))
+                    } else {
+                        None
+                    };
+                    (EstimateType::Bounded, epoch_start_timestamp)
+                } else {
+                    (EstimateType::Unbounded, None)
+                };
             if let Some(timestamp_estimate) =
-                self.get_timestamp_estimate(EstimateType::Unbounded, None)
+                self.get_timestamp_estimate(estimate_type, epoch_start_timestamp)
             {
                 if timestamp_estimate > unix_timestamp {
                     datapoint_info!(
@@ -9729,6 +9753,10 @@ mod tests {
             .accounts
             .remove(&feature_set::timestamp_correction::id())
             .unwrap();
+        genesis_config
+            .accounts
+            .remove(&feature_set::timestamp_bounding::id())
+            .unwrap();
         let bank = Bank::new(&genesis_config);
 
         let recent_timestamp: UnixTimestamp = bank.unix_timestamp_from_genesis();
@@ -9744,10 +9772,10 @@ mod tests {
 
         // Bank::new_from_parent should not adjust timestamp before feature activation
         let mut bank = new_from_parent(&Arc::new(bank));
-        let clock =
-            from_account::<sysvar::clock::Clock>(&bank.get_account(&sysvar::clock::id()).unwrap())
-                .unwrap();
-        assert_eq!(clock.unix_timestamp, bank.unix_timestamp_from_genesis());
+        assert_eq!(
+            bank.clock().unix_timestamp,
+            bank.unix_timestamp_from_genesis()
+        );
 
         // Request `timestamp_correction` activation
         bank.store_account(
@@ -9763,12 +9791,128 @@ mod tests {
 
         // Now Bank::new_from_parent should adjust timestamp
         let bank = Arc::new(new_from_parent(&Arc::new(bank)));
-        let clock =
-            from_account::<sysvar::clock::Clock>(&bank.get_account(&sysvar::clock::id()).unwrap())
-                .unwrap();
         assert_eq!(
-            clock.unix_timestamp,
+            bank.clock().unix_timestamp,
             bank.unix_timestamp_from_genesis() + additional_secs
+        );
+    }
+
+    #[test]
+    fn test_timestamp_bounding_feature() {
+        let leader_pubkey = solana_sdk::pubkey::new_rand();
+        let GenesisConfigInfo {
+            mut genesis_config,
+            voting_keypair,
+            ..
+        } = create_genesis_config_with_leader(5, &leader_pubkey, 3);
+        let slots_in_epoch = 32;
+        genesis_config
+            .accounts
+            .remove(&feature_set::timestamp_bounding::id())
+            .unwrap();
+        genesis_config.epoch_schedule = EpochSchedule::new(slots_in_epoch);
+        let bank = Bank::new(&genesis_config);
+
+        let recent_timestamp: UnixTimestamp = bank.unix_timestamp_from_genesis();
+        let additional_secs = 1;
+        update_vote_account_timestamp(
+            BlockTimestamp {
+                slot: bank.slot(),
+                timestamp: recent_timestamp + additional_secs,
+            },
+            &bank,
+            &voting_keypair.pubkey(),
+        );
+
+        // Bank::new_from_parent should allow unbounded timestamp before activation
+        let mut bank = new_from_parent(&Arc::new(bank));
+        assert_eq!(
+            bank.clock().unix_timestamp,
+            bank.unix_timestamp_from_genesis() + additional_secs
+        );
+
+        // Bank::new_from_parent should not allow epoch_start_timestamp to be set before activation
+        bank.update_clock(Some(0));
+        assert_eq!(
+            bank.clock().epoch_start_timestamp,
+            Bank::get_unused_from_slot(bank.slot(), bank.unused) as i64
+        );
+
+        // Request `timestamp_bounding` activation
+        let feature = Feature { activated_at: None };
+        bank.store_account(
+            &feature_set::timestamp_bounding::id(),
+            &feature.create_account(42),
+        );
+        for _ in 0..30 {
+            bank = new_from_parent(&Arc::new(bank));
+        }
+
+        // Refresh vote timestamp
+        let recent_timestamp: UnixTimestamp = bank.unix_timestamp_from_genesis();
+        let additional_secs = 1;
+        update_vote_account_timestamp(
+            BlockTimestamp {
+                slot: bank.slot(),
+                timestamp: recent_timestamp + additional_secs,
+            },
+            &bank,
+            &voting_keypair.pubkey(),
+        );
+
+        // Advance to epoch boundary to activate
+        bank = new_from_parent(&Arc::new(bank));
+
+        // Bank::new_from_parent is bounding, but should not use epoch_start_timestamp in activation slot
+        assert_eq!(
+            bank.clock().unix_timestamp,
+            bank.unix_timestamp_from_genesis() + additional_secs
+        );
+
+        assert_eq!(
+            bank.clock().epoch_start_timestamp,
+            bank.unix_timestamp_from_genesis() + additional_secs
+        );
+
+        // Past activation slot, bounding should use epoch_start_timestamp in activation slot
+        bank = new_from_parent(&Arc::new(bank));
+        assert_eq!(
+            bank.clock().unix_timestamp,
+            bank.unix_timestamp_from_genesis()
+        );
+
+        for _ in 0..30 {
+            bank = new_from_parent(&Arc::new(bank));
+        }
+
+        // Refresh vote timestamp
+        let recent_timestamp: UnixTimestamp = bank.unix_timestamp_from_genesis();
+        let additional_secs = 20;
+        update_vote_account_timestamp(
+            BlockTimestamp {
+                slot: bank.slot(),
+                timestamp: recent_timestamp + additional_secs,
+            },
+            &bank,
+            &voting_keypair.pubkey(),
+        );
+
+        // Advance to epoch boundary
+        bank = new_from_parent(&Arc::new(bank));
+
+        // Past activation slot, bounding should use previous epoch_start_timestamp on epoch boundary slots
+        assert_eq!(
+            bank.clock().unix_timestamp,
+            bank.unix_timestamp_from_genesis() // Plus estimated offset + 25%
+                + ((slots_in_epoch as u32 * Duration::from_nanos(bank.ns_per_slot as u64))
+                    .as_secs()
+                    * 25
+                    / 100) as i64,
+        );
+
+        assert_eq!(
+            bank.clock().epoch_start_timestamp,
+            bank.clock().unix_timestamp
         );
     }
 
