@@ -205,7 +205,7 @@ impl VoteTracker {
         }
     }
 
-    fn progress_slot(&self, root_bank: &Bank) {
+    fn purge_stale_state(&self, root_bank: &Bank) {
         // Purge any outdated slot data
         let new_root = root_bank.slot();
         let root_epoch = root_bank.epoch();
@@ -228,7 +228,7 @@ impl VoteTracker {
 
     fn progress_with_new_root_bank(&self, root_bank: &Bank) {
         self.progress_leader_schedule_epoch(root_bank);
-        self.progress_slot(root_bank);
+        self.purge_stale_state(root_bank);
     }
 }
 
