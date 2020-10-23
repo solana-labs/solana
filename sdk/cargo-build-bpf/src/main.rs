@@ -114,7 +114,7 @@ fn build_bpf(config: Config) {
         }
     };
 
-    let legacy_program_feature_present = root_package.features.contains_key("program");
+    let legacy_program_feature_present = root_package.name == "solana-sdk";
     let root_package_dir = &root_package.manifest_path.parent().unwrap_or_else(|| {
         eprintln!(
             "Unable to get directory of {}",
