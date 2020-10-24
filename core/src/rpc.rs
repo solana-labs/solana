@@ -1267,6 +1267,18 @@ impl JsonRpcRequestProcessor {
     }
 }
 
+fn verify_transaction(transaction: &Transaction) -> Result<()> {
+    if transaction.verify().is_err() {
+        return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
+    }
+
+    if let Err(e) = transaction.verify_precompiles() {
+        return Err(RpcCustomError::TransactionPrecompileVerificationFailure(e).into());
+    }
+
+    Ok(())
+}
+
 fn verify_filter(input: &RpcFilterType) -> Result<()> {
     input
         .verify()
@@ -2274,12 +2286,8 @@ impl RpcSol for RpcSolImpl {
             .unwrap_or(0);
 
         if !config.skip_preflight {
-            if transaction.verify().is_err() {
-                return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
-            }
-
-            if let Err(e) = transaction.verify_precompiles() {
-                return Err(RpcCustomError::TransactionPrecompileVerificationFailure(e).into());
+            if let Err(e) = verify_transaction(&transaction) {
+                return Err(e);
             }
 
             if meta.health.check() != RpcHealthStatus::Ok {
@@ -2316,26 +2324,20 @@ impl RpcSol for RpcSolImpl {
         let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base58);
         let (_, transaction) = deserialize_transaction(data, encoding)?;
 
-        let mut result = if config.sig_verify {
-            transaction.verify()
-        } else {
-            Ok(())
-        };
+        if config.sig_verify {
+            if let Err(e) = verify_transaction(&transaction) {
+                return Err(e);
+            }
+        }
 
         let bank = &*meta.bank(config.commitment);
-        let logs = if result.is_ok() {
-            let (transaction_result, log_messages) = bank.simulate_transaction(transaction);
-            result = transaction_result;
-            Some(log_messages)
-        } else {
-            None
-        };
+        let (result, logs) = bank.simulate_transaction(transaction);
 
         Ok(new_response(
             &bank,
             RpcSimulateTransactionResult {
                 err: result.err(),
-                logs,
+                logs: Some(logs),
             },
         ))
     }
@@ -3820,13 +3822,14 @@ pub mod tests {
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let expected = json!({
-            "jsonrpc": "2.0",
-            "result": {
-                "context":{"slot":0},
-                "value":{"err":"SignatureFailure", "logs":null}
+            "jsonrpc":"2.0",
+            "error": {
+                "code": -32003,
+                "message": "Transaction signature verification failure"
             },
-            "id": 1,
+            "id":1
         });
+
         let expected: Response =
             serde_json::from_value(expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
