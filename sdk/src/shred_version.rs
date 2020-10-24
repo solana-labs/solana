@@ -1,4 +1,4 @@
-#![cfg(feature = "everything")]
+#![cfg(feature = "full")]
 
 use solana_sdk::{
     hard_forks::HardForks,

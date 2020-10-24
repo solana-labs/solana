@@ -1,5 +1,5 @@
 //! The `system_transaction` module provides functionality for creating system transactions.
-#![cfg(feature = "everything")]
+#![cfg(feature = "full")]
 
 use crate::{
     hash::Hash,

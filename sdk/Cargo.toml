@@ -14,11 +14,10 @@ edition = "2018"
 # solana-program crate
 program = []
 
-# "everything" includes functionality that is not compatible or needed for on-chain programs
 default = [
-  "everything"
+  "full" # functionality that is not compatible or needed for on-chain programs
 ]
-everything = [
+full = [
     "assert_matches",
     "byteorder",
     "chrono",
