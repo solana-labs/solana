@@ -9,7 +9,7 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-solana-program-sdk = { path = "../../../../sdk/program", version = "1.5.0" }
+solana-program = { path = "../../../../sdk/program", version = "1.5.0" }
 
 [lib]
 name = "solana_bpf_rust_iter"

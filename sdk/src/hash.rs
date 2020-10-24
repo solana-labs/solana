@@ -1,4 +1,4 @@
-pub use solana_program_sdk::hash::*;
+pub use solana_program::hash::*;
 
 /// random hash value for tests and benchmarks.
 #[cfg(feature = "everything")]

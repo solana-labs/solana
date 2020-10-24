@@ -4380,7 +4380,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-program-sdk"
+name = "solana-program"
 version = "1.5.0"
 dependencies = [
  "assert_matches",
@@ -4595,7 +4595,7 @@ dependencies = [
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-logger 1.5.0",
- "solana-program-sdk",
+ "solana-program",
  "solana-sdk-macro 1.5.0",
  "thiserror",
  "tiny-bip39",

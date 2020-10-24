@@ -2,7 +2,7 @@
 
 #[macro_use]
 extern crate alloc;
-use solana_program_sdk::{entrypoint::SUCCESS, info};
+use solana_program::{entrypoint::SUCCESS, info};
 use std::{alloc::Layout, mem};
 
 #[no_mangle]

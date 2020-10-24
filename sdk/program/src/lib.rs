@@ -1,8 +1,8 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
 #![cfg_attr(RUSTC_NEEDS_PROC_MACRO_HYGIENE, feature(proc_macro_hygiene))]
 
-// Allows macro expansion of `use ::solana_program_sdk::*` to work within this crate
-extern crate self as solana_program_sdk;
+// Allows macro expansion of `use ::solana_program::*` to work within this crate
+extern crate self as solana_program;
 
 pub mod account;
 pub mod account_info;
@@ -51,10 +51,10 @@ pub mod sysvar;
 /// # // wrapper is used so that the macro invocation occurs in the item position
 /// # // rather than in the statement position which isn't allowed.
 /// use std::str::FromStr;
-/// use solana_program_sdk::{declare_id, pubkey::Pubkey};
+/// use solana_program::{declare_id, pubkey::Pubkey};
 ///
 /// # mod item_wrapper {
-/// #   use solana_program_sdk::declare_id;
+/// #   use solana_program::declare_id;
 /// declare_id!("My11111111111111111111111111111111111111111");
 /// # }
 /// # use item_wrapper::id;
@@ -62,7 +62,7 @@ pub mod sysvar;
 /// let my_id = Pubkey::from_str("My11111111111111111111111111111111111111111").unwrap();
 /// assert_eq!(id(), my_id);
 /// ```
-pub use solana_sdk_macro::program_sdk_declare_id as declare_id;
+pub use solana_sdk_macro::program_declare_id as declare_id;
 
 #[macro_use]
 extern crate serde_derive;
