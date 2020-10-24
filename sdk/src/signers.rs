@@ -1,4 +1,4 @@
-#![cfg(feature = "everything")]
+#![cfg(feature = "full")]
 use crate::{
     pubkey::Pubkey,
     signature::{Signature, Signer, SignerError},
