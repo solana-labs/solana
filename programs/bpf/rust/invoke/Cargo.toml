@@ -10,19 +10,7 @@ edition = "2018"
 
 [dependencies]
 solana-bpf-rust-invoked = { path = "../invoked", default-features = false }
-<<<<<<< HEAD
-<<<<<<< HEAD
-solana-sdk = { path = "../../../../sdk/", version = "1.4.3", default-features = false }
-
-[features]
-program = ["solana-sdk/program"]
-default = ["program", "solana-sdk/default"]
-=======
-solana-program-sdk = { path = "../../../../sdk/program", version = "1.5.0" }
->>>>>>> fe68f7f78... Port programs to solana-program-sdk
-=======
-solana-program = { path = "../../../../sdk/program", version = "1.5.0" }
->>>>>>> dd711ab5f... Rename solana-program-sdk to solana-program
+solana-program = { path = "../../../../sdk/program", version = "1.4.3" }
 
 [lib]
 name = "solana_bpf_rust_invoke"

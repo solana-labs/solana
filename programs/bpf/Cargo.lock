@@ -1780,11 +1780,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-call-depth"
-<<<<<<< HEAD
 version = "1.4.3"
-=======
-version = "1.5.0"
->>>>>>> fe68f7f78... Port programs to solana-program-sdk
 dependencies = [
  "solana-program",
 ]
@@ -2044,7 +2040,7 @@ dependencies = [
 
 [[package]]
 name = "solana-program"
-version = "1.5.0"
+version = "1.4.3"
 dependencies = [
  "bincode",
  "bs58",

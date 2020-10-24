@@ -11,15 +11,7 @@ edition = "2018"
 [dependencies]
 num-derive = "0.2"
 num-traits = "0.2"
-<<<<<<< HEAD
-<<<<<<< HEAD
-solana-sdk = { path = "../../../../sdk/", version = "1.4.3", default-features = false }
-=======
-solana-program-sdk = { path = "../../../../sdk/program", version = "1.5.0" }
->>>>>>> fe68f7f78... Port programs to solana-program-sdk
-=======
-solana-program = { path = "../../../../sdk/program", version = "1.5.0" }
->>>>>>> dd711ab5f... Rename solana-program-sdk to solana-program
+solana-program = { path = "../../../../sdk/program", version = "1.4.3" }
 thiserror = "1.0"
 
 [lib]

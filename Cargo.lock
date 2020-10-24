@@ -4319,7 +4319,7 @@ dependencies = [
 
 [[package]]
 name = "solana-program"
-version = "1.5.0"
+version = "1.4.3"
 dependencies = [
  "assert_matches",
  "bincode",
@@ -4342,8 +4342,8 @@ dependencies = [
  "sha2",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
- "solana-logger 1.5.0",
- "solana-sdk-macro 1.5.0",
+ "solana-logger 1.4.3",
+ "solana-sdk-macro 1.4.3",
  "thiserror",
 ]
 
@@ -4530,14 +4530,9 @@ dependencies = [
  "solana-crate-features 1.4.3",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
-<<<<<<< HEAD
  "solana-logger 1.4.3",
- "solana-sdk-macro 1.4.3",
-=======
- "solana-logger 1.5.0",
  "solana-program",
- "solana-sdk-macro 1.5.0",
->>>>>>> 63db32420... Initial population of solana-program-sdk
+ "solana-sdk-macro 1.4.3",
  "thiserror",
  "tiny-bip39",
 ]
