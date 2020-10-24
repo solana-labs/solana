@@ -1,3 +1,4 @@
+#![cfg(feature = "everything")]
 use crate::{
     pubkey::Pubkey,
     signature::{Signature, Signer, SignerError},

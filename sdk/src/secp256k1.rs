@@ -1,3 +1,5 @@
+#![cfg(feature = "everything")]
+
 use digest::Digest;
 use serde_derive::{Deserialize, Serialize};
 

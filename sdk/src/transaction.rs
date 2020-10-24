@@ -1,5 +1,7 @@
 //! Defines a Transaction type to package an atomic sequence of instructions.
 
+#![cfg(feature = "everything")]
+
 use crate::sanitize::{Sanitize, SanitizeError};
 use crate::secp256k1::verify_eth_addresses;
 use crate::{
@@ -101,7 +103,7 @@ impl From<SanitizeError> for TransactionError {
 }
 
 /// An atomic transaction
-#[frozen_abi(digest = "GoxM5ZMMjM2FSuY1VtuMhs1j8u9kMuYsH3dpYcSVVnTe")]
+#[frozen_abi(digest = "EGPL8qfT6of8UDKUTPQfcCADiRrpVxKXmULWtNdfjbQ8")]
 #[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, AbiExample)]
 pub struct Transaction {
     /// A set of digital signatures of `account_keys`, `program_ids`, `recent_blockhash`, and `instructions`, signed by the first

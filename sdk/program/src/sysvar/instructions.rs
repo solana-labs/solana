@@ -1,9 +1,6 @@
 //! This account contains the serialized transaction instructions
-//!
 
-use crate::instruction::Instruction;
-use crate::sanitize::SanitizeError;
-use crate::sysvar::Sysvar;
+use crate::{instruction::Instruction, sanitize::SanitizeError, sysvar::Sysvar};
 
 pub type Instructions = Vec<Instruction>;
 
@@ -24,7 +21,7 @@ pub fn store_current_index(data: &mut [u8], instruction_index: u16) {
 }
 
 pub fn load_instruction_at(index: usize, data: &[u8]) -> Result<Instruction, SanitizeError> {
-    solana_sdk::message::Message::deserialize_instruction(index, data)
+    crate::message::Message::deserialize_instruction(index, data)
 }
 
 #[cfg(test)]

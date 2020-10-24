@@ -356,7 +356,7 @@ pub fn make_accounts_hashes_message(
 }
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "3ZHQscZ9SgxKh45idzHv3hiagyyPRtDgeySmJn171PTi")]
+#[frozen_abi(digest = "21UweZ4WXK9RHypF97D1rEJQ4C8Bh4pw52SBSNAKxJvW")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 enum Protocol {

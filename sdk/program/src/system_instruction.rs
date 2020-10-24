@@ -52,7 +52,7 @@ impl<E> DecodeError<E> for NonceError {
 /// maximum permitted size of data: 10 MB
 pub const MAX_PERMITTED_DATA_LENGTH: u64 = 10 * 1024 * 1024;
 
-#[frozen_abi(digest = "EpsptsKTYzMoQGSdoWRfPbwT3odGNfK3imEUTrxpLF1i")]
+#[frozen_abi(digest = "2xnDcizcPKKR7b624FeuuPd1zj5bmnkmVsBWgoKPTh4w")]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, AbiExample, AbiEnumVisitor)]
 pub enum SystemInstruction {
     /// Create a new account
@@ -491,9 +491,9 @@ mod tests {
 
     #[test]
     fn test_move_many() {
-        let alice_pubkey = solana_sdk::pubkey::new_rand();
-        let bob_pubkey = solana_sdk::pubkey::new_rand();
-        let carol_pubkey = solana_sdk::pubkey::new_rand();
+        let alice_pubkey = Pubkey::new_unique();
+        let bob_pubkey = Pubkey::new_unique();
+        let carol_pubkey = Pubkey::new_unique();
         let to_lamports = vec![(bob_pubkey, 1), (carol_pubkey, 2)];
 
         let instructions = transfer_many(&alice_pubkey, &to_lamports);
@@ -504,8 +504,8 @@ mod tests {
 
     #[test]
     fn test_create_nonce_account() {
-        let from_pubkey = solana_sdk::pubkey::new_rand();
-        let nonce_pubkey = solana_sdk::pubkey::new_rand();
+        let from_pubkey = Pubkey::new_unique();
+        let nonce_pubkey = Pubkey::new_unique();
         let authorized = nonce_pubkey;
         let ixs = create_nonce_account(&from_pubkey, &nonce_pubkey, &authorized, 42);
         assert_eq!(ixs.len(), 2);
