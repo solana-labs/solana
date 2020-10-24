@@ -11,6 +11,7 @@ use solana_core::{
     cluster_info::VALIDATOR_PORT_RANGE,
     consensus::{SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
     gossip_service::discover_cluster,
+    optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
     validator::ValidatorConfig,
 };
 use solana_download_utils::download_snapshot;
@@ -1375,7 +1376,9 @@ fn test_no_voting() {
 #[test]
 fn test_optimistic_confirmation_violation() {
     solana_logger::setup();
-    let mut buf = BufferRedirect::stderr().unwrap();
+    let buf = std::env::var("OPTIMISTIC_CONF_TEST_DUMP_LOG")
+        .err()
+        .map(|_| BufferRedirect::stderr().unwrap());
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
     let node_stakes = vec![50, 51];
@@ -1462,10 +1465,17 @@ fn test_optimistic_confirmation_violation() {
 
     // Check to see that validator detected optimistic confirmation for
     // `prev_voted_slot` failed
-    let expected_log = format!("Optimistic slot {} was not rooted", prev_voted_slot);
-    let mut output = String::new();
-    buf.read_to_string(&mut output).unwrap();
-    assert!(output.contains(&expected_log));
+    let expected_log =
+        OptimisticConfirmationVerifier::format_optimistic_confirmd_slot_violation_log(
+            prev_voted_slot,
+        );
+    if let Some(mut buf) = buf {
+        let mut output = String::new();
+        buf.read_to_string(&mut output).unwrap();
+        assert!(output.contains(&expected_log));
+    } else {
+        panic!("dumped log and disaled testing");
+    }
 }
 
 fn wait_for_next_snapshot(
