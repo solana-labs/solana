@@ -1,7 +1,7 @@
 //! @brief Example Rust-based BPF noop program
 
-extern crate solana_program_sdk;
-use solana_program_sdk::{
+extern crate solana_program;
+use solana_program::{
     account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, pubkey::Pubkey,
 };
 

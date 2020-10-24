@@ -1,7 +1,7 @@
 //! @brief SHA256 Syscall test
 
-extern crate solana_program_sdk;
-use solana_program_sdk::{
+extern crate solana_program;
+use solana_program::{
     hash::{hashv, Hasher},
     info,
 };

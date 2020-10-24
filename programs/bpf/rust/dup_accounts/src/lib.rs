@@ -1,7 +1,7 @@
 //! @brief Example Rust-based BPF program that tests duplicate accounts passed via accounts
 
-extern crate solana_program_sdk;
-use solana_program_sdk::{
+extern crate solana_program;
+use solana_program::{
     account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, info,
     program_error::ProgramError, pubkey::Pubkey,
 };

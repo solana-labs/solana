@@ -1,9 +1,9 @@
 //! @brief Example Rust-based BPF program that exercises error handling
 
-extern crate solana_program_sdk;
+extern crate solana_program;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use solana_program_sdk::{
+use solana_program::{
     account_info::AccountInfo,
     decode_error::DecodeError,
     entrypoint,

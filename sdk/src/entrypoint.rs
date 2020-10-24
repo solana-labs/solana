@@ -1,9 +1,9 @@
-pub use solana_program_sdk::entrypoint::*;
+pub use solana_program::entrypoint::*;
 
 #[macro_export]
 #[deprecated(
     since = "1.4.3",
-    note = "use solana_program_sdk::entrypoint::entrypoint instead"
+    note = "use solana_program::entrypoint::entrypoint instead"
 )]
 macro_rules! entrypoint {
     ($process_instruction:ident) => {

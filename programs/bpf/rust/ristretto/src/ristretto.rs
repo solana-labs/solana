@@ -1,5 +1,5 @@
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
-use solana_program_sdk::program_error::ProgramError;
+use solana_program::program_error::ProgramError;
 
 /// Multiply a ristretto point with a scalar
 ///
@@ -37,7 +37,7 @@ pub fn ristretto_mul(
             )
         };
         match status {
-            solana_program_sdk::entrypoint::SUCCESS => Ok(result),
+            solana_program::entrypoint::SUCCESS => Ok(result),
             _ => Err(status.into()),
         }
     }
