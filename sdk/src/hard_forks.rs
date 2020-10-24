@@ -1,7 +1,7 @@
 //! The `hard_forks` module is used to maintain the list of slot boundaries for when a hard fork
 //! should occur.
 
-#![cfg(feature = "everything")]
+#![cfg(feature = "full")]
 
 use byteorder::{ByteOrder, LittleEndian};
 use solana_sdk::clock::Slot;
