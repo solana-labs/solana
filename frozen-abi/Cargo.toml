@@ -14,7 +14,7 @@ bv = { version = "0.11.1", features = ["serde"] }
 log = "0.4.8"
 serde = "1.0.112"
 serde_derive = "1.0.103"
-sha2 = "0.8.2"
+sha2 = "0.9.1"
 solana-frozen-abi-macro = { path = "macro", version = "1.5.0" }
 thiserror = "1.0"
 

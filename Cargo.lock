@@ -614,6 +614,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cpuid-bool"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8aebca1129a03dc6dc2b127edd729435bbc4a37e1d5f4d7513165089ceb02634"
+
+[[package]]
 name = "crc32fast"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -926,7 +932,7 @@ dependencies = [
  "ed25519",
  "rand 0.7.3",
  "serde",
- "sha2",
+ "sha2 0.8.2",
  "zeroize",
 ]
 
@@ -1953,7 +1959,7 @@ dependencies = [
  "digest 0.8.1",
  "hmac-drbg",
  "rand 0.7.3",
- "sha2",
+ "sha2 0.8.2",
  "subtle 2.2.2",
  "typenum",
 ]
@@ -3336,6 +3342,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha2"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2933378ddfeda7ea26f48c555bdad8bb446bf8a3d17832dc83e380d444cfb8c1"
+dependencies = [
+ "block-buffer 0.9.0",
+ "cfg-if",
+ "cpuid-bool",
+ "digest 0.9.0",
+ "opaque-debug 0.3.0",
+]
+
+[[package]]
 name = "sha3"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3993,7 +4012,7 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "sha2",
+ "sha2 0.9.1",
  "solana-frozen-abi-macro",
  "solana-logger 1.5.0",
  "thiserror",
@@ -4126,7 +4145,7 @@ dependencies = [
  "rocksdb",
  "serde",
  "serde_bytes",
- "sha2",
+ "sha2 0.9.1",
  "solana-bpf-loader-program",
  "solana-budget-program",
  "solana-logger 1.5.0",
@@ -4401,7 +4420,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2",
+ "sha2 0.8.2",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-logger 1.5.0",
@@ -4549,7 +4568,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2",
+ "sha2 0.8.2",
  "sha3",
  "solana-crate-features 1.4.0",
  "solana-logger 1.4.0",
@@ -4589,7 +4608,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2",
+ "sha2 0.9.1",
  "sha3",
  "solana-crate-features 1.5.0",
  "solana-frozen-abi",
@@ -5376,7 +5395,7 @@ dependencies = [
  "pbkdf2",
  "rand 0.7.3",
  "rustc-hash",
- "sha2",
+ "sha2 0.8.2",
  "unicode-normalization",
 ]
 

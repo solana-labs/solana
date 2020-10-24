@@ -31,7 +31,7 @@ rayon = "1.4.1"
 reed-solomon-erasure = { version = "4.0.2", features = ["simd-accel"] }
 serde = "1.0.112"
 serde_bytes = "0.11.4"
-sha2 = "0.8.2"
+sha2 = "0.9.1"
 solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "1.5.0" }
 solana-transaction-status = { path = "../transaction-status", version = "1.5.0" }
 solana-logger = { path = "../logger", version = "1.5.0" }
