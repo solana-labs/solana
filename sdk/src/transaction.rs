@@ -1,6 +1,6 @@
 //! Defines a Transaction type to package an atomic sequence of instructions.
 
-#![cfg(feature = "everything")]
+#![cfg(feature = "full")]
 
 use crate::sanitize::{Sanitize, SanitizeError};
 use crate::secp256k1::verify_eth_addresses;
