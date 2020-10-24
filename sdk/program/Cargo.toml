@@ -1,7 +1,7 @@
 [package]
-name = "solana-program-sdk"
+name = "solana-program"
 version = "1.5.0"
-description = "Solana Program SDK"
+description = "Solana Program"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 homepage = "https://solana.com/"

@@ -2,8 +2,8 @@
 
 #![allow(unreachable_code)]
 
-extern crate solana_program_sdk;
-use solana_program_sdk::{
+extern crate solana_program;
+use solana_program::{
     account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, info, pubkey::Pubkey,
 };
 

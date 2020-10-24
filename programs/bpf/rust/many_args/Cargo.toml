@@ -9,7 +9,7 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-solana-program-sdk = { path = "../../../../sdk/program", version = "1.5.0" }
+solana-program = { path = "../../../../sdk/program", version = "1.5.0" }
 solana-bpf-rust-many-args-dep = { path = "../many_args_dep", version = "1.5.0" }
 
 [lib]

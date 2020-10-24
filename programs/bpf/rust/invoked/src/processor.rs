@@ -3,7 +3,7 @@
 #![cfg(feature = "program")]
 
 use crate::instruction::*;
-use solana_program_sdk::{
+use solana_program::{
     account_info::AccountInfo,
     bpf_loader, entrypoint,
     entrypoint::ProgramResult,

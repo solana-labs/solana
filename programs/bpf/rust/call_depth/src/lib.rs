@@ -1,6 +1,6 @@
 //! @brief Example Rust-based BPF program that tests call depth and stack usage
 
-use solana_program_sdk::{entrypoint::SUCCESS, info};
+use solana_program::{entrypoint::SUCCESS, info};
 
 #[inline(never)]
 pub fn recurse(data: &mut [u8]) {
