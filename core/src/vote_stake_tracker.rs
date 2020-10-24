@@ -17,16 +17,17 @@ impl VoteStakeTracker {
         &mut self,
         vote_pubkey: Arc<Pubkey>,
         stake: u64,
-        total_epoch_stake: u64,
+        total_stake: u64,
     ) -> (bool, bool) {
         let is_new = !self.voted.contains(&vote_pubkey);
         if is_new {
             self.voted.insert(vote_pubkey);
-            let supermajority_stake = (total_epoch_stake as f64 * VOTE_THRESHOLD_SIZE) as u64;
-            let previous_stake = self.stake;
-            self.stake += stake;
+            let supermajority_stake = (total_stake as f64 * VOTE_THRESHOLD_SIZE) as u64;
+            let old_stake = self.stake;
+            let new_stake = self.stake + stake;
+            self.stake = new_stake;
             (
-                previous_stake <= supermajority_stake && self.stake > supermajority_stake,
+                old_stake <= supermajority_stake && supermajority_stake < new_stake,
                 is_new,
             )
         } else {
