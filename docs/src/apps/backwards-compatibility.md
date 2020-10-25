@@ -101,7 +101,7 @@ be backwards compatible.
 
 #### Web3 JavaScript SDK
 
-The Web3.JS SDK follows semantic versioning rules and is shipped separately from validator
+The Web3.JS SDK follows semantic versioning specifications and is shipped separately from validator
 releases.
 
 #### Attack Vectors
