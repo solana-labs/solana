@@ -657,7 +657,7 @@ declare module '@solana/web3.js' {
     instructions: Array<TransactionInstruction>;
     recentBlockhash: ?Blockhash;
     nonceInfo: ?NonceInformation;
-    feePayer: PublicKey | null;
+    feePayer: ?PublicKey;
 
     constructor(opts?: TransactionCtorFields): Transaction;
     static from(buffer: Buffer | Uint8Array | Array<number>): Transaction;

@@ -83,16 +83,6 @@ export class Message {
     );
   }
 
-  findSignerIndex(signer: PublicKey): number {
-    const index = this.accountKeys.findIndex(accountKey => {
-      return accountKey.equals(signer);
-    });
-    if (index < 0) {
-      throw new Error(`unknown signer: ${signer.toString()}`);
-    }
-    return index;
-  }
-
   serialize(): Buffer {
     const numKeys = this.accountKeys.length;
 

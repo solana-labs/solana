@@ -176,7 +176,7 @@ describe('load BPF Rust program', () => {
     );
   });
 
-  test('simulate transaction without signature verification', async () => {
+  test('deprecated - simulate transaction without signature verification', async () => {
     const simulatedTransaction = new Transaction().add({
       keys: [
         {pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
@@ -185,6 +185,33 @@ describe('load BPF Rust program', () => {
     });
 
     simulatedTransaction.setSigners(payerAccount.publicKey);
+    const {err, logs} = (
+      await connection.simulateTransaction(simulatedTransaction)
+    ).value;
+    expect(err).toBeNull();
+
+    if (logs === null) {
+      expect(logs).not.toBeNull();
+      return;
+    }
+
+    expect(logs.length).toBeGreaterThanOrEqual(2);
+    expect(logs[0]).toEqual(`Call BPF program ${program.publicKey.toBase58()}`);
+    expect(logs[logs.length - 1]).toEqual(
+      `BPF program ${program.publicKey.toBase58()} success`,
+    );
+  });
+
+  test('simulate transaction without signature verification', async () => {
+    const simulatedTransaction = new Transaction({
+      feePayer: payerAccount.publicKey,
+    }).add({
+      keys: [
+        {pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
+      ],
+      programId: program.publicKey,
+    });
+
     const {err, logs} = (
       await connection.simulateTransaction(simulatedTransaction)
     ).value;

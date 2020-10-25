@@ -198,8 +198,8 @@ test('get program accounts', async () => {
     },
   ]);
 
-  if (transaction.recentBlockhash === null) {
-    expect(transaction.recentBlockhash).not.toBeNull();
+  if (!transaction.recentBlockhash) {
+    expect(transaction.recentBlockhash).toBeTruthy();
     return;
   }
 
