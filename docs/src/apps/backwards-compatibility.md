@@ -74,7 +74,7 @@ Minor releases:
 ### Runtime Features
 
 New Solana runtime features are feature-switched and manually activated. Runtime features
-include things like introducing new native programs, sysvars, and syscalls or changes to
+include: the introduction of new native programs, sysvars, and syscalls; and changes to
 their behavior.
 
 The release process is as follows:
