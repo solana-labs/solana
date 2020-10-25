@@ -94,7 +94,7 @@ discourage centralized usage of Solana operated nodes.
 
 #### Local cluster scripts and Docker images
 
-Breaking changes will be limited to minor version updates, patch updates should always
+Breaking changes will be limited to minor version updates. Patch updates should always
 be backwards compatible.
 
 ### Exceptions
