@@ -79,9 +79,9 @@ their behavior.
 
 The release process is as follows:
 
-1. New runtime feature is added to a new release but deactivated by default
-2. Sufficient staked validators upgrade to the new release
-3. Runtime feature switch is activated manually with an instruction and take effect in the next epoch
+1. New runtime feature is included in a new release, deactivated by default
+2. Once sufficient staked validators upgrade to the new release, the runtime feature switch is activated manually with an instruction
+3. The feature takes effect at the beginning of the next epoch
 
 ### Infrastructure Changes
 
