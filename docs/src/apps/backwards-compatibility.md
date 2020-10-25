@@ -106,5 +106,5 @@ releases.
 
 #### Attack Vectors
 
-If a new attack vector is discovered in existing code and reported to the Solana team,
-according to the severity of the issue, the above processes may be circumvented.
+If a new attack vector is discovered in existing code, the above processes may be
+circumvented in order to rapidly deploy a fix, depending on the severity of the issue.
