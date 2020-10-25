@@ -10,7 +10,7 @@ and so this document attempts to clarify and codify the process for new releases
 
 ### Expectations
 
-- Solana API's, SDK's, and CLI tooling are tied to validator software releases (with a few
+- Solana APIs, SDKs, and CLI tooling are tied to validator software releases (with a few
   [exceptions](#exceptions)).
 - Software for a `MINOR` version release will be compatible across all software on the
   **same** `MINOR` version _regardless_ of `PATCH` version.
