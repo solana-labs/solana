@@ -1382,8 +1382,8 @@ fn do_process_deploy(
         config.commitment,
         last_valid_slot,
     )
-    .map_err(|_| {
-        CliError::DynamicProgramError("Data writes to program account failed".to_string())
+    .map_err(|err| {
+        CliError::DynamicProgramError(format!("Data writes to program account failed: {}", err))
     })?;
 
     let (blockhash, _, _) = rpc_client
