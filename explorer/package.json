@@ -6,7 +6,7 @@
     "@react-hook/debounce": "^3.0.0",
     "@sentry/react": "^5.26.0",
     "@solana/web3.js": "^0.83.0",
-    "@testing-library/jest-dom": "^5.11.4",
+    "@testing-library/jest-dom": "^5.11.5",
     "@testing-library/react": "^11.1.0",
     "@testing-library/user-event": "^12.1.10",
     "@types/bn.js": "^4.11.6",
