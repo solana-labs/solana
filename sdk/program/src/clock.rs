@@ -79,8 +79,8 @@ pub type UnixTimestamp = i64;
 pub struct Clock {
     /// the current network/bank Slot
     pub slot: Slot,
-    /// unused
-    pub unused: u64,
+    /// the timestamp of the first Slot in this Epoch
+    pub epoch_start_timestamp: UnixTimestamp,
     /// the bank Epoch
     pub epoch: Epoch,
     /// the future Epoch for which the leader schedule has
