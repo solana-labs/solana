@@ -741,7 +741,7 @@ impl Bank {
             }
             bank.update_stake_history(None);
         }
-        bank.update_clock();
+        bank.update_clock(None);
         bank.update_rent();
         bank.update_epoch_schedule();
         bank.update_recent_blockhashes();
@@ -844,7 +844,7 @@ impl Bank {
         new.update_slot_hashes();
         new.update_rewards(parent.epoch());
         new.update_stake_history(Some(parent.epoch()));
-        new.update_clock();
+        new.update_clock(Some(parent.epoch()));
         new.update_fees();
         if !new.fix_recent_blockhashes_sysvar_delay() {
             new.update_recent_blockhashes();
@@ -1073,7 +1073,7 @@ impl Bank {
             .unwrap_or_default()
     }
 
-    fn update_clock(&self) {
+    fn update_clock(&self, parent_epoch: Option<Epoch>) {
         let mut unix_timestamp = self.unix_timestamp_from_genesis();
         if self
             .feature_set
@@ -1090,9 +1090,22 @@ impl Bank {
                 }
             }
         }
+        let epoch_start_timestamp = if self
+            .feature_set
+            .is_active(&feature_set::timestamp_bounding::id())
+        {
+            // On epoch boundaries, update epoch_start_timestamp
+            if parent_epoch.is_some() && parent_epoch.unwrap() != self.epoch() {
+                unix_timestamp
+            } else {
+                self.clock().epoch_start_timestamp
+            }
+        } else {
+            Self::get_unused_from_slot(self.slot, self.unused) as i64
+        };
         let clock = sysvar::clock::Clock {
             slot: self.slot,
-            unused: Self::get_unused_from_slot(self.slot, self.unused),
+            epoch_start_timestamp,
             epoch: self.epoch_schedule.get_epoch(self.slot),
             leader_schedule_epoch: self.epoch_schedule.get_leader_schedule_epoch(self.slot),
             unix_timestamp,
@@ -9757,7 +9770,7 @@ mod tests {
             bank.unix_timestamp_from_genesis()
         );
 
-        bank.update_clock();
+        bank.update_clock(None);
         assert_eq!(
             bank.clock().unix_timestamp,
             bank.unix_timestamp_from_genesis()
@@ -9771,7 +9784,7 @@ mod tests {
             &bank,
             &voting_keypair.pubkey(),
         );
-        bank.update_clock();
+        bank.update_clock(None);
         assert_eq!(
             bank.clock().unix_timestamp,
             bank.unix_timestamp_from_genesis()
@@ -9785,7 +9798,7 @@ mod tests {
             &bank,
             &voting_keypair.pubkey(),
         );
-        bank.update_clock();
+        bank.update_clock(None);
         assert_eq!(
             bank.clock().unix_timestamp,
             bank.unix_timestamp_from_genesis()
@@ -9799,7 +9812,7 @@ mod tests {
             &bank,
             &voting_keypair.pubkey(),
         );
-        bank.update_clock();
+        bank.update_clock(None);
         assert_eq!(
             bank.clock().unix_timestamp,
             bank.unix_timestamp_from_genesis() + 1
