@@ -109,18 +109,21 @@ impl BanksServer {
 
     async fn poll_signature_status(
         self,
-        signature: Signature,
+        signature: &Signature,
+        blockhash: &Hash,
         last_valid_slot: Slot,
         commitment: CommitmentLevel,
     ) -> Option<transaction::Result<()>> {
-        let mut status = self.bank(commitment).get_signature_status(&signature);
+        let mut status = self
+            .bank(commitment)
+            .get_signature_status_with_blockhash(signature, blockhash);
         while status.is_none() {
             delay_for(Duration::from_millis(200)).await;
             let bank = self.bank(commitment);
             if bank.slot() > last_valid_slot {
                 break;
             }
-            status = bank.get_signature_status(&signature);
+            status = bank.get_signature_status_with_blockhash(signature, blockhash);
         }
         status
     }
@@ -193,13 +196,13 @@ impl Banks for BanksServer {
             .read()
             .unwrap()
             .root_bank()
-            .get_blockhash_last_valid_slot(&blockhash)
+            .get_blockhash_last_valid_slot(blockhash)
             .unwrap();
         let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
         let info =
             TransactionInfo::new(signature, serialize(&transaction).unwrap(), last_valid_slot);
         self.transaction_sender.send(info).unwrap();
-        self.poll_signature_status(signature, last_valid_slot, commitment)
+        self.poll_signature_status(&signature, blockhash, last_valid_slot, commitment)
             .await
     }
 
