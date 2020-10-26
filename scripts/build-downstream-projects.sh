@@ -68,13 +68,8 @@ spl() {
     update_solana_dependencies .
     patch_crates_io Cargo.toml
 
-    "$solana_dir"/cargo-build-bpf \
-      --manifest-path memo/program/Cargo.toml \
-      --no-default-features --features program
-
-    "$solana_dir"/cargo-build-bpf \
-      --manifest-path token/program/Cargo.toml \
-      --no-default-features --features program
+    "$solana_dir"/cargo-build-bpf --manifest-path memo/program/Cargo.toml
+    "$solana_dir"/cargo-build-bpf --manifest-path token/program/Cargo.toml
   )
 }
 
