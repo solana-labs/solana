@@ -10,18 +10,18 @@ and so this document attempts to clarify and codify the process for new releases
 
 ### Expectations
 
-- Solana APIs, SDKs, and CLI tooling are tied to validator software releases (with a few
-  [exceptions](#exceptions)).
+- Solana APIs, SDKs, and CLI tooling are updated together in every Solana software release
+  (with a few [exceptions](#exceptions)).
 - Software for a `MINOR` version release will be compatible across all software on the
-  **same** `MINOR` version _regardless_ of `PATCH` version.
-- Solana **DOES NOT** guarantee that software on _different_ `MINOR` version releases
-  will always be compatible.
-- Validator software releases **DO NOT** strictly follow semantic versioning, details below.
+  the first `PATCH` release of the previous `MINOR` version.
+- Solana **DOES NOT** guarantee that software on _non-sequential_ `MINOR` version releases
+  will always be compatible. _(For example, 1.3.x will likely not be compatible with 1.5.x)_
+- Solana software releases **DO NOT** strictly follow semantic versioning, details below.
 
 ### Release Cadence
 
 The Solana RPC API, Rust SDK, CLI tooling, and BPF Program SDK are all updated and shipped
-along with each Solana validator release and should always be compatible between patch
+along with each Solana software release and should always be compatible between patch
 updates of a particular minor version release.
 
 #### Minor Releases (1.x.0)
@@ -101,8 +101,8 @@ be backwards compatible.
 
 #### Web3 JavaScript SDK
 
-The Web3.JS SDK follows semantic versioning specifications and is shipped separately from validator
-releases.
+The Web3.JS SDK follows semantic versioning specifications and is shipped separately from Solana
+software releases.
 
 #### Attack Vectors
 
