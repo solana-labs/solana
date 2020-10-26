@@ -1609,7 +1609,15 @@ impl Blockstore {
         timestamp_slots
     }
 
-    pub fn cache_block_time(
+    pub fn cache_block_time(&self, slot: Slot, timestamp: UnixTimestamp) -> Result<()> {
+        if !self.is_root(slot) {
+            return Err(BlockstoreError::SlotNotRooted);
+        }
+        self.blocktime_cf.put(slot, &timestamp)
+    }
+
+    // DEPRECATED as of feature_set::timestamp_correction
+    pub fn cache_block_time_from_slot_entries(
         &self,
         slot: Slot,
         slot_duration: Duration,
@@ -1648,7 +1656,7 @@ impl Blockstore {
                 i64
             )
         );
-        self.blocktime_cf.put(slot, &stake_weighted_timestamp)
+        self.cache_block_time(slot, stake_weighted_timestamp)
     }
 
     pub fn get_first_available_block(&self) -> Result<Slot> {
@@ -5794,7 +5802,7 @@ pub mod tests {
         let slot_duration = Duration::from_millis(400);
         for slot in &[1, 2, 3, 8] {
             assert!(blockstore
-                .cache_block_time(*slot, slot_duration, &stakes)
+                .cache_block_time_from_slot_entries(*slot, slot_duration, &stakes)
                 .is_err());
         }
 
@@ -5804,7 +5812,7 @@ pub mod tests {
         }
         for slot in &[1, 2, 3, 8] {
             blockstore
-                .cache_block_time(*slot, slot_duration, &stakes)
+                .cache_block_time_from_slot_entries(*slot, slot_duration, &stakes)
                 .unwrap();
         }
         let block_time_slot_3 = blockstore.get_block_time(3);
@@ -5864,7 +5872,7 @@ pub mod tests {
         let slot_duration = Duration::from_millis(400);
         for slot in &[1, 2, 3, 8] {
             assert!(blockstore
-                .cache_block_time(*slot, slot_duration, &stakes)
+                .cache_block_time_from_slot_entries(*slot, slot_duration, &stakes)
                 .is_err());
             assert_eq!(blockstore.get_block_time(*slot).unwrap(), None);
         }
