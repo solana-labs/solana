@@ -1,28 +1,19 @@
 import React from "react";
 import {
-  TransactionInstruction,
   SystemProgram,
   SignatureResult,
-  SystemInstruction,
+  ParsedInstruction,
 } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
-import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import { Address } from "components/common/Address";
 
 export function AllocateDetailsCard(props: {
-  ix: TransactionInstruction;
+  ix: ParsedInstruction;
   index: number;
   result: SignatureResult;
+  info: any;
 }) {
-  const { ix, index, result } = props;
-
-  let params;
-  try {
-    params = SystemInstruction.decodeAllocate(ix);
-  } catch (err) {
-    console.error(err);
-    return <UnknownDetailsCard {...props} />;
-  }
+  const { ix, index, result, info } = props;
 
   return (
     <InstructionCard
@@ -41,13 +32,13 @@ export function AllocateDetailsCard(props: {
       <tr>
         <td>Account Address</td>
         <td className="text-lg-right">
-          <Address pubkey={params.accountPubkey} alignRight link />
+          <Address pubkey={info.account} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Allocated Space (Bytes)</td>
-        <td className="text-lg-right">{params.space}</td>
+        <td className="text-lg-right">{info.space}</td>
       </tr>
     </InstructionCard>
   );

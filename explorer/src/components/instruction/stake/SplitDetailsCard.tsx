@@ -1,29 +1,20 @@
 import React from "react";
 import {
-  TransactionInstruction,
   SignatureResult,
-  StakeInstruction,
   StakeProgram,
+  ParsedInstruction,
 } from "@solana/web3.js";
 import { lamportsToSolString } from "utils";
 import { InstructionCard } from "../InstructionCard";
-import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import { Address } from "components/common/Address";
 
 export function SplitDetailsCard(props: {
-  ix: TransactionInstruction;
+  ix: ParsedInstruction;
   index: number;
   result: SignatureResult;
+  info: any;
 }) {
-  const { ix, index, result } = props;
-
-  let params;
-  try {
-    params = StakeInstruction.decodeSplit(ix);
-  } catch (err) {
-    console.error(err);
-    return <UnknownDetailsCard {...props} />;
-  }
+  const { ix, index, result, info } = props;
 
   return (
     <InstructionCard ix={ix} index={index} result={result} title="Split Stake">
@@ -37,29 +28,27 @@ export function SplitDetailsCard(props: {
       <tr>
         <td>Stake Address</td>
         <td className="text-lg-right">
-          <Address pubkey={params.stakePubkey} alignRight link />
+          <Address pubkey={info.stakeAccount} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Authority Address</td>
         <td className="text-lg-right">
-          <Address pubkey={params.authorizedPubkey} alignRight link />
+          <Address pubkey={info.stakeAuthority} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>New Stake Address</td>
         <td className="text-lg-right">
-          <Address pubkey={params.splitStakePubkey} alignRight link />
+          <Address pubkey={info.newSplitAccount} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Split Amount (SOL)</td>
-        <td className="text-lg-right">
-          {lamportsToSolString(params.lamports)}
-        </td>
+        <td className="text-lg-right">{lamportsToSolString(info.lamports)}</td>
       </tr>
     </InstructionCard>
   );

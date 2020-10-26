@@ -1,28 +1,19 @@
 import React from "react";
 import {
-  TransactionInstruction,
   SignatureResult,
-  StakeInstruction,
   StakeProgram,
+  ParsedInstruction,
 } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
-import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import { Address } from "components/common/Address";
 
 export function DeactivateDetailsCard(props: {
-  ix: TransactionInstruction;
+  ix: ParsedInstruction;
   index: number;
   result: SignatureResult;
+  info: any;
 }) {
-  const { ix, index, result } = props;
-
-  let params;
-  try {
-    params = StakeInstruction.decodeDeactivate(ix);
-  } catch (err) {
-    console.error(err);
-    return <UnknownDetailsCard {...props} />;
-  }
+  const { ix, index, result, info } = props;
 
   return (
     <InstructionCard
@@ -41,14 +32,14 @@ export function DeactivateDetailsCard(props: {
       <tr>
         <td>Stake Address</td>
         <td className="text-lg-right">
-          <Address pubkey={params.stakePubkey} alignRight link />
+          <Address pubkey={info.stakeAccount} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Authority Address</td>
         <td className="text-lg-right">
-          <Address pubkey={params.authorizedPubkey} alignRight link />
+          <Address pubkey={info.stakeAuthority} alignRight link />
         </td>
       </tr>
     </InstructionCard>
