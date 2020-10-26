@@ -16,12 +16,12 @@ use solana_runtime::{
 };
 use solana_sdk::{
     account::Account,
-    account::KeyedAccount,
     account_info::AccountInfo,
     bpf_loader, bpf_loader_deprecated,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     hash::{Hasher, HASH_BYTES},
     instruction::{AccountMeta, Instruction, InstructionError},
+    keyed_account::KeyedAccount,
     message::Message,
     program_error::ProgramError,
     pubkey::{Pubkey, PubkeyError},

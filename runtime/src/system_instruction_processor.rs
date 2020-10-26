@@ -1,14 +1,16 @@
 use log::*;
 use solana_sdk::{
-    account::{get_signers, next_keyed_account, Account, KeyedAccount},
+    account::Account,
     account_utils::StateMut,
     instruction::InstructionError,
-    nonce::{self, Account as NonceAccount},
+    keyed_account::{from_keyed_account, get_signers, next_keyed_account, KeyedAccount},
+    nonce,
+    nonce_keyed_account::NonceKeyedAccount,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     system_instruction::{SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH},
     system_program,
-    sysvar::{self, recent_blockhashes::RecentBlockhashes, rent::Rent, Sysvar},
+    sysvar::{self, recent_blockhashes::RecentBlockhashes, rent::Rent},
 };
 use std::collections::HashSet;
 
@@ -267,7 +269,7 @@ pub fn process_instruction(
         SystemInstruction::AdvanceNonceAccount => {
             let me = &mut next_keyed_account(keyed_accounts_iter)?;
             me.advance_nonce_account(
-                &RecentBlockhashes::from_keyed_account(next_keyed_account(keyed_accounts_iter)?)?,
+                &from_keyed_account::<RecentBlockhashes>(next_keyed_account(keyed_accounts_iter)?)?,
                 &signers,
             )
         }
@@ -277,8 +279,8 @@ pub fn process_instruction(
             me.withdraw_nonce_account(
                 lamports,
                 to,
-                &RecentBlockhashes::from_keyed_account(next_keyed_account(keyed_accounts_iter)?)?,
-                &Rent::from_keyed_account(next_keyed_account(keyed_accounts_iter)?)?,
+                &from_keyed_account::<RecentBlockhashes>(next_keyed_account(keyed_accounts_iter)?)?,
+                &from_keyed_account::<Rent>(next_keyed_account(keyed_accounts_iter)?)?,
                 &signers,
             )
         }
@@ -286,8 +288,8 @@ pub fn process_instruction(
             let me = &mut next_keyed_account(keyed_accounts_iter)?;
             me.initialize_nonce_account(
                 &authorized,
-                &RecentBlockhashes::from_keyed_account(next_keyed_account(keyed_accounts_iter)?)?,
-                &Rent::from_keyed_account(next_keyed_account(keyed_accounts_iter)?)?,
+                &from_keyed_account::<RecentBlockhashes>(next_keyed_account(keyed_accounts_iter)?)?,
+                &from_keyed_account::<Rent>(next_keyed_account(keyed_accounts_iter)?)?,
             )
         }
         SystemInstruction::AuthorizeNonceAccount(nonce_authority) => {

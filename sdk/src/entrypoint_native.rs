@@ -1,6 +1,6 @@
 //! @brief Solana Native program entry point
 
-use crate::{account::KeyedAccount, instruction::InstructionError, pubkey::Pubkey};
+use crate::{instruction::InstructionError, keyed_account::KeyedAccount, pubkey::Pubkey};
 
 // Prototype of a native program entry point
 ///
@@ -86,7 +86,7 @@ macro_rules! declare_name {
 /// # // wrapper is used so that the macro invocation occurs in the item position
 /// # // rather than in the statement position which isn't allowed.
 /// # mod item_wrapper {
-/// use solana_sdk::account::KeyedAccount;
+/// use solana_sdk::keyed_account::KeyedAccount;
 /// use solana_sdk::instruction::InstructionError;
 /// use solana_sdk::pubkey::Pubkey;
 /// use solana_sdk::declare_program;
@@ -117,7 +117,7 @@ macro_rules! declare_name {
 /// # // wrapper is used so that the macro invocation occurs in the item position
 /// # // rather than in the statement position which isn't allowed.
 /// # mod item_wrapper {
-/// use solana_sdk::account::KeyedAccount;
+/// use solana_sdk::keyed_account::KeyedAccount;
 /// use solana_sdk::instruction::InstructionError;
 /// use solana_sdk::pubkey::Pubkey;
 /// use solana_sdk::declare_program;
@@ -150,7 +150,7 @@ macro_rules! declare_program(
         #[no_mangle]
         pub extern "C" fn $name(
             program_id: &$crate::pubkey::Pubkey,
-            keyed_accounts: &[$crate::account::KeyedAccount],
+            keyed_accounts: &[$crate::keyed_account::KeyedAccount],
             instruction_data: &[u8],
         ) -> Result<(), $crate::instruction::InstructionError> {
             $entrypoint(program_id, keyed_accounts, instruction_data)

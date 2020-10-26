@@ -1,16 +1,15 @@
-use crate::{
-    account::{self, KeyedAccount},
+use crate::keyed_account::KeyedAccount;
+use solana_program::{
     account_utils::State as AccountUtilsState,
     instruction::InstructionError,
     nonce::{self, state::Versions, State},
     pubkey::Pubkey,
     system_instruction::NonceError,
-    system_program,
     sysvar::{recent_blockhashes::RecentBlockhashes, rent::Rent},
 };
-use std::{cell::RefCell, collections::HashSet};
+use std::collections::HashSet;
 
-pub trait Account {
+pub trait NonceKeyedAccount {
     fn advance_nonce_account(
         &self,
         recent_blockhashes: &RecentBlockhashes,
@@ -37,7 +36,7 @@ pub trait Account {
     ) -> Result<(), InstructionError>;
 }
 
-impl<'a> Account for KeyedAccount<'a> {
+impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
     fn advance_nonce_account(
         &self,
         recent_blockhashes: &RecentBlockhashes,
@@ -157,25 +156,13 @@ impl<'a> Account for KeyedAccount<'a> {
     }
 }
 
-pub fn create_account(lamports: u64) -> RefCell<account::Account> {
-    RefCell::new(
-        account::Account::new_data_with_space(
-            lamports,
-            &Versions::new_current(State::Uninitialized),
-            State::size(),
-            &system_program::id(),
-        )
-        .expect("nonce_account"),
-    )
-}
-
 /// Convenience function for working with keyed accounts in tests
 pub fn with_test_keyed_account<F>(lamports: u64, signer: bool, f: F)
 where
     F: Fn(&KeyedAccount),
 {
     let pubkey = Pubkey::new_unique();
-    let account = create_account(lamports);
+    let account = solana_program::nonce::create_account(lamports);
     let keyed_account = KeyedAccount::new(&pubkey, signer, &account);
     f(&keyed_account)
 }
@@ -184,12 +171,13 @@ where
 mod test {
     use super::*;
     use crate::{
-        account::KeyedAccount,
         account_utils::State as AccountUtilsState,
+        keyed_account::KeyedAccount,
         nonce::{self, State},
         system_instruction::NonceError,
         sysvar::recent_blockhashes::{create_test_recent_blockhashes, RecentBlockhashes},
     };
+    use solana_program::{hash::Hash, nonce::utils::verify_nonce_account};
     use std::iter::FromIterator;
 
     #[test]
@@ -880,5 +868,55 @@ mod test {
             let result = nonce_account.authorize_nonce_account(&Pubkey::default(), &signers);
             assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
         })
+    }
+
+    #[test]
+    fn verify_nonce_ok() {
+        with_test_keyed_account(42, true, |nonce_account| {
+            let mut signers = HashSet::new();
+            signers.insert(nonce_account.signer_key().unwrap());
+            let state: State = nonce_account.state().unwrap();
+            // New is in Uninitialzed state
+            assert_eq!(state, State::Uninitialized);
+            let recent_blockhashes = create_test_recent_blockhashes(0);
+            let authorized = nonce_account.unsigned_key();
+            nonce_account
+                .initialize_nonce_account(&authorized, &recent_blockhashes, &Rent::free())
+                .unwrap();
+            assert!(verify_nonce_account(
+                &nonce_account.account.borrow(),
+                &recent_blockhashes[0].blockhash,
+            ));
+        });
+    }
+
+    #[test]
+    fn verify_nonce_bad_acc_state_fail() {
+        with_test_keyed_account(42, true, |nonce_account| {
+            assert!(!verify_nonce_account(
+                &nonce_account.account.borrow(),
+                &Hash::default()
+            ));
+        });
+    }
+
+    #[test]
+    fn verify_nonce_bad_query_hash_fail() {
+        with_test_keyed_account(42, true, |nonce_account| {
+            let mut signers = HashSet::new();
+            signers.insert(nonce_account.signer_key().unwrap());
+            let state: State = nonce_account.state().unwrap();
+            // New is in Uninitialzed state
+            assert_eq!(state, State::Uninitialized);
+            let recent_blockhashes = create_test_recent_blockhashes(0);
+            let authorized = nonce_account.unsigned_key();
+            nonce_account
+                .initialize_nonce_account(&authorized, &recent_blockhashes, &Rent::free())
+                .unwrap();
+            assert!(!verify_nonce_account(
+                &nonce_account.account.borrow(),
+                &recent_blockhashes[1].blockhash,
+            ));
+        });
     }
 }

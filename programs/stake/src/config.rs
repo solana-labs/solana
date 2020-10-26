@@ -4,9 +4,8 @@ use bincode::{deserialize, serialized_size};
 use serde_derive::{Deserialize, Serialize};
 use solana_config_program::{create_config_account, get_config_data, ConfigState};
 use solana_sdk::{
-    account::{Account, KeyedAccount},
-    genesis_config::GenesisConfig,
-    instruction::InstructionError,
+    account::Account, genesis_config::GenesisConfig, instruction::InstructionError,
+    keyed_account::KeyedAccount,
 };
 
 // stake config ID
