@@ -8,7 +8,7 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::Serialize;
 use solana_metrics::inc_new_counter_info;
 use solana_sdk::{
-    account::KeyedAccount, decode_error::DecodeError, instruction::InstructionError,
+    decode_error::DecodeError, instruction::InstructionError, keyed_account::KeyedAccount,
     program_utils::limited_deserialize, pubkey::Pubkey,
 };
 use std::cmp;

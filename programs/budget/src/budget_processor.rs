@@ -7,9 +7,9 @@ use crate::{
 use chrono::prelude::{DateTime, Utc};
 use log::*;
 use solana_sdk::{
-    account::{next_keyed_account, KeyedAccount},
     hash::hash,
     instruction::InstructionError,
+    keyed_account::{next_keyed_account, KeyedAccount},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
