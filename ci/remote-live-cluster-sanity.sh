@@ -56,7 +56,7 @@ validator_then_ledger_tool_pid=$!
 tail -F "$validator_log" > cluster-sanity/log-tail 2> /dev/null &
 tail_pid=$!
 
-attempts=100
+attempts=200
 while ! [[ -f cluster-sanity/init-completed ]]; do
   attempts=$((attempts - 1))
   if [[ (($attempts == 0)) || ! -d "/proc/$validator_then_ledger_tool_pid" ]]; then
@@ -80,7 +80,7 @@ snapshot_slot=$(ls -t cluster-sanity/ledger/snapshot-*.tar.* |
 current_root=$snapshot_slot
 goal_root=$((snapshot_slot + 50))
 
-attempts=100
+attempts=200
 while [[ $current_root -le $goal_root ]]; do
   attempts=$((attempts - 1))
   if [[ (($attempts == 0)) || ! -d "/proc/$validator_then_ledger_tool_pid" ]]; then
@@ -100,7 +100,7 @@ curl \
   -d '{"jsonrpc":"2.0","id":1, "method":"validatorExit"}' \
   http://localhost:8899
 
-attempts=100
+attempts=200
 while [[ -d "/proc/$validator_then_ledger_tool_pid" ]]; do
   attempts=$((attempts - 1))
   if [[ (($attempts == 0)) ]]; then
