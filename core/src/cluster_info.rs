@@ -1541,11 +1541,19 @@ impl ClusterInfo {
         self.stats
             .new_pull_requests_count
             .add_relaxed(pulls.len() as u64);
+        // There are at most 2 unique peers here: The randomly
+        // selected pull peer, and possibly also the entrypoint.
+        let peers: Vec<Pubkey> = pulls.iter().map(|(peer, _, _, _)| *peer).dedup().collect();
+        {
+            let mut gossip =
+                self.time_gossip_write_lock("mark_pull", &self.stats.mark_pull_request);
+            for peer in peers {
+                gossip.mark_pull_request_creation_time(&peer, now);
+            }
+        }
         pulls
             .into_iter()
-            .map(|(peer, filter, gossip, self_info)| {
-                self.time_gossip_write_lock("mark_pull", &self.stats.mark_pull_request)
-                    .mark_pull_request_creation_time(&peer, now);
+            .map(|(_, filter, gossip, self_info)| {
                 (gossip, Protocol::PullRequest(filter, self_info))
             })
             .collect()
