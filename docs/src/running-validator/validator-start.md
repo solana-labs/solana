@@ -192,8 +192,8 @@ Airdrop yourself some SOL to get started:
 solana airdrop 10
 ```
 
-Note that airdrops are only available on Devnet. Testnet SOL can be obtained by
-participating in the [Tour de SOL](../tour-de-sol.md) program.
+Note that airdrops are only available on Devnet and Testnet. Both are limited
+to 10 SOL per request.
 
 To view your current balance:
 
