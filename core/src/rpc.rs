@@ -2689,10 +2689,8 @@ pub mod tests {
     use jsonrpc_core_client::transports::local;
     use solana_client::rpc_filter::{Memcmp, MemcmpEncodedBytes};
     use solana_ledger::{
-        blockstore::entries_to_test_shreds,
         blockstore_meta::PerfSample,
         blockstore_processor::fill_blockstore_slot_with_ticks,
-        entry::next_entry_mut,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     };
     use solana_runtime::commitment::BlockCommitment;
@@ -2720,7 +2718,7 @@ pub mod tests {
         state::AccountState as TokenAccountState,
         state::Mint,
     };
-    use std::{collections::HashMap, time::Duration};
+    use std::collections::HashMap;
 
     const TEST_MINT_LAMPORTS: u64 = 1_000_000;
     const TEST_SLOTS_PER_EPOCH: u64 = DELINQUENT_VALIDATOR_SLOT_DISTANCE + 1;
@@ -2739,13 +2737,12 @@ pub mod tests {
     }
 
     fn start_rpc_handler_with_tx(pubkey: &Pubkey) -> RpcHandler {
-        start_rpc_handler_with_tx_and_blockstore(pubkey, vec![], 0)
+        start_rpc_handler_with_tx_and_blockstore(pubkey, vec![])
     }
 
     fn start_rpc_handler_with_tx_and_blockstore(
         pubkey: &Pubkey,
         blockstore_roots: Vec<Slot>,
-        default_timestamp: i64,
     ) -> RpcHandler {
         let (bank_forks, alice, leader_vote_keypair) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
@@ -2777,29 +2774,6 @@ pub mod tests {
             CommitmentSlots::new_from_slot(bank.slot()),
         )));
 
-        // Add timestamp vote to blockstore
-        let vote = Vote {
-            slots: vec![1],
-            hash: Hash::default(),
-            timestamp: Some(default_timestamp),
-        };
-        let vote_ix = vote_instruction::vote(
-            &leader_vote_keypair.pubkey(),
-            &leader_vote_keypair.pubkey(),
-            vote,
-        );
-        let vote_msg = Message::new(&[vote_ix], Some(&leader_vote_keypair.pubkey()));
-        let vote_tx = Transaction::new(&[&*leader_vote_keypair], vote_msg, Hash::default());
-        let shreds = entries_to_test_shreds(
-            vec![next_entry_mut(&mut Hash::default(), 0, vec![vote_tx])],
-            1,
-            0,
-            true,
-            0,
-        );
-        blockstore.insert_shreds(shreds, None, false).unwrap();
-        blockstore.set_roots(&[1]).unwrap();
-
         let mut roots = blockstore_roots;
         if !roots.is_empty() {
             roots.retain(|&x| x > 0);
@@ -2823,9 +2797,14 @@ pub mod tests {
                 bank_forks.write().unwrap().set_root(*root, &None, Some(0));
                 let mut stakes = HashMap::new();
                 stakes.insert(leader_vote_keypair.pubkey(), (1, Account::default()));
-                blockstore
-                    .cache_block_time(*root, Duration::from_millis(400), &stakes)
-                    .unwrap();
+                let block_time = bank_forks
+                    .read()
+                    .unwrap()
+                    .get(*root)
+                    .unwrap()
+                    .clock()
+                    .unix_timestamp;
+                blockstore.cache_block_time(*root, block_time).unwrap();
             }
         }
 
@@ -4772,7 +4751,7 @@ pub mod tests {
             meta,
             block_commitment_cache,
             ..
-        } = start_rpc_handler_with_tx_and_blockstore(&bob_pubkey, roots.clone(), 0);
+        } = start_rpc_handler_with_tx_and_blockstore(&bob_pubkey, roots.clone());
         block_commitment_cache
             .write()
             .unwrap()
@@ -4849,7 +4828,7 @@ pub mod tests {
             meta,
             block_commitment_cache,
             ..
-        } = start_rpc_handler_with_tx_and_blockstore(&bob_pubkey, roots, 0);
+        } = start_rpc_handler_with_tx_and_blockstore(&bob_pubkey, roots);
         block_commitment_cache
             .write()
             .unwrap()
@@ -4906,18 +4885,20 @@ pub mod tests {
     #[test]
     fn test_get_block_time() {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
-        let base_timestamp = 1_576_183_541;
         let RpcHandler {
             io,
             meta,
             bank,
             block_commitment_cache,
+            bank_forks,
             ..
-        } = start_rpc_handler_with_tx_and_blockstore(
-            &bob_pubkey,
-            vec![1, 2, 3, 4, 5, 6, 7],
-            base_timestamp,
-        );
+        } = start_rpc_handler_with_tx_and_blockstore(&bob_pubkey, vec![1, 2, 3, 4, 5, 6, 7]);
+        let base_timestamp = bank_forks
+            .read()
+            .unwrap()
+            .get(0)
+            .unwrap()
+            .unix_timestamp_from_genesis();
         block_commitment_cache
             .write()
             .unwrap()
