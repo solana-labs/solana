@@ -10,7 +10,7 @@ questions.  If not addressed here, the Solana
 ## CallDepth
 
 Cross-program invocations allow programs to invoke other programs directly but
-the depth is constrained currently to 1.
+the depth is constrained currently to 4.
 
 ## CallDepthExceeded
 
