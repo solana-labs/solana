@@ -31,4 +31,9 @@ export CARGO_TARGET_CACHE=$HOME/cargo-target-cache/"$CHANNEL"-"$BUILDKITE_LABEL"
 
   mkdir -p "$CARGO_TARGET_CACHE"/target
   rsync -a --delete --link-dest="$CARGO_TARGET_CACHE" "$CARGO_TARGET_CACHE"/target .
+
+  # Don't reuse BPF target build artifacts due to incremental build issues with
+  # `std:
+  #    "found possibly newer version of crate `std` which `xyz` depends on
+  rm -rf target/bpfel-unknown-unknown
 )
