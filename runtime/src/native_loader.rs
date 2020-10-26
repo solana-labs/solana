@@ -7,10 +7,10 @@ use libloading::os::windows::*;
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use solana_sdk::{
-    account::{next_keyed_account, KeyedAccount},
     decode_error::DecodeError,
     entrypoint_native::ProgramEntrypoint,
     instruction::InstructionError,
+    keyed_account::{next_keyed_account, KeyedAccount},
     pubkey::Pubkey,
 };
 use std::{collections::HashMap, env, path::PathBuf, str, sync::RwLock};

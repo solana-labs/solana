@@ -3,8 +3,8 @@
 use crate::ConfigKeys;
 use bincode::deserialize;
 use log::*;
-use solana_sdk::account::{next_keyed_account, KeyedAccount};
 use solana_sdk::instruction::InstructionError;
+use solana_sdk::keyed_account::{next_keyed_account, KeyedAccount};
 use solana_sdk::program_utils::limited_deserialize;
 use solana_sdk::pubkey::Pubkey;
 
@@ -107,7 +107,8 @@ mod tests {
     use bincode::serialized_size;
     use serde_derive::{Deserialize, Serialize};
     use solana_sdk::{
-        account::{create_keyed_is_signer_accounts, Account},
+        account::Account,
+        keyed_account::create_keyed_is_signer_accounts,
         signature::{Keypair, Signer},
         system_instruction::SystemInstruction,
     };

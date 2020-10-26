@@ -216,7 +216,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     let keyed_accounts: Vec<_> = keys
         .iter()
         .zip(&accounts)
-        .map(|(key, account)| solana_sdk::account::KeyedAccount::new(&key, false, &account))
+        .map(|(key, account)| solana_sdk::keyed_account::KeyedAccount::new(&key, false, &account))
         .collect();
     let instruction_data = vec![0u8];
 

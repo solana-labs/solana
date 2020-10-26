@@ -6,12 +6,13 @@ use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
-    account::{Account, KeyedAccount},
+    account::Account,
     account_utils::State,
     clock::{Epoch, Slot, UnixTimestamp},
     epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
     hash::Hash,
     instruction::InstructionError,
+    keyed_account::KeyedAccount,
     pubkey::Pubkey,
     rent::Rent,
     slot_hashes::SlotHash,
@@ -759,9 +760,10 @@ mod tests {
     use super::*;
     use crate::vote_state;
     use solana_sdk::{
-        account::{get_signers, next_keyed_account, Account},
+        account::Account,
         account_utils::StateMut,
         hash::hash,
+        keyed_account::{get_signers, next_keyed_account},
     };
     use std::cell::RefCell;
 
