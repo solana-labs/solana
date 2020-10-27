@@ -6,14 +6,14 @@ use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
-    account::{get_signers, next_keyed_account, KeyedAccount},
     clock::{Epoch, UnixTimestamp},
     decode_error::DecodeError,
     instruction::{AccountMeta, Instruction, InstructionError},
+    keyed_account::{from_keyed_account, get_signers, next_keyed_account, KeyedAccount},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     system_instruction,
-    sysvar::{self, clock::Clock, rent::Rent, stake_history::StakeHistory, Sysvar},
+    sysvar::{self, clock::Clock, rent::Rent, stake_history::StakeHistory},
 };
 use thiserror::Error;
 
@@ -459,7 +459,7 @@ pub fn process_instruction(
         StakeInstruction::Initialize(authorized, lockup) => me.initialize(
             &authorized,
             &lockup,
-            &Rent::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+            &from_keyed_account::<Rent>(next_keyed_account(keyed_accounts)?)?,
         ),
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
             me.authorize(&signers, &authorized_pubkey, stake_authorize)
@@ -479,8 +479,8 @@ pub fn process_instruction(
 
             me.delegate(
                 &vote,
-                &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
-                &StakeHistory::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
+                &from_keyed_account::<StakeHistory>(next_keyed_account(keyed_accounts)?)?,
                 &config::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
                 &signers,
             )
@@ -493,8 +493,8 @@ pub fn process_instruction(
             let source_stake = &next_keyed_account(keyed_accounts)?;
             me.merge(
                 source_stake,
-                &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
-                &StakeHistory::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
+                &from_keyed_account::<StakeHistory>(next_keyed_account(keyed_accounts)?)?,
                 &signers,
             )
         }
@@ -504,14 +504,14 @@ pub fn process_instruction(
             me.withdraw(
                 lamports,
                 to,
-                &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
-                &StakeHistory::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
+                &from_keyed_account::<StakeHistory>(next_keyed_account(keyed_accounts)?)?,
                 next_keyed_account(keyed_accounts)?,
                 keyed_accounts.next(),
             )
         }
         StakeInstruction::Deactivate => me.deactivate(
-            &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+            &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
             &signers,
         ),
 
@@ -523,7 +523,11 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use bincode::serialize;
-    use solana_sdk::{account::Account, rent::Rent, sysvar::stake_history::StakeHistory};
+    use solana_sdk::{
+        account::Account,
+        rent::Rent,
+        sysvar::{stake_history::StakeHistory, Sysvar},
+    };
     use std::cell::RefCell;
 
     fn create_default_account() -> RefCell<Account> {

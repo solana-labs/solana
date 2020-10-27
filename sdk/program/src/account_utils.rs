@@ -1,8 +1,5 @@
 //! useful extras for Account state
-use crate::{
-    account::{Account, KeyedAccount},
-    instruction::InstructionError,
-};
+use crate::{account::Account, instruction::InstructionError};
 use bincode::ErrorKind;
 
 /// Convenience trait to covert bincode errors to instruction errors.
@@ -28,18 +25,6 @@ where
             ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
             _ => InstructionError::GenericError,
         })
-    }
-}
-
-impl<'a, T> State<T> for KeyedAccount<'a>
-where
-    T: serde::Serialize + serde::de::DeserializeOwned,
-{
-    fn state(&self) -> Result<T, InstructionError> {
-        self.try_account_ref()?.state()
-    }
-    fn set_state(&self, state: &T) -> Result<(), InstructionError> {
-        self.try_account_ref_mut()?.set_state(state)
     }
 }
 

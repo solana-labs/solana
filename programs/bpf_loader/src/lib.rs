@@ -21,11 +21,11 @@ use solana_runtime::{
     process_instruction::{ComputeMeter, Executor, InvokeContext},
 };
 use solana_sdk::{
-    account::{is_executable, next_keyed_account, KeyedAccount},
     bpf_loader, bpf_loader_deprecated,
     decode_error::DecodeError,
     entrypoint::SUCCESS,
     instruction::InstructionError,
+    keyed_account::{is_executable, next_keyed_account, KeyedAccount},
     loader_instruction::LoaderInstruction,
     program_utils::limited_deserialize,
     pubkey::Pubkey,

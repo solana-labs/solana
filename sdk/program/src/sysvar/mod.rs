@@ -1,11 +1,7 @@
 //! named accounts for synthesized data accounts for bank state, etc.
 //!
 use crate::{
-    account::{Account, KeyedAccount},
-    account_info::AccountInfo,
-    instruction::InstructionError,
-    program_error::ProgramError,
-    pubkey::Pubkey,
+    account::Account, account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey,
 };
 
 pub mod clock;
@@ -78,13 +74,6 @@ pub trait Sysvar:
     }
     fn to_account_info(&self, account_info: &mut AccountInfo) -> Option<()> {
         bincode::serialize_into(&mut account_info.data.borrow_mut()[..], self).ok()
-    }
-    fn from_keyed_account(keyed_account: &KeyedAccount) -> Result<Self, InstructionError> {
-        if !Self::check_id(keyed_account.unsigned_key()) {
-            return Err(InstructionError::InvalidArgument);
-        }
-        Self::from_account(&*keyed_account.try_account_ref()?)
-            .ok_or(InstructionError::InvalidArgument)
     }
     fn create_account(&self, lamports: u64) -> Account {
         let data_len = Self::size_of().max(bincode::serialized_size(self).unwrap() as usize);

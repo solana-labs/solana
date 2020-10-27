@@ -3,8 +3,9 @@ use crate::feature_set::{
     pubkey_log_syscall_enabled, FeatureSet,
 };
 use solana_sdk::{
-    account::{Account, KeyedAccount},
+    account::Account,
     instruction::{CompiledInstruction, Instruction, InstructionError},
+    keyed_account::KeyedAccount,
     message::Message,
     pubkey::Pubkey,
 };

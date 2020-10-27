@@ -1,6 +1,6 @@
 use log::*;
-use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
+use solana_sdk::keyed_account::KeyedAccount;
 use solana_sdk::pubkey::Pubkey;
 
 solana_sdk::declare_program!(

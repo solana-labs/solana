@@ -73,7 +73,7 @@ macro_rules! declare_builtin_name {
 /// // wrapper is used so that the macro invocation occurs in the item position
 /// // rather than in the statement position which isn't allowed.
 /// mod item_wrapper {
-/// use solana_sdk::account::KeyedAccount;
+/// use solana_sdk::keyed_account::KeyedAccount;
 /// use solana_sdk::instruction::InstructionError;
 /// use solana_sdk::pubkey::Pubkey;
 /// use solana_sdk::declare_builtin;
@@ -104,7 +104,7 @@ macro_rules! declare_builtin_name {
 /// # // wrapper is used so that the macro invocation occurs in the item position
 /// # // rather than in the statement position which isn't allowed.
 /// # mod item_wrapper {
-/// use solana_sdk::account::KeyedAccount;
+/// use solana_sdk::keyed_account::KeyedAccount;
 /// use solana_sdk::instruction::InstructionError;
 /// use solana_sdk::pubkey::Pubkey;
 /// use solana_sdk::declare_builtin;
