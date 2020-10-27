@@ -21,8 +21,8 @@ and so this document attempts to clarify and codify the process for new releases
 ### Release Cadence
 
 The Solana RPC API, Rust SDK, CLI tooling, and BPF Program SDK are all updated and shipped
-along with each Solana software release and should always be compatible between patch
-updates of a particular minor version release.
+along with each Solana software release and should always be compatible between `PATCH`
+updates of a particular `MINOR` version release.
 
 #### Minor Releases (1.x.0)
 
