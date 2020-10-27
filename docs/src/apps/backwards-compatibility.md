@@ -12,8 +12,9 @@ and so this document attempts to clarify and codify the process for new releases
 
 - Solana APIs, SDKs, and CLI tooling are updated together in every Solana software release
   (with a few [exceptions](#exceptions)).
-- Software for a `MINOR` version release will be compatible across all software on the
-  the first `PATCH` release of the previous `MINOR` version.
+- Software for a `MINOR` version release will be compatible across all software back to the
+  the first `PATCH` release of the previous `MINOR` version. (eg. v1.4.x will remain
+  compatible back to v1.3.0)
 - Solana **DOES NOT** guarantee that software on _non-sequential_ `MINOR` version releases
   will always be compatible. _(For example, 1.3.x will likely not be compatible with 1.5.x)_
 - Solana software releases **DO NOT** strictly follow semantic versioning, details below.
@@ -45,7 +46,7 @@ Patch releases:
 
 Minor releases:
 - Endpoint / feature deprecation
-- Removal of previous minor version deprecated features
+- Removal of previous `MINOR` version deprecated features
 
 ### Program SDK
 
@@ -75,7 +76,8 @@ Minor releases:
 
 New Solana runtime features are feature-switched and manually activated. Runtime features
 include: the introduction of new native programs, sysvars, and syscalls; and changes to
-their behavior.
+their behavior. Feature activation is cluster agnostic, allowing confidence to be built on
+Testnet before activation on Mainnet-beta.
 
 The release process is as follows:
 
@@ -90,11 +92,11 @@ The release process is as follows:
 Solana provides publicly available RPC API nodes for all developers to use. The Solana team
 will make their best effort to communicate any changes to the host, port, rate-limiting behavior,
 availability, etc. However, we recommend that developers rely on their own validator nodes to
-discourage centralized usage of Solana operated nodes.
+discourage dependence upon Solana operated nodes.
 
 #### Local cluster scripts and Docker images
 
-Breaking changes will be limited to minor version updates. Patch updates should always
+Breaking changes will be limited to `MINOR` version updates. `PATCH` updates should always
 be backwards compatible.
 
 ### Exceptions
