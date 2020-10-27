@@ -331,7 +331,10 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::{account::Account, rent::Rent, sysvar::Sysvar};
+    use solana_sdk::{
+        account::{self, Account},
+        rent::Rent,
+    };
     use std::cell::RefCell;
 
     // these are for 100% coverage in this file
@@ -350,11 +353,11 @@ mod tests {
             .iter()
             .map(|meta| {
                 RefCell::new(if sysvar::clock::check_id(&meta.pubkey) {
-                    Clock::default().create_account(1)
+                    account::create_account(&Clock::default(), 1)
                 } else if sysvar::slot_hashes::check_id(&meta.pubkey) {
-                    SlotHashes::default().create_account(1)
+                    account::create_account(&SlotHashes::default(), 1)
                 } else if sysvar::rent::check_id(&meta.pubkey) {
-                    Rent::free().create_account(1)
+                    account::create_account(&Rent::free(), 1)
                 } else {
                     Account::default()
                 })

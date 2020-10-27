@@ -1,4 +1,4 @@
-use crate::{account::Account, clock::Epoch, program_error::ProgramError, pubkey::Pubkey};
+use crate::{clock::Epoch, program_error::ProgramError, pubkey::Pubkey};
 use std::{
     cell::{Ref, RefCell, RefMut},
     cmp, fmt,
@@ -148,74 +148,74 @@ impl<'a> AccountInfo<'a> {
     }
 }
 
-impl<'a> From<(&'a Pubkey, &'a mut Account)> for AccountInfo<'a> {
-    fn from((key, account): (&'a Pubkey, &'a mut Account)) -> Self {
-        Self::new(
-            key,
-            false,
-            false,
-            &mut account.lamports,
-            &mut account.data,
-            &account.owner,
-            account.executable,
-            account.rent_epoch,
-        )
-    }
-}
+// impl<'a> From<(&'a Pubkey, &'a mut Account)> for AccountInfo<'a> {
+//     fn from((key, account): (&'a Pubkey, &'a mut Account)) -> Self {
+//         Self::new(
+//             key,
+//             false,
+//             false,
+//             &mut account.lamports,
+//             &mut account.data,
+//             &account.owner,
+//             account.executable,
+//             account.rent_epoch,
+//         )
+//     }
+// }
 
-impl<'a> From<(&'a Pubkey, bool, &'a mut Account)> for AccountInfo<'a> {
-    fn from((key, is_signer, account): (&'a Pubkey, bool, &'a mut Account)) -> Self {
-        Self::new(
-            key,
-            is_signer,
-            false,
-            &mut account.lamports,
-            &mut account.data,
-            &account.owner,
-            account.executable,
-            account.rent_epoch,
-        )
-    }
-}
+// impl<'a> From<(&'a Pubkey, bool, &'a mut Account)> for AccountInfo<'a> {
+//     fn from((key, is_signer, account): (&'a Pubkey, bool, &'a mut Account)) -> Self {
+//         Self::new(
+//             key,
+//             is_signer,
+//             false,
+//             &mut account.lamports,
+//             &mut account.data,
+//             &account.owner,
+//             account.executable,
+//             account.rent_epoch,
+//         )
+//     }
+// }
 
-impl<'a> From<&'a mut (Pubkey, Account)> for AccountInfo<'a> {
-    fn from((key, account): &'a mut (Pubkey, Account)) -> Self {
-        Self::new(
-            key,
-            false,
-            false,
-            &mut account.lamports,
-            &mut account.data,
-            &account.owner,
-            account.executable,
-            account.rent_epoch,
-        )
-    }
-}
+// impl<'a> From<&'a mut (Pubkey, Account)> for AccountInfo<'a> {
+//     fn from((key, account): &'a mut (Pubkey, Account)) -> Self {
+//         Self::new(
+//             key,
+//             false,
+//             false,
+//             &mut account.lamports,
+//             &mut account.data,
+//             &account.owner,
+//             account.executable,
+//             account.rent_epoch,
+//         )
+//     }
+// }
 
-pub fn create_account_infos(accounts: &mut [(Pubkey, Account)]) -> Vec<AccountInfo> {
-    accounts.iter_mut().map(Into::into).collect()
-}
+// pub fn create_account_infos(accounts: &mut [(Pubkey, Account)]) -> Vec<AccountInfo> {
+//     accounts.iter_mut().map(Into::into).collect()
+// }
 
-pub fn create_is_signer_account_infos<'a>(
-    accounts: &'a mut [(&'a Pubkey, bool, &'a mut Account)],
-) -> Vec<AccountInfo<'a>> {
-    accounts
-        .iter_mut()
-        .map(|(key, is_signer, account)| {
-            AccountInfo::new(
-                key,
-                *is_signer,
-                false,
-                &mut account.lamports,
-                &mut account.data,
-                &account.owner,
-                account.executable,
-                account.rent_epoch,
-            )
-        })
-        .collect()
-}
+// pub fn create_is_signer_account_infos<'a>(
+//     accounts: &'a mut [(&'a Pubkey, bool, &'a mut Account)],
+// ) -> Vec<AccountInfo<'a>> {
+//     accounts
+//         .iter_mut()
+//         .map(|(key, is_signer, account)| {
+//             AccountInfo::new(
+//                 key,
+//                 *is_signer,
+//                 false,
+//                 &mut account.lamports,
+//                 &mut account.data,
+//                 &account.owner,
+//                 account.executable,
+//                 account.rent_epoch,
+//             )
+//         })
+//         .collect()
+// }
 
 /// Return the next AccountInfo or a NotEnoughAccountKeys error
 pub fn next_account_info<'a, 'b, I: Iterator<Item = &'a AccountInfo<'b>>>(

@@ -524,9 +524,9 @@ mod tests {
     use super::*;
     use bincode::serialize;
     use solana_sdk::{
-        account::Account,
+        account::{self, Account},
         rent::Rent,
-        sysvar::{stake_history::StakeHistory, Sysvar},
+        sysvar::stake_history::StakeHistory,
     };
     use std::cell::RefCell;
 
@@ -540,15 +540,15 @@ mod tests {
             .iter()
             .map(|meta| {
                 RefCell::new(if sysvar::clock::check_id(&meta.pubkey) {
-                    sysvar::clock::Clock::default().create_account(1)
+                    account::create_account(&sysvar::clock::Clock::default(), 1)
                 } else if sysvar::rewards::check_id(&meta.pubkey) {
-                    sysvar::rewards::create_account(1, 0.0)
+                    account::create_account(&sysvar::rewards::Rewards::new(0.0), 1)
                 } else if sysvar::stake_history::check_id(&meta.pubkey) {
-                    sysvar::stake_history::create_account(1, &StakeHistory::default())
+                    account::create_account(&StakeHistory::default(), 1)
                 } else if config::check_id(&meta.pubkey) {
                     config::create_account(0, &config::Config::default())
                 } else if sysvar::rent::check_id(&meta.pubkey) {
-                    sysvar::rent::create_account(1, &Rent::default())
+                    account::create_account(&Rent::default(), 1)
                 } else {
                     Account::default()
                 })
@@ -709,7 +709,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rent::id(),
                         false,
-                        &RefCell::new(sysvar::rent::create_account(0, &Rent::default()))
+                        &RefCell::new(account::create_account(&Rent::default(), 0))
                     )
                 ],
                 &serialize(&StakeInstruction::Initialize(
@@ -759,14 +759,15 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::clock::id(),
                         false,
-                        &RefCell::new(sysvar::clock::Clock::default().create_account(1))
+                        &RefCell::new(account::create_account(&sysvar::clock::Clock::default(), 1))
                     ),
                     KeyedAccount::new(
                         &sysvar::stake_history::id(),
                         false,
-                        &RefCell::new(
-                            sysvar::stake_history::StakeHistory::default().create_account(1)
-                        )
+                        &RefCell::new(account::create_account(
+                            &sysvar::stake_history::StakeHistory::default(),
+                            1
+                        ))
                     ),
                     KeyedAccount::new(
                         &config::id(),
@@ -789,15 +790,15 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rewards::id(),
                         false,
-                        &RefCell::new(sysvar::rewards::create_account(1, 0.0))
+                        &RefCell::new(account::create_account(
+                            &sysvar::rewards::Rewards::new(0.0),
+                            1
+                        ))
                     ),
                     KeyedAccount::new(
                         &sysvar::stake_history::id(),
                         false,
-                        &RefCell::new(sysvar::stake_history::create_account(
-                            1,
-                            &StakeHistory::default()
-                        ))
+                        &RefCell::new(account::create_account(&StakeHistory::default(), 1,))
                     ),
                 ],
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
@@ -828,7 +829,10 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rewards::id(),
                         false,
-                        &RefCell::new(sysvar::rewards::create_account(1, 0.0))
+                        &RefCell::new(account::create_account(
+                            &sysvar::rewards::Rewards::new(0.0),
+                            1
+                        ))
                     ),
                 ],
                 &serialize(&StakeInstruction::Deactivate).unwrap(),

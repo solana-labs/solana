@@ -1,4 +1,5 @@
 use crate::{clock::Epoch, pubkey::Pubkey};
+use solana_program::sysvar::Sysvar;
 use std::{cell::RefCell, cmp, fmt, rc::Rc};
 
 /// An Account with data that is stored on chain
@@ -108,4 +109,19 @@ impl Account {
         }
         bincode::serialize_into(&mut self.data[..], state)
     }
+}
+
+pub fn create_account<S: Sysvar>(sysvar: &S, lamports: u64) -> Account {
+    let data_len = S::size_of().max(bincode::serialized_size(sysvar).unwrap() as usize);
+    let mut account = Account::new(lamports, data_len, &solana_program::sysvar::id());
+    to_account::<S>(sysvar, &mut account).unwrap();
+    account
+}
+
+pub fn from_account<S: Sysvar>(account: &Account) -> Option<S> {
+    bincode::deserialize(&account.data).ok()
+}
+
+pub fn to_account<S: Sysvar>(sysvar: &S, account: &mut Account) -> Option<()> {
+    bincode::serialize_into(&mut account.data[..], sysvar).ok()
 }
