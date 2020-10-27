@@ -4441,35 +4441,59 @@ pub mod tests {
 
     #[test]
     fn test_bad_bank_hash() {
+        solana_logger::setup();
         use solana_sdk::signature::{Keypair, Signer};
         let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
 
         let some_slot: Slot = 0;
         let ancestors: Ancestors = [(some_slot, 0)].iter().copied().collect();
 
-        for _ in 0..10_000 {
+        let max_accounts = 200;
+        let mut accounts_keys: Vec<_> = (0..max_accounts)
+            .into_par_iter()
+            .map(|_| {
+                let key = Keypair::new().pubkey();
+                let lamports = thread_rng().gen_range(0, 100);
+                let some_data_len = thread_rng().gen_range(0, 1000);
+                let account = Account::new(lamports, some_data_len, &key);
+                (key, account)
+            })
+            .collect();
+
+        let mut existing = HashSet::new();
+        let mut last_print = Instant::now();
+        for i in 0..5_000 {
+            if last_print.elapsed().as_millis() > 5000 {
+                info!("i: {}", i);
+                last_print = Instant::now();
+            }
             let num_accounts = thread_rng().gen_range(0, 100);
-            let accounts_keys: Vec<_> = (0..num_accounts)
-                .map(|_| {
-                    let key = Keypair::new().pubkey();
-                    let lamports = thread_rng().gen_range(0, 100);
-                    let some_data_len = thread_rng().gen_range(0, 1000);
-                    let account = Account::new(lamports, some_data_len, &key);
-                    (key, account)
-                })
-                .collect();
-            let account_refs: Vec<_> = accounts_keys
+            (0..num_accounts).into_iter().for_each(|_| {
+                let mut idx;
+                loop {
+                    idx = thread_rng().gen_range(0, max_accounts);
+                    if existing.contains(&idx) {
+                        continue;
+                    }
+                    existing.insert(idx);
+                    break;
+                }
+                accounts_keys[idx].1.lamports = thread_rng().gen_range(0, 1000);
+            });
+
+            let account_refs: Vec<_> = existing
                 .iter()
-                .map(|(key, account)| (key, account))
+                .map(|idx| (&accounts_keys[*idx].0, &accounts_keys[*idx].1))
                 .collect();
             db.store(some_slot, &account_refs);
 
-            for (key, account) in &accounts_keys {
+            for (key, account) in &account_refs {
                 assert_eq!(
-                    db.load_account_hash(&ancestors, key),
+                    db.load_account_hash(&ancestors, &key),
                     AccountsDB::hash_account(some_slot, &account, &key, &ClusterType::Development)
                 );
             }
+            existing.clear();
         }
     }
 
