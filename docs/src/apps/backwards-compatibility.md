@@ -16,8 +16,15 @@ and so this document attempts to clarify and codify the process for new releases
   the first `PATCH` release of the previous `MINOR` version. (eg. v1.4.x will remain
   compatible back to v1.3.0)
 - Solana **DOES NOT** guarantee that software on _non-sequential_ `MINOR` version releases
-  will always be compatible. _(For example, 1.3.x will likely not be compatible with 1.5.x)_
+  will always be compatible. _(e.g. 1.3.x will likely not be compatible with 1.5.x)_
 - Solana software releases **DO NOT** strictly follow semantic versioning, details below.
+
+### Deprecation Process
+
+1. In any `PATCH` release (e.g. 1.3.x), a feature, API, endpoint, etc. will be marked as deprecated
+2. The next `MINOR` release (e.g. 1.4.0) will also contain the deprecation without breaking compatibility
+3. Finally, the following `MINOR` release (e.g. 1.5.0) may remove the deprecated feature
+  in an incompatible way.
 
 ### Release Cadence
 
@@ -28,14 +35,14 @@ updates of a particular `MINOR` version release.
 #### Minor Releases (1.x.0)
 
 Experimental changes and new proposal implementations are added to _new_ `MINOR` version
-releases (ex. 1.4.0) and are first run on Solana's Tour de SOL testnet cluster. After
+releases (e.g. 1.4.0) and are first run on Solana's Tour de SOL testnet cluster. After
 those changes have proven to be stable, the Mainnet Beta cluster will be updated to the
 new `MINOR` version.
 
 #### Patch Releases (1.0.x)
 
 Low risk features, non-breaking changes, and security and bug fixes are shipped as part
-of `PATCH` version releases (ex. 1.0.11).
+of `PATCH` version releases (e.g. 1.0.11).
 
 ### RPC API
 
@@ -48,7 +55,12 @@ Minor releases:
 - Endpoint / feature deprecation
 - Removal of previous `MINOR` version deprecated features
 
-### Program SDK
+### Rust Crates
+
+* [`solana-sdk`](https://docs.rs/solana-sdk/) - Rust SDK for creating transactions and parsing account state
+* [`solana-program`](https://docs.rs/solana-program/) - Rust SDK for writing programs
+* [`solana-client`](https://docs.rs/solana-client/) - Rust client for connecting to RPC API
+* [`solana-cli-config`](https://docs.rs/solana-cli-config/) - Rust client for managing Solana CLI config files
 
 Patch releases:
 - New APIs
@@ -58,7 +70,7 @@ Patch releases:
 
 Minor releases:
 - Removal of deprecated APIs
-- Backward compatibility breaking changes
+- Backwards incompatible behavior changes
 
 ### CLI Tools
 
@@ -66,10 +78,10 @@ Patch releases:
 - New subcommands
 - Bug and security fixes
 - Performance improvements
+- Subcommand / argument deprecation
 
 Minor releases:
 - Switch to new RPC API endpoints / configuration introduced in the previous minor version.
-- Subcommand / argument deprecation
 - Removal of previous minor version deprecated features
 
 ### Runtime Features
@@ -82,7 +94,8 @@ Testnet before activation on Mainnet-beta.
 The release process is as follows:
 
 1. New runtime feature is included in a new release, deactivated by default
-2. Once sufficient staked validators upgrade to the new release, the runtime feature switch is activated manually with an instruction
+2. Once sufficient staked validators upgrade to the new release, the runtime feature switch
+  is activated manually with an instruction
 3. The feature takes effect at the beginning of the next epoch
 
 ### Infrastructure Changes
