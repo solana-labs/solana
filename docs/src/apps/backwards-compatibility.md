@@ -29,7 +29,7 @@ updates of a particular `MINOR` version release.
 Experimental changes and new proposal implementations are added to _new_ `MINOR` version
 releases (ex. 1.4.0) and are first run on Solana's Tour de SOL testnet cluster. After
 those changes have proven to be stable, the Mainnet Beta cluster will be updated to the
-new minor version.
+new `MINOR` version.
 
 #### Patch Releases (1.0.x)
 
