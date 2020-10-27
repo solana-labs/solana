@@ -519,7 +519,7 @@ impl ClusterInfo {
             entrypoint: RwLock::new(self.entrypoint.read().unwrap().clone()),
             outbound_budget: self.outbound_budget.clone_non_atomic(),
             my_contact_info: RwLock::new(my_contact_info),
-            ping_cache: RwLock::new(self.ping_cache.read().unwrap().clone()),
+            ping_cache: RwLock::new(self.ping_cache.read().unwrap().mock_clone()),
             id: *new_id,
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),

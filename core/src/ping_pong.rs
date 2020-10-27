@@ -223,23 +223,22 @@ impl PingCache {
         };
         (check, ping)
     }
-}
 
-impl Clone for PingCache {
-    fn clone(&self) -> Self {
+    // Only for tests and simulations.
+    pub(crate) fn mock_clone(&self) -> Self {
         let mut clone = Self {
             ttl: self.ttl,
             pings: LruCache::new(self.pings.cap()),
             pongs: LruCache::new(self.pongs.cap()),
             pending_cache: LruCache::new(self.pending_cache.cap()),
         };
-        for (k, v) in self.pongs.iter() {
+        for (k, v) in self.pongs.iter().rev() {
             clone.pings.put(*k, *v);
         }
-        for (k, v) in self.pongs.iter() {
+        for (k, v) in self.pongs.iter().rev() {
             clone.pongs.put(*k, *v);
         }
-        for (k, v) in self.pending_cache.iter() {
+        for (k, v) in self.pending_cache.iter().rev() {
             clone.pending_cache.put(*k, *v);
         }
         clone
