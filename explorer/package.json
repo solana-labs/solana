@@ -25,7 +25,7 @@
     "bootstrap": "^4.5.3",
     "bs58": "^4.0.1",
     "chai": "^4.2.0",
-    "chart.js": "^2.9.3",
+    "chart.js": "^2.9.4",
     "classnames": "2.2.6",
     "humanize-duration-ts": "^2.1.1",
     "node-sass": "^4.14.1",
