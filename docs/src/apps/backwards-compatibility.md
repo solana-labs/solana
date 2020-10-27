@@ -26,7 +26,7 @@ updates of a particular `MINOR` version release.
 
 #### Minor Releases (1.x.0)
 
-Experimental changes and new proposal implementations are added to new `MINOR` version
+Experimental changes and new proposal implementations are added to _new_ `MINOR` version
 releases (ex. 1.4.0) and are first run on Solana's Tour de SOL testnet cluster. After
 those changes have proven to be stable, the Mainnet Beta cluster will be updated to the
 new minor version.
