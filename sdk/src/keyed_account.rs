@@ -243,12 +243,12 @@ mod tests {
         let key = crate::keyed_account::tests::id();
         let wrong_key = Pubkey::new_unique();
 
-        let account = create_account::<TestSysvar>(&test_sysvar, 42);
+        let account = create_account(&test_sysvar, 42);
         let test_sysvar = from_account::<TestSysvar>(&account).unwrap();
         assert_eq!(test_sysvar, TestSysvar::default());
 
         let mut account = Account::new(42, TestSysvar::size_of(), &key);
-        to_account::<TestSysvar>(&test_sysvar, &mut account).unwrap();
+        to_account(&test_sysvar, &mut account).unwrap();
         let test_sysvar = from_account::<TestSysvar>(&account).unwrap();
         assert_eq!(test_sysvar, TestSysvar::default());
 

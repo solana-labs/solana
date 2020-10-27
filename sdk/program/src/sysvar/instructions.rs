@@ -23,3 +23,16 @@ pub fn store_current_index(data: &mut [u8], instruction_index: u16) {
 pub fn load_instruction_at(index: usize, data: &[u8]) -> Result<Instruction, SanitizeError> {
     crate::message::Message::deserialize_instruction(index, data)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_load_store_instruction() {
+        let mut data = [4u8; 10];
+        store_current_index(&mut data, 3);
+        assert_eq!(load_current_index(&data), 3);
+        assert_eq!([4u8; 8], data[0..8]);
+    }
+}

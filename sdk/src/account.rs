@@ -1,5 +1,5 @@
 use crate::{clock::Epoch, pubkey::Pubkey};
-use solana_program::sysvar::Sysvar;
+use solana_program::{account_info::AccountInfo, sysvar::Sysvar};
 use std::{cell::RefCell, cmp, fmt, rc::Rc};
 
 /// An Account with data that is stored on chain
@@ -111,6 +111,7 @@ impl Account {
     }
 }
 
+/// Create an `Account` from a `Sysvar`.
 pub fn create_account<S: Sysvar>(sysvar: &S, lamports: u64) -> Account {
     let data_len = S::size_of().max(bincode::serialized_size(sysvar).unwrap() as usize);
     let mut account = Account::new(lamports, data_len, &solana_program::sysvar::id());
@@ -118,10 +119,52 @@ pub fn create_account<S: Sysvar>(sysvar: &S, lamports: u64) -> Account {
     account
 }
 
+/// Create a `Sysvar` from an `Account`'s data.
 pub fn from_account<S: Sysvar>(account: &Account) -> Option<S> {
     bincode::deserialize(&account.data).ok()
 }
 
+/// Serialize a `Sysvar` into an `Account`'s data.
 pub fn to_account<S: Sysvar>(sysvar: &S, account: &mut Account) -> Option<()> {
     bincode::serialize_into(&mut account.data[..], sysvar).ok()
+}
+
+/// Return the information required to construct an `AccountInfo`.  Used by the
+/// `AccountInfo` conversion implementations.
+impl solana_program::account_info::Account for Account {
+    fn get(&mut self) -> (&mut u64, &mut [u8], &Pubkey, bool, Epoch) {
+        (
+            &mut self.lamports,
+            &mut self.data,
+            &self.owner,
+            self.executable,
+            self.rent_epoch,
+        )
+    }
+}
+
+/// Create `AccountInfo`s
+pub fn create_account_infos(accounts: &mut [(Pubkey, Account)]) -> Vec<AccountInfo> {
+    accounts.iter_mut().map(Into::into).collect()
+}
+
+/// Create `AccountInfo`s
+pub fn create_is_signer_account_infos<'a>(
+    accounts: &'a mut [(&'a Pubkey, bool, &'a mut Account)],
+) -> Vec<AccountInfo<'a>> {
+    accounts
+        .iter_mut()
+        .map(|(key, is_signer, account)| {
+            AccountInfo::new(
+                key,
+                *is_signer,
+                false,
+                &mut account.lamports,
+                &mut account.data,
+                &account.owner,
+                account.executable,
+                account.rent_epoch,
+            )
+        })
+        .collect()
 }
