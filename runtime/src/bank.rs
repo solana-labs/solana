@@ -39,7 +39,8 @@ use solana_sdk::{
     account::Account,
     clock::{
         Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
-        MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES, SECONDS_PER_DAY,
+        MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES, MAX_TRANSACTION_FORWARDING_DELAY,
+        SECONDS_PER_DAY,
     },
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
@@ -1888,7 +1889,15 @@ impl Bank {
             _retryable_transactions,
             _transaction_count,
             _signature_count,
-        ) = self.load_and_execute_transactions(&batch, MAX_PROCESSING_AGE, false, true);
+        ) = self.load_and_execute_transactions(
+            &batch,
+            // After simulation, transactions will need to be forwarded to the leader
+            // for processing. During forwarding, the transaction could expire if the
+            // delay is not accounted for.
+            MAX_PROCESSING_AGE - MAX_TRANSACTION_FORWARDING_DELAY,
+            false,
+            true,
+        );
 
         let transaction_result = executed[0].0.clone().map(|_| ());
         let log_messages = transaction_logs
