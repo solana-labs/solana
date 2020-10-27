@@ -70,6 +70,9 @@ pub trait Sysvar:
         bincode::serialize_into(&mut account.data[..], self).ok()
     }
     fn from_account_info(account_info: &AccountInfo) -> Result<Self, ProgramError> {
+        if !Self::check_id(account_info.unsigned_key()) {
+            return Err(ProgramError::InvalidArgument);
+        }
         bincode::deserialize(&account_info.data.borrow()).map_err(|_| ProgramError::InvalidArgument)
     }
     fn to_account_info(&self, account_info: &mut AccountInfo) -> Option<()> {
@@ -80,5 +83,86 @@ pub trait Sysvar:
         let mut account = Account::new(lamports, data_len, &id());
         self.to_account(&mut account).unwrap();
         account
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{clock::Epoch, program_error::ProgramError, pubkey::Pubkey};
+    use std::{cell::RefCell, rc::Rc};
+
+    #[repr(C)]
+    #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
+    pub struct TestSysvar {
+        something: Pubkey,
+    }
+    crate::declare_id!("TestSysvar111111111111111111111111111111111");
+    impl crate::sysvar::SysvarId for TestSysvar {
+        fn check_id(pubkey: &crate::pubkey::Pubkey) -> bool {
+            check_id(pubkey)
+        }
+    }
+    impl Sysvar for TestSysvar {}
+
+    #[test]
+    fn test_sysvar_account_info_to_from() {
+        let test_sysvar = TestSysvar::default();
+        let key = crate::sysvar::tests::id();
+        let wrong_key = Pubkey::new_unique();
+        let owner = Pubkey::new_unique();
+        let mut lamports = 42;
+        let mut data = vec![0_u8; TestSysvar::size_of()];
+        let mut account_info = AccountInfo::new(
+            &key,
+            false,
+            true,
+            &mut lamports,
+            &mut data,
+            &owner,
+            false,
+            Epoch::default(),
+        );
+
+        test_sysvar.to_account_info(&mut account_info).unwrap();
+        let new_test_sysvar = TestSysvar::from_account_info(&account_info).unwrap();
+        assert_eq!(test_sysvar, new_test_sysvar);
+
+        account_info.key = &wrong_key;
+        assert_eq!(
+            TestSysvar::from_account_info(&account_info),
+            Err(ProgramError::InvalidArgument)
+        );
+
+        let mut small_data = vec![];
+        account_info.data = Rc::new(RefCell::new(&mut small_data));
+        assert_eq!(test_sysvar.to_account_info(&mut account_info), None);
+    }
+
+    #[test]
+    fn test_sysvar_keyed_account_to_from() {
+        let test_sysvar = TestSysvar::default();
+        let key = crate::sysvar::tests::id();
+        let wrong_key = Pubkey::new_unique();
+
+        let account = test_sysvar.create_account(42);
+        let test_sysvar = TestSysvar::from_account(&account).unwrap();
+        assert_eq!(test_sysvar, TestSysvar::default());
+
+        let mut account = Account::new(42, TestSysvar::size_of(), &key);
+        test_sysvar.to_account(&mut account).unwrap();
+        let test_sysvar = TestSysvar::from_account(&account).unwrap();
+        assert_eq!(test_sysvar, TestSysvar::default());
+
+        let account = RefCell::new(account);
+        let keyed_account = KeyedAccount::new(&key, false, &account);
+        let new_test_sysvar = TestSysvar::from_keyed_account(&keyed_account).unwrap();
+        assert_eq!(test_sysvar, new_test_sysvar);
+
+        let keyed_account = KeyedAccount::new(&wrong_key, false, &account);
+        assert_eq!(
+            TestSysvar::from_keyed_account(&keyed_account),
+            Err(InstructionError::InvalidArgument)
+        );
     }
 }
