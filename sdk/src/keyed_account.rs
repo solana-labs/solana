@@ -217,3 +217,50 @@ pub fn from_keyed_account<S: Sysvar>(
     }
     S::from_account(&*keyed_account.try_account_ref()?).ok_or(InstructionError::InvalidArgument)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pubkey::Pubkey;
+    use std::cell::RefCell;
+
+    #[repr(C)]
+    #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
+    struct TestSysvar {
+        something: Pubkey,
+    }
+    crate::declare_id!("TestSysvar111111111111111111111111111111111");
+    impl solana_program::sysvar::SysvarId for TestSysvar {
+        fn check_id(pubkey: &crate::pubkey::Pubkey) -> bool {
+            check_id(pubkey)
+        }
+    }
+    impl Sysvar for TestSysvar {}
+
+    #[test]
+    fn test_sysvar_keyed_account_to_from() {
+        let test_sysvar = TestSysvar::default();
+        let key = crate::keyed_account::tests::id();
+        let wrong_key = Pubkey::new_unique();
+
+        let account = test_sysvar.create_account(42);
+        let test_sysvar = TestSysvar::from_account(&account).unwrap();
+        assert_eq!(test_sysvar, TestSysvar::default());
+
+        let mut account = Account::new(42, TestSysvar::size_of(), &key);
+        test_sysvar.to_account(&mut account).unwrap();
+        let test_sysvar = TestSysvar::from_account(&account).unwrap();
+        assert_eq!(test_sysvar, TestSysvar::default());
+
+        let account = RefCell::new(account);
+        let keyed_account = KeyedAccount::new(&key, false, &account);
+        let new_test_sysvar = from_keyed_account::<TestSysvar>(&keyed_account).unwrap();
+        assert_eq!(test_sysvar, new_test_sysvar);
+
+        let keyed_account = KeyedAccount::new(&wrong_key, false, &account);
+        assert_eq!(
+            from_keyed_account::<TestSysvar>(&keyed_account),
+            Err(InstructionError::InvalidArgument)
+        );
+    }
+}
