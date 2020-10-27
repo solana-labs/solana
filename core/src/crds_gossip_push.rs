@@ -135,15 +135,18 @@ impl CrdsGossipPush {
         );
 
         let mut keep = HashSet::new();
-        let mut peer_stake_sum = 0;
+        let mut peer_stake_sum = *stakes.get(origin).unwrap_or(&0);
+        keep.insert(*origin);
         for next in shuffle {
-            let (next_peer, next_stake) = staked_peers[next];
-            keep.insert(next_peer);
-            peer_stake_sum += next_stake;
             if peer_stake_sum >= prune_stake_threshold
                 && keep.len() >= CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES
             {
                 break;
+            }
+            let (next_peer, next_stake) = staked_peers[next];
+            if next_peer != *origin {
+                keep.insert(next_peer);
+                peer_stake_sum += next_stake;
             }
         }
 
