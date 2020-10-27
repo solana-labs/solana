@@ -601,6 +601,7 @@ declare module '@solana/web3.js' {
     instructions: CompiledInstruction[];
 
     constructor(args: MessageArgs): Message;
+    static from(buffer: Buffer | Uint8Array | Array<number>): Message;
     isAccountWritable(index: number): boolean;
     serialize(): Buffer;
   }
