@@ -144,7 +144,7 @@ if [[ ! -e llvm-native-$version.md ]]; then
 fi
 
 # Install Rust-BPF
-version=v0.2.4
+version=v0.2.5
 if [[ ! -e rust-bpf-$version.md ]]; then
   (
     set -e
