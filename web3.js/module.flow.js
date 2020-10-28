@@ -152,8 +152,28 @@ declare module '@solana/web3.js' {
     logs: Array<string> | null,
   };
 
+  declare export type CompiledInnerInstruction = {
+    index: number,
+    instructions: CompiledInstruction[],
+  };
+
   declare export type ConfirmedTransactionMeta = {
     fee: number,
+    innerInstructions?: CompiledInnerInstruction[],
+    preBalances: Array<number>,
+    postBalances: Array<number>,
+    logMessages?: Array<string>,
+    err: TransactionError | null,
+  };
+
+  declare export type ParsedInnerInstruction = {
+    index: number,
+    instructions: (ParsedInstruction | PartiallyDecodedInstruction)[],
+  };
+
+  declare export type ParsedConfirmedTransactionMeta = {
+    fee: number,
+    innerInstructions?: ParsedInnerInstruction[],
     preBalances: Array<number>,
     postBalances: Array<number>,
     logMessages?: Array<string>,
@@ -225,7 +245,7 @@ declare module '@solana/web3.js' {
   declare export type ParsedConfirmedTransaction = {
     slot: number,
     transaction: ParsedTransaction,
-    meta: ConfirmedTransactionMeta | null,
+    meta: ParsedConfirmedTransactionMeta | null,
   };
 
   declare export type KeyedAccountInfo = {

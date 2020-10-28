@@ -1,5 +1,4 @@
 declare module '@solana/web3.js' {
-  import {Buffer} from 'buffer';
   import * as BufferLayout from 'buffer-layout';
 
   // === src/publickey.js ===
@@ -138,8 +137,28 @@ declare module '@solana/web3.js' {
     logs: Array<string> | null;
   };
 
+  export type CompiledInnerInstruction = {
+    index: number;
+    instructions: CompiledInstruction[];
+  };
+
   export type ConfirmedTransactionMeta = {
     fee: number;
+    innerInstructions?: CompiledInnerInstruction[];
+    preBalances: Array<number>;
+    postBalances: Array<number>;
+    logMessages?: Array<string>;
+    err: TransactionError | null;
+  };
+
+  export type ParsedInnerInstruction = {
+    index: number;
+    instructions: (ParsedInstruction | PartiallyDecodedInstruction)[];
+  };
+
+  export type ParsedConfirmedTransactionMeta = {
+    fee: number;
+    innerInstructions?: ParsedInnerInstruction[];
     preBalances: Array<number>;
     postBalances: Array<number>;
     logMessages?: Array<string>;
@@ -199,7 +218,7 @@ declare module '@solana/web3.js' {
   export type ParsedConfirmedTransaction = {
     slot: number;
     transaction: ParsedTransaction;
-    meta: ConfirmedTransactionMeta | null;
+    meta: ParsedConfirmedTransactionMeta | null;
   };
 
   export type ParsedAccountData = {
