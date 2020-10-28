@@ -166,14 +166,9 @@ declare module '@solana/web3.js' {
     err: TransactionError | null,
   };
 
-  declare export type PartiallyDecodedInnerInstruction = {
-    index: number,
-    instructions: PartiallyDecodedInstruction[],
-  };
-
   declare export type ParsedInnerInstruction = {
     index: number,
-    instructions: (ParsedInstruction | PartiallyDecodedInnerInstruction)[],
+    instructions: (ParsedInstruction | PartiallyDecodedInstruction)[],
   };
 
   declare export type ParsedConfirmedTransactionMeta = {
