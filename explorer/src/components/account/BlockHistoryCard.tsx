@@ -1,142 +1,111 @@
+import bs58 from "bs58";
 import React from "react";
 import { TableCardBody } from "components/common/TableCardBody";
 import { useBlock, useFetchBlock, FetchStatus } from "providers/block";
 import { Signature } from "components/common/Signature";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
-import { Block } from "components/common/Block";
+import { Slot } from "components/common/Slot";
 
-export function BlockHistoryCard({ block }: { block: string }) {
-  const blockData = useBlock(block);
+export function BlockHistoryCard({ slot }: { slot: string }) {
+  const ConfirmedBlock = useBlock(slot);
   const fetchBlock = useFetchBlock();
-  const refresh = () => fetchBlock(block);
+  const refresh = () => fetchBlock(slot);
 
   React.useEffect(() => {
-    if (!blockData) refresh();
-  }, [blockData, block]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!ConfirmedBlock) refresh();
+  }, [ConfirmedBlock, slot]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!blockData) {
+  if (!ConfirmedBlock) {
     return null;
   }
 
-  if (blockData?.data === undefined) {
-    if (blockData.status === FetchStatus.Fetching) {
+  if (ConfirmedBlock?.data === undefined) {
+    if (ConfirmedBlock.status === FetchStatus.Fetching) {
       return <LoadingCard message="Loading block" />;
     }
 
     return <ErrorCard retry={refresh} text="Failed to fetch block" />;
   }
 
-  if (blockData.status === FetchStatus.FetchFailed) {
-    return <ErrorCard text={`Block "${block}" is not valid`} />;
+  if (ConfirmedBlock.status === FetchStatus.FetchFailed) {
+    return <ErrorCard retry={refresh} text="Failed to fetch block" />;
   }
 
   return (
     <>
-      {blockData.data?.tags ? (
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-header-title mb-0 d-flex align-items-center">
-              Overview
-            </h3>
-          </div>
+      <div className="card">
+        <div className="card-header">
+          <h3 className="card-header-title mb-0 d-flex align-items-center">
+            Overview
+          </h3>
+        </div>
+        <TableCardBody>
+          <tr>
+            <td className="w-100">Slot</td>
+            <td className="text-lg-right text-monospace">
+              <Slot slot={Number(slot)} />
+            </td>
+          </tr>
+          <tr>
+            <td className="w-100">Parent Slot</td>
+            <td className="text-lg-right text-monospace">
+              <Slot slot={ConfirmedBlock.data.parentSlot} />
+            </td>
+          </tr>
+          <tr>
+            <td className="w-100">Blockhash</td>
+            <td className="text-lg-right text-monospace">
+              <span>{ConfirmedBlock.data.blockhash}</span>
+            </td>
+          </tr>
+          <tr>
+            <td className="w-100">Previous Blockhash</td>
+            <td className="text-lg-right text-monospace">
+              <span>{ConfirmedBlock.data.previousBlockhash}</span>
+            </td>
+          </tr>
+        </TableCardBody>
+      </div>
 
-          <TableCardBody>
-            {blockData.data?.tags
-              .filter(
-                (tag: any) =>
-                  tag.name === "slot" ||
-                  tag.name === "parentSlot" ||
-                  tag.name === "blockhash" ||
-                  tag.name === "previousBlockhash"
-              )
-              .map((tag: any) => {
+      <div className="card">
+        <div className="card-header align-items-center">
+          <h3 className="card-header-title">Block Transactions</h3>
+        </div>
+
+        <div className="table-responsive mb-0">
+          <table className="table table-sm table-nowrap card-table">
+            <thead>
+              <tr>
+                <th className="text-muted">Result</th>
+                <th className="text-muted">Transaction Signature</th>
+              </tr>
+            </thead>
+            <tbody className="list">
+              {ConfirmedBlock.data.transactions.map((tx) => {
+                const signature = bs58.encode(
+                  tx.transaction.signature
+                    ? tx.transaction.signature
+                    : new Buffer("")
+                );
                 return (
-                  <tr key={tag.name}>
+                  <tr key={signature}>
                     <td>
-                      {tag.name === "slot" ? "Slot" : ""}
-                      {tag.name === "parentSlot" ? "Parent Slot" : ""}
-                      {tag.name === "blockhash" ? "Blockhash" : ""}
-                      {tag.name === "previousBlockhash"
-                        ? "Previous Blockhash"
-                        : ""}
+                      <span className={`badge badge-soft-success`}>
+                        success
+                      </span>
                     </td>
-                    <td className="text-lg-right">
-                      {tag.name === "slot" ? (
-                        <Block block={tag.value} alignRight={true} />
-                      ) : (
-                        ""
-                      )}
-                      {tag.name === "parentSlot" ? (
-                        <Block
-                          block={tag.value}
-                          alignRight={true}
-                          link={true}
-                        />
-                      ) : (
-                        ""
-                      )}
-                      {tag.name === "blockhash" ? (
-                        <Block block={tag.value} alignRight={true} />
-                      ) : (
-                        ""
-                      )}
 
-                      {tag.name === "previousBlockhash" ? (
-                        <Block block={tag.value} alignRight={true} />
-                      ) : (
-                        ""
-                      )}
+                    <td>
+                      <Signature signature={signature} link />
                     </td>
                   </tr>
                 );
               })}
-          </TableCardBody>
+            </tbody>
+          </table>
         </div>
-      ) : (
-        ""
-      )}
-
-      {blockData.data?.blockData ? (
-        <div className="card">
-          <div className="card-header align-items-center">
-            <h3 className="card-header-title">Block Transactions</h3>
-          </div>
-
-          <div className="table-responsive mb-0">
-            <table className="table table-sm table-nowrap card-table">
-              <thead>
-                <tr>
-                  <th className="text-muted">Result</th>
-                  <th className="text-muted">Transaction Signature</th>
-                </tr>
-              </thead>
-              <tbody className="list">
-                {blockData.data?.blockData.transactions.map((tx: any) => {
-                  return (
-                    <tr key={tx.transaction.signatures[0]}>
-                      <td>
-                        <span className={`badge badge-soft-success`}>
-                          success
-                        </span>
-                      </td>
-
-                      <td>
-                        <Signature
-                          signature={tx.transaction.signatures[0]}
-                          link
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : (
-        ""
-      )}
+      </div>
     </>
   );
 }

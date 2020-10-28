@@ -28,7 +28,7 @@ import { intoTransactionInstruction, isSerumInstruction } from "utils/tx";
 import { TokenDetailsCard } from "components/instruction/token/TokenDetailsCard";
 import { FetchStatus } from "providers/cache";
 import { SerumDetailsCard } from "components/instruction/SerumDetailsCard";
-import { Block } from "components/common/Block";
+import { Slot } from "components/common/Slot";
 
 const AUTO_REFRESH_INTERVAL = 2000;
 const ZERO_CONFIRMATION_BAILOUT = 5;
@@ -248,7 +248,7 @@ function StatusCard({
         <tr>
           <td>Block</td>
           <td className="text-lg-right">
-            <Block block={info.slot.toString()} alignRight={true} link={true} />
+            <Slot slot={info.slot} />
           </td>
         </tr>
 
@@ -263,9 +263,7 @@ function StatusCard({
                 </InfoTooltip>
               )}
             </td>
-            <td className="text-lg-right">
-              <Block block={blockhash} alignRight={true} link={false} />
-            </td>
+            <td className="text-lg-right">{blockhash}</td>
           </tr>
         )}
 

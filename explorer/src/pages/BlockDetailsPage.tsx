@@ -3,13 +3,13 @@ import React from "react";
 import { BlockHistoryCard } from "components/account/BlockHistoryCard";
 import { ErrorCard } from "components/common/ErrorCard";
 
-type Props = { block: string };
+type Props = { slot: string };
 
-export function BlockDetailsPage({ block }: Props) {
-  let output = <ErrorCard text={`Block ${block} is not valid`} />;
+export function BlockDetailsPage({ slot }: Props) {
+  let output = <ErrorCard text={`Block ${slot} is not valid`} />;
 
-  if (block) {
-    output = <BlockHistoryCard block={block} />;
+  if (slot) {
+    output = <BlockHistoryCard slot={slot} />;
   }
 
   return (

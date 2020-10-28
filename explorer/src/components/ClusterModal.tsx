@@ -76,29 +76,26 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
 
   const inputTextClass = editing ? "" : "text-muted";
   return (
-    <>
-      <Link
-        to={(location) => clusterLocation(location)}
-        className="btn input-group input-group-merge p-0"
-      >
-        <input
-          type="text"
-          defaultValue={customUrl}
-          className={`form-control form-control-prepended ${inputTextClass} ${customClass(
-            "border"
-          )}`}
-          onFocus={() => setEditing(true)}
-          onBlur={() => setEditing(false)}
-          onInput={(e) => onUrlInput(e.currentTarget.value)}
-        />
-
-        <div className="input-group-prepend">
-          <div className={`input-group-text pr-0 ${customClass("border")}`}>
-            <span className={customClass("text") || ""}>Custom:</span>
-          </div>
+    <Link
+      to={(location) => clusterLocation(location)}
+      className="btn input-group input-group-merge p-0"
+    >
+      <input
+        type="text"
+        defaultValue={customUrl}
+        className={`form-control form-control-prepended ${inputTextClass} ${customClass(
+          "border"
+        )}`}
+        onFocus={() => setEditing(true)}
+        onBlur={() => setEditing(false)}
+        onInput={(e) => onUrlInput(e.currentTarget.value)}
+      />
+      <div className="input-group-prepend">
+        <div className={`input-group-text pr-0 ${customClass("border")}`}>
+          <span className={customClass("text") || ""}>Custom:</span>
         </div>
-      </Link>
-    </>
+      </div>
+    </Link>
   );
 }
 

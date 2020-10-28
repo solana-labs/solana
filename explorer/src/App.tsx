@@ -47,7 +47,7 @@ function App() {
           <Route
             exact
             path={"/block/:id"}
-            render={({ match }) => <BlockDetailsPage block={match.params.id} />}
+            render={({ match }) => <BlockDetailsPage slot={match.params.id} />}
           />
           <Route
             exact

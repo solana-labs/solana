@@ -1,7 +1,7 @@
 import React from "react";
 import * as Sentry from "@sentry/react";
 import * as Cache from "providers/cache";
-import { Connection } from "@solana/web3.js";
+import { Connection, ConfirmedBlock } from "@solana/web3.js";
 import { useCluster, Cluster } from "./cluster";
 
 export enum FetchStatus {
@@ -15,22 +15,17 @@ export enum ActionType {
   Clear,
 }
 
-type State = Cache.State<Block>;
-type Dispatch = Cache.Dispatch<Block>;
+type State = Cache.State<ConfirmedBlock>;
+type Dispatch = Cache.Dispatch<ConfirmedBlock>;
 
 const StateContext = React.createContext<State | undefined>(undefined);
 const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 
 type BlockProviderProps = { children: React.ReactNode };
 
-export interface Block {
-  blockData: any;
-  tags: any;
-}
-
 export function BlockProvider({ children }: BlockProviderProps) {
   const { url } = useCluster();
-  const [state, dispatch] = Cache.useReducer<Block>(url);
+  const [state, dispatch] = Cache.useReducer<ConfirmedBlock>(url);
 
   React.useEffect(() => {
     dispatch({ type: ActionType.Clear, url });
@@ -45,7 +40,9 @@ export function BlockProvider({ children }: BlockProviderProps) {
   );
 }
 
-export function useBlock(key: string): Cache.CacheEntry<Block> | undefined {
+export function useBlock(
+  key: string
+): Cache.CacheEntry<ConfirmedBlock> | undefined {
   const context = React.useContext(StateContext);
 
   if (!context) {
@@ -67,32 +64,18 @@ export async function fetchBlock(
     key,
     url,
   });
-
-  let result;
   let status = FetchStatus.Fetching;
-
-  let data = {
-    blockData: null,
-    tags: [
-      { name: "slot", value: key },
-      { name: "parentSlot", value: "" },
-      { name: "blockhash", value: "" },
-      { name: "previousBlockhash", value: "" },
-    ],
+  let data: ConfirmedBlock = {
+    blockhash: "",
+    previousBlockhash: "",
+    parentSlot: 0,
+    transactions: [],
   };
 
   try {
     const connection = new Connection(url, "max");
-    result = await connection.getConfirmedBlock(Number(key));
-
-    if (result) {
-      data.blockData = result as any;
-      data.tags = [
-        { name: "slot", value: key },
-        { name: "parentSlot", value: result.parentSlot.toString() },
-        { name: "blockhash", value: result.blockhash },
-        { name: "previousBlockhash", value: result.previousBlockhash },
-      ];
+    data = await connection.getConfirmedBlock(Number(key));
+    if (data) {
       status = FetchStatus.Fetched;
     } else {
       status = FetchStatus.FetchFailed;
