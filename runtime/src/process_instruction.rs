@@ -76,7 +76,7 @@ pub trait InvokeContext {
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool;
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, AbiExample)]
 pub struct ComputeBudget {
     /// Number of compute units that an instruction is allowed.  Compute units
     /// are consumed by program execution, resources they use, etc...

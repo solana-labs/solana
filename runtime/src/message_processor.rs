@@ -416,10 +416,6 @@ impl MessageProcessor {
         }
     }
 
-    fn get_compute_budget(feature_set: &FeatureSet) -> ComputeBudget {
-        ComputeBudget::new(feature_set)
-    }
-
     /// Create the KeyedAccounts that will be passed to the program
     fn create_keyed_accounts<'a>(
         message: &'a Message,
@@ -667,6 +663,7 @@ impl MessageProcessor {
         instruction_recorder: Option<InstructionRecorder>,
         instruction_index: usize,
         feature_set: Arc<FeatureSet>,
+        compute_budget: ComputeBudget,
     ) -> Result<(), InstructionError> {
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
@@ -690,7 +687,7 @@ impl MessageProcessor {
             pre_accounts,
             self.programs.clone(), // get rid of clone
             log_collector,
-            Self::get_compute_budget(&feature_set),
+            compute_budget,
             executors,
             instruction_recorder,
             feature_set,
@@ -723,6 +720,7 @@ impl MessageProcessor {
         executors: Rc<RefCell<Executors>>,
         instruction_recorders: Option<&[InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
+        compute_budget: ComputeBudget,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let instruction_recorder = instruction_recorders
@@ -739,6 +737,7 @@ impl MessageProcessor {
                 instruction_recorder,
                 instruction_index,
                 feature_set.clone(),
+                compute_budget,
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
@@ -1327,6 +1326,7 @@ mod tests {
             executors.clone(),
             None,
             Arc::new(FeatureSet::all_enabled()),
+            ComputeBudget::new(&FeatureSet::all_enabled()),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 100);
@@ -1350,6 +1350,7 @@ mod tests {
             executors.clone(),
             None,
             Arc::new(FeatureSet::all_enabled()),
+            ComputeBudget::new(&FeatureSet::all_enabled()),
         );
         assert_eq!(
             result,
@@ -1377,6 +1378,7 @@ mod tests {
             executors,
             None,
             Arc::new(FeatureSet::all_enabled()),
+            ComputeBudget::new(&FeatureSet::all_enabled()),
         );
         assert_eq!(
             result,
@@ -1487,6 +1489,7 @@ mod tests {
             executors.clone(),
             None,
             Arc::new(FeatureSet::all_enabled()),
+            ComputeBudget::new(&FeatureSet::all_enabled()),
         );
         assert_eq!(
             result,
@@ -1514,6 +1517,7 @@ mod tests {
             executors.clone(),
             None,
             Arc::new(FeatureSet::all_enabled()),
+            ComputeBudget::new(&FeatureSet::all_enabled()),
         );
         assert_eq!(result, Ok(()));
 
@@ -1538,6 +1542,7 @@ mod tests {
             executors,
             None,
             Arc::new(FeatureSet::all_enabled()),
+            ComputeBudget::new(&FeatureSet::all_enabled()),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);
