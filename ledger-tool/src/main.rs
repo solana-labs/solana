@@ -1860,7 +1860,7 @@ fn main() {
                                 bank.src.slot_deltas(&bank.src.roots()),
                                 output_directory,
                                 storages,
-                                CompressionType::Bzip2,
+                                CompressionType::Zstd,
                                 snapshot_version,
                             )
                         })
