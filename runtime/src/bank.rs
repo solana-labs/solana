@@ -1217,6 +1217,13 @@ impl Bank {
         });
     }
 
+    pub fn epoch_duration_in_years(&self, prev_epoch: Epoch) -> f64 {
+        // period: time that has passed as a fraction of a year, basically the length of
+        //  an epoch as a fraction of a year
+        //  calculated as: slots_elapsed / (slots / year)
+        self.epoch_schedule.get_slots_in_epoch(prev_epoch) as f64 / self.slots_per_year
+    }
+
     // update rewards based on the previous epoch
     fn update_rewards(&mut self, prev_epoch: Epoch) {
         if prev_epoch == self.epoch() {
@@ -1228,11 +1235,7 @@ impl Bank {
         let slot_in_year =
             (self.epoch_schedule.get_last_slot_in_epoch(prev_epoch)) as f64 / self.slots_per_year;
 
-        // period: time that has passed as a fraction of a year, basically the length of
-        //  an epoch as a fraction of a year
-        //  calculated as: slots_elapsed / (slots / year)
-        let epoch_duration_in_years =
-            self.epoch_schedule.get_slots_in_epoch(prev_epoch) as f64 / self.slots_per_year;
+        let epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
 
         let (validator_rate, foundation_rate) = {
             let inflation = self.inflation.read().unwrap();
