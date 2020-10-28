@@ -187,6 +187,7 @@ impl HeaviestSubtreeForkChoice {
             .expect("new root must exist in fork_infos map")
             .parent = None;
         self.root = new_root;
+        self.last_root_time = Instant::now();
     }
 
     pub fn add_root_parent(&mut self, root_parent: Slot) {
