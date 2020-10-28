@@ -2002,7 +2002,7 @@ fn main() {
                         }
 
                         if arg_matches.is_present("enable_inflation") {
-                            let inflation = Inflation::default();
+                            let inflation = Inflation::pico();
                             println!(
                                 "Forcing to: {:?} (was: {:?})",
                                 inflation,
