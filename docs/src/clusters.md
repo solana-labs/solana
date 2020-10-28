@@ -24,6 +24,10 @@ Explorers:
   - Devnet may be subject to ledger resets
   - Devnet typically runs a newer software version than Mainnet Beta
 - Gossip entrypoint for Devnet: `entrypoint.devnet.solana.com:8001`
+- Metrics environment variable for Devnet:
+```bash
+export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=devnet,u=scratch_writer,p=topsecret"
+```
 - RPC URL for Devnet: `https://devnet.solana.com`
 
 ##### Example `solana` command-line configuration
@@ -65,6 +69,10 @@ The `--trusted-validator`s is operated by Solana
 - Testnet typically runs a newer software release than both Devnet and
   Mainnet Beta
 - Gossip entrypoint for Testnet: `entrypoint.testnet.solana.com:8001`
+- Metrics environment variable for Testnet:
+```bash
+export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=tds,u=testnet_write,p=c4fa841aa918bf8274e3e2a44d77568d9861b3ea"
+```
 - RPC URL for Testnet: `https://testnet.solana.com`
 
 ##### Example `solana` command-line configuration
@@ -112,6 +120,10 @@ Currently smart contracts, rewards, and inflation are disabled.
     [Trust Wallet](wallet-guide/trust-wallet.md),
     the wallet will always be connecting to Mainnet Beta.
 - Gossip entrypoint for Mainnet Beta: `mainnet-beta.solana.com:8001`
+- Metrics environment variable for Mainnet Beta:
+```bash
+export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=mainnet-beta,u=mainnet-beta_write,p=password"
+```
 - RPC URL for Mainnet Beta: `https://api.mainnet-beta.solana.com`
 
 ##### Example `solana` command-line configuration
