@@ -86,7 +86,8 @@ pub struct Clock {
     /// the future Epoch for which the leader schedule has
     ///  most recently been calculated
     pub leader_schedule_epoch: Epoch,
-    /// computed from genesis creation time and network time
-    ///  in slots, drifts!
+    /// originally computed from genesis creation time and network time
+    /// in slots (drifty); corrected using validator timestamp oracle as of
+    /// timestamp_correction and timestamp_bounding features
     pub unix_timestamp: UnixTimestamp,
 }
