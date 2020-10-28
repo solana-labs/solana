@@ -51,7 +51,7 @@ use solana_sdk::{
     native_loader,
     native_token::sol_to_lamports,
     nonce, nonce_account,
-    process_instruction::{Executor, ProcessInstructionWithContext},
+    process_instruction::{BpfComputeBudget, Executor, ProcessInstructionWithContext},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     recent_blockhashes_account,
@@ -671,6 +671,8 @@ pub struct Bank {
     /// The Message processor
     message_processor: MessageProcessor,
 
+    bpf_compute_budget: Option<BpfComputeBudget>,
+
     /// Builtin programs activated dynamically by feature
     feature_builtins: Arc<Vec<(Builtin, Pubkey)>>,
 
@@ -807,6 +809,7 @@ impl Bank {
             tick_height: AtomicU64::new(parent.tick_height.load(Relaxed)),
             signature_count: AtomicU64::new(0),
             message_processor: parent.message_processor.clone(),
+            bpf_compute_budget: parent.bpf_compute_budget,
             feature_builtins: parent.feature_builtins.clone(),
             hard_forks: parent.hard_forks.clone(),
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Relaxed)),
@@ -912,6 +915,7 @@ impl Bank {
             epoch_stakes: fields.epoch_stakes,
             is_delta: AtomicBool::new(fields.is_delta),
             message_processor: new(),
+            bpf_compute_budget: None,
             feature_builtins: new(),
             last_vote_sync: new(),
             rewards: new(),
@@ -2353,6 +2357,9 @@ impl Bank {
         let mut inner_instructions: Vec<Option<InnerInstructionsList>> =
             Vec::with_capacity(txs.len());
         let mut transaction_logs: Vec<TransactionLogMessages> = Vec::with_capacity(txs.len());
+        let bpf_compute_budget = self
+            .bpf_compute_budget
+            .unwrap_or_else(|| BpfComputeBudget::new(&self.feature_set));
 
         let executed: Vec<TransactionProcessResult> = loaded_accounts
             .iter_mut()
@@ -2391,6 +2398,7 @@ impl Bank {
                         executors.clone(),
                         instruction_recorders.as_deref(),
                         self.feature_set.clone(),
+                        bpf_compute_budget,
                     );
 
                     if enable_log_recording {
@@ -3356,6 +3364,10 @@ impl Bank {
 
     pub fn set_inflation(&self, inflation: Inflation) {
         *self.inflation.write().unwrap() = inflation;
+    }
+
+    pub fn set_bpf_compute_budget(&mut self, bpf_compute_budget: Option<BpfComputeBudget>) {
+        self.bpf_compute_budget = bpf_compute_budget;
     }
 
     pub fn hard_forks(&self) -> Arc<RwLock<HardForks>> {

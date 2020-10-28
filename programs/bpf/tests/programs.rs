@@ -24,7 +24,7 @@ use solana_sdk::{
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     message::Message,
-    process_instruction::{ComputeBudget, InvokeContext, MockInvokeContext},
+    process_instruction::{BpfComputeBudget, InvokeContext, MockInvokeContext},
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     sysvar::{clock, fees, rent, slot_hashes, stake_history},
@@ -721,14 +721,14 @@ fn test_program_bpf_call_depth() {
 
     let instruction = Instruction::new(
         program_id,
-        &(ComputeBudget::default().max_call_depth - 1),
+        &(BpfComputeBudget::default().max_call_depth - 1),
         vec![],
     );
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
     assert!(result.is_ok());
 
     let instruction =
-        Instruction::new(program_id, &ComputeBudget::default().max_call_depth, vec![]);
+        Instruction::new(program_id, &BpfComputeBudget::default().max_call_depth, vec![]);
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
     assert!(result.is_err());
 }
