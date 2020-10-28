@@ -61,6 +61,7 @@ fn process_instruction(
         panic!();
     }
 
+    sol_log_compute_units();
     Ok(())
 }
 
