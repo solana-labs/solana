@@ -12,6 +12,7 @@ import { IX_STRUCTS } from "./types";
 import { reportError } from "utils/sentry";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import { Address } from "components/common/Address";
+import { wrap } from "utils";
 
 type DetailsProps = {
   tx: ParsedTransaction;
@@ -50,7 +51,7 @@ type Props = {
 
 export function BpfLoaderWriteDetailsCard(props: Props) {
   const { ix, index, result, info } = props;
-
+  const bytes = wrap(info.bytes, 50);
   return (
     <InstructionCard
       ix={ix}
@@ -77,7 +78,7 @@ export function BpfLoaderWriteDetailsCard(props: Props) {
           Bytes <span className="text-muted">(base 64)</span>
         </td>
         <td className="text-lg-right">
-          <code className="d-inline-block">{info.bytes}</code>
+          <pre className="d-inline-block text-left mb-0">{bytes}</pre>
         </td>
       </tr>
 
