@@ -17,7 +17,7 @@ use solana_rbpf::{
     vm::{Config, EbpfVm, Executable, InstructionMeter},
 };
 use solana_runtime::{
-    feature_set::compute_budget_balancing,
+    feature_set::bpf_compute_budget_balancing,
     process_instruction::{ComputeMeter, Executor, InvokeContext},
 };
 use solana_sdk::{
@@ -101,7 +101,7 @@ pub fn create_and_cache_executor(
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
     bpf_verifier::check(
         elf_bytes,
-        !invoke_context.is_feature_active(&compute_budget_balancing::id()),
+        !invoke_context.is_feature_active(&bpf_compute_budget_balancing::id()),
     )
     .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e)))?;
     let executor = Arc::new(BPFExecutor { executable });
@@ -116,7 +116,7 @@ pub fn create_vm<'a>(
     parameter_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<(EbpfVm<'a, BPFError>, MemoryRegion), EbpfError<BPFError>> {
-    let compute_budget = invoke_context.get_compute_budget();
+    let compute_budget = invoke_context.get_bpf_compute_budget();
     let mut vm = EbpfVm::new(
         executable,
         Config {
@@ -315,7 +315,7 @@ mod tests {
     use solana_runtime::{
         feature_set::FeatureSet,
         message_processor::{Executors, ThisInvokeContext},
-        process_instruction::{ComputeBudget, Logger, ProcessInstruction},
+        process_instruction::{BpfComputeBudget, Logger, ProcessInstruction},
     };
     use solana_sdk::{
         account::Account, instruction::CompiledInstruction, instruction::Instruction,
@@ -356,7 +356,7 @@ mod tests {
     pub struct MockInvokeContext {
         pub key: Pubkey,
         pub logger: MockLogger,
-        pub compute_budget: ComputeBudget,
+        pub compute_budget: BpfComputeBudget,
         pub compute_meter: MockComputeMeter,
     }
     impl Default for MockInvokeContext {
@@ -364,7 +364,7 @@ mod tests {
             MockInvokeContext {
                 key: Pubkey::default(),
                 logger: MockLogger::default(),
-                compute_budget: ComputeBudget::default(),
+                compute_budget: BpfComputeBudget::default(),
                 compute_meter: MockComputeMeter {
                     remaining: std::u64::MAX,
                 },
@@ -393,7 +393,7 @@ mod tests {
         fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
             Rc::new(RefCell::new(self.logger.clone()))
         }
-        fn get_compute_budget(&self) -> &ComputeBudget {
+        fn get_bpf_compute_budget(&self) -> &BpfComputeBudget {
             &self.compute_budget
         }
         fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
@@ -623,7 +623,7 @@ mod tests {
             vec![],
             vec![],
             None,
-            ComputeBudget {
+            BpfComputeBudget {
                 max_units: 1,
                 log_units: 100,
                 log_64_units: 100,

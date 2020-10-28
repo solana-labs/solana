@@ -14,7 +14,7 @@ use solana_runtime::{
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::load_program,
     process_instruction::{
-        ComputeBudget, ComputeMeter, Executor, InvokeContext, Logger, ProcessInstruction,
+        BpfComputeBudget, ComputeMeter, Executor, InvokeContext, Logger, ProcessInstruction,
     },
 };
 use solana_sdk::{
@@ -718,14 +718,14 @@ fn test_program_bpf_call_depth() {
 
     let instruction = Instruction::new(
         program_id,
-        &(ComputeBudget::default().max_call_depth - 1),
+        &(BpfComputeBudget::default().max_call_depth - 1),
         vec![],
     );
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
     assert!(result.is_ok());
 
     let instruction =
-        Instruction::new(program_id, &ComputeBudget::default().max_call_depth, vec![]);
+        Instruction::new(program_id, &BpfComputeBudget::default().max_call_depth, vec![]);
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
     assert!(result.is_err());
 }
@@ -782,7 +782,7 @@ fn assert_instruction_count() {
 struct MockInvokeContext {
     pub key: Pubkey,
     pub logger: MockLogger,
-    pub compute_budget: ComputeBudget,
+    pub compute_budget: BpfComputeBudget,
     pub compute_meter: MockComputeMeter,
 }
 impl InvokeContext for MockInvokeContext {
@@ -807,7 +807,7 @@ impl InvokeContext for MockInvokeContext {
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
         Rc::new(RefCell::new(self.logger.clone()))
     }
-    fn get_compute_budget(&self) -> &ComputeBudget {
+    fn get_bpf_compute_budget(&self) -> &BpfComputeBudget {
         &self.compute_budget
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {

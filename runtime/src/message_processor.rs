@@ -4,8 +4,9 @@ use crate::{
     log_collector::LogCollector,
     native_loader::NativeLoader,
     process_instruction::{
-        ComputeBudget, ComputeMeter, ErasedProcessInstruction, ErasedProcessInstructionWithContext,
-        Executor, InvokeContext, Logger, ProcessInstruction, ProcessInstructionWithContext,
+        BpfComputeBudget, ComputeMeter, ErasedProcessInstruction,
+        ErasedProcessInstructionWithContext, Executor, InvokeContext, Logger, ProcessInstruction,
+        ProcessInstructionWithContext,
     },
     rent_collector::RentCollector,
 };
@@ -207,7 +208,7 @@ pub struct ThisInvokeContext {
     pre_accounts: Vec<PreAccount>,
     programs: Vec<(Pubkey, ProcessInstruction)>,
     logger: Rc<RefCell<dyn Logger>>,
-    compute_budget: ComputeBudget,
+    bpf_compute_budget: BpfComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     executors: Rc<RefCell<Executors>>,
     instruction_recorder: Option<InstructionRecorder>,
@@ -220,12 +221,12 @@ impl ThisInvokeContext {
         pre_accounts: Vec<PreAccount>,
         programs: Vec<(Pubkey, ProcessInstruction)>,
         log_collector: Option<Rc<LogCollector>>,
-        compute_budget: ComputeBudget,
+        bpf_compute_budget: BpfComputeBudget,
         executors: Rc<RefCell<Executors>>,
         instruction_recorder: Option<InstructionRecorder>,
         feature_set: Arc<FeatureSet>,
     ) -> Self {
-        let mut program_ids = Vec::with_capacity(compute_budget.max_invoke_depth);
+        let mut program_ids = Vec::with_capacity(bpf_compute_budget.max_invoke_depth);
         program_ids.push(*program_id);
         Self {
             program_ids,
@@ -233,9 +234,9 @@ impl ThisInvokeContext {
             pre_accounts,
             programs,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
-            compute_budget,
+            bpf_compute_budget,
             compute_meter: Rc::new(RefCell::new(ThisComputeMeter {
-                remaining: compute_budget.max_units,
+                remaining: bpf_compute_budget.max_units,
             })),
             executors,
             instruction_recorder,
@@ -245,7 +246,7 @@ impl ThisInvokeContext {
 }
 impl InvokeContext for ThisInvokeContext {
     fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError> {
-        if self.program_ids.len() > self.compute_budget.max_invoke_depth {
+        if self.program_ids.len() > self.bpf_compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
         }
         if self.program_ids.contains(key) && self.program_ids.last() != Some(key) {
@@ -287,8 +288,8 @@ impl InvokeContext for ThisInvokeContext {
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
         self.logger.clone()
     }
-    fn get_compute_budget(&self) -> &ComputeBudget {
-        &self.compute_budget
+    fn get_bpf_compute_budget(&self) -> &BpfComputeBudget {
+        &self.bpf_compute_budget
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
         self.compute_meter.clone()
@@ -663,7 +664,7 @@ impl MessageProcessor {
         instruction_recorder: Option<InstructionRecorder>,
         instruction_index: usize,
         feature_set: Arc<FeatureSet>,
-        compute_budget: ComputeBudget,
+        bpf_compute_budget: BpfComputeBudget,
     ) -> Result<(), InstructionError> {
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
@@ -687,7 +688,7 @@ impl MessageProcessor {
             pre_accounts,
             self.programs.clone(), // get rid of clone
             log_collector,
-            compute_budget,
+            bpf_compute_budget,
             executors,
             instruction_recorder,
             feature_set,
@@ -720,7 +721,7 @@ impl MessageProcessor {
         executors: Rc<RefCell<Executors>>,
         instruction_recorders: Option<&[InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
-        compute_budget: ComputeBudget,
+        bpf_compute_budget: BpfComputeBudget,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let instruction_recorder = instruction_recorders
@@ -737,7 +738,7 @@ impl MessageProcessor {
                 instruction_recorder,
                 instruction_index,
                 feature_set.clone(),
-                compute_budget,
+                bpf_compute_budget,
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
@@ -782,7 +783,7 @@ mod tests {
             pre_accounts,
             vec![],
             None,
-            ComputeBudget::default(),
+            BpfComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
             None,
             Arc::new(FeatureSet::all_enabled()),
@@ -1326,7 +1327,7 @@ mod tests {
             executors.clone(),
             None,
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(&FeatureSet::all_enabled()),
+            BpfComputeBudget::new(&FeatureSet::all_enabled()),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 100);
@@ -1350,7 +1351,7 @@ mod tests {
             executors.clone(),
             None,
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(&FeatureSet::all_enabled()),
+            BpfComputeBudget::new(&FeatureSet::all_enabled()),
         );
         assert_eq!(
             result,
@@ -1378,7 +1379,7 @@ mod tests {
             executors,
             None,
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(&FeatureSet::all_enabled()),
+            BpfComputeBudget::new(&FeatureSet::all_enabled()),
         );
         assert_eq!(
             result,
@@ -1489,7 +1490,7 @@ mod tests {
             executors.clone(),
             None,
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(&FeatureSet::all_enabled()),
+            BpfComputeBudget::new(&FeatureSet::all_enabled()),
         );
         assert_eq!(
             result,
@@ -1517,7 +1518,7 @@ mod tests {
             executors.clone(),
             None,
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(&FeatureSet::all_enabled()),
+            BpfComputeBudget::new(&FeatureSet::all_enabled()),
         );
         assert_eq!(result, Ok(()));
 
@@ -1542,7 +1543,7 @@ mod tests {
             executors,
             None,
             Arc::new(FeatureSet::all_enabled()),
-            ComputeBudget::new(&FeatureSet::all_enabled()),
+            BpfComputeBudget::new(&FeatureSet::all_enabled()),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);
@@ -1616,7 +1617,7 @@ mod tests {
             vec![owned_preaccount, not_owned_preaccount],
             vec![],
             None,
-            ComputeBudget::default(),
+            BpfComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
             None,
             Arc::new(FeatureSet::all_enabled()),

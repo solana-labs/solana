@@ -98,7 +98,7 @@ pub fn register_syscalls<'a>(
     callers_keyed_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<MemoryRegion, EbpfError<BPFError>> {
-    let compute_budget = invoke_context.get_compute_budget();
+    let compute_budget = invoke_context.get_bpf_compute_budget();
 
     // Syscall functions common across languages
 
@@ -1147,7 +1147,7 @@ fn call<'a>(
     let mut invoke_context = syscall.get_context_mut()?;
     invoke_context
         .get_compute_meter()
-        .consume(invoke_context.get_compute_budget().invoke_units)?;
+        .consume(invoke_context.get_bpf_compute_budget().invoke_units)?;
 
     // Translate data passed from the VM
 

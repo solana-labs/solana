@@ -15,7 +15,7 @@ use solana_runtime::{
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::load_program,
     process_instruction::{
-        ComputeBudget, ComputeMeter, Executor, InvokeContext, Logger, ProcessInstruction,
+        BpfComputeBudget, ComputeMeter, Executor, InvokeContext, Logger, ProcessInstruction,
     },
 };
 use solana_sdk::{
@@ -247,7 +247,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
 pub struct MockInvokeContext {
     key: Pubkey,
     logger: MockLogger,
-    compute_budget: ComputeBudget,
+    compute_budget: BpfComputeBudget,
     compute_meter: Rc<RefCell<MockComputeMeter>>,
 }
 impl InvokeContext for MockInvokeContext {
@@ -272,7 +272,7 @@ impl InvokeContext for MockInvokeContext {
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
         Rc::new(RefCell::new(self.logger.clone()))
     }
-    fn get_compute_budget(&self) -> &ComputeBudget {
+    fn get_bpf_compute_budget(&self) -> &BpfComputeBudget {
         &self.compute_budget
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {

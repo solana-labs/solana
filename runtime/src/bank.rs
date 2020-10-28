@@ -18,7 +18,7 @@ use crate::{
     log_collector::LogCollector,
     message_processor::{Executors, MessageProcessor},
     process_instruction::{
-        ComputeBudget, ErasedProcessInstruction, ErasedProcessInstructionWithContext, Executor,
+        BpfComputeBudget, ErasedProcessInstruction, ErasedProcessInstructionWithContext, Executor,
         ProcessInstruction, ProcessInstructionWithContext,
     },
     rent_collector::RentCollector,
@@ -692,7 +692,7 @@ pub struct Bank {
     /// The Message processor
     message_processor: MessageProcessor,
 
-    compute_budget_override: Option<ComputeBudget>,
+    bpf_compute_budget_override: Option<BpfComputeBudget>,
 
     /// Builtin programs activated dynamically by feature
     feature_builtins: Arc<Vec<(Builtin, Pubkey)>>,
@@ -830,7 +830,7 @@ impl Bank {
             tick_height: AtomicU64::new(parent.tick_height.load(Relaxed)),
             signature_count: AtomicU64::new(0),
             message_processor: parent.message_processor.clone(),
-            compute_budget_override: parent.compute_budget_override,
+            bpf_compute_budget_override: parent.bpf_compute_budget_override,
             feature_builtins: parent.feature_builtins.clone(),
             hard_forks: parent.hard_forks.clone(),
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Relaxed)),
@@ -936,7 +936,7 @@ impl Bank {
             epoch_stakes: fields.epoch_stakes,
             is_delta: AtomicBool::new(fields.is_delta),
             message_processor: new(),
-            compute_budget_override: None,
+            bpf_compute_budget_override: None,
             feature_builtins: new(),
             last_vote_sync: new(),
             rewards: new(),
@@ -2380,9 +2380,9 @@ impl Bank {
         let mut inner_instructions: Vec<Option<InnerInstructionsList>> =
             Vec::with_capacity(txs.len());
         let mut transaction_logs: Vec<TransactionLogMessages> = Vec::with_capacity(txs.len());
-        let compute_budget = self
-            .compute_budget_override
-            .unwrap_or_else(|| ComputeBudget::new(&self.feature_set));
+        let bpf_compute_budget = self
+            .bpf_compute_budget_override
+            .unwrap_or_else(|| BpfComputeBudget::new(&self.feature_set));
 
         let executed: Vec<TransactionProcessResult> = loaded_accounts
             .iter_mut()
@@ -2421,7 +2421,7 @@ impl Bank {
                         executors.clone(),
                         instruction_recorders.as_deref(),
                         self.feature_set.clone(),
-                        compute_budget,
+                        bpf_compute_budget,
                     );
 
                     if enable_log_recording {
@@ -3385,8 +3385,11 @@ impl Bank {
         *self.inflation.write().unwrap() = inflation;
     }
 
-    pub fn set_compute_budget_override(&mut self, compute_budget_override: Option<ComputeBudget>) {
-        self.compute_budget_override = compute_budget_override;
+    pub fn set_bpf_compute_budget_override(
+        &mut self,
+        bpf_compute_budget_override: Option<BpfComputeBudget>,
+    ) {
+        self.bpf_compute_budget_override = bpf_compute_budget_override;
     }
 
     pub fn hard_forks(&self) -> Arc<RwLock<HardForks>> {
