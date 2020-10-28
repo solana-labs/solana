@@ -2022,33 +2022,65 @@ fn main() {
                         println!("Epoch: {} => {}", base_bank.epoch(), warped_bank.epoch());
                         assert_capitalization(&base_bank);
                         assert_capitalization(&warped_bank);
+                        let interest_per_epoch = ((warped_bank.capitalization() as f64)
+                            / (base_bank.capitalization() as f64)
+                            * 100_f64)
+                            - 100_f64;
+                        let interest_per_year = interest_per_epoch
+                            / warped_bank.epoch_duration_in_years(base_bank.epoch());
                         println!(
-                            "Capitalization: {} => {} (+{} {}%)",
+                            "Capitalization: {} => {} (+{} {}%; annualized {}%)",
                             Sol(base_bank.capitalization()),
                             Sol(warped_bank.capitalization()),
                             Sol(warped_bank.capitalization() - base_bank.capitalization()),
-                            ((warped_bank.capitalization() as f64)
-                                / (base_bank.capitalization() as f64)
-                                * 100_f64),
+                            interest_per_epoch,
+                            interest_per_year,
                         );
 
                         let mut overall_delta = 0;
-                        for (pubkey, warped_account) in
-                            warped_bank.get_all_accounts_modified_since_parent()
-                        {
+                        let modified_accounts =
+                            warped_bank.get_all_accounts_modified_since_parent();
+                        let mut sorted_accounts = modified_accounts
+                            .iter()
+                            .map(|(pubkey, account)| {
+                                (
+                                    pubkey,
+                                    account,
+                                    base_bank
+                                        .get_account(&pubkey)
+                                        .map(|a| a.lamports)
+                                        .unwrap_or_default(),
+                                )
+                            })
+                            .collect::<Vec<_>>();
+                        sorted_accounts.sort_unstable_by_key(|(pubkey, account, base_lamports)| {
+                            (
+                                account.owner,
+                                *base_lamports,
+                                account.lamports - base_lamports,
+                                *pubkey,
+                            )
+                        });
+                        for (pubkey, warped_account, _) in sorted_accounts {
                             if let Some(base_account) = base_bank.get_account(&pubkey) {
                                 if base_account.lamports != warped_account.lamports {
                                     let delta = warped_account.lamports - base_account.lamports;
                                     println!(
-                                        "{}({}): {} => {} (+{})",
-                                        pubkey,
+                                        "{:<45}({}): {} => {} (+{} {:>4.9}%)",
+                                        format!("{}", pubkey), // format! is needed to pad/justify correctly.
                                         base_account.owner,
                                         Sol(base_account.lamports),
                                         Sol(warped_account.lamports),
                                         Sol(delta),
+                                        ((warped_account.lamports as f64)
+                                            / (base_account.lamports as f64)
+                                            * 100_f64)
+                                            - 100_f64,
                                     );
                                     overall_delta += delta;
                                 }
+                            } else {
+                                error!("new account!?: {}", pubkey);
                             }
                         }
                         if overall_delta > 0 {
