@@ -102,19 +102,14 @@ export const SystemInstructionType = enums([
 export const IX_STRUCTS: { [id: string]: any } = {
   createAccount: CreateAccount,
   createAccountWithSeed: CreateAccountWithSeed,
-
   allocate: Allocate,
   allocateWithSeed: AllocateWithSeed,
-
   assign: Assign,
   assignWithSeed: AssignWithSeed,
-
   transfer: Transfer,
-
   advanceNonceAccount: AdvanceNonceAccount,
   withdrawNonceAccount: WithdrawNonceAccount,
   authorizeNonceAccount: AuthorizeNonceAccount,
   initializeNonceAccount: InitializeNonceAccount,
-
-  transferWithSeed: TransferWithSeed,
+  transferWithSeed: TransferWithSeed, // TODO: Add support for transfer with seed
 };
