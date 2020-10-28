@@ -12,7 +12,7 @@ import {NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
 import {MS_PER_SLOT} from './timing';
 import {Transaction} from './transaction';
-import {Message} from './message';
+import {Message, CompiledInstruction} from './message';
 import {sleep} from './util/sleep';
 import {promiseTimeout} from './util/promise-timeout';
 import {toBuffer} from './util/to-buffer';
@@ -367,14 +367,9 @@ const SimulatedTransactionResponseValidator = jsonRpcResultAndContext(
   }),
 );
 
-type PartiallyDecodedInnerInstruction = {
-  index: number,
-  instructions: PartiallyDecodedInstruction[],
-};
-
 type ParsedInnerInstruction = {
   index: number,
-  instructions: (ParsedInstruction | PartiallyDecodedInnerInstruction)[],
+  instructions: (ParsedInstruction | PartiallyDecodedInstruction)[],
 };
 
 /**
@@ -398,8 +393,8 @@ type ParsedConfirmedTransactionMeta = {
 };
 
 type CompiledInnerInstruction = {
-  index: number,
-  instructions: CompiledInstruction[],
+  index: number;
+  instructions: CompiledInstruction[];
 };
 
 /**
@@ -1163,22 +1158,22 @@ const ConfirmedTransactionMetaResult = struct.union([
   struct.pick({
     err: TransactionErrorResult,
     fee: 'number',
-    innerInstructions: struct.union(
+    innerInstructions: struct.union([
       struct.array([
         struct({
           index: 'number',
           instructions: struct.array([
-            struct({
-              accounts: struct.array(['number']),
-              data: 'string',
-              programIdIndex: 'number',
-            }),
+              struct({
+                accounts: struct.array(['number']),
+                data: 'string',
+                programIdIndex: 'number',
+              }),
           ]),
         }),
       ]),
       'null',
       'undefined',
-    ),
+    ]),
     preBalances: struct.array(['number']),
     postBalances: struct.array(['number']),
     logMessages: struct.union([struct.array(['string']), 'null', 'undefined']),
@@ -1192,7 +1187,7 @@ const ParsedConfirmedTransactionMetaResult = struct.union([
   struct.pick({
     err: TransactionErrorResult,
     fee: 'number',
-    innerInstructions: struct.union(
+    innerInstructions: struct.union([
       struct.array([
         struct({
           index: 'number',
@@ -1214,7 +1209,7 @@ const ParsedConfirmedTransactionMetaResult = struct.union([
       ]),
       'null',
       'undefined',
-    ),
+    ]),
     preBalances: struct.array(['number']),
     postBalances: struct.array(['number']),
     logMessages: struct.union([struct.array(['string']), 'null', 'undefined']),
