@@ -19,9 +19,6 @@ export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
 source scripts/ulimit-n.sh
 
-# Clear cached json keypair files
-rm -rf "$HOME/.config/solana"
-
 # Clear the C dependency files, if dependency moves these files are not regenerated
 test -d target/debug/bpf && find target/debug/bpf -name '*.d' -delete
 test -d target/release/bpf && find target/release/bpf -name '*.d' -delete
