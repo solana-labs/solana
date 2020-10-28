@@ -367,9 +367,14 @@ const SimulatedTransactionResponseValidator = jsonRpcResultAndContext(
   }),
 );
 
+type PartiallyDecodedInnerInstruction = {
+  index: number,
+  instructions: PartiallyDecodedInstruction[],
+};
+
 type ParsedInnerInstruction = {
   index: number,
-  instructions: ParsedInstruction[],
+  instructions: (ParsedInstruction | PartiallyDecodedInnerInstruction)[],
 };
 
 /**
@@ -392,9 +397,9 @@ type ParsedConfirmedTransactionMeta = {
   err: TransactionError | null,
 };
 
-type PartiallyDecodedInnerInstruction = {
+type CompiledInnerInstruction = {
   index: number,
-  instructions: PartiallyDecodedInstruction[],
+  instructions: CompiledInstruction[],
 };
 
 /**
@@ -402,7 +407,7 @@ type PartiallyDecodedInnerInstruction = {
  *
  * @typedef {Object} ConfirmedTransactionMeta
  * @property {number} fee The fee charged for processing the transaction
- * @property {Array<PartiallyDecodedInnerInstruction>} innerInstructions An array of cross program invoked instructions
+ * @property {Array<CompiledInnerInstruction>} innerInstructions An array of cross program invoked instructions
  * @property {Array<number>} preBalances The balances of the transaction accounts before processing
  * @property {Array<number>} postBalances The balances of the transaction accounts after processing
  * @property {Array<string>} logMessages An array of program log messages emitted during a transaction
@@ -410,7 +415,7 @@ type PartiallyDecodedInnerInstruction = {
  */
 type ConfirmedTransactionMeta = {
   fee: number,
-  innerInstructions?: PartiallyDecodedInnerInstruction[],
+  innerInstructions?: CompiledInnerInstruction[],
   preBalances: Array<number>,
   postBalances: Array<number>,
   logMessages?: Array<string>,
@@ -1163,13 +1168,11 @@ const ConfirmedTransactionMetaResult = struct.union([
         struct({
           index: 'number',
           instructions: struct.array([
-            struct.union([
-              struct({
-                accounts: struct.array(['number']),
-                data: 'string',
-                programIdIndex: 'number',
-              }),
-            ]),
+            struct({
+              accounts: struct.array(['number']),
+              data: 'string',
+              programIdIndex: 'number',
+            }),
           ]),
         }),
       ]),

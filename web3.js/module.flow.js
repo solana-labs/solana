@@ -152,23 +152,28 @@ declare module '@solana/web3.js' {
     logs: Array<string> | null,
   };
 
-  declare export type PartiallyDecodedInnerInstruction = {
+  declare export type CompiledInnerInstruction = {
     index: number,
-    instructions: PartiallyDecodedInstruction[],
+    instructions: CompiledInstruction[],
   };
 
   declare export type ConfirmedTransactionMeta = {
     fee: number,
-    innerInstructions?: PartiallyDecodedInnerInstruction[],
+    innerInstructions?: CompiledInnerInstruction[],
     preBalances: Array<number>,
     postBalances: Array<number>,
     logMessages?: Array<string>,
     err: TransactionError | null,
   };
 
+  declare export type PartiallyDecodedInnerInstruction = {
+    index: number,
+    instructions: PartiallyDecodedInstruction[],
+  };
+
   declare export type ParsedInnerInstruction = {
     index: number,
-    instructions: ParsedInstruction[],
+    instructions: (ParsedInstruction | PartiallyDecodedInnerInstruction)[],
   };
 
   declare export type ParsedConfirmedTransactionMeta = {
