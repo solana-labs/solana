@@ -66,7 +66,7 @@ impl Inflation {
     }
 
     pub fn pico() -> Self {
-       Self::new_fixed(0.0001) // 0.01% inflation
+        Self::new_fixed(0.0001) // 0.01% inflation
     }
 
     /// inflation rate at year
