@@ -23,12 +23,13 @@ use crate::{
     },
     data_budget::DataBudget,
     epoch_slots::EpochSlots,
+    ping_pong::{self, PingCache, Pong},
     result::{Error, Result},
     weighted_shuffle::weighted_shuffle,
 };
 
 use rand::distributions::{Distribution, WeightedIndex};
-use rand::SeedableRng;
+use rand::{CryptoRng, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use solana_sdk::sanitize::{Sanitize, SanitizeError};
 
@@ -97,6 +98,10 @@ const MAX_GOSSIP_TRAFFIC: usize = 128_000_000 / PACKET_DATA_SIZE;
 
 /// Keep the number of snapshot hashes a node publishes under MAX_PROTOCOL_PAYLOAD_SIZE
 pub const MAX_SNAPSHOT_HASHES: usize = 16;
+/// Number of bytes in the randomly generated token sent with ping messages.
+const GOSSIP_PING_TOKEN_SIZE: usize = 32;
+const GOSSIP_PING_CACHE_CAPACITY: usize = 16384;
+const GOSSIP_PING_CACHE_TTL: Duration = Duration::from_secs(640);
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -226,6 +231,7 @@ struct GossipStats {
     prune_received_cache: Counter,
     prune_message_count: Counter,
     prune_message_len: Counter,
+    pull_request_ping_pong_check_failed_count: Counter,
     purge: Counter,
     epoch_slots_lookup: Counter,
     epoch_slots_push: Counter,
@@ -251,6 +257,7 @@ pub struct ClusterInfo {
     entrypoint: RwLock<Option<ContactInfo>>,
     outbound_budget: DataBudget,
     my_contact_info: RwLock<ContactInfo>,
+    ping_cache: RwLock<PingCache>,
     id: Pubkey,
     stats: GossipStats,
     socket: UdpSocket,
@@ -355,8 +362,10 @@ pub fn make_accounts_hashes_message(
     Some(CrdsValue::new_signed(message, keypair))
 }
 
+type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
+
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "21UweZ4WXK9RHypF97D1rEJQ4C8Bh4pw52SBSNAKxJvW")]
+#[frozen_abi(digest = "3jHXixLRv6fuCykW47hBZSwFuwDjbZShR73GVQB6TjGr")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 enum Protocol {
@@ -365,6 +374,8 @@ enum Protocol {
     PullResponse(Pubkey, Vec<CrdsValue>),
     PushMessage(Pubkey, Vec<CrdsValue>),
     PruneMessage(Pubkey, PruneData),
+    PingMessage(Ping),
+    PongMessage(Pong),
 }
 
 impl Protocol {
@@ -416,6 +427,22 @@ impl Protocol {
                     None
                 }
             }
+            Protocol::PingMessage(ref ping) => {
+                if ping.verify() {
+                    Some(self)
+                } else {
+                    inc_new_counter_info!("cluster_info-gossip_ping_msg_verify_fail", 1);
+                    None
+                }
+            }
+            Protocol::PongMessage(ref pong) => {
+                if pong.verify() {
+                    Some(self)
+                } else {
+                    inc_new_counter_info!("cluster_info-gossip_pong_msg_verify_fail", 1);
+                    None
+                }
+            }
         }
     }
 }
@@ -430,6 +457,8 @@ impl Sanitize for Protocol {
             Protocol::PullResponse(_, val) => val.sanitize(),
             Protocol::PushMessage(_, val) => val.sanitize(),
             Protocol::PruneMessage(_, val) => val.sanitize(),
+            Protocol::PingMessage(ping) => ping.sanitize(),
+            Protocol::PongMessage(pong) => pong.sanitize(),
         }
     }
 }
@@ -459,6 +488,10 @@ impl ClusterInfo {
             entrypoint: RwLock::new(None),
             outbound_budget: DataBudget::default(),
             my_contact_info: RwLock::new(contact_info),
+            ping_cache: RwLock::new(PingCache::new(
+                GOSSIP_PING_CACHE_TTL,
+                GOSSIP_PING_CACHE_CAPACITY,
+            )),
             id,
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
@@ -486,6 +519,7 @@ impl ClusterInfo {
             entrypoint: RwLock::new(self.entrypoint.read().unwrap().clone()),
             outbound_budget: self.outbound_budget.clone_non_atomic(),
             my_contact_info: RwLock::new(my_contact_info),
+            ping_cache: RwLock::new(self.ping_cache.read().unwrap().mock_clone()),
             id: *new_id,
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
@@ -1790,6 +1824,8 @@ impl ClusterInfo {
             .read()
             .unwrap()
             .make_timeouts(&stakes, epoch_time_ms);
+        let mut ping_messages = vec![];
+        let mut pong_messages = vec![];
         let mut pull_responses = HashMap::new();
         for (from_addr, packet) in packets {
             match packet {
@@ -1865,9 +1901,15 @@ impl ClusterInfo {
                         ("prune_message", (allocated.get() - start) as i64, i64),
                     );
                 }
+                Protocol::PingMessage(ping) => ping_messages.push((ping, from_addr)),
+                Protocol::PongMessage(pong) => pong_messages.push((pong, from_addr)),
             }
         }
 
+        if let Some(response) = self.handle_ping_messages(ping_messages, recycler) {
+            let _ = response_sender.send(response);
+        }
+        self.handle_pong_messages(pong_messages, Instant::now());
         for (from, data) in pull_responses {
             self.handle_pull_response(&from, data, &timeouts);
         }
@@ -1878,7 +1920,7 @@ impl ClusterInfo {
                 .pull_requests_count
                 .add_relaxed(gossip_pull_data.len() as u64);
             let rsp = self.handle_pull_requests(recycler, gossip_pull_data, stakes, feature_set);
-            if let Some(rsp) = rsp {
+            if !rsp.is_empty() {
                 let _ignore_disconnect = response_sender.send(rsp);
             }
         }
@@ -1898,6 +1940,49 @@ impl ClusterInfo {
         });
     }
 
+    // Returns a predicate checking if the pull request is from a valid
+    // address, and if the address have responded to a ping request. Also
+    // appends ping packets for the addresses which need to be (re)verified.
+    fn check_pull_request<'a, R>(
+        &'a self,
+        now: Instant,
+        mut rng: &'a mut R,
+        packets: &'a mut Packets,
+        feature_set: Option<&FeatureSet>,
+    ) -> impl FnMut(&PullData) -> bool + 'a
+    where
+        R: Rng + CryptoRng,
+    {
+        let check_enabled = matches!(feature_set, Some(feature_set) if
+            feature_set.is_active(&feature_set::pull_request_ping_pong_check::id()));
+        let mut cache = HashMap::<(Pubkey, SocketAddr), bool>::new();
+        let mut pingf = move || Ping::new_rand(&mut rng, &self.keypair).ok();
+        let mut ping_cache = self.ping_cache.write().unwrap();
+        let mut hard_check = move |node| {
+            let (check, ping) = ping_cache.check(now, node, &mut pingf);
+            if let Some(ping) = ping {
+                let ping = Protocol::PingMessage(ping);
+                let ping = Packet::from_data(&node.1, ping);
+                packets.packets.push(ping);
+            }
+            if !check {
+                self.stats
+                    .pull_request_ping_pong_check_failed_count
+                    .add_relaxed(1)
+            }
+            check || !check_enabled
+        };
+        // Because pull-responses are sent back to packet.meta.addr() of
+        // incoming pull-requests, pings are also sent to request.from_addr (as
+        // opposed to caller.gossip address).
+        move |request| {
+            ContactInfo::is_valid_address(&request.from_addr) && {
+                let node = (request.caller.pubkey(), request.from_addr);
+                *cache.entry(node).or_insert_with(|| hard_check(node))
+            }
+        }
+    }
+
     // Pull requests take an incoming bloom filter of contained entries from a node
     // and tries to send back to them the values it detects are missing.
     fn handle_pull_requests(
@@ -1906,21 +1991,22 @@ impl ClusterInfo {
         requests: Vec<PullData>,
         stakes: &HashMap<Pubkey, u64>,
         feature_set: Option<&FeatureSet>,
-    ) -> Option<Packets> {
-        if matches!(feature_set, Some(feature_set) if
-                    feature_set.is_active(&feature_set::pull_request_ping_pong_check::id()))
-        {
-            // TODO: add ping-pong check on pull-request addresses.
-        }
-        // split the requests into addrs and filters
-        let mut caller_and_filters = vec![];
-        let mut addrs = vec![];
+    ) -> Packets {
         let mut time = Measure::start("handle_pull_requests");
+        self.time_gossip_write_lock("process_pull_reqs", &self.stats.process_pull_requests)
+            .process_pull_requests(requests.iter().map(|r| r.caller.clone()), timestamp());
         self.update_data_budget(stakes.len());
-        for pull_data in requests {
-            caller_and_filters.push((pull_data.caller, pull_data.filter));
-            addrs.push(pull_data.from_addr);
-        }
+        let mut packets = Packets::new_with_recycler(recycler.clone(), 64, "handle_pull_requests");
+        let (caller_and_filters, addrs): (Vec<_>, Vec<_>) = {
+            let mut rng = rand::thread_rng();
+            let check_pull_request =
+                self.check_pull_request(Instant::now(), &mut rng, &mut packets, feature_set);
+            requests
+                .into_iter()
+                .filter(check_pull_request)
+                .map(|r| ((r.caller, r.filter), r.from_addr))
+                .unzip()
+        };
         let now = timestamp();
         let self_id = self.id();
 
@@ -1931,27 +2017,14 @@ impl ClusterInfo {
             )
             .generate_pull_responses(&caller_and_filters, now);
 
-        self.time_gossip_write_lock("process_pull_reqs", &self.stats.process_pull_requests)
-            .process_pull_requests(caller_and_filters, now);
-
-        // Filter bad to addresses
         let pull_responses: Vec<_> = pull_responses
             .into_iter()
             .zip(addrs.into_iter())
-            .filter_map(|(responses, from_addr)| {
-                if !from_addr.ip().is_unspecified()
-                    && from_addr.port() != 0
-                    && !responses.is_empty()
-                {
-                    Some((responses, from_addr))
-                } else {
-                    None
-                }
-            })
+            .filter(|(response, _)| !response.is_empty())
             .collect();
 
         if pull_responses.is_empty() {
-            return None;
+            return packets;
         }
 
         let mut stats: Vec<_> = pull_responses
@@ -1983,7 +2056,6 @@ impl ClusterInfo {
         let rng = &mut ChaChaRng::from_seed(seed);
         let weighted_index = WeightedIndex::new(weights).unwrap();
 
-        let mut packets = Packets::new_with_recycler(recycler.clone(), 64, "handle_pull_requests");
         let mut total_bytes = 0;
         let mut sent = HashSet::new();
         while sent.len() < stats.len() {
@@ -2018,10 +2090,7 @@ impl ClusterInfo {
             stats.len(),
             total_bytes
         );
-        if packets.is_empty() {
-            return None;
-        }
-        Some(packets)
+        packets
     }
 
     // Returns (failed, timeout, success)
@@ -2105,6 +2174,41 @@ impl ClusterInfo {
                 CrdsData::ContactInfo(contact_info) => contact_info.id == *from,
                 _ => false,
             });
+        }
+    }
+
+    fn handle_ping_messages<I>(&self, pings: I, recycler: &PacketsRecycler) -> Option<Packets>
+    where
+        I: IntoIterator<Item = (Ping, SocketAddr)>,
+    {
+        let packets: Vec<_> = pings
+            .into_iter()
+            .filter_map(|(ping, addr)| {
+                let pong = Pong::new(&ping, &self.keypair).ok()?;
+                let pong = Protocol::PongMessage(pong);
+                let packet = Packet::from_data(&addr, pong);
+                Some(packet)
+            })
+            .collect();
+        if packets.is_empty() {
+            None
+        } else {
+            let packets =
+                Packets::new_with_recycler_data(recycler, "handle_ping_messages", packets);
+            Some(packets)
+        }
+    }
+
+    fn handle_pong_messages<I>(&self, pongs: I, now: Instant)
+    where
+        I: IntoIterator<Item = (Pong, SocketAddr)>,
+    {
+        let mut pongs = pongs.into_iter().peekable();
+        if pongs.peek().is_some() {
+            let mut ping_cache = self.ping_cache.write().unwrap();
+            for (pong, addr) in pongs {
+                ping_cache.add(&pong, addr, now);
+            }
         }
     }
 
@@ -2410,6 +2514,11 @@ impl ClusterInfo {
                 (
                     "process_pull_requests",
                     self.stats.process_pull_requests.clear(),
+                    i64
+                ),
+                (
+                    "pull_request_ping_pong_check_failed_count",
+                    self.stats.pull_request_ping_pong_check_failed_count.clear(),
                     i64
                 ),
                 (
@@ -2796,12 +2905,14 @@ pub fn stake_weight_peers<S: std::hash::BuildHasher>(
 mod tests {
     use super::*;
     use crate::crds_value::{CrdsValue, CrdsValueLabel, Vote as CrdsVote};
+    use itertools::izip;
     use rayon::prelude::*;
     use solana_perf::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, Signer};
     use solana_vote_program::{vote_instruction, vote_state::Vote};
     use std::collections::HashSet;
-    use std::net::{IpAddr, Ipv4Addr};
+    use std::iter::repeat_with;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddrV4};
     use std::sync::Arc;
 
     #[test]
@@ -2841,6 +2952,117 @@ mod tests {
             (1, 0, 0),
             ClusterInfo::handle_pull_response(&cluster_info, &entrypoint_pubkey2, data, &timeouts)
         );
+    }
+
+    fn new_rand_remote_node<R>(rng: &mut R) -> (Keypair, SocketAddr)
+    where
+        R: Rng,
+    {
+        let keypair = Keypair::new();
+        let socket = SocketAddr::V4(SocketAddrV4::new(
+            Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen()),
+            rng.gen(),
+        ));
+        (keypair, socket)
+    }
+
+    #[test]
+    fn test_handle_pong_messages() {
+        let now = Instant::now();
+        let mut rng = rand::thread_rng();
+        let this_node = Arc::new(Keypair::new());
+        let cluster_info = ClusterInfo::new(
+            ContactInfo::new_localhost(&this_node.pubkey(), timestamp()),
+            this_node.clone(),
+        );
+        let remote_nodes: Vec<(Keypair, SocketAddr)> =
+            repeat_with(|| new_rand_remote_node(&mut rng))
+                .take(128)
+                .collect();
+        let pings: Vec<_> = {
+            let mut ping_cache = cluster_info.ping_cache.write().unwrap();
+            let mut pingf = || Ping::new_rand(&mut rng, &this_node).ok();
+            remote_nodes
+                .iter()
+                .map(|(keypair, socket)| {
+                    let node = (keypair.pubkey(), *socket);
+                    let (check, ping) = ping_cache.check(now, node, &mut pingf);
+                    // Assert that initially remote nodes will not pass the
+                    // ping/pong check.
+                    assert!(!check);
+                    ping.unwrap()
+                })
+                .collect()
+        };
+        let pongs: Vec<(Pong, SocketAddr)> = pings
+            .iter()
+            .zip(&remote_nodes)
+            .map(|(ping, (keypair, socket))| (Pong::new(ping, keypair).unwrap(), *socket))
+            .collect();
+        let now = now + Duration::from_millis(1);
+        cluster_info.handle_pong_messages(pongs, now);
+        // Assert that remote nodes now pass the ping/pong check.
+        {
+            let mut ping_cache = cluster_info.ping_cache.write().unwrap();
+            for (keypair, socket) in &remote_nodes {
+                let node = (keypair.pubkey(), *socket);
+                let (check, _) = ping_cache.check(now, node, || -> Option<Ping> { None });
+                assert!(check);
+            }
+        }
+        // Assert that a new random remote node still will not pass the check.
+        {
+            let mut ping_cache = cluster_info.ping_cache.write().unwrap();
+            let (keypair, socket) = new_rand_remote_node(&mut rng);
+            let node = (keypair.pubkey(), socket);
+            let (check, _) = ping_cache.check(now, node, || -> Option<Ping> { None });
+            assert!(!check);
+        }
+    }
+
+    #[test]
+    fn test_handle_ping_messages() {
+        let mut rng = rand::thread_rng();
+        let this_node = Arc::new(Keypair::new());
+        let cluster_info = ClusterInfo::new(
+            ContactInfo::new_localhost(&this_node.pubkey(), timestamp()),
+            this_node.clone(),
+        );
+        let remote_nodes: Vec<(Keypair, SocketAddr)> =
+            repeat_with(|| new_rand_remote_node(&mut rng))
+                .take(128)
+                .collect();
+        let pings: Vec<_> = remote_nodes
+            .iter()
+            .map(|(keypair, _)| Ping::new_rand(&mut rng, keypair).unwrap())
+            .collect();
+        let pongs: Vec<_> = pings
+            .iter()
+            .map(|ping| Pong::new(ping, &this_node).unwrap())
+            .collect();
+        let recycler = PacketsRecycler::default();
+        let packets = cluster_info
+            .handle_ping_messages(
+                pings
+                    .into_iter()
+                    .zip(remote_nodes.iter().map(|(_, socket)| *socket)),
+                &recycler,
+            )
+            .unwrap()
+            .packets;
+        assert_eq!(remote_nodes.len(), packets.len());
+        for (packet, (_, socket), pong) in izip!(
+            packets.into_iter(),
+            remote_nodes.into_iter(),
+            pongs.into_iter()
+        ) {
+            assert_eq!(packet.meta.addr(), socket);
+            let bytes = serialize(&pong).unwrap();
+            match limited_deserialize(&packet.data[..packet.meta.size]).unwrap() {
+                Protocol::PongMessage(pong) => assert_eq!(serialize(&pong).unwrap(), bytes),
+                _ => panic!("invalid packet!"),
+            }
+        }
     }
 
     fn test_crds_values(pubkey: Pubkey) -> Vec<CrdsValue> {
