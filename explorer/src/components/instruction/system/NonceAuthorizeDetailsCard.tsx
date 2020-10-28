@@ -1,28 +1,19 @@
 import React from "react";
 import {
-  TransactionInstruction,
   SystemProgram,
   SignatureResult,
-  SystemInstruction,
+  ParsedInstruction,
 } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
-import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import { Address } from "components/common/Address";
 
 export function NonceAuthorizeDetailsCard(props: {
-  ix: TransactionInstruction;
+  ix: ParsedInstruction;
   index: number;
   result: SignatureResult;
+  info: any;
 }) {
-  const { ix, index, result } = props;
-
-  let params;
-  try {
-    params = SystemInstruction.decodeNonceAuthorize(ix);
-  } catch (err) {
-    console.error(err);
-    return <UnknownDetailsCard {...props} />;
-  }
+  const { ix, index, result, info } = props;
 
   return (
     <InstructionCard
@@ -41,21 +32,21 @@ export function NonceAuthorizeDetailsCard(props: {
       <tr>
         <td>Nonce Address</td>
         <td className="text-lg-right">
-          <Address pubkey={params.noncePubkey} alignRight link />
+          <Address pubkey={info.nonceAccount} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>Old Authority Address</td>
         <td className="text-lg-right">
-          <Address pubkey={params.authorizedPubkey} alignRight link />
+          <Address pubkey={info.nonceAuthority} alignRight link />
         </td>
       </tr>
 
       <tr>
         <td>New Authority Address</td>
         <td className="text-lg-right">
-          <Address pubkey={params.newAuthorizedPubkey} alignRight link />
+          <Address pubkey={info.newAuthorized} alignRight link />
         </td>
       </tr>
     </InstructionCard>

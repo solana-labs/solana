@@ -10,13 +10,13 @@ import { useCluster, ClusterStatus } from "providers/cluster";
 import {
   TransactionSignature,
   SystemProgram,
-  StakeProgram,
   SystemInstruction,
 } from "@solana/web3.js";
 import { lamportsToSolString } from "utils";
 import { UnknownDetailsCard } from "components/instruction/UnknownDetailsCard";
 import { SystemDetailsCard } from "components/instruction/system/SystemDetailsCard";
 import { StakeDetailsCard } from "components/instruction/stake/StakeDetailsCard";
+import { BpfLoaderDetailsCard } from "components/instruction/bpf-loader/BpfLoaderDetailsCard";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { TableCardBody } from "components/common/TableCardBody";
@@ -405,23 +405,55 @@ function InstructionsSection({ signature }: SignatureProps) {
   const instructionDetails = transaction.message.instructions.map(
     (next, index) => {
       if ("parsed" in next) {
-        if (next.program === "spl-token") {
-          return (
-            <TokenDetailsCard
-              key={index}
-              tx={transaction}
-              ix={next}
-              result={result}
-              index={index}
-            />
-          );
+        switch (next.program) {
+          case "spl-token":
+            return (
+              <TokenDetailsCard
+                key={index}
+                tx={transaction}
+                ix={next}
+                result={result}
+                index={index}
+              />
+            );
+          case "bpf-loader":
+            return (
+              <BpfLoaderDetailsCard
+                key={index}
+                tx={transaction}
+                ix={next}
+                result={result}
+                index={index}
+              />
+            );
+          case "system":
+            return (
+              <SystemDetailsCard
+                key={index}
+                tx={transaction}
+                ix={next}
+                result={result}
+                index={index}
+              />
+            );
+          case "stake":
+            return (
+              <StakeDetailsCard
+                key={index}
+                tx={transaction}
+                ix={next}
+                result={result}
+                index={index}
+              />
+            );
+          default:
+            const props = { ix: next, result, index };
+            return <UnknownDetailsCard key={index} {...props} />;
         }
-
-        const props = { ix: next, result, index };
-        return <UnknownDetailsCard key={index} {...props} />;
       }
 
       const ix = intoTransactionInstruction(transaction, index);
+
       if (!ix) {
         return (
           <ErrorCard
@@ -432,11 +464,8 @@ function InstructionsSection({ signature }: SignatureProps) {
       }
 
       const props = { ix, result, index, signature };
-      if (SystemProgram.programId.equals(ix.programId)) {
-        return <SystemDetailsCard key={index} {...props} />;
-      } else if (StakeProgram.programId.equals(ix.programId)) {
-        return <StakeDetailsCard key={index} {...props} />;
-      } else if (isSerumInstruction(ix)) {
+
+      if (isSerumInstruction(ix)) {
         return <SerumDetailsCard key={index} {...props} />;
       } else {
         return <UnknownDetailsCard key={index} {...props} />;
