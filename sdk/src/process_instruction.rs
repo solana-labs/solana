@@ -1,7 +1,7 @@
 use solana_sdk::{
     account::Account,
     feature_set::{
-        compute_budget_balancing, max_invoke_depth_4, max_program_call_depth_64,
+        bpf_compute_budget_balancing, max_invoke_depth_4, max_program_call_depth_64,
         pubkey_log_syscall_enabled, FeatureSet,
     },
     instruction::{CompiledInstruction, Instruction, InstructionError},
@@ -47,7 +47,7 @@ pub trait InvokeContext {
     /// Get this invocation's logger
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>>;
     /// Get this invocation's compute budget
-    fn get_compute_budget(&self) -> &ComputeBudget;
+    fn get_bpf_compute_budget(&self) -> &BpfComputeBudget;
     /// Get this invocation's compute meter
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>>;
     /// Loaders may need to do work in order to execute a program.  Cache
@@ -61,8 +61,8 @@ pub trait InvokeContext {
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool;
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct ComputeBudget {
+#[derive(Clone, Copy, Debug, AbiExample)]
+pub struct BpfComputeBudget {
     /// Number of compute units that an instruction is allowed.  Compute units
     /// are consumed by program execution, resources they use, etc...
     pub max_units: u64,
@@ -88,16 +88,16 @@ pub struct ComputeBudget {
     /// Number of compute units consumed by logging a `Pubkey`
     pub log_pubkey_units: u64,
 }
-impl Default for ComputeBudget {
+impl Default for BpfComputeBudget {
     fn default() -> Self {
         Self::new(&FeatureSet::all_enabled())
     }
 }
-impl ComputeBudget {
+impl BpfComputeBudget {
     pub fn new(feature_set: &FeatureSet) -> Self {
-        let mut compute_budget =
+        let mut bpf_compute_budget =
         // Original
-        ComputeBudget {
+        BpfComputeBudget {
             max_units: 100_000,
             log_units: 0,
             log_64_units: 0,
@@ -111,36 +111,36 @@ impl ComputeBudget {
             log_pubkey_units: 0,
         };
 
-        if feature_set.is_active(&compute_budget_balancing::id()) {
-            compute_budget = ComputeBudget {
+        if feature_set.is_active(&bpf_compute_budget_balancing::id()) {
+            bpf_compute_budget = BpfComputeBudget {
                 max_units: 200_000,
                 log_units: 100,
                 log_64_units: 100,
                 create_program_address_units: 1500,
                 invoke_units: 1000,
-                ..compute_budget
+                ..bpf_compute_budget
             };
         }
         if feature_set.is_active(&max_invoke_depth_4::id()) {
-            compute_budget = ComputeBudget {
+            bpf_compute_budget = BpfComputeBudget {
                 max_invoke_depth: 4,
-                ..compute_budget
+                ..bpf_compute_budget
             };
         }
 
         if feature_set.is_active(&max_program_call_depth_64::id()) {
-            compute_budget = ComputeBudget {
+            bpf_compute_budget = BpfComputeBudget {
                 max_call_depth: 64,
-                ..compute_budget
+                ..bpf_compute_budget
             };
         }
         if feature_set.is_active(&pubkey_log_syscall_enabled::id()) {
-            compute_budget = ComputeBudget {
+            bpf_compute_budget = BpfComputeBudget {
                 log_pubkey_units: 100,
-                ..compute_budget
+                ..bpf_compute_budget
             };
         }
-        compute_budget
+        bpf_compute_budget
     }
 }
 
@@ -206,7 +206,7 @@ impl Logger for MockLogger {
 pub struct MockInvokeContext {
     pub key: Pubkey,
     pub logger: MockLogger,
-    pub compute_budget: ComputeBudget,
+    pub bpf_compute_budget: BpfComputeBudget,
     pub compute_meter: MockComputeMeter,
 }
 impl Default for MockInvokeContext {
@@ -214,7 +214,7 @@ impl Default for MockInvokeContext {
         MockInvokeContext {
             key: Pubkey::default(),
             logger: MockLogger::default(),
-            compute_budget: ComputeBudget::default(),
+            bpf_compute_budget: BpfComputeBudget::default(),
             compute_meter: MockComputeMeter {
                 remaining: std::i64::MAX as u64,
             },
@@ -243,8 +243,8 @@ impl InvokeContext for MockInvokeContext {
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
         Rc::new(RefCell::new(self.logger.clone()))
     }
-    fn get_compute_budget(&self) -> &ComputeBudget {
-        &self.compute_budget
+    fn get_bpf_compute_budget(&self) -> &BpfComputeBudget {
+        &self.bpf_compute_budget
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
         Rc::new(RefCell::new(self.compute_meter.clone()))

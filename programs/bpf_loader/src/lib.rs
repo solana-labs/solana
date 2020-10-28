@@ -21,7 +21,7 @@ use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
     decode_error::DecodeError,
     entrypoint::SUCCESS,
-    feature_set::{bpf_just_in_time_compilation, compute_budget_balancing},
+    feature_set::{bpf_compute_budget_balancing, bpf_just_in_time_compilation},
     instruction::InstructionError,
     keyed_account::{is_executable, next_keyed_account, KeyedAccount},
     loader_instruction::LoaderInstruction,
@@ -100,7 +100,7 @@ pub fn create_and_cache_executor(
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
     bpf_verifier::check(
         elf_bytes,
-        !invoke_context.is_feature_active(&compute_budget_balancing::id()),
+        !invoke_context.is_feature_active(&bpf_compute_budget_balancing::id()),
     )
     .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e)))?;
     let executor = Arc::new(BPFExecutor { executable });
@@ -122,12 +122,12 @@ pub fn create_vm<'a>(
 ) -> Result<EbpfVm<'a, BPFError, ThisInstructionMeter>, EbpfError<BPFError>> {
     let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
     let heap_region = MemoryRegion::new_from_slice(&heap, MM_HEAP_START, true);
-    let compute_budget = invoke_context.get_compute_budget();
+    let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
     let mut vm = EbpfVm::new(
         executable,
         Config {
-            max_call_depth: compute_budget.max_call_depth,
-            stack_frame_size: compute_budget.stack_frame_size,
+            max_call_depth: bpf_compute_budget.max_call_depth,
+            stack_frame_size: bpf_compute_budget.stack_frame_size,
         },
         parameter_bytes,
         &[heap_region],
@@ -329,7 +329,7 @@ mod tests {
         account::Account,
         feature_set::FeatureSet,
         instruction::InstructionError,
-        process_instruction::{ComputeBudget, MockInvokeContext},
+        process_instruction::{BpfComputeBudget, MockInvokeContext},
         rent::Rent,
     };
     use std::{cell::RefCell, fs::File, io::Read, ops::Range, rc::Rc};
@@ -554,7 +554,7 @@ mod tests {
             vec![],
             &[],
             None,
-            ComputeBudget {
+            BpfComputeBudget {
                 max_units: 1,
                 log_units: 100,
                 log_64_units: 100,

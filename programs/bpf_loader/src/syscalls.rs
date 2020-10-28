@@ -94,7 +94,7 @@ pub fn register_syscalls<'a>(
     invoke_context: &'a mut dyn InvokeContext,
     heap: Vec<u8>,
 ) -> Result<(), EbpfError<BPFError>> {
-    let compute_budget = invoke_context.get_compute_budget();
+    let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
 
     // Syscall functions common across languages
 
@@ -106,7 +106,7 @@ pub fn register_syscalls<'a>(
     vm.register_syscall(
         hash_symbol_name(b"sol_log_"),
         Syscall::Object(Box::new(SyscallLog {
-            cost: compute_budget.log_units,
+            cost: bpf_compute_budget.log_units,
             compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
             loader_id,
@@ -115,7 +115,7 @@ pub fn register_syscalls<'a>(
     vm.register_syscall(
         hash_symbol_name(b"sol_log_64_"),
         Syscall::Object(Box::new(SyscallLogU64 {
-            cost: compute_budget.log_64_units,
+            cost: bpf_compute_budget.log_64_units,
             compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
         })),
@@ -135,7 +135,7 @@ pub fn register_syscalls<'a>(
         vm.register_syscall(
             hash_symbol_name(b"sol_log_pubkey"),
             Syscall::Object(Box::new(SyscallLogPubkey {
-                cost: compute_budget.log_pubkey_units,
+                cost: bpf_compute_budget.log_pubkey_units,
                 compute_meter: invoke_context.get_compute_meter(),
                 logger: invoke_context.get_logger(),
                 loader_id,
@@ -147,8 +147,8 @@ pub fn register_syscalls<'a>(
         vm.register_syscall(
             hash_symbol_name(b"sol_sha256"),
             Syscall::Object(Box::new(SyscallSha256 {
-                sha256_base_cost: compute_budget.sha256_base_cost,
-                sha256_byte_cost: compute_budget.sha256_byte_cost,
+                sha256_base_cost: bpf_compute_budget.sha256_base_cost,
+                sha256_byte_cost: bpf_compute_budget.sha256_byte_cost,
                 compute_meter: invoke_context.get_compute_meter(),
                 loader_id,
             })),
@@ -169,7 +169,7 @@ pub fn register_syscalls<'a>(
     vm.register_syscall(
         hash_symbol_name(b"sol_create_program_address"),
         Syscall::Object(Box::new(SyscallCreateProgramAddress {
-            cost: compute_budget.create_program_address_units,
+            cost: bpf_compute_budget.create_program_address_units,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         })),
@@ -1301,7 +1301,7 @@ fn call<'a>(
     let mut invoke_context = syscall.get_context_mut()?;
     invoke_context
         .get_compute_meter()
-        .consume(invoke_context.get_compute_budget().invoke_units)?;
+        .consume(invoke_context.get_bpf_compute_budget().invoke_units)?;
 
     // Translate data passed from the VM
 
