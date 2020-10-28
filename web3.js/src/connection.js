@@ -12,7 +12,7 @@ import {NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
 import {MS_PER_SLOT} from './timing';
 import {Transaction} from './transaction';
-import {Message, CompiledInstruction} from './message';
+import {Message} from './message';
 import {sleep} from './util/sleep';
 import {promiseTimeout} from './util/promise-timeout';
 import {toBuffer} from './util/to-buffer';
@@ -20,6 +20,7 @@ import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
 import type {Account} from './account';
 import type {TransactionSignature} from './transaction';
+import type {CompiledInstruction} from './message';
 import {AgentManager} from './agent-manager';
 
 export const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
