@@ -30,6 +30,7 @@ validator_log="cluster-sanity/validator.log"
 sys_tuner_log="cluster-sanity/sys-tuner.log"
 metrics_host="https://metrics.solana.com:8086"
 export SOLANA_METRICS_CONFIG="host=$metrics_host,db=testnet-live-cluster,u=scratch_writer,p=topsecret"
+export RUST_LOG=warn
 
 # shellcheck disable=SC2024 # create log as non-root user
 sudo ./solana-sys-tuner --user "$(whoami)" &> "$sys_tuner_log" &
