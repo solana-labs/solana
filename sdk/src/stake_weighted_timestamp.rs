@@ -10,7 +10,8 @@ use std::{
     time::Duration,
 };
 
-pub const TIMESTAMP_SLOT_RANGE: usize = 16;
+pub const TIMESTAMP_SLOT_RANGE: usize = 32;
+pub const DEPRECATED_TIMESTAMP_SLOT_RANGE: usize = 16; // Deprecated.  Remove in the Solana v1.6.0 timeframe
 const MAX_ALLOWABLE_DRIFT_PERCENTAGE: u32 = 25;
 
 pub enum EstimateType {

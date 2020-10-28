@@ -60,7 +60,7 @@ use solana_sdk::{
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
     stake_weighted_timestamp::{
-        calculate_stake_weighted_timestamp, EstimateType, TIMESTAMP_SLOT_RANGE,
+        calculate_stake_weighted_timestamp, EstimateType, DEPRECATED_TIMESTAMP_SLOT_RANGE,
     },
     system_transaction,
     sysvar::{self},
@@ -1489,7 +1489,13 @@ impl Bank {
             .filter_map(|(pubkey, (_, account))| {
                 VoteState::from(&account).and_then(|state| {
                     let timestamp_slot = state.last_timestamp.slot;
-                    if self.slot().checked_sub(timestamp_slot)? <= TIMESTAMP_SLOT_RANGE as u64 {
+                    if (self
+                        .feature_set
+                        .is_active(&feature_set::timestamp_bounding::id())
+                        && self.ancestors.contains_key(&timestamp_slot))
+                        || self.slot().checked_sub(timestamp_slot)?
+                            <= DEPRECATED_TIMESTAMP_SLOT_RANGE as u64
+                    {
                         Some((
                             pubkey,
                             (state.last_timestamp.slot, state.last_timestamp.timestamp),
@@ -9695,7 +9701,7 @@ mod tests {
         let validator_vote_keypairs1 = ValidatorVoteKeypairs::new_rand();
         let validator_keypairs = vec![&validator_vote_keypairs0, &validator_vote_keypairs1];
         let GenesisConfigInfo {
-            genesis_config,
+            mut genesis_config,
             mint_keypair: _,
             voting_keypair: _,
         } = create_genesis_config_with_vote_accounts(
@@ -9703,6 +9709,10 @@ mod tests {
             &validator_keypairs,
             vec![10_000; 2],
         );
+        genesis_config
+            .accounts
+            .remove(&feature_set::timestamp_bounding::id())
+            .unwrap();
         let mut bank = Bank::new(&genesis_config);
         assert_eq!(
             bank.get_timestamp_estimate(EstimateType::Unbounded, None),
