@@ -9,6 +9,7 @@ import { RichListProvider } from "./providers/richList";
 import { SupplyProvider } from "./providers/supply";
 import { TransactionsProvider } from "./providers/transactions";
 import { AccountsProvider } from "./providers/accounts";
+import { BlockProvider } from "./providers/block";
 import { StatsProvider } from "providers/stats";
 import { MintsProvider } from "providers/mints";
 
@@ -26,11 +27,13 @@ ReactDOM.render(
         <SupplyProvider>
           <RichListProvider>
             <AccountsProvider>
-              <MintsProvider>
-                <TransactionsProvider>
-                  <App />
-                </TransactionsProvider>
-              </MintsProvider>
+              <BlockProvider>
+                <MintsProvider>
+                  <TransactionsProvider>
+                    <App />
+                  </TransactionsProvider>
+                </MintsProvider>
+              </BlockProvider>
             </AccountsProvider>
           </RichListProvider>
         </SupplyProvider>

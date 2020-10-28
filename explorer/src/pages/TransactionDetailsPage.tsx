@@ -20,7 +20,6 @@ import { StakeDetailsCard } from "components/instruction/stake/StakeDetailsCard"
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { TableCardBody } from "components/common/TableCardBody";
-import { Slot } from "components/common/Slot";
 import { displayTimestamp } from "utils/date";
 import { InfoTooltip } from "components/common/InfoTooltip";
 import { Address } from "components/common/Address";
@@ -29,6 +28,7 @@ import { intoTransactionInstruction, isSerumInstruction } from "utils/tx";
 import { TokenDetailsCard } from "components/instruction/token/TokenDetailsCard";
 import { FetchStatus } from "providers/cache";
 import { SerumDetailsCard } from "components/instruction/SerumDetailsCard";
+import { Slot } from "components/common/Slot";
 
 const AUTO_REFRESH_INTERVAL = 2000;
 const ZERO_CONFIRMATION_BAILOUT = 5;
@@ -249,7 +249,7 @@ function StatusCard({
         <tr>
           <td>Block</td>
           <td className="text-lg-right">
-            <Slot slot={info.slot} />
+            <Slot slot={info.slot} link />
           </td>
         </tr>
 
@@ -264,9 +264,7 @@ function StatusCard({
                 </InfoTooltip>
               )}
             </td>
-            <td className="text-lg-right">
-              <code>{blockhash}</code>
-            </td>
+            <td className="text-lg-right">{blockhash}</td>
           </tr>
         )}
 

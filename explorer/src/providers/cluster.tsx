@@ -186,7 +186,11 @@ async function updateCluster(
     if (cluster !== Cluster.Custom) {
       reportError(error, { clusterUrl: clusterUrl(cluster, customUrl) });
     }
-    dispatch({ status: ClusterStatus.Failure, cluster, customUrl });
+    dispatch({
+      status: ClusterStatus.Failure,
+      cluster,
+      customUrl,
+    });
   }
 }
 
