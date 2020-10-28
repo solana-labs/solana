@@ -405,56 +405,51 @@ function InstructionsSection({ signature }: SignatureProps) {
   const instructionDetails = transaction.message.instructions.map(
     (next, index) => {
       if ("parsed" in next) {
-        if (next.program === "spl-token") {
-          return (
-            <TokenDetailsCard
-              key={index}
-              tx={transaction}
-              ix={next}
-              result={result}
-              index={index}
-            />
-          );
+        switch (next.program) {
+          case "spl-token":
+            return (
+              <TokenDetailsCard
+                key={index}
+                tx={transaction}
+                ix={next}
+                result={result}
+                index={index}
+              />
+            );
+          case "bpf-loader":
+            return (
+              <BpfLoaderDetailsCard
+                key={index}
+                tx={transaction}
+                ix={next}
+                result={result}
+                index={index}
+              />
+            );
+          case "system":
+            return (
+              <SystemDetailsCard
+                key={index}
+                tx={transaction}
+                ix={next}
+                result={result}
+                index={index}
+              />
+            );
+          case "stake":
+            return (
+              <StakeDetailsCard
+                key={index}
+                tx={transaction}
+                ix={next}
+                result={result}
+                index={index}
+              />
+            );
+          default:
+            const props = { ix: next, result, index };
+            return <UnknownDetailsCard key={index} {...props} />;
         }
-
-        if (next.program === "bpf-loader") {
-          return (
-            <BpfLoaderDetailsCard
-              key={index}
-              tx={transaction}
-              ix={next}
-              result={result}
-              index={index}
-            />
-          );
-        }
-
-        if (next.program === "system") {
-          return (
-            <SystemDetailsCard
-              key={index}
-              tx={transaction}
-              ix={next}
-              result={result}
-              index={index}
-            />
-          );
-        }
-
-        if (next.program === "stake") {
-          return (
-            <StakeDetailsCard
-              key={index}
-              tx={transaction}
-              ix={next}
-              result={result}
-              index={index}
-            />
-          );
-        }
-
-        const props = { ix: next, result, index };
-        return <UnknownDetailsCard key={index} {...props} />;
       }
 
       const ix = intoTransactionInstruction(transaction, index);
