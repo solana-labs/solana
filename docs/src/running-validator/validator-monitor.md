@@ -46,25 +46,6 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}' http://devnet.solana.com
 ```
 
-## Validator Metrics
-
-Metrics are available for local monitoring of your validator.
-
-Docker must be installed and the current user added to the docker group. Then
-download `solana-metrics.tar.bz2` from the Github Release and run
-
-```bash
-tar jxf solana-metrics.tar.bz2
-cd solana-metrics/
-./start.sh
-```
-
-A local InfluxDB and Grafana instance is now running on your machine. Define
-`SOLANA_METRICS_CONFIG` in your environment as described at the end of the
-`start.sh` output and restart your validator.
-
-Metrics should now be streaming and visible from your local Grafana dashboard.
-
 ## Timezone For Log Messages
 
 Log messages emitted by your validator include a timestamp. When sharing logs
