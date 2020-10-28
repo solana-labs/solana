@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-redeclare */
+
 import { StructType, object, string, enums, pick } from "superstruct";
 import { Pubkey } from "validators/pubkey";
 

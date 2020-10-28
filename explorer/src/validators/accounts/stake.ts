@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-redeclare */
+
 import { object, StructType, number, nullable, enums } from "superstruct";
 import { Pubkey } from "validators/pubkey";
 import { BigNum } from "validators/bignum";
