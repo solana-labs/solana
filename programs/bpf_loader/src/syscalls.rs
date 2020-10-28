@@ -15,6 +15,7 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     feature_set::{
         pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled, sha256_syscall_enabled,
+        sol_log_compute_units_syscall,
     },
     hash::{Hasher, HASH_BYTES},
     instruction::{AccountMeta, Instruction, InstructionError},
@@ -120,6 +121,16 @@ pub fn register_syscalls<'a>(
         })),
     )?;
 
+    if invoke_context.is_feature_active(&sol_log_compute_units_syscall::id()) {
+        vm.register_syscall(
+            hash_symbol_name(b"sol_log_compute_units_"),
+            Syscall::Object(Box::new(SyscallLogBpfComputeUnits {
+                cost: 0,
+                compute_meter: invoke_context.get_compute_meter(),
+                logger: invoke_context.get_logger(),
+            })),
+        )?;
+    }
     if invoke_context.is_feature_active(&pubkey_log_syscall_enabled::id()) {
         vm.register_syscall(
             hash_symbol_name(b"sol_log_pubkey"),
@@ -404,6 +415,37 @@ impl SyscallObject<BPFError> for SyscallLogU64 {
             logger.log(&format!(
                 "Program log: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
                 arg1, arg2, arg3, arg4, arg5
+            ));
+        }
+        Ok(0)
+    }
+}
+
+/// Log current compute consumption
+pub struct SyscallLogBpfComputeUnits {
+    cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    logger: Rc<RefCell<dyn Logger>>,
+}
+impl SyscallObject<BPFError> for SyscallLogBpfComputeUnits {
+    fn call(
+        &mut self,
+        _arg1: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        _memory_mapping: &MemoryMapping,
+    ) -> Result<u64, EbpfError<BPFError>> {
+        self.compute_meter.consume(self.cost)?;
+        let mut logger = self
+            .logger
+            .try_borrow_mut()
+            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
+        if logger.log_enabled() {
+            logger.log(&format!(
+                "Program consumption: {} units remaining",
+                self.compute_meter.borrow().get_remaining()
             ));
         }
         Ok(0)

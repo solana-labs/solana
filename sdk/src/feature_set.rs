@@ -66,6 +66,10 @@ pub mod cumulative_rent_related_fixes {
     solana_sdk::declare_id!("FtjnuAtJTWwX3Kx9m24LduNEhzaGuuPfDW6e14SX2Fy5");
 }
 
+pub mod sol_log_compute_units_syscall {
+    solana_sdk::declare_id!("BHuZqHAj7JdZc68wVgZZcy51jZykvgrx4zptR44RyChe");
+}
+
 pub mod pubkey_log_syscall_enabled {
     solana_sdk::declare_id!("MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN");
 }
@@ -96,6 +100,7 @@ lazy_static! {
         (max_program_call_depth_64::id(), "max program call depth 64"),
         (timestamp_correction::id(), "correct bank timestamps"),
         (cumulative_rent_related_fixes::id(), "rent fixes (#10206, #10468, #11342)"),
+        (sol_log_compute_units_syscall::id(), "sol_log_compute_units syscall (#13243)"),
         (pubkey_log_syscall_enabled::id(), "pubkey log syscall"),
         (pull_request_ping_pong_check::id(), "ping-pong packet check #12794"),
         (bpf_just_in_time_compilation::id(), "bpf just-in-time compilation #12951"),

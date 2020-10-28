@@ -19,6 +19,9 @@ pub trait SyscallStubs: Sync + Send {
     fn sol_log(&self, message: &str) {
         println!("{}", message);
     }
+    fn sol_log_compute_units(&self) {
+        sol_log("SyscallStubs: sol_log_compute_units() not available");
+    }
     fn sol_invoke_signed(
         &self,
         _instruction: &Instruction,
@@ -39,6 +42,10 @@ pub(crate) fn sol_log(message: &str) {
 
 pub(crate) fn sol_log_64(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) {
     sol_log(&format!("{} {} {} {} {}", arg1, arg2, arg3, arg4, arg5));
+}
+
+pub(crate) fn sol_log_compute_units() {
+    SYSCALL_STUBS.read().unwrap().sol_log_compute_units();
 }
 
 pub(crate) fn sol_invoke_signed(
