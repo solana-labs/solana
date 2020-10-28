@@ -43,6 +43,7 @@ pub mod local_vote_signer_service;
 pub mod non_circulating_supply;
 pub mod optimistic_confirmation_verifier;
 pub mod optimistically_confirmed_bank_tracker;
+pub mod ping_pong;
 pub mod poh_recorder;
 pub mod poh_service;
 pub mod progress_map;
