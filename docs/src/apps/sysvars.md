@@ -16,16 +16,17 @@ instruction processor like any other account. Access to sysvars is always
 ## Clock
 
 The Clock sysvar contains data on cluster time, including the current slot,
-epoch, and estimated wall-clock timestamp. It is updated every slot.
+epoch, and estimated wall-clock Unix timestamp. It is updated every slot.
 
 - Address: `SysvarC1ock11111111111111111111111111111111`
 - Layout: [Clock](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/sysvar/clock/struct.Clock.html)
 
 ## EpochSchedule
 
-The EpochSchedule sysvar contains epoch scheduling data that is set in genesis,
-and enables calculating the number of slots in a given epoch, the epoch for a
-given slot, etc.
+The EpochSchedule sysvar contains epoch scheduling constants that are set in
+genesis, and enables calculating the number of slots in a given epoch, the epoch
+for a given slot, etc. (Note: the epoch schedule is distinct from the
+[`leader schedule`](terminology.md#leader-schedule))
 
 - Address: `SysvarEpochSchedu1e111111111111111111111111`
 - Layout: [EpochSchedule](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/sysvar/epoch_schedule/struct.EpochSchedule.html)
@@ -82,8 +83,8 @@ epoch. It is updated every slot.
 
 ## StakeHistory
 
-The StakeHistory sysvar contains the history of stake activations and
-de-activations per epoch. It is updated at the start of every epoch.
+The StakeHistory sysvar contains the history of cluster-wide stake activations
+and de-activations per epoch. It is updated at the start of every epoch.
 
 - Address: `SysvarStakeHistory1111111111111111111111111`
 - Layout: [StakeHistory](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/sysvar/stake_history/struct.StakeHistory.html)
