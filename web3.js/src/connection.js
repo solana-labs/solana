@@ -367,9 +367,14 @@ const SimulatedTransactionResponseValidator = jsonRpcResultAndContext(
   }),
 );
 
+type PartiallyDecodedInnerInstruction = {
+  index: number,
+  instructions: PartiallyDecodedInstruction[],
+};
+
 type ParsedInnerInstruction = {
   index: number,
-  instructions: (ParsedInstruction | PartiallyDecodedInstruction)[],
+  instructions: (ParsedInstruction | PartiallyDecodedInnerInstruction)[],
 };
 
 /**
@@ -393,8 +398,8 @@ type ParsedConfirmedTransactionMeta = {
 };
 
 type CompiledInnerInstruction = {
-  index: number;
-  instructions: CompiledInstruction[];
+  index: number,
+  instructions: CompiledInstruction[],
 };
 
 /**
@@ -1163,11 +1168,11 @@ const ConfirmedTransactionMetaResult = struct.union([
         struct({
           index: 'number',
           instructions: struct.array([
-              struct({
-                accounts: struct.array(['number']),
-                data: 'string',
-                programIdIndex: 'number',
-              }),
+            struct({
+              accounts: struct.array(['number']),
+              data: 'string',
+              programIdIndex: 'number',
+            }),
           ]),
         }),
       ]),
