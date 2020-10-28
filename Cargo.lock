@@ -1308,7 +1308,15 @@ dependencies = [
 name = "hashbrown"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+<<<<<<< HEAD
 checksum = "00d63df3d41950fb462ed38308eea019113ad1508da725bbedcd0fa5a85ef5f7"
+=======
+checksum = "e91b62f79061a0bc2e046024cb7ba44b08419ed238ecbd9adbd787434b9e8c25"
+dependencies = [
+ "ahash",
+ "autocfg 1.0.0",
+]
+>>>>>>> ae9127096... implements ping-pong packets between nodes (#12794)
 
 [[package]]
 name = "hermit-abi"
@@ -1916,6 +1924,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14b6052be84e6b71ab17edffc2eeabf5c2c3ae1fdb464aae35ac50c67a44e1f7"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "lru"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "111b945ac72ec09eb7bc62a0fbdc3cc6e80555a7245f52a69d3921a75b53b153"
+dependencies = [
+ "hashbrown",
 ]
 
 [[package]]
@@ -3724,6 +3741,7 @@ dependencies = [
  "jsonrpc-pubsub",
  "jsonrpc-ws-server",
  "log 0.4.8",
+ "lru",
  "matches",
  "num-traits",
  "num_cpus",
