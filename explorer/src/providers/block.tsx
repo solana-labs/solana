@@ -41,7 +41,7 @@ export function BlockProvider({ children }: BlockProviderProps) {
 }
 
 export function useBlock(
-  key: string
+  key: number
 ): Cache.CacheEntry<ConfirmedBlock> | undefined {
   const context = React.useContext(StateContext);
 
@@ -56,7 +56,7 @@ export async function fetchBlock(
   dispatch: Dispatch,
   url: string,
   cluster: Cluster,
-  key: string
+  key: number
 ) {
   dispatch({
     type: ActionType.Update,
@@ -75,11 +75,7 @@ export async function fetchBlock(
   try {
     const connection = new Connection(url, "max");
     data = await connection.getConfirmedBlock(Number(key));
-    if (data) {
-      status = FetchStatus.Fetched;
-    } else {
-      status = FetchStatus.FetchFailed;
-    }
+    status = FetchStatus.Fetched;
   } catch (error) {
     console.log(error);
     if (cluster !== Cluster.Custom) {
@@ -107,7 +103,7 @@ export function useFetchBlock() {
   }
 
   return React.useCallback(
-    (key: string) => {
+    (key: number) => {
       const entry = state.entries[key];
       if (!entry) {
         fetchBlock(dispatch, url, cluster, key);

@@ -7,28 +7,28 @@ import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { Slot } from "components/common/Slot";
 
-export function BlockHistoryCard({ slot }: { slot: string }) {
-  const ConfirmedBlock = useBlock(slot);
+export function BlockHistoryCard({ slot }: { slot: number }) {
+  const confirmedBlock = useBlock(slot);
   const fetchBlock = useFetchBlock();
   const refresh = () => fetchBlock(slot);
 
   React.useEffect(() => {
-    if (!ConfirmedBlock) refresh();
-  }, [ConfirmedBlock, slot]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!confirmedBlock) refresh();
+  }, [confirmedBlock, slot]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!ConfirmedBlock) {
+  if (!confirmedBlock) {
     return null;
   }
 
-  if (ConfirmedBlock?.data === undefined) {
-    if (ConfirmedBlock.status === FetchStatus.Fetching) {
+  if (confirmedBlock.data === undefined) {
+    if (confirmedBlock.status === FetchStatus.Fetching) {
       return <LoadingCard message="Loading block" />;
     }
 
     return <ErrorCard retry={refresh} text="Failed to fetch block" />;
   }
 
-  if (ConfirmedBlock.status === FetchStatus.FetchFailed) {
+  if (confirmedBlock.status === FetchStatus.FetchFailed) {
     return <ErrorCard retry={refresh} text="Failed to fetch block" />;
   }
 
@@ -50,19 +50,19 @@ export function BlockHistoryCard({ slot }: { slot: string }) {
           <tr>
             <td className="w-100">Parent Slot</td>
             <td className="text-lg-right text-monospace">
-              <Slot slot={ConfirmedBlock.data.parentSlot} />
+              <Slot slot={confirmedBlock.data.parentSlot} link />
             </td>
           </tr>
           <tr>
             <td className="w-100">Blockhash</td>
             <td className="text-lg-right text-monospace">
-              <span>{ConfirmedBlock.data.blockhash}</span>
+              <span>{confirmedBlock.data.blockhash}</span>
             </td>
           </tr>
           <tr>
             <td className="w-100">Previous Blockhash</td>
             <td className="text-lg-right text-monospace">
-              <span>{ConfirmedBlock.data.previousBlockhash}</span>
+              <span>{confirmedBlock.data.previousBlockhash}</span>
             </td>
           </tr>
         </TableCardBody>
@@ -82,23 +82,36 @@ export function BlockHistoryCard({ slot }: { slot: string }) {
               </tr>
             </thead>
             <tbody className="list">
-              {ConfirmedBlock.data.transactions.map((tx) => {
-                const signature = bs58.encode(
-                  tx.transaction.signature
-                    ? tx.transaction.signature
-                    : new Buffer("")
-                );
+              {confirmedBlock.data.transactions.map((tx, i) => {
+                let statusText;
+                let statusClass;
+                let signature: React.ReactNode;
+                if (tx.meta?.err || !tx.transaction.signature) {
+                  statusClass = "warning";
+                  statusText = "Failed";
+                } else {
+                  statusClass = "success";
+                  statusText = "Success";
+                }
+
+                if (tx.transaction.signature) {
+                  signature = (
+                    <Signature
+                      signature={bs58.encode(tx.transaction.signature)}
+                      link
+                    />
+                  );
+                }
+
                 return (
-                  <tr key={signature}>
+                  <tr key={i}>
                     <td>
-                      <span className={`badge badge-soft-success`}>
-                        success
+                      <span className={`badge badge-soft-${statusClass}`}>
+                        {statusText}
                       </span>
                     </td>
 
-                    <td>
-                      <Signature signature={signature} link />
-                    </td>
+                    <td>{signature}</td>
                   </tr>
                 );
               })}

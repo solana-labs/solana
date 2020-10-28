@@ -8,8 +8,8 @@ type Props = { slot: string };
 export function BlockDetailsPage({ slot }: Props) {
   let output = <ErrorCard text={`Block ${slot} is not valid`} />;
 
-  if (slot) {
-    output = <BlockHistoryCard slot={slot} />;
+  if (!isNaN(Number(slot))) {
+    output = <BlockHistoryCard slot={Number(slot)} />;
   }
 
   return (
