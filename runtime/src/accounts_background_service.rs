@@ -51,6 +51,10 @@ impl SnapshotRequestHandler {
                     status_cache_slot_deltas,
                 } = snapshot_request;
 
+                let mut hash_time = Measure::start("hash_time");
+                snapshot_root_bank.update_accounts_hash();
+                hash_time.stop();
+
                 let mut shrink_time = Measure::start("shrink_time");
                 snapshot_root_bank.process_stale_slot_with_budget(0, SHRUNKEN_ACCOUNT_PER_INTERVAL);
                 shrink_time.stop();
@@ -97,7 +101,8 @@ impl SnapshotRequestHandler {
                         "purge_old_snapshots_time",
                         purge_old_snapshots_time.as_us(),
                         i64
-                    )
+                    ),
+                    ("hash_time", hash_time.as_us(), i64),
                 );
                 snapshot_root_bank.block_height()
             })
