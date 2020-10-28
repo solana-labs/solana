@@ -20,6 +20,7 @@ import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
 import type {Account} from './account';
 import type {TransactionSignature} from './transaction';
+import type {CompiledInstruction} from './message';
 import {AgentManager} from './agent-manager';
 
 export const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
@@ -1163,7 +1164,7 @@ const ConfirmedTransactionMetaResult = struct.union([
   struct.pick({
     err: TransactionErrorResult,
     fee: 'number',
-    innerInstructions: struct.union(
+    innerInstructions: struct.union([
       struct.array([
         struct({
           index: 'number',
@@ -1178,7 +1179,7 @@ const ConfirmedTransactionMetaResult = struct.union([
       ]),
       'null',
       'undefined',
-    ),
+    ]),
     preBalances: struct.array(['number']),
     postBalances: struct.array(['number']),
     logMessages: struct.union([struct.array(['string']), 'null', 'undefined']),
@@ -1192,7 +1193,7 @@ const ParsedConfirmedTransactionMetaResult = struct.union([
   struct.pick({
     err: TransactionErrorResult,
     fee: 'number',
-    innerInstructions: struct.union(
+    innerInstructions: struct.union([
       struct.array([
         struct({
           index: 'number',
@@ -1214,7 +1215,7 @@ const ParsedConfirmedTransactionMetaResult = struct.union([
       ]),
       'null',
       'undefined',
-    ),
+    ]),
     preBalances: struct.array(['number']),
     postBalances: struct.array(['number']),
     logMessages: struct.union([struct.array(['string']), 'null', 'undefined']),
