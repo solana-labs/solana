@@ -61,6 +61,7 @@ fn process_instruction(
         panic!();
     }
 
+    sol_log_bpf_compute_units();
     Ok(())
 }
 

@@ -96,3 +96,17 @@ pub fn sol_log_params(accounts: &[AccountInfo], data: &[u8]) {
     info!("Instruction data");
     sol_log_slice(data);
 }
+
+/// Logs the current BPF compute unit consumption
+#[inline]
+pub fn sol_log_bpf_compute_units() {
+    #[cfg(target_arch = "bpf")]
+    unsafe {
+        sol_log_bpf_compute_units_();
+    }
+}
+
+#[cfg(target_arch = "bpf")]
+extern "C" {
+    fn sol_log_bpf_compute_units_();
+}
