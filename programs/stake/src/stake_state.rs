@@ -31,6 +31,15 @@ pub enum StakeState {
     RewardsPool,
 }
 
+#[derive(Debug)]
+pub enum InflationPointCalcEvent {
+    CalculatedPoints(u128, u128, u128),
+    SplitRewards(u64, u64, u64, PointValue),
+    RentExemptReserve(u64),
+    Delegation(Delegation),
+    Commission(u8),
+}
+
 impl Default for StakeState {
     fn default() -> Self {
         StakeState::Uninitialized
@@ -369,6 +378,7 @@ impl Authorized {
 ///  and the total points over which those lamports
 ///  are to be distributed
 //  basically read as rewards/points, but in integers instead of as an f64
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct PointValue {
     pub rewards: u64, // lamports to split
     pub points: u128, // over these points
@@ -384,8 +394,9 @@ impl Stake {
         point_value: &PointValue,
         vote_state: &VoteState,
         stake_history: Option<&StakeHistory>,
+        tracer: &mut Option<impl FnMut(&InflationPointCalcEvent)>,
     ) -> Option<(u64, u64)> {
-        self.calculate_rewards(point_value, vote_state, stake_history)
+        self.calculate_rewards(point_value, vote_state, stake_history, tracer)
             .map(|(stakers_reward, voters_reward, credits_observed)| {
                 self.credits_observed = credits_observed;
                 self.delegation.stake += stakers_reward;
@@ -397,8 +408,9 @@ impl Stake {
         &self,
         vote_state: &VoteState,
         stake_history: Option<&StakeHistory>,
+        tracer: &mut Option<impl FnMut(&InflationPointCalcEvent)>,
     ) -> u128 {
-        self.calculate_points_and_credits(vote_state, stake_history)
+        self.calculate_points_and_credits(vote_state, stake_history, tracer)
             .0
     }
 
@@ -409,6 +421,7 @@ impl Stake {
         &self,
         new_vote_state: &VoteState,
         stake_history: Option<&StakeHistory>,
+        tracer: &mut Option<impl FnMut(&InflationPointCalcEvent)>,
     ) -> (u128, u64) {
         // if there is no newer credits since observed, return no point
         if new_vote_state.credits() <= self.credits_observed {
@@ -443,6 +456,14 @@ impl Stake {
 
             // finally calculate points for this epoch
             points += stake * earned_credits;
+
+            if let Some(tracer) = tracer {
+                tracer(&InflationPointCalcEvent::CalculatedPoints(
+                    points,
+                    stake,
+                    earned_credits,
+                ));
+            }
         }
 
         (points, new_credits_observed)
@@ -459,9 +480,10 @@ impl Stake {
         point_value: &PointValue,
         vote_state: &VoteState,
         stake_history: Option<&StakeHistory>,
+        tracer: &mut Option<impl FnMut(&InflationPointCalcEvent)>,
     ) -> Option<(u64, u64, u64)> {
         let (points, credits_observed) =
-            self.calculate_points_and_credits(vote_state, stake_history);
+            self.calculate_points_and_credits(vote_state, stake_history, tracer);
 
         if points == 0 || point_value.points == 0 {
             return None;
@@ -480,6 +502,14 @@ impl Stake {
             return None;
         }
         let (voter_rewards, staker_rewards, is_split) = vote_state.commission_split(rewards);
+        if let Some(tracer) = tracer {
+            tracer(&InflationPointCalcEvent::SplitRewards(
+                rewards,
+                voter_rewards,
+                staker_rewards,
+                (*point_value).clone(),
+            ));
+        }
 
         if (voter_rewards == 0 || staker_rewards == 0) && is_split {
             // don't collect if we lose a whole lamport somewhere
@@ -972,13 +1002,20 @@ pub fn redeem_rewards(
     vote_account: &mut Account,
     point_value: &PointValue,
     stake_history: Option<&StakeHistory>,
+    tracer: &mut Option<impl FnMut(&InflationPointCalcEvent)>,
 ) -> Result<(u64, u64), InstructionError> {
     if let StakeState::Stake(meta, mut stake) = stake_account.state()? {
         let vote_state: VoteState =
             StateMut::<VoteStateVersions>::state(vote_account)?.convert_to_current();
+        if let Some(tracer) = tracer {
+            tracer(&InflationPointCalcEvent::RentExemptReserve(
+                meta.rent_exempt_reserve,
+            ));
+            tracer(&InflationPointCalcEvent::Commission(vote_state.commission));
+        }
 
         if let Some((stakers_reward, voters_reward)) =
-            stake.redeem_rewards(point_value, &vote_state, stake_history)
+            stake.redeem_rewards(point_value, &vote_state, stake_history, tracer)
         {
             stake_account.lamports += stakers_reward;
             vote_account.lamports += voters_reward;
@@ -1004,7 +1041,7 @@ pub fn calculate_points(
         let vote_state: VoteState =
             StateMut::<VoteStateVersions>::state(vote_account)?.convert_to_current();
 
-        Ok(stake.calculate_points(&vote_state, stake_history))
+        Ok(stake.calculate_points(&vote_state, stake_history, &mut None::<fn(&_)>))
     } else {
         Err(InstructionError::InvalidAccountData)
     }
@@ -2440,7 +2477,8 @@ mod tests {
                     points: 1
                 },
                 &vote_state,
-                None
+                None,
+                &mut None::<fn(&_)>,
             )
         );
 
@@ -2457,7 +2495,8 @@ mod tests {
                     points: 1
                 },
                 &vote_state,
-                None
+                None,
+                &mut None::<fn(&_)>,
             )
         );
 
@@ -2491,7 +2530,8 @@ mod tests {
                     points: 1
                 },
                 &vote_state,
-                None
+                None,
+                &mut None::<fn(&_)>,
             )
         );
 
@@ -2505,7 +2545,7 @@ mod tests {
         // no overflow on points
         assert_eq!(
             u128::from(stake.delegation.stake) * epoch_slots,
-            stake.calculate_points(&vote_state, None)
+            stake.calculate_points(&vote_state, None, &mut None::<fn(&_)>)
         );
     }
 
@@ -2531,7 +2571,8 @@ mod tests {
                     points: 1
                 },
                 &vote_state,
-                None
+                None,
+                &mut None::<fn(&_)>,
             )
         );
 
@@ -2548,7 +2589,8 @@ mod tests {
                     points: 2 // all his
                 },
                 &vote_state,
-                None
+                None,
+                &mut None::<fn(&_)>,
             )
         );
 
@@ -2562,7 +2604,8 @@ mod tests {
                     points: 1
                 },
                 &vote_state,
-                None
+                None,
+                &mut None::<fn(&_)>,
             )
         );
 
@@ -2579,7 +2622,8 @@ mod tests {
                     points: 2
                 },
                 &vote_state,
-                None
+                None,
+                &mut None::<fn(&_)>,
             )
         );
 
@@ -2594,7 +2638,8 @@ mod tests {
                     points: 2
                 },
                 &vote_state,
-                None
+                None,
+                &mut None::<fn(&_)>,
             )
         );
 
@@ -2615,7 +2660,8 @@ mod tests {
                     points: 4
                 },
                 &vote_state,
-                None
+                None,
+                &mut None::<fn(&_)>,
             )
         );
 
@@ -2630,7 +2676,8 @@ mod tests {
                     points: 4
                 },
                 &vote_state,
-                None
+                None,
+                &mut None::<fn(&_)>,
             )
         );
         vote_state.commission = 99;
@@ -2642,7 +2689,8 @@ mod tests {
                     points: 4
                 },
                 &vote_state,
-                None
+                None,
+                &mut None::<fn(&_)>,
             )
         );
     }
