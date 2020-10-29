@@ -1,14 +1,8 @@
 import React from "react";
-import { StakeAccount as StakeAccountWasm } from "solana-sdk-wasm";
-import {
-  PublicKey,
-  Connection,
-  StakeProgram,
-  StakeActivationData,
-} from "@solana/web3.js";
+import { PublicKey, Connection, StakeActivationData } from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
 import { HistoryProvider } from "./history";
-import { TokensProvider, TOKEN_PROGRAM_ID } from "./tokens";
+import { TokensProvider } from "./tokens";
 import { coerce } from "superstruct";
 import { ParsedInfo } from "validators";
 import { StakeAccount } from "validators/accounts/stake";
@@ -28,7 +22,7 @@ export { useAccountHistory } from "./history";
 
 export type StakeProgramData = {
   program: "stake";
-  parsed: StakeAccount | StakeAccountWasm;
+  parsed: StakeAccount;
   activation?: StakeActivationData;
 };
 
@@ -137,52 +131,24 @@ async function fetchAccountInfo(
       }
 
       let data: ProgramData | undefined;
-      if (result.owner.equals(StakeProgram.programId)) {
-        try {
-          let parsed: StakeAccount | StakeAccountWasm;
-          let isDelegated: boolean = false;
-          if ("parsed" in result.data) {
-            const info = coerce(result.data.parsed, ParsedInfo);
-            parsed = coerce(info, StakeAccount);
-            isDelegated = parsed.type === "delegated";
-          } else {
-            const wasm = await import("solana-sdk-wasm");
-            parsed = wasm.StakeAccount.fromAccountData(result.data);
-            isDelegated = (parsed.accountType as any) === "delegated";
-          }
-
-          const activation = isDelegated
-            ? await connection.getStakeActivation(pubkey)
-            : undefined;
-
-          data = {
-            program: "stake",
-            parsed,
-            activation,
-          };
-        } catch (err) {
-          reportError(err, { url, address: pubkey.toBase58() });
-          // TODO store error state in Account info
-        }
-      } else if (
-        "parsed" in result.data &&
-        result.owner.equals(TOKEN_PROGRAM_ID)
-      ) {
-        try {
-          const info = coerce(result.data.parsed, ParsedInfo);
-          const parsed = coerce(info, TokenAccount);
-          data = {
-            program: "spl-token",
-            parsed,
-          };
-        } catch (err) {
-          reportError(err, { url, address: pubkey.toBase58() });
-          // TODO store error state in Account info
-        }
-      } else if ("parsed" in result.data) {
+      if ("parsed" in result.data) {
         try {
           const info = coerce(result.data.parsed, ParsedInfo);
           switch (result.data.program) {
+            case "stake": {
+              const parsed = coerce(info, StakeAccount);
+              const isDelegated = parsed.type === "delegated";
+              const activation = isDelegated
+                ? await connection.getStakeActivation(pubkey)
+                : undefined;
+
+              data = {
+                program: result.data.program,
+                parsed,
+                activation,
+              };
+              break;
+            }
             case "vote":
               data = {
                 program: result.data.program,
@@ -205,6 +171,13 @@ async function fetchAccountInfo(
               data = {
                 program: result.data.program,
                 parsed: coerce(info, ConfigAccount),
+              };
+              break;
+
+            case "spl-token":
+              data = {
+                program: result.data.program,
+                parsed: coerce(info, TokenAccount),
               };
               break;
             default:
