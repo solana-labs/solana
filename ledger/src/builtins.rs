@@ -1,4 +1,4 @@
-use solana_runtime::bank::{Builtin, Builtins, Entrypoint};
+use solana_runtime::bank::{Builtin, Builtins};
 use solana_sdk::{feature_set, genesis_config::ClusterType, pubkey::Pubkey};
 
 /// Builtin programs that are always available
@@ -16,7 +16,7 @@ fn genesis_builtins(cluster_type: ClusterType) -> Vec<Builtin> {
 
     builtins
         .into_iter()
-        .map(|b| Builtin::new(&b.0, b.1, Entrypoint::Loader(b.2)))
+        .map(|b| Builtin::new(&b.0, b.1, b.2))
         .collect()
 }
 
@@ -29,7 +29,7 @@ fn feature_builtins() -> Vec<(Builtin, Pubkey)> {
 
     builtins
         .into_iter()
-        .map(|(b, p)| (Builtin::new(&b.0, b.1, Entrypoint::Loader(b.2)), p))
+        .map(|(b, p)| (Builtin::new(&b.0, b.1, b.2), p))
         .collect()
 }
 
