@@ -243,7 +243,7 @@ export function useMintAccountInfo(
       const data = accountInfo?.data?.details?.data;
       if (!data) return;
       if (data.program !== "spl-token" || data.parsed.type !== "mint") {
-        throw new Error("Expected mint");
+        return;
       }
 
       return coerce(data.parsed.info, MintAccountInfo);
@@ -263,7 +263,7 @@ export function useTokenAccountInfo(
     const data = accountInfo?.data?.details?.data;
     if (!data) return;
     if (data.program !== "spl-token" || data.parsed.type !== "account") {
-      throw new Error("Expected token account");
+      return;
     }
 
     return coerce(data.parsed.info, TokenAccountInfo);
