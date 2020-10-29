@@ -4,9 +4,7 @@
 // Allows macro expansion of `use ::solana_program::*` to work within this crate
 extern crate self as solana_program;
 
-pub mod account;
 pub mod account_info;
-pub mod account_utils;
 pub mod bpf_loader;
 pub mod bpf_loader_deprecated;
 pub mod clock;

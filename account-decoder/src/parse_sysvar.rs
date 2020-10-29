@@ -212,15 +212,14 @@ pub struct UiStakeHistoryEntry {
 mod test {
     use super::*;
     use solana_sdk::{
-        fee_calculator::FeeCalculator,
-        hash::Hash,
-        sysvar::{recent_blockhashes::IterItem, Sysvar},
+        account::create_account, fee_calculator::FeeCalculator, hash::Hash,
+        sysvar::recent_blockhashes::IterItem,
     };
     use std::iter::FromIterator;
 
     #[test]
     fn test_parse_sysvars() {
-        let clock_sysvar = Clock::default().create_account(1);
+        let clock_sysvar = create_account(&Clock::default(), 1);
         assert_eq!(
             parse_sysvar(&clock_sysvar.data, &sysvar::clock::id()).unwrap(),
             SysvarAccountType::Clock(UiClock::default()),
@@ -233,13 +232,13 @@ mod test {
             first_normal_epoch: 1,
             first_normal_slot: 12,
         };
-        let epoch_schedule_sysvar = epoch_schedule.create_account(1);
+        let epoch_schedule_sysvar = create_account(&epoch_schedule, 1);
         assert_eq!(
             parse_sysvar(&epoch_schedule_sysvar.data, &sysvar::epoch_schedule::id()).unwrap(),
             SysvarAccountType::EpochSchedule(epoch_schedule),
         );
 
-        let fees_sysvar = Fees::default().create_account(1);
+        let fees_sysvar = create_account(&Fees::default(), 1);
         assert_eq!(
             parse_sysvar(&fees_sysvar.data, &sysvar::fees::id()).unwrap(),
             SysvarAccountType::Fees(UiFees::default()),
@@ -251,7 +250,7 @@ mod test {
         };
         let recent_blockhashes =
             RecentBlockhashes::from_iter(vec![IterItem(0, &hash, &fee_calculator)].into_iter());
-        let recent_blockhashes_sysvar = recent_blockhashes.create_account(1);
+        let recent_blockhashes_sysvar = create_account(&recent_blockhashes, 1);
         assert_eq!(
             parse_sysvar(
                 &recent_blockhashes_sysvar.data,
@@ -269,13 +268,13 @@ mod test {
             exemption_threshold: 2.0,
             burn_percent: 5,
         };
-        let rent_sysvar = rent.create_account(1);
+        let rent_sysvar = create_account(&rent, 1);
         assert_eq!(
             parse_sysvar(&rent_sysvar.data, &sysvar::rent::id()).unwrap(),
             SysvarAccountType::Rent(rent.into()),
         );
 
-        let rewards_sysvar = Rewards::default().create_account(1);
+        let rewards_sysvar = create_account(&Rewards::default(), 1);
         assert_eq!(
             parse_sysvar(&rewards_sysvar.data, &sysvar::rewards::id()).unwrap(),
             SysvarAccountType::Rewards(UiRewards::default()),
@@ -283,7 +282,7 @@ mod test {
 
         let mut slot_hashes = SlotHashes::default();
         slot_hashes.add(1, hash);
-        let slot_hashes_sysvar = slot_hashes.create_account(1);
+        let slot_hashes_sysvar = create_account(&slot_hashes, 1);
         assert_eq!(
             parse_sysvar(&slot_hashes_sysvar.data, &sysvar::slot_hashes::id()).unwrap(),
             SysvarAccountType::SlotHashes(vec![UiSlotHashEntry {
@@ -294,7 +293,7 @@ mod test {
 
         let mut slot_history = SlotHistory::default();
         slot_history.add(42);
-        let slot_history_sysvar = slot_history.create_account(1);
+        let slot_history_sysvar = create_account(&slot_history, 1);
         assert_eq!(
             parse_sysvar(&slot_history_sysvar.data, &sysvar::slot_history::id()).unwrap(),
             SysvarAccountType::SlotHistory(UiSlotHistory {
@@ -310,7 +309,7 @@ mod test {
             deactivating: 3,
         };
         stake_history.add(1, stake_history_entry.clone());
-        let stake_history_sysvar = stake_history.create_account(1);
+        let stake_history_sysvar = create_account(&stake_history, 1);
         assert_eq!(
             parse_sysvar(&stake_history_sysvar.data, &sysvar::stake_history::id()).unwrap(),
             SysvarAccountType::StakeHistory(vec![UiStakeHistoryEntry {

@@ -4,13 +4,14 @@ use solana_runtime::{
     genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
 };
 use solana_sdk::{
+    account::from_account,
     account_utils::StateMut,
     client::SyncClient,
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     system_instruction::SystemError,
-    sysvar::{self, stake_history::StakeHistory, Sysvar},
+    sysvar::{self, stake_history::StakeHistory},
     transaction::TransactionError,
 };
 use solana_stake_program::{
@@ -75,7 +76,7 @@ fn warmed_up(bank: &Bank, stake_pubkey: &Pubkey) -> bool {
         == stake.stake(
             bank.epoch(),
             Some(
-                &StakeHistory::from_account(
+                &from_account::<StakeHistory>(
                     &bank.get_account(&sysvar::stake_history::id()).unwrap(),
                 )
                 .unwrap(),
@@ -89,7 +90,7 @@ fn get_staked(bank: &Bank, stake_pubkey: &Pubkey) -> u64 {
         .stake(
             bank.epoch(),
             Some(
-                &StakeHistory::from_account(
+                &from_account::<StakeHistory>(
                     &bank.get_account(&sysvar::stake_history::id()).unwrap(),
                 )
                 .unwrap(),

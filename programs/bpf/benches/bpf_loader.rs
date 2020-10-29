@@ -210,7 +210,34 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     let instruction_meter = MockInstructionMeter { compute_meter };
 
     let mut measure = Measure::start("tune");
+<<<<<<< HEAD
     let _ = vm.execute_program_metered(&mut [0], &[], &[], instruction_meter.clone());
+=======
+
+    let accounts = [RefCell::new(Account::new(
+        1,
+        10000001,
+        &solana_sdk::pubkey::new_rand(),
+    ))];
+    let keys = [solana_sdk::pubkey::new_rand()];
+    let keyed_accounts: Vec<_> = keys
+        .iter()
+        .zip(&accounts)
+        .map(|(key, account)| solana_sdk::keyed_account::KeyedAccount::new(&key, false, &account))
+        .collect();
+    let instruction_data = vec![0u8];
+
+    // Serialize account data
+    let mut serialized = solana_bpf_loader_program::serialization::serialize_parameters(
+        &bpf_loader::id(),
+        &solana_sdk::pubkey::new_rand(),
+        &keyed_accounts,
+        &instruction_data,
+    )
+    .unwrap();
+
+    let _ = vm.execute_program_metered(&mut serialized, &[], &[], instruction_meter.clone());
+>>>>>>> c458d4b21... move Account to solana-sdk (#13198)
     measure.stop();
     assert_eq!(
         0,

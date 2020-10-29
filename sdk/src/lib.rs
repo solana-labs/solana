@@ -6,6 +6,8 @@ extern crate self as solana_sdk;
 
 pub use solana_program::*;
 
+pub mod account;
+pub mod account_utils;
 pub mod builtins;
 pub mod client;
 pub mod commitment_config;
@@ -21,11 +23,13 @@ pub mod inflation;
 pub mod keyed_account;
 pub mod log;
 pub mod native_loader;
+pub mod nonce_account;
 pub mod nonce_keyed_account;
 pub mod packet;
 pub mod poh_config;
 pub mod program_utils;
 pub mod pubkey;
+pub mod recent_blockhashes_account;
 pub mod rpc_port;
 pub mod secp256k1;
 pub mod shred_version;

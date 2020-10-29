@@ -61,7 +61,7 @@ impl FromStr for ClusterType {
     }
 }
 
-#[frozen_abi(digest = "BAfWTFBwzed5FYCGAyMDq4HLsoZNTp8dZx2bqtYTCmGZ")]
+#[frozen_abi(digest = "VxfEg5DXq5czYouMdcCbqDzUE8jGi3iSDSjzrrWp5iG")]
 #[derive(Serialize, Deserialize, Debug, Clone, AbiExample)]
 pub struct GenesisConfig {
     /// when the network (bootstrap validator) was started relative to the UNIX Epoch

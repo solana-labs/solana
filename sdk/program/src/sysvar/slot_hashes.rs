@@ -33,13 +33,4 @@ mod tests {
             .unwrap() as usize
         );
     }
-
-    #[test]
-    fn test_create_account() {
-        let lamports = 42;
-        let account = SlotHashes::new(&[]).create_account(lamports);
-        assert_eq!(account.data.len(), SlotHashes::size_of());
-        let slot_hashes = SlotHashes::from_account(&account);
-        assert_eq!(slot_hashes, Some(SlotHashes::default()));
-    }
 }

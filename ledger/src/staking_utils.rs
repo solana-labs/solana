@@ -104,15 +104,13 @@ pub(crate) mod tests {
         create_genesis_config, GenesisConfigInfo, BOOTSTRAP_VALIDATOR_LAMPORTS,
     };
     use solana_sdk::{
+        account::from_account,
         clock::Clock,
         instruction::Instruction,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         signers::Signers,
-        sysvar::{
-            stake_history::{self, StakeHistory},
-            Sysvar,
-        },
+        sysvar::stake_history::{self, StakeHistory},
         transaction::Transaction,
     };
     use solana_stake_program::{
@@ -244,7 +242,7 @@ pub(crate) mod tests {
         let mut result: Vec<_> = epoch_stakes_and_lockouts(&bank, next_leader_schedule_epoch);
         result.sort();
         let stake_history =
-            StakeHistory::from_account(&bank.get_account(&stake_history::id()).unwrap()).unwrap();
+            from_account::<StakeHistory>(&bank.get_account(&stake_history::id()).unwrap()).unwrap();
         let mut expected = vec![
             (leader_stake.stake(bank.epoch(), Some(&stake_history)), None),
             (other_stake.stake(bank.epoch(), Some(&stake_history)), None),
