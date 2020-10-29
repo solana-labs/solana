@@ -2,14 +2,12 @@ use crate::utils;
 use log::*;
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
+    account::from_account,
     clock::Epoch,
     epoch_info::EpochInfo,
     genesis_config::GenesisConfig,
     stake_history::StakeHistoryEntry,
-    sysvar::{
-        stake_history::{self, StakeHistory},
-        Sysvar,
-    },
+    sysvar::stake_history::{self, StakeHistory},
 };
 use solana_stake_program::config::Config as StakeConfig;
 use std::{thread::sleep, time::Duration};
@@ -54,7 +52,7 @@ fn calculate_stake_warmup(mut stake_entry: StakeHistoryEntry, stake_config: &Sta
 
 fn stake_history_entry(epoch: Epoch, rpc_client: &RpcClient) -> Option<StakeHistoryEntry> {
     let stake_history_account = rpc_client.get_account(&stake_history::id()).ok()?;
-    let stake_history = StakeHistory::from_account(&stake_history_account)?;
+    let stake_history = from_account::<StakeHistory>(&stake_history_account)?;
     stake_history.get(&epoch).cloned()
 }
 

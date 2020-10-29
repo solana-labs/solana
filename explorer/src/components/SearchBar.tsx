@@ -40,7 +40,7 @@ export function SearchBar() {
             ref={(ref) => (selectRef.current = ref)}
             options={buildOptions(search, cluster)}
             noOptionsMessage={() => "No Results"}
-            placeholder="Search for accounts, transactions, programs, and tokens"
+            placeholder="Search for blocks, accounts, transactions, programs, and tokens"
             value={resetValue}
             inputValue={search}
             blurInputOnSelect
@@ -164,7 +164,8 @@ function buildTokenOptions(search: string, cluster: Cluster) {
   }
 }
 
-function buildOptions(search: string, cluster: Cluster) {
+function buildOptions(rawSearch: string, cluster: Cluster) {
+  const search = rawSearch.trim();
   if (search.length === 0) return [];
 
   const options = [];
@@ -187,6 +188,19 @@ function buildOptions(search: string, cluster: Cluster) {
   const tokenOptions = buildTokenOptions(search, cluster);
   if (tokenOptions) {
     options.push(tokenOptions);
+  }
+
+  if (!isNaN(Number(search))) {
+    options.push({
+      label: "Block",
+      options: [
+        {
+          label: `Slot #${search}`,
+          value: search,
+          pathname: `/block/${search}`,
+        },
+      ],
+    });
   }
 
   // Prefer nice suggestions over raw suggestions

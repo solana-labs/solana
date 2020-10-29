@@ -57,16 +57,10 @@ fn main() {
         let install_dir =
             "target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
 
-        assert!(Command::new("mkdir")
-            .arg("-p")
-            .arg(&install_dir)
-            .status()
-            .expect("Unable to create BPF install directory")
-            .success());
-
         let rust_programs = [
             "128bit",
             "alloc",
+            "call_depth",
             "custom_heap",
             "dep_crate",
             "deprecated_loader",
@@ -93,21 +87,15 @@ fn main() {
                 "cargo:warning=(not a warning) Building Rust-based BPF programs: solana_bpf_rust_{}",
                 program
             );
-            assert!(Command::new("bash")
-                .current_dir("rust")
-                .args(&["./do.sh", "build", program])
+            assert!(Command::new("../../cargo-build-bpf")
+                .args(&[
+                    "--manifest-path",
+                    &format!("rust/{}/Cargo.toml", program),
+                    "--bpf-out-dir",
+                    &install_dir
+                ])
                 .status()
-                .expect("Error calling do.sh from build.rs")
-                .success());
-            let src = format!(
-                "target/bpfel-unknown-unknown/release/solana_bpf_rust_{}.so",
-                program,
-            );
-            assert!(Command::new("cp")
-                .arg(&src)
-                .arg(&install_dir)
-                .status()
-                .unwrap_or_else(|_| panic!("Failed to cp {} to {}", src, install_dir))
+                .expect("Error calling cargo-build-bpf from build.rs")
                 .success());
         }
 

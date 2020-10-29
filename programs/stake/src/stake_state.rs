@@ -10,10 +10,11 @@ use crate::{
 };
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
-    account::{Account, KeyedAccount},
+    account::Account,
     account_utils::{State, StateMut},
     clock::{Clock, Epoch, UnixTimestamp},
     instruction::InstructionError,
+    keyed_account::KeyedAccount,
     pubkey::Pubkey,
     rent::Rent,
     stake_history::{StakeHistory, StakeHistoryEntry},
@@ -1103,7 +1104,7 @@ mod tests {
 
     #[test]
     fn test_authorized_authorize() {
-        let staker = Pubkey::new_rand();
+        let staker = solana_sdk::pubkey::new_rand();
         let mut authorized = Authorized::auto(&staker);
         let mut signers = HashSet::new();
         assert_eq!(
@@ -1155,7 +1156,7 @@ mod tests {
             ..Clock::default()
         };
 
-        let vote_pubkey = Pubkey::new_rand();
+        let vote_pubkey = solana_sdk::pubkey::new_rand();
         let mut vote_state = VoteState::default();
         for i in 0..1000 {
             vote_state.process_slot_vote_unchecked(i);
@@ -1163,7 +1164,7 @@ mod tests {
 
         let vote_account = RefCell::new(vote_state::create_account(
             &vote_pubkey,
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
             100,
         ));
@@ -1173,7 +1174,7 @@ mod tests {
             .set_state(&VoteStateVersions::Current(Box::new(vote_state)))
             .unwrap();
 
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let stake_account = Account::new_ref_data_with_space(
             stake_lamports,
@@ -1609,14 +1610,14 @@ mod tests {
 
     #[test]
     fn test_stake_initialize() {
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let stake_account =
             Account::new_ref(stake_lamports, std::mem::size_of::<StakeState>(), &id());
 
         // unsigned keyed account
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &stake_account);
-        let custodian = Pubkey::new_rand();
+        let custodian = solana_sdk::pubkey::new_rand();
 
         // not enough balance for rent...
         assert_eq!(
@@ -1673,7 +1674,7 @@ mod tests {
 
     #[test]
     fn test_deactivate() {
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let stake_account = Account::new_ref_data_with_space(
             stake_lamports,
@@ -1697,10 +1698,10 @@ mod tests {
         );
 
         // Staking
-        let vote_pubkey = Pubkey::new_rand();
+        let vote_pubkey = solana_sdk::pubkey::new_rand();
         let vote_account = RefCell::new(vote_state::create_account(
             &vote_pubkey,
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
             100,
         ));
@@ -1739,7 +1740,7 @@ mod tests {
 
     #[test]
     fn test_set_lockup() {
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let stake_account = Account::new_ref_data_with_space(
             stake_lamports,
@@ -1757,7 +1758,7 @@ mod tests {
         );
 
         // initalize the stake
-        let custodian = Pubkey::new_rand();
+        let custodian = solana_sdk::pubkey::new_rand();
         stake_keyed_account
             .initialize(
                 &Authorized::auto(&stake_pubkey),
@@ -1788,10 +1789,10 @@ mod tests {
         );
 
         // delegate stake
-        let vote_pubkey = Pubkey::new_rand();
+        let vote_pubkey = solana_sdk::pubkey::new_rand();
         let vote_account = RefCell::new(vote_state::create_account(
             &vote_pubkey,
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
             100,
         ));
@@ -1836,7 +1837,7 @@ mod tests {
 
     #[test]
     fn test_optional_lockup() {
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let stake_account = Account::new_ref_data_with_space(
             stake_lamports,
@@ -1847,7 +1848,7 @@ mod tests {
         .expect("stake_account");
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &stake_account);
 
-        let custodian = Pubkey::new_rand();
+        let custodian = solana_sdk::pubkey::new_rand();
         stake_keyed_account
             .initialize(
                 &Authorized::auto(&stake_pubkey),
@@ -1916,7 +1917,7 @@ mod tests {
             panic!();
         }
 
-        let new_custodian = Pubkey::new_rand();
+        let new_custodian = solana_sdk::pubkey::new_rand();
         assert_eq!(
             stake_keyed_account.set_lockup(
                 &LockupArgs {
@@ -1950,7 +1951,7 @@ mod tests {
 
     #[test]
     fn test_withdraw_stake() {
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let stake_account = Account::new_ref_data_with_space(
             stake_lamports,
@@ -1962,7 +1963,7 @@ mod tests {
 
         let mut clock = Clock::default();
 
-        let to = Pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         let to_account = Account::new_ref(1, 0, &system_program::id());
         let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
 
@@ -2001,7 +2002,7 @@ mod tests {
 
         // lockup
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
-        let custodian = Pubkey::new_rand();
+        let custodian = solana_sdk::pubkey::new_rand();
         stake_keyed_account
             .initialize(
                 &Authorized::auto(&stake_pubkey),
@@ -2030,10 +2031,10 @@ mod tests {
         );
 
         // Stake some lamports (available lamports for withdrawals will reduce to zero)
-        let vote_pubkey = Pubkey::new_rand();
+        let vote_pubkey = solana_sdk::pubkey::new_rand();
         let vote_account = RefCell::new(vote_state::create_account(
             &vote_pubkey,
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
             100,
         ));
@@ -2124,7 +2125,7 @@ mod tests {
 
     #[test]
     fn test_withdraw_stake_before_warmup() {
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         let total_lamports = 100;
         let stake_lamports = 42;
         let stake_account = Account::new_ref_data_with_space(
@@ -2139,17 +2140,17 @@ mod tests {
         let mut future = Clock::default();
         future.epoch += 16;
 
-        let to = Pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         let to_account = Account::new_ref(1, 0, &system_program::id());
         let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
 
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
 
         // Stake some lamports (available lamports for withdrawals will reduce)
-        let vote_pubkey = Pubkey::new_rand();
+        let vote_pubkey = solana_sdk::pubkey::new_rand();
         let vote_account = RefCell::new(vote_state::create_account(
             &vote_pubkey,
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
             100,
         ));
@@ -2195,7 +2196,7 @@ mod tests {
 
     #[test]
     fn test_withdraw_stake_invalid_state() {
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         let total_lamports = 100;
         let stake_account = Account::new_ref_data_with_space(
             total_lamports,
@@ -2205,7 +2206,7 @@ mod tests {
         )
         .expect("stake_account");
 
-        let to = Pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         let to_account = Account::new_ref(1, 0, &system_program::id());
         let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
@@ -2224,8 +2225,8 @@ mod tests {
 
     #[test]
     fn test_withdraw_lockup() {
-        let stake_pubkey = Pubkey::new_rand();
-        let custodian = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
+        let custodian = solana_sdk::pubkey::new_rand();
         let total_lamports = 100;
         let stake_account = Account::new_ref_data_with_space(
             total_lamports,
@@ -2242,7 +2243,7 @@ mod tests {
         )
         .expect("stake_account");
 
-        let to = Pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         let to_account = Account::new_ref(1, 0, &system_program::id());
         let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
 
@@ -2299,7 +2300,7 @@ mod tests {
 
     #[test]
     fn test_withdraw_identical_authorities() {
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         let custodian = stake_pubkey;
         let total_lamports = 100;
         let stake_account = Account::new_ref_data_with_space(
@@ -2317,7 +2318,7 @@ mod tests {
         )
         .expect("stake_account");
 
-        let to = Pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         let to_account = Account::new_ref(1, 0, &system_program::id());
         let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
 
@@ -2586,7 +2587,7 @@ mod tests {
 
     #[test]
     fn test_authorize_uninit() {
-        let new_authority = Pubkey::new_rand();
+        let new_authority = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let stake_account = Account::new_ref_data_with_space(
             stake_lamports,
@@ -2606,7 +2607,7 @@ mod tests {
 
     #[test]
     fn test_authorize_lockup() {
-        let stake_authority = Pubkey::new_rand();
+        let stake_authority = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let stake_account = Account::new_ref_data_with_space(
             stake_lamports,
@@ -2616,14 +2617,14 @@ mod tests {
         )
         .expect("stake_account");
 
-        let to = Pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         let to_account = Account::new_ref(1, 0, &system_program::id());
         let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
 
         let clock = Clock::default();
         let stake_keyed_account = KeyedAccount::new(&stake_authority, true, &stake_account);
 
-        let stake_pubkey0 = Pubkey::new_rand();
+        let stake_pubkey0 = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_authority].into_iter().collect();
         assert_eq!(
             stake_keyed_account.authorize(&signers, &stake_pubkey0, StakeAuthorize::Staker),
@@ -2643,7 +2644,7 @@ mod tests {
         }
 
         // A second authorization signed by the stake_keyed_account should fail
-        let stake_pubkey1 = Pubkey::new_rand();
+        let stake_pubkey1 = solana_sdk::pubkey::new_rand();
         assert_eq!(
             stake_keyed_account.authorize(&signers, &stake_pubkey1, StakeAuthorize::Staker),
             Err(InstructionError::MissingRequiredSignature)
@@ -2652,7 +2653,7 @@ mod tests {
         let signers0 = vec![stake_pubkey0].into_iter().collect();
 
         // Test a second authorization by the newly authorized pubkey
-        let stake_pubkey2 = Pubkey::new_rand();
+        let stake_pubkey2 = solana_sdk::pubkey::new_rand();
         assert_eq!(
             stake_keyed_account.authorize(&signers0, &stake_pubkey2, StakeAuthorize::Staker),
             Ok(())
@@ -2705,7 +2706,7 @@ mod tests {
 
     #[test]
     fn test_authorize_with_seed() {
-        let base_pubkey = Pubkey::new_rand();
+        let base_pubkey = solana_sdk::pubkey::new_rand();
         let seed = "42";
         let withdrawer_pubkey = Pubkey::create_with_seed(&base_pubkey, &seed, &id()).unwrap();
         let stake_lamports = 42;
@@ -2722,7 +2723,7 @@ mod tests {
 
         let stake_keyed_account = KeyedAccount::new(&withdrawer_pubkey, true, &stake_account);
 
-        let new_authority = Pubkey::new_rand();
+        let new_authority = solana_sdk::pubkey::new_rand();
 
         // Wrong seed
         assert_eq!(
@@ -2787,7 +2788,7 @@ mod tests {
 
     #[test]
     fn test_authorize_override() {
-        let withdrawer_pubkey = Pubkey::new_rand();
+        let withdrawer_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let stake_account = Account::new_ref_data_with_space(
             stake_lamports,
@@ -2800,7 +2801,7 @@ mod tests {
         let stake_keyed_account = KeyedAccount::new(&withdrawer_pubkey, true, &stake_account);
 
         // Authorize a staker pubkey and move the withdrawer key into cold storage.
-        let new_authority = Pubkey::new_rand();
+        let new_authority = solana_sdk::pubkey::new_rand();
         let signers = vec![withdrawer_pubkey].into_iter().collect();
         assert_eq!(
             stake_keyed_account.authorize(&signers, &new_authority, StakeAuthorize::Staker),
@@ -2808,7 +2809,7 @@ mod tests {
         );
 
         // Attack! The stake key (a hot key) is stolen and used to authorize a new staker.
-        let mallory_pubkey = Pubkey::new_rand();
+        let mallory_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![new_authority].into_iter().collect();
         assert_eq!(
             stake_keyed_account.authorize(&signers, &mallory_pubkey, StakeAuthorize::Staker),
@@ -2816,7 +2817,7 @@ mod tests {
         );
 
         // Verify the original staker no longer has access.
-        let new_stake_pubkey = Pubkey::new_rand();
+        let new_stake_pubkey = solana_sdk::pubkey::new_rand();
         assert_eq!(
             stake_keyed_account.authorize(&signers, &new_stake_pubkey, StakeAuthorize::Staker),
             Err(InstructionError::MissingRequiredSignature)
@@ -2839,7 +2840,7 @@ mod tests {
 
     #[test]
     fn test_split_source_uninitialized() {
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let stake_account = Account::new_ref_data_with_space(
             stake_lamports,
@@ -2849,7 +2850,7 @@ mod tests {
         )
         .expect("stake_account");
 
-        let split_stake_pubkey = Pubkey::new_rand();
+        let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let split_stake_account = Account::new_ref_data_with_space(
             0,
             &StakeState::Uninitialized,
@@ -2886,7 +2887,7 @@ mod tests {
 
     #[test]
     fn test_split_split_not_uninitialized() {
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let stake_account = Account::new_ref_data_with_space(
             stake_lamports,
@@ -2896,7 +2897,7 @@ mod tests {
         )
         .expect("stake_account");
 
-        let split_stake_pubkey = Pubkey::new_rand();
+        let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let split_stake_account = Account::new_ref_data_with_space(
             0,
             &StakeState::Initialized(Meta::auto(&stake_pubkey)),
@@ -2938,7 +2939,7 @@ mod tests {
 
     #[test]
     fn test_split_more_than_staked() {
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let stake_account = Account::new_ref_data_with_space(
             stake_lamports,
@@ -2951,7 +2952,7 @@ mod tests {
         )
         .expect("stake_account");
 
-        let split_stake_pubkey = Pubkey::new_rand();
+        let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let split_stake_account = Account::new_ref_data_with_space(
             0,
             &StakeState::Uninitialized,
@@ -2972,8 +2973,8 @@ mod tests {
 
     #[test]
     fn test_split_with_rent() {
-        let stake_pubkey = Pubkey::new_rand();
-        let split_stake_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
+        let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let rent_exempt_reserve = 10;
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -3073,10 +3074,10 @@ mod tests {
 
     #[test]
     fn test_split() {
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
 
-        let split_stake_pubkey = Pubkey::new_rand();
+        let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
 
         // test splitting both an Initialized stake and a Staked stake
@@ -3165,11 +3166,11 @@ mod tests {
 
     #[test]
     fn test_split_100_percent_of_source() {
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let rent_exempt_reserve = 10;
 
-        let split_stake_pubkey = Pubkey::new_rand();
+        let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
 
         let meta = Meta {
@@ -3262,9 +3263,9 @@ mod tests {
 
     #[test]
     fn test_merge() {
-        let stake_pubkey = Pubkey::new_rand();
-        let source_stake_pubkey = Pubkey::new_rand();
-        let authorized_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
+        let source_stake_pubkey = solana_sdk::pubkey::new_rand();
+        let authorized_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
 
         let signers = vec![authorized_pubkey].into_iter().collect();
@@ -3335,10 +3336,10 @@ mod tests {
 
     #[test]
     fn test_merge_incorrect_authorized_staker() {
-        let stake_pubkey = Pubkey::new_rand();
-        let source_stake_pubkey = Pubkey::new_rand();
-        let authorized_pubkey = Pubkey::new_rand();
-        let wrong_authorized_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
+        let source_stake_pubkey = solana_sdk::pubkey::new_rand();
+        let authorized_pubkey = solana_sdk::pubkey::new_rand();
+        let wrong_authorized_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
 
         let signers = vec![authorized_pubkey].into_iter().collect();
@@ -3402,9 +3403,9 @@ mod tests {
 
     #[test]
     fn test_merge_invalid_account_data() {
-        let stake_pubkey = Pubkey::new_rand();
-        let source_stake_pubkey = Pubkey::new_rand();
-        let authorized_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
+        let source_stake_pubkey = solana_sdk::pubkey::new_rand();
+        let authorized_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let signers = vec![authorized_pubkey].into_iter().collect();
 
@@ -3452,9 +3453,9 @@ mod tests {
 
     #[test]
     fn test_merge_active_stake() {
-        let stake_pubkey = Pubkey::new_rand();
-        let source_stake_pubkey = Pubkey::new_rand();
-        let authorized_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
+        let source_stake_pubkey = solana_sdk::pubkey::new_rand();
+        let authorized_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
 
         let signers = vec![authorized_pubkey].into_iter().collect();
@@ -3505,7 +3506,7 @@ mod tests {
 
     #[test]
     fn test_lockup_is_expired() {
-        let custodian = Pubkey::new_rand();
+        let custodian = solana_sdk::pubkey::new_rand();
         let lockup = Lockup {
             epoch: 1,
             unix_timestamp: 1,
@@ -3587,7 +3588,7 @@ mod tests {
 
     #[test]
     fn test_authorize_delegated_stake() {
-        let stake_pubkey = Pubkey::new_rand();
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         let stake_lamports = 42;
         let stake_account = Account::new_ref_data_with_space(
             stake_lamports,
@@ -3599,10 +3600,10 @@ mod tests {
 
         let clock = Clock::default();
 
-        let vote_pubkey = Pubkey::new_rand();
+        let vote_pubkey = solana_sdk::pubkey::new_rand();
         let vote_account = RefCell::new(vote_state::create_account(
             &vote_pubkey,
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
             100,
         ));
@@ -3623,7 +3624,7 @@ mod tests {
         // deactivate, so we can re-delegate
         stake_keyed_account.deactivate(&clock, &signers).unwrap();
 
-        let new_staker_pubkey = Pubkey::new_rand();
+        let new_staker_pubkey = solana_sdk::pubkey::new_rand();
         assert_eq!(
             stake_keyed_account.authorize(&signers, &new_staker_pubkey, StakeAuthorize::Staker),
             Ok(())
@@ -3632,17 +3633,17 @@ mod tests {
             StakeState::authorized_from(&stake_keyed_account.try_account_ref().unwrap()).unwrap();
         assert_eq!(authorized.staker, new_staker_pubkey);
 
-        let other_pubkey = Pubkey::new_rand();
+        let other_pubkey = solana_sdk::pubkey::new_rand();
         let other_signers = vec![other_pubkey].into_iter().collect();
 
         // Use unsigned stake_keyed_account to test other signers
         let stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &stake_account);
 
-        let new_voter_pubkey = Pubkey::new_rand();
+        let new_voter_pubkey = solana_sdk::pubkey::new_rand();
         let vote_state = VoteState::default();
         let new_vote_account = RefCell::new(vote_state::create_account(
             &new_voter_pubkey,
-            &Pubkey::new_rand(),
+            &solana_sdk::pubkey::new_rand(),
             0,
             100,
         ));

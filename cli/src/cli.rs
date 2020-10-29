@@ -1,7 +1,8 @@
 use crate::{
-    checks::*, cluster_query::*, feature::*, inflation::*, nonce::*, spend_utils::*, stake::*,
-    validator_info::*, vote::*,
+    checks::*, cluster_query::*, feature::*, inflation::*, nonce::*, send_tpu::*, spend_utils::*,
+    stake::*, validator_info::*, vote::*,
 };
+use bincode::serialize;
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use clap::{value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
@@ -32,7 +33,7 @@ use solana_client::{
     rpc_client::RpcClient,
     rpc_config::{RpcLargestAccountsFilter, RpcSendTransactionConfig},
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
-    rpc_response::RpcKeyedAccount,
+    rpc_response::{RpcKeyedAccount, RpcLeaderSchedule},
 };
 #[cfg(not(test))]
 use solana_faucet::faucet::request_airdrop_transaction;
@@ -42,13 +43,14 @@ use solana_rbpf::vm::EbpfVm;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
-    clock::{Epoch, Slot, DEFAULT_TICKS_PER_SECOND},
+    clock::{Epoch, Slot},
     commitment_config::CommitmentConfig,
     decode_error::DecodeError,
     hash::Hash,
     instruction::{Instruction, InstructionError},
     loader_instruction,
     message::Message,
+    native_token::Sol,
     pubkey::{Pubkey, MAX_SEED_LEN},
     signature::{keypair_from_seed, Keypair, Signature, Signer, SignerError},
     signers::Signers,
@@ -63,12 +65,13 @@ use solana_stake_program::{
 use solana_transaction_status::{EncodedTransaction, UiTransactionEncoding};
 use solana_vote_program::vote_state::VoteAuthorize;
 use std::{
+    cmp::min,
     collections::HashMap,
     error,
     fmt::Write as FmtWrite,
     fs::File,
     io::{Read, Write},
-    net::{IpAddr, SocketAddr},
+    net::{IpAddr, SocketAddr, UdpSocket},
     str::FromStr,
     sync::Arc,
     thread::sleep,
@@ -178,6 +181,7 @@ pub enum CliCommand {
         program_location: String,
         address: Option<SignerIndex>,
         use_deprecated_loader: bool,
+        allow_excessive_balance: bool,
     },
     // Stake Commands
     CreateStakeAccount {
@@ -609,13 +613,13 @@ pub fn parse_command(
                 signers.push(signer);
                 1
             });
-            let use_deprecated_loader = matches.is_present("use_deprecated_loader");
 
             Ok(CliCommandInfo {
                 command: CliCommand::Deploy {
                     program_location: matches.value_of("program_location").unwrap().to_string(),
                     address,
-                    use_deprecated_loader,
+                    use_deprecated_loader: matches.is_present("use_deprecated_loader"),
+                    allow_excessive_balance: matches.is_present("allow_excessive_balance"),
                 },
                 signers,
             })
@@ -1029,33 +1033,50 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
 ) -> Result<(), Box<dyn error::Error>> {
     let progress_bar = new_spinner_progress_bar();
     let mut send_retries = 5;
+    let mut leader_schedule: Option<RpcLeaderSchedule> = None;
+    let mut leader_schedule_epoch = 0;
+    let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let cluster_nodes = rpc_client.get_cluster_nodes().ok();
+
     loop {
         let mut status_retries = 15;
+
+        progress_bar.set_message("Finding leader node...");
+        let epoch_info = rpc_client.get_epoch_info_with_commitment(commitment)?;
+        if epoch_info.epoch > leader_schedule_epoch || leader_schedule.is_none() {
+            leader_schedule = rpc_client
+                .get_leader_schedule_with_commitment(Some(epoch_info.absolute_slot), commitment)?;
+            leader_schedule_epoch = epoch_info.epoch;
+        }
+        let tpu_address = get_leader_tpu(
+            min(epoch_info.slot_index + 1, epoch_info.slots_in_epoch),
+            leader_schedule.as_ref(),
+            cluster_nodes.as_ref(),
+        );
 
         // Send all transactions
         let mut pending_transactions = HashMap::new();
         let num_transactions = transactions.len();
         for transaction in transactions {
-            if cfg!(not(test)) {
-                // Delay ~1 tick between write transactions in an attempt to reduce AccountInUse errors
-                // when all the write transactions modify the same program account (eg, deploying a
-                // new program)
-                sleep(Duration::from_millis(1000 / DEFAULT_TICKS_PER_SECOND));
+            if let Some(tpu_address) = tpu_address {
+                let wire_transaction =
+                    serialize(&transaction).expect("serialization should succeed");
+                send_transaction_tpu(&send_socket, &tpu_address, &wire_transaction);
+            } else {
+                let _result = rpc_client
+                    .send_transaction_with_config(
+                        &transaction,
+                        RpcSendTransactionConfig {
+                            preflight_commitment: Some(commitment.commitment),
+                            ..RpcSendTransactionConfig::default()
+                        },
+                    )
+                    .ok();
             }
-
-            let _result = rpc_client
-                .send_transaction_with_config(
-                    &transaction,
-                    RpcSendTransactionConfig {
-                        preflight_commitment: Some(commitment.commitment),
-                        ..RpcSendTransactionConfig::default()
-                    },
-                )
-                .ok();
             pending_transactions.insert(transaction.signatures[0], transaction);
 
             progress_bar.set_message(&format!(
-                "[{}/{}] Transactions sent",
+                "[{}/{}] Total Transactions sent",
                 pending_transactions.len(),
                 num_transactions
             ));
@@ -1091,6 +1112,11 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                         let _ = pending_transactions.remove(&signature);
                     }
                 }
+                progress_bar.set_message(&format!(
+                    "[{}/{}] Transactions confirmed",
+                    num_transactions - pending_transactions.len(),
+                    num_transactions
+                ));
             }
 
             if pending_transactions.is_empty() {
@@ -1132,6 +1158,7 @@ fn process_deploy(
     program_location: &str,
     address: Option<SignerIndex>,
     use_deprecated_loader: bool,
+    allow_excessive_balance: bool,
 ) -> ProcessResult {
     const WORDS: usize = 12;
     // Create ephemeral keypair to use for program address, if not provided
@@ -1145,6 +1172,7 @@ fn process_deploy(
         program_location,
         address,
         use_deprecated_loader,
+        allow_excessive_balance,
         new_keypair,
     );
 
@@ -1160,7 +1188,7 @@ fn process_deploy(
             WORDS
         );
         eprintln!(
-            "then pass it as the [ADDRESS_SIGNER] argument to `solana deploy ...`\n{}\n{}\n{}",
+            "then pass it as the [PROGRAM_ADDRESS_SIGNER] argument to `solana deploy ...`\n{}\n{}\n{}",
             divider, phrase, divider
         );
     }
@@ -1173,6 +1201,7 @@ fn do_process_deploy(
     program_location: &str,
     address: Option<SignerIndex>,
     use_deprecated_loader: bool,
+    allow_excessive_balance: bool,
     new_keypair: Keypair,
 ) -> ProcessResult {
     let program_id = if let Some(i) = address {
@@ -1237,6 +1266,15 @@ fn do_process_deploy(
                 balance,
             ));
             balance_needed = balance;
+        } else if account.lamports > minimum_balance
+            && system_program::check_id(&account.owner)
+            && !allow_excessive_balance
+        {
+            return Err(CliError::DynamicProgramError(format!(
+                "Program account has a balance: {:?}; it may already be in use",
+                Sol(account.lamports)
+            ))
+            .into());
         }
         (instructions, balance_needed)
     } else {
@@ -1344,8 +1382,8 @@ fn do_process_deploy(
         config.commitment,
         last_valid_slot,
     )
-    .map_err(|_| {
-        CliError::DynamicProgramError("Data writes to program account failed".to_string())
+    .map_err(|err| {
+        CliError::DynamicProgramError(format!("Data writes to program account failed: {}", err))
     })?;
 
     let (blockhash, _, _) = rpc_client
@@ -1619,12 +1657,14 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             program_location,
             address,
             use_deprecated_loader,
+            allow_excessive_balance,
         } => process_deploy(
             &rpc_client,
             config,
             program_location,
             *address,
             *use_deprecated_loader,
+            *allow_excessive_balance,
         ),
 
         // Stake Commands
@@ -2241,7 +2281,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("address_signer")
                         .index(2)
-                        .value_name("ADDRESS_SIGNER")
+                        .value_name("PROGRAM_ADDRESS_SIGNER")
                         .takes_value(true)
                         .validator(is_valid_signer)
                         .help("The signer for the desired address of the program [default: new random address]")
@@ -2252,6 +2292,12 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(false)
                         .hidden(true) // Don't document this argument to discourage its use
                         .help("Use the deprecated BPF loader")
+                )
+                .arg(
+                    Arg::with_name("allow_excessive_balance")
+                        .long("allow-excessive-deploy-account-balance")
+                        .takes_value(false)
+                        .help("Use the designated program id, even if the account already holds a large balance of SOL")
                 )
                 .arg(commitment_arg_with_default("max")),
         )
@@ -2409,7 +2455,10 @@ mod tests {
             .unwrap();
         assert_eq!(signer_info.signers.len(), 1);
         assert_eq!(signer_info.index_of(None), Some(0));
-        assert_eq!(signer_info.index_of(Some(Pubkey::new_rand())), None);
+        assert_eq!(
+            signer_info.index_of(Some(solana_sdk::pubkey::new_rand())),
+            None
+        );
 
         let keypair0 = keypair_from_seed(&[1u8; 32]).unwrap();
         let keypair0_pubkey = keypair0.pubkey();
@@ -2465,7 +2514,7 @@ mod tests {
     fn test_cli_parse_command() {
         let test_commands = app("test", "desc", "version");
 
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let pubkey_string = format!("{}", pubkey);
 
         let default_keypair = Keypair::new();
@@ -2561,7 +2610,7 @@ mod tests {
         assert!(parse_command(&test_bad_signature, &default_signer, &mut None).is_err());
 
         // Test CreateAddressWithSeed
-        let from_pubkey = Some(Pubkey::new_rand());
+        let from_pubkey = Some(solana_sdk::pubkey::new_rand());
         let from_str = from_pubkey.unwrap().to_string();
         for (name, program_id) in &[
             ("STAKE", solana_stake_program::id()),
@@ -2618,6 +2667,7 @@ mod tests {
                     program_location: "/Users/test/program.o".to_string(),
                     address: None,
                     use_deprecated_loader: false,
+                    allow_excessive_balance: false,
                 },
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2639,6 +2689,7 @@ mod tests {
                     program_location: "/Users/test/program.o".to_string(),
                     address: Some(1),
                     use_deprecated_loader: false,
+                    allow_excessive_balance: false,
                 },
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -2718,7 +2769,7 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let new_authorized_pubkey = Pubkey::new_rand();
+        let new_authorized_pubkey = solana_sdk::pubkey::new_rand();
         config.signers = vec![&bob_keypair];
         config.command = CliCommand::VoteAuthorize {
             vote_account_pubkey: bob_pubkey,
@@ -2740,7 +2791,7 @@ mod tests {
 
         let bob_keypair = Keypair::new();
         let bob_pubkey = bob_keypair.pubkey();
-        let custodian = Pubkey::new_rand();
+        let custodian = solana_sdk::pubkey::new_rand();
         config.command = CliCommand::CreateStakeAccount {
             stake_account: 1,
             seed: None,
@@ -2763,8 +2814,8 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let stake_account_pubkey = Pubkey::new_rand();
-        let to_pubkey = Pubkey::new_rand();
+        let stake_account_pubkey = solana_sdk::pubkey::new_rand();
+        let to_pubkey = solana_sdk::pubkey::new_rand();
         config.command = CliCommand::WithdrawStake {
             stake_account_pubkey,
             destination_account_pubkey: to_pubkey,
@@ -2781,7 +2832,7 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let stake_account_pubkey = Pubkey::new_rand();
+        let stake_account_pubkey = solana_sdk::pubkey::new_rand();
         config.command = CliCommand::DeactivateStake {
             stake_account_pubkey,
             stake_authority: 0,
@@ -2794,7 +2845,7 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let stake_account_pubkey = Pubkey::new_rand();
+        let stake_account_pubkey = solana_sdk::pubkey::new_rand();
         let split_stake_account = Keypair::new();
         config.command = CliCommand::SplitStake {
             stake_account_pubkey,
@@ -2812,8 +2863,8 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
 
-        let stake_account_pubkey = Pubkey::new_rand();
-        let source_stake_account_pubkey = Pubkey::new_rand();
+        let stake_account_pubkey = solana_sdk::pubkey::new_rand();
+        let source_stake_account_pubkey = solana_sdk::pubkey::new_rand();
         let merge_stake_account = Keypair::new();
         config.command = CliCommand::MergeStake {
             stake_account_pubkey,
@@ -2836,7 +2887,7 @@ mod tests {
         assert_eq!(process_command(&config).unwrap(), "1234");
 
         // CreateAddressWithSeed
-        let from_pubkey = Pubkey::new_rand();
+        let from_pubkey = solana_sdk::pubkey::new_rand();
         config.signers = vec![];
         config.command = CliCommand::CreateAddressWithSeed {
             from_pubkey: Some(from_pubkey),
@@ -2849,7 +2900,7 @@ mod tests {
         assert_eq!(address.unwrap(), expected_address.to_string());
 
         // Need airdrop cases
-        let to = Pubkey::new_rand();
+        let to = solana_sdk::pubkey::new_rand();
         config.signers = vec![&keypair];
         config.command = CliCommand::Airdrop {
             faucet_host: None,
@@ -2952,6 +3003,7 @@ mod tests {
             program_location: pathbuf.to_str().unwrap().to_string(),
             address: None,
             use_deprecated_loader: false,
+            allow_excessive_balance: false,
         };
         let result = process_command(&config);
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
@@ -2970,6 +3022,7 @@ mod tests {
             program_location: "bad/file/location.so".to_string(),
             address: None,
             use_deprecated_loader: false,
+            allow_excessive_balance: false,
         };
         assert!(process_command(&config).is_err());
     }

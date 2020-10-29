@@ -75,6 +75,7 @@ else
 
 
   BINS=(
+    cargo-build-bpf
     solana
     solana-bench-exchange
     solana-bench-tps
@@ -123,6 +124,9 @@ done
 if [[ -d target/perf-libs ]]; then
   cp -a target/perf-libs "$installDir"/bin/perf-libs
 fi
+
+mkdir -p "$installDir"/bin/sdk/bpf
+cp -a sdk/bpf/* "$installDir"/bin/sdk/bpf
 
 (
   set -x

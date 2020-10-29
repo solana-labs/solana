@@ -38,6 +38,7 @@ export function InstructionCard({
         </h3>
 
         <button
+          disabled={defaultRaw}
           className={`btn btn-sm d-flex ${
             showRaw ? "btn-black active" : "btn-white"
           }`}

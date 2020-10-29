@@ -129,13 +129,13 @@ pub(crate) mod tests {
         // Create some vote accounts for each pubkey
         let vote_accounts_map: HashMap<Pubkey, Vec<VoteAccountInfo>> = (0..10)
             .map(|_| {
-                let node_id = Pubkey::new_rand();
+                let node_id = solana_sdk::pubkey::new_rand();
                 (
                     node_id,
                     iter::repeat_with(|| {
-                        let authorized_voter = Pubkey::new_rand();
+                        let authorized_voter = solana_sdk::pubkey::new_rand();
                         VoteAccountInfo {
-                            vote_account: Pubkey::new_rand(),
+                            vote_account: solana_sdk::pubkey::new_rand(),
                             account: create_account_with_authorized(
                                 &node_id,
                                 &authorized_voter,

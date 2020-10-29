@@ -1609,7 +1609,15 @@ impl Blockstore {
         timestamp_slots
     }
 
-    pub fn cache_block_time(
+    pub fn cache_block_time(&self, slot: Slot, timestamp: UnixTimestamp) -> Result<()> {
+        if !self.is_root(slot) {
+            return Err(BlockstoreError::SlotNotRooted);
+        }
+        self.blocktime_cf.put(slot, &timestamp)
+    }
+
+    // DEPRECATED as of feature_set::timestamp_correction
+    pub fn cache_block_time_from_slot_entries(
         &self,
         slot: Slot,
         slot_duration: Duration,
@@ -1648,7 +1656,7 @@ impl Blockstore {
                 i64
             )
         );
-        self.blocktime_cf.put(slot, &stake_weighted_timestamp)
+        self.cache_block_time(slot, stake_weighted_timestamp)
     }
 
     pub fn get_first_available_block(&self) -> Result<Slot> {
@@ -3475,9 +3483,9 @@ pub mod tests {
         for x in 0..num_entries {
             let transaction = Transaction::new_with_compiled_instructions(
                 &[&Keypair::new()],
-                &[Pubkey::new_rand()],
+                &[solana_sdk::pubkey::new_rand()],
                 Hash::default(),
-                vec![Pubkey::new_rand()],
+                vec![solana_sdk::pubkey::new_rand()],
                 vec![CompiledInstruction::new(1, &(), vec![0])],
             );
             entries.push(next_entry_mut(&mut Hash::default(), 0, vec![transaction]));
@@ -5794,7 +5802,7 @@ pub mod tests {
         let slot_duration = Duration::from_millis(400);
         for slot in &[1, 2, 3, 8] {
             assert!(blockstore
-                .cache_block_time(*slot, slot_duration, &stakes)
+                .cache_block_time_from_slot_entries(*slot, slot_duration, &stakes)
                 .is_err());
         }
 
@@ -5804,7 +5812,7 @@ pub mod tests {
         }
         for slot in &[1, 2, 3, 8] {
             blockstore
-                .cache_block_time(*slot, slot_duration, &stakes)
+                .cache_block_time_from_slot_entries(*slot, slot_duration, &stakes)
                 .unwrap();
         }
         let block_time_slot_3 = blockstore.get_block_time(3);
@@ -5864,7 +5872,7 @@ pub mod tests {
         let slot_duration = Duration::from_millis(400);
         for slot in &[1, 2, 3, 8] {
             assert!(blockstore
-                .cache_block_time(*slot, slot_duration, &stakes)
+                .cache_block_time_from_slot_entries(*slot, slot_duration, &stakes)
                 .is_err());
             assert_eq!(blockstore.get_block_time(*slot).unwrap(), None);
         }
@@ -6391,8 +6399,8 @@ pub mod tests {
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
-            let address0 = Pubkey::new_rand();
-            let address1 = Pubkey::new_rand();
+            let address0 = solana_sdk::pubkey::new_rand();
+            let address1 = solana_sdk::pubkey::new_rand();
 
             let slot0 = 10;
             for x in 1..5 {
@@ -6538,7 +6546,7 @@ pub mod tests {
                         &[&Keypair::new()],
                         &[*address],
                         Hash::default(),
-                        vec![Pubkey::new_rand()],
+                        vec![solana_sdk::pubkey::new_rand()],
                         vec![CompiledInstruction::new(1, &(), vec![0])],
                     );
                     entries.push(next_entry_mut(&mut Hash::default(), 0, vec![transaction]));
@@ -6548,8 +6556,8 @@ pub mod tests {
                 entries
             }
 
-            let address0 = Pubkey::new_rand();
-            let address1 = Pubkey::new_rand();
+            let address0 = solana_sdk::pubkey::new_rand();
+            let address1 = solana_sdk::pubkey::new_rand();
 
             for slot in 2..=8 {
                 let entries = make_slot_entries_with_transaction_addresses(&[
@@ -6772,9 +6780,9 @@ pub mod tests {
             for x in 0..4 {
                 let transaction = Transaction::new_with_compiled_instructions(
                     &[&Keypair::new()],
-                    &[Pubkey::new_rand()],
+                    &[solana_sdk::pubkey::new_rand()],
                     Hash::default(),
-                    vec![Pubkey::new_rand()],
+                    vec![solana_sdk::pubkey::new_rand()],
                     vec![CompiledInstruction::new(1, &(), vec![0])],
                 );
                 transaction_status_cf
@@ -6797,9 +6805,9 @@ pub mod tests {
             // Push transaction that will not have matching status, as a test case
             transactions.push(Transaction::new_with_compiled_instructions(
                 &[&Keypair::new()],
-                &[Pubkey::new_rand()],
+                &[solana_sdk::pubkey::new_rand()],
                 Hash::default(),
-                vec![Pubkey::new_rand()],
+                vec![solana_sdk::pubkey::new_rand()],
                 vec![CompiledInstruction::new(1, &(), vec![0])],
             ));
 
@@ -7256,7 +7264,7 @@ pub mod tests {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
             let rewards: Rewards = (0..100)
                 .map(|i| Reward {
-                    pubkey: Pubkey::new_rand().to_string(),
+                    pubkey: solana_sdk::pubkey::new_rand().to_string(),
                     lamports: 42 + i,
                     post_balance: std::u64::MAX,
                     reward_type: Some(RewardType::Fee),

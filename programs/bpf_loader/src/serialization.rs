@@ -1,7 +1,7 @@
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_sdk::{
-    account::KeyedAccount, bpf_loader_deprecated, entrypoint::MAX_PERMITTED_DATA_INCREASE,
-    instruction::InstructionError, pubkey::Pubkey,
+    bpf_loader_deprecated, entrypoint::MAX_PERMITTED_DATA_INCREASE, instruction::InstructionError,
+    keyed_account::KeyedAccount, pubkey::Pubkey,
 };
 use std::{
     io::prelude::*,
@@ -262,9 +262,14 @@ mod tests {
 
     #[test]
     fn test_serialize_parameters() {
-        let program_id = Pubkey::new_rand();
-        let dup_key = Pubkey::new_rand();
-        let keys = vec![dup_key, dup_key, Pubkey::new_rand(), Pubkey::new_rand()];
+        let program_id = solana_sdk::pubkey::new_rand();
+        let dup_key = solana_sdk::pubkey::new_rand();
+        let keys = vec![
+            dup_key,
+            dup_key,
+            solana_sdk::pubkey::new_rand(),
+            solana_sdk::pubkey::new_rand(),
+        ];
         let accounts = [
             RefCell::new(Account {
                 lamports: 1,

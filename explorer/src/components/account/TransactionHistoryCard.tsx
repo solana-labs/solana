@@ -72,7 +72,7 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
       detailsList.push(
         <tr key={signature}>
           <td className="w-1">
-            <Slot slot={slot} />
+            <Slot slot={slot} link />
           </td>
 
           <td>

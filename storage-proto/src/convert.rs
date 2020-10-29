@@ -88,8 +88,8 @@ impl From<generated::Reward> for Reward {
                 0 => None,
                 1 => Some(RewardType::Fee),
                 2 => Some(RewardType::Rent),
-                3 => Some(RewardType::Voting),
-                4 => Some(RewardType::Staking),
+                3 => Some(RewardType::Staking),
+                4 => Some(RewardType::Voting),
                 _ => None,
             },
         }
@@ -353,5 +353,38 @@ impl From<generated::CompiledInstruction> for CompiledInstruction {
             accounts: value.accounts,
             data: value.data,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_reward_type_encode() {
+        let mut reward = Reward {
+            pubkey: "invalid".to_string(),
+            lamports: 123,
+            post_balance: 321,
+            reward_type: None,
+        };
+        let gen_reward: generated::Reward = reward.clone().into();
+        assert_eq!(reward, gen_reward.into());
+
+        reward.reward_type = Some(RewardType::Fee);
+        let gen_reward: generated::Reward = reward.clone().into();
+        assert_eq!(reward, gen_reward.into());
+
+        reward.reward_type = Some(RewardType::Rent);
+        let gen_reward: generated::Reward = reward.clone().into();
+        assert_eq!(reward, gen_reward.into());
+
+        reward.reward_type = Some(RewardType::Voting);
+        let gen_reward: generated::Reward = reward.clone().into();
+        assert_eq!(reward, gen_reward.into());
+
+        reward.reward_type = Some(RewardType::Staking);
+        let gen_reward: generated::Reward = reward.clone().into();
+        assert_eq!(reward, gen_reward.into());
     }
 }

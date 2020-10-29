@@ -184,17 +184,17 @@ mod test {
     fn test_parse_stake_instruction() {
         let mut keys: Vec<Pubkey> = vec![];
         for _ in 0..6 {
-            keys.push(Pubkey::new_rand());
+            keys.push(solana_sdk::pubkey::new_rand());
         }
 
         let authorized = Authorized {
-            staker: Pubkey::new_rand(),
-            withdrawer: Pubkey::new_rand(),
+            staker: solana_sdk::pubkey::new_rand(),
+            withdrawer: solana_sdk::pubkey::new_rand(),
         };
         let lockup = Lockup {
             unix_timestamp: 1_234_567_890,
             epoch: 11,
-            custodian: Pubkey::new_rand(),
+            custodian: solana_sdk::pubkey::new_rand(),
         };
         let lamports = 55;
 
@@ -375,11 +375,11 @@ mod test {
     fn test_parse_set_lockup() {
         let mut keys: Vec<Pubkey> = vec![];
         for _ in 0..2 {
-            keys.push(Pubkey::new_rand());
+            keys.push(solana_sdk::pubkey::new_rand());
         }
         let unix_timestamp = 1_234_567_890;
         let epoch = 11;
-        let custodian = Pubkey::new_rand();
+        let custodian = solana_sdk::pubkey::new_rand();
 
         let lockup = LockupArgs {
             unix_timestamp: Some(unix_timestamp),

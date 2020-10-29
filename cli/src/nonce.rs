@@ -580,6 +580,7 @@ mod tests {
         fee_calculator::FeeCalculator,
         hash::hash,
         nonce::{self, state::Versions, State},
+        nonce_account,
         signature::{read_keypair_file, write_keypair, Keypair, Signer},
         system_program,
     };
@@ -833,7 +834,7 @@ mod tests {
     #[test]
     fn test_check_nonce_account() {
         let blockhash = Hash::default();
-        let nonce_pubkey = Pubkey::new_rand();
+        let nonce_pubkey = solana_sdk::pubkey::new_rand();
         let data = Versions::new_current(State::Initialized(nonce::state::Data {
             authority: nonce_pubkey,
             blockhash,
@@ -869,7 +870,7 @@ mod tests {
         }
 
         let data = Versions::new_current(State::Initialized(nonce::state::Data {
-            authority: Pubkey::new_rand(),
+            authority: solana_sdk::pubkey::new_rand(),
             blockhash,
             fee_calculator: FeeCalculator::default(),
         }));
@@ -891,7 +892,7 @@ mod tests {
 
     #[test]
     fn test_account_identity_ok() {
-        let nonce_account = nonce::create_account(1).into_inner();
+        let nonce_account = nonce_account::create_account(1).into_inner();
         assert_eq!(account_identity_ok(&nonce_account), Ok(()));
 
         let system_account = Account::new(1, 0, &system_program::id());
@@ -910,7 +911,7 @@ mod tests {
 
     #[test]
     fn test_state_from_account() {
-        let mut nonce_account = nonce::create_account(1).into_inner();
+        let mut nonce_account = nonce_account::create_account(1).into_inner();
         assert_eq!(state_from_account(&nonce_account), Ok(State::Uninitialized));
 
         let data = nonce::state::Data {
@@ -935,7 +936,7 @@ mod tests {
 
     #[test]
     fn test_data_from_helpers() {
-        let mut nonce_account = nonce::create_account(1).into_inner();
+        let mut nonce_account = nonce_account::create_account(1).into_inner();
         let state = state_from_account(&nonce_account).unwrap();
         assert_eq!(
             data_from_state(&state),

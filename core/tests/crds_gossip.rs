@@ -77,13 +77,13 @@ fn stakes(network: &Network) -> HashMap<Pubkey, u64> {
 
 fn star_network_create(num: usize) -> Network {
     let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-        &Pubkey::new_rand(),
+        &solana_sdk::pubkey::new_rand(),
         0,
     )));
     let mut network: HashMap<_, _> = (1..num)
         .map(|_| {
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &Pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 0,
             )));
             let id = new.label().pubkey();
@@ -104,7 +104,7 @@ fn star_network_create(num: usize) -> Network {
 
 fn rstar_network_create(num: usize) -> Network {
     let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-        &Pubkey::new_rand(),
+        &solana_sdk::pubkey::new_rand(),
         0,
     )));
     let mut origin = CrdsGossip::default();
@@ -114,7 +114,7 @@ fn rstar_network_create(num: usize) -> Network {
     let mut network: HashMap<_, _> = (1..num)
         .map(|_| {
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &Pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 0,
             )));
             let id = new.label().pubkey();
@@ -133,7 +133,7 @@ fn ring_network_create(num: usize) -> Network {
     let mut network: HashMap<_, _> = (0..num)
         .map(|_| {
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &Pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 0,
             )));
             let id = new.label().pubkey();
@@ -171,7 +171,7 @@ fn connected_staked_network_create(stakes: &[u64]) -> Network {
     let mut network: HashMap<_, _> = (0..num)
         .map(|n| {
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &Pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 0,
             )));
             let id = new.label().pubkey();
@@ -254,7 +254,7 @@ fn network_simulator(thread_pool: &ThreadPool, network: &mut Network, max_conver
             );
         });
         // push for a bit
-        let (queue_size, bytes_tx) = network_run_push(network, start, end);
+        let (queue_size, bytes_tx) = network_run_push(thread_pool, network, start, end);
         total_bytes += bytes_tx;
         trace!(
             "network_simulator_push_{}: queue_size: {} bytes: {}",
@@ -278,7 +278,12 @@ fn network_simulator(thread_pool: &ThreadPool, network: &mut Network, max_conver
     }
 }
 
-fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, usize) {
+fn network_run_push(
+    thread_pool: &ThreadPool,
+    network: &mut Network,
+    start: usize,
+    end: usize,
+) -> (usize, usize) {
     let mut bytes: usize = 0;
     let mut num_msgs: usize = 0;
     let mut total: usize = 0;
@@ -295,7 +300,7 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
             .map(|node| {
                 let mut node_lock = node.lock().unwrap();
                 let timeouts = node_lock.make_timeouts_test();
-                node_lock.purge(now, &timeouts);
+                node_lock.purge(thread_pool, now, &timeouts);
                 node_lock.new_push_messages(vec![], now)
             })
             .collect();
@@ -457,7 +462,10 @@ fn network_run_pull(
                             .into_iter()
                             .flatten()
                             .collect();
-                        node.lock().unwrap().process_pull_requests(filters, now);
+                        node.lock().unwrap().process_pull_requests(
+                            filters.into_iter().map(|(caller, _)| caller),
+                            now,
+                        );
                         rsp
                     })
                     .unwrap();

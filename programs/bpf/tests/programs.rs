@@ -7,30 +7,30 @@ use solana_bpf_loader_program::{
     create_vm,
     serialization::{deserialize_parameters, serialize_parameters},
 };
-use solana_rbpf::vm::{EbpfVm, InstructionMeter};
+use solana_rbpf::vm::EbpfVm;
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
+    bpf_test_utils::MockInvokeContext,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::load_program,
-    process_instruction::{
-        ComputeBudget, ComputeMeter, Executor, InvokeContext, Logger, ProcessInstruction,
-    },
+    process_instruction::ComputeBudget,
 };
 use solana_sdk::{
-    account::{Account, KeyedAccount},
+    account::Account,
     bpf_loader, bpf_loader_deprecated,
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, MAX_PROCESSING_AGE},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
+    keyed_account::KeyedAccount,
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     sysvar::{clock, fees, rent, slot_hashes, stake_history},
     transaction::{Transaction, TransactionError},
 };
-use std::{cell::RefCell, env, fs::File, io::Read, path::PathBuf, rc::Rc, sync::Arc};
+use std::{cell::RefCell, env, fs::File, io::Read, path::PathBuf, sync::Arc};
 
 /// BPF program file extension
 const PLATFORM_FILE_EXTENSION_BPF: &str = "so";
@@ -54,7 +54,9 @@ fn load_bpf_program(
     name: &str,
 ) -> Pubkey {
     let path = create_bpf_path(name);
-    let mut file = File::open(path).unwrap();
+    let mut file = File::open(&path).unwrap_or_else(|err| {
+        panic!("Failed to open {}: {}", path.display(), err);
+    });
     let mut elf = Vec::new();
     file.read_to_end(&mut elf).unwrap();
     load_program(bank_client, payer_keypair, loader_id, elf)
@@ -276,11 +278,11 @@ fn test_program_bpf_duplicate_accounts() {
         let bank_client = BankClient::new_shared(&bank);
         let program_id = load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
         let payee_account = Account::new(10, 1, &program_id);
-        let payee_pubkey = Pubkey::new_rand();
+        let payee_pubkey = solana_sdk::pubkey::new_rand();
         bank.store_account(&payee_pubkey, &payee_account);
 
         let account = Account::new(10, 1, &program_id);
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account_metas = vec![
             AccountMeta::new(mint_keypair.pubkey(), true),
             AccountMeta::new(payee_pubkey, false),
@@ -763,89 +765,13 @@ fn assert_instruction_count() {
 
     for program in programs.iter() {
         println!("Test program: {:?}", program.0);
-        let program_id = Pubkey::new_rand();
-        let key = Pubkey::new_rand();
+        let program_id = solana_sdk::pubkey::new_rand();
+        let key = solana_sdk::pubkey::new_rand();
         let mut account = RefCell::new(Account::default());
         let parameter_accounts = vec![KeyedAccount::new(&key, false, &mut account)];
         let count = run_program(program.0, &program_id, &parameter_accounts[..], &[]).unwrap();
         println!("  {} : {:?} ({:?})", program.0, count, program.1,);
         assert!(count <= program.1);
-    }
-}
-
-// Mock InvokeContext
-
-#[derive(Debug, Default)]
-struct MockInvokeContext {
-    pub key: Pubkey,
-    pub logger: MockLogger,
-    pub compute_budget: ComputeBudget,
-    pub compute_meter: MockComputeMeter,
-}
-impl InvokeContext for MockInvokeContext {
-    fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
-        Ok(())
-    }
-    fn pop(&mut self) {}
-    fn verify_and_update(
-        &mut self,
-        _message: &Message,
-        _instruction: &CompiledInstruction,
-        _accounts: &[Rc<RefCell<Account>>],
-    ) -> Result<(), InstructionError> {
-        Ok(())
-    }
-    fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
-        Ok(&self.key)
-    }
-    fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
-        &[]
-    }
-    fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
-        Rc::new(RefCell::new(self.logger.clone()))
-    }
-    fn get_compute_budget(&self) -> &ComputeBudget {
-        &self.compute_budget
-    }
-    fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
-        Rc::new(RefCell::new(self.compute_meter.clone()))
-    }
-    fn add_executor(&mut self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
-    fn get_executor(&mut self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
-        None
-    }
-    fn record_instruction(&self, _instruction: &Instruction) {}
-    fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
-        true
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-struct MockComputeMeter {}
-impl ComputeMeter for MockComputeMeter {
-    fn consume(&mut self, _amount: u64) -> Result<(), InstructionError> {
-        Ok(())
-    }
-    fn get_remaining(&self) -> u64 {
-        u64::MAX
-    }
-}
-#[derive(Debug, Default, Clone)]
-struct MockLogger {}
-impl Logger for MockLogger {
-    fn log_enabled(&self) -> bool {
-        true
-    }
-    fn log(&mut self, _message: &str) {
-        // println!("{}", message);
-    }
-}
-
-struct TestInstructionMeter {}
-impl InstructionMeter for TestInstructionMeter {
-    fn consume(&mut self, _amount: u64) {}
-    fn get_remaining(&self) -> u64 {
-        u64::MAX
     }
 }
 

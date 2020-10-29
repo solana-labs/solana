@@ -198,8 +198,8 @@ test('get program accounts', async () => {
     },
   ]);
 
-  if (transaction.recentBlockhash === null) {
-    expect(transaction.recentBlockhash).not.toBeNull();
+  if (!transaction.recentBlockhash) {
+    expect(transaction.recentBlockhash).toBeTruthy();
     return;
   }
 
@@ -1120,13 +1120,15 @@ test('get confirmed block', async () => {
       params: [Number.MAX_SAFE_INTEGER],
     },
     {
-      error: null,
+      error: {
+        message: `Block not available for slot ${Number.MAX_SAFE_INTEGER}`,
+      },
       result: null,
     },
   ]);
   await expect(
     connection.getConfirmedBlock(Number.MAX_SAFE_INTEGER),
-  ).rejects.toThrow();
+  ).rejects.toThrow(`Block not available for slot ${Number.MAX_SAFE_INTEGER}`);
 });
 
 test('get recent blockhash', async () => {

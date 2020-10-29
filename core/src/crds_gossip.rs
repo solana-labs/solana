@@ -174,9 +174,12 @@ impl CrdsGossip {
         self.pull.mark_pull_request_creation_time(from, now)
     }
     /// process a pull request and create a response
-    pub fn process_pull_requests(&mut self, filters: Vec<(CrdsValue, CrdsFilter)>, now: u64) {
+    pub fn process_pull_requests<I>(&mut self, callers: I, now: u64)
+    where
+        I: IntoIterator<Item = CrdsValue>,
+    {
         self.pull
-            .process_pull_requests(&mut self.crds, filters, now);
+            .process_pull_requests(&mut self.crds, callers, now);
     }
 
     pub fn generate_pull_responses(
@@ -232,7 +235,12 @@ impl CrdsGossip {
         self.pull.make_timeouts(&self.id, stakes, epoch_ms)
     }
 
-    pub fn purge(&mut self, now: u64, timeouts: &HashMap<Pubkey, u64>) -> usize {
+    pub fn purge(
+        &mut self,
+        thread_pool: &ThreadPool,
+        now: u64,
+        timeouts: &HashMap<Pubkey, u64>,
+    ) -> usize {
         let mut rv = 0;
         if now > self.push.msg_timeout {
             let min = now - self.push.msg_timeout;
@@ -247,7 +255,9 @@ impl CrdsGossip {
             let min = self.pull.crds_timeout;
             assert_eq!(timeouts[&self.id], std::u64::MAX);
             assert_eq!(timeouts[&Pubkey::default()], min);
-            rv = self.pull.purge_active(&mut self.crds, now, &timeouts);
+            rv = self
+                .pull
+                .purge_active(thread_pool, &mut self.crds, now, &timeouts);
         }
         if now > 5 * self.pull.crds_timeout {
             let min = now - 5 * self.pull.crds_timeout;

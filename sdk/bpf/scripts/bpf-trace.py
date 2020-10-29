@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 
-# 
+#
 # Prints a BPF program call trace with instruction counts for each call
 #
 # This script requires a dump file containing the instruction dump of the ELF
 # and a trace file that contains the trace output of the BPF VM
 #
-# You can create the dump file with do.sh:
-#  $ do.sh dump <project>
-# Or directly:
+# You can create the dump file by passing the --dump flag to `cargo build-bpf`,
+# or directly:
 #  $ llvm-objdump -print-imm-hex --source --disassemble <ELF file path>
 #
 # You can create the trace file by running the program and setting RUST_LOG:
@@ -53,7 +52,7 @@ if __name__ == '__main__':
         sys.exit('    Usage: ' + sys.argv[0] + ' dump_file trace_file')
     dumppath = sys.argv[1]
     tracepath = sys.argv[2]
-    
+
     # parse the dump file to create a map
     # of instruction numbers to symbols
     symbols = {}
@@ -76,7 +75,7 @@ if __name__ == '__main__':
             line = file_object.readline()
     if len(symbols) == 0:
         sys.exit("Error: No instruction dump in: " + dumppath)
-    
+
     # parse the trace file to build a call list
     calls = [] # all the calls made
     with open(tracepath, 'r') as file_object:

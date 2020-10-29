@@ -18,6 +18,7 @@ jsonrpc-core = "15.0.0"
 log = "0.4.8"
 rayon = "1.4.0"
 reqwest = { version = "0.10.8", default-features = false, features = ["blocking", "rustls-tls", "json"] }
+semver = "0.11.0"
 serde = "1.0.112"
 serde_derive = "1.0.103"
 serde_json = "1.0.56"
@@ -26,6 +27,7 @@ solana-clap-utils = { path = "../clap-utils", version = "1.5.0" }
 solana-net-utils = { path = "../net-utils", version = "1.5.0" }
 solana-sdk = { path = "../sdk", version = "1.5.0" }
 solana-transaction-status = { path = "../transaction-status", version = "1.5.0" }
+solana-version = { path = "../version", version = "1.5.0" }
 solana-vote-program = { path = "../programs/vote", version = "1.5.0" }
 thiserror = "1.0"
 tungstenite = "0.10.1"

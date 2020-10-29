@@ -11,10 +11,12 @@ use solana_core::{
     cluster_info::VALIDATOR_PORT_RANGE,
     consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
     gossip_service::discover_cluster,
+    optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
     validator::ValidatorConfig,
 };
 use solana_download_utils::download_snapshot;
 use solana_ledger::{
+    ancestor_iterator::AncestorIterator,
     blockstore::{Blockstore, PurgeType},
     blockstore_db::AccessType,
     leader_schedule::FixedSchedule,
@@ -161,8 +163,12 @@ fn test_local_cluster_signature_subscribe() {
         .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
         .unwrap();
 
-    let mut transaction =
-        system_transaction::transfer(&cluster.funding_keypair, &Pubkey::new_rand(), 10, blockhash);
+    let mut transaction = system_transaction::transfer(
+        &cluster.funding_keypair,
+        &solana_sdk::pubkey::new_rand(),
+        10,
+        blockhash,
+    );
 
     let (mut sig_subscribe_client, receiver) = PubsubClient::signature_subscribe(
         &format!("ws://{}", &non_bootstrap_info.rpc_pubsub.to_string()),
@@ -814,7 +820,12 @@ fn generate_frozen_account_panic(mut cluster: LocalCluster, frozen_account: Arc<
             .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
             .unwrap();
         client
-            .async_transfer(1, &frozen_account, &Pubkey::new_rand(), blockhash)
+            .async_transfer(
+                1,
+                &frozen_account,
+                &solana_sdk::pubkey::new_rand(),
+                blockhash,
+            )
             .unwrap();
 
         sleep(Duration::from_secs(1));
@@ -1370,7 +1381,9 @@ fn test_no_voting() {
 #[serial]
 fn test_optimistic_confirmation_violation_detection() {
     solana_logger::setup();
-    let mut buf = BufferRedirect::stderr().unwrap();
+    let buf = std::env::var("OPTIMISTIC_CONF_TEST_DUMP_LOG")
+        .err()
+        .map(|_| BufferRedirect::stderr().unwrap());
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
     let node_stakes = vec![51, 50];
@@ -1457,10 +1470,17 @@ fn test_optimistic_confirmation_violation_detection() {
 
     // Check to see that validator detected optimistic confirmation for
     // `prev_voted_slot` failed
-    let expected_log = format!("Optimistic slot {} was not rooted", prev_voted_slot);
-    let mut output = String::new();
-    buf.read_to_string(&mut output).unwrap();
-    assert!(output.contains(&expected_log));
+    let expected_log =
+        OptimisticConfirmationVerifier::format_optimistic_confirmd_slot_violation_log(
+            prev_voted_slot,
+        );
+    if let Some(mut buf) = buf {
+        let mut output = String::new();
+        buf.read_to_string(&mut output).unwrap();
+        assert!(output.contains(&expected_log));
+    } else {
+        panic!("dumped log and disaled testing");
+    }
 }
 
 #[test]
@@ -1677,7 +1697,11 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     let node_stakes = vec![31, 36, 33, 0];
 
     // Each pubkeys are prefixed with A, B, C and D.
-    // D is needed to avoid NoPropagatedConfirmation erorrs
+    // D is needed to:
+    // 1) Propagate A's votes for S2 to validator C after A shuts down so that
+    // C can avoid NoPropagatedConfirmation errors and continue to generate blocks
+    // 2) Provide gossip discovery for `A` when it restarts because `A` will restart
+    // at a different gossip port than the entrypoint saved in C's gossip table
     let validator_keys = vec![
         "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
         "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
@@ -1804,16 +1828,27 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
 
     // monitor for actual votes from validator A
     let mut bad_vote_detected = false;
+    let mut a_votes = vec![];
     for _ in 0..100 {
         sleep(Duration::from_millis(100));
 
         if let Some(last_vote) = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
-            if votes_on_c_fork.contains(&last_vote) {
+            a_votes.push(last_vote);
+            let blockstore = Blockstore::open_with_access_type(
+                &val_a_ledger_path,
+                AccessType::TryPrimaryThenSecondary,
+                None,
+            )
+            .unwrap();
+            let mut ancestors = AncestorIterator::new(last_vote, &blockstore);
+            if ancestors.any(|a| votes_on_c_fork.contains(&a)) {
                 bad_vote_detected = true;
                 break;
             }
         }
     }
+
+    info!("Observed A's votes on: {:?}", a_votes);
 
     // an elaborate way of assert!(with_tower && !bad_vote_detected || ...)
     let expects_optimistic_confirmation_violation = !with_tower;

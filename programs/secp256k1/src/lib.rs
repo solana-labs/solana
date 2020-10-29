@@ -1,7 +1,7 @@
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::{
-    account::KeyedAccount,
     instruction::{Instruction, InstructionError},
+    keyed_account::KeyedAccount,
 };
 
 pub fn process_instruction(

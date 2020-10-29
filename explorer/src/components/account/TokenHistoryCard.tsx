@@ -276,7 +276,7 @@ const TokenTransactionRow = React.memo(
       return (
         <tr key={tx.signature}>
           <td className="w-1">
-            <Slot slot={tx.slot} />
+            <Slot slot={tx.slot} link />
           </td>
 
           <td>
@@ -327,7 +327,7 @@ const TokenTransactionRow = React.memo(
           return (
             <tr key={index}>
               <td className="w-1">
-                <Slot slot={tx.slot} />
+                <Slot slot={tx.slot} link />
               </td>
 
               <td>

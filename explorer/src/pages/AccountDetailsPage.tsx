@@ -167,21 +167,12 @@ function InfoSection({ account }: { account: Account }) {
   const data = account?.details?.data;
 
   if (data && data.program === "stake") {
-    let stakeAccountType, stakeAccount;
-    if ("accountType" in data.parsed) {
-      stakeAccount = data.parsed;
-      stakeAccountType = data.parsed.accountType as any;
-    } else {
-      stakeAccount = data.parsed.info;
-      stakeAccountType = data.parsed.type;
-    }
-
     return (
       <StakeAccountSection
         account={account}
-        stakeAccount={stakeAccount}
+        stakeAccount={data.parsed.info}
         activation={data.activation}
-        stakeAccountType={stakeAccountType}
+        stakeAccountType={data.parsed.type}
       />
     );
   } else if (data && data.program === "spl-token") {

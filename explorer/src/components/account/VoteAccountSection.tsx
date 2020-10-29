@@ -9,6 +9,7 @@ import {
   AccountAddressRow,
   AccountBalanceRow,
 } from "components/common/Account";
+import { Slot } from "components/common/Slot";
 
 export function VoteAccountSection({
   account,
@@ -18,6 +19,7 @@ export function VoteAccountSection({
   voteAccount: VoteAccount;
 }) {
   const refresh = useFetchAccountInfo();
+  const rootSlot = voteAccount.info.rootSlot;
   return (
     <div className="card">
       <AccountHeader
@@ -75,7 +77,9 @@ export function VoteAccountSection({
 
         <tr>
           <td>Root Slot</td>
-          <td className="text-lg-right">{voteAccount.info.rootSlot}</td>
+          <td className="text-lg-right">
+            {rootSlot !== null ? <Slot slot={rootSlot} link /> : "N/A"}
+          </td>
         </tr>
       </TableCardBody>
     </div>

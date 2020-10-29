@@ -397,11 +397,10 @@ impl Validator {
             if let Some((rpc_addr, rpc_pubsub_addr, rpc_banks_addr)) = config.rpc_addrs {
                 if ContactInfo::is_valid_address(&node.info.rpc) {
                     assert!(ContactInfo::is_valid_address(&node.info.rpc_pubsub));
-                    assert_eq!(rpc_addr.port(), node.info.rpc.port());
-                    assert_eq!(rpc_pubsub_addr.port(), node.info.rpc_pubsub.port());
-                    assert_eq!(rpc_banks_addr.port(), node.info.rpc_banks.port());
+                    assert!(ContactInfo::is_valid_address(&node.info.rpc_banks));
                 } else {
                     assert!(!ContactInfo::is_valid_address(&node.info.rpc_pubsub));
+                    assert!(!ContactInfo::is_valid_address(&node.info.rpc_banks));
                 }
                 let tpu_address = cluster_info.my_contact_info().tpu;
                 let (bank_notification_sender, bank_notification_receiver) = unbounded();
@@ -934,8 +933,8 @@ fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_versi
 
         let end_slot = last_slot.unwrap();
         info!("Purging slots {} to {}", start_slot, end_slot);
-        blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
         blockstore.purge_from_next_slots(start_slot, end_slot);
+        blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
         info!("Purging done, compacting db..");
         if let Err(e) = blockstore.compact_storage(start_slot, end_slot) {
             warn!(

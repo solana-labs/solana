@@ -1,5 +1,4 @@
 declare module '@solana/web3.js' {
-  import {Buffer} from 'buffer';
   import * as BufferLayout from 'buffer-layout';
 
   // === src/publickey.js ===
@@ -138,8 +137,28 @@ declare module '@solana/web3.js' {
     logs: Array<string> | null;
   };
 
+  export type CompiledInnerInstruction = {
+    index: number;
+    instructions: CompiledInstruction[];
+  };
+
   export type ConfirmedTransactionMeta = {
     fee: number;
+    innerInstructions?: CompiledInnerInstruction[];
+    preBalances: Array<number>;
+    postBalances: Array<number>;
+    logMessages?: Array<string>;
+    err: TransactionError | null;
+  };
+
+  export type ParsedInnerInstruction = {
+    index: number;
+    instructions: (ParsedInstruction | PartiallyDecodedInstruction)[];
+  };
+
+  export type ParsedConfirmedTransactionMeta = {
+    fee: number;
+    innerInstructions?: ParsedInnerInstruction[];
     preBalances: Array<number>;
     postBalances: Array<number>;
     logMessages?: Array<string>;
@@ -199,7 +218,7 @@ declare module '@solana/web3.js' {
   export type ParsedConfirmedTransaction = {
     slot: number;
     transaction: ParsedTransaction;
-    meta: ConfirmedTransactionMeta | null;
+    meta: ParsedConfirmedTransactionMeta | null;
   };
 
   export type ParsedAccountData = {
@@ -531,6 +550,7 @@ declare module '@solana/web3.js' {
   export const SYSVAR_RENT_PUBKEY: PublicKey;
   export const SYSVAR_REWARDS_PUBKEY: PublicKey;
   export const SYSVAR_STAKE_HISTORY_PUBKEY: PublicKey;
+  export const SYSVAR_INSTRUCTIONS_PUBKEY: PublicKey;
 
   // === src/vote-account.js ===
   export const VOTE_PROGRAM_ID: PublicKey;
@@ -598,6 +618,7 @@ declare module '@solana/web3.js' {
     instructions: CompiledInstruction[];
 
     constructor(args: MessageArgs);
+    static from(buffer: Buffer | Uint8Array | Array<number>): Message;
     isAccountWritable(index: number): boolean;
     serialize(): Buffer;
   }
@@ -652,7 +673,7 @@ declare module '@solana/web3.js' {
     instructions: Array<TransactionInstruction>;
     recentBlockhash?: Blockhash;
     nonceInfo?: NonceInformation;
-    feePayer: PublicKey | null;
+    feePayer?: PublicKey;
 
     constructor(opts?: TransactionCtorFields);
     static from(buffer: Buffer | Uint8Array | Array<number>): Transaction;
@@ -765,6 +786,7 @@ declare module '@solana/web3.js' {
     ): Transaction;
     static delegate(params: DelegateStakeParams): Transaction;
     static authorize(params: AuthorizeStakeParams): Transaction;
+    static authorizeWithSeed(params: AuthorizeWithSeedStakeParams): Transaction;
     static split(params: SplitStakeParams): Transaction;
     static withdraw(params: WithdrawStakeParams): Transaction;
     static deactivate(params: DeactivateStakeParams): Transaction;
@@ -796,6 +818,9 @@ declare module '@solana/web3.js' {
     static decodeAuthorize(
       instruction: TransactionInstruction,
     ): AuthorizeStakeParams;
+    static decodeAuthorizeWithSeed(
+      instruction: TransactionInstruction,
+    ): AuthorizeWithSeedStakeParams;
     static decodeSplit(instruction: TransactionInstruction): SplitStakeParams;
     static decodeWithdraw(
       instruction: TransactionInstruction,
@@ -964,6 +989,31 @@ declare module '@solana/web3.js' {
     static decodeNonceAuthorize(
       instruction: TransactionInstruction,
     ): AuthorizeNonceParams;
+  }
+
+  // === src/secp256k1-program.js ===
+  export type CreateSecp256k1InstructionWithPublicKeyParams = {
+    publicKey: Buffer | Uint8Array | Array<number>;
+    message: Buffer | Uint8Array | Array<number>;
+    signature: Buffer | Uint8Array | Array<number>;
+    recoveryId: number;
+  };
+
+  export type CreateSecp256k1InstructionWithPrivateKeyParams = {
+    privateKey: Buffer | Uint8Array | Array<number>;
+    message: Buffer | Uint8Array | Array<number>;
+  };
+
+  export class Secp256k1Program {
+    static get programId(): PublicKey;
+
+    static createInstructionWithPublicKey(
+      params: CreateSecp256k1InstructionWithPublicKeyParams,
+    ): TransactionInstruction;
+
+    static createInstructionWithPrivateKey(
+      params: CreateSecp256k1InstructionWithPrivateKeyParams,
+    ): TransactionInstruction;
   }
 
   // === src/loader.js ===

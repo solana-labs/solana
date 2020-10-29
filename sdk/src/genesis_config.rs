@@ -1,5 +1,7 @@
 //! The `genesis_config` module is a library for generating the chain's genesis config.
 
+#![cfg(feature = "full")]
+
 use crate::{
     account::Account,
     clock::{UnixTimestamp, DEFAULT_TICKS_PER_SLOT},
@@ -59,7 +61,7 @@ impl FromStr for ClusterType {
     }
 }
 
-#[frozen_abi(digest = "DEg4N5ps9EdEBL2H2ahU54SCcw3QphtPjh48H413fvNq")]
+#[frozen_abi(digest = "VxfEg5DXq5czYouMdcCbqDzUE8jGi3iSDSjzrrWp5iG")]
 #[derive(Serialize, Deserialize, Debug, Clone, AbiExample)]
 pub struct GenesisConfig {
     /// when the network (bootstrap validator) was started relative to the UNIX Epoch
@@ -310,8 +312,11 @@ mod tests {
             faucet_keypair.pubkey(),
             Account::new(10_000, 0, &Pubkey::default()),
         );
-        config.add_account(Pubkey::new_rand(), Account::new(1, 0, &Pubkey::default()));
-        config.add_native_instruction_processor("hi".to_string(), Pubkey::new_rand());
+        config.add_account(
+            solana_sdk::pubkey::new_rand(),
+            Account::new(1, 0, &Pubkey::default()),
+        );
+        config.add_native_instruction_processor("hi".to_string(), solana_sdk::pubkey::new_rand());
 
         assert_eq!(config.accounts.len(), 2);
         assert!(config

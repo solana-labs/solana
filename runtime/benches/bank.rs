@@ -5,12 +5,12 @@ extern crate test;
 use log::*;
 use solana_runtime::{bank::*, bank_client::BankClient, loader_utils::create_invoke_instruction};
 use solana_sdk::{
-    account::KeyedAccount,
     client::AsyncClient,
     client::SyncClient,
     clock::MAX_RECENT_BLOCKHASHES,
     genesis_config::create_genesis_config,
     instruction::InstructionError,
+    keyed_account::KeyedAccount,
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},

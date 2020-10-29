@@ -6,14 +6,14 @@ use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
-    account::{get_signers, next_keyed_account, KeyedAccount},
     clock::{Epoch, UnixTimestamp},
     decode_error::DecodeError,
     instruction::{AccountMeta, Instruction, InstructionError},
+    keyed_account::{from_keyed_account, get_signers, next_keyed_account, KeyedAccount},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     system_instruction,
-    sysvar::{self, clock::Clock, rent::Rent, stake_history::StakeHistory, Sysvar},
+    sysvar::{self, clock::Clock, rent::Rent, stake_history::StakeHistory},
 };
 use thiserror::Error;
 
@@ -459,7 +459,7 @@ pub fn process_instruction(
         StakeInstruction::Initialize(authorized, lockup) => me.initialize(
             &authorized,
             &lockup,
-            &Rent::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+            &from_keyed_account::<Rent>(next_keyed_account(keyed_accounts)?)?,
         ),
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
             me.authorize(&signers, &authorized_pubkey, stake_authorize)
@@ -479,8 +479,8 @@ pub fn process_instruction(
 
             me.delegate(
                 &vote,
-                &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
-                &StakeHistory::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
+                &from_keyed_account::<StakeHistory>(next_keyed_account(keyed_accounts)?)?,
                 &config::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
                 &signers,
             )
@@ -493,8 +493,8 @@ pub fn process_instruction(
             let source_stake = &next_keyed_account(keyed_accounts)?;
             me.merge(
                 source_stake,
-                &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
-                &StakeHistory::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
+                &from_keyed_account::<StakeHistory>(next_keyed_account(keyed_accounts)?)?,
                 &signers,
             )
         }
@@ -504,14 +504,14 @@ pub fn process_instruction(
             me.withdraw(
                 lamports,
                 to,
-                &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
-                &StakeHistory::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
+                &from_keyed_account::<StakeHistory>(next_keyed_account(keyed_accounts)?)?,
                 next_keyed_account(keyed_accounts)?,
                 keyed_accounts.next(),
             )
         }
         StakeInstruction::Deactivate => me.deactivate(
-            &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+            &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
             &signers,
         ),
 
@@ -523,7 +523,11 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use bincode::serialize;
-    use solana_sdk::{account::Account, rent::Rent, sysvar::stake_history::StakeHistory};
+    use solana_sdk::{
+        account::{self, Account},
+        rent::Rent,
+        sysvar::stake_history::StakeHistory,
+    };
     use std::cell::RefCell;
 
     fn create_default_account() -> RefCell<Account> {
@@ -536,15 +540,15 @@ mod tests {
             .iter()
             .map(|meta| {
                 RefCell::new(if sysvar::clock::check_id(&meta.pubkey) {
-                    sysvar::clock::Clock::default().create_account(1)
+                    account::create_account(&sysvar::clock::Clock::default(), 1)
                 } else if sysvar::rewards::check_id(&meta.pubkey) {
-                    sysvar::rewards::create_account(1, 0.0)
+                    account::create_account(&sysvar::rewards::Rewards::new(0.0), 1)
                 } else if sysvar::stake_history::check_id(&meta.pubkey) {
-                    sysvar::stake_history::create_account(1, &StakeHistory::default())
+                    account::create_account(&StakeHistory::default(), 1)
                 } else if config::check_id(&meta.pubkey) {
                     config::create_account(0, &config::Config::default())
                 } else if sysvar::rent::check_id(&meta.pubkey) {
-                    sysvar::rent::create_account(1, &Rent::default())
+                    account::create_account(&Rent::default(), 1)
                 } else {
                     Account::default()
                 })
@@ -623,7 +627,7 @@ mod tests {
             process_instruction(&withdraw(
                 &Pubkey::default(),
                 &Pubkey::default(),
-                &Pubkey::new_rand(),
+                &solana_sdk::pubkey::new_rand(),
                 100,
                 None,
             )),
@@ -705,7 +709,7 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rent::id(),
                         false,
-                        &RefCell::new(sysvar::rent::create_account(0, &Rent::default()))
+                        &RefCell::new(account::create_account(&Rent::default(), 0))
                     )
                 ],
                 &serialize(&StakeInstruction::Initialize(
@@ -755,14 +759,15 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::clock::id(),
                         false,
-                        &RefCell::new(sysvar::clock::Clock::default().create_account(1))
+                        &RefCell::new(account::create_account(&sysvar::clock::Clock::default(), 1))
                     ),
                     KeyedAccount::new(
                         &sysvar::stake_history::id(),
                         false,
-                        &RefCell::new(
-                            sysvar::stake_history::StakeHistory::default().create_account(1)
-                        )
+                        &RefCell::new(account::create_account(
+                            &sysvar::stake_history::StakeHistory::default(),
+                            1
+                        ))
                     ),
                     KeyedAccount::new(
                         &config::id(),
@@ -785,15 +790,15 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rewards::id(),
                         false,
-                        &RefCell::new(sysvar::rewards::create_account(1, 0.0))
+                        &RefCell::new(account::create_account(
+                            &sysvar::rewards::Rewards::new(0.0),
+                            1
+                        ))
                     ),
                     KeyedAccount::new(
                         &sysvar::stake_history::id(),
                         false,
-                        &RefCell::new(sysvar::stake_history::create_account(
-                            1,
-                            &StakeHistory::default()
-                        ))
+                        &RefCell::new(account::create_account(&StakeHistory::default(), 1,))
                     ),
                 ],
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
@@ -824,7 +829,10 @@ mod tests {
                     KeyedAccount::new(
                         &sysvar::rewards::id(),
                         false,
-                        &RefCell::new(sysvar::rewards::create_account(1, 0.0))
+                        &RefCell::new(account::create_account(
+                            &sysvar::rewards::Rewards::new(0.0),
+                            1
+                        ))
                     ),
                 ],
                 &serialize(&StakeInstruction::Deactivate).unwrap(),

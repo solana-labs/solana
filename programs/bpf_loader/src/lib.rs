@@ -21,11 +21,11 @@ use solana_runtime::{
     process_instruction::{ComputeMeter, Executor, InvokeContext},
 };
 use solana_sdk::{
-    account::{is_executable, next_keyed_account, KeyedAccount},
     bpf_loader, bpf_loader_deprecated,
     decode_error::DecodeError,
     entrypoint::SUCCESS,
     instruction::InstructionError,
+    keyed_account::{is_executable, next_keyed_account, KeyedAccount},
     loader_instruction::LoaderInstruction,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
@@ -313,101 +313,13 @@ mod tests {
     use super::*;
     use rand::Rng;
     use solana_runtime::{
+        bpf_test_utils::MockInvokeContext,
         feature_set::FeatureSet,
         message_processor::{Executors, ThisInvokeContext},
-        process_instruction::{ComputeBudget, Logger, ProcessInstruction},
+        process_instruction::ComputeBudget,
     };
-    use solana_sdk::{
-        account::Account, instruction::CompiledInstruction, instruction::Instruction,
-        message::Message, rent::Rent,
-    };
+    use solana_sdk::{account::Account, rent::Rent};
     use std::{cell::RefCell, fs::File, io::Read, ops::Range, rc::Rc};
-
-    #[derive(Debug, Default, Clone)]
-    pub struct MockComputeMeter {
-        pub remaining: u64,
-    }
-    impl ComputeMeter for MockComputeMeter {
-        fn consume(&mut self, amount: u64) -> Result<(), InstructionError> {
-            let exceeded = self.remaining < amount;
-            self.remaining = self.remaining.saturating_sub(amount);
-            if exceeded {
-                return Err(InstructionError::ComputationalBudgetExceeded);
-            }
-            Ok(())
-        }
-        fn get_remaining(&self) -> u64 {
-            self.remaining
-        }
-    }
-    #[derive(Debug, Default, Clone)]
-    pub struct MockLogger {
-        pub log: Rc<RefCell<Vec<String>>>,
-    }
-    impl Logger for MockLogger {
-        fn log_enabled(&self) -> bool {
-            true
-        }
-        fn log(&mut self, message: &str) {
-            self.log.borrow_mut().push(message.to_string());
-        }
-    }
-    #[derive(Debug)]
-    pub struct MockInvokeContext {
-        pub key: Pubkey,
-        pub logger: MockLogger,
-        pub compute_budget: ComputeBudget,
-        pub compute_meter: MockComputeMeter,
-    }
-    impl Default for MockInvokeContext {
-        fn default() -> Self {
-            MockInvokeContext {
-                key: Pubkey::default(),
-                logger: MockLogger::default(),
-                compute_budget: ComputeBudget::default(),
-                compute_meter: MockComputeMeter {
-                    remaining: std::u64::MAX,
-                },
-            }
-        }
-    }
-    impl InvokeContext for MockInvokeContext {
-        fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
-            Ok(())
-        }
-        fn pop(&mut self) {}
-        fn verify_and_update(
-            &mut self,
-            _message: &Message,
-            _instruction: &CompiledInstruction,
-            _accounts: &[Rc<RefCell<Account>>],
-        ) -> Result<(), InstructionError> {
-            Ok(())
-        }
-        fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
-            Ok(&self.key)
-        }
-        fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
-            &[]
-        }
-        fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
-            Rc::new(RefCell::new(self.logger.clone()))
-        }
-        fn get_compute_budget(&self) -> &ComputeBudget {
-            &self.compute_budget
-        }
-        fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
-            Rc::new(RefCell::new(self.compute_meter.clone()))
-        }
-        fn add_executor(&mut self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
-        fn get_executor(&mut self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
-            None
-        }
-        fn record_instruction(&self, _instruction: &Instruction) {}
-        fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
-            true
-        }
-    }
 
     struct TestInstructionMeter {
         remaining: u64,
@@ -441,8 +353,8 @@ mod tests {
 
     #[test]
     fn test_bpf_loader_write() {
-        let program_id = Pubkey::new_rand();
-        let program_key = Pubkey::new_rand();
+        let program_id = solana_sdk::pubkey::new_rand();
+        let program_key = solana_sdk::pubkey::new_rand();
         let program_account = Account::new_ref(1, 0, &program_id);
         let keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         let instruction_data = bincode::serialize(&LoaderInstruction::Write {
@@ -508,8 +420,8 @@ mod tests {
 
     #[test]
     fn test_bpf_loader_finalize() {
-        let program_id = Pubkey::new_rand();
-        let program_key = Pubkey::new_rand();
+        let program_id = solana_sdk::pubkey::new_rand();
+        let program_key = solana_sdk::pubkey::new_rand();
         let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
         let mut elf = Vec::new();
         let rent = Rent::default();
@@ -572,8 +484,8 @@ mod tests {
 
     #[test]
     fn test_bpf_loader_invoke_main() {
-        let program_id = Pubkey::new_rand();
-        let program_key = Pubkey::new_rand();
+        let program_id = solana_sdk::pubkey::new_rand();
+        let program_key = solana_sdk::pubkey::new_rand();
 
         // Create program account
         let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
@@ -646,7 +558,7 @@ mod tests {
         );
 
         // Case: With duplicate accounts
-        let duplicate_key = Pubkey::new_rand();
+        let duplicate_key = solana_sdk::pubkey::new_rand();
         let parameter_account = Account::new_ref(1, 0, &program_id);
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
@@ -664,8 +576,8 @@ mod tests {
 
     #[test]
     fn test_bpf_loader_serialize_unaligned() {
-        let program_id = Pubkey::new_rand();
-        let program_key = Pubkey::new_rand();
+        let program_id = solana_sdk::pubkey::new_rand();
+        let program_key = solana_sdk::pubkey::new_rand();
 
         // Create program account
         let mut file = File::open("test_elfs/noop_unaligned.so").expect("file open failed");
@@ -690,7 +602,7 @@ mod tests {
         );
 
         // Case: With duplicate accounts
-        let duplicate_key = Pubkey::new_rand();
+        let duplicate_key = solana_sdk::pubkey::new_rand();
         let parameter_account = Account::new_ref(1, 0, &program_id);
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
@@ -708,8 +620,8 @@ mod tests {
 
     #[test]
     fn test_bpf_loader_serialize_aligned() {
-        let program_id = Pubkey::new_rand();
-        let program_key = Pubkey::new_rand();
+        let program_id = solana_sdk::pubkey::new_rand();
+        let program_key = solana_sdk::pubkey::new_rand();
 
         // Create program account
         let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
@@ -734,7 +646,7 @@ mod tests {
         );
 
         // Case: With duplicate accounts
-        let duplicate_key = Pubkey::new_rand();
+        let duplicate_key = solana_sdk::pubkey::new_rand();
         let parameter_account = Account::new_ref(1, 0, &program_id);
         let mut keyed_accounts = vec![KeyedAccount::new(&program_key, false, &program_account)];
         keyed_accounts.push(KeyedAccount::new(&duplicate_key, false, &parameter_account));
@@ -776,8 +688,8 @@ mod tests {
     #[test]
     #[ignore]
     fn test_fuzz() {
-        let program_id = Pubkey::new_rand();
-        let program_key = Pubkey::new_rand();
+        let program_id = solana_sdk::pubkey::new_rand();
+        let program_key = solana_sdk::pubkey::new_rand();
 
         // Create program account
         let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");

@@ -318,7 +318,7 @@ impl CrdsValue {
         R: rand::Rng,
     {
         let now = rng.gen();
-        let contact_info = ContactInfo::new_localhost(&Pubkey::new_rand(), now);
+        let contact_info = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), now);
         Self::new_signed(CrdsData::ContactInfo(contact_info), &Keypair::new())
     }
 

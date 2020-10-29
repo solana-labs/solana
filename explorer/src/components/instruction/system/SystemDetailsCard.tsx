@@ -1,8 +1,8 @@
 import React from "react";
 import {
-  SystemInstruction,
-  TransactionInstruction,
   SignatureResult,
+  ParsedInstruction,
+  ParsedTransaction,
 } from "@solana/web3.js";
 
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
@@ -17,46 +17,85 @@ import { NonceInitializeDetailsCard } from "./NonceInitializeDetailsCard";
 import { NonceAdvanceDetailsCard } from "./NonceAdvanceDetailsCard";
 import { NonceWithdrawDetailsCard } from "./NonceWithdrawDetailsCard";
 import { NonceAuthorizeDetailsCard } from "./NonceAuthorizeDetailsCard";
+import { ParsedInfo } from "validators";
+import { coerce } from "superstruct";
+import { reportError } from "utils/sentry";
+import {
+  CreateAccountInfo,
+  CreateAccountWithSeedInfo,
+  AllocateInfo,
+  AllocateWithSeedInfo,
+  AssignInfo,
+  AssignWithSeedInfo,
+  TransferInfo,
+  AdvanceNonceAccountInfo,
+  AuthorizeNonceAccountInfo,
+  InitializeNonceAccountInfo,
+  WithdrawNonceAccountInfo,
+} from "./types";
 
 type DetailsProps = {
-  ix: TransactionInstruction;
+  tx: ParsedTransaction;
+  ix: ParsedInstruction;
   result: SignatureResult;
   index: number;
 };
 
 export function SystemDetailsCard(props: DetailsProps) {
-  let systemInstructionType;
   try {
-    systemInstructionType = SystemInstruction.decodeInstructionType(props.ix);
-  } catch (err) {
-    console.error(err);
+    const parsed = coerce(props.ix.parsed, ParsedInfo);
+    switch (parsed.type) {
+      case "createAccount": {
+        const info = coerce(parsed.info, CreateAccountInfo);
+        return <CreateDetailsCard info={info} {...props} />;
+      }
+      case "createAccountWithSeed": {
+        const info = coerce(parsed.info, CreateAccountWithSeedInfo);
+        return <CreateWithSeedDetailsCard info={info} {...props} />;
+      }
+      case "allocate": {
+        const info = coerce(parsed.info, AllocateInfo);
+        return <AllocateDetailsCard info={info} {...props} />;
+      }
+      case "allocateWithSeed": {
+        const info = coerce(parsed.info, AllocateWithSeedInfo);
+        return <AllocateWithSeedDetailsCard info={info} {...props} />;
+      }
+      case "assign": {
+        const info = coerce(parsed.info, AssignInfo);
+        return <AssignDetailsCard info={info} {...props} />;
+      }
+      case "assignWithSeed": {
+        const info = coerce(parsed.info, AssignWithSeedInfo);
+        return <AssignWithSeedDetailsCard info={info} {...props} />;
+      }
+      case "transfer": {
+        const info = coerce(parsed.info, TransferInfo);
+        return <TransferDetailsCard info={info} {...props} />;
+      }
+      case "advanceNonceAccount": {
+        const info = coerce(parsed.info, AdvanceNonceAccountInfo);
+        return <NonceAdvanceDetailsCard info={info} {...props} />;
+      }
+      case "withdrawNonceAccount": {
+        const info = coerce(parsed.info, WithdrawNonceAccountInfo);
+        return <NonceWithdrawDetailsCard info={info} {...props} />;
+      }
+      case "authorizeNonceAccount": {
+        const info = coerce(parsed.info, AuthorizeNonceAccountInfo);
+        return <NonceAuthorizeDetailsCard info={info} {...props} />;
+      }
+      case "initializeNonceAccount": {
+        const info = coerce(parsed.info, InitializeNonceAccountInfo);
+        return <NonceInitializeDetailsCard info={info} {...props} />;
+      }
+      default:
+        return <UnknownDetailsCard {...props} />;
+    }
+  } catch (error) {
+    reportError(error, {
+      signature: props.tx.signatures[0],
+    });
     return <UnknownDetailsCard {...props} />;
-  }
-
-  switch (systemInstructionType) {
-    case "Create":
-      return <CreateDetailsCard {...props} />;
-    case "CreateWithSeed":
-      return <CreateWithSeedDetailsCard {...props} />;
-    case "Allocate":
-      return <AllocateDetailsCard {...props} />;
-    case "AllocateWithSeed":
-      return <AllocateWithSeedDetailsCard {...props} />;
-    case "Assign":
-      return <AssignDetailsCard {...props} />;
-    case "AssignWithSeed":
-      return <AssignWithSeedDetailsCard {...props} />;
-    case "Transfer":
-      return <TransferDetailsCard {...props} />;
-    case "AdvanceNonceAccount":
-      return <NonceAdvanceDetailsCard {...props} />;
-    case "WithdrawNonceAccount":
-      return <NonceWithdrawDetailsCard {...props} />;
-    case "AuthorizeNonceAccount":
-      return <NonceAuthorizeDetailsCard {...props} />;
-    case "InitializeNonceAccount":
-      return <NonceInitializeDetailsCard {...props} />;
-    default:
-      return <UnknownDetailsCard {...props} />;
   }
 }

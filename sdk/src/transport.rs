@@ -1,3 +1,5 @@
+#![cfg(feature = "full")]
+
 use crate::transaction::TransactionError;
 use std::io;
 use thiserror::Error;

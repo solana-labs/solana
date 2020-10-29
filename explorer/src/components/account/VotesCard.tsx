@@ -1,3 +1,4 @@
+import { Slot } from "components/common/Slot";
 import React from "react";
 import { VoteAccount, Vote } from "validators/accounts/vote";
 
@@ -44,7 +45,7 @@ const renderAccountRow = (vote: Vote, index: number) => {
   return (
     <tr key={index}>
       <td className="w-1 text-monospace">
-        {vote.slot.toLocaleString("en-US")}
+        <Slot slot={vote.slot} link />
       </td>
       <td className="text-monospace">{vote.confirmationCount}</td>
     </tr>

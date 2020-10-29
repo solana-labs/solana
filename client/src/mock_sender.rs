@@ -1,17 +1,19 @@
 use crate::{
     client_error::Result,
     rpc_request::RpcRequest,
-    rpc_response::{Response, RpcResponseContext},
+    rpc_response::{Response, RpcResponseContext, RpcVersionInfo},
     rpc_sender::RpcSender,
 };
-use serde_json::{Number, Value};
+use serde_json::{json, Number, Value};
 use solana_sdk::{
+    epoch_info::EpochInfo,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     instruction::InstructionError,
     signature::Signature,
     transaction::{self, Transaction, TransactionError},
 };
 use solana_transaction_status::TransactionStatus;
+use solana_version::Version;
 use std::{collections::HashMap, sync::RwLock};
 
 pub const PUBKEY: &str = "7RoSF9fUmdphVCpabEoefH81WwrW7orsWonXWqTXkKV8";
@@ -56,6 +58,13 @@ impl RpcSender for MockSender {
                     Value::String(PUBKEY.to_string()),
                     serde_json::to_value(FeeCalculator::default()).unwrap(),
                 ),
+            })?,
+            RpcRequest::GetEpochInfo => serde_json::to_value(EpochInfo {
+                epoch: 1,
+                slot_index: 2,
+                slots_in_epoch: 32,
+                absolute_slot: 34,
+                block_height: 34,
             })?,
             RpcRequest::GetFeeCalculatorForBlockhash => {
                 let value = if self.url == "blockhash_expired" {
@@ -119,6 +128,13 @@ impl RpcSender for MockSender {
                 Value::String(signature)
             }
             RpcRequest::GetMinimumBalanceForRentExemption => Value::Number(Number::from(20)),
+            RpcRequest::GetVersion => {
+                let version = Version::default();
+                json!(RpcVersionInfo {
+                    solana_core: version.to_string(),
+                    feature_set: Some(version.feature_set),
+                })
+            }
             _ => Value::Null,
         };
         Ok(val)

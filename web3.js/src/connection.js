@@ -20,6 +20,7 @@ import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
 import type {Account} from './account';
 import type {TransactionSignature} from './transaction';
+import type {CompiledInstruction} from './message';
 import {AgentManager} from './agent-manager';
 
 export const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
@@ -367,11 +368,47 @@ const SimulatedTransactionResponseValidator = jsonRpcResultAndContext(
   }),
 );
 
+type PartiallyDecodedInnerInstruction = {
+  index: number,
+  instructions: PartiallyDecodedInstruction[],
+};
+
+type ParsedInnerInstruction = {
+  index: number,
+  instructions: (ParsedInstruction | PartiallyDecodedInnerInstruction)[],
+};
+
+/**
+ * Metadata for a parsed confirmed transaction on the ledger
+ *
+ * @typedef {Object} ParsedConfirmedTransactionMeta
+ * @property {number} fee The fee charged for processing the transaction
+ * @property {Array<ParsedInnerInstruction>} innerInstructions An array of cross program invoked parsed instructions
+ * @property {Array<number>} preBalances The balances of the transaction accounts before processing
+ * @property {Array<number>} postBalances The balances of the transaction accounts after processing
+ * @property {Array<string>} logMessages An array of program log messages emitted during a transaction
+ * @property {object|null} err The error result of transaction processing
+ */
+type ParsedConfirmedTransactionMeta = {
+  fee: number,
+  innerInstructions?: ParsedInnerInstruction[],
+  preBalances: Array<number>,
+  postBalances: Array<number>,
+  logMessages?: Array<string>,
+  err: TransactionError | null,
+};
+
+type CompiledInnerInstruction = {
+  index: number,
+  instructions: CompiledInstruction[],
+};
+
 /**
  * Metadata for a confirmed transaction on the ledger
  *
  * @typedef {Object} ConfirmedTransactionMeta
  * @property {number} fee The fee charged for processing the transaction
+ * @property {Array<CompiledInnerInstruction>} innerInstructions An array of cross program invoked instructions
  * @property {Array<number>} preBalances The balances of the transaction accounts before processing
  * @property {Array<number>} postBalances The balances of the transaction accounts after processing
  * @property {Array<string>} logMessages An array of program log messages emitted during a transaction
@@ -379,6 +416,7 @@ const SimulatedTransactionResponseValidator = jsonRpcResultAndContext(
  */
 type ConfirmedTransactionMeta = {
   fee: number,
+  innerInstructions?: CompiledInnerInstruction[],
   preBalances: Array<number>,
   postBalances: Array<number>,
   logMessages?: Array<string>,
@@ -478,7 +516,7 @@ type ParsedTransaction = {
 type ParsedConfirmedTransaction = {
   slot: number,
   transaction: ParsedTransaction,
-  meta: ConfirmedTransactionMeta | null,
+  meta: ParsedConfirmedTransactionMeta | null,
 };
 
 /**
@@ -1126,6 +1164,58 @@ const ConfirmedTransactionMetaResult = struct.union([
   struct.pick({
     err: TransactionErrorResult,
     fee: 'number',
+    innerInstructions: struct.union([
+      struct.array([
+        struct({
+          index: 'number',
+          instructions: struct.array([
+            struct({
+              accounts: struct.array(['number']),
+              data: 'string',
+              programIdIndex: 'number',
+            }),
+          ]),
+        }),
+      ]),
+      'null',
+      'undefined',
+    ]),
+    preBalances: struct.array(['number']),
+    postBalances: struct.array(['number']),
+    logMessages: struct.union([struct.array(['string']), 'null', 'undefined']),
+  }),
+]);
+/**
+ * @private
+ */
+const ParsedConfirmedTransactionMetaResult = struct.union([
+  'null',
+  struct.pick({
+    err: TransactionErrorResult,
+    fee: 'number',
+    innerInstructions: struct.union([
+      struct.array([
+        struct({
+          index: 'number',
+          instructions: struct.array([
+            struct.union([
+              struct({
+                accounts: struct.array(['string']),
+                data: 'string',
+                programId: 'string',
+              }),
+              struct({
+                parsed: 'any',
+                program: 'string',
+                programId: 'string',
+              }),
+            ]),
+          ]),
+        }),
+      ]),
+      'null',
+      'undefined',
+    ]),
     preBalances: struct.array(['number']),
     postBalances: struct.array(['number']),
     logMessages: struct.union([struct.array(['string']), 'null', 'undefined']),
@@ -1186,7 +1276,7 @@ const GetParsedConfirmedTransactionRpcResult = jsonRpcResult(
     struct.pick({
       slot: 'number',
       transaction: ParsedConfirmedTransactionResult,
-      meta: ConfirmedTransactionMetaResult,
+      meta: ParsedConfirmedTransactionMetaResult,
     }),
   ]),
 );
@@ -2445,10 +2535,11 @@ export class Connection {
    */
   async getConfirmedBlock(slot: number): Promise<ConfirmedBlock> {
     const unsafeRes = await this._rpcRequest('getConfirmedBlock', [slot]);
-    const {result, error} = GetConfirmedBlockRpcResult(unsafeRes);
-    if (error) {
-      throw new Error('failed to get confirmed block: ' + result.error.message);
+    const res = GetConfirmedBlockRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error('failed to get confirmed block: ' + res.error.message);
     }
+    const result = res.result;
     assert(typeof result !== 'undefined');
     if (!result) {
       throw new Error('Confirmed block ' + slot + ' not found');
@@ -2857,6 +2948,14 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('sendTransaction', args);
     const res = SendTransactionRpcResult(unsafeRes);
     if (res.error) {
+      if (res.error.data) {
+        const logs = res.error.data.logs;
+        if (logs && Array.isArray(logs)) {
+          const traceIndent = '\n    ';
+          const logTrace = traceIndent + logs.join(traceIndent);
+          console.error(res.error.message, logTrace);
+        }
+      }
       throw new Error('failed to send transaction: ' + res.error.message);
     }
     assert(typeof res.result !== 'undefined');

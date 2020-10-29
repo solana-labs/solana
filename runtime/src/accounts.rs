@@ -22,7 +22,7 @@ use solana_sdk::{
     genesis_config::ClusterType,
     hash::Hash,
     message::Message,
-    native_loader, nonce,
+    native_loader, nonce, nonce_account,
     pubkey::Pubkey,
     transaction::Result,
     transaction::{Transaction, TransactionError},
@@ -144,6 +144,8 @@ impl Accounts {
             let mut payer_index = None;
             let mut tx_rent: TransactionRent = 0;
             let mut accounts = Vec::with_capacity(message.account_keys.len());
+            let rent_fix_enabled = feature_set.cumulative_rent_related_fixes_enabled();
+
             for (i, key) in message.account_keys.iter().enumerate() {
                 let account = if Self::is_non_loader_key(message, key, i) {
                     if payer_index.is_none() {
@@ -163,7 +165,11 @@ impl Accounts {
                                 .map(|(mut account, _)| {
                                     if message.is_writable(i) {
                                         let rent_due = rent_collector
-                                            .collect_from_existing_account(&key, &mut account);
+                                            .collect_from_existing_account(
+                                                &key,
+                                                &mut account,
+                                                rent_fix_enabled,
+                                            );
                                         (account, rent_due)
                                     } else {
                                         (account, 0)
@@ -300,9 +306,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
     ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
-        //PERF: hold the lock to scan for the references, but not to clone the accounts
-        //TODO: two locks usually leads to deadlocks, should this be one structure?
-        let accounts_index = self.accounts_db.accounts_index.read().unwrap();
+        let accounts_index = &self.accounts_db.accounts_index;
 
         let fee_config = FeeConfig {
             secp256k1_program_enabled: feature_set
@@ -314,7 +318,7 @@ impl Accounts {
                 ((_, tx), (Ok(()), hash_age_kind)) => {
                     let fee_calculator = match hash_age_kind.as_ref() {
                         Some(HashAgeKind::DurableNonce(_, account)) => {
-                            nonce::utils::fee_calculator_of(account)
+                            nonce_account::fee_calculator_of(account)
                         }
                         _ => hash_queue
                             .get_fee_calculator(&tx.message().recent_blockhash)
@@ -329,7 +333,7 @@ impl Accounts {
                     let load_res = self.load_tx_accounts(
                         &self.accounts_db.storage,
                         ancestors,
-                        &accounts_index,
+                        accounts_index,
                         tx,
                         fee,
                         error_counters,
@@ -344,7 +348,7 @@ impl Accounts {
                     let load_res = Self::load_loaders(
                         &self.accounts_db.storage,
                         ancestors,
-                        &accounts_index,
+                        accounts_index,
                         tx,
                         error_counters,
                     );
@@ -720,6 +724,8 @@ impl Accounts {
     }
 
     /// Store the accounts into the DB
+    // allow(clippy) needed for various gating flags
+    #[allow(clippy::too_many_arguments)]
     pub fn store_accounts(
         &self,
         slot: Slot,
@@ -730,6 +736,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
+        rent_fix_enabled: bool,
     ) {
         let accounts_to_store = self.collect_accounts_to_store(
             txs,
@@ -739,6 +746,7 @@ impl Accounts {
             rent_collector,
             last_blockhash_with_fee_calculator,
             fix_recent_blockhashes_sysvar_delay,
+            rent_fix_enabled,
         );
         self.accounts_db.store(slot, &accounts_to_store);
     }
@@ -766,6 +774,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
+        rent_fix_enabled: bool,
     ) -> Vec<(&'a Pubkey, &'a Account)> {
         let mut accounts = Vec::with_capacity(loaded.len());
         for (i, ((raccs, _hash_age_kind), (_, tx))) in loaded
@@ -806,7 +815,11 @@ impl Accounts {
                 );
                 if message.is_writable(i) {
                     if account.rent_epoch == 0 {
-                        acc.2 += rent_collector.collect_from_created_account(&key, account);
+                        acc.2 += rent_collector.collect_from_created_account(
+                            &key,
+                            account,
+                            rent_fix_enabled,
+                        );
                     }
                     accounts.push((key, &*account));
                 }
@@ -863,7 +876,7 @@ pub fn create_test_accounts(
     slot: Slot,
 ) {
     for t in 0..num {
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new((t + 1) as u64, 0, &Account::default().owner);
         accounts.store_slow(slot, &pubkey, &account);
         pubkeys.push(pubkey);
@@ -1086,7 +1099,7 @@ mod tests {
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
 
-        let account = Account::new(1, 1, &Pubkey::new_rand()); // <-- owner is not the system program
+        let account = Account::new(1, 1, &solana_sdk::pubkey::new_rand()); // <-- owner is not the system program
         accounts.push((key0, account));
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
@@ -1122,7 +1135,6 @@ mod tests {
                 lamports_per_byte_year: 42,
                 ..Rent::default()
             },
-            ClusterType::Development,
         );
         let min_balance = rent_collector.rent.minimum_balance(nonce::State::size());
         let fee_calculator = FeeCalculator::new(min_balance);
@@ -1481,13 +1493,13 @@ mod tests {
         let accounts = Accounts::new(Vec::new(), &ClusterType::Development);
 
         // Load accounts owned by various programs into AccountsDB
-        let pubkey0 = Pubkey::new_rand();
+        let pubkey0 = solana_sdk::pubkey::new_rand();
         let account0 = Account::new(1, 0, &Pubkey::new(&[2; 32]));
         accounts.store_slow(0, &pubkey0, &account0);
-        let pubkey1 = Pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
         let account1 = Account::new(1, 0, &Pubkey::new(&[2; 32]));
         accounts.store_slow(0, &pubkey1, &account1);
-        let pubkey2 = Pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
         let account2 = Account::new(1, 0, &Pubkey::new(&[3; 32]));
         accounts.store_slow(0, &pubkey2, &account2);
 
@@ -1505,13 +1517,12 @@ mod tests {
         let mut error_counters = ErrorCounters::default();
         let ancestors = vec![(0, 0)].into_iter().collect();
 
-        let accounts_index = accounts.accounts_db.accounts_index.read().unwrap();
         assert_eq!(
             Accounts::load_executable_accounts(
                 &accounts.accounts_db.storage,
                 &ancestors,
-                &accounts_index,
-                &Pubkey::new_rand(),
+                &accounts.accounts_db.accounts_index,
+                &solana_sdk::pubkey::new_rand(),
                 &mut error_counters
             ),
             Err(TransactionError::ProgramAccountNotFound)
@@ -1718,7 +1729,7 @@ mod tests {
     fn test_collect_accounts_to_store() {
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();
-        let pubkey = Pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
 
         let rent_collector = RentCollector::default();
 
@@ -1799,6 +1810,7 @@ mod tests {
             &rent_collector,
             &(Hash::default(), FeeCalculator::default()),
             true,
+            true,
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
@@ -1836,7 +1848,7 @@ mod tests {
         let zero_account = Account::new(0, 0, &Account::default().owner);
         info!("storing..");
         for i in 0..2_000 {
-            let pubkey = Pubkey::new_rand();
+            let pubkey = solana_sdk::pubkey::new_rand();
             let account = Account::new((i + 1) as u64, 0, &Account::default().owner);
             accounts.store_slow(i, &pubkey, &account);
             accounts.store_slow(i, &old_pubkey, &zero_account);
@@ -1883,7 +1895,7 @@ mod tests {
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0, 1])];
         let tx = Transaction::new_with_compiled_instructions(
             &[&keypair],
-            &[Pubkey::new_rand(), instructions_key],
+            &[solana_sdk::pubkey::new_rand(), instructions_key],
             Hash::default(),
             vec![native_loader::id()],
             instructions,

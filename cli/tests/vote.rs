@@ -12,7 +12,6 @@ use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     account_utils::StateMut,
     commitment_config::CommitmentConfig,
-    pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
 use solana_vote_program::vote_state::{VoteAuthorize, VoteState, VoteStateVersions};
@@ -110,7 +109,7 @@ fn test_vote_authorize_and_withdraw() {
     assert_eq!(authorized_withdrawer, withdraw_authority.pubkey());
 
     // Withdraw from vote account
-    let destination_account = Pubkey::new_rand(); // Send withdrawal to new account to make balance check easy
+    let destination_account = solana_sdk::pubkey::new_rand(); // Send withdrawal to new account to make balance check easy
     config.signers = vec![&default_signer, &withdraw_authority];
     config.command = CliCommand::WithdrawFromVoteAccount {
         vote_account_pubkey,

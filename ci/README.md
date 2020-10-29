@@ -47,6 +47,8 @@ sudo ./setup-new-buildkite-agent/setup-buildkite.sh
 ```
 - Copy the pubkey contents from `~buildkite-agent/.ssh/id_ecdsa.pub` and
 add the pubkey as an authorized SSH key on github.
+  - In net/scripts/solana-user-authorized_keys.sh
+  - Bug mvines to add it to the "solana-grimes" github user
 - Edit `/etc/buildkite-agent/buildkite-agent.cfg` and/or `/etc/systemd/system/buildkite-agent@*` to the desired configuration of the agent(s)
 - Copy `ejson` keys from another CI node at `/opt/ejson/keys/`
 to the same location on the new node.

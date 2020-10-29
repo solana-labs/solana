@@ -313,7 +313,7 @@ mod tests {
         let bank_client = BankClient::new(bank);
 
         // Create 2-2 Multisig Transfer instruction.
-        let bob_pubkey = Pubkey::new_rand();
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
         let mut transfer_instruction = system_instruction::transfer(&john_pubkey, &bob_pubkey, 42);
         transfer_instruction
             .accounts

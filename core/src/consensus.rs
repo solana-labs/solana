@@ -89,7 +89,7 @@ pub(crate) struct ComputedBankState {
     pub pubkey_votes: Arc<PubkeyVotes>,
 }
 
-#[frozen_abi(digest = "2ZUeCLMVQxmHYbeqMH7M97ifVSKoVErGvRHzyxcQRjgU")]
+#[frozen_abi(digest = "Eay84NBbJqiMBfE7HHH2o6e51wcvoU79g8zCi5sw6uj3")]
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, AbiExample)]
 pub struct Tower {
     node_pubkey: Pubkey,
@@ -921,11 +921,12 @@ impl Tower {
             }
 
             if let Some(checked_slot) = checked_slot {
-                // This is really special, only if tower is initialized (root = slot 0) for genesis and contains
-                // a vote (= slot 0) for the genesis, the slot 0 can repeat only once
-                let voting_from_genesis = *slot_in_tower == checked_slot && *slot_in_tower == 0;
+                // This is really special, only if tower is initialized and contains
+                // a vote for the root, the root slot can repeat only once
+                let voting_for_root =
+                    *slot_in_tower == checked_slot && *slot_in_tower == tower_root;
 
-                if !voting_from_genesis {
+                if !voting_for_root {
                     // Unless we're voting since genesis, slots_in_tower must always be older than last checked_slot
                     // including all vote slot and the root slot.
                     assert!(
@@ -1536,7 +1537,7 @@ pub mod test {
                 &mut account.data,
             )
             .expect("serialize state");
-            stakes.push((Pubkey::new_rand(), (*lamports, account)));
+            stakes.push((solana_sdk::pubkey::new_rand(), (*lamports, account)));
         }
         stakes
     }
@@ -3036,6 +3037,23 @@ pub mod test {
         tower
             .adjust_lockouts_after_replay(2, &slot_history)
             .unwrap();
+    }
+
+    #[test]
+    fn test_adjust_lockouts_after_replay_vote_on_root() {
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.lockouts.root_slot = Some(42);
+        tower.lockouts.votes.push_back(Lockout::new(42));
+        tower.lockouts.votes.push_back(Lockout::new(43));
+        tower.lockouts.votes.push_back(Lockout::new(44));
+        let vote = Vote::new(vec![44], Hash::default());
+        tower.last_vote = vote;
+
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(42);
+
+        let tower = tower.adjust_lockouts_after_replay(42, &slot_history);
+        assert_eq!(tower.unwrap().voted_slots(), [43, 44]);
     }
 
     #[test]

@@ -26,7 +26,7 @@ export enum ActionType {
 export type Update<T> = {
   type: ActionType.Update;
   url: string;
-  key: string;
+  key: string | number;
   status: FetchStatus;
   data?: T;
 };
