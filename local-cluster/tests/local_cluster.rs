@@ -43,6 +43,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     system_transaction,
 };
+use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
     collections::{HashMap, HashSet},
@@ -1914,21 +1915,23 @@ fn test_future_tower() {
             }
         }
     }
+    let purged_slot_before_restart = 10;
     let validator_a_info = cluster.exit_node(&validator_a_pubkey);
     {
         // revert blockstore to effectively create a warped future tower without mangling the tower itself
         let blockstore = open_blockstore(&val_a_ledger_path);
-        purge_slots(&blockstore, 10, 100);
+        purge_slots(&blockstore, purged_slot_before_restart, 100);
     }
 
     cluster.restart_node(&validator_a_pubkey, validator_a_info);
 
     let mut newly_rooted = false;
+    let some_root_after_restart = purged_slot_before_restart + 15; // 15 is arbitrary; just wait a bit
     for _ in 0..300 {
         sleep(Duration::from_millis(100));
 
         if let Some(root) = root_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
-            if root >= 25 {
+            if root >= some_root_after_restart {
                 newly_rooted = true;
                 break;
             }
@@ -1939,11 +1942,13 @@ fn test_future_tower() {
         // there should be no forks; i.e. monotonically increasing voted slots
         let last_vote = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey).unwrap();
         let blockstore = open_blockstore(&val_a_ledger_path);
+        let ideal_countinuous_no_fork_votes =
+            some_root_after_restart..=some_root_after_restart + MAX_LOCKOUT_HISTORY as Slot + 2;
         assert_eq!(
             AncestorIterator::new(last_vote, &blockstore)
-                .take_while(|a| *a >= 25)
+                .take_while(|a| *a >= some_root_after_restart)
                 .collect::<Vec<_>>(),
-            (25..=58).rev().collect::<Vec<_>>()
+            ideal_countinuous_no_fork_votes.rev().collect::<Vec<_>>(),
         );
         info!("validator managed to handle future tower!");
     } else {
