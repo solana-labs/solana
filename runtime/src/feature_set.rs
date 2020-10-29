@@ -133,7 +133,7 @@ impl FeatureSet {
     }
 
     pub fn activated_slot(&self, feature_id: &Pubkey) -> Option<Slot> {
-        self.active.get(feature_id).map(|slot| *slot)
+        self.active.get(feature_id).copied()
     }
 
     pub fn cumulative_rent_related_fixes_enabled(&self) -> bool {
