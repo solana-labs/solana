@@ -1,5 +1,6 @@
 use lazy_static::lazy_static;
 use solana_sdk::{
+    clock::Slot,
     hash::{Hash, Hasher},
     pubkey::Pubkey,
 };
@@ -114,21 +115,25 @@ lazy_static! {
 /// `FeatureSet` holds the set of currently active/inactive runtime features
 #[derive(AbiExample, Debug, Clone)]
 pub struct FeatureSet {
-    pub active: HashSet<Pubkey>,
+    pub active: HashMap<Pubkey, Slot>,
     pub inactive: HashSet<Pubkey>,
 }
 impl Default for FeatureSet {
     fn default() -> Self {
         // All features disabled
         Self {
-            active: HashSet::new(),
+            active: HashMap::new(),
             inactive: FEATURE_NAMES.keys().cloned().collect(),
         }
     }
 }
 impl FeatureSet {
     pub fn is_active(&self, feature_id: &Pubkey) -> bool {
-        self.active.contains(feature_id)
+        self.active.contains_key(feature_id)
+    }
+
+    pub fn activated_slot(&self, feature_id: &Pubkey) -> Option<Slot> {
+        self.active.get(feature_id).copied()
     }
 
     pub fn cumulative_rent_related_fixes_enabled(&self) -> bool {
@@ -138,7 +143,7 @@ impl FeatureSet {
     /// All features enabled, useful for testing
     pub fn all_enabled() -> Self {
         Self {
-            active: FEATURE_NAMES.keys().cloned().collect(),
+            active: FEATURE_NAMES.keys().cloned().map(|key| (key, 0)).collect(),
             inactive: HashSet::new(),
         }
     }
