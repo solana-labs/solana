@@ -2178,7 +2178,7 @@ export class Connection {
     assert(decodedSignature.length === 64, 'signature has invalid length');
 
     const start = Date.now();
-    const subscriptionCommitment: Commitment = commitment || this.commitment;
+    const subscriptionCommitment = commitment || this.commitment;
 
     let subscriptionId;
     let response: RpcResponseAndContext<SignatureResult> | null = null;
