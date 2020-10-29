@@ -205,7 +205,8 @@ pub struct ThisInvokeContext<'a> {
     program_ids: Vec<Pubkey>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
-    programs: &'a[(Pubkey, ProcessInstructionWithContext)],
+    programs: &'a [(Pubkey, ProcessInstructionWithContext)],
+    loaders: &'a [(Pubkey, ProcessInstructionWithContext)],
     logger: Rc<RefCell<dyn Logger>>,
     compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
@@ -219,6 +220,7 @@ impl<'a> ThisInvokeContext<'a> {
         rent: Rent,
         pre_accounts: Vec<PreAccount>,
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
+        loaders: &'a [(Pubkey, ProcessInstructionWithContext)],
         log_collector: Option<Rc<LogCollector>>,
         compute_budget: ComputeBudget,
         executors: Rc<RefCell<Executors>>,
@@ -232,6 +234,7 @@ impl<'a> ThisInvokeContext<'a> {
             rent,
             pre_accounts,
             programs,
+            loaders,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
             compute_budget,
             compute_meter: Rc::new(RefCell::new(ThisComputeMeter {
@@ -283,6 +286,9 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     }
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
         self.programs
+    }
+    fn get_loaders(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
+        self.loaders
     }
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
         self.logger.clone()
@@ -397,6 +403,17 @@ impl ::solana_frozen_abi::abi_example::AbiExample for MessageProcessor {
 }
 
 impl MessageProcessor {
+    pub fn new_with_programs_and_loaders(
+        programs: &[(Pubkey, ProcessInstructionWithContext)],
+        loaders: &[(Pubkey, ProcessInstructionWithContext)],
+    ) -> Self {
+        Self {
+            programs: programs.to_vec(),
+            loaders: loaders.to_vec(),
+            native_loader: NativeLoader::default(),
+        }
+    }
+
     /// Add a static entrypoint to intercept instructions before the dynamic loader.
     pub fn add_program(
         &mut self,
@@ -694,6 +711,7 @@ impl MessageProcessor {
             rent_collector.rent,
             pre_accounts,
             &self.programs,
+            &self.loaders,
             log_collector,
             Self::get_compute_budget(&feature_set),
             executors,

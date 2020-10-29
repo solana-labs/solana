@@ -11,7 +11,7 @@ use solana_runtime::message_processor::MessageProcessor;
 use solana_sdk::{
     account::Account,
     account_info::AccountInfo,
-    bpf_loader, bpf_loader_deprecated,
+    bpf_loader_deprecated,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     feature_set::{
         pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled, sha256_syscall_enabled,
@@ -1179,12 +1179,10 @@ fn call<'a>(
         return Err(SyscallError::InstructionError(InstructionError::AccountNotExecutable).into());
     }
     let executable_accounts = vec![(callee_program_id, program_account)];
-    let mut message_processor = MessageProcessor::default();
-    for (program_id, process_instruction) in invoke_context.get_programs().iter() {
-        message_processor.add_program(*program_id, *process_instruction);
-    }
-    message_processor.add_loader(bpf_loader::id(), crate::process_instruction);
-    message_processor.add_loader(bpf_loader_deprecated::id(), crate::process_instruction);
+    let message_processor = MessageProcessor::new_with_programs_and_loaders(
+        invoke_context.get_programs(),
+        invoke_context.get_loaders(),
+    );
 
     #[allow(clippy::deref_addrof)]
     match message_processor.process_cross_program_instruction(

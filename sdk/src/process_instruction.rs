@@ -52,6 +52,8 @@ pub trait InvokeContext {
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
     /// Get a list of built-in programs
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)];
+    /// Get a list of built-in loaders
+    fn get_loaders(&self) -> &[(Pubkey, ProcessInstructionWithContext)];
     /// Get this invocation's logger
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>>;
     /// Get this invocation's compute budget
@@ -246,6 +248,9 @@ impl InvokeContext for MockInvokeContext {
         Ok(&self.key)
     }
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
+        &[]
+    }
+    fn get_loaders(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
         &[]
     }
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
