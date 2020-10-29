@@ -288,12 +288,11 @@ impl CrdsGossipPush {
 
     /// add the `from` to the peer's filter of nodes
     pub fn process_prune_msg(&mut self, self_pubkey: &Pubkey, peer: &Pubkey, origins: &[Pubkey]) {
-        for origin in origins {
-            if origin == self_pubkey {
-                continue;
-            }
-            if let Some(p) = self.active_set.get_mut(peer) {
-                p.add(origin)
+        if let Some(peer) = self.active_set.get_mut(peer) {
+            for origin in origins {
+                if origin != self_pubkey {
+                    peer.add(origin);
+                }
             }
         }
     }
