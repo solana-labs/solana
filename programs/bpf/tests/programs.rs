@@ -12,10 +12,8 @@ use solana_rbpf::vm::Executable;
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
-    bpf_test_utils::MockInvokeContext,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::load_program,
-    process_instruction::{ComputeBudget, InvokeContext},
 };
 use solana_sdk::{
     account::Account,
@@ -26,6 +24,7 @@ use solana_sdk::{
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     message::Message,
+    process_instruction::{ComputeBudget, InvokeContext, MockInvokeContext},
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     sysvar::{clock, fees, rent, slot_hashes, stake_history},

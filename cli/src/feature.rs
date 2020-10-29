@@ -9,12 +9,14 @@ use solana_clap_utils::{input_parsers::*, input_validators::*, keypair::*};
 use solana_cli_output::{QuietDisplay, VerboseDisplay};
 use solana_client::{client_error::ClientError, rpc_client::RpcClient};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_runtime::{
+use solana_sdk::{
+    clock::Slot,
     feature::{self, Feature},
     feature_set::FEATURE_NAMES,
-};
-use solana_sdk::{
-    clock::Slot, message::Message, pubkey::Pubkey, system_instruction, transaction::Transaction,
+    message::Message,
+    pubkey::Pubkey,
+    system_instruction,
+    transaction::Transaction,
 };
 use std::{collections::HashMap, fmt, sync::Arc};
 

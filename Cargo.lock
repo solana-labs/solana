@@ -3791,7 +3791,6 @@ dependencies = [
  "solana-logger 1.5.0",
  "solana-net-utils",
  "solana-remote-wallet",
- "solana-runtime",
  "solana-sdk 1.5.0",
  "solana-stake-program",
  "solana-transaction-status",
@@ -4638,6 +4637,7 @@ dependencies = [
  "hex",
  "hmac",
  "itertools 0.9.0",
+ "lazy_static",
  "libsecp256k1",
  "log 0.4.8",
  "memmap",
@@ -5001,7 +5001,6 @@ dependencies = [
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-logger 1.5.0",
- "solana-runtime",
  "solana-sdk 1.5.0",
 ]
 
