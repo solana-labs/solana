@@ -8,7 +8,7 @@ pub trait IsInitialized {
     fn is_initialized(&self) -> bool;
 }
 
-/// Depends on Sized
+/// Implementors must have a known size
 pub trait Sealed: Sized {}
 
 /// Safely and efficiently (de)serialize account state
