@@ -36,7 +36,7 @@ use solana_metrics::{
     datapoint_debug, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
 };
 use solana_sdk::{
-    account::Account,
+    account::{create_account, from_account, Account},
     clock::{
         Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
         MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES, MAX_TRANSACTION_FORWARDING_DELAY,
@@ -54,16 +54,17 @@ use solana_sdk::{
     message::Message,
     native_loader,
     native_token::sol_to_lamports,
-    nonce,
+    nonce, nonce_account,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
+    recent_blockhashes_account,
     sanitize::Sanitize,
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
     stake_weighted_timestamp::{calculate_stake_weighted_timestamp, TIMESTAMP_SLOT_RANGE},
     system_transaction,
-    sysvar::{self, Sysvar},
+    sysvar::{self},
     timing::years_as_slots,
     transaction::{self, Result, Transaction, TransactionError},
 };
@@ -1086,10 +1087,8 @@ impl Bank {
     }
 
     pub fn clock(&self) -> sysvar::clock::Clock {
-        sysvar::clock::Clock::from_account(
-            &self.get_account(&sysvar::clock::id()).unwrap_or_default(),
-        )
-        .unwrap_or_default()
+        from_account(&self.get_account(&sysvar::clock::id()).unwrap_or_default())
+            .unwrap_or_default()
     }
 
     fn update_clock(&self) {
@@ -1117,7 +1116,7 @@ impl Bank {
             unix_timestamp,
         };
         self.update_sysvar_account(&sysvar::clock::id(), |account| {
-            clock.create_account(self.inherit_sysvar_account_balance(account))
+            create_account(&clock, self.inherit_sysvar_account_balance(account))
         });
     }
 
@@ -1125,10 +1124,10 @@ impl Bank {
         self.update_sysvar_account(&sysvar::slot_history::id(), |account| {
             let mut slot_history = account
                 .as_ref()
-                .map(|account| SlotHistory::from_account(&account).unwrap())
+                .map(|account| from_account::<SlotHistory>(&account).unwrap())
                 .unwrap_or_default();
             slot_history.add(self.slot());
-            slot_history.create_account(self.inherit_sysvar_account_balance(account))
+            create_account(&slot_history, self.inherit_sysvar_account_balance(account))
         });
     }
 
@@ -1136,15 +1135,15 @@ impl Bank {
         self.update_sysvar_account(&sysvar::slot_hashes::id(), |account| {
             let mut slot_hashes = account
                 .as_ref()
-                .map(|account| SlotHashes::from_account(&account).unwrap())
+                .map(|account| from_account::<SlotHashes>(&account).unwrap())
                 .unwrap_or_default();
             slot_hashes.add(self.parent_slot, self.parent_hash);
-            slot_hashes.create_account(self.inherit_sysvar_account_balance(account))
+            create_account(&slot_hashes, self.inherit_sysvar_account_balance(account))
         });
     }
 
     pub fn get_slot_history(&self) -> SlotHistory {
-        SlotHistory::from_account(&self.get_account(&sysvar::slot_history::id()).unwrap()).unwrap()
+        from_account(&self.get_account(&sysvar::slot_history::id()).unwrap()).unwrap()
     }
 
     fn update_epoch_stakes(&mut self, leader_schedule_epoch: Epoch) {
@@ -1179,27 +1178,27 @@ impl Bank {
 
     fn update_fees(&self) {
         self.update_sysvar_account(&sysvar::fees::id(), |account| {
-            sysvar::fees::create_account(
+            create_account(
+                &sysvar::fees::Fees::new(&self.fee_calculator),
                 self.inherit_sysvar_account_balance(account),
-                &self.fee_calculator,
             )
         });
     }
 
     fn update_rent(&self) {
         self.update_sysvar_account(&sysvar::rent::id(), |account| {
-            sysvar::rent::create_account(
-                self.inherit_sysvar_account_balance(account),
+            create_account(
                 &self.rent_collector.rent,
+                self.inherit_sysvar_account_balance(account),
             )
         });
     }
 
     fn update_epoch_schedule(&self) {
         self.update_sysvar_account(&sysvar::epoch_schedule::id(), |account| {
-            sysvar::epoch_schedule::create_account(
-                self.inherit_sysvar_account_balance(account),
+            create_account(
                 &self.epoch_schedule,
+                self.inherit_sysvar_account_balance(account),
             )
         });
     }
@@ -1210,9 +1209,9 @@ impl Bank {
         }
         // if I'm the first Bank in an epoch, ensure stake_history is updated
         self.update_sysvar_account(&sysvar::stake_history::id(), |account| {
-            sysvar::stake_history::create_account(
+            create_account::<sysvar::stake_history::StakeHistory>(
+                &self.stakes.read().unwrap().history(),
                 self.inherit_sysvar_account_balance(account),
-                self.stakes.read().unwrap().history(),
             )
         });
     }
@@ -1259,9 +1258,9 @@ impl Bank {
         {
             // this sysvar can be retired once `pico_inflation` is enabled on all clusters
             self.update_sysvar_account(&sysvar::rewards::id(), |account| {
-                sysvar::rewards::create_account(
+                create_account(
+                    &sysvar::rewards::Rewards::new(validator_point_value),
                     self.inherit_sysvar_account_balance(account),
-                    validator_point_value,
                 )
             });
         }
@@ -1434,7 +1433,7 @@ impl Bank {
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
         self.update_sysvar_account(&sysvar::recent_blockhashes::id(), |account| {
             let recent_blockhash_iter = locked_blockhash_queue.get_recent_blockhashes();
-            sysvar::recent_blockhashes::create_account_with_data(
+            recent_blockhashes_account::create_account_with_data(
                 self.inherit_sysvar_account_balance(account),
                 recent_blockhash_iter,
             )
@@ -2063,7 +2062,7 @@ impl Bank {
                     .map(|acc| (*nonce_pubkey, acc))
             })
             .filter(|(_pubkey, nonce_account)| {
-                nonce::utils::verify_nonce_account(nonce_account, &tx.message().recent_blockhash)
+                nonce_account::verify_nonce_account(nonce_account, &tx.message().recent_blockhash)
             })
     }
 
@@ -2520,7 +2519,7 @@ impl Bank {
             .map(|((_, tx), (res, hash_age_kind))| {
                 let (fee_calculator, is_durable_nonce) = match hash_age_kind {
                     Some(HashAgeKind::DurableNonce(_, account)) => {
-                        (nonce::utils::fee_calculator_of(account), true)
+                        (nonce_account::fee_calculator_of(account), true)
                     }
                     _ => (
                         hash_queue
@@ -4216,7 +4215,7 @@ mod tests {
         );
 
         let rent_account = bank.get_account(&sysvar::rent::id()).unwrap();
-        let rent = sysvar::rent::Rent::from_account(&rent_account).unwrap();
+        let rent = from_account::<sysvar::rent::Rent>(&rent_account).unwrap();
 
         assert_eq!(rent.burn_percent, 5);
         assert_eq!(rent.exemption_threshold, 1.2);
@@ -5905,7 +5904,7 @@ mod tests {
 
         let rewards = bank1
             .get_account(&sysvar::rewards::id())
-            .map(|account| Rewards::from_account(&account).unwrap())
+            .map(|account| from_account::<Rewards>(&account).unwrap())
             .unwrap();
 
         // verify the stake and vote accounts are the right size
@@ -7188,56 +7187,63 @@ mod tests {
         let bank1 = Arc::new(Bank::new(&genesis_config));
         bank1.update_sysvar_account(&dummy_clock_id, |optional_account| {
             assert!(optional_account.is_none());
-            Clock {
-                slot: expected_previous_slot,
-                ..Clock::default()
-            }
-            .create_account(1)
+
+            create_account(
+                &Clock {
+                    slot: expected_previous_slot,
+                    ..Clock::default()
+                },
+                1,
+            )
         });
         let current_account = bank1.get_account(&dummy_clock_id).unwrap();
         assert_eq!(
             expected_previous_slot,
-            Clock::from_account(&current_account).unwrap().slot
+            from_account::<Clock>(&current_account).unwrap().slot
         );
 
         // Updating should increment the clock's slot
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 1));
         bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
-            let slot = Clock::from_account(optional_account.as_ref().unwrap())
+            let slot = from_account::<Clock>(optional_account.as_ref().unwrap())
                 .unwrap()
                 .slot
                 + 1;
 
-            Clock {
-                slot,
-                ..Clock::default()
-            }
-            .create_account(1)
+            create_account(
+                &Clock {
+                    slot,
+                    ..Clock::default()
+                },
+                1,
+            )
         });
         let current_account = bank2.get_account(&dummy_clock_id).unwrap();
         assert_eq!(
             expected_next_slot,
-            Clock::from_account(&current_account).unwrap().slot
+            from_account::<Clock>(&current_account).unwrap().slot
         );
 
         // Updating again should give bank1's sysvar to the closure not bank2's.
         // Thus, assert with same expected_next_slot as previously
         bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
-            let slot = Clock::from_account(optional_account.as_ref().unwrap())
+            let slot = from_account::<Clock>(optional_account.as_ref().unwrap())
                 .unwrap()
                 .slot
                 + 1;
 
-            Clock {
-                slot,
-                ..Clock::default()
-            }
-            .create_account(1)
+            create_account(
+                &Clock {
+                    slot,
+                    ..Clock::default()
+                },
+                1,
+            )
         });
         let current_account = bank2.get_account(&dummy_clock_id).unwrap();
         assert_eq!(
             expected_next_slot,
-            Clock::from_account(&current_account).unwrap().slot
+            from_account::<Clock>(&current_account).unwrap().slot
         );
     }
 
@@ -7584,7 +7590,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_config));
 
         let fees_account = bank.get_account(&sysvar::fees::id()).unwrap();
-        let fees = Fees::from_account(&fees_account).unwrap();
+        let fees = from_account::<Fees>(&fees_account).unwrap();
         assert_eq!(
             bank.fee_calculator.lamports_per_signature,
             fees.fee_calculator.lamports_per_signature
@@ -7865,7 +7871,8 @@ mod tests {
         for i in 1..5 {
             let bhq_account = bank.get_account(&sysvar::recent_blockhashes::id()).unwrap();
             let recent_blockhashes =
-                sysvar::recent_blockhashes::RecentBlockhashes::from_account(&bhq_account).unwrap();
+                from_account::<sysvar::recent_blockhashes::RecentBlockhashes>(&bhq_account)
+                    .unwrap();
             // Check length
             assert_eq!(recent_blockhashes.len(), i);
             let most_recent_hash = recent_blockhashes.iter().next().unwrap().blockhash;
@@ -7884,7 +7891,7 @@ mod tests {
 
         let bhq_account = bank.get_account(&sysvar::recent_blockhashes::id()).unwrap();
         let recent_blockhashes =
-            sysvar::recent_blockhashes::RecentBlockhashes::from_account(&bhq_account).unwrap();
+            from_account::<sysvar::recent_blockhashes::RecentBlockhashes>(&bhq_account).unwrap();
 
         let sysvar_recent_blockhash = recent_blockhashes[0].blockhash;
         let bank_last_blockhash = bank.last_blockhash();
@@ -9735,7 +9742,7 @@ mod tests {
         // Bank::new_from_parent should not adjust timestamp before feature activation
         let mut bank = new_from_parent(&Arc::new(bank));
         let clock =
-            sysvar::clock::Clock::from_account(&bank.get_account(&sysvar::clock::id()).unwrap())
+            from_account::<sysvar::clock::Clock>(&bank.get_account(&sysvar::clock::id()).unwrap())
                 .unwrap();
         assert_eq!(clock.unix_timestamp, bank.unix_timestamp_from_genesis());
 
@@ -9752,7 +9759,7 @@ mod tests {
         // Now Bank::new_from_parent should adjust timestamp
         let bank = Arc::new(new_from_parent(&Arc::new(bank)));
         let clock =
-            sysvar::clock::Clock::from_account(&bank.get_account(&sysvar::clock::id()).unwrap())
+            from_account::<sysvar::clock::Clock>(&bank.get_account(&sysvar::clock::id()).unwrap())
                 .unwrap();
         assert_eq!(
             clock.unix_timestamp,

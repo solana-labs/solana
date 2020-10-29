@@ -5117,9 +5117,10 @@ pub mod tests {
 
     #[test]
     fn test_account_balance_for_capitalization_sysvar() {
-        use solana_sdk::sysvar::Sysvar;
-
-        let normal_sysvar = solana_sdk::slot_history::SlotHistory::default().create_account(1);
+        let normal_sysvar = solana_sdk::account::create_account(
+            &solana_sdk::slot_history::SlotHistory::default(),
+            1,
+        );
         assert_eq!(
             AccountsDB::account_balance_for_capitalization(
                 normal_sysvar.lamports,

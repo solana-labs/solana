@@ -211,7 +211,11 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
 
     let mut measure = Measure::start("tune");
 
-    let accounts = [RefCell::new(Account::new(1, 10000001, &solana_sdk::pubkey::new_rand()))];
+    let accounts = [RefCell::new(Account::new(
+        1,
+        10000001,
+        &solana_sdk::pubkey::new_rand(),
+    ))];
     let keys = [solana_sdk::pubkey::new_rand()];
     let keyed_accounts: Vec<_> = keys
         .iter()
@@ -229,7 +233,8 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     )
     .unwrap();
 
-    let _ = vm.execute_program_metered(&mut serialized, &[], &[], instruction_meter.clone());    measure.stop();
+    let _ = vm.execute_program_metered(&mut serialized, &[], &[], instruction_meter.clone());
+    measure.stop();
     assert_eq!(
         0,
         instruction_meter.get_remaining(),

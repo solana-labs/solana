@@ -1,6 +1,8 @@
-use crate::keyed_account::KeyedAccount;
+use crate::{
+    account_utils::State as AccountUtilsState, keyed_account::KeyedAccount,
+    nonce_account::create_account,
+};
 use solana_program::{
-    account_utils::State as AccountUtilsState,
     instruction::InstructionError,
     nonce::{self, state::Versions, State},
     pubkey::Pubkey,
@@ -162,7 +164,7 @@ where
     F: Fn(&KeyedAccount),
 {
     let pubkey = Pubkey::new_unique();
-    let account = solana_program::nonce::create_account(lamports);
+    let account = create_account(lamports);
     let keyed_account = KeyedAccount::new(&pubkey, signer, &account);
     f(&keyed_account)
 }
@@ -174,10 +176,11 @@ mod test {
         account_utils::State as AccountUtilsState,
         keyed_account::KeyedAccount,
         nonce::{self, State},
+        nonce_account::verify_nonce_account,
         system_instruction::NonceError,
         sysvar::recent_blockhashes::{create_test_recent_blockhashes, RecentBlockhashes},
     };
-    use solana_program::{hash::Hash, nonce::utils::verify_nonce_account};
+    use solana_program::hash::Hash;
     use std::iter::FromIterator;
 
     #[test]
