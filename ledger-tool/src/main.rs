@@ -2014,6 +2014,9 @@ fn main() {
                         let next_epoch = base_bank
                             .epoch_schedule()
                             .get_first_slot_in_epoch(warp_epoch);
+                        base_bank
+                            .lazy_rent_collection
+                            .store(true, std::sync::atomic::Ordering::Relaxed);
                         let warped_bank =
                             Bank::new_from_parent(&base_bank, base_bank.collector_id(), next_epoch);
                         warped_bank.freeze();
