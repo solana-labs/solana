@@ -1296,8 +1296,6 @@ fn call<'a>(
     for (program_id, process_instruction) in invoke_context.get_programs().iter() {
         message_processor.add_program(*program_id, *process_instruction);
     }
-    message_processor.add_loader(bpf_loader::id(), crate::process_instruction);
-    message_processor.add_loader(bpf_loader_deprecated::id(), crate::process_instruction);
 
     #[allow(clippy::deref_addrof)]
     match message_processor.process_cross_program_instruction(
