@@ -8,7 +8,7 @@ import {
 import { InstructionCard } from "../InstructionCard";
 import { coerce } from "superstruct";
 import { ParsedInfo } from "validators";
-import { IX_STRUCTS } from "./types";
+import { WriteInfo, FinalizeInfo } from "./types";
 import { reportError } from "utils/sentry";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import { Address } from "components/common/Address";
@@ -24,13 +24,16 @@ type DetailsProps = {
 export function BpfLoaderDetailsCard(props: DetailsProps) {
   try {
     const parsed = coerce(props.ix.parsed, ParsedInfo);
-    const info = coerce(parsed.info, IX_STRUCTS[parsed.type]);
 
     switch (parsed.type) {
-      case "write":
+      case "write": {
+        const info = coerce(parsed.info, WriteInfo);
         return <BpfLoaderWriteDetailsCard info={info} {...props} />;
-      case "finalize":
+      }
+      case "finalize": {
+        const info = coerce(parsed.info, FinalizeInfo);
         return <BpfLoaderFinalizeDetailsCard info={info} {...props} />;
+      }
       default:
         return <UnknownDetailsCard {...props} />;
     }
@@ -42,14 +45,14 @@ export function BpfLoaderDetailsCard(props: DetailsProps) {
   }
 }
 
-type Props = {
+type Props<T> = {
   ix: ParsedInstruction;
   index: number;
   result: SignatureResult;
-  info: any;
+  info: T;
 };
 
-export function BpfLoaderWriteDetailsCard(props: Props) {
+export function BpfLoaderWriteDetailsCard(props: Props<WriteInfo>) {
   const { ix, index, result, info } = props;
   const bytes = wrap(info.bytes, 50);
   return (
@@ -90,7 +93,7 @@ export function BpfLoaderWriteDetailsCard(props: Props) {
   );
 }
 
-export function BpfLoaderFinalizeDetailsCard(props: Props) {
+export function BpfLoaderFinalizeDetailsCard(props: Props<FinalizeInfo>) {
   const { ix, index, result, info } = props;
 
   return (

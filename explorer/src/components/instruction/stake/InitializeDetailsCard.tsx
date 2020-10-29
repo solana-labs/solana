@@ -7,12 +7,13 @@ import {
 } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
+import { InitializeInfo } from "./types";
 
 export function InitializeDetailsCard(props: {
   ix: ParsedInstruction;
   index: number;
   result: SignatureResult;
-  info: any;
+  info: InitializeInfo;
 }) {
   const { ix, index, result, info } = props;
 

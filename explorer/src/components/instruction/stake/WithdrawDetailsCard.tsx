@@ -7,12 +7,13 @@ import {
 import { lamportsToSolString } from "utils";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
+import { WithdrawInfo } from "./types";
 
 export function WithdrawDetailsCard(props: {
   ix: ParsedInstruction;
   index: number;
   result: SignatureResult;
-  info: any;
+  info: WithdrawInfo;
 }) {
   const { ix, index, result, info } = props;
 

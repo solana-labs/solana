@@ -8,12 +8,13 @@ import { lamportsToSolString } from "utils";
 import { InstructionCard } from "../InstructionCard";
 import { Copyable } from "components/common/Copyable";
 import { Address } from "components/common/Address";
+import { CreateAccountWithSeedInfo } from "./types";
 
 export function CreateWithSeedDetailsCard(props: {
   ix: ParsedInstruction;
   index: number;
   result: SignatureResult;
-  info: any;
+  info: CreateAccountWithSeedInfo;
 }) {
   const { ix, index, result, info } = props;
 
