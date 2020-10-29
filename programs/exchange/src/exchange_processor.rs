@@ -9,7 +9,7 @@ use serde_derive::Serialize;
 use solana_metrics::inc_new_counter_info;
 use solana_sdk::{
     decode_error::DecodeError, instruction::InstructionError, keyed_account::KeyedAccount,
-    program_utils::limited_deserialize, pubkey::Pubkey,
+    process_instruction::InvokeContext, program_utils::limited_deserialize, pubkey::Pubkey,
 };
 use std::cmp;
 use thiserror::Error;
@@ -464,6 +464,7 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
+    _invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
 

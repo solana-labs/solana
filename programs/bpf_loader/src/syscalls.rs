@@ -7,22 +7,20 @@ use solana_rbpf::{
     memory_region::{AccessType, MemoryMapping},
     vm::{EbpfVm, Syscall, SyscallObject},
 };
-use solana_runtime::{
-    feature_set::{
-        pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled, sha256_syscall_enabled,
-    },
-    message_processor::MessageProcessor,
-    process_instruction::{ComputeMeter, InvokeContext, Logger},
-};
+use solana_runtime::message_processor::MessageProcessor;
 use solana_sdk::{
     account::Account,
     account_info::AccountInfo,
-    bpf_loader, bpf_loader_deprecated,
+    bpf_loader_deprecated,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
+    feature_set::{
+        pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled, sha256_syscall_enabled,
+    },
     hash::{Hasher, HASH_BYTES},
     instruction::{AccountMeta, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     message::Message,
+    process_instruction::{ComputeMeter, InvokeContext, Logger},
     program_error::ProgramError,
     pubkey::{Pubkey, PubkeyError},
 };
@@ -1351,8 +1349,11 @@ fn call<'a>(
 mod tests {
     use super::*;
     use solana_rbpf::memory_region::MemoryRegion;
-    use solana_runtime::bpf_test_utils::{MockComputeMeter, MockLogger};
-    use solana_sdk::hash::hashv;
+    use solana_sdk::{
+        bpf_loader,
+        hash::hashv,
+        process_instruction::{MockComputeMeter, MockLogger},
+    };
     use std::str::FromStr;
 
     macro_rules! assert_access_violation {
