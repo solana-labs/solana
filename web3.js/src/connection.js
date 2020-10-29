@@ -2535,10 +2535,11 @@ export class Connection {
    */
   async getConfirmedBlock(slot: number): Promise<ConfirmedBlock> {
     const unsafeRes = await this._rpcRequest('getConfirmedBlock', [slot]);
-    const {result, error} = GetConfirmedBlockRpcResult(unsafeRes);
-    if (error) {
-      throw new Error('failed to get confirmed block: ' + result.error.message);
+    const res = GetConfirmedBlockRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error('failed to get confirmed block: ' + res.error.message);
     }
+    const result = res.result;
     assert(typeof result !== 'undefined');
     if (!result) {
       throw new Error('Confirmed block ' + slot + ' not found');
