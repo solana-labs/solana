@@ -21,7 +21,6 @@ use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
     decode_error::DecodeError,
     entrypoint::SUCCESS,
-    feature_set::compute_budget_balancing,
     feature_set::{bpf_just_in_time_compilation, compute_budget_balancing},
     instruction::InstructionError,
     keyed_account::{is_executable, next_keyed_account, KeyedAccount},
