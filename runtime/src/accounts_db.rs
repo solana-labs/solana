@@ -40,6 +40,7 @@ use solana_sdk::{
 };
 use std::convert::TryFrom;
 use std::{
+    boxed::Box,
     collections::{HashMap, HashSet},
     convert::TryInto,
     io::{Error as IOError, Result as IOResult},
@@ -106,6 +107,7 @@ pub(crate) type SlotStores = Arc<RwLock<HashMap<usize, Arc<AccountStorageEntry>>
 type AccountSlots = HashMap<Pubkey, HashSet<Slot>>;
 type AppendVecOffsets = HashMap<AppendVecId, HashSet<usize>>;
 type ReclaimResult = (AccountSlots, AppendVecOffsets);
+type StorageFinder<'a> = Box<dyn Fn(Slot, usize) -> Arc<AccountStorageEntry> + 'a>;
 
 trait Versioned {
     fn version(&self) -> u64;
@@ -408,6 +410,12 @@ struct FrozenAccountInfo {
     pub lamports: u64, // Account balance cannot be lower than this amount
 }
 
+#[derive(Default)]
+pub struct StoreAccountsTiming {
+    store_accounts_elapsed: u64,
+    update_index_elapsed: u64,
+    handle_reclaims_elapsed: u64,
+}
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
 pub struct AccountsDB {
@@ -1089,10 +1097,8 @@ impl AccountsDB {
         let mut dead_storages = vec![];
         let mut find_alive_elapsed = 0;
         let mut create_and_insert_store_elapsed = 0;
-        let mut store_accounts_elapsed = 0;
-        let mut update_index_elapsed = 0;
-        let mut handle_reclaims_elapsed = 0;
         let mut write_storage_elapsed = 0;
+        let mut store_accounts_timing = StoreAccountsTiming::default();
         if aligned_total > 0 {
             let mut start = Measure::start("find_alive_elapsed");
             let mut accounts = Vec::with_capacity(alive_accounts.len());
@@ -1122,26 +1128,13 @@ impl AccountsDB {
             // here, we're writing back alive_accounts. That should be an atomic operation
             // without use of rather wide locks in this whole function, because we're
             // mutating rooted slots; There should be no writers to them.
-            let mut start = Measure::start("store_accounts_elapsed");
-            let infos = self.store_accounts_to(
+            store_accounts_timing = self.store_accounts_custom(
                 slot,
                 &accounts,
                 &hashes,
-                |_, _| shrunken_store.clone(),
-                write_versions.into_iter(),
+                Some(Box::new(move |_, _| shrunken_store.clone())),
+                Some(Box::new(write_versions.into_iter())),
             );
-            start.stop();
-            store_accounts_elapsed = start.as_us();
-
-            let mut start = Measure::start("update_index_elapsed");
-            let reclaims = self.update_index(slot, infos, &accounts);
-            start.stop();
-            update_index_elapsed = start.as_us();
-
-            let mut start = Measure::start("handle_reclaims_elapsed");
-            self.handle_reclaims(&reclaims, Some(slot), true, None);
-            start.stop();
-            handle_reclaims_elapsed = start.as_us();
 
             let mut start = Measure::start("write_storage_elapsed");
             if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
@@ -1184,9 +1177,21 @@ impl AccountsDB {
                 create_and_insert_store_elapsed,
                 i64
             ),
-            ("store_accounts_elapsed", store_accounts_elapsed, i64),
-            ("update_index_elapsed", update_index_elapsed, i64),
-            ("handle_reclaims_elapsed", handle_reclaims_elapsed, i64),
+            (
+                "store_accounts_elapsed",
+                store_accounts_timing.store_accounts_elapsed,
+                i64
+            ),
+            (
+                "update_index_elapsed",
+                store_accounts_timing.update_index_elapsed,
+                i64
+            ),
+            (
+                "handle_reclaims_elapsed",
+                store_accounts_timing.handle_reclaims_elapsed,
+                i64
+            ),
             ("write_storage_elapsed", write_storage_elapsed, i64),
             ("rewrite_elapsed", rewrite_elapsed.as_us(), i64),
             (
@@ -1944,29 +1949,6 @@ impl AccountsDB {
             .fetch_add(count as u64, Ordering::Relaxed)
     }
 
-    fn store_accounts(
-        &self,
-        slot: Slot,
-        accounts: &[(&Pubkey, &Account)],
-        hashes: &[Hash],
-    ) -> Vec<AccountInfo> {
-        let mut current_version = self.bulk_assign_write_version(accounts.len());
-        let write_version_producer = std::iter::from_fn(move || {
-            let ret = current_version;
-            current_version += 1;
-            Some(ret)
-        });
-
-        let storage_finder = |slot, size| self.find_storage_candidate(slot, size);
-        self.store_accounts_to(
-            slot,
-            accounts,
-            hashes,
-            storage_finder,
-            write_version_producer,
-        )
-    }
-
     fn store_accounts_to<
         F: FnMut(Slot, usize) -> Arc<AccountStorageEntry>,
         P: Iterator<Item = u64>,
@@ -2626,7 +2608,7 @@ impl AccountsDB {
         self.stats
             .store_hash_accounts
             .fetch_add(hash_time.as_us(), Ordering::Relaxed);
-        self.store_with_hashes(slot, accounts, &hashes);
+        self.store_accounts_default(slot, accounts, &hashes);
         self.report_store_timings();
     }
 
@@ -2715,12 +2697,53 @@ impl AccountsDB {
         }
     }
 
-    fn store_with_hashes(&self, slot: Slot, accounts: &[(&Pubkey, &Account)], hashes: &[Hash]) {
+    fn store_accounts_default<'a>(
+        &'a self,
+        slot: Slot,
+        accounts: &[(&Pubkey, &Account)],
+        hashes: &[Hash],
+    ) {
+        self.store_accounts_custom(
+            slot,
+            accounts,
+            hashes,
+            None::<StorageFinder>,
+            None::<Box<dyn Iterator<Item = u64>>>,
+        );
+    }
+
+    fn store_accounts_custom<'a>(
+        &'a self,
+        slot: Slot,
+        accounts: &[(&Pubkey, &Account)],
+        hashes: &[Hash],
+        storage_finder: Option<StorageFinder<'a>>,
+        write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
+    ) -> StoreAccountsTiming {
+        let storage_finder: StorageFinder<'a> = storage_finder
+            .unwrap_or_else(|| Box::new(move |slot, size| self.find_storage_candidate(slot, size)));
+
+        let write_version_producer: Box<dyn Iterator<Item = u64>> = write_version_producer
+            .unwrap_or_else(|| {
+                let mut current_version = self.bulk_assign_write_version(accounts.len());
+                Box::new(std::iter::from_fn(move || {
+                    let ret = current_version;
+                    current_version += 1;
+                    Some(ret)
+                }))
+            });
+
         self.stats
             .store_num_accounts
             .fetch_add(accounts.len() as u64, Ordering::Relaxed);
         let mut store_accounts_time = Measure::start("store_accounts");
-        let infos = self.store_accounts(slot, accounts, hashes);
+        let infos = self.store_accounts_to(
+            slot,
+            accounts,
+            hashes,
+            storage_finder,
+            write_version_producer,
+        );
         store_accounts_time.stop();
         self.stats
             .store_accounts
@@ -2746,6 +2769,12 @@ impl AccountsDB {
         self.stats
             .store_handle_reclaims
             .fetch_add(handle_reclaims_time.as_us(), Ordering::Relaxed);
+
+        StoreAccountsTiming {
+            store_accounts_elapsed: store_accounts_time.as_us(),
+            update_index_elapsed: update_index_time.as_us(),
+            handle_reclaims_elapsed: handle_reclaims_time.as_us(),
+        }
     }
 
     pub fn add_root(&self, slot: Slot) {
@@ -4733,7 +4762,7 @@ pub mod tests {
         db.hash_accounts(some_slot, accounts, &ClusterType::Development);
         // provide bogus account hashes
         let some_hash = Hash::new(&[0xca; HASH_BYTES]);
-        db.store_with_hashes(some_slot, accounts, &[some_hash]);
+        db.store_accounts_default(some_slot, accounts, &[some_hash]);
         db.add_root(some_slot);
         assert_matches!(
             db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1),
