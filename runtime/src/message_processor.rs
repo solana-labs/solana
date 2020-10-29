@@ -15,8 +15,7 @@ use solana_sdk::{
     message::Message,
     native_loader,
     process_instruction::{
-        ComputeBudget, ComputeMeter, ErasedProcessInstructionWithContext, Executor, InvokeContext,
-        Logger, ProcessInstructionWithContext,
+        ComputeBudget, ComputeMeter, Executor, InvokeContext, Logger, ProcessInstructionWithContext,
     },
     pubkey::Pubkey,
     rent::Rent,
@@ -338,6 +337,15 @@ impl std::fmt::Debug for MessageProcessor {
             programs: Vec<String>,
             native_loader: &'a NativeLoader,
         }
+
+        // These are just type aliases for work around of Debug-ing above pointers
+        type ErasedProcessInstructionWithContext = fn(
+            &'static Pubkey,
+            &'static [KeyedAccount<'static>],
+            &'static [u8],
+            &'static mut dyn InvokeContext,
+        ) -> Result<(), InstructionError>;
+
         // rustc doesn't compile due to bug without this work around
         // https://github.com/rust-lang/rust/issues/50280
         // https://users.rust-lang.org/t/display-function-pointer/17073/2

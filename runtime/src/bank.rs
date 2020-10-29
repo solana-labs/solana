@@ -51,9 +51,7 @@ use solana_sdk::{
     native_loader,
     native_token::sol_to_lamports,
     nonce, nonce_account,
-    process_instruction::{
-        ErasedProcessInstructionWithContext, Executor, ProcessInstructionWithContext,
-    },
+    process_instruction::{Executor, ProcessInstructionWithContext},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     recent_blockhashes_account,
@@ -137,49 +135,30 @@ type RentCollectionCycleParams = (
 
 type EpochCount = u64;
 
-#[derive(Copy, Clone)]
-pub enum Entrypoint {
-    Program(ProcessInstructionWithContext),
-    Loader(ProcessInstructionWithContext),
-}
-
-impl fmt::Debug for Entrypoint {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        #[derive(Debug)]
-        enum EntrypointForDebug {
-            Program(String),
-            Loader(String),
-        }
-        // rustc doesn't compile due to bug without this work around
-        // https://github.com/rust-lang/rust/issues/50280
-        // https://users.rust-lang.org/t/display-function-pointer/17073/2
-        let entrypoint = match self {
-            Entrypoint::Program(instruction) => EntrypointForDebug::Program(format!(
-                "{:p}",
-                *instruction as ErasedProcessInstructionWithContext
-            )),
-            Entrypoint::Loader(instruction) => EntrypointForDebug::Loader(format!(
-                "{:p}",
-                *instruction as ErasedProcessInstructionWithContext
-            )),
-        };
-        write!(f, "{:?}", entrypoint)
-    }
-}
-
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Builtin {
     pub name: String,
     pub id: Pubkey,
-    pub entrypoint: Entrypoint,
+    pub process_instruction_with_context: ProcessInstructionWithContext,
 }
+
 impl Builtin {
-    pub fn new(name: &str, id: Pubkey, entrypoint: Entrypoint) -> Self {
+    pub fn new(
+        name: &str,
+        id: Pubkey,
+        process_instruction_with_context: ProcessInstructionWithContext,
+    ) -> Self {
         Self {
             name: name.to_string(),
             id,
-            entrypoint,
+            process_instruction_with_context,
         }
+    }
+}
+
+impl fmt::Debug for Builtin {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Builtin [name={}, id={}]", self.name, self.id)
     }
 }
 
@@ -223,7 +202,7 @@ impl AbiExample for Builtin {
         Self {
             name: String::default(),
             id: Pubkey::default(),
-            entrypoint: Entrypoint::Program(|_, _, _, _| Ok(())),
+            process_instruction_with_context: |_, _, _, _| Ok(()),
         }
     }
 }
@@ -3364,7 +3343,11 @@ impl Bank {
                 .extend_from_slice(&additional_builtins.feature_builtins);
         }
         for builtin in builtins.genesis_builtins {
-            self.add_builtin(&builtin.name, builtin.id, builtin.entrypoint);
+            self.add_builtin(
+                &builtin.name,
+                builtin.id,
+                builtin.process_instruction_with_context,
+            );
         }
         self.feature_builtins = Arc::new(builtins.feature_builtins);
 
@@ -3822,47 +3805,17 @@ impl Bank {
         !self.is_delta.load(Relaxed)
     }
 
-    pub fn add_builtin_program(
-        &mut self,
-        name: &str,
-        program_id: Pubkey,
-        process_instruction_with_context: ProcessInstructionWithContext,
-    ) {
-        self.add_builtin(
-            name,
-            program_id,
-            Entrypoint::Program(process_instruction_with_context),
-        );
-    }
-
-    pub fn add_builtin_loader(
-        &mut self,
-        name: &str,
-        program_id: Pubkey,
-        process_instruction_with_context: ProcessInstructionWithContext,
-    ) {
-        self.add_builtin(
-            name,
-            program_id,
-            Entrypoint::Loader(process_instruction_with_context),
-        );
-    }
-
     /// Add an instruction processor to intercept instructions before the dynamic loader.
-    pub fn add_builtin(&mut self, name: &str, program_id: Pubkey, entrypoint: Entrypoint) {
+    pub fn add_builtin(
+        &mut self,
+        name: &str,
+        program_id: Pubkey,
+        process_instruction_with_context: ProcessInstructionWithContext,
+    ) {
+        debug!("Added program {} under {:?}", name, program_id);
         self.add_native_program(name, &program_id);
-        match entrypoint {
-            Entrypoint::Program(process_instruction) => {
-                self.message_processor
-                    .add_program(program_id, process_instruction);
-                debug!("Added builtin program {} under {:?}", name, program_id);
-            }
-            Entrypoint::Loader(process_instruction_with_context) => {
-                self.message_processor
-                    .add_loader(program_id, process_instruction_with_context);
-                debug!("Added builtin loader {} under {:?}", name, program_id);
-            }
-        }
+        self.message_processor
+            .add_program(program_id, process_instruction_with_context);
     }
 
     pub fn clean_accounts(&self, skip_last: bool) {
@@ -3998,7 +3951,11 @@ impl Bank {
             let should_populate = init_or_warp && self.feature_set.is_active(&feature)
                 || !init_or_warp && new_feature_activations.contains(&feature);
             if should_populate {
-                self.add_builtin(&builtin.name, builtin.id, builtin.entrypoint);
+                self.add_builtin(
+                    &builtin.name,
+                    builtin.id,
+                    builtin.process_instruction_with_context,
+                );
             }
         }
     }
@@ -4581,7 +4538,7 @@ mod tests {
             ) as u64,
         );
         bank.rent_collector.slots_per_year = 421_812.0;
-        bank.add_builtin_program("mock_program", mock_program_id, mock_process_instruction);
+        bank.add_builtin("mock_program", mock_program_id, mock_process_instruction);
 
         bank
     }
@@ -7717,7 +7674,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_builtin_program() {
+    fn test_add_builtin() {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let mut bank = Bank::new(&genesis_config);
 
@@ -7737,7 +7694,7 @@ mod tests {
         }
 
         assert!(bank.get_account(&mock_vote_program_id()).is_none());
-        bank.add_builtin_program(
+        bank.add_builtin(
             "mock_vote_program",
             mock_vote_program_id(),
             mock_vote_processor,
@@ -7811,7 +7768,7 @@ mod tests {
         );
 
         let vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
-        bank.add_builtin_program(
+        bank.add_builtin(
             "solana_vote_program",
             solana_vote_program::id(),
             mock_vote_processor,
@@ -7857,15 +7814,15 @@ mod tests {
         assert!(!bank.stakes.read().unwrap().stake_delegations().is_empty());
         assert_eq!(bank.calculate_capitalization(), bank.capitalization());
 
-        bank.add_builtin_program("mock_program1", vote_id, mock_ix_processor);
-        bank.add_builtin_program("mock_program2", stake_id, mock_ix_processor);
+        bank.add_builtin("mock_program1", vote_id, mock_ix_processor);
+        bank.add_builtin("mock_program2", stake_id, mock_ix_processor);
         assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
         assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
         assert_eq!(bank.calculate_capitalization(), bank.capitalization());
 
         // Re-adding builtin programs should be no-op
-        bank.add_builtin_program("mock_program1", vote_id, mock_ix_processor);
-        bank.add_builtin_program("mock_program2", stake_id, mock_ix_processor);
+        bank.add_builtin("mock_program1", vote_id, mock_ix_processor);
+        bank.add_builtin("mock_program2", stake_id, mock_ix_processor);
         assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
         assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
         assert_eq!(bank.calculate_capitalization(), bank.capitalization());
@@ -8521,7 +8478,7 @@ mod tests {
         }
 
         let mock_program_id = Pubkey::new(&[2u8; 32]);
-        bank.add_builtin_program("mock_program", mock_program_id, mock_process_instruction);
+        bank.add_builtin("mock_program", mock_program_id, mock_process_instruction);
 
         let from_pubkey = solana_sdk::pubkey::new_rand();
         let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -8565,7 +8522,7 @@ mod tests {
         }
 
         let mock_program_id = Pubkey::new(&[2u8; 32]);
-        bank.add_builtin_program("mock_program", mock_program_id, mock_process_instruction);
+        bank.add_builtin("mock_program", mock_program_id, mock_process_instruction);
 
         let from_pubkey = solana_sdk::pubkey::new_rand();
         let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -8617,7 +8574,7 @@ mod tests {
 
         tx.message.account_keys.push(solana_sdk::pubkey::new_rand());
 
-        bank.add_builtin_program(
+        bank.add_builtin(
             "mock_vote",
             solana_vote_program::id(),
             mock_ok_vote_processor,
@@ -8671,7 +8628,7 @@ mod tests {
             AccountMeta::new(to_pubkey, false),
         ];
 
-        bank.add_builtin_program(
+        bank.add_builtin(
             "mock_vote",
             solana_vote_program::id(),
             mock_ok_vote_processor,
@@ -8704,7 +8661,7 @@ mod tests {
             AccountMeta::new(to_pubkey, false),
         ];
 
-        bank.add_builtin_program(
+        bank.add_builtin(
             "mock_vote",
             solana_vote_program::id(),
             mock_ok_vote_processor,
@@ -8760,7 +8717,7 @@ mod tests {
             AccountMeta::new(to_pubkey, false),
         ];
 
-        bank.add_builtin_program(
+        bank.add_builtin(
             "mock_vote",
             solana_vote_program::id(),
             mock_ok_vote_processor,
@@ -8796,7 +8753,7 @@ mod tests {
             .map(|i| {
                 let key = solana_sdk::pubkey::new_rand();
                 let name = format!("program{:?}", i);
-                bank.add_builtin_program(&name, key, mock_ok_vote_processor);
+                bank.add_builtin(&name, key, mock_ok_vote_processor);
                 (key, name.as_bytes().to_vec())
             })
             .collect();
@@ -9005,7 +8962,7 @@ mod tests {
 
         // Add a new program
         let program1_pubkey = solana_sdk::pubkey::new_rand();
-        bank.add_builtin_program("program", program1_pubkey, nested_processor);
+        bank.add_builtin("program", program1_pubkey, nested_processor);
 
         // Add a new program owned by the first
         let program2_pubkey = solana_sdk::pubkey::new_rand();
@@ -9167,7 +9124,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_builtin_program_no_overwrite() {
+    fn test_add_builtin_no_overwrite() {
         let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
 
         fn mock_ix_processor(
@@ -9189,19 +9146,15 @@ mod tests {
         ));
         assert_eq!(bank.get_account_modified_slot(&program_id), None);
 
-        Arc::get_mut(&mut bank).unwrap().add_builtin_program(
-            "mock_program",
-            program_id,
-            mock_ix_processor,
-        );
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_builtin("mock_program", program_id, mock_ix_processor);
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
 
         let mut bank = Arc::new(new_from_parent(&bank));
-        Arc::get_mut(&mut bank).unwrap().add_builtin_program(
-            "mock_program",
-            program_id,
-            mock_ix_processor,
-        );
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_builtin("mock_program", program_id, mock_ix_processor);
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
     }
 
@@ -9228,19 +9181,15 @@ mod tests {
         ));
         assert_eq!(bank.get_account_modified_slot(&loader_id), None);
 
-        Arc::get_mut(&mut bank).unwrap().add_builtin_loader(
-            "mock_program",
-            loader_id,
-            mock_ix_processor,
-        );
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_builtin("mock_program", loader_id, mock_ix_processor);
         assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
 
         let mut bank = Arc::new(new_from_parent(&bank));
-        Arc::get_mut(&mut bank).unwrap().add_builtin_loader(
-            "mock_program",
-            loader_id,
-            mock_ix_processor,
-        );
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_builtin("mock_program", loader_id, mock_ix_processor);
         assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
     }
 
@@ -10073,19 +10022,5 @@ mod tests {
         bank.finish_init(&genesis_config, None);
         let debug = format!("{:#?}", bank);
         assert!(!debug.is_empty());
-    }
-
-    #[test]
-    fn test_debug_entrypoint() {
-        fn mock_processor(
-            _pubkey: &Pubkey,
-            _ka: &[KeyedAccount],
-            _data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
-        ) -> std::result::Result<(), InstructionError> {
-            Ok(())
-        }
-        assert!(!format!("{:?}", Entrypoint::Program(mock_processor)).is_empty());
-        assert!(!format!("{:?}", Entrypoint::Loader(mock_processor)).is_empty());
     }
 }

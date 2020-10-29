@@ -27,14 +27,6 @@ pub type LoaderEntrypoint = unsafe extern "C" fn(
 pub type ProcessInstructionWithContext =
     fn(&Pubkey, &[KeyedAccount], &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
 
-// These are just type aliases for work around of Debug-ing above function pointers
-pub type ErasedProcessInstructionWithContext = fn(
-    &'static Pubkey,
-    &'static [KeyedAccount<'static>],
-    &'static [u8],
-    &'static mut dyn InvokeContext,
-) -> Result<(), InstructionError>;
-
 /// Invocation context passed to loaders
 pub trait InvokeContext {
     /// Push a program ID on to the invocation stack
