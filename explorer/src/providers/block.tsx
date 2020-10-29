@@ -64,13 +64,9 @@ export async function fetchBlock(
     key,
     url,
   });
-  let status = FetchStatus.Fetching;
-  let data: ConfirmedBlock = {
-    blockhash: "",
-    previousBlockhash: "",
-    parentSlot: 0,
-    transactions: [],
-  };
+
+  let status: FetchStatus;
+  let data: ConfirmedBlock | undefined;
 
   try {
     const connection = new Connection(url, "max");
@@ -103,12 +99,7 @@ export function useFetchBlock() {
   }
 
   return React.useCallback(
-    (key: number) => {
-      const entry = state.entries[key];
-      if (!entry) {
-        fetchBlock(dispatch, url, cluster, key);
-      }
-    },
-    [state, dispatch, cluster, url]
+    (key: number) => fetchBlock(dispatch, url, cluster, key),
+    [dispatch, cluster, url]
   );
 }
