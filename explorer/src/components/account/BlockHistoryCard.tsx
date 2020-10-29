@@ -68,57 +68,61 @@ export function BlockHistoryCard({ slot }: { slot: number }) {
         </TableCardBody>
       </div>
 
-      <div className="card">
-        <div className="card-header align-items-center">
-          <h3 className="card-header-title">Block Transactions</h3>
-        </div>
+      {confirmedBlock.data.transactions.length === 0 ? (
+        <ErrorCard text="This block has no transactions" />
+      ) : (
+        <div className="card">
+          <div className="card-header align-items-center">
+            <h3 className="card-header-title">Block Transactions</h3>
+          </div>
 
-        <div className="table-responsive mb-0">
-          <table className="table table-sm table-nowrap card-table">
-            <thead>
-              <tr>
-                <th className="text-muted">Result</th>
-                <th className="text-muted">Transaction Signature</th>
-              </tr>
-            </thead>
-            <tbody className="list">
-              {confirmedBlock.data.transactions.map((tx, i) => {
-                let statusText;
-                let statusClass;
-                let signature: React.ReactNode;
-                if (tx.meta?.err || !tx.transaction.signature) {
-                  statusClass = "warning";
-                  statusText = "Failed";
-                } else {
-                  statusClass = "success";
-                  statusText = "Success";
-                }
+          <div className="table-responsive mb-0">
+            <table className="table table-sm table-nowrap card-table">
+              <thead>
+                <tr>
+                  <th className="text-muted">Result</th>
+                  <th className="text-muted">Transaction Signature</th>
+                </tr>
+              </thead>
+              <tbody className="list">
+                {confirmedBlock.data.transactions.map((tx, i) => {
+                  let statusText;
+                  let statusClass;
+                  let signature: React.ReactNode;
+                  if (tx.meta?.err || !tx.transaction.signature) {
+                    statusClass = "warning";
+                    statusText = "Failed";
+                  } else {
+                    statusClass = "success";
+                    statusText = "Success";
+                  }
 
-                if (tx.transaction.signature) {
-                  signature = (
-                    <Signature
-                      signature={bs58.encode(tx.transaction.signature)}
-                      link
-                    />
+                  if (tx.transaction.signature) {
+                    signature = (
+                      <Signature
+                        signature={bs58.encode(tx.transaction.signature)}
+                        link
+                      />
+                    );
+                  }
+
+                  return (
+                    <tr key={i}>
+                      <td>
+                        <span className={`badge badge-soft-${statusClass}`}>
+                          {statusText}
+                        </span>
+                      </td>
+
+                      <td>{signature}</td>
+                    </tr>
                   );
-                }
-
-                return (
-                  <tr key={i}>
-                    <td>
-                      <span className={`badge badge-soft-${statusClass}`}>
-                        {statusText}
-                      </span>
-                    </td>
-
-                    <td>{signature}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 }
