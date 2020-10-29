@@ -6,15 +6,16 @@ extern crate solana_bpf_loader_program;
 use solana_bpf_loader_program::{
     create_vm,
     serialization::{deserialize_parameters, serialize_parameters},
+    ThisInstructionMeter,
 };
-use solana_rbpf::vm::EbpfVm;
+use solana_rbpf::vm::Executable;
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
     bpf_test_utils::MockInvokeContext,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::load_program,
-    process_instruction::ComputeBudget,
+    process_instruction::{ComputeBudget, InvokeContext},
 };
 use solana_sdk::{
     account::Account,
@@ -75,25 +76,29 @@ fn run_program(
     file.read_to_end(&mut data).unwrap();
     let loader_id = bpf_loader::id();
     let mut invoke_context = MockInvokeContext::default();
-
-    let executable = EbpfVm::create_executable_from_elf(&data, None).unwrap();
-    let (mut vm, heap_region) = create_vm(
-        &loader_id,
-        executable.as_ref(),
-        parameter_accounts,
-        &mut invoke_context,
-    )
-    .unwrap();
-    let mut parameter_bytes = serialize_parameters(
+    let parameter_bytes = serialize_parameters(
         &bpf_loader::id(),
         program_id,
         parameter_accounts,
         &instruction_data,
     )
     .unwrap();
+    let compute_meter = invoke_context.get_compute_meter();
+    let mut instruction_meter = ThisInstructionMeter { compute_meter };
+
+    let executable = Executable::from_elf(&data, None).unwrap();
+    let mut vm = create_vm(
+        &loader_id,
+        executable.as_ref(),
+        &parameter_bytes,
+        parameter_accounts,
+        &mut invoke_context,
+    )
+    .unwrap();
+
     assert_eq!(
         SUCCESS,
-        vm.execute_program(parameter_bytes.as_mut_slice(), &[], &[heap_region.clone()])
+        vm.execute_program_interpreted(&mut instruction_meter)
             .unwrap()
     );
     deserialize_parameters(&bpf_loader::id(), parameter_accounts, &parameter_bytes).unwrap();
@@ -812,7 +817,6 @@ fn test_program_bpf_instruction_introspection() {
         Some(&mint_keypair.pubkey()),
     );
     let result = bank_client.send_and_confirm_message(&[&mint_keypair], message);
-    println!("result: {:?}", result);
     assert!(result.is_ok());
 
     // writable special instructions11111 key, should not be allowed

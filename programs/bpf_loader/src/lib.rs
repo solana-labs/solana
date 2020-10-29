@@ -12,12 +12,13 @@ use crate::{
 };
 use num_derive::{FromPrimitive, ToPrimitive};
 use solana_rbpf::{
+    ebpf::MM_HEAP_START,
     error::{EbpfError, UserDefinedError},
     memory_region::MemoryRegion,
     vm::{Config, EbpfVm, Executable, InstructionMeter},
 };
 use solana_runtime::{
-    feature_set::compute_budget_balancing,
+    feature_set::{bpf_just_in_time_compilation, compute_budget_balancing},
     process_instruction::{ComputeMeter, Executor, InvokeContext},
 };
 use solana_sdk::{
@@ -94,7 +95,7 @@ pub fn create_and_cache_executor(
     program: &KeyedAccount,
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<Arc<BPFExecutor>, InstructionError> {
-    let executable = EbpfVm::create_executable_from_elf(&program.try_account_ref()?.data, None)
+    let executable = Executable::from_elf(&program.try_account_ref()?.data, None)
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
     let (_, elf_bytes) = executable
         .get_text_bytes()
@@ -109,13 +110,20 @@ pub fn create_and_cache_executor(
     Ok(executor)
 }
 
+/// Default program heap size, allocators
+/// are expected to enforce this
+const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
+
 /// Create the BPF virtual machine
 pub fn create_vm<'a>(
     loader_id: &'a Pubkey,
     executable: &'a dyn Executable<BPFError>,
+    parameter_bytes: &[u8],
     parameter_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
-) -> Result<(EbpfVm<'a, BPFError>, MemoryRegion), EbpfError<BPFError>> {
+) -> Result<EbpfVm<'a, BPFError, ThisInstructionMeter>, EbpfError<BPFError>> {
+    let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
+    let heap_region = MemoryRegion::new_from_slice(&heap, MM_HEAP_START, true);
     let compute_budget = invoke_context.get_compute_budget();
     let mut vm = EbpfVm::new(
         executable,
@@ -123,10 +131,11 @@ pub fn create_vm<'a>(
             max_call_depth: compute_budget.max_call_depth,
             stack_frame_size: compute_budget.stack_frame_size,
         },
+        parameter_bytes,
+        &[heap_region],
     )?;
-    let heap_region =
-        syscalls::register_syscalls(loader_id, &mut vm, parameter_accounts, invoke_context)?;
-    Ok((vm, heap_region))
+    syscalls::register_syscalls(loader_id, &mut vm, parameter_accounts, invoke_context, heap)?;
+    Ok(vm)
 }
 
 pub fn process_instruction(
@@ -191,8 +200,8 @@ pub fn process_instruction(
 }
 
 /// Passed to the VM to enforce the compute budget
-struct ThisInstructionMeter {
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+pub struct ThisInstructionMeter {
+    pub compute_meter: Rc<RefCell<dyn ComputeMeter>>,
 }
 impl ThisInstructionMeter {
     fn new(compute_meter: Rc<RefCell<dyn ComputeMeter>>) -> Self {
@@ -244,9 +253,12 @@ impl Executor for BPFExecutor {
         )?;
         {
             let compute_meter = invoke_context.get_compute_meter();
-            let (mut vm, heap_region) = match create_vm(
+            let is_jit_enabled =
+                invoke_context.is_feature_active(&bpf_just_in_time_compilation::id());
+            let mut vm = match create_vm(
                 program_id,
                 self.executable.as_ref(),
+                parameter_bytes.as_slice(),
                 &parameter_accounts,
                 invoke_context,
             ) {
@@ -258,14 +270,16 @@ impl Executor for BPFExecutor {
             };
 
             log!(logger, "Call BPF program {}", program.unsigned_key());
-            let instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
+            let mut instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
             let before = compute_meter.borrow().get_remaining();
-            let result = vm.execute_program_metered(
-                parameter_bytes.as_slice(),
-                &[],
-                &[heap_region],
-                instruction_meter,
-            );
+            let result = if is_jit_enabled {
+                if vm.jit_compile().is_err() {
+                    return Err(BPFLoaderError::VirtualMachineCreationFailed.into());
+                }
+                unsafe { vm.execute_program_jit(&mut instruction_meter) }
+            } else {
+                vm.execute_program_interpreted(&mut instruction_meter)
+            };
             let after = compute_meter.borrow().get_remaining();
             log!(
                 logger,
@@ -318,8 +332,8 @@ mod tests {
         message_processor::{Executors, ThisInvokeContext},
         process_instruction::ComputeBudget,
     };
-    use solana_sdk::{account::Account, rent::Rent};
-    use std::{cell::RefCell, fs::File, io::Read, ops::Range, rc::Rc};
+    use solana_sdk::{account::Account, instruction::InstructionError, pubkey::Pubkey, rent::Rent};
+    use std::{fs::File, io::Read, ops::Range};
 
     struct TestInstructionMeter {
         remaining: u64,
@@ -334,7 +348,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "ExceededMaxInstructions(10)")]
+    #[should_panic(expected = "ExceededMaxInstructions(31, 10)")]
     fn test_bpf_loader_non_terminating_program() {
         #[rustfmt::skip]
         let program = &[
@@ -344,10 +358,16 @@ mod tests {
         ];
         let input = &mut [0x00];
 
-        let executable = EbpfVm::create_executable_from_text_bytes(program, None).unwrap();
-        let mut vm = EbpfVm::<BPFError>::new(executable.as_ref(), Config::default()).unwrap();
-        let instruction_meter = TestInstructionMeter { remaining: 10 };
-        vm.execute_program_metered(input, &[], &[], instruction_meter)
+        let executable = Executable::<BPFError>::from_text_bytes(program, None).unwrap();
+        let mut vm = EbpfVm::<BPFError, TestInstructionMeter>::new(
+            executable.as_ref(),
+            Config::default(),
+            input,
+            &[],
+        )
+        .unwrap();
+        let mut instruction_meter = TestInstructionMeter { remaining: 10 };
+        vm.execute_program_interpreted(&mut instruction_meter)
             .unwrap();
     }
 
