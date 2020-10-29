@@ -54,7 +54,7 @@ function StatsCardBody() {
 
   const { avgSlotTime_1h, avgSlotTime_1min, epochInfo } = dashboardInfo;
   const hourlySlotTime = Math.round(1000 * avgSlotTime_1h);
-  const averageSlotTime = Math.round(1000 * avgSlotTime_1min) + "ms";
+  const averageSlotTime = Math.round(1000 * avgSlotTime_1min);
   const { slotIndex, slotsInEpoch } = epochInfo;
   const currentEpoch = epochInfo.epoch.toString();
   const epochProgress = ((100 * slotIndex) / slotsInEpoch).toFixed(1) + "%";
@@ -81,20 +81,24 @@ function StatsCardBody() {
         </tr>
       )}
       <tr>
-        <td className="w-100">Slot time</td>
-        <td className="text-lg-right text-monospace">{averageSlotTime}</td>
+        <td className="w-100">Slot time (1min average)</td>
+        <td className="text-lg-right text-monospace">{averageSlotTime}ms</td>
+      </tr>
+      <tr>
+        <td className="w-100">Slot time (1hr average)</td>
+        <td className="text-lg-right text-monospace">{hourlySlotTime}ms</td>
       </tr>
       <tr>
         <td className="w-100">Epoch</td>
-        <td className="text-lg-right text-monospace">{currentEpoch} </td>
+        <td className="text-lg-right text-monospace">{currentEpoch}</td>
       </tr>
       <tr>
         <td className="w-100">Epoch progress</td>
-        <td className="text-lg-right text-monospace">{epochProgress} </td>
+        <td className="text-lg-right text-monospace">{epochProgress}</td>
       </tr>
       <tr>
-        <td className="w-100">Epoch time remaining</td>
-        <td className="text-lg-right text-monospace">{epochTimeRemaining} </td>
+        <td className="w-100">Epoch time remaining (approx.)</td>
+        <td className="text-lg-right text-monospace">~{epochTimeRemaining}</td>
       </tr>
     </TableCardBody>
   );
