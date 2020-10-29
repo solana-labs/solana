@@ -6,12 +6,13 @@ import {
 } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
+import { AuthorizeInfo } from "./types";
 
 export function AuthorizeDetailsCard(props: {
   ix: ParsedInstruction;
   index: number;
   result: SignatureResult;
-  info: any;
+  info: AuthorizeInfo;
 }) {
   const { ix, index, result, info } = props;
 

@@ -7,12 +7,13 @@ import {
 import { lamportsToSolString } from "utils";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
+import { SplitInfo } from "./types";
 
 export function SplitDetailsCard(props: {
   ix: ParsedInstruction;
   index: number;
   result: SignatureResult;
-  info: any;
+  info: SplitInfo;
 }) {
   const { ix, index, result, info } = props;
 

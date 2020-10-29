@@ -15,7 +15,14 @@ import { DeactivateDetailsCard } from "./DeactivateDetailsCard";
 import { ParsedInfo } from "validators";
 import { reportError } from "utils/sentry";
 import { coerce } from "superstruct";
-import { IX_STRUCTS } from "./types";
+import {
+  AuthorizeInfo,
+  DeactivateInfo,
+  DelegateInfo,
+  InitializeInfo,
+  SplitInfo,
+  WithdrawInfo,
+} from "./types";
 
 type DetailsProps = {
   tx: ParsedTransaction;
@@ -27,21 +34,32 @@ type DetailsProps = {
 export function StakeDetailsCard(props: DetailsProps) {
   try {
     const parsed = coerce(props.ix.parsed, ParsedInfo);
-    const info = coerce(parsed.info, IX_STRUCTS[parsed.type]);
 
     switch (parsed.type) {
-      case "initialize":
+      case "initialize": {
+        const info = coerce(parsed.info, InitializeInfo);
         return <InitializeDetailsCard info={info} {...props} />;
-      case "delegate":
+      }
+      case "delegate": {
+        const info = coerce(parsed.info, DelegateInfo);
         return <DelegateDetailsCard info={info} {...props} />;
-      case "authorize":
+      }
+      case "authorize": {
+        const info = coerce(parsed.info, AuthorizeInfo);
         return <AuthorizeDetailsCard info={info} {...props} />;
-      case "split":
+      }
+      case "split": {
+        const info = coerce(parsed.info, SplitInfo);
         return <SplitDetailsCard info={info} {...props} />;
-      case "withdraw":
+      }
+      case "withdraw": {
+        const info = coerce(parsed.info, WithdrawInfo);
         return <WithdrawDetailsCard info={info} {...props} />;
-      case "deactivate":
+      }
+      case "deactivate": {
+        const info = coerce(parsed.info, DeactivateInfo);
         return <DeactivateDetailsCard info={info} {...props} />;
+      }
       default:
         return <UnknownDetailsCard {...props} />;
     }

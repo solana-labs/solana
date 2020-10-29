@@ -3,7 +3,8 @@
 import { enums, number, pick, string, StructType } from "superstruct";
 import { Pubkey } from "validators/pubkey";
 
-const Initialize = pick({
+export type InitializeInfo = StructType<typeof InitializeInfo>;
+export const InitializeInfo = pick({
   stakeAccount: Pubkey,
   authorized: pick({
     staker: Pubkey,
@@ -16,34 +17,39 @@ const Initialize = pick({
   }),
 });
 
-const Delegate = pick({
+export type DelegateInfo = StructType<typeof DelegateInfo>;
+export const DelegateInfo = pick({
   stakeAccount: Pubkey,
   voteAccount: Pubkey,
   stakeAuthority: Pubkey,
 });
 
-const Authorize = pick({
+export type AuthorizeInfo = StructType<typeof AuthorizeInfo>;
+export const AuthorizeInfo = pick({
   authorityType: string(),
   stakeAccount: Pubkey,
   authority: Pubkey,
   newAuthority: Pubkey,
 });
 
-const Split = pick({
+export type SplitInfo = StructType<typeof SplitInfo>;
+export const SplitInfo = pick({
   stakeAccount: Pubkey,
   stakeAuthority: Pubkey,
   newSplitAccount: Pubkey,
   lamports: number(),
 });
 
-const Withdraw = pick({
+export type WithdrawInfo = StructType<typeof WithdrawInfo>;
+export const WithdrawInfo = pick({
   stakeAccount: Pubkey,
   withdrawAuthority: Pubkey,
   destination: Pubkey,
   lamports: number(),
 });
 
-const Deactivate = pick({
+export type DeactivateInfo = StructType<typeof DeactivateInfo>;
+export const DeactivateInfo = pick({
   stakeAccount: Pubkey,
   stakeAuthority: Pubkey,
 });
@@ -57,12 +63,3 @@ export const StakeInstructionType = enums([
   "withdraw",
   "deactivate",
 ]);
-
-export const IX_STRUCTS: { [id: string]: any } = {
-  initialize: Initialize,
-  delegate: Delegate,
-  authorize: Authorize,
-  split: Split,
-  withdraw: Withdraw,
-  deactivate: Deactivate,
-};

@@ -6,12 +6,13 @@ import {
 } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
+import { AuthorizeNonceAccountInfo } from "./types";
 
 export function NonceAuthorizeDetailsCard(props: {
   ix: ParsedInstruction;
   index: number;
   result: SignatureResult;
-  info: any;
+  info: AuthorizeNonceAccountInfo;
 }) {
   const { ix, index, result, info } = props;
 

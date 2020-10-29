@@ -3,13 +3,15 @@
 import { enums, number, pick, string, StructType } from "superstruct";
 import { Pubkey } from "validators/pubkey";
 
-const Write = pick({
+export type WriteInfo = StructType<typeof WriteInfo>;
+export const WriteInfo = pick({
   account: Pubkey,
   bytes: string(),
   offset: number(),
 });
 
-const Finalize = pick({
+export type FinalizeInfo = StructType<typeof FinalizeInfo>;
+export const FinalizeInfo = pick({
   account: Pubkey,
 });
 
@@ -17,8 +19,3 @@ export type BpfLoaderInstructionType = StructType<
   typeof BpfLoaderInstructionType
 >;
 export const BpfLoaderInstructionType = enums(["write", "finalize"]);
-
-export const IX_STRUCTS: { [id: string]: any } = {
-  write: Write,
-  finalize: Finalize,
-};

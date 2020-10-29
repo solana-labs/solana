@@ -7,12 +7,13 @@ import {
 import { InstructionCard } from "../InstructionCard";
 import { Copyable } from "components/common/Copyable";
 import { Address } from "components/common/Address";
+import { AllocateWithSeedInfo } from "./types";
 
 export function AllocateWithSeedDetailsCard(props: {
   ix: ParsedInstruction;
   index: number;
   result: SignatureResult;
-  info: any;
+  info: AllocateWithSeedInfo;
 }) {
   const { ix, index, result, info } = props;
 
