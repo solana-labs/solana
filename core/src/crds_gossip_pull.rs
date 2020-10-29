@@ -537,24 +537,21 @@ impl CrdsGossipPull {
     /// The value_hash of an active item is put into self.purged_values queue
     pub fn purge_active(
         &mut self,
+        thread_pool: &ThreadPool,
         crds: &mut Crds,
         now: u64,
         timeouts: &HashMap<Pubkey, u64>,
     ) -> usize {
-        let old = crds.find_old_labels(now, timeouts);
-        let mut purged: VecDeque<_> = old
-            .iter()
-            .filter_map(|label| {
-                let rv = crds
-                    .lookup_versioned(label)
-                    .map(|val| (val.value_hash, val.local_timestamp));
-                crds.remove(label);
-                rv
-            })
-            .collect();
-        let ret = purged.len();
-        self.purged_values.append(&mut purged);
-        ret
+        let num_purged_values = self.purged_values.len();
+        self.purged_values.extend(
+            crds.find_old_labels(thread_pool, now, timeouts)
+                .into_iter()
+                .filter_map(|label| {
+                    let val = crds.remove(&label)?;
+                    Some((val.value_hash, val.local_timestamp))
+                }),
+        );
+        self.purged_values.len() - num_purged_values
     }
     /// Purge values from the `self.purged_values` queue that are older then purge_timeout
     pub fn purge_purged(&mut self, min_ts: u64) {
@@ -1229,7 +1226,7 @@ mod test {
 
         // purge
         let timeouts = node.make_timeouts_def(&node_pubkey, &HashMap::new(), 0, 1);
-        node.purge_active(&mut node_crds, 2, &timeouts);
+        node.purge_active(&thread_pool, &mut node_crds, 2, &timeouts);
 
         //verify self is still valid after purge
         assert_eq!(node_crds.lookup(&node_label).unwrap().label(), node_label);
