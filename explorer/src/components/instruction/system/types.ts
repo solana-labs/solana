@@ -38,36 +38,28 @@ export const CreateAccountWithSeedInfo = pick({
   owner: Pubkey,
 });
 
-export type AdvanceNonceAccountInfo = StructType<
-  typeof AdvanceNonceAccountInfo
->;
-export const AdvanceNonceAccountInfo = pick({
+export type AdvanceNonceInfo = StructType<typeof AdvanceNonceInfo>;
+export const AdvanceNonceInfo = pick({
   nonceAccount: Pubkey,
   nonceAuthority: Pubkey,
 });
 
-export type WithdrawNonceAccountInfo = StructType<
-  typeof WithdrawNonceAccountInfo
->;
-export const WithdrawNonceAccountInfo = pick({
+export type WithdrawNonceInfo = StructType<typeof WithdrawNonceInfo>;
+export const WithdrawNonceInfo = pick({
   nonceAccount: Pubkey,
   destination: Pubkey,
   nonceAuthority: Pubkey,
   lamports: number(),
 });
 
-export type InitializeNonceAccountInfo = StructType<
-  typeof InitializeNonceAccountInfo
->;
-export const InitializeNonceAccountInfo = pick({
+export type InitializeNonceInfo = StructType<typeof InitializeNonceInfo>;
+export const InitializeNonceInfo = pick({
   nonceAccount: Pubkey,
   nonceAuthority: Pubkey,
 });
 
-export type AuthorizeNonceAccountInfo = StructType<
-  typeof AuthorizeNonceAccountInfo
->;
-export const AuthorizeNonceAccountInfo = pick({
+export type AuthorizeNonceInfo = StructType<typeof AuthorizeNonceInfo>;
+export const AuthorizeNonceInfo = pick({
   nonceAccount: Pubkey,
   nonceAuthority: Pubkey,
   newAuthorized: Pubkey,
@@ -115,9 +107,9 @@ export const SystemInstructionType = enums([
   "assign",
   "assignWithSeed",
   "transfer",
-  "advanceNonceAccount",
-  "withdrawNonceAccount",
-  "authorizeNonceAccount",
-  "initializeNonceAccount",
+  "advanceNonce",
+  "withdrawNonce",
+  "authorizeNonce",
+  "initializeNonce",
   // "transferWithSeed", TODO: Add support for transfer with seed
 ]);

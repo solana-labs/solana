@@ -7,13 +7,13 @@ import {
 import { lamportsToSolString } from "utils";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
-import { WithdrawNonceAccountInfo } from "./types";
+import { WithdrawNonceInfo } from "./types";
 
 export function NonceWithdrawDetailsCard(props: {
   ix: ParsedInstruction;
   index: number;
   result: SignatureResult;
-  info: WithdrawNonceAccountInfo;
+  info: WithdrawNonceInfo;
 }) {
   const { ix, index, result, info } = props;
 
