@@ -6,7 +6,6 @@ extern crate self as solana_sdk;
 
 pub use solana_program::*;
 
-pub mod builtins;
 pub mod client;
 pub mod commitment_config;
 pub mod deserialize_utils;
