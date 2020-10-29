@@ -212,11 +212,9 @@ export function SolanaClusterStatsProvider({ children }: Props) {
       type: PerformanceInfoActionType.SetError,
       data: "Cluster stats timed out",
     });
-    if (cluster !== Cluster.Custom) {
-      reportError(new Error("Cluster stats timed out"), { url });
-    }
+    console.error("Cluster stats timed out");
     setActive(false);
-  }, [cluster, url]);
+  }, []);
 
   const retry = React.useCallback(() => {
     resetData();
