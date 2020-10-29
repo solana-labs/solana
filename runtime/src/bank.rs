@@ -3950,7 +3950,7 @@ impl Bank {
         let slot = self.slot();
 
         for feature_id in &self.feature_set.inactive {
-            let mut activated = false;
+            let mut activated = None;
             if let Some(mut account) = self.get_account(feature_id) {
                 if let Some(mut feature) = Feature::from_account(&account) {
                     match feature.activated_at {
@@ -3962,21 +3962,21 @@ impl Bank {
                                     self.store_account(feature_id, &account);
                                 }
                                 newly_activated.insert(*feature_id);
-                                activated = true;
+                                activated = Some(slot);
                                 info!("Feature {} activated at slot {}", feature_id, slot);
                             }
                         }
                         Some(activation_slot) => {
                             if slot >= activation_slot {
                                 // Feature is already active
-                                activated = true;
+                                activated = Some(activation_slot);
                             }
                         }
                     }
                 }
             }
-            if activated {
-                active.insert(*feature_id);
+            if let Some(slot) = activated {
+                active.insert(*feature_id, slot);
             } else {
                 inactive.insert(*feature_id);
             }
