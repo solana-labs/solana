@@ -3,10 +3,6 @@ use crate::{
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     native_loader::NativeLoader,
-    process_instruction::{
-        ComputeBudget, ComputeMeter, ErasedProcessInstruction, ErasedProcessInstructionWithContext,
-        Executor, InvokeContext, Logger, ProcessInstruction, ProcessInstructionWithContext,
-    },
     rent_collector::RentCollector,
 };
 use log::*;
@@ -18,6 +14,10 @@ use solana_sdk::{
     keyed_account::{create_keyed_readonly_accounts, KeyedAccount},
     message::Message,
     native_loader,
+    process_instruction::{
+        ComputeBudget, ComputeMeter, ErasedProcessInstructionWithContext, Executor, InvokeContext,
+        Logger, ProcessInstructionWithContext,
+    },
     pubkey::Pubkey,
     rent::Rent,
     system_program,
@@ -205,7 +205,7 @@ pub struct ThisInvokeContext {
     program_ids: Vec<Pubkey>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
-    programs: Vec<(Pubkey, ProcessInstruction)>,
+    programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
     logger: Rc<RefCell<dyn Logger>>,
     compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
@@ -218,7 +218,7 @@ impl ThisInvokeContext {
         program_id: &Pubkey,
         rent: Rent,
         pre_accounts: Vec<PreAccount>,
-        programs: Vec<(Pubkey, ProcessInstruction)>,
+        programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
         log_collector: Option<Rc<LogCollector>>,
         compute_budget: ComputeBudget,
         executors: Rc<RefCell<Executors>>,
@@ -281,7 +281,7 @@ impl InvokeContext for ThisInvokeContext {
             .last()
             .ok_or(InstructionError::GenericError)
     }
-    fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
+    fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
         &self.programs
     }
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
@@ -326,7 +326,7 @@ impl Logger for ThisLogger {
 #[derive(Deserialize, Serialize)]
 pub struct MessageProcessor {
     #[serde(skip)]
-    programs: Vec<(Pubkey, ProcessInstruction)>,
+    programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
     #[serde(skip)]
     loaders: Vec<(Pubkey, ProcessInstructionWithContext)>,
     #[serde(skip)]
@@ -349,7 +349,7 @@ impl std::fmt::Debug for MessageProcessor {
                 .programs
                 .iter()
                 .map(|(pubkey, instruction)| {
-                    let erased_instruction: ErasedProcessInstruction = *instruction;
+                    let erased_instruction: ErasedProcessInstructionWithContext = *instruction;
                     format!("{}: {:p}", pubkey, erased_instruction)
                 })
                 .collect::<Vec<_>>(),
@@ -398,7 +398,11 @@ impl ::solana_frozen_abi::abi_example::AbiExample for MessageProcessor {
 
 impl MessageProcessor {
     /// Add a static entrypoint to intercept instructions before the dynamic loader.
-    pub fn add_program(&mut self, program_id: Pubkey, process_instruction: ProcessInstruction) {
+    pub fn add_program(
+        &mut self,
+        program_id: Pubkey,
+        process_instruction: ProcessInstructionWithContext,
+    ) {
         match self.programs.iter_mut().find(|(key, _)| program_id == *key) {
             Some((_, processor)) => *processor = process_instruction,
             None => self.programs.push((program_id, process_instruction)),
@@ -476,6 +480,7 @@ impl MessageProcessor {
                             &root_id,
                             &keyed_accounts[1..],
                             instruction_data,
+                            invoke_context,
                         );
                     }
                 }
@@ -1266,6 +1271,7 @@ mod tests {
             _program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
@@ -1400,6 +1406,7 @@ mod tests {
             _program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
@@ -1559,6 +1566,7 @@ mod tests {
             program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
             assert_eq!(*program_id, keyed_accounts[0].owner()?);
             assert_ne!(
@@ -1675,6 +1683,7 @@ mod tests {
             _program_id: &Pubkey,
             _keyed_accounts: &[KeyedAccount],
             _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
             Ok(())
         }

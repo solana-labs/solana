@@ -11,12 +11,11 @@ use solana_rbpf::vm::EbpfVm;
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
-    bpf_test_utils::MockInvokeContext,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::load_program,
-    process_instruction::ComputeBudget,
 };
 use solana_sdk::{
+    process_instruction::{MockInvokeContext,ComputeBudget},
     account::Account,
     bpf_loader, bpf_loader_deprecated,
     client::SyncClient,

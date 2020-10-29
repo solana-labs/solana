@@ -17,10 +17,6 @@ use crate::{
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     message_processor::{Executors, MessageProcessor},
-    process_instruction::{
-        ErasedProcessInstruction, ErasedProcessInstructionWithContext, Executor,
-        ProcessInstruction, ProcessInstructionWithContext,
-    },
     rent_collector::RentCollector,
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
@@ -55,6 +51,9 @@ use solana_sdk::{
     native_loader,
     native_token::sol_to_lamports,
     nonce, nonce_account,
+    process_instruction::{
+        ErasedProcessInstructionWithContext, Executor, ProcessInstructionWithContext,
+    },
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     recent_blockhashes_account,
@@ -140,7 +139,7 @@ type EpochCount = u64;
 
 #[derive(Copy, Clone)]
 pub enum Entrypoint {
-    Program(ProcessInstruction),
+    Program(ProcessInstructionWithContext),
     Loader(ProcessInstructionWithContext),
 }
 
@@ -157,7 +156,7 @@ impl fmt::Debug for Entrypoint {
         let entrypoint = match self {
             Entrypoint::Program(instruction) => EntrypointForDebug::Program(format!(
                 "{:p}",
-                *instruction as ErasedProcessInstruction
+                *instruction as ErasedProcessInstructionWithContext
             )),
             Entrypoint::Loader(instruction) => EntrypointForDebug::Loader(format!(
                 "{:p}",
@@ -224,7 +223,7 @@ impl AbiExample for Builtin {
         Self {
             name: String::default(),
             id: Pubkey::default(),
-            entrypoint: Entrypoint::Program(|_, _, _| Ok(())),
+            entrypoint: Entrypoint::Program(|_, _, _, _| Ok(())),
         }
     }
 }
@@ -3827,9 +3826,13 @@ impl Bank {
         &mut self,
         name: &str,
         program_id: Pubkey,
-        process_instruction: ProcessInstruction,
+        process_instruction_with_context: ProcessInstructionWithContext,
     ) {
-        self.add_builtin(name, program_id, Entrypoint::Program(process_instruction));
+        self.add_builtin(
+            name,
+            program_id,
+            Entrypoint::Program(process_instruction_with_context),
+        );
     }
 
     pub fn add_builtin_loader(
@@ -4125,7 +4128,6 @@ mod tests {
             BOOTSTRAP_VALIDATOR_LAMPORTS,
         },
         native_loader::NativeLoaderError,
-        process_instruction::InvokeContext,
         status_cache::MAX_CACHE_ENTRIES,
     };
     use solana_sdk::{
@@ -4138,6 +4140,7 @@ mod tests {
         message::{Message, MessageHeader},
         nonce,
         poh_config::PohConfig,
+        process_instruction::InvokeContext,
         rent::Rent,
         signature::{Keypair, Signer},
         system_instruction::{self, SystemError},
@@ -4428,6 +4431,7 @@ mod tests {
         _program_id: &Pubkey,
         keyed_accounts: &[KeyedAccount],
         data: &[u8],
+        _invoke_context: &mut dyn InvokeContext,
     ) -> result::Result<(), InstructionError> {
         if let Ok(instruction) = bincode::deserialize(data) {
             match instruction {
@@ -7724,6 +7728,7 @@ mod tests {
             program_id: &Pubkey,
             _keyed_accounts: &[KeyedAccount],
             _instruction_data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             if mock_vote_program_id() != *program_id {
                 return Err(InstructionError::IncorrectProgramId);
@@ -7781,6 +7786,7 @@ mod tests {
             _pubkey: &Pubkey,
             _ka: &[KeyedAccount],
             _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Err(InstructionError::Custom(42))
         }
@@ -7831,6 +7837,7 @@ mod tests {
             _pubkey: &Pubkey,
             _ka: &[KeyedAccount],
             _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Err(InstructionError::Custom(42))
         }
@@ -8499,6 +8506,7 @@ mod tests {
             _program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
             let lamports = data[0] as u64;
             {
@@ -8551,6 +8559,7 @@ mod tests {
             _program_id: &Pubkey,
             _keyed_accounts: &[KeyedAccount],
             _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
             Ok(())
         }
@@ -8733,6 +8742,7 @@ mod tests {
         _pubkey: &Pubkey,
         _ka: &[KeyedAccount],
         _data: &[u8],
+        _invoke_context: &mut dyn InvokeContext,
     ) -> std::result::Result<(), InstructionError> {
         Ok(())
     }
@@ -8982,6 +8992,7 @@ mod tests {
             _program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
             assert_eq!(42, keyed_accounts[0].lamports().unwrap());
             let mut account = keyed_accounts[0].try_account_ref_mut()?;
@@ -9163,6 +9174,7 @@ mod tests {
             _pubkey: &Pubkey,
             _ka: &[KeyedAccount],
             _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
         }
@@ -10065,22 +10077,15 @@ mod tests {
 
     #[test]
     fn test_debug_entrypoint() {
-        fn mock_process_instruction(
-            _program_id: &Pubkey,
-            _keyed_accounts: &[KeyedAccount],
-            _data: &[u8],
-        ) -> std::result::Result<(), InstructionError> {
-            Ok(())
-        }
-        fn mock_ix_processor(
+        fn mock_processor(
             _pubkey: &Pubkey,
             _ka: &[KeyedAccount],
             _data: &[u8],
-            _context: &mut dyn InvokeContext,
+            _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
         }
-        assert!(!format!("{:?}", Entrypoint::Program(mock_process_instruction)).is_empty());
-        assert!(!format!("{:?}", Entrypoint::Loader(mock_ix_processor)).is_empty());
+        assert!(!format!("{:?}", Entrypoint::Program(mock_processor)).is_empty());
+        assert!(!format!("{:?}", Entrypoint::Loader(mock_processor)).is_empty());
     }
 }

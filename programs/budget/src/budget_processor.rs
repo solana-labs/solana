@@ -10,6 +10,7 @@ use solana_sdk::{
     hash::hash,
     instruction::InstructionError,
     keyed_account::{next_keyed_account, KeyedAccount},
+    process_instruction::InvokeContext,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
@@ -116,6 +117,7 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
+    _invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     let keyed_accounts_iter = &mut keyed_accounts.iter();
     let instruction = limited_deserialize(data)?;
