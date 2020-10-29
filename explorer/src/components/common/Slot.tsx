@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
+import { clusterPath } from "utils/url";
 
 type CopyState = "copy" | "copied";
 type Props = {
@@ -30,7 +31,7 @@ export function Slot({ slot, link }: Props) {
   return link ? (
     <span className="text-monospace">
       {copyButton}
-      <Link className="" to={`/block/${slot}`}>
+      <Link to={clusterPath(`/block/${slot}`)}>
         {slot.toLocaleString("en-US")}
       </Link>
     </span>

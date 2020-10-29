@@ -6,32 +6,31 @@ import { Signature } from "components/common/Signature";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { Slot } from "components/common/Slot";
+import { ClusterStatus, useCluster } from "providers/cluster";
 
 export function BlockHistoryCard({ slot }: { slot: number }) {
   const confirmedBlock = useBlock(slot);
   const fetchBlock = useFetchBlock();
+  const { status } = useCluster();
   const refresh = () => fetchBlock(slot);
 
+  // Fetch block on load
   React.useEffect(() => {
-    if (!confirmedBlock) refresh();
-  }, [confirmedBlock, slot]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!confirmedBlock && status === ClusterStatus.Connected) refresh();
+  }, [slot, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!confirmedBlock) {
-    return null;
-  }
-
-  if (confirmedBlock.data === undefined) {
-    if (confirmedBlock.status === FetchStatus.Fetching) {
-      return <LoadingCard message="Loading block" />;
-    }
-
+  if (!confirmedBlock || confirmedBlock.status === FetchStatus.Fetching) {
+    return <LoadingCard message="Loading block" />;
+  } else if (
+    confirmedBlock.data === undefined ||
+    confirmedBlock.status === FetchStatus.FetchFailed
+  ) {
     return <ErrorCard retry={refresh} text="Failed to fetch block" />;
+  } else if (confirmedBlock.data.block === undefined) {
+    return <ErrorCard retry={refresh} text={`Block ${slot} was not found`} />;
   }
 
-  if (confirmedBlock.status === FetchStatus.FetchFailed) {
-    return <ErrorCard retry={refresh} text="Failed to fetch block" />;
-  }
-
+  const block = confirmedBlock.data.block;
   return (
     <>
       <div className="card">
@@ -44,31 +43,31 @@ export function BlockHistoryCard({ slot }: { slot: number }) {
           <tr>
             <td className="w-100">Slot</td>
             <td className="text-lg-right text-monospace">
-              <Slot slot={Number(slot)} />
+              <Slot slot={slot} />
             </td>
           </tr>
           <tr>
             <td className="w-100">Parent Slot</td>
             <td className="text-lg-right text-monospace">
-              <Slot slot={confirmedBlock.data.parentSlot} link />
+              <Slot slot={block.parentSlot} link />
             </td>
           </tr>
           <tr>
             <td className="w-100">Blockhash</td>
             <td className="text-lg-right text-monospace">
-              <span>{confirmedBlock.data.blockhash}</span>
+              <span>{block.blockhash}</span>
             </td>
           </tr>
           <tr>
             <td className="w-100">Previous Blockhash</td>
             <td className="text-lg-right text-monospace">
-              <span>{confirmedBlock.data.previousBlockhash}</span>
+              <span>{block.previousBlockhash}</span>
             </td>
           </tr>
         </TableCardBody>
       </div>
 
-      {confirmedBlock.data.transactions.length === 0 ? (
+      {block.transactions.length === 0 ? (
         <ErrorCard text="This block has no transactions" />
       ) : (
         <div className="card">
@@ -85,7 +84,7 @@ export function BlockHistoryCard({ slot }: { slot: number }) {
                 </tr>
               </thead>
               <tbody className="list">
-                {confirmedBlock.data.transactions.map((tx, i) => {
+                {block.transactions.map((tx, i) => {
                   let statusText;
                   let statusClass;
                   let signature: React.ReactNode;
