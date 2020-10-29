@@ -38,17 +38,13 @@ export const CreateAccountWithSeedInfo = pick({
   owner: Pubkey,
 });
 
-export type AdvanceNonceInfo = StructType<
-  typeof AdvanceNonceInfo
->;
+export type AdvanceNonceInfo = StructType<typeof AdvanceNonceInfo>;
 export const AdvanceNonceInfo = pick({
   nonceAccount: Pubkey,
   nonceAuthority: Pubkey,
 });
 
-export type WithdrawNonceInfo = StructType<
-  typeof WithdrawNonceInfo
->;
+export type WithdrawNonceInfo = StructType<typeof WithdrawNonceInfo>;
 export const WithdrawNonceInfo = pick({
   nonceAccount: Pubkey,
   destination: Pubkey,
@@ -56,17 +52,13 @@ export const WithdrawNonceInfo = pick({
   lamports: number(),
 });
 
-export type InitializeNonceInfo = StructType<
-  typeof InitializeNonceInfo
->;
+export type InitializeNonceInfo = StructType<typeof InitializeNonceInfo>;
 export const InitializeNonceInfo = pick({
   nonceAccount: Pubkey,
   nonceAuthority: Pubkey,
 });
 
-export type AuthorizeNonceInfo = StructType<
-  typeof AuthorizeNonceInfo
->;
+export type AuthorizeNonceInfo = StructType<typeof AuthorizeNonceInfo>;
 export const AuthorizeNonceInfo = pick({
   nonceAccount: Pubkey,
   nonceAuthority: Pubkey,
