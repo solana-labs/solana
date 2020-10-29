@@ -19,6 +19,7 @@ import {
   AccountBalanceRow,
 } from "components/common/Account";
 import { displayTimestamp } from "utils/date";
+import { Slot } from "components/common/Slot";
 
 export function SysvarAccountSection({
   account,
@@ -171,7 +172,7 @@ function SysvarAccountSlotHistory({
           <td className="text-lg-right text-monospace">
             {history.map((val) => (
               <p key={val} className="mb-0">
-                {val}
+                <Slot slot={val} link />
               </p>
             ))}
           </td>
@@ -281,7 +282,7 @@ function SysvarAccountEpochScheduleCard({
         <tr>
           <td>First Normal Slot</td>
           <td className="text-lg-right">
-            {sysvarAccount.info.firstNormalSlot}
+            <Slot slot={sysvarAccount.info.firstNormalSlot} />
           </td>
         </tr>
       </TableCardBody>
@@ -329,7 +330,9 @@ function SysvarAccountClockCard({
 
         <tr>
           <td>Slot</td>
-          <td className="text-lg-right">{sysvarAccount.info.slot}</td>
+          <td className="text-lg-right">
+            <Slot slot={sysvarAccount.info.slot} link />
+          </td>
         </tr>
       </TableCardBody>
     </div>

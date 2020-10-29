@@ -69,7 +69,7 @@ function StatsCardBody() {
       <tr>
         <td className="w-100">Slot</td>
         <td className="text-lg-right text-monospace">
-          <Slot slot={absoluteSlot} />
+          <Slot slot={absoluteSlot} link />
         </td>
       </tr>
       {blockHeight !== undefined && (
