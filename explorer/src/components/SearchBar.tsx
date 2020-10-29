@@ -164,7 +164,8 @@ function buildTokenOptions(search: string, cluster: Cluster) {
   }
 }
 
-function buildOptions(search: string, cluster: Cluster) {
+function buildOptions(rawSearch: string, cluster: Cluster) {
+  const search = rawSearch.trim();
   if (search.length === 0) return [];
 
   const options = [];
