@@ -15,8 +15,12 @@ export enum ActionType {
   Clear,
 }
 
-type State = Cache.State<ConfirmedBlock>;
-type Dispatch = Cache.Dispatch<ConfirmedBlock>;
+type Block = {
+  block?: ConfirmedBlock;
+};
+
+type State = Cache.State<Block>;
+type Dispatch = Cache.Dispatch<Block>;
 
 const StateContext = React.createContext<State | undefined>(undefined);
 const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
@@ -25,7 +29,7 @@ type BlockProviderProps = { children: React.ReactNode };
 
 export function BlockProvider({ children }: BlockProviderProps) {
   const { url } = useCluster();
-  const [state, dispatch] = Cache.useReducer<ConfirmedBlock>(url);
+  const [state, dispatch] = Cache.useReducer<Block>(url);
 
   React.useEffect(() => {
     dispatch({ type: ActionType.Clear, url });
@@ -40,9 +44,7 @@ export function BlockProvider({ children }: BlockProviderProps) {
   );
 }
 
-export function useBlock(
-  key: number
-): Cache.CacheEntry<ConfirmedBlock> | undefined {
+export function useBlock(key: number): Cache.CacheEntry<Block> | undefined {
   const context = React.useContext(StateContext);
 
   if (!context) {
@@ -66,18 +68,23 @@ export async function fetchBlock(
   });
 
   let status: FetchStatus;
-  let data: ConfirmedBlock | undefined;
+  let data: Block | undefined = undefined;
 
   try {
     const connection = new Connection(url, "max");
-    data = await connection.getConfirmedBlock(Number(key));
+    data = { block: await connection.getConfirmedBlock(Number(key)) };
     status = FetchStatus.Fetched;
-  } catch (error) {
-    console.log(error);
-    if (cluster !== Cluster.Custom) {
-      Sentry.captureException(error, { tags: { url } });
+  } catch (err) {
+    const error = err as Error;
+    if (error.message.includes("not found")) {
+      data = {} as Block;
+      status = FetchStatus.Fetched;
+    } else {
+      status = FetchStatus.FetchFailed;
+      if (cluster !== Cluster.Custom) {
+        Sentry.captureException(error, { tags: { url } });
+      }
     }
-    status = FetchStatus.FetchFailed;
   }
 
   dispatch({
@@ -90,14 +97,12 @@ export async function fetchBlock(
 }
 
 export function useFetchBlock() {
-  const { cluster, url } = useCluster();
-  const state = React.useContext(StateContext);
   const dispatch = React.useContext(DispatchContext);
-
-  if (!state || !dispatch) {
+  if (!dispatch) {
     throw new Error(`useFetchBlock must be used within a BlockProvider`);
   }
 
+  const { cluster, url } = useCluster();
   return React.useCallback(
     (key: number) => fetchBlock(dispatch, url, cluster, key),
     [dispatch, cluster, url]
