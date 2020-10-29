@@ -85,21 +85,6 @@ get() {
 }
 
 # Install xargo
-<<<<<<< HEAD
-(
-  set -ex
-  # shellcheck disable=SC2154
-  if [[ -n $rust_stable ]]; then
-    cargo +"$rust_stable" install xargo
-  else
-    cargo install xargo
-  fi
-  xargo --version >xargo.md 2>&1
-)
-# shellcheck disable=SC2181
-if [[ $? -ne 0 ]]; then
-  exit 1
-=======
 version=0.3.22
 if [[ ! -e xargo-$version.md ]] || [[ ! -x bin/xargo ]]; then
   (
@@ -117,7 +102,6 @@ if [[ ! -e xargo-$version.md ]] || [[ ! -x bin/xargo ]]; then
     exit 1
   fi
   ./bin/xargo --version >xargo-$version.md 2>&1
->>>>>>> 4e0d1b1d4... more portable install.sh (#13114)
 fi
 
 # Install Criterion
