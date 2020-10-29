@@ -1237,7 +1237,7 @@ fn call<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::{MockComputeMeter, MockLogger};
+    use solana_runtime::bpf_test_utils::{MockComputeMeter, MockLogger};
     use solana_sdk::hash::hashv;
     use std::str::FromStr;
 
