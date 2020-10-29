@@ -200,11 +200,11 @@ impl ComputeMeter for ThisComputeMeter {
         self.remaining
     }
 }
-pub struct ThisInvokeContext {
+pub struct ThisInvokeContext<'a> {
     program_ids: Vec<Pubkey>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
-    programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
+    programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     logger: Rc<RefCell<dyn Logger>>,
     compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
@@ -212,12 +212,12 @@ pub struct ThisInvokeContext {
     instruction_recorder: Option<InstructionRecorder>,
     feature_set: Arc<FeatureSet>,
 }
-impl ThisInvokeContext {
+impl<'a> ThisInvokeContext<'a> {
     pub fn new(
         program_id: &Pubkey,
         rent: Rent,
         pre_accounts: Vec<PreAccount>,
-        programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
+        programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         log_collector: Option<Rc<LogCollector>>,
         compute_budget: ComputeBudget,
         executors: Rc<RefCell<Executors>>,
@@ -242,7 +242,7 @@ impl ThisInvokeContext {
         }
     }
 }
-impl InvokeContext for ThisInvokeContext {
+impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError> {
         if self.program_ids.len() > self.compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
@@ -281,7 +281,7 @@ impl InvokeContext for ThisInvokeContext {
             .ok_or(InstructionError::GenericError)
     }
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
-        &self.programs
+        self.programs
     }
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
         self.logger.clone()
@@ -674,7 +674,7 @@ impl MessageProcessor {
             instruction.program_id(&message.account_keys),
             rent_collector.rent,
             pre_accounts,
-            self.programs.clone(), // get rid of clone
+            &self.programs,
             log_collector,
             Self::get_compute_budget(&feature_set),
             executors,
@@ -767,7 +767,7 @@ mod tests {
             &program_ids[0],
             Rent::default(),
             pre_accounts,
-            vec![],
+            &[],
             None,
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
@@ -1598,7 +1598,7 @@ mod tests {
             &caller_program_id,
             Rent::default(),
             vec![owned_preaccount, not_owned_preaccount],
-            vec![],
+            &[],
             None,
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),

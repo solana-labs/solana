@@ -552,7 +552,7 @@ mod tests {
             &program_id,
             Rent::default(),
             vec![],
-            vec![],
+            &[],
             None,
             ComputeBudget {
                 max_units: 1,
