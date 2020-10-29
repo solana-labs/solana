@@ -273,20 +273,18 @@ impl CrdsGossipPull {
     }
 
     /// process a pull request
-    pub fn process_pull_requests(
-        &mut self,
-        crds: &mut Crds,
-        requests: Vec<(CrdsValue, CrdsFilter)>,
-        now: u64,
-    ) {
-        requests.into_iter().for_each(|(caller, _)| {
+    pub fn process_pull_requests<I>(&mut self, crds: &mut Crds, callers: I, now: u64)
+    where
+        I: IntoIterator<Item = CrdsValue>,
+    {
+        for caller in callers {
             let key = caller.label().pubkey();
             if let Ok(Some(val)) = crds.insert(caller, now) {
                 self.purged_values
                     .push_back((val.value_hash, val.local_timestamp));
             }
             crds.update_record_timestamp(&key, now);
-        });
+        }
     }
 
     /// Create gossip responses to pull requests
@@ -1087,7 +1085,11 @@ mod test {
         let (_, filters, caller) = req.unwrap();
         let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
         let rsp = dest.generate_pull_responses(&dest_crds, &filters, 0);
-        dest.process_pull_requests(&mut dest_crds, filters, 1);
+        dest.process_pull_requests(
+            &mut dest_crds,
+            filters.into_iter().map(|(caller, _)| caller),
+            1,
+        );
         assert!(rsp.iter().all(|rsp| rsp.is_empty()));
         assert!(dest_crds.lookup(&caller.label()).is_some());
         assert_eq!(
@@ -1161,7 +1163,11 @@ mod test {
             let (_, filters, caller) = req.unwrap();
             let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
             let mut rsp = dest.generate_pull_responses(&dest_crds, &filters, 0);
-            dest.process_pull_requests(&mut dest_crds, filters, 0);
+            dest.process_pull_requests(
+                &mut dest_crds,
+                filters.into_iter().map(|(caller, _)| caller),
+                0,
+            );
             // if there is a false positive this is empty
             // prob should be around 0.1 per iteration
             if rsp.is_empty() {

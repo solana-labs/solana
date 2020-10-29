@@ -462,7 +462,10 @@ fn network_run_pull(
                             .into_iter()
                             .flatten()
                             .collect();
-                        node.lock().unwrap().process_pull_requests(filters, now);
+                        node.lock().unwrap().process_pull_requests(
+                            filters.into_iter().map(|(caller, _)| caller),
+                            now,
+                        );
                         rsp
                     })
                     .unwrap();
