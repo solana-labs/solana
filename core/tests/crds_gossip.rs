@@ -298,16 +298,10 @@ fn network_run_push(
         let requests: Vec<_> = network_values
             .par_iter()
             .map(|node| {
-<<<<<<< HEAD
-                let timeouts = node.lock().unwrap().make_timeouts_test();
-                node.lock().unwrap().purge(now, &timeouts);
-                node.lock().unwrap().new_push_messages(now)
-=======
                 let mut node_lock = node.lock().unwrap();
                 let timeouts = node_lock.make_timeouts_test();
                 node_lock.purge(thread_pool, now, &timeouts);
-                node_lock.new_push_messages(vec![], now)
->>>>>>> 37c8842bc... scans crds table in parallel for finding old labels (#13073)
+                node_lock.new_push_messages(now)
             })
             .collect();
         let transfered: Vec<_> = requests
