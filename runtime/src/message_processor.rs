@@ -328,8 +328,6 @@ pub struct MessageProcessor {
     #[serde(skip)]
     programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
     #[serde(skip)]
-    loaders: Vec<(Pubkey, ProcessInstructionWithContext)>,
-    #[serde(skip)]
     native_loader: NativeLoader,
 }
 
@@ -338,7 +336,6 @@ impl std::fmt::Debug for MessageProcessor {
         #[derive(Debug)]
         struct MessageProcessor<'a> {
             programs: Vec<String>,
-            loaders: Vec<String>,
             native_loader: &'a NativeLoader,
         }
         // rustc doesn't compile due to bug without this work around
@@ -347,14 +344,6 @@ impl std::fmt::Debug for MessageProcessor {
         let processor = MessageProcessor {
             programs: self
                 .programs
-                .iter()
-                .map(|(pubkey, instruction)| {
-                    let erased_instruction: ErasedProcessInstructionWithContext = *instruction;
-                    format!("{}: {:p}", pubkey, erased_instruction)
-                })
-                .collect::<Vec<_>>(),
-            loaders: self
-                .loaders
                 .iter()
                 .map(|(pubkey, instruction)| {
                     let erased_instruction: ErasedProcessInstructionWithContext = *instruction;
@@ -372,7 +361,6 @@ impl Default for MessageProcessor {
     fn default() -> Self {
         Self {
             programs: vec![],
-            loaders: vec![],
             native_loader: NativeLoader::default(),
         }
     }
@@ -381,7 +369,6 @@ impl Clone for MessageProcessor {
     fn clone(&self) -> Self {
         MessageProcessor {
             programs: self.programs.clone(),
-            loaders: self.loaders.clone(),
             native_loader: NativeLoader::default(),
         }
     }
@@ -414,10 +401,7 @@ impl MessageProcessor {
         program_id: Pubkey,
         process_instruction: ProcessInstructionWithContext,
     ) {
-        match self.loaders.iter_mut().find(|(key, _)| program_id == *key) {
-            Some((_, processor)) => *processor = process_instruction,
-            None => self.loaders.push((program_id, process_instruction)),
-        }
+        self.add_program(program_id, process_instruction);
     }
 
     fn get_compute_budget(feature_set: &FeatureSet) -> ComputeBudget {
@@ -462,17 +446,6 @@ impl MessageProcessor {
         if let Some(root_account) = keyed_accounts.iter().next() {
             if native_loader::check_id(&root_account.owner()?) {
                 let root_id = root_account.unsigned_key();
-                for (id, process_instruction) in &self.loaders {
-                    if id == root_id {
-                        // Call the program via a builtin loader
-                        return process_instruction(
-                            &root_id,
-                            &keyed_accounts[1..],
-                            instruction_data,
-                            invoke_context,
-                        );
-                    }
-                }
                 for (id, process_instruction) in &self.programs {
                     if id == root_id {
                         // Call the builtin program
@@ -493,7 +466,7 @@ impl MessageProcessor {
                 );
             } else {
                 let owner_id = &root_account.owner()?;
-                for (id, process_instruction) in &self.loaders {
+                for (id, process_instruction) in &self.programs {
                     if id == owner_id {
                         // Call the program via a builtin loader
                         return process_instruction(
