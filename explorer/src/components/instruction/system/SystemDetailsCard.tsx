@@ -28,10 +28,10 @@ import {
   AssignInfo,
   AssignWithSeedInfo,
   TransferInfo,
-  AdvanceNonceAccountInfo,
-  AuthorizeNonceAccountInfo,
-  InitializeNonceAccountInfo,
-  WithdrawNonceAccountInfo,
+  AdvanceNonceInfo,
+  AuthorizeNonceInfo,
+  InitializeNonceInfo,
+  WithdrawNonceInfo,
 } from "./types";
 
 type DetailsProps = {
@@ -73,20 +73,20 @@ export function SystemDetailsCard(props: DetailsProps) {
         const info = coerce(parsed.info, TransferInfo);
         return <TransferDetailsCard info={info} {...props} />;
       }
-      case "advanceNonceAccount": {
-        const info = coerce(parsed.info, AdvanceNonceAccountInfo);
+      case "advanceNonce": {
+        const info = coerce(parsed.info, AdvanceNonceInfo);
         return <NonceAdvanceDetailsCard info={info} {...props} />;
       }
-      case "withdrawNonceAccount": {
-        const info = coerce(parsed.info, WithdrawNonceAccountInfo);
+      case "withdrawNonce": {
+        const info = coerce(parsed.info, WithdrawNonceInfo);
         return <NonceWithdrawDetailsCard info={info} {...props} />;
       }
-      case "authorizeNonceAccount": {
-        const info = coerce(parsed.info, AuthorizeNonceAccountInfo);
+      case "authorizeNonce": {
+        const info = coerce(parsed.info, AuthorizeNonceInfo);
         return <NonceAuthorizeDetailsCard info={info} {...props} />;
       }
-      case "initializeNonceAccount": {
-        const info = coerce(parsed.info, InitializeNonceAccountInfo);
+      case "initializeNonce": {
+        const info = coerce(parsed.info, InitializeNonceInfo);
         return <NonceInitializeDetailsCard info={info} {...props} />;
       }
       default:
