@@ -73,7 +73,7 @@ mod tests {
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
         let (genesis_config, mint_keypair) = create_genesis_config(lamports);
         let mut bank = Bank::new(&genesis_config);
-        bank.add_builtin_program("ownable_program", crate::id(), process_instruction);
+        bank.add_builtin("ownable_program", crate::id(), process_instruction);
         (bank, mint_keypair)
     }
 
