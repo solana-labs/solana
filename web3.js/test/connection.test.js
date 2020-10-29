@@ -1351,7 +1351,7 @@ describe('token methods', () => {
     return;
   }
 
-  const connection = new Connection(url);
+  const connection = new Connection(url, 'recent');
   const newAccount = new Account().publicKey;
 
   let testToken: Token;
@@ -1364,7 +1364,6 @@ describe('token methods', () => {
     const payerAccount = new Account();
     await connection.confirmTransaction(
       await connection.requestAirdrop(payerAccount.publicKey, 100000000000),
-      'single',
     );
 
     const mintOwner = new Account();
@@ -1402,7 +1401,7 @@ describe('token methods', () => {
       new u64(1),
     );
 
-    await connection.confirmTransaction(testSignature);
+    await connection.confirmTransaction(testSignature, 'max');
 
     testOwner = accountOwner;
     testToken = token;

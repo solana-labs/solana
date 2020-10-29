@@ -2163,8 +2163,6 @@ export class Connection {
 
   /**
    * Confirm the transaction identified by the specified signature.
-   *
-   * If `commitment` is not specified, default to 'max'.
    */
   async confirmTransaction(
     signature: TransactionSignature,
@@ -2180,7 +2178,7 @@ export class Connection {
     assert(decodedSignature.length === 64, 'signature has invalid length');
 
     const start = Date.now();
-    const subscriptionCommitment: Commitment = commitment || 'max';
+    const subscriptionCommitment = commitment || this.commitment;
 
     let subscriptionId;
     let response: RpcResponseAndContext<SignatureResult> | null = null;

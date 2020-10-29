@@ -129,6 +129,7 @@ describe('load BPF Rust program', () => {
       transaction,
       [payerAccount],
       {
+        commitment: 'max',
         skipPreflight: true,
       },
     );
