@@ -32,6 +32,7 @@ use solana_client::{
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
+    account::from_account,
     account_utils::StateMut,
     clock::{Clock, Epoch, Slot, UnixTimestamp, SECONDS_PER_DAY},
     message::Message,
@@ -40,7 +41,6 @@ use solana_sdk::{
     sysvar::{
         clock,
         stake_history::{self, StakeHistory},
-        Sysvar,
     },
     transaction::Transaction,
 };
@@ -1696,12 +1696,11 @@ pub fn process_show_stake_account(
     match stake_account.state() {
         Ok(stake_state) => {
             let stake_history_account = rpc_client.get_account(&stake_history::id())?;
-            let stake_history =
-                StakeHistory::from_account(&stake_history_account).ok_or_else(|| {
-                    CliError::RpcRequestError("Failed to deserialize stake history".to_string())
-                })?;
+            let stake_history = from_account(&stake_history_account).ok_or_else(|| {
+                CliError::RpcRequestError("Failed to deserialize stake history".to_string())
+            })?;
             let clock_account = rpc_client.get_account(&clock::id())?;
-            let clock: Clock = Sysvar::from_account(&clock_account).ok_or_else(|| {
+            let clock: Clock = from_account(&clock_account).ok_or_else(|| {
                 CliError::RpcRequestError("Failed to deserialize clock sysvar".to_string())
             })?;
 
@@ -1738,7 +1737,7 @@ pub fn process_show_stake_history(
     use_lamports_unit: bool,
 ) -> ProcessResult {
     let stake_history_account = rpc_client.get_account(&stake_history::id())?;
-    let stake_history = StakeHistory::from_account(&stake_history_account).ok_or_else(|| {
+    let stake_history = from_account::<StakeHistory>(&stake_history_account).ok_or_else(|| {
         CliError::RpcRequestError("Failed to deserialize stake history".to_string())
     })?;
 

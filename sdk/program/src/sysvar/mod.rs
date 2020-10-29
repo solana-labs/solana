@@ -1,8 +1,6 @@
 //! named accounts for synthesized data accounts for bank state, etc.
 //!
-use crate::{
-    account::Account, account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey,
-};
+use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
 
 pub mod clock;
 pub mod epoch_schedule;
@@ -63,12 +61,6 @@ pub trait Sysvar:
     fn size_of() -> usize {
         bincode::serialized_size(&Self::default()).unwrap() as usize
     }
-    fn from_account(account: &Account) -> Option<Self> {
-        bincode::deserialize(&account.data).ok()
-    }
-    fn to_account(&self, account: &mut Account) -> Option<()> {
-        bincode::serialize_into(&mut account.data[..], self).ok()
-    }
     fn from_account_info(account_info: &AccountInfo) -> Result<Self, ProgramError> {
         if !Self::check_id(account_info.unsigned_key()) {
             return Err(ProgramError::InvalidArgument);
@@ -77,12 +69,6 @@ pub trait Sysvar:
     }
     fn to_account_info(&self, account_info: &mut AccountInfo) -> Option<()> {
         bincode::serialize_into(&mut account_info.data.borrow_mut()[..], self).ok()
-    }
-    fn create_account(&self, lamports: u64) -> Account {
-        let data_len = Self::size_of().max(bincode::serialized_size(self).unwrap() as usize);
-        let mut account = Account::new(lamports, data_len, &id());
-        self.to_account(&mut account).unwrap();
-        account
     }
 }
 

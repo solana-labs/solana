@@ -55,7 +55,7 @@ use solana_sdk::{
     signature::Signature,
     stake_history::StakeHistory,
     system_instruction,
-    sysvar::{stake_history, Sysvar},
+    sysvar::stake_history,
     transaction::{self, Transaction},
 };
 use solana_stake_program::stake_state::StakeState;
@@ -1036,7 +1036,8 @@ impl JsonRpcRequestProcessor {
             .get_account(&stake_history::id())
             .ok_or_else(Error::internal_error)?;
         let stake_history =
-            StakeHistory::from_account(&stake_history_account).ok_or_else(Error::internal_error)?;
+            solana_sdk::account::from_account::<StakeHistory>(&stake_history_account)
+                .ok_or_else(Error::internal_error)?;
 
         let (active, activating, deactivating) =
             delegation.stake_activating_and_deactivating(epoch, Some(&stake_history));
