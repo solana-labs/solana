@@ -16,17 +16,15 @@ use solana_rbpf::{
     memory_region::MemoryRegion,
     vm::{Config, EbpfVm, Executable, InstructionMeter},
 };
-use solana_runtime::{
-    feature_set::compute_budget_balancing,
-    process_instruction::{ComputeMeter, Executor, InvokeContext},
-};
 use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
     decode_error::DecodeError,
     entrypoint::SUCCESS,
+    feature_set::compute_budget_balancing,
     instruction::InstructionError,
     keyed_account::{is_executable, next_keyed_account, KeyedAccount},
     loader_instruction::LoaderInstruction,
+    process_instruction::{ComputeMeter, Executor, InvokeContext},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
@@ -312,13 +310,14 @@ impl Executor for BPFExecutor {
 mod tests {
     use super::*;
     use rand::Rng;
-    use solana_runtime::{
-        bpf_test_utils::MockInvokeContext,
+    use solana_runtime::message_processor::{Executors, ThisInvokeContext};
+    use solana_sdk::{
+        account::Account,
         feature_set::FeatureSet,
-        message_processor::{Executors, ThisInvokeContext},
-        process_instruction::ComputeBudget,
+        instruction::InstructionError,
+        process_instruction::{ComputeBudget, MockInvokeContext},
+        rent::Rent,
     };
-    use solana_sdk::{account::Account, rent::Rent};
     use std::{cell::RefCell, fs::File, io::Read, ops::Range, rc::Rc};
 
     struct TestInstructionMeter {

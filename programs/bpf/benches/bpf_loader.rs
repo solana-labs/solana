@@ -14,7 +14,6 @@ use solana_runtime::{
     bpf_test_utils::MockInvokeContext,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::load_program,
-    process_instruction::{ComputeMeter, InvokeContext},
 };
 use solana_sdk::{
     account::Account,
@@ -23,6 +22,7 @@ use solana_sdk::{
     entrypoint::SUCCESS,
     instruction::{AccountMeta, Instruction},
     message::Message,
+    process_instruction::{ComputeMeter, InvokeContext, MockInvokeContext},
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };

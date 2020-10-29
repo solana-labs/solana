@@ -1,8 +1,5 @@
-use solana_runtime::{
-    bank::{Builtin, Builtins, Entrypoint},
-    feature_set,
-};
-use solana_sdk::{genesis_config::ClusterType, pubkey::Pubkey};
+use solana_runtime::bank::{Builtin, Builtins, Entrypoint};
+use solana_sdk::{feature_set, genesis_config::ClusterType, pubkey::Pubkey};
 
 /// Builtin programs that are always available
 fn genesis_builtins(cluster_type: ClusterType) -> Vec<Builtin> {

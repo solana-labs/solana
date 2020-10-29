@@ -52,10 +52,10 @@ use solana_perf::packet::{
 };
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::bank_forks::BankForks;
-use solana_runtime::feature_set::{self, FeatureSet};
-use solana_sdk::hash::Hash;
 use solana_sdk::{
     clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_SLOTS_PER_EPOCH},
+    feature_set::{self, FeatureSet},
+    hash::Hash,
     pubkey::Pubkey,
     signature::{Keypair, Signable, Signature, Signer},
     timing::timestamp,

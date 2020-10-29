@@ -16,7 +16,6 @@ solana-frozen-abi = { path = "../frozen-abi", version = "1.4.4" }
 solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "1.4.4" }
 solana-logger = { path = "../logger", version = "1.4.4" }
 solana-sdk = { path = "../sdk", version = "1.4.4" }
-solana-runtime = { path = "../runtime", version = "1.4.4" }
 
 [lib]
 name = "solana_version"

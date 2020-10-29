@@ -12,6 +12,7 @@ use solana_sdk::{
     instruction::InstructionError,
     keyed_account::KeyedAccount,
     message::Message,
+    process_instruction::InvokeContext,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     transaction::Transaction,
@@ -33,6 +34,7 @@ fn process_instruction(
     _program_id: &Pubkey,
     _keyed_accounts: &[KeyedAccount],
     _data: &[u8],
+    _invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     Ok(())
 }
