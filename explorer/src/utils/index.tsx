@@ -90,3 +90,12 @@ export function slotsToHumanString(
 ): string {
   return HUMANIZER.humanize(slots * slotTime);
 }
+
+export function wrap(input: string, length: number): string {
+  var result = [];
+  while (input.length) {
+    result.push(input.substr(0, length));
+    input = input.substr(length);
+  }
+  return result.join("\n");
+}

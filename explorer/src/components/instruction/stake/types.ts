@@ -10,8 +10,8 @@ const Initialize = pick({
     withdrawer: Pubkey,
   }),
   lockup: pick({
-    epoch: number(),
     unixTimestamp: number(),
+    epoch: number(),
     custodian: Pubkey,
   }),
 });
