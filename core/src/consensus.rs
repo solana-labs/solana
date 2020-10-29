@@ -515,6 +515,60 @@ impl Tower {
             .map(|last_voted_slot| {
                 let root = self.root();
                 let empty_ancestors = HashSet::default();
+                let empty_ancestors_due_to_minor_unsynced_ledger = || {
+                    // This condition (stale stray last vote) shouldn't occur under normal validator
+                    // operation, indicating something unusual happened.
+                    // This condition could be introduced by manual ledger mishandling,
+                    // validator SEGV, OS/HW crash, or plain No Free Space FS error.
+
+                    // However, returning empty ancestors as a fallback here shouldn't result in
+                    // slashing by itself (Note that we couldn't fully preclude any kind of slashing if
+                    // the failure was OS or HW level).
+
+                    // Firstly, lockout is ensured elsewhere.
+
+                    // Also, there is no risk of optimistic conf. violation. Although empty ancestors
+                    // could result in incorrect (= more than actual) locked_out_stake and
+                    // false-positive SwitchProof later in this function, there should be no such a
+                    // heavier fork candidate, first of all, if the last vote (or any of its
+                    // unavailable ancestors) were already optimistically confirmed.
+                    // The only exception is that other validator is already violating it...
+                    if self.is_first_switch_check() && switch_slot < last_voted_slot {
+                        // `switch < last` is needed not to warn! this message just because of using
+                        // newer snapshots on validator restart
+                        let message = format!(
+                          "bank_forks doesn't have corresponding data for the stray restored \
+                           last vote({}), meaning some inconsistency between saved tower and ledger.",
+                          last_voted_slot
+                        );
+                        warn!("{}", message);
+                        datapoint_warn!("tower_warn", ("warn", message, String));
+                    }
+                    &empty_ancestors
+                };
+
+                let suspended_decision_due_to_major_unsynced_ledger = |total_stake: u64| -> SwitchForkDecision {
+                    // This peculiar corner handling is needed mainly for a tower which is newer than
+                    // blockstore. (Yeah, we tolerate it for ease of maintaining validator by operators)
+                    // This condition could be introduced by manual ledger mishandling,
+                    // validator SEGV, OS/HW crash, or plain No Free Space FS error.
+
+                    // When we're in this clause, it basically means validator is badly running
+                    // with a future tower and RE-CREATING a block for one of past slots as the leader
+                    // of the slot, especially problematic is last_voted_slot.
+                    // So, don't re-vote on it by returning pseudo FailedSwitchThreshold, otherwise
+                    // there would be slashing because of double vote on one of last_vote_ancestors.
+                    // (Well, needless to say, re-creating the duplicate block must be handled properly
+                    // at the banking stage: https://github.com/solana-labs/solana/issues/8232)
+                    //
+                    // To be specific, the replay stage is tricked into a false perception where
+                    // last_vote_ancestors is AVAILABLE for descendant-of-`switch_slot`,  stale, and
+                    // stray slots (which should always be empty_ancestors). This is caused by the banking
+                    // stage's incorrectly creating new duplicate block.
+                    //
+                    // This is covered by test_future_tower in local_cluster
+                    SwitchForkDecision::FailedSwitchThreshold(0, total_stake)
+                };
 
                 let last_vote_ancestors =
                     ancestors.get(&last_voted_slot).unwrap_or_else(|| {
@@ -529,35 +583,7 @@ impl Tower {
                             // all of them.
                             panic!("no ancestors found with slot: {}", last_voted_slot);
                         } else {
-                            // This condition (stale stray last vote) shouldn't occur under normal validator
-                            // operation, indicating something unusual happened.
-                            // Possible causes include: OS/HW crash, validator process crash, only saved tower
-                            // is moved over to a new setup, etc...
-
-                            // However, returning empty ancestors as a fallback here shouldn't result in
-                            // slashing by itself (Note that we couldn't fully preclude any kind of slashing if
-                            // the failure was OS or HW level).
-
-                            // Firstly, lockout is ensured elsewhere.
-
-                            // Also, there is no risk of optimistic conf. violation. Although empty ancestors
-                            // could result in incorrect (= more than actual) locked_out_stake and
-                            // false-positive SwitchProof later in this function, there should be no such a
-                            // heavier fork candidate, first of all, if the last vote (or any of its
-                            // unavailable ancestors) were already optimistically confirmed.
-                            // The only exception is that other validator is already violating it...
-                            if self.is_first_switch_check() && switch_slot < last_voted_slot {
-                                // `switch < last` is needed not to warn! this message just because of using
-                                // newer snapshots on validator restart
-                                let message = format!(
-                                  "bank_forks doesn't have corresponding data for the stray restored \
-                                   last vote({}), meaning some inconsistency between saved tower and ledger.",
-                                  last_voted_slot
-                                );
-                                warn!("{}", message);
-                                datapoint_warn!("tower_warn", ("warn", message, String));
-                            }
-                            &empty_ancestors
+                            empty_ancestors_due_to_minor_unsynced_ledger()
                         }
                     });
 
@@ -578,25 +604,7 @@ impl Tower {
                             last_voted_slot
                         );
                     } else {
-                        // This peculiar corner handling is needed mainly for a tower which is newer than
-                        // blockstore. (Yeah, we tolerate it for ease of maintaining validator by operators)
-                        // This condition could be introduced by manual ledger mishandling,
-                        // validator SEGV, OS/HW crash, or plain No Free Space FS error.
-                        // When we're in this clause, it basically means validator is badly running
-                        // with a future tower and RE-CREATING a block for one of past slots as the leader
-                        // of the slot, especially problematic is last_voted_slot.
-                        // So, don't re-vote on it by returning pseudo FailedSwitchThreshold, otherwise
-                        // there would be slashing because of double vote on one of last_vote_ancestors.
-                        // (Well, needless to say, re-creating the duplicate block must be handled properly
-                        // at the banking stage: https://github.com/solana-labs/solana/issues/8232)
-                        //
-                        // To be specific, the replay stage is tricked into a false perception where
-                        // last_vote_ancestors is AVAILABLE for descendant-of-`switch_slot`,  stale, and
-                        // stray slots (which should always be empty_ancestors). This is caused by the banking
-                        // stage's incorrectly creating new duplicate block.
-                        //
-                        // This is covered by test_future_tower in local_cluster
-                        return SwitchForkDecision::FailedSwitchThreshold(0, total_stake);
+                        return suspended_decision_due_to_major_unsynced_ledger(total_stake);
                     }
                 }
 
@@ -880,7 +888,8 @@ impl Tower {
 
         if let Some(last_voted_slot) = self.last_voted_slot() {
             if tower_root <= replayed_root {
-                // Normally, we goes into this clause with possible help of reconcile_blockstore_roots_with_tower()
+                // Normally, we goes into this clause with possible help of
+                // reconcile_blockstore_roots_with_tower()
                 if slot_history.check(last_voted_slot) == Check::TooOld {
                     // We could try hard to anchor with other older votes, but opt to simplify the
                     // following logic
@@ -892,6 +901,9 @@ impl Tower {
                 self.adjust_lockouts_with_slot_history(slot_history)?;
                 self.initialize_root(replayed_root);
             } else {
+                // This should never occur under normal operation.
+                // If this validator has leader slots while voting suspended this way,
+                // suspended_decision_due_to_major_unsynced_ledger() will be also touched.
                 let message = format!(
                     "For some reason, we're REPROCESSING already voted and ROOTED slots; \
                      VOTING will be SUSPENDED UNTIL {}!",
