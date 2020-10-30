@@ -64,14 +64,14 @@ impl UserDefinedError for BPFError {}
 /// Point all log messages to the log collector
 macro_rules! log{
     ($logger:ident, $message:expr) => {
-        if let Ok(mut logger) = $logger.try_borrow_mut() {
+        if let Ok(logger) = $logger.try_borrow_mut() {
             if logger.log_enabled() {
                 logger.log($message);
             }
         }
     };
     ($logger:ident, $fmt:expr, $($arg:tt)*) => {
-        if let Ok(mut logger) = $logger.try_borrow_mut() {
+        if let Ok(logger) = $logger.try_borrow_mut() {
             if logger.log_enabled() {
                 logger.log(&format!($fmt, $($arg)*));
             }
