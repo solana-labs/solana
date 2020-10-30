@@ -1005,7 +1005,9 @@ impl Tower {
 
             checked_slot = Some(*slot_in_tower);
 
-            retain_flags_for_each_vote_in_reverse.push(anchored_slot.is_none());
+            let is_still_unanchored = anchored_slot.is_none();
+            // not anchored slots must be retained
+            retain_flags_for_each_vote_in_reverse.push(is_still_unanchored);
         }
 
         // Check for errors if not anchored
@@ -1027,7 +1029,13 @@ impl Tower {
             retain_flags_for_each_vote_in_reverse.into_iter().rev();
 
         let original_votes_len = self.lockouts.votes.len();
-        self.initialize_lockouts(move |_| retain_flags_for_each_vote.next().unwrap());
+        let keep_the_only_root_vote_for_no_double_vote =
+            self.lockouts.votes.len() == 1 && self.last_voted_slot().unwrap() == tower_root;
+        if !keep_the_only_root_vote_for_no_double_vote {
+            self.initialize_lockouts(|_| retain_flags_for_each_vote.next().unwrap());
+            // we should have fully consumed the iterator.
+            assert!(retain_flags_for_each_vote.next().is_none());
+        }
 
         if self.lockouts.votes.is_empty() {
             info!("All restored votes were behind; resetting root_slot and last_vote in tower!");
@@ -3134,6 +3142,21 @@ pub mod test {
 
         let tower = tower.adjust_lockouts_after_replay(42, &slot_history);
         assert_eq!(tower.unwrap().voted_slots(), [43, 44]);
+    }
+
+    #[test]
+    fn test_adjust_lockouts_after_replay_vote_on_only_root() {
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.lockouts.root_slot = Some(42);
+        tower.lockouts.votes.push_back(Lockout::new(42));
+        let vote = Vote::new(vec![42], Hash::default());
+        tower.last_vote = vote;
+
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(42);
+
+        let tower = tower.adjust_lockouts_after_replay(42, &slot_history);
+        assert_eq!(tower.unwrap().voted_slots(), [42]);
     }
 
     #[test]
