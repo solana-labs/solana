@@ -466,6 +466,7 @@ The result field will be an object with the following fields:
       - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
       - `postBalances: <array>` - array of u64 account balances after the transaction was processed
       - `innerInstructions: <array|undefined>` - List of [inner instructions](#inner-instructions-structure) or omitted if inner instruction recording was not yet enabled during this transaction
+      - `logMessages: <array>` - array of string log messages or omitted if log message recording was not yet enabled during this transaction
       - DEPRECATED: `status: <object>` - Transaction status
         - `"Ok": <null>` - Transaction was successful
         - `"Err": <ERR>` - Transaction failed with TransactionError
@@ -501,6 +502,7 @@ Result:
           "err": null,
           "fee": 5000,
           "innerInstructions": [],
+          "logMessages": [],
           "postBalances": [
             499998932500,
             26858640,
@@ -582,6 +584,7 @@ Result:
           "err": null,
           "fee": 5000,
           "innerInstructions": [],
+          "logMessages": [],
           "postBalances": [
             499998932500,
             26858640,
@@ -830,6 +833,7 @@ N encoding attempts to use program-specific instruction parsers to return more h
     - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
     - `postBalances: <array>` - array of u64 account balances after the transaction was processed
     - `innerInstructions: <array|undefined>` - List of [inner instructions](#inner-instructions-structure) or omitted if inner instruction recording was not yet enabled during this transaction
+    - `logMessages: <array>` - array of string log messages or omitted if log message recording was not yet enabled during this transaction
     - DEPRECATED: `status: <object>` - Transaction status
       - `"Ok": <null>` - Transaction was successful
       - `"Err": <ERR>` - Transaction failed with TransactionError
