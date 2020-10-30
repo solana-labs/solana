@@ -490,7 +490,6 @@ impl MessageProcessor {
     /// Process a cross-program instruction
     /// This method calls the instruction's program entrypoint function
     pub fn process_cross_program_instruction(
-        &self,
         message: &Message,
         executable_accounts: &[(Pubkey, RefCell<Account>)],
         accounts: &[Rc<RefCell<Account>>],
@@ -506,8 +505,17 @@ impl MessageProcessor {
 
             // Invoke callee
             invoke_context.push(instruction.program_id(&message.account_keys))?;
-            let mut result =
-                self.process_instruction(&keyed_accounts, &instruction.data, invoke_context);
+
+            let mut message_processor = MessageProcessor::default();
+            for (program_id, process_instruction) in invoke_context.get_programs().iter() {
+                message_processor.add_program(*program_id, *process_instruction);
+            }
+
+            let mut result = message_processor.process_instruction(
+                &keyed_accounts,
+                &instruction.data,
+                invoke_context,
+            );
             if result.is_ok() {
                 // Verify the called program has not misbehaved
                 result = invoke_context.verify_and_update(message, instruction, accounts);
@@ -1580,8 +1588,6 @@ mod tests {
 
         let caller_program_id = solana_sdk::pubkey::new_rand();
         let callee_program_id = solana_sdk::pubkey::new_rand();
-        let mut message_processor = MessageProcessor::default();
-        message_processor.add_program(callee_program_id, mock_process_instruction);
 
         let mut program_account = Account::new(1, 0, &native_loader::id());
         program_account.executable = true;
@@ -1600,11 +1606,13 @@ mod tests {
             Rc::new(RefCell::new(owned_account)),
             Rc::new(RefCell::new(not_owned_account)),
         ];
+        let programs: Vec<(_, ProcessInstructionWithContext)> =
+            vec![(callee_program_id, mock_process_instruction)];
         let mut invoke_context = ThisInvokeContext::new(
             &caller_program_id,
             Rent::default(),
             vec![owned_preaccount, not_owned_preaccount],
-            &[],
+            programs.as_slice(),
             None,
             BpfComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
@@ -1625,7 +1633,7 @@ mod tests {
         );
         let message = Message::new(&[instruction], None);
         assert_eq!(
-            message_processor.process_cross_program_instruction(
+            MessageProcessor::process_cross_program_instruction(
                 &message,
                 &executable_accounts,
                 &accounts,
@@ -1652,7 +1660,7 @@ mod tests {
             let instruction = Instruction::new(callee_program_id, &case.0, metas.clone());
             let message = Message::new(&[instruction], None);
             assert_eq!(
-                message_processor.process_cross_program_instruction(
+                MessageProcessor::process_cross_program_instruction(
                     &message,
                     &executable_accounts,
                     &accounts,
