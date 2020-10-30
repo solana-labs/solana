@@ -4637,7 +4637,6 @@ dependencies = [
  "hex",
  "hmac",
  "itertools 0.9.0",
- "lazy_static",
  "libsecp256k1",
  "log 0.4.8",
  "memmap",
@@ -4678,6 +4677,7 @@ dependencies = [
  "hex",
  "hmac",
  "itertools 0.9.0",
+ "lazy_static",
  "libsecp256k1",
  "log 0.4.8",
  "memmap",
@@ -5077,9 +5077,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.0"
+version = "0.1.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09e18fa1e1b6cac20a5f2571882b7580a65ae685b1413fc498f975d07d4c968f"
+checksum = "9a95dbe2b00920ac4e1524b7442cf5319f01e8fa5742930ac60148882fd7738b"
 dependencies = [
  "byteorder",
  "combine",

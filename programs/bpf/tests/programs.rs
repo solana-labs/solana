@@ -6,9 +6,8 @@ extern crate solana_bpf_loader_program;
 use solana_bpf_loader_program::{
     create_vm,
     serialization::{deserialize_parameters, serialize_parameters},
-    ThisInstructionMeter,
 };
-use solana_rbpf::vm::Executable;
+use solana_rbpf::vm::EbpfVm;
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
@@ -24,7 +23,7 @@ use solana_sdk::{
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     message::Message,
-    process_instruction::{BpfComputeBudget, InvokeContext, MockInvokeContext},
+    process_instruction::{BpfComputeBudget, MockInvokeContext},
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     sysvar::{clock, fees, rent, slot_hashes, stake_history},
@@ -75,29 +74,25 @@ fn run_program(
     file.read_to_end(&mut data).unwrap();
     let loader_id = bpf_loader::id();
     let mut invoke_context = MockInvokeContext::default();
-    let parameter_bytes = serialize_parameters(
+
+    let executable = EbpfVm::create_executable_from_elf(&data, None).unwrap();
+    let (mut vm, heap_region) = create_vm(
+        &loader_id,
+        executable.as_ref(),
+        parameter_accounts,
+        &mut invoke_context,
+    )
+    .unwrap();
+    let mut parameter_bytes = serialize_parameters(
         &bpf_loader::id(),
         program_id,
         parameter_accounts,
         &instruction_data,
     )
     .unwrap();
-    let compute_meter = invoke_context.get_compute_meter();
-    let mut instruction_meter = ThisInstructionMeter { compute_meter };
-
-    let executable = Executable::from_elf(&data, None).unwrap();
-    let mut vm = create_vm(
-        &loader_id,
-        executable.as_ref(),
-        &parameter_bytes,
-        parameter_accounts,
-        &mut invoke_context,
-    )
-    .unwrap();
-
     assert_eq!(
         SUCCESS,
-        vm.execute_program_interpreted(&mut instruction_meter)
+        vm.execute_program(parameter_bytes.as_mut_slice(), &[], &[heap_region.clone()])
             .unwrap()
     );
     deserialize_parameters(&bpf_loader::id(), parameter_accounts, &parameter_bytes).unwrap();
@@ -816,6 +811,7 @@ fn test_program_bpf_instruction_introspection() {
         Some(&mint_keypair.pubkey()),
     );
     let result = bank_client.send_and_confirm_message(&[&mint_keypair], message);
+    println!("result: {:?}", result);
     assert!(result.is_ok());
 
     // writable special instructions11111 key, should not be allowed
