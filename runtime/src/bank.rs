@@ -12,8 +12,6 @@ use crate::{
     blockhash_queue::BlockhashQueue,
     builtins,
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
-    feature::Feature,
-    feature_set::{self, FeatureSet},
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     message_processor::{Executors, MessageProcessor},
@@ -40,6 +38,8 @@ use solana_sdk::{
     },
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
+    feature,
+    feature_set::{self, FeatureSet},
     fee_calculator::{FeeCalculator, FeeConfig, FeeRateGovernor},
     genesis_config::{ClusterType, GenesisConfig},
     hard_forks::HardForks,
@@ -3919,13 +3919,13 @@ impl Bank {
         for feature_id in &self.feature_set.inactive {
             let mut activated = None;
             if let Some(mut account) = self.get_account(feature_id) {
-                if let Some(mut feature) = Feature::from_account(&account) {
+                if let Some(mut feature) = feature::from_account(&account) {
                     match feature.activated_at {
                         None => {
                             if allow_new_activations {
                                 // Feature has been requested, activate it now
                                 feature.activated_at = Some(slot);
-                                if feature.to_account(&mut account).is_some() {
+                                if feature::to_account(&feature, &mut account).is_some() {
                                     self.store_account(feature_id, &account);
                                 }
                                 newly_activated.insert(*feature_id);
@@ -4103,6 +4103,7 @@ mod tests {
         account_utils::StateMut,
         clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
+        feature::Feature,
         genesis_config::create_genesis_config,
         instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
         keyed_account::KeyedAccount,
@@ -9571,13 +9572,13 @@ mod tests {
         // Request `test_feature` activation
         let feature = Feature::default();
         assert_eq!(feature.activated_at, None);
-        bank.store_account(&test_feature, &feature.create_account(42));
+        bank.store_account(&test_feature, &feature::create_account(&feature, 42));
 
         // Run `compute_active_feature_set` disallowing new activations
         let new_activations = bank.compute_active_feature_set(false);
         assert!(new_activations.is_empty());
         assert!(!bank.feature_set.is_active(&test_feature));
-        let feature = Feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
+        let feature = feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
             .expect("from_account");
         assert_eq!(feature.activated_at, None);
 
@@ -9585,7 +9586,7 @@ mod tests {
         let new_activations = bank.compute_active_feature_set(true);
         assert_eq!(new_activations.len(), 1);
         assert!(bank.feature_set.is_active(&test_feature));
-        let feature = Feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
+        let feature = feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
             .expect("from_account");
         assert_eq!(feature.activated_at, Some(1));
 
@@ -9720,12 +9721,14 @@ mod tests {
         assert_eq!(clock.unix_timestamp, bank.unix_timestamp_from_genesis());
 
         // Request `timestamp_correction` activation
-        let feature = Feature {
-            activated_at: Some(bank.slot),
-        };
         bank.store_account(
             &feature_set::timestamp_correction::id(),
-            &feature.create_account(42),
+            &feature::create_account(
+                &Feature {
+                    activated_at: Some(bank.slot),
+                },
+                42,
+            ),
         );
         bank.compute_active_feature_set(true);
 
