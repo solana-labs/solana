@@ -293,10 +293,10 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
         self.compute_meter.clone()
     }
-    fn add_executor(&mut self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
+    fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
         self.executors.borrow_mut().insert(*pubkey, executor);
     }
-    fn get_executor(&mut self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
+    fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         self.executors.borrow().get(&pubkey)
     }
     fn record_instruction(&self, instruction: &Instruction) {
@@ -315,7 +315,7 @@ impl Logger for ThisLogger {
     fn log_enabled(&self) -> bool {
         log_enabled!(log::Level::Info) || self.log_collector.is_some()
     }
-    fn log(&mut self, message: &str) {
+    fn log(&self, message: &str) {
         info!("{}", message);
         if let Some(log_collector) = &self.log_collector {
             log_collector.log(message);
