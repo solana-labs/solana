@@ -44,6 +44,13 @@ const MAINNET_TOKENS: { [key: string]: TokenDetails } = {
     icon: "/tokens/usdc.svg",
     website: "https://www.centre.io/",
   },
+  "9S4t2NEAiJVMvPdRYKVrfJpBafPBLtvbvyS3DecojQHw": {
+    symbol: "FRONT",
+    name: "Wrapped FRONT",
+    logo: "/tokens/front.svg",
+    icon: "/tokens/front.svg",
+    website: "https://frontier.xyz/",
+  },
   "9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E": {
     symbol: "BTC",
     name: "Wrapped Bitcoin",
