@@ -197,6 +197,16 @@ impl Counter {
     fn clear(&self) -> u64 {
         self.0.swap(0, Ordering::Relaxed)
     }
+    fn measure_task<F, R>(&self, task: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
+        let now = Instant::now();
+        let out = task();
+        let micros = now.elapsed().as_micros();
+        self.0.fetch_add(micros as u64, Ordering::Relaxed);
+        out
+    }
 }
 
 #[derive(Default)]
@@ -216,6 +226,12 @@ struct GossipStats {
     new_push_requests2: Counter,
     new_push_requests_num: Counter,
     filter_pull_response: Counter,
+    handle_batch_ping_messages_time: Counter,
+    handle_batch_pong_messages_time: Counter,
+    handle_batch_prune_messages_time: Counter,
+    handle_batch_pull_requests_time: Counter,
+    handle_batch_pull_responses_time: Counter,
+    handle_batch_push_messages_time: Counter,
     process_gossip_packets_time: Counter,
     process_pull_response: Counter,
     process_pull_response_count: Counter,
@@ -2451,25 +2467,46 @@ impl ClusterInfo {
                 Protocol::PongMessage(pong) => pong_messages.push((from_addr, pong)),
             }
         }
-        self.handle_batch_ping_messages(ping_messages, recycler, response_sender);
-        self.handle_batch_prune_messages(prune_messages);
-        self.handle_batch_push_messages(
-            push_messages,
-            thread_pool,
-            recycler,
-            &stakes,
-            response_sender,
-        );
-        self.handle_batch_pull_responses(pull_responses, thread_pool, &stakes, epoch_time_ms);
-        self.handle_batch_pong_messages(pong_messages, Instant::now());
-        self.handle_batch_pull_requests(
-            pull_requests,
-            thread_pool,
-            recycler,
-            &stakes,
-            response_sender,
-            feature_set,
-        );
+        self.stats.handle_batch_ping_messages_time.measure_task(|| {
+            self.handle_batch_ping_messages(ping_messages, recycler, response_sender)
+        });
+        self.stats
+            .handle_batch_prune_messages_time
+            .measure_task(|| {
+                self.handle_batch_prune_messages(prune_messages);
+            });
+        self.stats.handle_batch_push_messages_time.measure_task(|| {
+            self.handle_batch_push_messages(
+                push_messages,
+                thread_pool,
+                recycler,
+                &stakes,
+                response_sender,
+            );
+        });
+        self.stats
+            .handle_batch_pull_responses_time
+            .measure_task(|| {
+                self.handle_batch_pull_responses(
+                    pull_responses,
+                    thread_pool,
+                    &stakes,
+                    epoch_time_ms,
+                );
+            });
+        self.stats.handle_batch_pong_messages_time.measure_task(|| {
+            self.handle_batch_pong_messages(pong_messages, Instant::now());
+        });
+        self.stats.handle_batch_pull_requests_time.measure_task(|| {
+            self.handle_batch_pull_requests(
+                pull_requests,
+                thread_pool,
+                recycler,
+                &stakes,
+                response_sender,
+                feature_set,
+            );
+        });
         self.stats
             .process_gossip_packets_time
             .add_measure(&mut timer);
@@ -2586,6 +2623,36 @@ impl ClusterInfo {
                 (
                     "process_gossip_packets_time",
                     self.stats.process_gossip_packets_time.clear(),
+                    i64
+                ),
+                (
+                    "handle_batch_ping_messages_time",
+                    self.stats.handle_batch_ping_messages_time.clear(),
+                    i64
+                ),
+                (
+                    "handle_batch_pong_messages_time",
+                    self.stats.handle_batch_pong_messages_time.clear(),
+                    i64
+                ),
+                (
+                    "handle_batch_prune_messages_time",
+                    self.stats.handle_batch_prune_messages_time.clear(),
+                    i64
+                ),
+                (
+                    "handle_batch_pull_requests_time",
+                    self.stats.handle_batch_pull_requests_time.clear(),
+                    i64
+                ),
+                (
+                    "handle_batch_pull_responses_time",
+                    self.stats.handle_batch_pull_responses_time.clear(),
+                    i64
+                ),
+                (
+                    "handle_batch_push_messages_time",
+                    self.stats.handle_batch_push_messages_time.clear(),
                     i64
                 ),
                 (
