@@ -515,6 +515,59 @@ impl Tower {
             .map(|last_voted_slot| {
                 let root = self.root();
                 let empty_ancestors = HashSet::default();
+                let empty_ancestors_due_to_minor_unsynced_ledger = || {
+                    // This condition (stale stray last vote) shouldn't occur under normal validator
+                    // operation, indicating something unusual happened.
+                    // This condition could be introduced by manual ledger mishandling,
+                    // validator SEGV, OS/HW crash, or plain No Free Space FS error.
+
+                    // However, returning empty ancestors as a fallback here shouldn't result in
+                    // slashing by itself (Note that we couldn't fully preclude any kind of slashing if
+                    // the failure was OS or HW level).
+
+                    // Firstly, lockout is ensured elsewhere.
+
+                    // Also, there is no risk of optimistic conf. violation. Although empty ancestors
+                    // could result in incorrect (= more than actual) locked_out_stake and
+                    // false-positive SwitchProof later in this function, there should be no such a
+                    // heavier fork candidate, first of all, if the last vote (or any of its
+                    // unavailable ancestors) were already optimistically confirmed.
+                    // The only exception is that other validator is already violating it...
+                    if self.is_first_switch_check() && switch_slot < last_voted_slot {
+                        // `switch < last` is needed not to warn! this message just because of using
+                        // newer snapshots on validator restart
+                        let message = format!(
+                          "bank_forks doesn't have corresponding data for the stray restored \
+                           last vote({}), meaning some inconsistency between saved tower and ledger.",
+                          last_voted_slot
+                        );
+                        warn!("{}", message);
+                        datapoint_warn!("tower_warn", ("warn", message, String));
+                    }
+                    &empty_ancestors
+                };
+
+                let suspended_decision_due_to_major_unsynced_ledger = || {
+                    // This peculiar corner handling is needed mainly for a tower which is newer than
+                    // blockstore. (Yeah, we tolerate it for ease of maintaining validator by operators)
+                    // This condition could be introduced by manual ledger mishandling,
+                    // validator SEGV, OS/HW crash, or plain No Free Space FS error.
+
+                    // When we're in this clause, it basically means validator is badly running
+                    // with a future tower while replaying past slots, especially problematic is
+                    // last_voted_slot.
+                    // So, don't re-vote on it by returning pseudo FailedSwitchThreshold, otherwise
+                    // there would be slashing because of double vote on one of last_vote_ancestors.
+                    // (Well, needless to say, re-creating the duplicate block must be handled properly
+                    // at the banking stage: https://github.com/solana-labs/solana/issues/8232)
+                    //
+                    // To be specific, the replay stage is tricked into a false perception where
+                    // last_vote_ancestors is AVAILABLE for descendant-of-`switch_slot`,  stale, and
+                    // stray slots (which should always be empty_ancestors).
+                    //
+                    // This is covered by test_future_tower_* in local_cluster
+                    SwitchForkDecision::FailedSwitchThreshold(0, total_stake)
+                };
 
                 let last_vote_ancestors =
                     ancestors.get(&last_voted_slot).unwrap_or_else(|| {
@@ -529,35 +582,7 @@ impl Tower {
                             // all of them.
                             panic!("no ancestors found with slot: {}", last_voted_slot);
                         } else {
-                            // This condition (stale stray last vote) shouldn't occur under normal validator
-                            // operation, indicating something unusual happened.
-                            // Possible causes include: OS/HW crash, validator process crash, only saved tower
-                            // is moved over to a new setup, etc...
-
-                            // However, returning empty ancestors as a fallback here shouldn't result in
-                            // slashing by itself (Note that we couldn't fully preclude any kind of slashing if
-                            // the failure was OS or HW level).
-
-                            // Firstly, lockout is ensured elsewhere.
-
-                            // Also, there is no risk of optimistic conf. violation. Although empty ancestors
-                            // could result in incorrect (= more than actual) locked_out_stake and
-                            // false-positive SwitchProof later in this function, there should be no such a
-                            // heavier fork candidate, first of all, if the last vote (or any of its
-                            // unavailable ancestors) were already optimistically confirmed.
-                            // The only exception is that other validator is already violating it...
-                            if self.is_first_switch_check() && switch_slot < last_voted_slot {
-                                // `switch < last` is needed not to warn! this message just because of using
-                                // newer snapshots on validator restart
-                                let message = format!(
-                                  "bank_forks doesn't have corresponding data for the stray restored \
-                                   last vote({}), meaning some inconsistency between saved tower and ledger.",
-                                  last_voted_slot
-                                );
-                                warn!("{}", message);
-                                datapoint_warn!("tower_warn", ("warn", message, String));
-                            }
-                            &empty_ancestors
+                            empty_ancestors_due_to_minor_unsynced_ledger()
                         }
                     });
 
@@ -569,13 +594,18 @@ impl Tower {
                     return SwitchForkDecision::SameFork;
                 }
 
-                assert!(
-                    !last_vote_ancestors.contains(&switch_slot),
-                    "Should never consider switching to slot ({}), which is ancestors({:?}) of last vote: {}",
-                    switch_slot,
-                    last_vote_ancestors,
-                    last_voted_slot
-                );
+                if last_vote_ancestors.contains(&switch_slot) {
+                    if !self.is_stray_last_vote() {
+                        panic!(
+                            "Should never consider switching to slot ({}), which is ancestors({:?}) of last vote: {}",
+                            switch_slot,
+                            last_vote_ancestors,
+                            last_voted_slot
+                        );
+                    } else {
+                        return suspended_decision_due_to_major_unsynced_ledger();
+                    }
+                }
 
                 // By this point, we know the `switch_slot` is on a different fork
                 // (is neither an ancestor nor descendant of `last_vote`), so a
@@ -846,14 +876,6 @@ impl Tower {
         );
         assert_eq!(slot_history.check(replayed_root), Check::Found);
 
-        // reconcile_blockstore_roots_with_tower() should already have aligned these.
-        assert!(
-            tower_root <= replayed_root,
-            format!(
-                "tower root: {:?} >= replayed root slot: {}",
-                tower_root, replayed_root
-            )
-        );
         assert!(
             self.last_vote == Vote::default() && self.lockouts.votes.is_empty()
                 || self.last_vote != Vote::default() && !self.lockouts.votes.is_empty(),
@@ -864,16 +886,59 @@ impl Tower {
         );
 
         if let Some(last_voted_slot) = self.last_voted_slot() {
-            if slot_history.check(last_voted_slot) == Check::TooOld {
-                // We could try hard to anchor with other older votes, but opt to simplify the
-                // following logic
-                return Err(TowerError::TooOldTower(
+            if tower_root <= replayed_root {
+                // Normally, we goes into this clause with possible help of
+                // reconcile_blockstore_roots_with_tower()
+                if slot_history.check(last_voted_slot) == Check::TooOld {
+                    // We could try hard to anchor with other older votes, but opt to simplify the
+                    // following logic
+                    return Err(TowerError::TooOldTower(
+                        last_voted_slot,
+                        slot_history.oldest(),
+                    ));
+                }
+
+                self.adjust_lockouts_with_slot_history(slot_history)?;
+                self.initialize_root(replayed_root);
+            } else {
+                // This should never occur under normal operation.
+                // While this validator's voting is suspended this way,
+                // suspended_decision_due_to_major_unsynced_ledger() will be also touched.
+                let message = format!(
+                    "For some reason, we're REPROCESSING slots which has already been \
+                     voted and ROOTED by us; \
+                     VOTING will be SUSPENDED UNTIL {}!",
                     last_voted_slot,
-                    slot_history.oldest(),
-                ));
+                );
+                error!("{}", message);
+                datapoint_error!("tower_error", ("error", message, String));
+
+                // Let's pass-through adjust_lockouts_with_slot_history just for sanitization,
+                // using a synthesized SlotHistory.
+
+                let mut warped_slot_history = (*slot_history).clone();
+                // Blockstore doesn't have the tower_root slot because of
+                // (replayed_root < tower_root) in this else clause, meaning the tower is from
+                // the future from the view of blockstore.
+                // Pretend the blockstore has the future tower_root to anchor exactly with that
+                // slot by adding tower_root to a slot history. The added slot will be newer
+                // than all slots in the slot history (remember tower_root > replayed_root),
+                // satisfying the slot history invariant.
+                // Thus, the whole process will be safe as well because tower_root exists
+                // within both tower and slot history, guaranteeing the success of adjustment
+                // and retaining all of future votes correctly while sanitizing.
+                warped_slot_history.add(tower_root);
+
+                self.adjust_lockouts_with_slot_history(&warped_slot_history)?;
+                // don't update root; future tower's root should be kept across validator
+                // restarts to continue to show the scary messages at restarts until the next
+                // voting.
             }
-            self.adjust_lockouts_with_slot_history(slot_history)?;
-            self.initialize_root(replayed_root);
+        } else {
+            // This else clause is for newly created tower.
+            // initialize_lockouts_from_bank() should ensure the following invariant,
+            // otherwise we're screwing something up.
+            assert_eq!(tower_root, replayed_root);
         }
 
         Ok(self)
@@ -1152,8 +1217,11 @@ impl SavedTower {
     }
 }
 
-// Given an untimely crash, tower may have roots that are not reflected in blockstore because
-// `ReplayState::handle_votable_bank()` saves tower before setting blockstore roots
+// Given an untimely crash, tower may have roots that are not reflected in blockstore,
+// or the reverse of this.
+// That's because we don't impose any ordering guarantee or any kind of write barriers
+// between tower (plain old POSIX fs calls) and blockstore (through RocksDB), when
+// `ReplayState::handle_votable_bank()` saves tower before setting blockstore roots.
 pub fn reconcile_blockstore_roots_with_tower(
     tower: &Tower,
     blockstore: &Blockstore,
@@ -1173,12 +1241,23 @@ pub fn reconcile_blockstore_roots_with_tower(
                 ),
             })
             .collect();
-        assert!(
-            !new_roots.is_empty(),
-            "at least 1 parent slot must be found"
-        );
-
-        blockstore.set_roots(&new_roots)?;
+        if !new_roots.is_empty() {
+            info!(
+                "Reconciling slots as root based on tower root: {:?} ({}..{}) ",
+                new_roots, tower_root, last_blockstore_root
+            );
+            blockstore.set_roots(&new_roots)?;
+        } else {
+            // This indicates we're in bad state; but still don't panic here.
+            // That's because we might have a chance of recovering properly with
+            // newer snapshot.
+            warn!(
+                "Couldn't find any ancestor slots from tower root ({}) \
+                 towards blockstore root ({}); blockstore pruned or only \
+                 tower moved into new ledger?",
+                tower_root, last_blockstore_root,
+            );
+        }
     }
     Ok(())
 }
@@ -2700,8 +2779,7 @@ pub mod test {
     }
 
     #[test]
-    #[should_panic(expected = "at least 1 parent slot must be found")]
-    fn test_reconcile_blockstore_roots_with_tower_panic_no_parent() {
+    fn test_reconcile_blockstore_roots_with_tower_nop_no_parent() {
         solana_logger::setup();
         let blockstore_path = get_tmp_ledger_path!();
         {
@@ -2717,7 +2795,9 @@ pub mod test {
 
             let mut tower = Tower::new_with_key(&Pubkey::default());
             tower.lockouts.root_slot = Some(4);
+            assert_eq!(blockstore.last_root(), 0);
             reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap();
+            assert_eq!(blockstore.last_root(), 0);
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
@@ -3067,5 +3147,26 @@ pub mod test {
         slot_history.add(0);
 
         assert!(tower.adjust_lockouts_after_replay(0, &slot_history).is_ok());
+    }
+
+    #[test]
+    fn test_adjust_lockouts_after_replay_future_tower() {
+        let mut tower = Tower::new_for_tests(10, 0.9);
+        tower.lockouts.votes.push_back(Lockout::new(13));
+        tower.lockouts.votes.push_back(Lockout::new(14));
+        let vote = Vote::new(vec![14], Hash::default());
+        tower.last_vote = vote;
+        tower.initialize_root(12);
+
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(0);
+        slot_history.add(2);
+
+        let tower = tower
+            .adjust_lockouts_after_replay(2, &slot_history)
+            .unwrap();
+        assert_eq!(tower.root(), 12);
+        assert_eq!(tower.voted_slots(), vec![13, 14]);
+        assert_eq!(tower.stray_restored_slot, Some(14));
     }
 }
