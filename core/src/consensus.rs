@@ -547,7 +547,7 @@ impl Tower {
                     &empty_ancestors
                 };
 
-                let suspended_decision_due_to_major_unsynced_ledger = |total_stake: u64| -> SwitchForkDecision {
+                let suspended_decision_due_to_major_unsynced_ledger = |total_stake| {
                     // This peculiar corner handling is needed mainly for a tower which is newer than
                     // blockstore. (Yeah, we tolerate it for ease of maintaining validator by operators)
                     // This condition could be introduced by manual ledger mishandling,
@@ -898,6 +898,7 @@ impl Tower {
                         slot_history.oldest(),
                     ));
                 }
+
                 self.adjust_lockouts_with_slot_history(slot_history)?;
                 self.initialize_root(replayed_root);
             } else {
@@ -911,13 +912,27 @@ impl Tower {
                 );
                 error!("{}", message);
                 datapoint_error!("tower_error", ("error", message, String));
-                // pass-through adjust_lockouts_with_slot_history just to sanitize without
-                // any adjustment using a synthesized SlotHistory.
+
+                // Let's pass-through adjust_lockouts_with_slot_history just for sanitization,
+                // using a synthesized SlotHistory.
+
                 let mut warped_slot_history = (*slot_history).clone();
+                // Blockstore doesn't have the tower_root slot because of
+                // (replayed_root < tower_root) in this else clause, meaning the tower is from
+                // the future from the view of blockstore.
+                // Pretend the blockstore has the future tower_root to anchor exactly with that
+                // slot by adding tower_root to a slot history. The added slot will be newer
+                // than all slots in the slot history (remember tower_root > replayed_root),
+                // satisfying the slot history invariant.
+                // Thus, the whole process will be safe as well because tower_root exists
+                // within both tower and slot history, guaranteeing the success of adjustment
+                // and retaining all of future votes correctly while sanitizing.
                 warped_slot_history.add(tower_root);
+
                 self.adjust_lockouts_with_slot_history(&warped_slot_history)?;
-                // don't update root; future tower's root preferred be kept across validator
-                // restarts to retain scary messages
+                // don't update root; future tower's root should be kept across validator
+                // restarts to continue to show the scary messages at restarts until the next
+                // voting.
             }
         } else {
             // This else clause is for newly created tower.
