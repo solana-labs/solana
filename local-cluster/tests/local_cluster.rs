@@ -1870,17 +1870,24 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     }
 }
 
-#[test]
-#[serial]
-fn test_future_tower() {
+enum ClusterMode {
+    MasterOnly,
+    MasterSlave,
+}
+
+fn do_test_future_tower(cluster_mode: ClusterMode) {
     solana_logger::setup();
 
     // First set up the cluster with 4 nodes
     let slots_per_epoch = 2048;
-    let node_stakes = vec![100];
+    let node_stakes = match cluster_mode {
+        ClusterMode::MasterOnly => vec![100],
+        ClusterMode::MasterSlave => vec![100, 0],
+    };
 
     let validator_keys = vec![
         "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+        "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
     ]
     .iter()
     .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
@@ -1890,7 +1897,10 @@ fn test_future_tower() {
         .iter()
         .map(|(kp, _)| kp.pubkey())
         .collect::<Vec<_>>();
-    let validator_a_pubkey = validators[0];
+    let validator_a_pubkey = match cluster_mode {
+        ClusterMode::MasterOnly => validators[0],
+        ClusterMode::MasterSlave => validators[1],
+    };
 
     let config = ClusterConfig {
         cluster_lamports: 100_000,
@@ -1918,7 +1928,11 @@ fn test_future_tower() {
     let purged_slot_before_restart = 10;
     let validator_a_info = cluster.exit_node(&validator_a_pubkey);
     {
-        // revert blockstore to effectively create a warped future tower without mangling the tower itself
+        // create a warped future tower without mangling the tower itself
+        info!(
+            "Revert blockstore before slot {} and effectively create a future tower",
+            purged_slot_before_restart,
+        );
         let blockstore = open_blockstore(&val_a_ledger_path);
         purge_slots(&blockstore, purged_slot_before_restart, 100);
     }
@@ -1926,8 +1940,8 @@ fn test_future_tower() {
     cluster.restart_node(&validator_a_pubkey, validator_a_info);
 
     let mut newly_rooted = false;
-    let some_root_after_restart = purged_slot_before_restart + 15; // 15 is arbitrary; just wait a bit
-    for _ in 0..300 {
+    let some_root_after_restart = purged_slot_before_restart + 25; // 25 is arbitrary; just wait a bit
+    for _ in 0..600 {
         sleep(Duration::from_millis(100));
 
         if let Some(root) = root_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
@@ -1939,21 +1953,33 @@ fn test_future_tower() {
     }
     let _validator_a_info = cluster.exit_node(&validator_a_pubkey);
     if newly_rooted {
-        // there should be no forks; i.e. monotonically increasing voted slots
+        // there should be no forks; i.e. monotonically increasing ancestor chain
         let last_vote = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey).unwrap();
         let blockstore = open_blockstore(&val_a_ledger_path);
-        let ideal_countinuous_no_fork_votes =
-            some_root_after_restart..=some_root_after_restart + MAX_LOCKOUT_HISTORY as Slot + 2;
-        assert_eq!(
-            AncestorIterator::new(last_vote, &blockstore)
-                .take_while(|a| *a >= some_root_after_restart)
-                .collect::<Vec<_>>(),
-            ideal_countinuous_no_fork_votes.rev().collect::<Vec<_>>(),
-        );
+        let actual_block_ancestors = AncestorIterator::new_inclusive(last_vote, &blockstore)
+            .take_while(|a| *a >= some_root_after_restart)
+            .collect::<Vec<_>>();
+        let expected_countinuous_no_fork_votes = (some_root_after_restart..=last_vote)
+            .rev()
+            .collect::<Vec<_>>();
+        assert_eq!(actual_block_ancestors, expected_countinuous_no_fork_votes);
+        assert!(actual_block_ancestors.len() > MAX_LOCKOUT_HISTORY);
         info!("validator managed to handle future tower!");
     } else {
         panic!("no root detected");
     }
+}
+
+#[test]
+#[serial]
+fn test_future_tower_master_only() {
+    do_test_future_tower(ClusterMode::MasterOnly);
+}
+
+#[test]
+#[serial]
+fn test_future_tower_master_slave() {
+    do_test_future_tower(ClusterMode::MasterSlave);
 }
 
 #[test]

@@ -547,7 +547,7 @@ impl Tower {
                     &empty_ancestors
                 };
 
-                let suspended_decision_due_to_major_unsynced_ledger = |total_stake| {
+                let suspended_decision_due_to_major_unsynced_ledger = || {
                     // This peculiar corner handling is needed mainly for a tower which is newer than
                     // blockstore. (Yeah, we tolerate it for ease of maintaining validator by operators)
                     // This condition could be introduced by manual ledger mishandling,
@@ -604,7 +604,7 @@ impl Tower {
                             last_voted_slot
                         );
                     } else {
-                        return suspended_decision_due_to_major_unsynced_ledger(total_stake);
+                        return suspended_decision_due_to_major_unsynced_ledger();
                     }
                 }
 
