@@ -6,7 +6,7 @@ use bv::BitVec;
 use bv::BitsMut;
 
 #[repr(C)]
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct SlotHistory {
     pub bits: BitVec<u64>,
     pub next_slot: Slot,
