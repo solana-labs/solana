@@ -2183,6 +2183,7 @@ dependencies = [
  "solana-logger",
  "solana-measure",
  "solana-metrics",
+ "solana-program",
  "solana-rayon-threadlimit",
  "solana-sdk",
  "solana-secp256k1-program",

@@ -1185,8 +1185,8 @@ impl Bank {
         });
     }
 
-    fn update_stake_history(&self, epoch: Option<Epoch>) {
-        if epoch == Some(self.epoch()) {
+    fn update_stake_history(&self, parent_epoch: Option<Epoch>) {
+        if parent_epoch == Some(self.epoch()) {
             return;
         }
         // if I'm the first Bank in an epoch, ensure stake_history is updated
@@ -1196,6 +1196,29 @@ impl Bank {
                 self.inherit_sysvar_account_balance(account),
             )
         });
+
+        // Update epoch vote accounts sysvar
+        if self
+            .feature_set
+            .is_active(&feature_set::epoch_vote_accounts_sysvar::id())
+        {
+            self.update_sysvar_account(&sysvar::epoch_vote_accounts::id(), |account| {
+                create_account::<sysvar::epoch_vote_accounts::EpochVoteAccounts>(
+                    &solana_program::epoch_vote_accounts::EpochVoteAccounts::new(
+                        self.epoch_vote_accounts(self.epoch()).map_or(
+                            vec![],
+                            |epoch_vote_accounts| {
+                                epoch_vote_accounts
+                                    .iter()
+                                    .map(|(address, (active_stake, _))| (*address, *active_stake))
+                                    .collect()
+                            },
+                        ),
+                    ),
+                    self.inherit_sysvar_account_balance(account),
+                )
+            });
+        }
     }
 
     pub fn epoch_duration_in_years(&self, prev_epoch: Epoch) -> f64 {
@@ -7258,6 +7281,20 @@ mod tests {
         assert_eq!(leader_vote_stake.len(), 1);
         let (leader_vote_account, leader_stake) = leader_vote_stake.pop().unwrap();
         assert!(leader_stake > 0);
+
+        let epoch_vote_accounts = from_account::<sysvar::epoch_vote_accounts::EpochVoteAccounts>(
+            &parent
+                .get_account(&sysvar::epoch_vote_accounts::id())
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            epoch_vote_accounts,
+            solana_program::epoch_vote_accounts::EpochVoteAccounts::new(vec![(
+                leader_vote_account,
+                leader_stake
+            )])
+        );
 
         let leader_stake = Stake {
             delegation: Delegation {

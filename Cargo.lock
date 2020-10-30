@@ -4598,6 +4598,7 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-noop-program",
+ "solana-program",
  "solana-rayon-threadlimit",
  "solana-sdk 1.5.0",
  "solana-secp256k1-program",

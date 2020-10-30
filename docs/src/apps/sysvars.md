@@ -31,6 +31,14 @@ for a given slot, etc. (Note: the epoch schedule is distinct from the
 - Address: `SysvarEpochSchedu1e111111111111111111111111`
 - Layout: [EpochSchedule](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/epoch_schedule/struct.EpochSchedule.html)
 
+## EpochVoteAccounts
+
+The EpochVoteAccounts sysvar contains the address and total stake for all vote
+accounts with active stake for the current epoch.
+
+- Address: `SysvarEpochVoteAccounts11111111111111111111`
+- Layout: [EpochVoteAccounts](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/epoch_vote_accounts/struct.EpochVoteAccounts.html)
+
 ## Fees
 
 The Fees sysvar contains the fee calculator for the current slot. It is updated
