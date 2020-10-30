@@ -5,6 +5,7 @@ use bincode::serialize_into;
 use solana_sdk::{
     instruction::InstructionError,
     keyed_account::{next_keyed_account, KeyedAccount},
+    process_instruction::InvokeContext,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
@@ -30,6 +31,7 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
+    _invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     let new_owner_pubkey: Pubkey = limited_deserialize(data)?;
     let keyed_accounts_iter = &mut keyed_accounts.iter();
@@ -71,7 +73,7 @@ mod tests {
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
         let (genesis_config, mint_keypair) = create_genesis_config(lamports);
         let mut bank = Bank::new(&genesis_config);
-        bank.add_builtin_program("ownable_program", crate::id(), process_instruction);
+        bank.add_builtin("ownable_program", crate::id(), process_instruction);
         (bank, mint_keypair)
     }
 

@@ -34,7 +34,7 @@ pub mod bpf_loader2_program {
     solana_sdk::declare_id!("DFBnrgThdzH4W6wZ12uGPoWcMnvfZj11EHnxHcVxLPhD");
 }
 
-pub mod compute_budget_balancing {
+pub mod bpf_compute_budget_balancing {
     solana_sdk::declare_id!("HxvjqDSiF5sYdSYuCXsUnS8UeAoWsMT9iGoFP8pgV1mB");
 }
 
@@ -66,6 +66,10 @@ pub mod cumulative_rent_related_fixes {
     solana_sdk::declare_id!("FtjnuAtJTWwX3Kx9m24LduNEhzaGuuPfDW6e14SX2Fy5");
 }
 
+pub mod sol_log_compute_units_syscall {
+    solana_sdk::declare_id!("BHuZqHAj7JdZc68wVgZZcy51jZykvgrx4zptR44RyChe");
+}
+
 pub mod pubkey_log_syscall_enabled {
     solana_sdk::declare_id!("MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN");
 }
@@ -84,7 +88,7 @@ lazy_static! {
         (inflation_kill_switch::id(), "inflation kill switch"),
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
         (bpf_loader2_program::id(), "bpf_loader2 program"),
-        (compute_budget_balancing::id(), "compute budget balancing"),
+        (bpf_compute_budget_balancing::id(), "compute budget balancing"),
         (sha256_syscall_enabled::id(), "sha256 syscall"),
         (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
         (ristretto_mul_syscall_enabled::id(), "ristretto multiply syscall"),
@@ -92,6 +96,7 @@ lazy_static! {
         (max_program_call_depth_64::id(), "max program call depth 64"),
         (timestamp_correction::id(), "correct bank timestamps"),
         (cumulative_rent_related_fixes::id(), "rent fixes (#10206, #10468, #11342)"),
+        (sol_log_compute_units_syscall::id(), "sol_log_compute_units syscall (#13243)"),
         (pubkey_log_syscall_enabled::id(), "pubkey log syscall"),
         (pull_request_ping_pong_check::id(), "ping-pong packet check #12794"),
         /*************** ADD NEW FEATURES HERE ***************/

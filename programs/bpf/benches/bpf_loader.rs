@@ -11,10 +11,8 @@ use solana_rbpf::vm::{EbpfVm, InstructionMeter};
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
-    bpf_test_utils::MockInvokeContext,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::load_program,
-    process_instruction::{ComputeMeter, InvokeContext},
 };
 use solana_sdk::{
     account::Account,
@@ -23,6 +21,7 @@ use solana_sdk::{
     entrypoint::SUCCESS,
     instruction::{AccountMeta, Instruction},
     message::Message,
+    process_instruction::{ComputeMeter, InvokeContext, MockInvokeContext},
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
@@ -161,7 +160,7 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
     } = create_genesis_config(50);
     let mut bank = Bank::new(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin_loader(&name, id, entrypoint);
+    bank.add_builtin(&name, id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 

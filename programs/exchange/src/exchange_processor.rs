@@ -9,7 +9,7 @@ use serde_derive::Serialize;
 use solana_metrics::inc_new_counter_info;
 use solana_sdk::{
     decode_error::DecodeError, instruction::InstructionError, keyed_account::KeyedAccount,
-    program_utils::limited_deserialize, pubkey::Pubkey,
+    process_instruction::InvokeContext, program_utils::limited_deserialize, pubkey::Pubkey,
 };
 use std::cmp;
 use thiserror::Error;
@@ -464,6 +464,7 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
+    _invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
 
@@ -578,7 +579,7 @@ mod test {
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
         let (genesis_config, mint_keypair) = create_genesis_config(lamports);
         let mut bank = Bank::new(&genesis_config);
-        bank.add_builtin_program("exchange_program", id(), process_instruction);
+        bank.add_builtin("exchange_program", id(), process_instruction);
         (bank, mint_keypair)
     }
 

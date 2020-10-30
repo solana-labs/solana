@@ -1,23 +1,19 @@
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::{
     instruction::{Instruction, InstructionError},
     keyed_account::KeyedAccount,
+    process_instruction::InvokeContext,
+    pubkey::Pubkey,
 };
 
 pub fn process_instruction(
     _program_id: &Pubkey,
     _keyed_accounts: &[KeyedAccount],
     _data: &[u8],
+    _invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     // Should be already checked by now.
     Ok(())
 }
-
-solana_sdk::declare_program!(
-    solana_sdk::secp256k1_program::ID,
-    solana_keccak_secp256k1_program,
-    process_instruction
-);
 
 pub fn new_secp256k1_instruction(
     priv_key: &secp256k1::SecretKey,

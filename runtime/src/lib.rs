@@ -10,12 +10,9 @@ pub mod bank_forks;
 pub mod bank_utils;
 mod blockhash_queue;
 pub mod bloom;
-pub mod bpf_test_utils;
 pub mod builtins;
 pub mod commitment;
 pub mod epoch_stakes;
-pub mod feature;
-pub mod feature_set;
 pub mod genesis_utils;
 pub mod hardened_unpack;
 pub mod instruction_recorder;
@@ -23,7 +20,6 @@ pub mod loader_utils;
 pub mod log_collector;
 pub mod message_processor;
 mod native_loader;
-pub mod process_instruction;
 pub mod rent_collector;
 pub mod serde_snapshot;
 pub mod snapshot_package;
@@ -34,6 +30,10 @@ mod system_instruction_processor;
 pub mod transaction_batch;
 pub mod transaction_utils;
 pub mod vote_sender_types;
+
+// TODO: Refactor all feature users to reference the solana_sdk definitions directly and remove the
+// next line
+use solana_sdk::{feature, feature_set};
 
 extern crate solana_config_program;
 extern crate solana_stake_program;

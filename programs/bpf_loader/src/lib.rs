@@ -16,17 +16,15 @@ use solana_rbpf::{
     memory_region::MemoryRegion,
     vm::{Config, EbpfVm, Executable, InstructionMeter},
 };
-use solana_runtime::{
-    feature_set::compute_budget_balancing,
-    process_instruction::{ComputeMeter, Executor, InvokeContext},
-};
 use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
     decode_error::DecodeError,
     entrypoint::SUCCESS,
+    feature_set::bpf_compute_budget_balancing,
     instruction::InstructionError,
     keyed_account::{is_executable, next_keyed_account, KeyedAccount},
     loader_instruction::LoaderInstruction,
+    process_instruction::{ComputeMeter, Executor, InvokeContext},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
@@ -101,7 +99,7 @@ pub fn create_and_cache_executor(
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
     bpf_verifier::check(
         elf_bytes,
-        !invoke_context.is_feature_active(&compute_budget_balancing::id()),
+        !invoke_context.is_feature_active(&bpf_compute_budget_balancing::id()),
     )
     .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e)))?;
     let executor = Arc::new(BPFExecutor { executable });
@@ -116,12 +114,12 @@ pub fn create_vm<'a>(
     parameter_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<(EbpfVm<'a, BPFError>, MemoryRegion), EbpfError<BPFError>> {
-    let compute_budget = invoke_context.get_compute_budget();
+    let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
     let mut vm = EbpfVm::new(
         executable,
         Config {
-            max_call_depth: compute_budget.max_call_depth,
-            stack_frame_size: compute_budget.stack_frame_size,
+            max_call_depth: bpf_compute_budget.max_call_depth,
+            stack_frame_size: bpf_compute_budget.stack_frame_size,
         },
     )?;
     let heap_region =
@@ -312,13 +310,14 @@ impl Executor for BPFExecutor {
 mod tests {
     use super::*;
     use rand::Rng;
-    use solana_runtime::{
-        bpf_test_utils::MockInvokeContext,
+    use solana_runtime::message_processor::{Executors, ThisInvokeContext};
+    use solana_sdk::{
+        account::Account,
         feature_set::FeatureSet,
-        message_processor::{Executors, ThisInvokeContext},
-        process_instruction::ComputeBudget,
+        instruction::InstructionError,
+        process_instruction::{BpfComputeBudget, MockInvokeContext},
+        rent::Rent,
     };
-    use solana_sdk::{account::Account, rent::Rent};
     use std::{cell::RefCell, fs::File, io::Read, ops::Range, rc::Rc};
 
     struct TestInstructionMeter {
@@ -533,9 +532,9 @@ mod tests {
             &program_id,
             Rent::default(),
             vec![],
-            vec![],
+            &[],
             None,
-            ComputeBudget {
+            BpfComputeBudget {
                 max_units: 1,
                 log_units: 100,
                 log_64_units: 100,

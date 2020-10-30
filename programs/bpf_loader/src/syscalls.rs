@@ -7,22 +7,21 @@ use solana_rbpf::{
     memory_region::{translate_addr, MemoryRegion},
     vm::{EbpfVm, SyscallObject},
 };
-use solana_runtime::{
-    feature_set::{
-        pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled, sha256_syscall_enabled,
-    },
-    message_processor::MessageProcessor,
-    process_instruction::{ComputeMeter, InvokeContext, Logger},
-};
+use solana_runtime::message_processor::MessageProcessor;
 use solana_sdk::{
     account::Account,
     account_info::AccountInfo,
-    bpf_loader, bpf_loader_deprecated,
+    bpf_loader_deprecated,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
+    feature_set::{
+        pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled, sha256_syscall_enabled,
+        sol_log_compute_units_syscall,
+    },
     hash::{Hasher, HASH_BYTES},
     instruction::{AccountMeta, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     message::Message,
+    process_instruction::{ComputeMeter, InvokeContext, Logger},
     program_error::ProgramError,
     pubkey::{Pubkey, PubkeyError},
 };
@@ -98,7 +97,7 @@ pub fn register_syscalls<'a>(
     callers_keyed_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<MemoryRegion, EbpfError<BPFError>> {
-    let compute_budget = invoke_context.get_compute_budget();
+    let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
 
     // Syscall functions common across languages
 
@@ -107,7 +106,7 @@ pub fn register_syscalls<'a>(
     vm.register_syscall_with_context_ex(
         "sol_log_",
         Box::new(SyscallLog {
-            cost: compute_budget.log_units,
+            cost: bpf_compute_budget.log_units,
             compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
             loader_id,
@@ -116,17 +115,27 @@ pub fn register_syscalls<'a>(
     vm.register_syscall_with_context_ex(
         "sol_log_64_",
         Box::new(SyscallLogU64 {
-            cost: compute_budget.log_64_units,
+            cost: bpf_compute_budget.log_64_units,
             compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
         }),
     )?;
 
+    if invoke_context.is_feature_active(&sol_log_compute_units_syscall::id()) {
+        vm.register_syscall_with_context_ex(
+            "sol_log_compute_units_",
+            Box::new(SyscallLogBpfComputeUnits {
+                cost: 0,
+                compute_meter: invoke_context.get_compute_meter(),
+                logger: invoke_context.get_logger(),
+            }),
+        )?;
+    }
     if invoke_context.is_feature_active(&pubkey_log_syscall_enabled::id()) {
         vm.register_syscall_with_context_ex(
             "sol_log_pubkey",
             Box::new(SyscallLogPubkey {
-                cost: compute_budget.log_pubkey_units,
+                cost: bpf_compute_budget.log_pubkey_units,
                 compute_meter: invoke_context.get_compute_meter(),
                 logger: invoke_context.get_logger(),
                 loader_id,
@@ -138,8 +147,8 @@ pub fn register_syscalls<'a>(
         vm.register_syscall_with_context_ex(
             "sol_sha256",
             Box::new(SyscallSha256 {
-                sha256_base_cost: compute_budget.sha256_base_cost,
-                sha256_byte_cost: compute_budget.sha256_byte_cost,
+                sha256_base_cost: bpf_compute_budget.sha256_base_cost,
+                sha256_byte_cost: bpf_compute_budget.sha256_byte_cost,
                 compute_meter: invoke_context.get_compute_meter(),
                 loader_id,
             }),
@@ -160,7 +169,7 @@ pub fn register_syscalls<'a>(
     vm.register_syscall_with_context_ex(
         "sol_create_program_address",
         Box::new(SyscallCreateProgramAddress {
-            cost: compute_budget.create_program_address_units,
+            cost: bpf_compute_budget.create_program_address_units,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         }),
@@ -408,6 +417,38 @@ impl SyscallObject<BPFError> for SyscallLogU64 {
             logger.log(&format!(
                 "Program log: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
                 arg1, arg2, arg3, arg4, arg5
+            ));
+        }
+        Ok(0)
+    }
+}
+
+/// Log current compute consumption
+pub struct SyscallLogBpfComputeUnits {
+    cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    logger: Rc<RefCell<dyn Logger>>,
+}
+impl SyscallObject<BPFError> for SyscallLogBpfComputeUnits {
+    fn call(
+        &mut self,
+        _arg1: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        _ro_regions: &[MemoryRegion],
+        _rw_regions: &[MemoryRegion],
+    ) -> Result<u64, EbpfError<BPFError>> {
+        self.compute_meter.consume(self.cost)?;
+        let mut logger = self
+            .logger
+            .try_borrow_mut()
+            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
+        if logger.log_enabled() {
+            logger.log(&format!(
+                "Program consumption: {} units remaining",
+                self.compute_meter.borrow().get_remaining()
             ));
         }
         Ok(0)
@@ -1147,7 +1188,7 @@ fn call<'a>(
     let mut invoke_context = syscall.get_context_mut()?;
     invoke_context
         .get_compute_meter()
-        .consume(invoke_context.get_compute_budget().invoke_units)?;
+        .consume(invoke_context.get_bpf_compute_budget().invoke_units)?;
 
     // Translate data passed from the VM
 
@@ -1185,8 +1226,6 @@ fn call<'a>(
     for (program_id, process_instruction) in invoke_context.get_programs().iter() {
         message_processor.add_program(*program_id, *process_instruction);
     }
-    message_processor.add_loader(bpf_loader::id(), crate::process_instruction);
-    message_processor.add_loader(bpf_loader_deprecated::id(), crate::process_instruction);
 
     #[allow(clippy::deref_addrof)]
     match message_processor.process_cross_program_instruction(
@@ -1237,8 +1276,11 @@ fn call<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_runtime::bpf_test_utils::{MockComputeMeter, MockLogger};
-    use solana_sdk::hash::hashv;
+    use solana_sdk::{
+        bpf_loader,
+        hash::hashv,
+        process_instruction::{MockComputeMeter, MockLogger},
+    };
     use std::str::FromStr;
 
     macro_rules! assert_access_violation {

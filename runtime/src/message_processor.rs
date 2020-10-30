@@ -3,10 +3,6 @@ use crate::{
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     native_loader::NativeLoader,
-    process_instruction::{
-        ComputeBudget, ComputeMeter, ErasedProcessInstruction, ErasedProcessInstructionWithContext,
-        Executor, InvokeContext, Logger, ProcessInstruction, ProcessInstructionWithContext,
-    },
     rent_collector::RentCollector,
 };
 use log::*;
@@ -18,6 +14,10 @@ use solana_sdk::{
     keyed_account::{create_keyed_readonly_accounts, KeyedAccount},
     message::Message,
     native_loader,
+    process_instruction::{
+        BpfComputeBudget, ComputeMeter, Executor, InvokeContext, Logger,
+        ProcessInstructionWithContext,
+    },
     pubkey::Pubkey,
     rent::Rent,
     system_program,
@@ -201,31 +201,31 @@ impl ComputeMeter for ThisComputeMeter {
         self.remaining
     }
 }
-pub struct ThisInvokeContext {
+pub struct ThisInvokeContext<'a> {
     program_ids: Vec<Pubkey>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
-    programs: Vec<(Pubkey, ProcessInstruction)>,
+    programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     logger: Rc<RefCell<dyn Logger>>,
-    compute_budget: ComputeBudget,
+    bpf_compute_budget: BpfComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     executors: Rc<RefCell<Executors>>,
     instruction_recorder: Option<InstructionRecorder>,
     feature_set: Arc<FeatureSet>,
 }
-impl ThisInvokeContext {
+impl<'a> ThisInvokeContext<'a> {
     pub fn new(
         program_id: &Pubkey,
         rent: Rent,
         pre_accounts: Vec<PreAccount>,
-        programs: Vec<(Pubkey, ProcessInstruction)>,
+        programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         log_collector: Option<Rc<LogCollector>>,
-        compute_budget: ComputeBudget,
+        bpf_compute_budget: BpfComputeBudget,
         executors: Rc<RefCell<Executors>>,
         instruction_recorder: Option<InstructionRecorder>,
         feature_set: Arc<FeatureSet>,
     ) -> Self {
-        let mut program_ids = Vec::with_capacity(compute_budget.max_invoke_depth);
+        let mut program_ids = Vec::with_capacity(bpf_compute_budget.max_invoke_depth);
         program_ids.push(*program_id);
         Self {
             program_ids,
@@ -233,9 +233,9 @@ impl ThisInvokeContext {
             pre_accounts,
             programs,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
-            compute_budget,
+            bpf_compute_budget,
             compute_meter: Rc::new(RefCell::new(ThisComputeMeter {
-                remaining: compute_budget.max_units,
+                remaining: bpf_compute_budget.max_units,
             })),
             executors,
             instruction_recorder,
@@ -243,9 +243,9 @@ impl ThisInvokeContext {
         }
     }
 }
-impl InvokeContext for ThisInvokeContext {
+impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError> {
-        if self.program_ids.len() > self.compute_budget.max_invoke_depth {
+        if self.program_ids.len() > self.bpf_compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
         }
         if self.program_ids.contains(key) && self.program_ids.last() != Some(key) {
@@ -281,14 +281,14 @@ impl InvokeContext for ThisInvokeContext {
             .last()
             .ok_or(InstructionError::GenericError)
     }
-    fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
-        &self.programs
+    fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
+        self.programs
     }
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
         self.logger.clone()
     }
-    fn get_compute_budget(&self) -> &ComputeBudget {
-        &self.compute_budget
+    fn get_bpf_compute_budget(&self) -> &BpfComputeBudget {
+        &self.bpf_compute_budget
     }
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
         self.compute_meter.clone()
@@ -326,9 +326,7 @@ impl Logger for ThisLogger {
 #[derive(Deserialize, Serialize)]
 pub struct MessageProcessor {
     #[serde(skip)]
-    programs: Vec<(Pubkey, ProcessInstruction)>,
-    #[serde(skip)]
-    loaders: Vec<(Pubkey, ProcessInstructionWithContext)>,
+    programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
     #[serde(skip)]
     native_loader: NativeLoader,
 }
@@ -338,23 +336,23 @@ impl std::fmt::Debug for MessageProcessor {
         #[derive(Debug)]
         struct MessageProcessor<'a> {
             programs: Vec<String>,
-            loaders: Vec<String>,
             native_loader: &'a NativeLoader,
         }
+
+        // These are just type aliases for work around of Debug-ing above pointers
+        type ErasedProcessInstructionWithContext = fn(
+            &'static Pubkey,
+            &'static [KeyedAccount<'static>],
+            &'static [u8],
+            &'static mut dyn InvokeContext,
+        ) -> Result<(), InstructionError>;
+
         // rustc doesn't compile due to bug without this work around
         // https://github.com/rust-lang/rust/issues/50280
         // https://users.rust-lang.org/t/display-function-pointer/17073/2
         let processor = MessageProcessor {
             programs: self
                 .programs
-                .iter()
-                .map(|(pubkey, instruction)| {
-                    let erased_instruction: ErasedProcessInstruction = *instruction;
-                    format!("{}: {:p}", pubkey, erased_instruction)
-                })
-                .collect::<Vec<_>>(),
-            loaders: self
-                .loaders
                 .iter()
                 .map(|(pubkey, instruction)| {
                     let erased_instruction: ErasedProcessInstructionWithContext = *instruction;
@@ -372,7 +370,6 @@ impl Default for MessageProcessor {
     fn default() -> Self {
         Self {
             programs: vec![],
-            loaders: vec![],
             native_loader: NativeLoader::default(),
         }
     }
@@ -381,7 +378,6 @@ impl Clone for MessageProcessor {
     fn clone(&self) -> Self {
         MessageProcessor {
             programs: self.programs.clone(),
-            loaders: self.loaders.clone(),
             native_loader: NativeLoader::default(),
         }
     }
@@ -398,7 +394,11 @@ impl ::solana_frozen_abi::abi_example::AbiExample for MessageProcessor {
 
 impl MessageProcessor {
     /// Add a static entrypoint to intercept instructions before the dynamic loader.
-    pub fn add_program(&mut self, program_id: Pubkey, process_instruction: ProcessInstruction) {
+    pub fn add_program(
+        &mut self,
+        program_id: Pubkey,
+        process_instruction: ProcessInstructionWithContext,
+    ) {
         match self.programs.iter_mut().find(|(key, _)| program_id == *key) {
             Some((_, processor)) => *processor = process_instruction,
             None => self.programs.push((program_id, process_instruction)),
@@ -410,14 +410,7 @@ impl MessageProcessor {
         program_id: Pubkey,
         process_instruction: ProcessInstructionWithContext,
     ) {
-        match self.loaders.iter_mut().find(|(key, _)| program_id == *key) {
-            Some((_, processor)) => *processor = process_instruction,
-            None => self.loaders.push((program_id, process_instruction)),
-        }
-    }
-
-    fn get_compute_budget(feature_set: &FeatureSet) -> ComputeBudget {
-        ComputeBudget::new(feature_set)
+        self.add_program(program_id, process_instruction);
     }
 
     /// Create the KeyedAccounts that will be passed to the program
@@ -458,17 +451,6 @@ impl MessageProcessor {
         if let Some(root_account) = keyed_accounts.iter().next() {
             if native_loader::check_id(&root_account.owner()?) {
                 let root_id = root_account.unsigned_key();
-                for (id, process_instruction) in &self.loaders {
-                    if id == root_id {
-                        // Call the program via a builtin loader
-                        return process_instruction(
-                            &root_id,
-                            &keyed_accounts[1..],
-                            instruction_data,
-                            invoke_context,
-                        );
-                    }
-                }
                 for (id, process_instruction) in &self.programs {
                     if id == root_id {
                         // Call the builtin program
@@ -476,6 +458,7 @@ impl MessageProcessor {
                             &root_id,
                             &keyed_accounts[1..],
                             instruction_data,
+                            invoke_context,
                         );
                     }
                 }
@@ -488,7 +471,7 @@ impl MessageProcessor {
                 );
             } else {
                 let owner_id = &root_account.owner()?;
-                for (id, process_instruction) in &self.loaders {
+                for (id, process_instruction) in &self.programs {
                     if id == owner_id {
                         // Call the program via a builtin loader
                         return process_instruction(
@@ -667,6 +650,7 @@ impl MessageProcessor {
         instruction_recorder: Option<InstructionRecorder>,
         instruction_index: usize,
         feature_set: Arc<FeatureSet>,
+        bpf_compute_budget: BpfComputeBudget,
     ) -> Result<(), InstructionError> {
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
@@ -688,9 +672,9 @@ impl MessageProcessor {
             instruction.program_id(&message.account_keys),
             rent_collector.rent,
             pre_accounts,
-            self.programs.clone(), // get rid of clone
+            &self.programs,
             log_collector,
-            Self::get_compute_budget(&feature_set),
+            bpf_compute_budget,
             executors,
             instruction_recorder,
             feature_set,
@@ -723,6 +707,7 @@ impl MessageProcessor {
         executors: Rc<RefCell<Executors>>,
         instruction_recorders: Option<&[InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
+        bpf_compute_budget: BpfComputeBudget,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let instruction_recorder = instruction_recorders
@@ -739,6 +724,7 @@ impl MessageProcessor {
                 instruction_recorder,
                 instruction_index,
                 feature_set.clone(),
+                bpf_compute_budget,
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
@@ -781,9 +767,9 @@ mod tests {
             &program_ids[0],
             Rent::default(),
             pre_accounts,
-            vec![],
+            &[],
             None,
-            ComputeBudget::default(),
+            BpfComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
             None,
             Arc::new(FeatureSet::all_enabled()),
@@ -1266,6 +1252,7 @@ mod tests {
             _program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
@@ -1327,6 +1314,7 @@ mod tests {
             executors.clone(),
             None,
             Arc::new(FeatureSet::all_enabled()),
+            BpfComputeBudget::new(&FeatureSet::all_enabled()),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 100);
@@ -1350,6 +1338,7 @@ mod tests {
             executors.clone(),
             None,
             Arc::new(FeatureSet::all_enabled()),
+            BpfComputeBudget::new(&FeatureSet::all_enabled()),
         );
         assert_eq!(
             result,
@@ -1377,6 +1366,7 @@ mod tests {
             executors,
             None,
             Arc::new(FeatureSet::all_enabled()),
+            BpfComputeBudget::new(&FeatureSet::all_enabled()),
         );
         assert_eq!(
             result,
@@ -1400,6 +1390,7 @@ mod tests {
             _program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
@@ -1487,6 +1478,7 @@ mod tests {
             executors.clone(),
             None,
             Arc::new(FeatureSet::all_enabled()),
+            BpfComputeBudget::new(&FeatureSet::all_enabled()),
         );
         assert_eq!(
             result,
@@ -1514,6 +1506,7 @@ mod tests {
             executors.clone(),
             None,
             Arc::new(FeatureSet::all_enabled()),
+            BpfComputeBudget::new(&FeatureSet::all_enabled()),
         );
         assert_eq!(result, Ok(()));
 
@@ -1538,6 +1531,7 @@ mod tests {
             executors,
             None,
             Arc::new(FeatureSet::all_enabled()),
+            BpfComputeBudget::new(&FeatureSet::all_enabled()),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);
@@ -1559,6 +1553,7 @@ mod tests {
             program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
             assert_eq!(*program_id, keyed_accounts[0].owner()?);
             assert_ne!(
@@ -1609,9 +1604,9 @@ mod tests {
             &caller_program_id,
             Rent::default(),
             vec![owned_preaccount, not_owned_preaccount],
-            vec![],
+            &[],
             None,
-            ComputeBudget::default(),
+            BpfComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
             None,
             Arc::new(FeatureSet::all_enabled()),
@@ -1675,6 +1670,7 @@ mod tests {
             _program_id: &Pubkey,
             _keyed_accounts: &[KeyedAccount],
             _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
             Ok(())
         }

@@ -1,8 +1,8 @@
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
 use solana_ledger::blockstore::Blockstore;
 use solana_measure::measure::Measure;
-use solana_runtime::{bank::Bank, feature_set};
-use solana_sdk::timing::slot_duration_from_slots_per_year;
+use solana_runtime::bank::Bank;
+use solana_sdk::{feature_set, timing::slot_duration_from_slots_per_year};
 use std::{
     collections::HashMap,
     sync::{
