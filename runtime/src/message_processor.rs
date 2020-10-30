@@ -1,15 +1,13 @@
 use crate::{
-    feature_set::{instructions_sysvar_enabled, FeatureSet},
-    instruction_recorder::InstructionRecorder,
-    log_collector::LogCollector,
-    native_loader::NativeLoader,
-    rent_collector::RentCollector,
+    instruction_recorder::InstructionRecorder, log_collector::LogCollector,
+    native_loader::NativeLoader, rent_collector::RentCollector,
 };
 use log::*;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::Account,
     clock::Epoch,
+    feature_set::{instructions_sysvar_enabled, FeatureSet},
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_readonly_accounts, KeyedAccount},
     message::Message,
