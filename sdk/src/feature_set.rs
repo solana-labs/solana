@@ -78,10 +78,6 @@ pub mod pull_request_ping_pong_check {
     solana_sdk::declare_id!("5RzEHTnf6D7JPZCvwEzjM19kzBsyjSU3HoMfXaQmVgnZ");
 }
 
-pub mod bpf_just_in_time_compilation {
-    solana_sdk::declare_id!("3bZhti6PMmsdkPxqPT8TPNzB3n9NYbKtnwqEpUDnFuPi");
-}
-
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -103,7 +99,6 @@ lazy_static! {
         (sol_log_compute_units_syscall::id(), "sol_log_compute_units syscall (#13243)"),
         (pubkey_log_syscall_enabled::id(), "pubkey log syscall"),
         (pull_request_ping_pong_check::id(), "ping-pong packet check #12794"),
-        (bpf_just_in_time_compilation::id(), "bpf just-in-time compilation #12951"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
