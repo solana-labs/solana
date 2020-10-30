@@ -1,5 +1,5 @@
 ---
-title: Backwards Compatibility Policy
+title: Backward Compatibility Policy
 ---
 
 As the Solana developer ecosystem grows, so does the need for clear expectations around
@@ -10,21 +10,17 @@ and so this document attempts to clarify and codify the process for new releases
 
 ### Expectations
 
-- Solana APIs, SDKs, and CLI tooling are updated together in every Solana software release
-  (with a few [exceptions](#exceptions)).
-- Software for a `MINOR` version release will be compatible across all software back to the
-  the first `PATCH` release of the previous `MINOR` version. (eg. v1.4.x will remain
-  compatible back to v1.3.0)
-- Solana **DOES NOT** guarantee that software on _non-sequential_ `MINOR` version releases
-  will always be compatible. _(e.g. 1.3.x will likely not be compatible with 1.5.x)_
-- Solana software releases **DO NOT** strictly follow semantic versioning, details below.
+- Solana software releases include APIs, SDKs, and CLI tooling (with a few [exceptions](#exceptions)).
+- Solana software releases follow semantic versioning, more details below.
+- Software for a `MINOR` version release will be compatible across all software on the
+  same `MAJOR` version.
 
 ### Deprecation Process
 
-1. In any `PATCH` release (e.g. 1.3.x), a feature, API, endpoint, etc. will be marked as deprecated
-2. The next `MINOR` release (e.g. 1.4.0) will also contain the deprecation without breaking compatibility
-3. Finally, the following `MINOR` release (e.g. 1.5.0) may remove the deprecated feature
-  in an incompatible way.
+1. In any `PATCH` or `MINOR` release, a feature, API, endpoint, etc. could be marked as deprecated.
+2. According to code upgrade difficulty, some features will be remain deprecated for a few release
+  cycles.
+3. In a future `MAJOR` release, deprecated features will be removed in an incompatible way.
 
 ### Release Cadence
 
@@ -32,28 +28,44 @@ The Solana RPC API, Rust SDK, CLI tooling, and BPF Program SDK are all updated a
 along with each Solana software release and should always be compatible between `PATCH`
 updates of a particular `MINOR` version release.
 
+#### Release Channels
+
+- `edge` software that contains cutting-edge features with no backward compatibility policy
+- `beta` software that runs on the Solana Tour de SOL testnet cluster
+- `stable` software that run on the Solana Mainnet Beta and Devnet clusters
+
+#### Major Releases (x.0.0)
+
+`MAJOR` version releases (e.g. 2.0.0) may contain breaking changes and removal of previously
+deprecated features. Client SDKs and tooling will begin using new features and endpoints
+that were enabled in the previous `MAJOR` version.
+
 #### Minor Releases (1.x.0)
 
-Experimental changes and new proposal implementations are added to _new_ `MINOR` version
-releases (e.g. 1.4.0) and are first run on Solana's Tour de SOL testnet cluster. After
-those changes have proven to be stable, the Mainnet Beta cluster will be updated to the
-new `MINOR` version.
+New features and proposal implementations are added to _new_ `MINOR` version
+releases (e.g. 1.4.0) and are first run on Solana's Tour de SOL testnet cluster. While running
+on the testnet, `MINOR` versions are considered to be in the `beta` release channel. After
+those changes have been patched as needed and proven to be reliable, the `MINOR` version will
+be upgraded to the `stable` release channel and deployed to the Mainnet Beta cluster.
 
 #### Patch Releases (1.0.x)
 
 Low risk features, non-breaking changes, and security and bug fixes are shipped as part
-of `PATCH` version releases (e.g. 1.0.11).
+of `PATCH` version releases (e.g. 1.0.11). Patches may be applied to both `beta` and `stable`
+release channels.
 
 ### RPC API
 
 Patch releases:
-- New RPC endpoints and features
 - Bug fixes
 - Security fixes
+- Endpoint / feature deprecation
 
 Minor releases:
-- Endpoint / feature deprecation
-- Removal of previous `MINOR` version deprecated features
+- New RPC endpoints and features
+
+Major releases:
+- Removal of deprecated features
 
 ### Rust Crates
 
@@ -63,26 +75,30 @@ Minor releases:
 * [`solana-cli-config`](https://docs.rs/solana-cli-config/) - Rust client for managing Solana CLI config files
 
 Patch releases:
-- New APIs
 - Bug fixes
-- Performance improvements
 - Security fixes
+- Performance improvements
 
 Minor releases:
+- New APIs
+
+Major releases
 - Removal of deprecated APIs
 - Backwards incompatible behavior changes
 
 ### CLI Tools
 
 Patch releases:
-- New subcommands
 - Bug and security fixes
 - Performance improvements
 - Subcommand / argument deprecation
 
 Minor releases:
-- Switch to new RPC API endpoints / configuration introduced in the previous minor version.
-- Removal of previous minor version deprecated features
+- New subcommands
+
+Major releases:
+- Switch to new RPC API endpoints / configuration introduced in the previous major version.
+- Removal of deprecated features
 
 ### Runtime Features
 
@@ -109,14 +125,14 @@ discourage dependence upon Solana operated nodes.
 
 #### Local cluster scripts and Docker images
 
-Breaking changes will be limited to `MINOR` version updates. `PATCH` updates should always
+Breaking changes will be limited to `MAJOR` version updates. `MINOR` and `PATCH` updates should always
 be backwards compatible.
 
 ### Exceptions
 
 #### Web3 JavaScript SDK
 
-The Web3.JS SDK follows semantic versioning specifications and is shipped separately from Solana
+The Web3.JS SDK also follows semantic versioning specifications but is shipped separately from Solana
 software releases.
 
 #### Attack Vectors
