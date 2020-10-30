@@ -554,8 +554,8 @@ impl Tower {
                     // validator SEGV, OS/HW crash, or plain No Free Space FS error.
 
                     // When we're in this clause, it basically means validator is badly running
-                    // with a future tower and RE-CREATING a block for one of past slots as the leader
-                    // of the slot, especially problematic is last_voted_slot.
+                    // with a future tower while replaying past slots, especially problematic is
+                    // last_voted_slot.
                     // So, don't re-vote on it by returning pseudo FailedSwitchThreshold, otherwise
                     // there would be slashing because of double vote on one of last_vote_ancestors.
                     // (Well, needless to say, re-creating the duplicate block must be handled properly
@@ -563,10 +563,9 @@ impl Tower {
                     //
                     // To be specific, the replay stage is tricked into a false perception where
                     // last_vote_ancestors is AVAILABLE for descendant-of-`switch_slot`,  stale, and
-                    // stray slots (which should always be empty_ancestors). This is caused by the banking
-                    // stage's incorrectly creating new duplicate block.
+                    // stray slots (which should always be empty_ancestors).
                     //
-                    // This is covered by test_future_tower in local_cluster
+                    // This is covered by test_future_tower_* in local_cluster
                     SwitchForkDecision::FailedSwitchThreshold(0, total_stake)
                 };
 
@@ -903,10 +902,11 @@ impl Tower {
                 self.initialize_root(replayed_root);
             } else {
                 // This should never occur under normal operation.
-                // If this validator has leader slots while voting suspended this way,
+                // While this validator's voting is suspended this way,
                 // suspended_decision_due_to_major_unsynced_ledger() will be also touched.
                 let message = format!(
-                    "For some reason, we're REPROCESSING already voted and ROOTED slots; \
+                    "For some reason, we're REPROCESSING slots which has already been \
+                     voted and ROOTED by us; \
                      VOTING will be SUSPENDED UNTIL {}!",
                     last_voted_slot,
                 );
