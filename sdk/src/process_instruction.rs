@@ -1,9 +1,9 @@
-use crate::feature_set::{
-    compute_budget_balancing, max_invoke_depth_4, max_program_call_depth_64,
-    pubkey_log_syscall_enabled, FeatureSet,
-};
 use solana_sdk::{
     account::{Account, KeyedAccount},
+    feature_set::{
+        bpf_compute_budget_balancing, max_invoke_depth_4, max_program_call_depth_64,
+        pubkey_log_syscall_enabled, FeatureSet,
+    },
     instruction::{CompiledInstruction, Instruction, InstructionError},
     message::Message,
     pubkey::Pubkey,
@@ -23,23 +23,8 @@ pub type LoaderEntrypoint = unsafe extern "C" fn(
     invoke_context: &dyn InvokeContext,
 ) -> Result<(), InstructionError>;
 
-pub type ProcessInstruction = fn(&Pubkey, &[KeyedAccount], &[u8]) -> Result<(), InstructionError>;
 pub type ProcessInstructionWithContext =
     fn(&Pubkey, &[KeyedAccount], &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
-
-// These are just type aliases for work around of Debug-ing above function pointers
-pub type ErasedProcessInstructionWithContext = fn(
-    &'static Pubkey,
-    &'static [KeyedAccount<'static>],
-    &'static [u8],
-    &'static mut dyn InvokeContext,
-) -> Result<(), InstructionError>;
-
-pub type ErasedProcessInstruction = fn(
-    &'static Pubkey,
-    &'static [KeyedAccount<'static>],
-    &'static [u8],
-) -> Result<(), InstructionError>;
 
 /// Invocation context passed to loaders
 pub trait InvokeContext {
@@ -57,11 +42,11 @@ pub trait InvokeContext {
     /// Get the program ID of the currently executing program
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
     /// Get a list of built-in programs
-    fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)];
+    fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)];
     /// Get this invocation's logger
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>>;
     /// Get this invocation's compute budget
-    fn get_compute_budget(&self) -> &ComputeBudget;
+    fn get_bpf_compute_budget(&self) -> &BpfComputeBudget;
     /// Get this invocation's compute meter
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>>;
     /// Loaders may need to do work in order to execute a program.  Cache
@@ -75,8 +60,8 @@ pub trait InvokeContext {
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool;
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct ComputeBudget {
+#[derive(Clone, Copy, Debug, AbiExample)]
+pub struct BpfComputeBudget {
     /// Number of compute units that an instruction is allowed.  Compute units
     /// are consumed by program execution, resources they use, etc...
     pub max_units: u64,
@@ -98,16 +83,16 @@ pub struct ComputeBudget {
     /// Number of compute units consumed by logging a `Pubkey`
     pub log_pubkey_units: u64,
 }
-impl Default for ComputeBudget {
+impl Default for BpfComputeBudget {
     fn default() -> Self {
         Self::new(&FeatureSet::all_enabled())
     }
 }
-impl ComputeBudget {
+impl BpfComputeBudget {
     pub fn new(feature_set: &FeatureSet) -> Self {
-        let mut compute_budget =
+        let mut bpf_compute_budget =
         // Original
-        ComputeBudget {
+        BpfComputeBudget {
             max_units: 100_000,
             log_units: 0,
             log_64_units: 0,
@@ -119,35 +104,35 @@ impl ComputeBudget {
             log_pubkey_units: 0,
         };
 
-        if feature_set.is_active(&compute_budget_balancing::id()) {
-            compute_budget = ComputeBudget {
+        if feature_set.is_active(&bpf_compute_budget_balancing::id()) {
+            bpf_compute_budget = BpfComputeBudget {
                 max_units: 200_000,
                 log_units: 100,
                 log_64_units: 100,
                 create_program_address_units: 1500,
                 invoke_units: 1000,
-                ..compute_budget
+                ..bpf_compute_budget
             };
         }
         if feature_set.is_active(&max_invoke_depth_4::id()) {
-            compute_budget = ComputeBudget {
+            bpf_compute_budget = BpfComputeBudget {
                 max_invoke_depth: 4,
-                ..compute_budget
+                ..bpf_compute_budget
             };
         }
         if feature_set.is_active(&max_program_call_depth_64::id()) {
-            compute_budget = ComputeBudget {
+            bpf_compute_budget = BpfComputeBudget {
                 max_call_depth: 64,
-                ..compute_budget
+                ..bpf_compute_budget
             };
         }
         if feature_set.is_active(&pubkey_log_syscall_enabled::id()) {
-            compute_budget = ComputeBudget {
+            bpf_compute_budget = BpfComputeBudget {
                 log_pubkey_units: 100,
-                ..compute_budget
+                ..bpf_compute_budget
             };
         }
-        compute_budget
+        bpf_compute_budget
     }
 }
 
@@ -176,4 +161,92 @@ pub trait Executor: Debug + Send + Sync {
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError>;
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct MockComputeMeter {
+    pub remaining: u64,
+}
+impl ComputeMeter for MockComputeMeter {
+    fn consume(&mut self, amount: u64) -> Result<(), InstructionError> {
+        let exceeded = self.remaining < amount;
+        self.remaining = self.remaining.saturating_sub(amount);
+        if exceeded {
+            return Err(InstructionError::ComputationalBudgetExceeded);
+        }
+        Ok(())
+    }
+    fn get_remaining(&self) -> u64 {
+        self.remaining
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct MockLogger {
+    pub log: Rc<RefCell<Vec<String>>>,
+}
+impl Logger for MockLogger {
+    fn log_enabled(&self) -> bool {
+        true
+    }
+    fn log(&mut self, message: &str) {
+        self.log.borrow_mut().push(message.to_string());
+    }
+}
+
+#[derive(Debug)]
+pub struct MockInvokeContext {
+    pub key: Pubkey,
+    pub logger: MockLogger,
+    pub bpf_compute_budget: BpfComputeBudget,
+    pub compute_meter: MockComputeMeter,
+}
+impl Default for MockInvokeContext {
+    fn default() -> Self {
+        MockInvokeContext {
+            key: Pubkey::default(),
+            logger: MockLogger::default(),
+            bpf_compute_budget: BpfComputeBudget::default(),
+            compute_meter: MockComputeMeter {
+                remaining: std::i64::MAX as u64,
+            },
+        }
+    }
+}
+impl InvokeContext for MockInvokeContext {
+    fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
+        Ok(())
+    }
+    fn pop(&mut self) {}
+    fn verify_and_update(
+        &mut self,
+        _message: &Message,
+        _instruction: &CompiledInstruction,
+        _accounts: &[Rc<RefCell<Account>>],
+    ) -> Result<(), InstructionError> {
+        Ok(())
+    }
+    fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
+        Ok(&self.key)
+    }
+    fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
+        &[]
+    }
+    fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
+        Rc::new(RefCell::new(self.logger.clone()))
+    }
+    fn get_bpf_compute_budget(&self) -> &BpfComputeBudget {
+        &self.bpf_compute_budget
+    }
+    fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
+        Rc::new(RefCell::new(self.compute_meter.clone()))
+    }
+    fn add_executor(&mut self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
+    fn get_executor(&mut self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
+        None
+    }
+    fn record_instruction(&self, _instruction: &Instruction) {}
+    fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
+        true
+    }
 }

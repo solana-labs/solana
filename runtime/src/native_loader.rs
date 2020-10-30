@@ -1,5 +1,4 @@
 //! Native loader
-use crate::process_instruction::{InvokeContext, LoaderEntrypoint};
 #[cfg(unix)]
 use libloading::os::unix::*;
 #[cfg(windows)]
@@ -11,6 +10,7 @@ use solana_sdk::{
     decode_error::DecodeError,
     entrypoint_native::ProgramEntrypoint,
     instruction::InstructionError,
+    process_instruction::{InvokeContext, LoaderEntrypoint},
     pubkey::Pubkey,
 };
 use std::{collections::HashMap, env, path::PathBuf, str, sync::RwLock};

@@ -14,6 +14,7 @@ use solana_sdk::{
     decode_error::DecodeError,
     hash::Hash,
     instruction::{AccountMeta, Instruction, InstructionError},
+    process_instruction::InvokeContext,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     system_instruction,
@@ -265,6 +266,7 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
+    _invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
@@ -319,14 +321,19 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::{account::Account, rent::Rent};
+    use solana_sdk::{account::Account, process_instruction::MockInvokeContext, rent::Rent};
     use std::cell::RefCell;
 
     // these are for 100% coverage in this file
     #[test]
     fn test_vote_process_instruction_decode_bail() {
         assert_eq!(
-            super::process_instruction(&Pubkey::default(), &[], &[],),
+            super::process_instruction(
+                &Pubkey::default(),
+                &[],
+                &[],
+                &mut MockInvokeContext::default()
+            ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
     }
@@ -358,7 +365,12 @@ mod tests {
                 .zip(accounts.iter())
                 .map(|(meta, account)| KeyedAccount::new(&meta.pubkey, meta.is_signer, account))
                 .collect();
-            super::process_instruction(&Pubkey::default(), &keyed_accounts, &instruction.data)
+            super::process_instruction(
+                &Pubkey::default(),
+                &keyed_accounts,
+                &instruction.data,
+                &mut MockInvokeContext::default(),
+            )
         }
     }
 

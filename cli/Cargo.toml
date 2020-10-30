@@ -40,7 +40,6 @@ solana-logger = { path = "../logger", version = "1.3.20" }
 solana-net-utils = { path = "../net-utils", version = "1.3.20" }
 solana_rbpf = "=0.1.32"
 solana-remote-wallet = { path = "../remote-wallet", version = "1.3.20" }
-solana-runtime = { path = "../runtime", version = "1.3.20" }
 solana-sdk = { path = "../sdk", version = "1.3.20" }
 solana-stake-program = { path = "../programs/stake", version = "1.3.20" }
 solana-transaction-status = { path = "../transaction-status", version = "1.3.20" }

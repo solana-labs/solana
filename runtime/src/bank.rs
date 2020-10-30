@@ -17,10 +17,6 @@ use crate::{
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     message_processor::{Executors, MessageProcessor},
-    process_instruction::{
-        ErasedProcessInstruction, ErasedProcessInstructionWithContext, Executor,
-        ProcessInstruction, ProcessInstructionWithContext,
-    },
     rent_collector::RentCollector,
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
@@ -55,6 +51,7 @@ use solana_sdk::{
     native_loader,
     native_token::sol_to_lamports,
     nonce,
+    process_instruction::{BpfComputeBudget, Executor, ProcessInstructionWithContext},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     sanitize::Sanitize,
@@ -135,49 +132,30 @@ type RentCollectionCycleParams = (
 
 type EpochCount = u64;
 
-#[derive(Copy, Clone)]
-pub enum Entrypoint {
-    Program(ProcessInstruction),
-    Loader(ProcessInstructionWithContext),
-}
-
-impl fmt::Debug for Entrypoint {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        #[derive(Debug)]
-        enum EntrypointForDebug {
-            Program(String),
-            Loader(String),
-        }
-        // rustc doesn't compile due to bug without this work around
-        // https://github.com/rust-lang/rust/issues/50280
-        // https://users.rust-lang.org/t/display-function-pointer/17073/2
-        let entrypoint = match self {
-            Entrypoint::Program(instruction) => EntrypointForDebug::Program(format!(
-                "{:p}",
-                *instruction as ErasedProcessInstruction
-            )),
-            Entrypoint::Loader(instruction) => EntrypointForDebug::Loader(format!(
-                "{:p}",
-                *instruction as ErasedProcessInstructionWithContext
-            )),
-        };
-        write!(f, "{:?}", entrypoint)
-    }
-}
-
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Builtin {
     pub name: String,
     pub id: Pubkey,
-    pub entrypoint: Entrypoint,
+    pub process_instruction_with_context: ProcessInstructionWithContext,
 }
+
 impl Builtin {
-    pub fn new(name: &str, id: Pubkey, entrypoint: Entrypoint) -> Self {
+    pub fn new(
+        name: &str,
+        id: Pubkey,
+        process_instruction_with_context: ProcessInstructionWithContext,
+    ) -> Self {
         Self {
             name: name.to_string(),
             id,
-            entrypoint,
+            process_instruction_with_context,
         }
+    }
+}
+
+impl fmt::Debug for Builtin {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Builtin [name={}, id={}]", self.name, self.id)
     }
 }
 
@@ -221,7 +199,7 @@ impl AbiExample for Builtin {
         Self {
             name: String::default(),
             id: Pubkey::default(),
-            entrypoint: Entrypoint::Program(|_, _, _| Ok(())),
+            process_instruction_with_context: |_, _, _, _| Ok(()),
         }
     }
 }
@@ -690,6 +668,8 @@ pub struct Bank {
     /// The Message processor
     message_processor: MessageProcessor,
 
+    bpf_compute_budget: Option<BpfComputeBudget>,
+
     /// Builtin programs activated dynamically by feature
     feature_builtins: Arc<Vec<(Builtin, Pubkey)>>,
 
@@ -826,6 +806,7 @@ impl Bank {
             tick_height: AtomicU64::new(parent.tick_height.load(Relaxed)),
             signature_count: AtomicU64::new(0),
             message_processor: parent.message_processor.clone(),
+            bpf_compute_budget: parent.bpf_compute_budget,
             feature_builtins: parent.feature_builtins.clone(),
             hard_forks: parent.hard_forks.clone(),
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Relaxed)),
@@ -931,6 +912,7 @@ impl Bank {
             epoch_stakes: fields.epoch_stakes,
             is_delta: AtomicBool::new(fields.is_delta),
             message_processor: new(),
+            bpf_compute_budget: None,
             feature_builtins: new(),
             last_vote_sync: new(),
             rewards: new(),
@@ -2307,6 +2289,9 @@ impl Bank {
         let mut inner_instructions: Vec<Option<InnerInstructionsList>> =
             Vec::with_capacity(txs.len());
         let mut transaction_logs: Vec<TransactionLogMessages> = Vec::with_capacity(txs.len());
+        let bpf_compute_budget = self
+            .bpf_compute_budget
+            .unwrap_or_else(|| BpfComputeBudget::new(&self.feature_set));
 
         let executed: Vec<TransactionProcessResult> = loaded_accounts
             .iter_mut()
@@ -2345,6 +2330,7 @@ impl Bank {
                         executors.clone(),
                         instruction_recorders.as_deref(),
                         self.feature_set.clone(),
+                        bpf_compute_budget,
                     );
 
                     if enable_log_recording {
@@ -3296,7 +3282,11 @@ impl Bank {
                 .extend_from_slice(&additional_builtins.feature_builtins);
         }
         for builtin in builtins.genesis_builtins {
-            self.add_builtin(&builtin.name, builtin.id, builtin.entrypoint);
+            self.add_builtin(
+                &builtin.name,
+                builtin.id,
+                builtin.process_instruction_with_context,
+            );
         }
         self.feature_builtins = Arc::new(builtins.feature_builtins);
 
@@ -3305,6 +3295,10 @@ impl Bank {
 
     pub fn set_inflation(&self, inflation: Inflation) {
         *self.inflation.write().unwrap() = inflation;
+    }
+
+    pub fn set_bpf_compute_budget(&mut self, bpf_compute_budget: Option<BpfComputeBudget>) {
+        self.bpf_compute_budget = bpf_compute_budget;
     }
 
     pub fn hard_forks(&self) -> Arc<RwLock<HardForks>> {
@@ -3741,43 +3735,17 @@ impl Bank {
         !self.is_delta.load(Relaxed)
     }
 
-    pub fn add_builtin_program(
-        &mut self,
-        name: &str,
-        program_id: Pubkey,
-        process_instruction: ProcessInstruction,
-    ) {
-        self.add_builtin(name, program_id, Entrypoint::Program(process_instruction));
-    }
-
-    pub fn add_builtin_loader(
+    /// Add an instruction processor to intercept instructions before the dynamic loader.
+    pub fn add_builtin(
         &mut self,
         name: &str,
         program_id: Pubkey,
         process_instruction_with_context: ProcessInstructionWithContext,
     ) {
-        self.add_builtin(
-            name,
-            program_id,
-            Entrypoint::Loader(process_instruction_with_context),
-        );
-    }
-
-    /// Add an instruction processor to intercept instructions before the dynamic loader.
-    pub fn add_builtin(&mut self, name: &str, program_id: Pubkey, entrypoint: Entrypoint) {
+        debug!("Added program {} under {:?}", name, program_id);
         self.add_native_program(name, &program_id);
-        match entrypoint {
-            Entrypoint::Program(process_instruction) => {
-                self.message_processor
-                    .add_program(program_id, process_instruction);
-                debug!("Added builtin program {} under {:?}", name, program_id);
-            }
-            Entrypoint::Loader(process_instruction_with_context) => {
-                self.message_processor
-                    .add_loader(program_id, process_instruction_with_context);
-                debug!("Added builtin loader {} under {:?}", name, program_id);
-            }
-        }
+        self.message_processor
+            .add_program(program_id, process_instruction_with_context);
     }
 
     pub fn clean_accounts(&self) {
@@ -3908,7 +3876,11 @@ impl Bank {
             let should_populate = init_or_warp && self.feature_set.is_active(&feature)
                 || !init_or_warp && new_feature_activations.contains(&feature);
             if should_populate {
-                self.add_builtin(&builtin.name, builtin.id, builtin.entrypoint);
+                self.add_builtin(
+                    &builtin.name,
+                    builtin.id,
+                    builtin.process_instruction_with_context,
+                );
             }
         }
     }
@@ -4037,7 +4009,6 @@ mod tests {
             BOOTSTRAP_VALIDATOR_LAMPORTS,
         },
         native_loader::NativeLoaderError,
-        process_instruction::InvokeContext,
         status_cache::MAX_CACHE_ENTRIES,
     };
     use solana_sdk::{
@@ -4050,6 +4021,7 @@ mod tests {
         message::{Message, MessageHeader},
         nonce,
         poh_config::PohConfig,
+        process_instruction::InvokeContext,
         rent::Rent,
         signature::{Keypair, Signer},
         system_instruction, system_program,
@@ -4336,6 +4308,7 @@ mod tests {
         _program_id: &Pubkey,
         keyed_accounts: &[KeyedAccount],
         data: &[u8],
+        _invoke_context: &mut dyn InvokeContext,
     ) -> result::Result<(), InstructionError> {
         if let Ok(instruction) = bincode::deserialize(data) {
             match instruction {
@@ -4485,7 +4458,7 @@ mod tests {
             ) as u64,
         );
         bank.rent_collector.slots_per_year = 421_812.0;
-        bank.add_builtin_program("mock_program", mock_program_id, mock_process_instruction);
+        bank.add_builtin("mock_program", mock_program_id, mock_process_instruction);
 
         bank
     }
@@ -7616,7 +7589,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_builtin_program() {
+    fn test_add_builtin() {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let mut bank = Bank::new(&genesis_config);
 
@@ -7627,6 +7600,7 @@ mod tests {
             program_id: &Pubkey,
             _keyed_accounts: &[KeyedAccount],
             _instruction_data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             if mock_vote_program_id() != *program_id {
                 return Err(InstructionError::IncorrectProgramId);
@@ -7635,7 +7609,7 @@ mod tests {
         }
 
         assert!(bank.get_account(&mock_vote_program_id()).is_none());
-        bank.add_builtin_program(
+        bank.add_builtin(
             "mock_vote_program",
             mock_vote_program_id(),
             mock_vote_processor,
@@ -7684,6 +7658,7 @@ mod tests {
             _pubkey: &Pubkey,
             _ka: &[KeyedAccount],
             _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Err(InstructionError::Custom(42))
         }
@@ -7708,7 +7683,7 @@ mod tests {
         );
 
         let vote_loader_account = bank.get_account(&solana_vote_program::id()).unwrap();
-        bank.add_builtin_program(
+        bank.add_builtin(
             "solana_vote_program",
             solana_vote_program::id(),
             mock_vote_processor,
@@ -7734,6 +7709,7 @@ mod tests {
             _pubkey: &Pubkey,
             _ka: &[KeyedAccount],
             _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Err(InstructionError::Custom(42))
         }
@@ -7753,15 +7729,15 @@ mod tests {
         assert!(!bank.stakes.read().unwrap().stake_delegations().is_empty());
         assert_eq!(bank.calculate_capitalization(), bank.capitalization());
 
-        bank.add_builtin_program("mock_program1", vote_id, mock_ix_processor);
-        bank.add_builtin_program("mock_program2", stake_id, mock_ix_processor);
+        bank.add_builtin("mock_program1", vote_id, mock_ix_processor);
+        bank.add_builtin("mock_program2", stake_id, mock_ix_processor);
         assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
         assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
         assert_eq!(bank.calculate_capitalization(), bank.capitalization());
 
         // Re-adding builtin programs should be no-op
-        bank.add_builtin_program("mock_program1", vote_id, mock_ix_processor);
-        bank.add_builtin_program("mock_program2", stake_id, mock_ix_processor);
+        bank.add_builtin("mock_program1", vote_id, mock_ix_processor);
+        bank.add_builtin("mock_program2", stake_id, mock_ix_processor);
         assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
         assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
         assert_eq!(bank.calculate_capitalization(), bank.capitalization());
@@ -8401,6 +8377,7 @@ mod tests {
             _program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
             let lamports = data[0] as u64;
             {
@@ -8415,7 +8392,7 @@ mod tests {
         }
 
         let mock_program_id = Pubkey::new(&[2u8; 32]);
-        bank.add_builtin_program("mock_program", mock_program_id, mock_process_instruction);
+        bank.add_builtin("mock_program", mock_program_id, mock_process_instruction);
 
         let from_pubkey = solana_sdk::pubkey::new_rand();
         let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -8453,12 +8430,13 @@ mod tests {
             _program_id: &Pubkey,
             _keyed_accounts: &[KeyedAccount],
             _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
             Ok(())
         }
 
         let mock_program_id = Pubkey::new(&[2u8; 32]);
-        bank.add_builtin_program("mock_program", mock_program_id, mock_process_instruction);
+        bank.add_builtin("mock_program", mock_program_id, mock_process_instruction);
 
         let from_pubkey = solana_sdk::pubkey::new_rand();
         let to_pubkey = solana_sdk::pubkey::new_rand();
@@ -8510,7 +8488,7 @@ mod tests {
 
         tx.message.account_keys.push(solana_sdk::pubkey::new_rand());
 
-        bank.add_builtin_program(
+        bank.add_builtin(
             "mock_vote",
             solana_vote_program::id(),
             mock_ok_vote_processor,
@@ -8564,7 +8542,7 @@ mod tests {
             AccountMeta::new(to_pubkey, false),
         ];
 
-        bank.add_builtin_program(
+        bank.add_builtin(
             "mock_vote",
             solana_vote_program::id(),
             mock_ok_vote_processor,
@@ -8597,7 +8575,7 @@ mod tests {
             AccountMeta::new(to_pubkey, false),
         ];
 
-        bank.add_builtin_program(
+        bank.add_builtin(
             "mock_vote",
             solana_vote_program::id(),
             mock_ok_vote_processor,
@@ -8635,6 +8613,7 @@ mod tests {
         _pubkey: &Pubkey,
         _ka: &[KeyedAccount],
         _data: &[u8],
+        _invoke_context: &mut dyn InvokeContext,
     ) -> std::result::Result<(), InstructionError> {
         Ok(())
     }
@@ -8652,7 +8631,7 @@ mod tests {
             AccountMeta::new(to_pubkey, false),
         ];
 
-        bank.add_builtin_program(
+        bank.add_builtin(
             "mock_vote",
             solana_vote_program::id(),
             mock_ok_vote_processor,
@@ -8688,7 +8667,7 @@ mod tests {
             .map(|i| {
                 let key = solana_sdk::pubkey::new_rand();
                 let name = format!("program{:?}", i);
-                bank.add_builtin_program(&name, key, mock_ok_vote_processor);
+                bank.add_builtin(&name, key, mock_ok_vote_processor);
                 (key, name.as_bytes().to_vec())
             })
             .collect();
@@ -8883,6 +8862,7 @@ mod tests {
             _program_id: &Pubkey,
             keyed_accounts: &[KeyedAccount],
             _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
             assert_eq!(42, keyed_accounts[0].lamports().unwrap());
             let mut account = keyed_accounts[0].try_account_ref_mut()?;
@@ -8895,7 +8875,7 @@ mod tests {
 
         // Add a new program
         let program1_pubkey = solana_sdk::pubkey::new_rand();
-        bank.add_builtin_program("program", program1_pubkey, nested_processor);
+        bank.add_builtin("program", program1_pubkey, nested_processor);
 
         // Add a new program owned by the first
         let program2_pubkey = solana_sdk::pubkey::new_rand();
@@ -9057,13 +9037,14 @@ mod tests {
     }
 
     #[test]
-    fn test_add_builtin_program_no_overwrite() {
+    fn test_add_builtin_no_overwrite() {
         let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
 
         fn mock_ix_processor(
             _pubkey: &Pubkey,
             _ka: &[KeyedAccount],
             _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
         }
@@ -9078,19 +9059,15 @@ mod tests {
         ));
         assert_eq!(bank.get_account_modified_slot(&program_id), None);
 
-        Arc::get_mut(&mut bank).unwrap().add_builtin_program(
-            "mock_program",
-            program_id,
-            mock_ix_processor,
-        );
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_builtin("mock_program", program_id, mock_ix_processor);
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
 
         let mut bank = Arc::new(new_from_parent(&bank));
-        Arc::get_mut(&mut bank).unwrap().add_builtin_program(
-            "mock_program",
-            program_id,
-            mock_ix_processor,
-        );
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_builtin("mock_program", program_id, mock_ix_processor);
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
     }
 
@@ -9117,19 +9094,15 @@ mod tests {
         ));
         assert_eq!(bank.get_account_modified_slot(&loader_id), None);
 
-        Arc::get_mut(&mut bank).unwrap().add_builtin_loader(
-            "mock_program",
-            loader_id,
-            mock_ix_processor,
-        );
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_builtin("mock_program", loader_id, mock_ix_processor);
         assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
 
         let mut bank = Arc::new(new_from_parent(&bank));
-        Arc::get_mut(&mut bank).unwrap().add_builtin_loader(
-            "mock_program",
-            loader_id,
-            mock_ix_processor,
-        );
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_builtin("mock_program", loader_id, mock_ix_processor);
         assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
     }
 
@@ -9688,26 +9661,5 @@ mod tests {
         bank.finish_init(&genesis_config, None);
         let debug = format!("{:#?}", bank);
         assert!(!debug.is_empty());
-    }
-
-    #[test]
-    fn test_debug_entrypoint() {
-        fn mock_process_instruction(
-            _program_id: &Pubkey,
-            _keyed_accounts: &[KeyedAccount],
-            _data: &[u8],
-        ) -> std::result::Result<(), InstructionError> {
-            Ok(())
-        }
-        fn mock_ix_processor(
-            _pubkey: &Pubkey,
-            _ka: &[KeyedAccount],
-            _data: &[u8],
-            _context: &mut dyn InvokeContext,
-        ) -> std::result::Result<(), InstructionError> {
-            Ok(())
-        }
-        assert!(!format!("{:?}", Entrypoint::Program(mock_process_instruction)).is_empty());
-        assert!(!format!("{:?}", Entrypoint::Loader(mock_ix_processor)).is_empty());
     }
 }

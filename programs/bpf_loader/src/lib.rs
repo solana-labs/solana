@@ -16,17 +16,15 @@ use solana_rbpf::{
     memory_region::MemoryRegion,
     vm::{Config, EbpfVm, Executable, InstructionMeter},
 };
-use solana_runtime::{
-    feature_set::compute_budget_balancing,
-    process_instruction::{ComputeMeter, Executor, InvokeContext},
-};
 use solana_sdk::{
     account::{is_executable, next_keyed_account, KeyedAccount},
     bpf_loader, bpf_loader_deprecated,
     decode_error::DecodeError,
     entrypoint::SUCCESS,
+    feature_set::bpf_compute_budget_balancing,
     instruction::InstructionError,
     loader_instruction::LoaderInstruction,
+    process_instruction::{ComputeMeter, Executor, InvokeContext},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
@@ -101,7 +99,7 @@ pub fn create_and_cache_executor(
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
     bpf_verifier::check(
         elf_bytes,
-        !invoke_context.is_feature_active(&compute_budget_balancing::id()),
+        !invoke_context.is_feature_active(&bpf_compute_budget_balancing::id()),
     )
     .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e)))?;
     let executor = Arc::new(BPFExecutor { executable });
@@ -116,12 +114,12 @@ pub fn create_vm<'a>(
     parameter_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<(EbpfVm<'a, BPFError>, MemoryRegion), EbpfError<BPFError>> {
-    let compute_budget = invoke_context.get_compute_budget();
+    let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
     let mut vm = EbpfVm::new(
         executable,
         Config {
-            max_call_depth: compute_budget.max_call_depth,
-            stack_frame_size: compute_budget.stack_frame_size,
+            max_call_depth: bpf_compute_budget.max_call_depth,
+            stack_frame_size: bpf_compute_budget.stack_frame_size,
         },
     )?;
     let heap_region =
@@ -312,102 +310,15 @@ impl Executor for BPFExecutor {
 mod tests {
     use super::*;
     use rand::Rng;
-    use solana_runtime::{
-        feature_set::FeatureSet,
-        message_processor::{Executors, ThisInvokeContext},
-        process_instruction::{ComputeBudget, Logger, ProcessInstruction},
-    };
+    use solana_runtime::message_processor::{Executors, ThisInvokeContext};
     use solana_sdk::{
-        account::Account, instruction::CompiledInstruction, instruction::Instruction,
-        message::Message, rent::Rent,
+        account::Account,
+        feature_set::FeatureSet,
+        instruction::InstructionError,
+        process_instruction::{BpfComputeBudget, MockInvokeContext},
+        rent::Rent,
     };
     use std::{cell::RefCell, fs::File, io::Read, ops::Range, rc::Rc};
-
-    #[derive(Debug, Default, Clone)]
-    pub struct MockComputeMeter {
-        pub remaining: u64,
-    }
-    impl ComputeMeter for MockComputeMeter {
-        fn consume(&mut self, amount: u64) -> Result<(), InstructionError> {
-            let exceeded = self.remaining < amount;
-            self.remaining = self.remaining.saturating_sub(amount);
-            if exceeded {
-                return Err(InstructionError::ComputationalBudgetExceeded);
-            }
-            Ok(())
-        }
-        fn get_remaining(&self) -> u64 {
-            self.remaining
-        }
-    }
-    #[derive(Debug, Default, Clone)]
-    pub struct MockLogger {
-        pub log: Rc<RefCell<Vec<String>>>,
-    }
-    impl Logger for MockLogger {
-        fn log_enabled(&self) -> bool {
-            true
-        }
-        fn log(&mut self, message: &str) {
-            self.log.borrow_mut().push(message.to_string());
-        }
-    }
-    #[derive(Debug)]
-    pub struct MockInvokeContext {
-        pub key: Pubkey,
-        pub logger: MockLogger,
-        pub compute_budget: ComputeBudget,
-        pub compute_meter: MockComputeMeter,
-    }
-    impl Default for MockInvokeContext {
-        fn default() -> Self {
-            MockInvokeContext {
-                key: Pubkey::default(),
-                logger: MockLogger::default(),
-                compute_budget: ComputeBudget::default(),
-                compute_meter: MockComputeMeter {
-                    remaining: std::u64::MAX,
-                },
-            }
-        }
-    }
-    impl InvokeContext for MockInvokeContext {
-        fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
-            Ok(())
-        }
-        fn pop(&mut self) {}
-        fn verify_and_update(
-            &mut self,
-            _message: &Message,
-            _instruction: &CompiledInstruction,
-            _accounts: &[Rc<RefCell<Account>>],
-        ) -> Result<(), InstructionError> {
-            Ok(())
-        }
-        fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
-            Ok(&self.key)
-        }
-        fn get_programs(&self) -> &[(Pubkey, ProcessInstruction)] {
-            &[]
-        }
-        fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
-            Rc::new(RefCell::new(self.logger.clone()))
-        }
-        fn get_compute_budget(&self) -> &ComputeBudget {
-            &self.compute_budget
-        }
-        fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
-            Rc::new(RefCell::new(self.compute_meter.clone()))
-        }
-        fn add_executor(&mut self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
-        fn get_executor(&mut self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
-            None
-        }
-        fn record_instruction(&self, _instruction: &Instruction) {}
-        fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
-            true
-        }
-    }
 
     struct TestInstructionMeter {
         remaining: u64,
@@ -621,9 +532,9 @@ mod tests {
             &program_id,
             Rent::default(),
             vec![],
-            vec![],
+            &[],
             None,
-            ComputeBudget {
+            BpfComputeBudget {
                 max_units: 1,
                 log_units: 100,
                 log_64_units: 100,

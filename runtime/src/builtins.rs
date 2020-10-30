@@ -1,5 +1,5 @@
 use crate::{
-    bank::{Builtin, Builtins, Entrypoint},
+    bank::{Builtin, Builtins},
     feature_set, system_instruction_processor,
 };
 use solana_sdk::{pubkey::Pubkey, system_program};
@@ -10,22 +10,22 @@ fn genesis_builtins() -> Vec<Builtin> {
         Builtin::new(
             "system_program",
             system_program::id(),
-            Entrypoint::Program(system_instruction_processor::process_instruction),
+            system_instruction_processor::process_instruction,
         ),
         Builtin::new(
             "vote_program",
             solana_vote_program::id(),
-            Entrypoint::Program(solana_vote_program::vote_instruction::process_instruction),
+            solana_vote_program::vote_instruction::process_instruction,
         ),
         Builtin::new(
             "stake_program",
             solana_stake_program::id(),
-            Entrypoint::Program(solana_stake_program::stake_instruction::process_instruction),
+            solana_stake_program::stake_instruction::process_instruction,
         ),
         Builtin::new(
             "config_program",
             solana_config_program::id(),
-            Entrypoint::Program(solana_config_program::config_processor::process_instruction),
+            solana_config_program::config_processor::process_instruction,
         ),
     ]
 }
@@ -36,7 +36,7 @@ fn feature_builtins() -> Vec<(Builtin, Pubkey)> {
         Builtin::new(
             "secp256k1_program",
             solana_sdk::secp256k1_program::id(),
-            Entrypoint::Program(solana_secp256k1_program::process_instruction),
+            solana_secp256k1_program::process_instruction,
         ),
         feature_set::secp256k1_program_enabled::id(),
     )]

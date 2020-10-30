@@ -13,9 +13,6 @@ use solana_runtime::{
     bank_client::BankClient,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::load_program,
-    process_instruction::{
-        ComputeBudget, ComputeMeter, Executor, InvokeContext, Logger, ProcessInstruction,
-    },
 };
 use solana_sdk::{
     account::{Account, KeyedAccount},
@@ -25,6 +22,7 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     message::Message,
+    process_instruction::{BpfComputeBudget, MockInvokeContext},
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     sysvar::{clock, fees, rent, slot_hashes, stake_history},
@@ -173,7 +171,7 @@ fn test_program_bpf_sanity() {
         } = create_genesis_config(50);
         let mut bank = Bank::new(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_program!();
-        bank.add_builtin_loader(&name, id, entrypoint);
+        bank.add_builtin(&name, id, entrypoint);
         let bank = Arc::new(bank);
 
         // Create bank with a specific slot, used by solana_bpf_rust_sysvar test
@@ -227,7 +225,7 @@ fn test_program_bpf_loader_deprecated() {
         } = create_genesis_config(50);
         let mut bank = Bank::new(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_deprecated_program!();
-        bank.add_builtin_loader(&name, id, entrypoint);
+        bank.add_builtin(&name, id, entrypoint);
         let bank_client = BankClient::new(bank);
 
         let program_id = load_bpf_program(
@@ -267,7 +265,7 @@ fn test_program_bpf_duplicate_accounts() {
         } = create_genesis_config(50);
         let mut bank = Bank::new(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_program!();
-        bank.add_builtin_loader(&name, id, entrypoint);
+        bank.add_builtin(&name, id, entrypoint);
         let bank = Arc::new(bank);
         let bank_client = BankClient::new_shared(&bank);
         let program_id = load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
@@ -352,7 +350,7 @@ fn test_program_bpf_error_handling() {
         } = create_genesis_config(50);
         let mut bank = Bank::new(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_program!();
-        bank.add_builtin_loader(&name, id, entrypoint);
+        bank.add_builtin(&name, id, entrypoint);
         let bank_client = BankClient::new(bank);
         let program_id = load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
         let account_metas = vec![AccountMeta::new(mint_keypair.pubkey(), true)];
@@ -469,7 +467,7 @@ fn test_program_bpf_invoke() {
         } = create_genesis_config(50);
         let mut bank = Bank::new(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_program!();
-        bank.add_builtin_loader(&name, id, entrypoint);
+        bank.add_builtin(&name, id, entrypoint);
         let bank = Arc::new(bank);
         let bank_client = BankClient::new_shared(&bank);
 
@@ -700,7 +698,7 @@ fn test_program_bpf_call_depth() {
     } = create_genesis_config(50);
     let mut bank = Bank::new(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin_loader(&name, id, entrypoint);
+    bank.add_builtin(&name, id, entrypoint);
     let bank_client = BankClient::new(bank);
     let program_id = load_bpf_program(
         &bank_client,
@@ -711,14 +709,14 @@ fn test_program_bpf_call_depth() {
 
     let instruction = Instruction::new(
         program_id,
-        &(ComputeBudget::default().max_call_depth - 1),
+        &(BpfComputeBudget::default().max_call_depth - 1),
         vec![],
     );
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
     assert!(result.is_ok());
 
     let instruction =
-        Instruction::new(program_id, &ComputeBudget::default().max_call_depth, vec![]);
+        Instruction::new(program_id, &BpfComputeBudget::default().max_call_depth, vec![]);
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
     assert!(result.is_err());
 }
@@ -857,7 +855,7 @@ fn test_program_bpf_instruction_introspection() {
     let mut bank = Bank::new(&genesis_config);
 
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin_loader(&name, id, entrypoint);
+    bank.add_builtin(&name, id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 

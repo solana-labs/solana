@@ -134,6 +134,12 @@ void sol_log_64_(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
 #define sol_log_64 sol_log_64_
 
 /**
+ * Prints the current compute unit consumption to stdout
+ */
+void sol_log_compute_units_();
+#define sol_log_compute_units() sol_log_compute_units_()
+
+/**
  * Size of Public key in bytes
  */
 #define SIZE_PUBKEY 32

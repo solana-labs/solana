@@ -86,3 +86,15 @@ pub fn sol_log_params(accounts: &[AccountInfo], data: &[u8]) {
     info!("Instruction data");
     sol_log_slice(data);
 }
+
+/// Logs the current compute unit consumption
+#[inline]
+pub fn sol_log_compute_units() {
+    unsafe {
+        sol_log_compute_units_();
+    }
+}
+
+extern "C" {
+    fn sol_log_compute_units_();
+}

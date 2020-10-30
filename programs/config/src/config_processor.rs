@@ -3,15 +3,19 @@
 use crate::ConfigKeys;
 use bincode::deserialize;
 use log::*;
-use solana_sdk::account::{next_keyed_account, KeyedAccount};
-use solana_sdk::instruction::InstructionError;
-use solana_sdk::program_utils::limited_deserialize;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{
+    account::{next_keyed_account, KeyedAccount},
+    instruction::InstructionError,
+    process_instruction::InvokeContext,
+    program_utils::limited_deserialize,
+    pubkey::Pubkey,
+};
 
 pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
+    _invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     let key_list: ConfigKeys = limited_deserialize(data)?;
     let keyed_accounts_iter = &mut keyed_accounts.iter();
@@ -108,6 +112,7 @@ mod tests {
     use serde_derive::{Deserialize, Serialize};
     use solana_sdk::{
         account::{create_keyed_is_signer_accounts, Account},
+        process_instruction::MockInvokeContext,
         signature::{Keypair, Signer},
         system_instruction::SystemInstruction,
     };
@@ -161,7 +166,12 @@ mod tests {
         let accounts = vec![(&config_pubkey, true, &config_account)];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
-            process_instruction(&id(), &keyed_accounts, &instructions[1].data),
+            process_instruction(
+                &id(),
+                &keyed_accounts,
+                &instructions[1].data,
+                &mut MockInvokeContext::default()
+            ),
             Ok(())
         );
 
@@ -191,7 +201,12 @@ mod tests {
         let accounts = vec![(&config_pubkey, true, &config_account)];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
-            process_instruction(&id(), &keyed_accounts, &instruction.data),
+            process_instruction(
+                &id(),
+                &keyed_accounts,
+                &instruction.data,
+                &mut MockInvokeContext::default()
+            ),
             Ok(())
         );
         assert_eq!(
@@ -213,7 +228,12 @@ mod tests {
         let accounts = vec![(&config_pubkey, true, &config_account)];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
-            process_instruction(&id(), &keyed_accounts, &instruction.data),
+            process_instruction(
+                &id(),
+                &keyed_accounts,
+                &instruction.data,
+                &mut MockInvokeContext::default()
+            ),
             Err(InstructionError::InvalidInstructionData)
         );
     }
@@ -231,7 +251,12 @@ mod tests {
         let accounts = vec![(&config_pubkey, false, &config_account)];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
-            process_instruction(&id(), &keyed_accounts, &instruction.data),
+            process_instruction(
+                &id(),
+                &keyed_accounts,
+                &instruction.data,
+                &mut MockInvokeContext::default()
+            ),
             Err(InstructionError::MissingRequiredSignature)
         );
     }
@@ -261,7 +286,12 @@ mod tests {
         ];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
-            process_instruction(&id(), &keyed_accounts, &instruction.data),
+            process_instruction(
+                &id(),
+                &keyed_accounts,
+                &instruction.data,
+                &mut MockInvokeContext::default()
+            ),
             Ok(())
         );
         let meta_data: ConfigKeys = deserialize(&config_account.borrow().data).unwrap();
@@ -287,7 +317,12 @@ mod tests {
         let accounts = vec![(&signer0_pubkey, true, &signer0_account)];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
-            process_instruction(&id(), &keyed_accounts, &instruction.data),
+            process_instruction(
+                &id(),
+                &keyed_accounts,
+                &instruction.data,
+                &mut MockInvokeContext::default()
+            ),
             Err(InstructionError::InvalidAccountData)
         );
     }
@@ -313,7 +348,12 @@ mod tests {
         ];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
-            process_instruction(&id(), &keyed_accounts, &instruction.data),
+            process_instruction(
+                &id(),
+                &keyed_accounts,
+                &instruction.data,
+                &mut MockInvokeContext::default()
+            ),
             Err(InstructionError::MissingRequiredSignature)
         );
 
@@ -324,7 +364,12 @@ mod tests {
         ];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
-            process_instruction(&id(), &keyed_accounts, &instruction.data),
+            process_instruction(
+                &id(),
+                &keyed_accounts,
+                &instruction.data,
+                &mut MockInvokeContext::default()
+            ),
             Err(InstructionError::MissingRequiredSignature)
         );
     }
@@ -356,7 +401,12 @@ mod tests {
         ];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
-            process_instruction(&id(), &keyed_accounts, &instruction.data),
+            process_instruction(
+                &id(),
+                &keyed_accounts,
+                &instruction.data,
+                &mut MockInvokeContext::default()
+            ),
             Ok(())
         );
 
@@ -371,7 +421,12 @@ mod tests {
         ];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
-            process_instruction(&id(), &keyed_accounts, &instruction.data),
+            process_instruction(
+                &id(),
+                &keyed_accounts,
+                &instruction.data,
+                &mut MockInvokeContext::default()
+            ),
             Ok(())
         );
         let meta_data: ConfigKeys = deserialize(&config_account.borrow().data).unwrap();
@@ -391,7 +446,12 @@ mod tests {
         ];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
-            process_instruction(&id(), &keyed_accounts, &instruction.data),
+            process_instruction(
+                &id(),
+                &keyed_accounts,
+                &instruction.data,
+                &mut MockInvokeContext::default()
+            ),
             Err(InstructionError::MissingRequiredSignature)
         );
 
@@ -409,7 +469,12 @@ mod tests {
         ];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
-            process_instruction(&id(), &keyed_accounts, &instruction.data),
+            process_instruction(
+                &id(),
+                &keyed_accounts,
+                &instruction.data,
+                &mut MockInvokeContext::default()
+            ),
             Err(InstructionError::MissingRequiredSignature)
         );
     }
@@ -442,7 +507,12 @@ mod tests {
         ];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
-            process_instruction(&id(), &keyed_accounts, &instruction.data),
+            process_instruction(
+                &id(),
+                &keyed_accounts,
+                &instruction.data,
+                &mut MockInvokeContext::default()
+            ),
             Ok(())
         );
 
@@ -456,7 +526,12 @@ mod tests {
         ];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
-            process_instruction(&id(), &keyed_accounts, &instruction.data),
+            process_instruction(
+                &id(),
+                &keyed_accounts,
+                &instruction.data,
+                &mut MockInvokeContext::default()
+            ),
             Ok(())
         );
         let meta_data: ConfigKeys = deserialize(&config_account.borrow().data).unwrap();
@@ -472,7 +547,12 @@ mod tests {
         let accounts = vec![(&config_pubkey, true, &config_account)];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
-            process_instruction(&id(), &keyed_accounts, &instruction.data),
+            process_instruction(
+                &id(),
+                &keyed_accounts,
+                &instruction.data,
+                &mut MockInvokeContext::default()
+            ),
             Err(InstructionError::MissingRequiredSignature)
         );
     }
@@ -486,7 +566,12 @@ mod tests {
         let accounts = vec![];
         let keyed_accounts = create_keyed_is_signer_accounts(&accounts);
         assert_eq!(
-            process_instruction(&id(), &keyed_accounts, &instructions[1].data),
+            process_instruction(
+                &id(),
+                &keyed_accounts,
+                &instructions[1].data,
+                &mut MockInvokeContext::default()
+            ),
             Err(InstructionError::NotEnoughAccountKeys)
         );
     }
