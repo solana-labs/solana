@@ -24,6 +24,7 @@
 //! A value is updated to a new version if the labels match, and the value
 //! wallclock is later, or the value hash is greater.
 
+use crate::contact_info::ContactInfo;
 use crate::crds_shards::CrdsShards;
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use bincode::serialize;
@@ -158,6 +159,11 @@ impl Crds {
 
     pub fn lookup_versioned(&self, label: &CrdsValueLabel) -> Option<&VersionedCrdsValue> {
         self.table.get(label)
+    }
+
+    pub fn get_contact_info(&self, pubkey: &Pubkey) -> Option<&ContactInfo> {
+        let label = CrdsValueLabel::ContactInfo(*pubkey);
+        self.table.get(&label)?.value.contact_info()
     }
 
     fn update_label_timestamp(&mut self, id: &CrdsValueLabel, now: u64) {
