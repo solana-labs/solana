@@ -103,8 +103,9 @@ where
         let parts: Vec<_> = parts.map(|p| p.unwrap()).collect();
         if !entry_checker(parts.as_slice(), entry.header().entry_type()) {
             return Err(UnpackError::Archive(format!(
-                "extra entry found: {:?}",
-                path_str
+                "extra entry found: {:?} {:?}",
+                path_str,
+                entry.header().entry_type(),
             )));
         }
         total_size = checked_total_size_sum(total_size, entry.header().size()?, limit_size)?;
@@ -451,7 +452,7 @@ mod tests {
         let mut archive = Builder::new(Vec::new());
         archive.append(&header, data).unwrap();
         let result = finalize_and_unpack_snapshot(archive);
-        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message == "extra entry found: \"foo\"");
+        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message == "extra entry found: \"foo\" Regular");
     }
 
     #[test]
