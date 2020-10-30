@@ -16,6 +16,7 @@ import {
 import { TokenRegistry } from "tokenRegistry";
 import { Cluster } from "providers/cluster";
 import { SerumMarketRegistry } from "serumMarketRegistry";
+import { MARKETS } from "@project-serum/serum";
 
 export type ProgramName = typeof PROGRAM_IDS[keyof typeof PROGRAM_IDS];
 
