@@ -113,15 +113,8 @@ pub fn create_vm<'a>(
     executable: &'a dyn Executable<BPFError>,
     parameter_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
-<<<<<<< HEAD
 ) -> Result<(EbpfVm<'a, BPFError>, MemoryRegion), EbpfError<BPFError>> {
-    let compute_budget = invoke_context.get_compute_budget();
-=======
-) -> Result<EbpfVm<'a, BPFError, ThisInstructionMeter>, EbpfError<BPFError>> {
-    let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
-    let heap_region = MemoryRegion::new_from_slice(&heap, MM_HEAP_START, true);
     let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
->>>>>>> 7d686b72a... Add Bank::set_bpf_compute_budget()
     let mut vm = EbpfVm::new(
         executable,
         Config {

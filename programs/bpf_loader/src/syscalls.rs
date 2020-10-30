@@ -96,9 +96,8 @@ pub fn register_syscalls<'a>(
     vm: &mut EbpfVm<'a, BPFError>,
     callers_keyed_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
-<<<<<<< HEAD
 ) -> Result<MemoryRegion, EbpfError<BPFError>> {
-    let compute_budget = invoke_context.get_compute_budget();
+    let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
 
     // Syscall functions common across languages
 
@@ -107,67 +106,36 @@ pub fn register_syscalls<'a>(
     vm.register_syscall_with_context_ex(
         "sol_log_",
         Box::new(SyscallLog {
-            cost: compute_budget.log_units,
-=======
-    heap: Vec<u8>,
-) -> Result<(), EbpfError<BPFError>> {
-    let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
-
-    // Syscall functions common across languages
-
-    vm.register_syscall(hash_symbol_name(b"abort"), Syscall::Function(syscall_abort))?;
-    vm.register_syscall(
-        hash_symbol_name(b"sol_panic_"),
-        Syscall::Object(Box::new(SyscallPanic { loader_id })),
-    )?;
-    vm.register_syscall(
-        hash_symbol_name(b"sol_log_"),
-        Syscall::Object(Box::new(SyscallLog {
             cost: bpf_compute_budget.log_units,
->>>>>>> 7d686b72a... Add Bank::set_bpf_compute_budget()
             compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
             loader_id,
         }),
     )?;
-<<<<<<< HEAD
     vm.register_syscall_with_context_ex(
         "sol_log_64_",
         Box::new(SyscallLogU64 {
-            cost: compute_budget.log_64_units,
-=======
-    vm.register_syscall(
-        hash_symbol_name(b"sol_log_64_"),
-        Syscall::Object(Box::new(SyscallLogU64 {
             cost: bpf_compute_budget.log_64_units,
->>>>>>> 7d686b72a... Add Bank::set_bpf_compute_budget()
             compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
         }),
     )?;
 
     if invoke_context.is_feature_active(&sol_log_compute_units_syscall::id()) {
-        vm.register_syscall(
-            hash_symbol_name(b"sol_log_compute_units_"),
-            Syscall::Object(Box::new(SyscallLogBpfComputeUnits {
+        vm.register_syscall_with_context_ex(
+            "sol_log_compute_units_",
+            Box::new(SyscallLogBpfComputeUnits {
                 cost: 0,
                 compute_meter: invoke_context.get_compute_meter(),
                 logger: invoke_context.get_logger(),
-            })),
+            }),
         )?;
     }
     if invoke_context.is_feature_active(&pubkey_log_syscall_enabled::id()) {
-<<<<<<< HEAD
         vm.register_syscall_with_context_ex(
             "sol_log_pubkey",
             Box::new(SyscallLogPubkey {
-                cost: compute_budget.log_pubkey_units,
-=======
-        vm.register_syscall(
-            hash_symbol_name(b"sol_log_pubkey"),
-            Syscall::Object(Box::new(SyscallLogPubkey {
                 cost: bpf_compute_budget.log_pubkey_units,
->>>>>>> 7d686b72a... Add Bank::set_bpf_compute_budget()
                 compute_meter: invoke_context.get_compute_meter(),
                 logger: invoke_context.get_logger(),
                 loader_id,
@@ -176,19 +144,11 @@ pub fn register_syscalls<'a>(
     }
 
     if invoke_context.is_feature_active(&sha256_syscall_enabled::id()) {
-<<<<<<< HEAD
         vm.register_syscall_with_context_ex(
             "sol_sha256",
             Box::new(SyscallSha256 {
-                sha256_base_cost: compute_budget.sha256_base_cost,
-                sha256_byte_cost: compute_budget.sha256_byte_cost,
-=======
-        vm.register_syscall(
-            hash_symbol_name(b"sol_sha256"),
-            Syscall::Object(Box::new(SyscallSha256 {
                 sha256_base_cost: bpf_compute_budget.sha256_base_cost,
                 sha256_byte_cost: bpf_compute_budget.sha256_byte_cost,
->>>>>>> 7d686b72a... Add Bank::set_bpf_compute_budget()
                 compute_meter: invoke_context.get_compute_meter(),
                 loader_id,
             }),
@@ -206,17 +166,10 @@ pub fn register_syscalls<'a>(
         )?;
     }
 
-<<<<<<< HEAD
     vm.register_syscall_with_context_ex(
         "sol_create_program_address",
         Box::new(SyscallCreateProgramAddress {
-            cost: compute_budget.create_program_address_units,
-=======
-    vm.register_syscall(
-        hash_symbol_name(b"sol_create_program_address"),
-        Syscall::Object(Box::new(SyscallCreateProgramAddress {
             cost: bpf_compute_budget.create_program_address_units,
->>>>>>> 7d686b72a... Add Bank::set_bpf_compute_budget()
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         }),
@@ -484,7 +437,8 @@ impl SyscallObject<BPFError> for SyscallLogBpfComputeUnits {
         _arg3: u64,
         _arg4: u64,
         _arg5: u64,
-        _memory_mapping: &MemoryMapping,
+        _ro_regions: &[MemoryRegion],
+        _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
         self.compute_meter.consume(self.cost)?;
         let mut logger = self

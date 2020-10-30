@@ -10,7 +10,6 @@ pub mod bank_forks;
 pub mod bank_utils;
 mod blockhash_queue;
 pub mod bloom;
-pub mod bpf_test_utils;
 pub mod builtins;
 pub mod commitment;
 pub mod epoch_stakes;
