@@ -10,13 +10,13 @@ use std::{
 pub struct AccountInfo<'a> {
     /// Public key of the account
     pub key: &'a Pubkey,
-    // Was the transaction signed by this account's public key?
+    /// Was the transaction signed by this account's public key?
     pub is_signer: bool,
-    // Is the account writable?
+    /// Is the account writable?
     pub is_writable: bool,
-    /// Account members that are mutable by the program
+    /// The lamports in the account.  Modifiable by programs.
     pub lamports: Rc<RefCell<&'a mut u64>>,
-    /// Account members that are mutable by the program
+    /// The data held in this account.  Modifiable by programs.
     pub data: Rc<RefCell<&'a mut [u8]>>,
     /// Program that owns this account
     pub owner: &'a Pubkey,
