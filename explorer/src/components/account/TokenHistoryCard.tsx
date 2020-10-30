@@ -3,6 +3,7 @@ import {
   PublicKey,
   ConfirmedSignatureInfo,
   ParsedInstruction,
+  PartiallyDecodedInstruction,
 } from "@solana/web3.js";
 import { CacheEntry, FetchStatus } from "providers/cache";
 import {
@@ -31,6 +32,11 @@ import {
   IX_TITLES,
 } from "components/instruction/token/types";
 import { reportError } from "utils/sentry";
+import {
+  intoTransactionInstruction,
+  isSerumInstruction,
+  parseSerumInstructionTitle,
+} from "utils/tx";
 
 export function TokenHistoryCard({ pubkey }: { pubkey: PublicKey }) {
   const address = pubkey.toBase58();
@@ -301,11 +307,29 @@ const TokenTransactionRow = React.memo(
       );
 
     const tokenInstructionNames = instructions
-      .map((ix): string | undefined => {
+      .map((ix, index): string | undefined => {
+        let transactionInstruction;
+        if (details?.data?.transaction?.transaction) {
+          transactionInstruction = intoTransactionInstruction(
+            details.data.transaction.transaction,
+            index
+          );
+        }
+
         if ("parsed" in ix) {
           if (ix.program === "spl-token") {
             return instructionTypeName(ix, tx);
           } else {
+            return undefined;
+          }
+        } else if (
+          transactionInstruction &&
+          isSerumInstruction(transactionInstruction)
+        ) {
+          try {
+            return parseSerumInstructionTitle(transactionInstruction);
+          } catch (error) {
+            reportError(error, { signature: tx.signature });
             return undefined;
           }
         } else {

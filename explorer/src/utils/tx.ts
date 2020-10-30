@@ -16,6 +16,7 @@ import {
 import { TokenRegistry } from "tokenRegistry";
 import { Cluster } from "providers/cluster";
 import { SerumMarketRegistry } from "serumMarketRegistry";
+import { MARKETS } from "@project-serum/serum";
 
 export const EXTERNAL_PROGRAMS: { [key: string]: string } = {
   Serum: "4ckmDgGdxQoPDLUkDT3vHgSAkzA3QRdNq5ywwY4sUSJn",
@@ -129,7 +130,13 @@ export function intoParsedTransaction(tx: Transaction): ParsedTransaction {
 }
 
 export function isSerumInstruction(instruction: TransactionInstruction) {
-  return instruction.programId.toBase58() === EXTERNAL_PROGRAMS["Serum"];
+  return (
+    instruction.programId.toBase58() === EXTERNAL_PROGRAMS["Serum"] ||
+    MARKETS.some(
+      (market) =>
+        market.programId && market.programId.equals(instruction.programId)
+    )
+  );
 }
 
 const SERUM_CODE_LOOKUP: { [key: number]: string } = {
