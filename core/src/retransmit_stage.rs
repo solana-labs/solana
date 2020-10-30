@@ -167,7 +167,23 @@ fn update_retransmit_stats(
         packets_by_slot.clear();
         drop(packets_by_slot);
         let mut packets_by_source = stats.packets_by_source.lock().unwrap();
-        info!("retransmit: packets_by_source: {:?}", packets_by_source);
+        let mut top = BTreeMap::new();
+        let mut max = 0;
+        for (source, num) in packets_by_source.iter() {
+            if *num > max {
+                top.insert(*num, source.clone());
+                if top.len() > 5 {
+                    let last = *top.iter().next().unwrap().0;
+                    top.remove(&last);
+                }
+                max = *top.iter().next().unwrap().0;
+            }
+        }
+        info!(
+            "retransmit: top packets_by_source: {:?} len: {}",
+            top,
+            packets_by_source.len()
+        );
         packets_by_source.clear();
     }
 }
