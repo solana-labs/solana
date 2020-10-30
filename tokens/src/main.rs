@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let url = Url::parse(&rpc_banks_url)?;
     let host_port = (url.host_str().unwrap(), url.port().unwrap());
 
-    let mut runtime = Runtime::new().unwrap();
+    let runtime = Runtime::new().unwrap();
     let mut banks_client = runtime.block_on(start_tcp_client(&host_port))?;
 
     match command_args.command {

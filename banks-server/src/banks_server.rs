@@ -38,7 +38,7 @@ use tarpc::{
     server::{self, Channel, Handler},
     transport,
 };
-use tokio::time::delay_for;
+use tokio::time::sleep;
 use tokio_serde::formats::Bincode;
 
 #[derive(Clone)]
@@ -118,7 +118,7 @@ impl BanksServer {
             .bank(commitment)
             .get_signature_status_with_blockhash(signature, blockhash);
         while status.is_none() {
-            delay_for(Duration::from_millis(200)).await;
+            sleep(Duration::from_millis(200)).await;
             let bank = self.bank(commitment);
             if bank.slot() > last_valid_slot {
                 break;
