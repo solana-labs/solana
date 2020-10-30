@@ -31,10 +31,6 @@ pub mod transaction_batch;
 pub mod transaction_utils;
 pub mod vote_sender_types;
 
-// TODO: Refactor all feature users to reference the solana_sdk definitions directly and remove the
-// next line
-use solana_sdk::{feature, feature_set};
-
 extern crate solana_config_program;
 extern crate solana_stake_program;
 extern crate solana_vote_program;

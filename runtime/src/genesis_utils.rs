@@ -1,6 +1,7 @@
-use crate::{feature::Feature, feature_set::FeatureSet};
 use solana_sdk::{
     account::Account,
+    feature::{self, Feature},
+    feature_set::FeatureSet,
     fee_calculator::FeeRateGovernor,
     genesis_config::{ClusterType, GenesisConfig},
     pubkey::Pubkey,
@@ -127,15 +128,14 @@ pub fn create_genesis_config_with_leader(
 pub fn activate_all_features(genesis_config: &mut GenesisConfig) {
     // Activate all features at genesis in development mode
     for feature_id in FeatureSet::default().inactive {
-        let feature = Feature {
-            activated_at: Some(0),
-        };
         genesis_config.accounts.insert(
             feature_id,
-            feature.create_account(std::cmp::max(
-                genesis_config.rent.minimum_balance(Feature::size_of()),
-                1,
-            )),
+            feature::create_account(
+                &Feature {
+                    activated_at: Some(0),
+                },
+                std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1),
+            ),
         );
     }
 }
