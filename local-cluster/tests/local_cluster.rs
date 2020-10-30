@@ -43,6 +43,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     system_transaction,
 };
+use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
     collections::{HashMap, HashSet},
@@ -1630,7 +1631,7 @@ fn purge_slots(blockstore: &Blockstore, start_slot: Slot, slot_count: Slot) {
     blockstore.purge_slots(start_slot, start_slot + slot_count, PurgeType::Exact);
 }
 
-fn last_vote_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
+fn restore_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Tower> {
     let tower = Tower::restore(&ledger_path, &node_pubkey);
     if let Err(tower_err) = tower {
         if tower_err.is_file_missing() {
@@ -1640,11 +1641,15 @@ fn last_vote_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> 
         }
     }
     // actually saved tower must have at least one vote.
-    let last_vote = Tower::restore(&ledger_path, &node_pubkey)
-        .unwrap()
-        .last_voted_slot()
-        .unwrap();
-    Some(last_vote)
+    Tower::restore(&ledger_path, &node_pubkey).ok()
+}
+
+fn last_vote_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
+    restore_tower(ledger_path, node_pubkey).map(|tower| tower.last_voted_slot().unwrap())
+}
+
+fn root_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
+    restore_tower(ledger_path, node_pubkey).map(|tower| tower.root())
 }
 
 fn remove_tower(ledger_path: &Path, node_pubkey: &Pubkey) {
@@ -1863,6 +1868,118 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     } else {
         info!("THIS TEST expected no violation. And indeed, there was none, thanks to persisted tower.");
     }
+}
+
+enum ClusterMode {
+    MasterOnly,
+    MasterSlave,
+}
+
+fn do_test_future_tower(cluster_mode: ClusterMode) {
+    solana_logger::setup();
+
+    // First set up the cluster with 4 nodes
+    let slots_per_epoch = 2048;
+    let node_stakes = match cluster_mode {
+        ClusterMode::MasterOnly => vec![100],
+        ClusterMode::MasterSlave => vec![100, 0],
+    };
+
+    let validator_keys = vec![
+        "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+        "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
+    ]
+    .iter()
+    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+    .take(node_stakes.len())
+    .collect::<Vec<_>>();
+    let validators = validator_keys
+        .iter()
+        .map(|(kp, _)| kp.pubkey())
+        .collect::<Vec<_>>();
+    let validator_a_pubkey = match cluster_mode {
+        ClusterMode::MasterOnly => validators[0],
+        ClusterMode::MasterSlave => validators[1],
+    };
+
+    let config = ClusterConfig {
+        cluster_lamports: 100_000,
+        node_stakes: node_stakes.clone(),
+        validator_configs: vec![ValidatorConfig::default(); node_stakes.len()],
+        validator_keys: Some(validator_keys),
+        slots_per_epoch,
+        stakers_slot_offset: slots_per_epoch,
+        skip_warmup_slots: true,
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&config);
+
+    let val_a_ledger_path = cluster.ledger_path(&validator_a_pubkey);
+
+    loop {
+        sleep(Duration::from_millis(100));
+
+        if let Some(root) = root_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
+            if root >= 15 {
+                break;
+            }
+        }
+    }
+    let purged_slot_before_restart = 10;
+    let validator_a_info = cluster.exit_node(&validator_a_pubkey);
+    {
+        // create a warped future tower without mangling the tower itself
+        info!(
+            "Revert blockstore before slot {} and effectively create a future tower",
+            purged_slot_before_restart,
+        );
+        let blockstore = open_blockstore(&val_a_ledger_path);
+        purge_slots(&blockstore, purged_slot_before_restart, 100);
+    }
+
+    cluster.restart_node(&validator_a_pubkey, validator_a_info);
+
+    let mut newly_rooted = false;
+    let some_root_after_restart = purged_slot_before_restart + 25; // 25 is arbitrary; just wait a bit
+    for _ in 0..600 {
+        sleep(Duration::from_millis(100));
+
+        if let Some(root) = root_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
+            if root >= some_root_after_restart {
+                newly_rooted = true;
+                break;
+            }
+        }
+    }
+    let _validator_a_info = cluster.exit_node(&validator_a_pubkey);
+    if newly_rooted {
+        // there should be no forks; i.e. monotonically increasing ancestor chain
+        let last_vote = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey).unwrap();
+        let blockstore = open_blockstore(&val_a_ledger_path);
+        let actual_block_ancestors = AncestorIterator::new_inclusive(last_vote, &blockstore)
+            .take_while(|a| *a >= some_root_after_restart)
+            .collect::<Vec<_>>();
+        let expected_countinuous_no_fork_votes = (some_root_after_restart..=last_vote)
+            .rev()
+            .collect::<Vec<_>>();
+        assert_eq!(actual_block_ancestors, expected_countinuous_no_fork_votes);
+        assert!(actual_block_ancestors.len() > MAX_LOCKOUT_HISTORY);
+        info!("validator managed to handle future tower!");
+    } else {
+        panic!("no root detected");
+    }
+}
+
+#[test]
+#[serial]
+fn test_future_tower_master_only() {
+    do_test_future_tower(ClusterMode::MasterOnly);
+}
+
+#[test]
+#[serial]
+fn test_future_tower_master_slave() {
+    do_test_future_tower(ClusterMode::MasterSlave);
 }
 
 #[test]
