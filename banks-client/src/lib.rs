@@ -216,7 +216,7 @@ mod tests {
     use solana_sdk::{message::Message, signature::Signer, system_instruction};
     use std::sync::{Arc, RwLock};
     use tarpc::transport;
-    use tokio::{runtime::Runtime, time::delay_for};
+    use tokio::{runtime::Runtime, time::sleep};
 
     #[test]
     fn test_banks_client_new() {
@@ -285,7 +285,7 @@ mod tests {
                 if root_slot > last_valid_slot {
                     break;
                 }
-                delay_for(Duration::from_millis(100)).await;
+                sleep(Duration::from_millis(100)).await;
                 status = banks_client.get_transaction_status(signature).await?;
             }
             assert!(status.unwrap().err.is_none());

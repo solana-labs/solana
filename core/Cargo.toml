@@ -72,7 +72,7 @@ solana-vote-signer = { path = "../vote-signer", version = "1.5.0" }
 spl-token-v2-0 = { package = "spl-token", version = "=2.0.8" }
 tempfile = "3.1.0"
 thiserror = "1.0"
-tokio = { version = "0.2.22", features = ["full"] }
+tokio = { version = "0.2", features = ["full"] }
 tokio_01 = { version = "0.1", package = "tokio" }
 tokio_fs_01 = { version = "0.1", package = "tokio-fs" }
 tokio_io_01 = { version = "0.1", package = "tokio-io" }

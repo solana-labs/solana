@@ -27,7 +27,7 @@ use std::{
     io,
     time::Duration,
 };
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 struct Allocation {
@@ -417,7 +417,7 @@ async fn finalize_transactions(
         }
 
         // Sleep for about 1 slot
-        delay_for(Duration::from_millis(500)).await;
+        sleep(Duration::from_millis(500)).await;
         let opt_conf = update_finalized_transactions(client, db).await?;
         opt_confirmations = opt_conf;
     }
