@@ -371,7 +371,7 @@ impl<'a> SyscallObject<BPFError> for SyscallLog<'a> {
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
         self.compute_meter.consume(self.cost)?;
-        let mut logger = self
+        let logger = self
             .logger
             .try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
@@ -409,7 +409,7 @@ impl SyscallObject<BPFError> for SyscallLogU64 {
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
         self.compute_meter.consume(self.cost)?;
-        let mut logger = self
+        let logger = self
             .logger
             .try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
@@ -441,7 +441,7 @@ impl SyscallObject<BPFError> for SyscallLogBpfComputeUnits {
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
         self.compute_meter.consume(self.cost)?;
-        let mut logger = self
+        let logger = self
             .logger
             .try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
@@ -474,7 +474,7 @@ impl<'a> SyscallObject<BPFError> for SyscallLogPubkey<'a> {
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
         self.compute_meter.consume(self.cost)?;
-        let mut logger = self
+        let logger = self
             .logger
             .try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
