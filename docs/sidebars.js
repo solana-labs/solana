@@ -174,6 +174,7 @@ module.exports = {
         ],
       },
       "implemented-proposals/abi-management",
+      "implemented-proposals/bank-timestamp-correction",
       "implemented-proposals/commitment",
       "implemented-proposals/cross-program-invocation",
       "implemented-proposals/durable-tx-nonces",
