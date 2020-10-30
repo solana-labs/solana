@@ -371,7 +371,7 @@ impl<'a> SyscallObject<BPFError> for SyscallLog<'a> {
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
         self.compute_meter.consume(self.cost)?;
-        let mut logger = self
+        let logger = self
             .logger
             .try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
@@ -409,7 +409,7 @@ impl SyscallObject<BPFError> for SyscallLogU64 {
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
         self.compute_meter.consume(self.cost)?;
-        let mut logger = self
+        let logger = self
             .logger
             .try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
@@ -441,7 +441,7 @@ impl SyscallObject<BPFError> for SyscallLogBpfComputeUnits {
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
         self.compute_meter.consume(self.cost)?;
-        let mut logger = self
+        let logger = self
             .logger
             .try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
@@ -474,7 +474,7 @@ impl<'a> SyscallObject<BPFError> for SyscallLogPubkey<'a> {
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
         self.compute_meter.consume(self.cost)?;
-        let mut logger = self
+        let logger = self
             .logger
             .try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
@@ -1222,13 +1222,9 @@ fn call<'a>(
         return Err(SyscallError::InstructionError(InstructionError::AccountNotExecutable).into());
     }
     let executable_accounts = vec![(callee_program_id, program_account)];
-    let mut message_processor = MessageProcessor::default();
-    for (program_id, process_instruction) in invoke_context.get_programs().iter() {
-        message_processor.add_program(*program_id, *process_instruction);
-    }
 
     #[allow(clippy::deref_addrof)]
-    match message_processor.process_cross_program_instruction(
+    match MessageProcessor::process_cross_program_instruction(
         &message,
         &executable_accounts,
         &accounts,

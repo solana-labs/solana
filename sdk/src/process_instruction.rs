@@ -52,9 +52,9 @@ pub trait InvokeContext {
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>>;
     /// Loaders may need to do work in order to execute a program.  Cache
     /// the work that can be re-used across executions
-    fn add_executor(&mut self, pubkey: &Pubkey, executor: Arc<dyn Executor>);
+    fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>);
     /// Get the completed loader work that can be re-used across executions
-    fn get_executor(&mut self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>>;
+    fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>>;
     /// Record invoked instruction
     fn record_instruction(&self, instruction: &Instruction);
     /// Get the bank's active feature set
@@ -156,7 +156,7 @@ pub trait ComputeMeter {
 pub trait Logger {
     fn log_enabled(&self) -> bool;
     /// Log a message
-    fn log(&mut self, message: &str);
+    fn log(&self, message: &str);
 }
 
 /// Program executor
@@ -197,7 +197,7 @@ impl Logger for MockLogger {
     fn log_enabled(&self) -> bool {
         true
     }
-    fn log(&mut self, message: &str) {
+    fn log(&self, message: &str) {
         self.log.borrow_mut().push(message.to_string());
     }
 }
@@ -249,8 +249,8 @@ impl InvokeContext for MockInvokeContext {
     fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
         Rc::new(RefCell::new(self.compute_meter.clone()))
     }
-    fn add_executor(&mut self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
-    fn get_executor(&mut self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
+    fn add_executor(&self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
+    fn get_executor(&self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         None
     }
     fn record_instruction(&self, _instruction: &Instruction) {}
