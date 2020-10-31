@@ -16,7 +16,7 @@ export function isSerumInstruction(instruction: TransactionInstruction) {
 const SERUM_CODE_LOOKUP: { [key: number]: string } = {
   0: "Initialize Market",
   1: "New Order",
-  2: "Match Order",
+  2: "Match Orders",
   3: "Consume Events",
   4: "Cancel Order",
   5: "Settle Funds",
