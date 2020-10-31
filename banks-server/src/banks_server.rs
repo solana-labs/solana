@@ -5,11 +5,7 @@ use futures::{
     prelude::stream::{self, StreamExt},
 };
 use solana_banks_interface::{Banks, BanksRequest, BanksResponse, TransactionStatus};
-use solana_runtime::{
-    bank::Bank,
-    bank_forks::BankForks,
-    commitment::{BlockCommitmentCache, CommitmentSlots},
-};
+use solana_runtime::{bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache};
 use solana_sdk::{
     account::Account,
     clock::Slot,
@@ -21,7 +17,6 @@ use solana_sdk::{
     transaction::{self, Transaction},
 };
 use std::{
-    collections::HashMap,
     io,
     net::{Ipv4Addr, SocketAddr},
     sync::{
@@ -84,11 +79,9 @@ impl BanksServer {
         let (transaction_sender, transaction_receiver) = channel();
         let bank = bank_forks.read().unwrap().working_bank();
         let slot = bank.slot();
-        let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
-            HashMap::default(),
-            0,
-            CommitmentSlots::new_from_slot(slot),
-        )));
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::new_for_tests_with_slots(slot, slot),
+        ));
         Builder::new()
             .name("solana-bank-forks-client".to_string())
             .spawn(move || Self::run(&bank, transaction_receiver))
