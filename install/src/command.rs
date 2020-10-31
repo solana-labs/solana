@@ -425,19 +425,19 @@ fn add_to_path(new_path: &str) -> Result<bool, String> {
     let mut modified_rcfiles = false;
 
     // Look for sh, bash, and zsh rc files
-    let mut rcfiles = vec![dirs::home_dir().map(|p| p.join(".profile"))];
+    let mut rcfiles = vec![dirs_next::home_dir().map(|p| p.join(".profile"))];
     if let Ok(shell) = std::env::var("SHELL") {
         if shell.contains("zsh") {
             let zdotdir = std::env::var("ZDOTDIR")
                 .ok()
                 .map(PathBuf::from)
-                .or_else(dirs::home_dir);
+                .or_else(dirs_next::home_dir);
             let zprofile = zdotdir.map(|p| p.join(".zprofile"));
             rcfiles.push(zprofile);
         }
     }
 
-    if let Some(bash_profile) = dirs::home_dir().map(|p| p.join(".bash_profile")) {
+    if let Some(bash_profile) = dirs_next::home_dir().map(|p| p.join(".bash_profile")) {
         // Only update .bash_profile if it exists because creating .bash_profile
         // will cause .profile to not be read
         if bash_profile.exists() {

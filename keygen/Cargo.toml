@@ -11,7 +11,7 @@ edition = "2018"
 [dependencies]
 bs58 = "0.3.1"
 clap = "2.33"
-dirs = "2.0.2"
+dirs-next = "2.0.0"
 num_cpus = "1.13.0"
 solana-clap-utils = { path = "../clap-utils", version = "1.5.0" }
 solana-cli-config = { path = "../cli-config", version = "1.5.0" }

@@ -9,7 +9,7 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
-dirs = "2.0.2"
+dirs-next = "2.0.0"
 lazy_static = "1.4.0"
 serde = "1.0.112"
 serde_derive = "1.0.103"
