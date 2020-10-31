@@ -31,15 +31,15 @@ import {
   IX_TITLES,
 } from "components/instruction/token/types";
 import { reportError } from "utils/sentry";
-import {
-  intoTransactionInstruction,
-  isSerumInstruction,
-  parseSerumInstructionTitle,
-} from "utils/tx";
+import { intoTransactionInstruction } from "utils/tx";
 import {
   isTokenSwapInstruction,
   parseTokenSwapInstructionTitle,
 } from "components/instruction/token-swap/types";
+import {
+  isSerumInstruction,
+  parseSerumInstructionTitle,
+} from "components/instruction/serum/types";
 
 export function TokenHistoryCard({ pubkey }: { pubkey: PublicKey }) {
   const address = pubkey.toBase58();

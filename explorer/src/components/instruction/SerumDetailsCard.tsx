@@ -1,9 +1,9 @@
 import React from "react";
 import { TransactionInstruction, SignatureResult } from "@solana/web3.js";
 import { InstructionCard } from "./InstructionCard";
-import { parseSerumInstructionTitle } from "utils/tx";
 import { useCluster } from "providers/cluster";
 import { reportError } from "utils/sentry";
+import { parseSerumInstructionTitle } from "./serum/types";
 
 export function SerumDetailsCard({
   ix,
