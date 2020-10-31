@@ -171,7 +171,7 @@ all_test_steps() {
       - "queue=cuda"
   - command: "ci/live-cluster-sanity.sh"
     name: "live-cluster"
-    timeout_in_minutes: 30
+    timeout_in_minutes: 40
     artifact_paths:
       - "*/validator.log"
       - "*/sys-tuner.log"
