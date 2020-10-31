@@ -202,12 +202,12 @@ impl Logger for MockLogger {
     }
 }
 
-#[derive(Debug)]
 pub struct MockInvokeContext {
     pub key: Pubkey,
     pub logger: MockLogger,
     pub bpf_compute_budget: BpfComputeBudget,
     pub compute_meter: MockComputeMeter,
+    pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
 }
 impl Default for MockInvokeContext {
     fn default() -> Self {
@@ -218,6 +218,7 @@ impl Default for MockInvokeContext {
             compute_meter: MockComputeMeter {
                 remaining: std::i64::MAX as u64,
             },
+            programs: vec![],
         }
     }
 }
@@ -238,7 +239,7 @@ impl InvokeContext for MockInvokeContext {
         Ok(&self.key)
     }
     fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
-        &[]
+        &self.programs
     }
     fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
         Rc::new(RefCell::new(self.logger.clone()))
