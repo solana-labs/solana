@@ -1,7 +1,6 @@
 solana_sdk::pubkeys!(
     testnet_validators,
     [
-        "121CY7X4snhJcTEJAWG1Q2psae3uSGzXHL",
         "123vij84ecQEKUvQ7gYMKxKwKF6PbYSzCzzURYA4xULY",
         "12NG4Y7LGq8VQgtDZxn82ok4eGUEqmhzKh3wZtsakjLN",
         "12Y25eHzGPaK5R5DjQ1kgJWuVd7zrtQ7cmaMPfmacsJV",
