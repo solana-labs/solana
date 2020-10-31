@@ -519,8 +519,8 @@ impl Stake {
         let mut points = 0;
         let mut new_credits_observed = self.credits_observed;
 
-        for (epoch, final_epoch_credits, initial_epoch_credits) in
-            new_vote_state.epoch_credits().iter().copied()
+        if let Some((epoch, final_epoch_credits, initial_epoch_credits)) =
+            new_vote_state.epoch_credits().last().copied()
         {
             let stake = u128::from(self.delegation.stake(
                 epoch,
@@ -535,7 +535,7 @@ impl Stake {
                 final_epoch_credits - initial_epoch_credits
             } else if self.credits_observed < final_epoch_credits {
                 // the staker registered sometime during the epoch, partial credit
-                final_epoch_credits - new_credits_observed
+                final_epoch_credits - self.credits_observed
             } else {
                 // the staker has already observed or been redeemed this epoch
                 //  or was activated after this epoch
@@ -543,8 +543,8 @@ impl Stake {
             };
             let earned_credits = u128::from(earned_credits);
 
-            // don't want to assume anything about order of the iterator...
-            new_credits_observed = new_credits_observed.max(final_epoch_credits);
+            // try to update credits_observed
+            new_credits_observed = final_epoch_credits;
 
             // finally calculate points for this epoch
             points += stake * earned_credits;
