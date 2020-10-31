@@ -52,7 +52,7 @@ fn get_keypair_from_matches(
     config: Config,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<Box<dyn Signer>, Box<dyn error::Error>> {
-    let mut path = dirs::home_dir().expect("home directory");
+    let mut path = dirs_next::home_dir().expect("home directory");
     let path = if matches.is_present("keypair") {
         matches.value_of("keypair").unwrap()
     } else if config.keypair_path != "" {
@@ -421,7 +421,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             }
         }
         ("new", Some(matches)) => {
-            let mut path = dirs::home_dir().expect("home directory");
+            let mut path = dirs_next::home_dir().expect("home directory");
             let outfile = if matches.is_present("outfile") {
                 matches.value_of("outfile")
             } else if matches.is_present("no_outfile") {
@@ -478,7 +478,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             }
         }
         ("recover", Some(matches)) => {
-            let mut path = dirs::home_dir().expect("home directory");
+            let mut path = dirs_next::home_dir().expect("home directory");
             let outfile = if matches.is_present("outfile") {
                 matches.value_of("outfile").unwrap()
             } else {

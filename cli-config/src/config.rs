@@ -5,7 +5,7 @@ use url::Url;
 
 lazy_static! {
     pub static ref CONFIG_FILE: Option<String> = {
-        dirs::home_dir().map(|mut path| {
+        dirs_next::home_dir().map(|mut path| {
             path.extend(&[".config", "solana", "cli", "config.yml"]);
             path.to_str().unwrap().to_string()
         })
@@ -25,7 +25,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         let keypair_path = {
-            let mut keypair_path = dirs::home_dir().expect("home directory");
+            let mut keypair_path = dirs_next::home_dir().expect("home directory");
             keypair_path.extend(&[".config", "solana", "id.json"]);
             keypair_path.to_str().unwrap().to_string()
         };
