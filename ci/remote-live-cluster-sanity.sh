@@ -12,7 +12,7 @@ handle_error() {
 show_log() {
   if find cluster-sanity/log-tail -not -empty | grep ^ > /dev/null; then
     echo "##### new log:"
-    timeout 1 cat cluster-sanity/log-tail | tail -n 3 | cut -c 1-300 || true
+    timeout 0.01 cat cluster-sanity/log-tail | tail -n 3 | cut -c 1-300 || true
     truncate --size 0 cluster-sanity/log-tail
     echo
   fi
@@ -37,6 +37,7 @@ sudo ./solana-sys-tuner --user "$(whoami)" &> "$sys_tuner_log" &
 sys_tuner_pid=$!
 
 (
+  echo "$(date): VALIDATOR STARTED." &&
   ./solana-validator \
     --ledger cluster-sanity/ledger \
     --no-untrusted-rpc \
@@ -48,9 +49,11 @@ sys_tuner_pid=$!
     --rpc-bind-address localhost \
     --snapshot-interval-slots 0 \
     "$@" &&
+  echo "$(date): VALIDATOR FINISHED AND LEDGER-TOOL STARTED." &&
   ./solana-ledger-tool \
     --ledger cluster-sanity/ledger \
-    verify
+    verify &&
+  echo "$(date): LEDGER-TOOL FINISHED."
 ) &> "$validator_log" &
 
 validator_then_ledger_tool_pid=$!
@@ -101,7 +104,7 @@ curl \
   -d '{"jsonrpc":"2.0","id":1, "method":"validatorExit"}' \
   http://localhost:8899
 
-attempts=200
+attempts=400
 while [[ -d "/proc/$validator_then_ledger_tool_pid" ]]; do
   attempts=$((attempts - 1))
   if [[ (($attempts == 0)) ]]; then
