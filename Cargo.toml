@@ -38,6 +38,7 @@ members = [
     "net-shaper",
     "notifier",
     "poh-bench",
+    "program-test",
     "programs/secp256k1",
     "programs/bpf_loader",
     "programs/budget",
