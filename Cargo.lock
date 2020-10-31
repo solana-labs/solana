@@ -499,14 +499,25 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "chrono"
-version = "0.4.11"
+version = "0.4.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80094f509cf8b5ae86a4966a39b3ff66cd7e2a3e594accec3743ff3fabeab5b2"
+checksum = "670ad68c9088c2a963aaa298cb369688cf3f9465ce5e2d4ca10e6e0098a1ce73"
 dependencies = [
+ "libc",
  "num-integer",
  "num-traits",
  "serde",
  "time 0.1.43",
+ "winapi 0.3.8",
+]
+
+[[package]]
+name = "chrono-humanize"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0a4c32145b4db85fe1c4f2b125a4f9493769df424f5f84baf6b04ea8eaf33c9"
+dependencies = [
+ "chrono",
 ]
 
 [[package]]
@@ -4514,6 +4525,23 @@ dependencies = [
  "solana-logger 1.5.0",
  "solana-sdk-macro 1.5.0",
  "thiserror",
+]
+
+[[package]]
+name = "solana-program-test"
+version = "1.5.0"
+dependencies = [
+ "base64 0.12.3",
+ "chrono",
+ "chrono-humanize",
+ "log 0.4.8",
+ "solana-banks-client",
+ "solana-banks-server",
+ "solana-bpf-loader-program",
+ "solana-logger 1.5.0",
+ "solana-program",
+ "solana-runtime",
+ "solana-sdk 1.5.0",
 ]
 
 [[package]]
