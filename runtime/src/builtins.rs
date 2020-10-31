@@ -1,8 +1,8 @@
 use crate::{
     bank::{Builtin, Builtins},
-    feature_set, system_instruction_processor,
+    system_instruction_processor,
 };
-use solana_sdk::{pubkey::Pubkey, system_program};
+use solana_sdk::{feature_set, pubkey::Pubkey, system_program};
 
 /// Builtin programs that are always available
 fn genesis_builtins() -> Vec<Builtin> {
