@@ -29,6 +29,8 @@ import { TokenDetailsCard } from "components/instruction/token/TokenDetailsCard"
 import { FetchStatus } from "providers/cache";
 import { SerumDetailsCard } from "components/instruction/SerumDetailsCard";
 import { Slot } from "components/common/Slot";
+import { isTokenSwapInstruction } from "components/instruction/token-swap/types";
+import { TokenSwapDetailsCard } from "components/instruction/TokenSwapDetailsCard";
 
 const AUTO_REFRESH_INTERVAL = 2000;
 const ZERO_CONFIRMATION_BAILOUT = 5;
@@ -467,6 +469,8 @@ function InstructionsSection({ signature }: SignatureProps) {
 
       if (isSerumInstruction(ix)) {
         return <SerumDetailsCard key={index} {...props} />;
+      } else if (isTokenSwapInstruction(ix)) {
+        return <TokenSwapDetailsCard key={index} {...props} />;
       } else {
         return <UnknownDetailsCard key={index} {...props} />;
       }

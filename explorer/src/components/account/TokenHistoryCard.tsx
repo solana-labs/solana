@@ -3,7 +3,6 @@ import {
   PublicKey,
   ConfirmedSignatureInfo,
   ParsedInstruction,
-  PartiallyDecodedInstruction,
 } from "@solana/web3.js";
 import { CacheEntry, FetchStatus } from "providers/cache";
 import {
@@ -37,6 +36,10 @@ import {
   isSerumInstruction,
   parseSerumInstructionTitle,
 } from "utils/tx";
+import {
+  isTokenSwapInstruction,
+  parseTokenSwapInstructionTitle,
+} from "components/instruction/token-swap/types";
 
 export function TokenHistoryCard({ pubkey }: { pubkey: PublicKey }) {
   const address = pubkey.toBase58();
@@ -328,6 +331,16 @@ const TokenTransactionRow = React.memo(
         ) {
           try {
             return parseSerumInstructionTitle(transactionInstruction);
+          } catch (error) {
+            reportError(error, { signature: tx.signature });
+            return undefined;
+          }
+        } else if (
+          transactionInstruction &&
+          isTokenSwapInstruction(transactionInstruction)
+        ) {
+          try {
+            return parseTokenSwapInstructionTitle(transactionInstruction);
           } catch (error) {
             reportError(error, { signature: tx.signature });
             return undefined;
