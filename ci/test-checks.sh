@@ -67,6 +67,11 @@ cargo_audit_ignores=(
   #
   # Blocked on https://github.com/paritytech/jsonrpc/issues/575
   --ignore RUSTSEC-2020-0016
+
+  # stdweb is unmaintained
+  #
+  # Blocked on multiple upstream crates removing their `stdweb` dependency.
+  --ignore RUSTSEC-2020-0056
 )
 _ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit "${cargo_audit_ignores[@]}"
 
