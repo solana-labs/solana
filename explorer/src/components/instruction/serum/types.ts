@@ -1,7 +1,295 @@
-import { MARKETS } from "@project-serum/serum";
-import { TransactionInstruction } from "@solana/web3.js";
+/* eslint-disable @typescript-eslint/no-redeclare */
+
+import { decodeInstruction, MARKETS } from "@project-serum/serum";
+import { PublicKey, TransactionInstruction } from "@solana/web3.js";
+import BN from "bn.js";
+import { coerce, enums, optional, pick, StructType } from "superstruct";
+import { BigNumValue } from "validators/bignum";
+import { Pubkey } from "validators/pubkey";
 
 const SERUM_PROGRAM_ID = "4ckmDgGdxQoPDLUkDT3vHgSAkzA3QRdNq5ywwY4sUSJn";
+
+export type Side = StructType<typeof Side>;
+export const Side = enums(["buy", "sell"]);
+
+export type OrderType = StructType<typeof OrderType>;
+export const OrderType = enums(["limit", "ioc", "postOnly"]);
+
+export type InitializeMarket = {
+  market: PublicKey;
+  requestQueue: PublicKey;
+  eventQueue: PublicKey;
+  bids: PublicKey;
+  asks: PublicKey;
+  baseVault: PublicKey;
+  quoteVault: PublicKey;
+  baseMint: PublicKey;
+  quoteMint: PublicKey;
+  baseLotSize: BN;
+  quoteLotSize: BN;
+  feeRateBps: BN;
+  vaultSignerNonce: PublicKey;
+  quoteDustThreshold: BN;
+  programId: PublicKey;
+};
+
+export const InitializeMarketDecode = pick({
+  baseLotSize: BigNumValue,
+  quoteLotSize: BigNumValue,
+  feeRateBps: BigNumValue,
+  quoteDustThreshold: BigNumValue,
+  vaultSignerNonce: Pubkey,
+});
+
+export function BuildInitializeMarket(
+  ix: TransactionInstruction
+): InitializeMarket {
+  const decoded = coerce(
+    decodeInstruction(ix.data).initializeMarket,
+    InitializeMarketDecode
+  );
+
+  let initializeMarket: InitializeMarket = {
+    market: ix.keys[0].pubkey,
+    requestQueue: ix.keys[1].pubkey,
+    eventQueue: ix.keys[2].pubkey,
+    bids: ix.keys[3].pubkey,
+    asks: ix.keys[4].pubkey,
+    baseVault: ix.keys[5].pubkey,
+    quoteVault: ix.keys[6].pubkey,
+    baseMint: ix.keys[7].pubkey,
+    quoteMint: ix.keys[8].pubkey,
+    programId: ix.programId,
+    baseLotSize: decoded.baseLotSize as BN,
+    quoteLotSize: decoded.quoteLotSize as BN,
+    feeRateBps: decoded.feeRateBps as BN,
+    quoteDustThreshold: decoded.quoteDustThreshold as BN,
+    vaultSignerNonce: decoded.vaultSignerNonce,
+  };
+
+  return initializeMarket;
+}
+
+export type NewOrder = {
+  market: PublicKey;
+  openOrders: PublicKey;
+  requestQueue: PublicKey;
+  payer: PublicKey;
+  owner: PublicKey;
+  baseVault: PublicKey;
+  quoteVault: PublicKey;
+  programId: PublicKey;
+  feeDiscountPubkey?: PublicKey;
+  side: Side;
+  limitPrice: BN;
+  maxQuantity: BN;
+  orderType: OrderType;
+  clientId: BN;
+};
+
+export const NewOrderDecode = pick({
+  side: Side,
+  limitPrice: BigNumValue,
+  maxQuantity: BigNumValue,
+  orderType: OrderType,
+  clientId: BigNumValue,
+  feeDiscountPubkey: optional(Pubkey),
+});
+
+export function BuildNewOrder(ix: TransactionInstruction): NewOrder {
+  const decoded = coerce(decodeInstruction(ix.data).newOrder, NewOrderDecode);
+
+  let newOrder: NewOrder = {
+    market: ix.keys[0].pubkey,
+    openOrders: ix.keys[1].pubkey,
+    requestQueue: ix.keys[2].pubkey,
+    payer: ix.keys[3].pubkey,
+    owner: ix.keys[4].pubkey,
+    baseVault: ix.keys[5].pubkey,
+    quoteVault: ix.keys[6].pubkey,
+    programId: ix.keys[7].pubkey,
+    side: decoded.side as Side,
+    limitPrice: decoded.limitPrice as BN,
+    maxQuantity: decoded.maxQuantity as BN,
+    orderType: decoded.orderType as OrderType,
+    clientId: decoded.clientId as BN,
+  };
+
+  if (decoded.feeDiscountPubkey) {
+    newOrder.feeDiscountPubkey = decoded.feeDiscountPubkey;
+  }
+
+  return newOrder;
+}
+
+export type MatchOrders = {
+  market: PublicKey;
+  requestQueue: PublicKey;
+  eventQueue: PublicKey;
+  bids: PublicKey;
+  asks: PublicKey;
+  baseVault: PublicKey;
+  quoteVault: PublicKey;
+  limit: BN;
+  programId: PublicKey;
+};
+
+export const MatchOrdersDecode = pick({
+  limit: BigNumValue,
+});
+
+export function BuildMatchOrders(ix: TransactionInstruction): MatchOrders {
+  const decoded = coerce(
+    decodeInstruction(ix.data).matchOrders,
+    MatchOrdersDecode
+  );
+
+  const matchOrders: MatchOrders = {
+    market: ix.keys[0].pubkey,
+    requestQueue: ix.keys[1].pubkey,
+    eventQueue: ix.keys[2].pubkey,
+    bids: ix.keys[3].pubkey,
+    asks: ix.keys[4].pubkey,
+    baseVault: ix.keys[5].pubkey,
+    quoteVault: ix.keys[6].pubkey,
+    programId: ix.programId,
+    limit: decoded.limit as BN,
+  };
+
+  return matchOrders;
+}
+
+export type ConsumeEvents = {
+  market: PublicKey;
+  eventQueue: PublicKey;
+  openOrdersAccounts: PublicKey[];
+  limit: BN;
+  programId: PublicKey;
+};
+
+export const ConsumeEventsDecode = pick({
+  limit: BigNumValue,
+});
+
+export function BuildConsumeEvents(ix: TransactionInstruction): ConsumeEvents {
+  const decoded = coerce(
+    decodeInstruction(ix.data).consumeEvents,
+    ConsumeEventsDecode
+  );
+
+  const consumeEvents: ConsumeEvents = {
+    openOrdersAccounts: ix.keys.slice(0, -2).map((k) => k.pubkey),
+    market: ix.keys[ix.keys.length - 3].pubkey,
+    eventQueue: ix.keys[ix.keys.length - 2].pubkey,
+    programId: ix.programId,
+    limit: decoded.limit as BN,
+  };
+
+  return consumeEvents;
+}
+
+export type CancelOrder = {
+  market: PublicKey;
+  openOrders: PublicKey;
+  owner: PublicKey;
+  requestQueue: PublicKey;
+  side: "buy" | "sell";
+  orderId: BN;
+  openOrdersSlot: BN;
+  programId: PublicKey;
+};
+
+export const CancelOrderDecode = pick({
+  side: Side,
+  orderId: BigNumValue,
+  openOrdersSlot: BigNumValue,
+});
+
+export function BuildCancelOrder(ix: TransactionInstruction): CancelOrder {
+  const decoded = coerce(
+    decodeInstruction(ix.data).cancelOrder,
+    CancelOrderDecode
+  );
+
+  const cancelOrder: CancelOrder = {
+    market: ix.keys[0].pubkey,
+    openOrders: ix.keys[1].pubkey,
+    requestQueue: ix.keys[2].pubkey,
+    owner: ix.keys[3].pubkey,
+    programId: ix.programId,
+    openOrdersSlot: decoded.openOrdersSlot as BN,
+    orderId: decoded.orderId as BN,
+    side: decoded.side,
+  };
+
+  return cancelOrder;
+}
+
+export type CancelOrderByClientId = {
+  market: PublicKey;
+  openOrders: PublicKey;
+  owner: PublicKey;
+  requestQueue: PublicKey;
+  clientId: BN;
+  programId: PublicKey;
+};
+
+export const CancelOrderByClientIdDecode = pick({
+  clientId: BigNumValue,
+});
+
+export function BuildCancelOrderByClientId(
+  ix: TransactionInstruction
+): CancelOrderByClientId {
+  const decoded = coerce(
+    decodeInstruction(ix.data),
+    CancelOrderByClientIdDecode
+  );
+
+  const cancelOrderByClientId: CancelOrderByClientId = {
+    market: ix.keys[0].pubkey,
+    openOrders: ix.keys[1].pubkey,
+    requestQueue: ix.keys[2].pubkey,
+    owner: ix.keys[3].pubkey,
+    programId: ix.programId,
+    clientId: decoded.clientId as BN,
+  };
+
+  return cancelOrderByClientId;
+}
+
+export type SettleFunds = {
+  market: PublicKey;
+  openOrders: PublicKey;
+  owner: PublicKey;
+  baseVault: PublicKey;
+  quoteVault: PublicKey;
+  baseWallet: PublicKey;
+  quoteWallet: PublicKey;
+  vaultSigner: PublicKey;
+  programId: PublicKey;
+  referrerQuoteWallet?: PublicKey;
+};
+
+export function BuildSettleFunds(ix: TransactionInstruction): SettleFunds {
+  let settleFunds: SettleFunds = {
+    market: ix.keys[0].pubkey,
+    openOrders: ix.keys[1].pubkey,
+    owner: ix.keys[2].pubkey,
+    baseVault: ix.keys[3].pubkey,
+    quoteVault: ix.keys[4].pubkey,
+    baseWallet: ix.keys[5].pubkey,
+    quoteWallet: ix.keys[6].pubkey,
+    vaultSigner: ix.keys[7].pubkey,
+    programId: ix.keys[8].pubkey,
+  };
+
+  if (ix.keys.length > 9) {
+    settleFunds.referrerQuoteWallet = ix.keys[9].pubkey;
+  }
+
+  return settleFunds;
+}
 
 export function isSerumInstruction(instruction: TransactionInstruction) {
   return (
@@ -11,6 +299,23 @@ export function isSerumInstruction(instruction: TransactionInstruction) {
         market.programId && market.programId.equals(instruction.programId)
     )
   );
+}
+
+export function parseSerumInstructionKey(
+  instruction: TransactionInstruction
+): string {
+  try {
+    const decoded = decodeInstruction(instruction.data);
+    const keys = Object.keys(decoded);
+
+    if (keys.length < 1) {
+      throw new Error("Serum instruction key not decoded");
+    }
+
+    return keys[0];
+  } catch (error) {
+    throw new Error(`Problem parsing Serum instruction; ${error}`);
+  }
 }
 
 const SERUM_CODE_LOOKUP: { [key: number]: string } = {
