@@ -407,37 +407,45 @@ impl Stake {
     ///   for credits_observed were the points paid
     pub fn calculate_points_and_credits(
         &self,
-        vote_state: &VoteState,
+        new_vote_state: &VoteState,
         stake_history: Option<&StakeHistory>,
     ) -> (u128, u64) {
-        if self.credits_observed >= vote_state.credits() {
+        // if there is no newer credits since observed, return no point
+        if new_vote_state.credits() <= self.credits_observed {
             return (0, 0);
         }
 
-        let mut credits_observed = self.credits_observed;
-        let mut points = 0u128;
-        for (epoch, credits, prev_credits) in vote_state.epoch_credits() {
+        let mut points = 0;
+        let mut new_credits_observed = self.credits_observed;
+
+        for (epoch, final_epoch_credits, initial_epoch_credits) in
+            new_vote_state.epoch_credits().iter().copied()
+        {
+            let stake = u128::from(self.delegation.stake(epoch, stake_history));
+
             // figure out how much this stake has seen that
             //   for which the vote account has a record
-            let epoch_credits = if self.credits_observed < *prev_credits {
+            let earned_credits = if self.credits_observed < initial_epoch_credits {
                 // the staker observed the entire epoch
-                credits - prev_credits
-            } else if self.credits_observed < *credits {
+                final_epoch_credits - initial_epoch_credits
+            } else if self.credits_observed < final_epoch_credits {
                 // the staker registered sometime during the epoch, partial credit
-                credits - credits_observed
+                final_epoch_credits - new_credits_observed
             } else {
                 // the staker has already observed or been redeemed this epoch
                 //  or was activated after this epoch
                 0
             };
-
-            points += u128::from(self.delegation.stake(*epoch, stake_history))
-                * u128::from(epoch_credits);
+            let earned_credits = u128::from(earned_credits);
 
             // don't want to assume anything about order of the iterator...
-            credits_observed = credits_observed.max(*credits);
+            new_credits_observed = new_credits_observed.max(final_epoch_credits);
+
+            // finally calculate points for this epoch
+            points += stake * earned_credits;
         }
-        (points, credits_observed)
+
+        (points, new_credits_observed)
     }
 
     /// for a given stake and vote_state, calculate what distributions and what updates should be made
