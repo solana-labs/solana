@@ -79,14 +79,15 @@ pub type UnixTimestamp = i64;
 pub struct Clock {
     /// the current network/bank Slot
     pub slot: Slot,
-    /// unused
-    pub unused: u64,
+    /// the timestamp of the first Slot in this Epoch
+    pub epoch_start_timestamp: UnixTimestamp,
     /// the bank Epoch
     pub epoch: Epoch,
     /// the future Epoch for which the leader schedule has
     ///  most recently been calculated
     pub leader_schedule_epoch: Epoch,
-    /// computed from genesis creation time and network time
-    ///  in slots, drifts!
+    /// originally computed from genesis creation time and network time
+    /// in slots (drifty); corrected using validator timestamp oracle as of
+    /// timestamp_correction and timestamp_bounding features
     pub unix_timestamp: UnixTimestamp,
 }

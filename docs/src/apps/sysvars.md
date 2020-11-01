@@ -20,6 +20,28 @@ epoch, and estimated wall-clock Unix timestamp. It is updated every slot.
 
 - Address: `SysvarC1ock11111111111111111111111111111111`
 - Layout: [Clock](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/clock/struct.Clock.html)
+- Fields:
+  - `slot`: the current slot
+  - `epoch_start_timestamp`: the Unix timestamp of the first slot in this epoch. In the first slot of an epoch, this timestamp is identical to the `unix_timestamp` (below).
+  - `epoch`: the current epoch
+  - `leader_schedule_epoch`: the most recent epoch for which the leader schedule has already been generated
+  - `unix_timestamp`: the Unix timestamp of this slot.
+
+  Each slot has an estimated duration based on Proof of History. But in reality,
+  slots may elapse faster and slower than this estimate. As a result, the Unix
+  timestamp of a slot is generated based on oracle input from voting validators.
+  This timestamp is calculated as the stake-weighted median of timestamp
+  estimates provided by votes, bounded by the expected time elapsed since the
+  start of the epoch.
+
+  More explicitly: for each slot, the most recent vote timestamp provided by
+  each validator is used to generate a timestamp estimate for the current slot
+  (the elapsed slots since the vote timestamp are assumed to be
+  Bank::ns_per_slot). Each timestamp estimate is associated with the stake
+  delegated to that vote account to create a distribution of timestamps by
+  stake. The median timestamp is used as the `unix_timestamp`, unless the
+  elapsed time since the `epoch_start_timestamp` has deviated from the expected
+  elapsed time by more than 25%.
 
 ## EpochSchedule
 
