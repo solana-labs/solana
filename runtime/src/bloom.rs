@@ -146,16 +146,42 @@ impl<T: BloomHashIndex> From<Bloom<T>> for AtomicBloom<T> {
 }
 
 impl<T: BloomHashIndex> AtomicBloom<T> {
+    fn pos(&self, key: &T, hash_index: u64) -> (usize, u64) {
+        let pos = key.hash_at_index(hash_index) % self.num_bits;
+        // Divide by 64 to figure out which of the
+        // AtomicU64 bit chunks we need to modify.
+        let index = pos >> 6;
+        // (pos & 63) is equivalent to mod 64 so that we can find
+        // the index of the bit within the AtomicU64 to modify.
+        let mask = 1u64 << (pos & 63);
+        (index as usize, mask)
+    }
+
     pub fn add(&self, key: &T) {
         for k in &self.keys {
-            let pos = key.hash_at_index(*k) % self.num_bits;
-            // Divide by 64 to figure out which of the
-            // AtomicU64 bit chunks we need to modify.
-            let index = pos >> 6;
-            // (pos & 63) is equivalent to mod 64 so that we can find
-            // the index of the bit within the AtomicU64 to modify.
-            let bit = 1u64 << (pos & 63);
-            self.bits[index as usize].fetch_or(bit, Ordering::Relaxed);
+            let (index, mask) = self.pos(key, *k);
+            self.bits[index].fetch_or(mask, Ordering::Relaxed);
+        }
+    }
+
+    pub fn contains(&self, key: &T) -> bool {
+        self.keys.iter().all(|k| {
+            let (index, mask) = self.pos(key, *k);
+            let bit = self.bits[index].load(Ordering::Relaxed) & mask;
+            bit != 0u64
+        })
+    }
+
+    // Only for tests and simulations.
+    pub fn mock_clone(&self) -> Self {
+        Self {
+            keys: self.keys.clone(),
+            bits: self
+                .bits
+                .iter()
+                .map(|v| AtomicU64::new(v.load(Ordering::Relaxed)))
+                .collect(),
+            ..*self
         }
     }
 }
