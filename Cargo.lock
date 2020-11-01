@@ -4904,6 +4904,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-store-tool"
+version = "1.5.0"
+dependencies = [
+ "clap",
+ "log 0.4.8",
+ "solana-logger 1.5.0",
+ "solana-measure",
+ "solana-runtime",
+ "solana-sdk 1.5.0",
+ "solana-version",
+]
+
+[[package]]
 name = "solana-streamer"
 version = "1.5.0"
 dependencies = [

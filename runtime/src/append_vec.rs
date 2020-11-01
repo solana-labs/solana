@@ -111,11 +111,14 @@ pub struct AppendVec {
     append_offset: Mutex<usize>,
     current_len: AtomicUsize,
     file_size: u64,
+    remove_on_drop: bool,
 }
 
 impl Drop for AppendVec {
     fn drop(&mut self) {
-        let _ignored = remove_file(&self.path);
+        if self.remove_on_drop {
+            let _ignored = remove_file(&self.path);
+        }
     }
 }
 
@@ -176,11 +179,16 @@ impl AppendVec {
             append_offset: Mutex::new(initial_len),
             current_len: AtomicUsize::new(initial_len),
             file_size: size as u64,
+            remove_on_drop: true,
         }
     }
 
+    pub fn set_no_remove_on_drop(&mut self) {
+        self.remove_on_drop = false;
+    }
+
     #[allow(clippy::mutex_atomic)]
-    pub(crate) fn new_empty_map(current_len: usize) -> Self {
+    pub fn new_empty_map(current_len: usize) -> Self {
         let map = MmapMut::map_anon(1).unwrap_or_else(|e| {
             error!(
                 "Failed to create VM map for snapshot. {:?}\n
@@ -196,6 +204,7 @@ impl AppendVec {
             append_offset: Mutex::new(current_len),
             current_len: AtomicUsize::new(current_len),
             file_size: 0, // will be filled by set_file()
+            remove_on_drop: true,
         }
     }
 

@@ -53,6 +53,7 @@ members = [
     "remote-wallet",
     "ramp-tps",
     "runtime",
+    "runtime/store-tool",
     "sdk",
     "sdk/cargo-build-bpf",
     "scripts",
