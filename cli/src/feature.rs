@@ -331,7 +331,6 @@ fn process_activate(
     }
 
     let rent = rpc_client.get_minimum_balance_for_rent_exemption(Feature::size_of())?;
-
     let (blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let (message, _) = resolve_spend_tx_and_check_account_balance(
         rpc_client,
@@ -340,14 +339,10 @@ fn process_activate(
         &fee_calculator,
         &config.signers[0].pubkey(),
         |lamports| {
-            Message::new(
-                &feature::activate_with_lamports(
-                    &feature_id,
-                    &config.signers[0].pubkey(),
-                    lamports,
-                ),
-                Some(&config.signers[0].pubkey()),
-            )
+            let mut instructions =
+                feature::propose(&feature_id, &config.signers[0].pubkey(), lamports);
+            instructions.push(feature::approve(&feature_id));
+            Message::new(&instructions, Some(&config.signers[0].pubkey()))
         },
         config.commitment,
     )?;

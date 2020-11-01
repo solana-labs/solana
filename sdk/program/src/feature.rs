@@ -9,7 +9,7 @@
 ///
 use crate::{
     account_info::AccountInfo, clock::Slot, instruction::Instruction, program_error::ProgramError,
-    pubkey::Pubkey, rent::Rent, system_instruction,
+    pubkey::Pubkey, system_instruction,
 };
 
 crate::declare_id!("Feature111111111111111111111111111111111111");
@@ -35,25 +35,29 @@ impl Feature {
     }
 }
 
-/// Activate a feature
-pub fn activate(feature_id: &Pubkey, funding_address: &Pubkey, rent: &Rent) -> Vec<Instruction> {
-    activate_with_lamports(
-        feature_id,
-        funding_address,
-        rent.minimum_balance(Feature::size_of()),
-    )
-}
-
-pub fn activate_with_lamports(
-    feature_id: &Pubkey,
-    funding_address: &Pubkey,
-    lamports: u64,
-) -> Vec<Instruction> {
+/// Propose a feature
+///
+/// Accounts expected:
+/// * `feature_id: [writeable,signer]` - The account representing the feature
+/// * `funding_address: [writeable,signer]` - The funding account for the feature
+///
+/// It's recommended that the feature account be funded with
+/// `rent.minimum_balance(Feature::size_of())` lamports.
+///
+pub fn propose(feature_id: &Pubkey, funding_address: &Pubkey, lamports: u64) -> Vec<Instruction> {
     vec![
         system_instruction::transfer(funding_address, feature_id, lamports),
         system_instruction::allocate(feature_id, Feature::size_of() as u64),
-        system_instruction::assign(feature_id, &id()),
     ]
+}
+
+/// Approve a proposed feature.
+///
+/// Accounts expected:
+/// * `feature_id: [writeable,signer]` - The account representing the feature
+///
+pub fn approve(feature_id: &Pubkey) -> Instruction {
+    system_instruction::assign(feature_id, &id())
 }
 
 #[cfg(test)]
