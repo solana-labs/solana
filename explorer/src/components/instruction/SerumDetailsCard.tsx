@@ -14,51 +14,49 @@ import {
   parseSerumInstructionKey,
   parseSerumInstructionTitle,
 } from "./serum/types";
+import { NewOrderDetailsCard } from "./serum/NewOrderDetailsCard";
+import { MatchOrdersDetailsCard } from "./serum/MatchOrdersDetailsCard";
+import { InitializeMarketDetailsCard } from "./serum/InitializeMarketDetailsCard";
+import { ConsumeEventsDetailsCard } from "./serum/ConsumeEventsDetails";
+import { CancelOrderDetailsCard } from "./serum/CancelOrderDetails";
+import { CancelOrderByClientIdDetailsCard } from "./serum/CancelOrderByClientIdDetails";
+import { SettleFundsDetailsCard } from "./serum/SettleFundsDetailsCard";
 
-export function SerumDetailsCard({
-  ix,
-  index,
-  result,
-  signature,
-}: {
+export function SerumDetailsCard(props: {
   ix: TransactionInstruction;
   index: number;
   result: SignatureResult;
   signature: string;
 }) {
+  const {
+    ix,
+    index,
+    result,
+    signature,
+  } = props;
+
   const { url } = useCluster();
 
   let title;
   try {
     title = parseSerumInstructionTitle(ix);
 
-    const key = parseSerumInstructionKey(ix);
-
-    switch (key) {
+    switch (parseSerumInstructionKey(ix)) {
       case "initializeMarket":
-        const initializeMarket = BuildInitializeMarket(ix);
-        break;
+        return <InitializeMarketDetailsCard info={BuildInitializeMarket(ix)} {...props} />
       case "newOrder":
-        const newOrder = BuildNewOrder(ix);
-        break;
+        return <NewOrderDetailsCard info={BuildNewOrder(ix)} {...props}/>
       case "matchOrders":
-        const matchOrders = BuildMatchOrders(ix);
-        break;
+        return <MatchOrdersDetailsCard info={BuildMatchOrders(ix)} {...props} />
       case "consumeEvents":
-        const consumeEvents = BuildConsumeEvents(ix);
-        break;
+        return <ConsumeEventsDetailsCard info={BuildConsumeEvents(ix)} {...props} />
       case "cancelOrder":
-        const cancelOrder = BuildCancelOrder(ix);
-        break;
+        return <CancelOrderDetailsCard info={BuildCancelOrder(ix)} {...props} />
       case "cancelOrderByClientId":
-        const cancelOrderByClientId = BuildCancelOrderByClientId(ix);
-        break;
+        return <CancelOrderByClientIdDetailsCard info={BuildCancelOrderByClientId(ix)} {...props} />
       case "settleFunds":
-        const settleFunds = BuildSettleFunds(ix);
-        break;
+        return <SettleFundsDetailsCard info={BuildSettleFunds(ix)} {...props} />
     }
-
-    console.log(key);
   } catch (error) {
     reportError(error, {
       url: url,

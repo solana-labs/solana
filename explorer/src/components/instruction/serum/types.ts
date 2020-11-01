@@ -3,7 +3,7 @@
 import { decodeInstruction, MARKETS } from "@project-serum/serum";
 import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
-import { coerce, enums, optional, pick, StructType } from "superstruct";
+import { coerce, enums, number, optional, pick, StructType } from "superstruct";
 import { BigNumValue } from "validators/bignum";
 import { Pubkey } from "validators/pubkey";
 
@@ -27,8 +27,8 @@ export type InitializeMarket = {
   quoteMint: PublicKey;
   baseLotSize: BN;
   quoteLotSize: BN;
-  feeRateBps: BN;
-  vaultSignerNonce: PublicKey;
+  feeRateBps: number;
+  vaultSignerNonce: BN;
   quoteDustThreshold: BN;
   programId: PublicKey;
 };
@@ -36,9 +36,9 @@ export type InitializeMarket = {
 export const InitializeMarketDecode = pick({
   baseLotSize: BigNumValue,
   quoteLotSize: BigNumValue,
-  feeRateBps: BigNumValue,
+  feeRateBps: number(),
   quoteDustThreshold: BigNumValue,
-  vaultSignerNonce: Pubkey,
+  vaultSignerNonce: BigNumValue,
 });
 
 export function BuildInitializeMarket(
@@ -62,9 +62,9 @@ export function BuildInitializeMarket(
     programId: ix.programId,
     baseLotSize: decoded.baseLotSize as BN,
     quoteLotSize: decoded.quoteLotSize as BN,
-    feeRateBps: decoded.feeRateBps as BN,
+    feeRateBps: decoded.feeRateBps,
     quoteDustThreshold: decoded.quoteDustThreshold as BN,
-    vaultSignerNonce: decoded.vaultSignerNonce,
+    vaultSignerNonce: decoded.vaultSignerNonce as BN,
   };
 
   return initializeMarket;
@@ -107,7 +107,7 @@ export function BuildNewOrder(ix: TransactionInstruction): NewOrder {
     owner: ix.keys[4].pubkey,
     baseVault: ix.keys[5].pubkey,
     quoteVault: ix.keys[6].pubkey,
-    programId: ix.keys[7].pubkey,
+    programId: ix.programId,
     side: decoded.side as Side,
     limitPrice: decoded.limitPrice as BN,
     maxQuantity: decoded.maxQuantity as BN,
@@ -130,12 +130,12 @@ export type MatchOrders = {
   asks: PublicKey;
   baseVault: PublicKey;
   quoteVault: PublicKey;
-  limit: BN;
+  limit: number;
   programId: PublicKey;
 };
 
 export const MatchOrdersDecode = pick({
-  limit: BigNumValue,
+  limit: number(),
 });
 
 export function BuildMatchOrders(ix: TransactionInstruction): MatchOrders {
@@ -153,7 +153,7 @@ export function BuildMatchOrders(ix: TransactionInstruction): MatchOrders {
     baseVault: ix.keys[5].pubkey,
     quoteVault: ix.keys[6].pubkey,
     programId: ix.programId,
-    limit: decoded.limit as BN,
+    limit: decoded.limit,
   };
 
   return matchOrders;
@@ -163,12 +163,12 @@ export type ConsumeEvents = {
   market: PublicKey;
   eventQueue: PublicKey;
   openOrdersAccounts: PublicKey[];
-  limit: BN;
+  limit: number;
   programId: PublicKey;
 };
 
 export const ConsumeEventsDecode = pick({
-  limit: BigNumValue,
+  limit: number(),
 });
 
 export function BuildConsumeEvents(ix: TransactionInstruction): ConsumeEvents {
@@ -182,7 +182,7 @@ export function BuildConsumeEvents(ix: TransactionInstruction): ConsumeEvents {
     market: ix.keys[ix.keys.length - 3].pubkey,
     eventQueue: ix.keys[ix.keys.length - 2].pubkey,
     programId: ix.programId,
-    limit: decoded.limit as BN,
+    limit: decoded.limit,
   };
 
   return consumeEvents;
@@ -195,14 +195,14 @@ export type CancelOrder = {
   requestQueue: PublicKey;
   side: "buy" | "sell";
   orderId: BN;
-  openOrdersSlot: BN;
+  openOrdersSlot: number;
   programId: PublicKey;
 };
 
 export const CancelOrderDecode = pick({
   side: Side,
   orderId: BigNumValue,
-  openOrdersSlot: BigNumValue,
+  openOrdersSlot: number(),
 });
 
 export function BuildCancelOrder(ix: TransactionInstruction): CancelOrder {
@@ -217,7 +217,7 @@ export function BuildCancelOrder(ix: TransactionInstruction): CancelOrder {
     requestQueue: ix.keys[2].pubkey,
     owner: ix.keys[3].pubkey,
     programId: ix.programId,
-    openOrdersSlot: decoded.openOrdersSlot as BN,
+    openOrdersSlot: decoded.openOrdersSlot,
     orderId: decoded.orderId as BN,
     side: decoded.side,
   };
@@ -281,7 +281,7 @@ export function BuildSettleFunds(ix: TransactionInstruction): SettleFunds {
     baseWallet: ix.keys[5].pubkey,
     quoteWallet: ix.keys[6].pubkey,
     vaultSigner: ix.keys[7].pubkey,
-    programId: ix.keys[8].pubkey,
+    programId: ix.programId,
   };
 
   if (ix.keys.length > 9) {
