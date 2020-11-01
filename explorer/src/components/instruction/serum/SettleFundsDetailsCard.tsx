@@ -1,8 +1,5 @@
 import React from "react";
-import {
-  SignatureResult,
-  TransactionInstruction,
-} from "@solana/web3.js";
+import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
 import { SettleFunds } from "./types";
@@ -64,7 +61,6 @@ export function SettleFundsDetailsCard(props: {
         </td>
       </tr>
 
-
       <tr>
         <td>Base Wallet</td>
         <td className="text-lg-right">
@@ -86,14 +82,14 @@ export function SettleFundsDetailsCard(props: {
         </td>
       </tr>
 
-      {info.referrerQuoteWallet &&
+      {info.referrerQuoteWallet && (
         <tr>
           <td>Referrer Quote Wallet</td>
           <td className="text-lg-right">
             <Address pubkey={info.referrerQuoteWallet} alignRight link />
           </td>
-       </tr>
-      }
+        </tr>
+      )}
     </InstructionCard>
   );
 }

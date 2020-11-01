@@ -1,8 +1,5 @@
 import React from "react";
-import {
-  SignatureResult,
-  TransactionInstruction,
-} from "@solana/web3.js";
+import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
 import { InitializeMarket } from "./types";
@@ -94,23 +91,17 @@ export function InitializeMarketDetailsCard(props: {
 
       <tr>
         <td>Base Lot Size</td>
-        <td className="text-lg-right">
-          {info.baseLotSize.toString(10)}
-        </td>
+        <td className="text-lg-right">{info.baseLotSize.toString(10)}</td>
       </tr>
 
       <tr>
         <td>Quote Lot Size</td>
-        <td className="text-lg-right">
-          {info.quoteLotSize.toString(10)}
-        </td>
+        <td className="text-lg-right">{info.quoteLotSize.toString(10)}</td>
       </tr>
 
       <tr>
         <td>Fee Rate Bps</td>
-        <td className="text-lg-right">
-          {info.feeRateBps}
-        </td>
+        <td className="text-lg-right">{info.feeRateBps}</td>
       </tr>
 
       <tr>
@@ -122,9 +113,7 @@ export function InitializeMarketDetailsCard(props: {
 
       <tr>
         <td>Vault Signer Nonce</td>
-        <td className="text-lg-right">
-          {info.vaultSignerNonce.toString(10)}
-        </td>
+        <td className="text-lg-right">{info.vaultSignerNonce.toString(10)}</td>
       </tr>
     </InstructionCard>
   );

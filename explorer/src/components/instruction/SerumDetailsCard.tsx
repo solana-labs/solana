@@ -4,13 +4,13 @@ import { InstructionCard } from "./InstructionCard";
 import { useCluster } from "providers/cluster";
 import { reportError } from "utils/sentry";
 import {
-  buildCancelOrder,
-  buildCancelOrderByClientId,
-  buildConsumeEvents,
-  buildInitializeMarket,
-  buildMatchOrders,
-  buildNewOrder,
-  buildSettleFunds,
+  decodeCancelOrder,
+  decodeCancelOrderByClientId,
+  decodeConsumeEvents,
+  decodeInitializeMarket,
+  decodeMatchOrders,
+  decodeNewOrder,
+  decodeSettleFunds,
   parseSerumInstructionKey,
   parseSerumInstructionTitle,
 } from "./serum/types";
@@ -28,12 +28,7 @@ export function SerumDetailsCard(props: {
   result: SignatureResult;
   signature: string;
 }) {
-  const {
-    ix,
-    index,
-    result,
-    signature,
-  } = props;
+  const { ix, index, result, signature } = props;
 
   const { url } = useCluster();
 
@@ -43,19 +38,37 @@ export function SerumDetailsCard(props: {
 
     switch (parseSerumInstructionKey(ix)) {
       case "initializeMarket":
-        return <InitializeMarketDetailsCard info={buildInitializeMarket(ix)} {...props} />
+        return (
+          <InitializeMarketDetailsCard
+            info={decodeInitializeMarket(ix)}
+            {...props}
+          />
+        );
       case "newOrder":
-        return <NewOrderDetailsCard info={buildNewOrder(ix)} {...props}/>
+        return <NewOrderDetailsCard info={decodeNewOrder(ix)} {...props} />;
       case "matchOrders":
-        return <MatchOrdersDetailsCard info={buildMatchOrders(ix)} {...props} />
+        return (
+          <MatchOrdersDetailsCard info={decodeMatchOrders(ix)} {...props} />
+        );
       case "consumeEvents":
-        return <ConsumeEventsDetailsCard info={buildConsumeEvents(ix)} {...props} />
+        return (
+          <ConsumeEventsDetailsCard info={decodeConsumeEvents(ix)} {...props} />
+        );
       case "cancelOrder":
-        return <CancelOrderDetailsCard info={buildCancelOrder(ix)} {...props} />
+        return (
+          <CancelOrderDetailsCard info={decodeCancelOrder(ix)} {...props} />
+        );
       case "cancelOrderByClientId":
-        return <CancelOrderByClientIdDetailsCard info={buildCancelOrderByClientId(ix)} {...props} />
+        return (
+          <CancelOrderByClientIdDetailsCard
+            info={decodeCancelOrderByClientId(ix)}
+            {...props}
+          />
+        );
       case "settleFunds":
-        return <SettleFundsDetailsCard info={buildSettleFunds(ix)} {...props} />
+        return (
+          <SettleFundsDetailsCard info={decodeSettleFunds(ix)} {...props} />
+        );
     }
   } catch (error) {
     reportError(error, {

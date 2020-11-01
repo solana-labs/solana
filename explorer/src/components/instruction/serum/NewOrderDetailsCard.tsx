@@ -1,8 +1,5 @@
 import React from "react";
-import {
-  SignatureResult,
-  TransactionInstruction,
-} from "@solana/web3.js";
+import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
 import { NewOrder } from "./types";
@@ -80,37 +77,27 @@ export function NewOrderDetailsCard(props: {
 
       <tr>
         <td>Side</td>
-        <td className="text-lg-right">
-          {info.side}
-        </td>
+        <td className="text-lg-right">{info.side}</td>
       </tr>
 
       <tr>
         <td>Order Type</td>
-        <td className="text-lg-right">
-          {info.orderType}
-        </td>
+        <td className="text-lg-right">{info.orderType}</td>
       </tr>
 
       <tr>
         <td>Limit Price</td>
-        <td className="text-lg-right">
-          {info.limitPrice.toString(10)}
-        </td>
+        <td className="text-lg-right">{info.limitPrice.toString(10)}</td>
       </tr>
 
       <tr>
         <td>Max Quantity</td>
-        <td className="text-lg-right">
-          {info.maxQuantity.toString(10)}
-        </td>
+        <td className="text-lg-right">{info.maxQuantity.toString(10)}</td>
       </tr>
 
       <tr>
         <td>Client Id</td>
-        <td className="text-lg-right">
-          {info.clientId.toString(10)}
-        </td>
+        <td className="text-lg-right">{info.clientId.toString(10)}</td>
       </tr>
     </InstructionCard>
   );

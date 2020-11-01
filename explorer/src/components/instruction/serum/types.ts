@@ -41,7 +41,7 @@ export const InitializeMarketDecode = pick({
   vaultSignerNonce: BigNumValue,
 });
 
-export function buildInitializeMarket(
+export function decodeInitializeMarket(
   ix: TransactionInstruction
 ): InitializeMarket {
   const decoded = coerce(
@@ -96,7 +96,7 @@ export const NewOrderDecode = pick({
   feeDiscountPubkey: optional(Pubkey),
 });
 
-export function buildNewOrder(ix: TransactionInstruction): NewOrder {
+export function decodeNewOrder(ix: TransactionInstruction): NewOrder {
   const decoded = coerce(decodeInstruction(ix.data).newOrder, NewOrderDecode);
 
   let newOrder: NewOrder = {
@@ -138,7 +138,7 @@ export const MatchOrdersDecode = pick({
   limit: number(),
 });
 
-export function buildMatchOrders(ix: TransactionInstruction): MatchOrders {
+export function decodeMatchOrders(ix: TransactionInstruction): MatchOrders {
   const decoded = coerce(
     decodeInstruction(ix.data).matchOrders,
     MatchOrdersDecode
@@ -171,7 +171,7 @@ export const ConsumeEventsDecode = pick({
   limit: number(),
 });
 
-export function buildConsumeEvents(ix: TransactionInstruction): ConsumeEvents {
+export function decodeConsumeEvents(ix: TransactionInstruction): ConsumeEvents {
   const decoded = coerce(
     decodeInstruction(ix.data).consumeEvents,
     ConsumeEventsDecode
@@ -205,7 +205,7 @@ export const CancelOrderDecode = pick({
   openOrdersSlot: number(),
 });
 
-export function buildCancelOrder(ix: TransactionInstruction): CancelOrder {
+export function decodeCancelOrder(ix: TransactionInstruction): CancelOrder {
   const decoded = coerce(
     decodeInstruction(ix.data).cancelOrder,
     CancelOrderDecode
@@ -238,7 +238,7 @@ export const CancelOrderByClientIdDecode = pick({
   clientId: BigNumValue,
 });
 
-export function buildCancelOrderByClientId(
+export function decodeCancelOrderByClientId(
   ix: TransactionInstruction
 ): CancelOrderByClientId {
   const decoded = coerce(
@@ -271,7 +271,7 @@ export type SettleFunds = {
   referrerQuoteWallet?: PublicKey;
 };
 
-export function buildSettleFunds(ix: TransactionInstruction): SettleFunds {
+export function decodeSettleFunds(ix: TransactionInstruction): SettleFunds {
   let settleFunds: SettleFunds = {
     market: ix.keys[0].pubkey,
     openOrders: ix.keys[1].pubkey,

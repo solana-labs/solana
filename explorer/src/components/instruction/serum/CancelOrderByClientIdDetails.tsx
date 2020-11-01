@@ -1,8 +1,5 @@
 import React from "react";
-import {
-  SignatureResult,
-  TransactionInstruction,
-} from "@solana/web3.js";
+import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
 import { CancelOrderByClientId } from "./types";
@@ -52,9 +49,7 @@ export function CancelOrderByClientIdDetailsCard(props: {
 
       <tr>
         <td>Client Id</td>
-        <td className="text-lg-right">
-          {info.clientId.toString(10)}
-        </td>
+        <td className="text-lg-right">{info.clientId.toString(10)}</td>
       </tr>
     </InstructionCard>
   );

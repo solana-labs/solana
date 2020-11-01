@@ -1,8 +1,5 @@
 import React from "react";
-import {
-  SignatureResult,
-  TransactionInstruction,
-} from "@solana/web3.js";
+import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
 import { ConsumeEvents } from "./types";
@@ -47,16 +44,14 @@ export function ConsumeEventsDetailsCard(props: {
         <td>Open Orders Accounts</td>
         <td className="text-lg-right">
           {info.openOrdersAccounts.map((account, index) => {
-            return <Address pubkey={account} key={index} alignRight link />
+            return <Address pubkey={account} key={index} alignRight link />;
           })}
         </td>
       </tr>
 
       <tr>
         <td>Limit</td>
-        <td className="text-lg-right">
-          {info.limit}
-        </td>
+        <td className="text-lg-right">{info.limit}</td>
       </tr>
     </InstructionCard>
   );
