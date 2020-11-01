@@ -4,13 +4,13 @@ import { InstructionCard } from "./InstructionCard";
 import { useCluster } from "providers/cluster";
 import { reportError } from "utils/sentry";
 import {
-  BuildCancelOrder,
-  BuildCancelOrderByClientId,
-  BuildConsumeEvents,
-  BuildInitializeMarket,
-  BuildMatchOrders,
-  BuildNewOrder,
-  BuildSettleFunds,
+  buildCancelOrder,
+  buildCancelOrderByClientId,
+  buildConsumeEvents,
+  buildInitializeMarket,
+  buildMatchOrders,
+  buildNewOrder,
+  buildSettleFunds,
   parseSerumInstructionKey,
   parseSerumInstructionTitle,
 } from "./serum/types";
@@ -43,19 +43,19 @@ export function SerumDetailsCard(props: {
 
     switch (parseSerumInstructionKey(ix)) {
       case "initializeMarket":
-        return <InitializeMarketDetailsCard info={BuildInitializeMarket(ix)} {...props} />
+        return <InitializeMarketDetailsCard info={buildInitializeMarket(ix)} {...props} />
       case "newOrder":
-        return <NewOrderDetailsCard info={BuildNewOrder(ix)} {...props}/>
+        return <NewOrderDetailsCard info={buildNewOrder(ix)} {...props}/>
       case "matchOrders":
-        return <MatchOrdersDetailsCard info={BuildMatchOrders(ix)} {...props} />
+        return <MatchOrdersDetailsCard info={buildMatchOrders(ix)} {...props} />
       case "consumeEvents":
-        return <ConsumeEventsDetailsCard info={BuildConsumeEvents(ix)} {...props} />
+        return <ConsumeEventsDetailsCard info={buildConsumeEvents(ix)} {...props} />
       case "cancelOrder":
-        return <CancelOrderDetailsCard info={BuildCancelOrder(ix)} {...props} />
+        return <CancelOrderDetailsCard info={buildCancelOrder(ix)} {...props} />
       case "cancelOrderByClientId":
-        return <CancelOrderByClientIdDetailsCard info={BuildCancelOrderByClientId(ix)} {...props} />
+        return <CancelOrderByClientIdDetailsCard info={buildCancelOrderByClientId(ix)} {...props} />
       case "settleFunds":
-        return <SettleFundsDetailsCard info={BuildSettleFunds(ix)} {...props} />
+        return <SettleFundsDetailsCard info={buildSettleFunds(ix)} {...props} />
     }
   } catch (error) {
     reportError(error, {
