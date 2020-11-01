@@ -304,18 +304,14 @@ export function isSerumInstruction(instruction: TransactionInstruction) {
 export function parseSerumInstructionKey(
   instruction: TransactionInstruction
 ): string {
-  try {
-    const decoded = decodeInstruction(instruction.data);
-    const keys = Object.keys(decoded);
+  const decoded = decodeInstruction(instruction.data);
+  const keys = Object.keys(decoded);
 
-    if (keys.length < 1) {
-      throw new Error("Serum instruction key not decoded");
-    }
-
-    return keys[0];
-  } catch (error) {
-    throw new Error(`Problem parsing Serum instruction; ${error}`);
+  if (keys.length < 1) {
+    throw new Error("Serum instruction key not decoded");
   }
+
+  return keys[0];
 }
 
 const SERUM_CODE_LOOKUP: { [key: number]: string } = {
