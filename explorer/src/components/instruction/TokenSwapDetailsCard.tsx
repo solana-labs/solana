@@ -3,9 +3,9 @@ import { TransactionInstruction, SignatureResult } from "@solana/web3.js";
 import { InstructionCard } from "./InstructionCard";
 import { useCluster } from "providers/cluster";
 import { reportError } from "utils/sentry";
-import { parseSerumInstructionTitle } from "./serum/types";
+import { parseTokenSwapInstructionTitle } from "./token-swap/types";
 
-export function SerumDetailsCard({
+export function TokenSwapDetailsCard({
   ix,
   index,
   result,
@@ -20,7 +20,7 @@ export function SerumDetailsCard({
 
   let title;
   try {
-    title = parseSerumInstructionTitle(ix);
+    title = parseTokenSwapInstructionTitle(ix);
   } catch (error) {
     reportError(error, {
       url: url,
@@ -33,7 +33,7 @@ export function SerumDetailsCard({
       ix={ix}
       index={index}
       result={result}
-      title={`Serum: ${title || "Unknown"}`}
+      title={`Token Swap: ${title || "Unknown"}`}
       defaultRaw
     />
   );

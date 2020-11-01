@@ -17,10 +17,6 @@ import { TokenRegistry } from "tokenRegistry";
 import { Cluster } from "providers/cluster";
 import { SerumMarketRegistry } from "serumMarketRegistry";
 
-export const EXTERNAL_PROGRAMS: { [key: string]: string } = {
-  Serum: "4ckmDgGdxQoPDLUkDT3vHgSAkzA3QRdNq5ywwY4sUSJn",
-};
-
 export type ProgramName = typeof PROGRAM_IDS[keyof typeof PROGRAM_IDS];
 
 export const PROGRAM_IDS = {
@@ -126,36 +122,4 @@ export function intoParsedTransaction(tx: Transaction): ParsedTransaction {
       recentBlockhash: message.recentBlockhash,
     },
   };
-}
-
-export function isSerumInstruction(instruction: TransactionInstruction) {
-  return instruction.programId.toBase58() === EXTERNAL_PROGRAMS["Serum"];
-}
-
-const SERUM_CODE_LOOKUP: { [key: number]: string } = {
-  0: "Initialize Market",
-  1: "New Order",
-  2: "Match Order",
-  3: "Consume Events",
-  4: "Cancel Order",
-  5: "Settle Funds",
-  6: "Cancel Order By Client Id",
-  7: "Disable Market",
-  8: "Sweep Fees",
-};
-
-export function parseSerumInstructionTitle(
-  instruction: TransactionInstruction
-): string {
-  try {
-    const code = instruction.data.slice(1, 5).readUInt32LE(0);
-
-    if (!(code in SERUM_CODE_LOOKUP)) {
-      throw new Error(`Unrecognized Serum instruction code: ${code}`);
-    }
-
-    return SERUM_CODE_LOOKUP[code];
-  } catch (error) {
-    throw error;
-  }
 }
