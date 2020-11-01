@@ -9861,7 +9861,7 @@ mod tests {
         let feature = Feature { activated_at: None };
         bank.store_account(
             &feature_set::timestamp_bounding::id(),
-            &feature.create_account(42),
+            &feature::create_account(&feature, 42),
         );
         for _ in 0..30 {
             bank = new_from_parent(&Arc::new(bank));
