@@ -43,8 +43,8 @@ confirmed by 2/3+ stake.
 
 From each vote timestamp, an estimate for the current Bank is calculated using
 the epoch's target ns_per_slot for any delta between the Bank slot and the
-timestamp slot. Each timestamp estimate is  is associated with the stake
-delegated to that vote account, and all the timestamps are collected to create a
+timestamp slot. Each timestamp estimate is associated with the stake delegated
+to that vote account, and all the timestamps are collected to create a
 stake-weighted timestamp distribution.
 
 From this set, the stake-weighted median timestamp -- that is, the timestamp at
@@ -75,5 +75,5 @@ In order to calculate the timestamp deviation, each Bank needs to log the
 
 Then, the runtime compares the expected elapsed time since the start of the
 epoch with the proposed elapsed time based on the corrected timestamp. If the
-corrected elaped time is within +/- 25% of expected, the corrected timestamp is
+corrected elapsed time is within +/- 25% of expected, the corrected timestamp is
 accepted. Otherwise, it is bounded to the acceptable deviation.
