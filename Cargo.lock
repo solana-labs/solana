@@ -4529,7 +4529,7 @@ dependencies = [
 
 [[package]]
 name = "solana-program-test"
-version = "1.5.0"
+version = "1.4.4"
 dependencies = [
  "base64 0.12.3",
  "chrono",
@@ -4538,10 +4538,10 @@ dependencies = [
  "solana-banks-client",
  "solana-banks-server",
  "solana-bpf-loader-program",
- "solana-logger 1.5.0",
+ "solana-logger 1.4.4",
  "solana-program",
  "solana-runtime",
- "solana-sdk 1.5.0",
+ "solana-sdk 1.4.4",
 ]
 
 [[package]]
