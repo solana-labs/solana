@@ -28,15 +28,11 @@ const SERUM_CODE_LOOKUP: { [key: number]: string } = {
 export function parseSerumInstructionTitle(
   instruction: TransactionInstruction
 ): string {
-  try {
-    const code = instruction.data.slice(1, 5).readUInt32LE(0);
+  const code = instruction.data.slice(1, 5).readUInt32LE(0);
 
-    if (!(code in SERUM_CODE_LOOKUP)) {
-      throw new Error(`Unrecognized Serum instruction code: ${code}`);
-    }
-
-    return SERUM_CODE_LOOKUP[code];
-  } catch (error) {
-    throw error;
+  if (!(code in SERUM_CODE_LOOKUP)) {
+    throw new Error(`Unrecognized Serum instruction code: ${code}`);
   }
+
+  return SERUM_CODE_LOOKUP[code];
 }

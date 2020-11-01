@@ -28,15 +28,11 @@ export function isTokenSwapInstruction(
 export function parseTokenSwapInstructionTitle(
   instruction: TransactionInstruction
 ): string {
-  try {
-    const code = instruction.data[0];
+  const code = instruction.data[0];
 
-    if (!(code in INSTRUCTION_LOOKUP)) {
-      throw new Error(`Unrecognized Token Swap instruction code: ${code}`);
-    }
-
-    return INSTRUCTION_LOOKUP[code];
-  } catch (error) {
-    throw error;
+  if (!(code in INSTRUCTION_LOOKUP)) {
+    throw new Error(`Unrecognized Token Swap instruction code: ${code}`);
   }
+
+  return INSTRUCTION_LOOKUP[code];
 }
