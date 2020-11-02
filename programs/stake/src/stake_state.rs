@@ -2853,13 +2853,17 @@ mod tests {
             )
         );
 
+        let mut current_credits = 0;
+
         // put 2 credits in at epoch 0
         vote_state.increment_credits(0);
+        current_credits += 1;
         vote_state.increment_credits(0);
+        current_credits += 1;
 
         // this one should be able to collect exactly 2
         assert_eq!(
-            Some((stake.delegation.stake * 2, 0, 2)),
+            Some((stake.delegation.stake * 2, 0, current_credits)),
             stake.calculate_rewards(
                 &PointValue {
                     rewards: 2,
@@ -2875,7 +2879,7 @@ mod tests {
         stake.credits_observed = 1;
         // this one should be able to collect exactly 1 (already observed one)
         assert_eq!(
-            Some((stake.delegation.stake, 0, 2)),
+            Some((stake.delegation.stake, 0, current_credits)),
             stake.calculate_rewards(
                 &PointValue {
                     rewards: 1,
@@ -2890,11 +2894,12 @@ mod tests {
 
         // put 1 credit in epoch 1
         vote_state.increment_credits(1);
+        current_credits += 1;
 
         stake.credits_observed = 2;
         // this one should be able to collect the one just added
         assert_eq!(
-            Some((stake.delegation.stake, 0, 3)),
+            Some((stake.delegation.stake, 0, current_credits)),
             stake.calculate_rewards(
                 &PointValue {
                     rewards: 2,
@@ -2909,9 +2914,12 @@ mod tests {
 
         // put 1 credit in epoch 2
         vote_state.increment_credits(2);
+        current_credits += 1;
+        vote_state.increment_credits(2);
+        current_credits += 1;
         // this one should be able to collect 2 now
         assert_eq!(
-            Some((stake.delegation.stake * 2, 0, 4)),
+            Some((stake.delegation.stake * 2, 0, current_credits)),
             stake.calculate_rewards(
                 &PointValue {
                     rewards: 2,
@@ -2925,15 +2933,13 @@ mod tests {
         );
 
         stake.credits_observed = 0;
-        // this one should be able to collect everything from t=0 a warmed up stake of 2
-        // (2 credits at stake of 1) + (1 credit at a stake of 2)
+        // even if creidts_observed is so small,
+        // this one should collect only the last epoch
         assert_eq!(
             Some((
-                stake.delegation.stake * 2 // epoch 0
-                    + stake.delegation.stake // epoch 1
-                    + stake.delegation.stake, // epoch 2
+                stake.delegation.stake * 2, // only epoch 2
                 0,
-                4
+                current_credits
             )),
             stake.calculate_rewards(
                 &PointValue {
@@ -2951,7 +2957,7 @@ mod tests {
         //  verify that None comes back on small redemptions where no one gets paid
         vote_state.commission = 1;
         assert_eq!(
-            None, // would be Some((0, 2 * 1 + 1 * 2, 4)),
+            None, // would be Some((0, 2 * 1 + 1 * 2, current_credits)),
             stake.calculate_rewards(
                 &PointValue {
                     rewards: 4,
