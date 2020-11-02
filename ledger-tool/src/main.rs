@@ -2130,7 +2130,7 @@ fn main() {
 
                         let modified_accounts =
                             warped_bank.get_all_accounts_modified_since_parent();
-                        let mut sorted_accounts = modified_accounts
+                        let mut rewarded_accounts = modified_accounts
                             .iter()
                             .map(|(pubkey, account)| {
                                 (
@@ -2143,31 +2143,37 @@ fn main() {
                                 )
                             })
                             .collect::<Vec<_>>();
-                        sorted_accounts.sort_unstable_by_key(|(pubkey, account, base_lamports)| {
-                            (
-                                account.owner,
-                                *base_lamports,
-                                account.lamports - base_lamports,
-                                *pubkey,
-                            )
-                        });
+                        rewarded_accounts.sort_unstable_by_key(
+                            |(pubkey, account, base_lamports)| {
+                                (
+                                    account.owner,
+                                    *base_lamports,
+                                    account.lamports - base_lamports,
+                                    *pubkey,
+                                )
+                            },
+                        );
 
                         let mut unchanged_accounts = stake_calcuration_details
                             .keys()
                             .collect::<HashSet<_>>()
                             .difference(
-                                &sorted_accounts.iter().map(|(pubkey, ..)| *pubkey).collect(),
+                                &rewarded_accounts
+                                    .iter()
+                                    .map(|(pubkey, ..)| *pubkey)
+                                    .collect(),
                             )
                             .map(|pubkey| (**pubkey, warped_bank.get_account(pubkey).unwrap()))
                             .collect::<Vec<_>>();
                         unchanged_accounts.sort_unstable_by_key(|(pubkey, account)| {
                             (account.owner, account.lamports, *pubkey)
                         });
+                        let unchanged_accounts = unchanged_accounts.into_iter();
 
-                        let sorted_accounts = sorted_accounts
+                        let rewarded_accounts = rewarded_accounts
                             .into_iter()
                             .map(|(pubkey, account, ..)| (*pubkey, account.clone()));
-                        let all_accounts = unchanged_accounts.into_iter().chain(sorted_accounts);
+                        let all_accounts = unchanged_accounts.chain(rewarded_accounts);
                         let mut last_point_value = None;
                         for (pubkey, warped_account) in all_accounts {
                             // Don't ouput sysvars; it's always updated but not related to
