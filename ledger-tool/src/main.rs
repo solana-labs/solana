@@ -2040,7 +2040,7 @@ fn main() {
                             stake_rewards: u64,
                             activation_epoch: Epoch,
                             deactivation_epoch: Option<Epoch>,
-                            point_value: PointValue,
+                            point_value: Option<PointValue>,
                         }
                         use solana_stake_program::stake_state::InflationPointCalcEvent;
                         let mut stake_calcuration_details: HashMap<Pubkey, CalculationDetail> =
@@ -2071,7 +2071,7 @@ fn main() {
                                         detail.original_rewards = *all;
                                         detail.vote_rewards = *voter;
                                         detail.stake_rewards = *staker;
-                                        detail.point_value = point_value.clone();
+                                        detail.point_value = Some(point_value.clone());
                                     }
                                     InflationPointCalcEvent::Commission(commission) => {
                                         detail.commission = *commission;
@@ -2173,10 +2173,11 @@ fn main() {
                         let rewarded_accounts = rewarded_accounts
                             .into_iter()
                             .map(|(pubkey, account, ..)| (*pubkey, account.clone()));
-                        let all_accounts = unchanged_accounts.chain(rewarded_accounts);
+
                         let mut last_point_value = None;
+                        let all_accounts = unchanged_accounts.chain(rewarded_accounts);
                         for (pubkey, warped_account) in all_accounts {
-                            // Don't ouput sysvars; it's always updated but not related to
+                            // Don't output sysvars; it's always updated but not related to
                             // inflation.
                             if solana_sdk::sysvar::is_sysvar_id(&pubkey) {
                                 continue;
@@ -2223,10 +2224,10 @@ fn main() {
                                         if last_point_value.is_some() {
                                             assert_eq!(
                                                 last_point_value.as_ref(),
-                                                Some(&point_value)
+                                                point_value.as_ref(),
                                             );
                                         }
-                                        last_point_value = Some(point_value);
+                                        last_point_value = point_value;
                                     }
                                     fn format_or_na<T: std::fmt::Display>(
                                         data: Option<T>,
@@ -2258,12 +2259,12 @@ fn main() {
                                             detail.map(|d| d.stake_rewards),
                                         ),
                                         vote_rewards: format_or_na(detail.map(|d| d.vote_rewards)),
-                                        grand_total_rewards: format_or_na(
-                                            detail.map(|d| d.point_value.rewards),
-                                        ),
-                                        grand_total_points: format_or_na(
-                                            detail.map(|d| d.point_value.points),
-                                        ),
+                                        grand_total_rewards: format_or_na(detail.and_then(|d| {
+                                            d.point_value.as_ref().map(|pv| pv.rewards)
+                                        })),
+                                        grand_total_points: format_or_na(detail.and_then(|d| {
+                                            d.point_value.as_ref().map(|pv| pv.points)
+                                        })),
                                     };
                                     csv_writer.serialize(&record).unwrap();
                                 }
