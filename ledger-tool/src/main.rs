@@ -2270,9 +2270,6 @@ fn main() {
                                 error!("new account!?: {}", pubkey);
                             }
                         }
-                        if let Some(ref mut csv_writer) = csv_writer {
-                            csv_writer.flush().unwrap();
-                        }
                         if overall_delta > 0 {
                             println!("Sum of lamports changes: {}", Sol(overall_delta));
                         }
