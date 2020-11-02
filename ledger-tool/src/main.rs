@@ -2215,11 +2215,13 @@ fn main() {
                                         owner: String,
                                         old_balance: u64,
                                         new_balance: u64,
-                                        stake_target: String,
+                                        delegation: String,
                                         effective_stake: String,
                                         total_stake: String,
+                                        rent_exempt_reserve: String,
                                         activation_epoch: String,
                                         deactivation_epoch: String,
+                                        epochs: String,
                                         earned_credits: String,
                                         stake_rewards: String,
                                         vote_rewards: String,
@@ -2237,9 +2239,12 @@ fn main() {
                                         owner: format!("{}", base_account.owner),
                                         old_balance: base_account.lamports,
                                         new_balance: warped_account.lamports,
-                                        stake_target: format_or_na(detail.map(|d| d.voter)),
+                                        delegation: format_or_na(detail.map(|d| d.voter)),
                                         effective_stake: format_or_na(detail.map(|d| d.stake)),
                                         total_stake: format_or_na(detail.map(|d| d.total_stake)),
+                                        rent_exempt_reserve: format_or_na(
+                                            detail.map(|d| d.rent_exempt_reserve),
+                                        ),
                                         activation_epoch: format_or_na(detail.map(|d| {
                                             if d.activation_epoch < Epoch::max_value() {
                                                 d.activation_epoch
@@ -2251,6 +2256,7 @@ fn main() {
                                         deactivation_epoch: format_or_na(
                                             detail.and_then(|d| d.deactivation_epoch),
                                         ),
+                                        epochs: format_or_na(detail.map(|d| d.epochs)),
                                         earned_credits: format_or_na(detail.map(|d| d.credits)),
                                         stake_rewards: format_or_na(
                                             detail.map(|d| d.stake_rewards),
