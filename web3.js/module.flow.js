@@ -665,7 +665,6 @@ declare module '@solana/web3.js' {
     recentBlockhash?: Blockhash,
     nonceInfo?: NonceInformation,
     signatures?: Array<SignaturePubkeyPair>,
-    feePayer?: PublicKey,
   |};
 
   declare export type SerializeConfig = {
