@@ -515,14 +515,18 @@ impl Stake {
         Ok(())
     }
 
-    fn split(&mut self, lamports: u64) -> Result<Self, StakeError> {
-        if lamports > self.delegation.stake {
+    fn split(
+        &mut self,
+        remaining_stake_delta: u64,
+        split_stake_amount: u64,
+    ) -> Result<Self, StakeError> {
+        if remaining_stake_delta > self.delegation.stake {
             return Err(StakeError::InsufficientStake);
         }
-        self.delegation.stake -= lamports;
+        self.delegation.stake -= remaining_stake_delta;
         let new = Self {
             delegation: Delegation {
-                stake: lamports,
+                stake: split_stake_amount,
                 ..self.delegation
             },
             ..*self
@@ -769,13 +773,31 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                         return Err(InstructionError::InsufficientFunds);
                     }
                     // split the stake, subtract rent_exempt_balance unless
-                    //  the destination account already has those lamports
-                    //  in place.
-                    // this could represent a small loss of staked lamports
-                    //  if the split account starts out with a zero balance
-                    let split_stake = stake.split(
-                        lamports - meta.rent_exempt_reserve.saturating_sub(split.lamports()?),
-                    )?;
+                    // the destination account already has those lamports
+                    // in place.
+                    // this means that the new stake account will have a stake equivalent to
+                    // lamports minus rent_exempt_reserve if it starts out with a zero balance
+                    let (remaining_stake_delta, split_stake_amount) = if lamports
+                        == self.lamports()?
+                    {
+                        // If split amount equals the full source stake, the new split stake must
+                        // equal the same amount, regardless of any current lamport balance in the
+                        // split account. Since split accounts retain the state of their source
+                        // account, this prevents any magic activation of stake by prefunding the
+                        // split account.
+                        (
+                            lamports - meta.rent_exempt_reserve,
+                            lamports - meta.rent_exempt_reserve,
+                        )
+                    } else {
+                        // Otherwise, the new split stake should reflect the entire split
+                        // requested, less any lamports needed to cover the rent-exempt reserve
+                        (
+                            lamports,
+                            lamports - meta.rent_exempt_reserve.saturating_sub(split.lamports()?),
+                        )
+                    };
+                    let split_stake = stake.split(remaining_stake_delta, split_stake_amount)?;
 
                     self.set_state(&StakeState::Stake(meta, stake))?;
                     split.set_state(&StakeState::Stake(meta, split_stake))?;
@@ -3049,7 +3071,7 @@ mod tests {
             split_stake_keyed_account.account.borrow_mut().lamports = 1_000;
             assert_eq!(
                 stake_keyed_account.split(
-                    stake_lamports - rent_exempt_reserve,
+                    stake_lamports - rent_exempt_reserve, // leave rent_exempt_reserve in original account
                     &split_stake_keyed_account,
                     &signers
                 ),
