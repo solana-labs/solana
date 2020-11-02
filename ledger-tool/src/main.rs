@@ -2044,7 +2044,7 @@ fn main() {
                         }
                         use solana_stake_program::stake_state::InflationPointCalcEvent;
                         let mut stake_calcuration_details: HashMap<Pubkey, CalculationDetail> =
-                            Default::default();
+                            HashMap::new();
                         let tracer = |event: &RewardCalcEvent| {
                             if let RewardCalcEvent::Staking(pubkey, event) = event {
                                 let detail = stake_calcuration_details.entry(**pubkey).or_default();
