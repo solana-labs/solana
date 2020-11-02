@@ -2045,6 +2045,7 @@ fn main() {
                         use solana_stake_program::stake_state::InflationPointCalcEvent;
                         let mut stake_calcuration_details: HashMap<Pubkey, CalculationDetail> =
                             HashMap::new();
+                        let mut last_point_value = None;
                         let tracer = |event: &RewardCalcEvent| {
                             if let RewardCalcEvent::Staking(pubkey, event) = event {
                                 let detail = stake_calcuration_details.entry(**pubkey).or_default();
@@ -2072,6 +2073,15 @@ fn main() {
                                         detail.vote_rewards = *voter;
                                         detail.stake_rewards = *staker;
                                         detail.point_value = Some(point_value.clone());
+                                        // we have duplicate copies of `PointValue`s for possible
+                                        // miscalculation; do some minimum sanity check
+                                        let point_value = detail.point_value.clone();
+                                        if point_value.is_some() {
+                                            if last_point_value.is_some() {
+                                                assert_eq!(last_point_value, point_value,);
+                                            }
+                                            last_point_value = point_value;
+                                        }
                                     }
                                     InflationPointCalcEvent::Commission(commission) => {
                                         detail.commission = *commission;
@@ -2174,7 +2184,6 @@ fn main() {
                             .into_iter()
                             .map(|(pubkey, account, ..)| (*pubkey, account.clone()));
 
-                        let mut last_point_value = None;
                         let all_accounts = unchanged_accounts.chain(rewarded_accounts);
                         for (pubkey, warped_account) in all_accounts {
                             // Don't output sysvars; it's always updated but not related to
@@ -2204,9 +2213,9 @@ fn main() {
                                     struct InflationRecord {
                                         account: String,
                                         owner: String,
-                                        stake_target: String,
                                         old_balance: u64,
                                         new_balance: u64,
+                                        stake_target: String,
                                         effective_stake: String,
                                         total_stake: String,
                                         activation_epoch: String,
@@ -2217,18 +2226,6 @@ fn main() {
                                         grand_total_rewards: String,
                                         grand_total_points: String,
                                     };
-                                    if let Some(detail) = detail {
-                                        // we have duplicate copies of `PointValue`s for possible
-                                        // miscalculation; do some minimum sanity check
-                                        let point_value = detail.point_value.clone();
-                                        if last_point_value.is_some() {
-                                            assert_eq!(
-                                                last_point_value.as_ref(),
-                                                point_value.as_ref(),
-                                            );
-                                        }
-                                        last_point_value = point_value;
-                                    }
                                     fn format_or_na<T: std::fmt::Display>(
                                         data: Option<T>,
                                     ) -> String {
@@ -2238,9 +2235,9 @@ fn main() {
                                     let record = InflationRecord {
                                         account: format!("{}", pubkey),
                                         owner: format!("{}", base_account.owner),
-                                        stake_target: format_or_na(detail.map(|d| d.voter)),
                                         old_balance: base_account.lamports,
                                         new_balance: warped_account.lamports,
+                                        stake_target: format_or_na(detail.map(|d| d.voter)),
                                         effective_stake: format_or_na(detail.map(|d| d.stake)),
                                         total_stake: format_or_na(detail.map(|d| d.total_stake)),
                                         activation_epoch: format_or_na(detail.map(|d| {
@@ -2259,12 +2256,12 @@ fn main() {
                                             detail.map(|d| d.stake_rewards),
                                         ),
                                         vote_rewards: format_or_na(detail.map(|d| d.vote_rewards)),
-                                        grand_total_rewards: format_or_na(detail.and_then(|d| {
-                                            d.point_value.as_ref().map(|pv| pv.rewards)
-                                        })),
-                                        grand_total_points: format_or_na(detail.and_then(|d| {
-                                            d.point_value.as_ref().map(|pv| pv.points)
-                                        })),
+                                        grand_total_rewards: format_or_na(
+                                            last_point_value.as_ref().map(|pv| pv.rewards),
+                                        ),
+                                        grand_total_points: format_or_na(
+                                            last_point_value.as_ref().map(|pv| pv.points),
+                                        ),
                                     };
                                     csv_writer.serialize(&record).unwrap();
                                 }
