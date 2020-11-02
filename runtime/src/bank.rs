@@ -1280,7 +1280,7 @@ impl Bank {
         let validator_rewards =
             (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
 
-        let vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
+        let old_vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
 
         let validator_point_value = self.pay_validator_rewards(validator_rewards);
 
@@ -1297,8 +1297,8 @@ impl Bank {
             });
         }
 
-        let validator_rewards_paid =
-            self.stakes.read().unwrap().vote_balance_and_staked() - vote_balance_and_staked;
+        let new_vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
+        let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
         assert_eq!(
             validator_rewards_paid,
             u64::try_from(
@@ -6068,7 +6068,7 @@ mod tests {
         // The same reward should be distributed given same credits
         let expected_capitalization = do_test_bank_update_rewards_determinism();
         // Repeat somewhat large number of iterations to expose possible different behavior
-        // depending on the randamly-seeded HashMap ordering
+        // depending on the randomly-seeded HashMap ordering
         for _ in 0..30 {
             let actual_capitalization = do_test_bank_update_rewards_determinism();
             assert_eq!(actual_capitalization, expected_capitalization);
