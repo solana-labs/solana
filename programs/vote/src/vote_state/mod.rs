@@ -29,8 +29,7 @@ pub const MAX_LOCKOUT_HISTORY: usize = 31;
 pub const INITIAL_LOCKOUT: usize = 2;
 
 // Maximum number of credits history to keep around
-//  smaller numbers makes
-pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
+const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 
 #[frozen_abi(digest = "69hYtmmcuqPbhpc64ZaNJDidaUcg66CW6wzPFiuYZ3To")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
@@ -388,8 +387,7 @@ impl VoteState {
                 self.epoch_credits.last_mut().unwrap().0 = epoch;
             }
 
-            // if stakers do not claim before the epoch goes away they lose the
-            //  credits...
+            // Remove too old epoch_credits
             if self.epoch_credits.len() > MAX_EPOCH_CREDITS_HISTORY {
                 self.epoch_credits.remove(0);
             }
