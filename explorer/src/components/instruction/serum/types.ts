@@ -23,6 +23,7 @@ const SERUM_CODE_LOOKUP: { [key: number]: string } = {
   6: "Cancel Order By Client Id",
   7: "Disable Market",
   8: "Sweep Fees",
+  9: "New Order",
 };
 
 export function parseSerumInstructionTitle(
