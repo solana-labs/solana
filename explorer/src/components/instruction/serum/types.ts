@@ -242,7 +242,7 @@ export function decodeCancelOrderByClientId(
   ix: TransactionInstruction
 ): CancelOrderByClientId {
   const decoded = coerce(
-    decodeInstruction(ix.data),
+    decodeInstruction(ix.data).cancelOrderByClientId,
     CancelOrderByClientIdDecode
   );
 
