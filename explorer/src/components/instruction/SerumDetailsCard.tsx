@@ -11,8 +11,10 @@ import {
   decodeMatchOrders,
   decodeNewOrder,
   decodeSettleFunds,
+  parseSerumInstructionCode,
   parseSerumInstructionKey,
   parseSerumInstructionTitle,
+  SERUM_DECODED_MAX,
 } from "./serum/types";
 import { NewOrderDetailsCard } from "./serum/NewOrderDetailsCard";
 import { MatchOrdersDetailsCard } from "./serum/MatchOrdersDetailsCard";
@@ -35,40 +37,46 @@ export function SerumDetailsCard(props: {
   let title;
   try {
     title = parseSerumInstructionTitle(ix);
+    const code = parseSerumInstructionCode(ix);
 
-    switch (parseSerumInstructionKey(ix)) {
-      case "initializeMarket":
-        return (
-          <InitializeMarketDetailsCard
-            info={decodeInitializeMarket(ix)}
-            {...props}
-          />
-        );
-      case "newOrder":
-        return <NewOrderDetailsCard info={decodeNewOrder(ix)} {...props} />;
-      case "matchOrders":
-        return (
-          <MatchOrdersDetailsCard info={decodeMatchOrders(ix)} {...props} />
-        );
-      case "consumeEvents":
-        return (
-          <ConsumeEventsDetailsCard info={decodeConsumeEvents(ix)} {...props} />
-        );
-      case "cancelOrder":
-        return (
-          <CancelOrderDetailsCard info={decodeCancelOrder(ix)} {...props} />
-        );
-      case "cancelOrderByClientId":
-        return (
-          <CancelOrderByClientIdDetailsCard
-            info={decodeCancelOrderByClientId(ix)}
-            {...props}
-          />
-        );
-      case "settleFunds":
-        return (
-          <SettleFundsDetailsCard info={decodeSettleFunds(ix)} {...props} />
-        );
+    if (code <= SERUM_DECODED_MAX) {
+      switch (parseSerumInstructionKey(ix)) {
+        case "initializeMarket":
+          return (
+            <InitializeMarketDetailsCard
+              info={decodeInitializeMarket(ix)}
+              {...props}
+            />
+          );
+        case "newOrder":
+          return <NewOrderDetailsCard info={decodeNewOrder(ix)} {...props} />;
+        case "matchOrders":
+          return (
+            <MatchOrdersDetailsCard info={decodeMatchOrders(ix)} {...props} />
+          );
+        case "consumeEvents":
+          return (
+            <ConsumeEventsDetailsCard
+              info={decodeConsumeEvents(ix)}
+              {...props}
+            />
+          );
+        case "cancelOrder":
+          return (
+            <CancelOrderDetailsCard info={decodeCancelOrder(ix)} {...props} />
+          );
+        case "cancelOrderByClientId":
+          return (
+            <CancelOrderByClientIdDetailsCard
+              info={decodeCancelOrderByClientId(ix)}
+              {...props}
+            />
+          );
+        case "settleFunds":
+          return (
+            <SettleFundsDetailsCard info={decodeSettleFunds(ix)} {...props} />
+          );
+      }
     }
   } catch (error) {
     reportError(error, {

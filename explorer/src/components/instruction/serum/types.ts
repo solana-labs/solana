@@ -9,6 +9,8 @@ import { Pubkey } from "validators/pubkey";
 
 const SERUM_PROGRAM_ID = "4ckmDgGdxQoPDLUkDT3vHgSAkzA3QRdNq5ywwY4sUSJn";
 
+export const SERUM_DECODED_MAX = 6;
+
 export type Side = StructType<typeof Side>;
 export const Side = enums(["buy", "sell"]);
 
@@ -327,10 +329,14 @@ const SERUM_CODE_LOOKUP: { [key: number]: string } = {
   9: "New Order",
 };
 
+export function parseSerumInstructionCode(instruction: TransactionInstruction) {
+  return instruction.data.slice(1, 5).readUInt32LE(0);
+}
+
 export function parseSerumInstructionTitle(
   instruction: TransactionInstruction
 ): string {
-  const code = instruction.data.slice(1, 5).readUInt32LE(0);
+  const code = parseSerumInstructionCode(instruction);
 
   if (!(code in SERUM_CODE_LOOKUP)) {
     throw new Error(`Unrecognized Serum instruction code: ${code}`);
