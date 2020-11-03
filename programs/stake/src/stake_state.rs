@@ -1099,7 +1099,7 @@ mod tests {
     use crate::id;
     use solana_sdk::{account::Account, native_token, pubkey::Pubkey, system_program};
     use solana_vote_program::vote_state;
-    use std::cell::RefCell;
+    use std::{cell::RefCell, iter::FromIterator};
 
     impl Meta {
         pub fn auto(authorized: &Pubkey) -> Self {
@@ -3688,5 +3688,109 @@ mod tests {
 
         // Test another staking action
         assert_eq!(stake_keyed_account.deactivate(&clock, &new_signers), Ok(()));
+    }
+
+    #[test]
+    fn test_redelegate_consider_balance_changes() {
+        let initial_lamports = 4242424242;
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let withdrawer_pubkey = Pubkey::new_unique();
+        let stake_lamports = rent_exempt_reserve + initial_lamports;
+
+        let meta = Meta {
+            rent_exempt_reserve,
+            ..Meta::auto(&withdrawer_pubkey)
+        };
+        let stake_account = Account::new_ref_data_with_space(
+            stake_lamports,
+            &StakeState::Initialized(meta),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
+        let stake_keyed_account = KeyedAccount::new(&withdrawer_pubkey, true, &stake_account);
+
+        let vote_pubkey = Pubkey::new_unique();
+        let vote_account = RefCell::new(vote_state::create_account(
+            &vote_pubkey,
+            &Pubkey::new_unique(),
+            0,
+            100,
+        ));
+        let vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &vote_account);
+
+        let signers = HashSet::from_iter(vec![withdrawer_pubkey]);
+        let config = Config::default();
+        let stake_history = StakeHistory::default();
+        let mut clock = Clock::default();
+        stake_keyed_account
+            .delegate(
+                &vote_keyed_account,
+                &clock,
+                &stake_history,
+                &config,
+                &signers,
+            )
+            .unwrap();
+
+        clock.epoch += 1;
+        stake_keyed_account.deactivate(&clock, &signers).unwrap();
+
+        clock.epoch += 1;
+        let to = Pubkey::new_unique();
+        let to_account = Account::new_ref(1, 0, &system_program::id());
+        let to_keyed_account = KeyedAccount::new(&to, false, &to_account);
+        let withdraw_lamports = initial_lamports / 2;
+        stake_keyed_account
+            .withdraw(
+                withdraw_lamports,
+                &to_keyed_account,
+                &clock,
+                &stake_history,
+                &stake_keyed_account,
+                None,
+            )
+            .unwrap();
+        let expected_balance = rent_exempt_reserve + initial_lamports - withdraw_lamports;
+        assert_eq!(stake_keyed_account.lamports().unwrap(), expected_balance);
+
+        clock.epoch += 1;
+        stake_keyed_account
+            .delegate(
+                &vote_keyed_account,
+                &clock,
+                &stake_history,
+                &config,
+                &signers,
+            )
+            .unwrap();
+        let stake = StakeState::stake_from(&stake_account.borrow()).unwrap();
+        assert_eq!(
+            stake.delegation.stake,
+            stake_keyed_account.lamports().unwrap() - rent_exempt_reserve,
+        );
+
+        clock.epoch += 1;
+        stake_keyed_account.deactivate(&clock, &signers).unwrap();
+
+        // Out of band deposit
+        stake_keyed_account.try_account_ref_mut().unwrap().lamports += withdraw_lamports;
+
+        clock.epoch += 1;
+        stake_keyed_account
+            .delegate(
+                &vote_keyed_account,
+                &clock,
+                &stake_history,
+                &config,
+                &signers,
+            )
+            .unwrap();
+        let stake = StakeState::stake_from(&stake_account.borrow()).unwrap();
+        assert_eq!(
+            stake.delegation.stake,
+            stake_keyed_account.lamports().unwrap() - rent_exempt_reserve,
+        );
     }
 }
