@@ -493,6 +493,7 @@ impl Stake {
 
     fn redelegate(
         &mut self,
+        stake_lamports: u64,
         voter_pubkey: &Pubkey,
         vote_state: &VoteState,
         clock: &Clock,
@@ -505,6 +506,7 @@ impl Stake {
         if self.stake(clock.epoch, Some(stake_history)) != 0 {
             return Err(StakeError::TooSoonToRedelegate);
         }
+        self.delegation.stake = stake_lamports;
         self.delegation.activation_epoch = clock.epoch;
         self.delegation.deactivation_epoch = std::u64::MAX;
         self.delegation.voter_pubkey = *voter_pubkey;
@@ -703,6 +705,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             StakeState::Stake(meta, mut stake) => {
                 meta.authorized.check(signers, StakeAuthorize::Staker)?;
                 stake.redelegate(
+                    self.lamports()?.saturating_sub(meta.rent_exempt_reserve), // can't stake the rent ;)
                     vote_account.unsigned_key(),
                     &State::<VoteStateVersions>::state(vote_account)?.convert_to_current(),
                     clock,
