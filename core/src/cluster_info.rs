@@ -66,7 +66,7 @@ use solana_streamer::streamer::{PacketReceiver, PacketSender};
 use std::{
     borrow::Cow,
     cmp::min,
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
     fmt,
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
     ops::{Deref, DerefMut},
@@ -202,6 +202,7 @@ impl Counter {
 struct GossipStats {
     entrypoint: Counter,
     entrypoint2: Counter,
+    gossip_packets_dropped_count: Counter,
     push_vote_read: Counter,
     vote_process_push: Counter,
     get_votes: Counter,
@@ -2387,7 +2388,7 @@ impl ClusterInfo {
 
     fn process_packets(
         &self,
-        requests: Vec<Packets>,
+        packets: VecDeque<Packet>,
         thread_pool: &ThreadPool,
         recycler: &PacketsRecycler,
         response_sender: &PacketSender,
@@ -2397,9 +2398,8 @@ impl ClusterInfo {
     ) {
         let mut timer = Measure::start("process_gossip_packets_time");
         let packets: Vec<_> = thread_pool.install(|| {
-            requests
+            packets
                 .into_par_iter()
-                .flat_map(|request| request.packets.into_par_iter())
                 .filter_map(|packet| {
                     let protocol: Protocol =
                         limited_deserialize(&packet.data[..packet.meta.size]).ok()?;
@@ -2456,24 +2456,20 @@ impl ClusterInfo {
         thread_pool: &ThreadPool,
         last_print: &mut Instant,
     ) -> Result<()> {
-        let timeout = Duration::new(1, 0);
-        let mut requests = vec![requests_receiver.recv_timeout(timeout)?];
-        let mut num_requests = requests.last().unwrap().packets.len();
-        while let Ok(more_reqs) = requests_receiver.try_recv() {
-            if num_requests >= MAX_GOSSIP_TRAFFIC {
-                continue;
+        const RECV_TIMEOUT: Duration = Duration::from_secs(1);
+        let packets: Vec<_> = requests_receiver.recv_timeout(RECV_TIMEOUT)?.packets.into();
+        let mut packets = VecDeque::from(packets);
+        while let Ok(packet) = requests_receiver.try_recv() {
+            let num_packets = packets.len() + packet.packets.len();
+            if num_packets > MAX_GOSSIP_TRAFFIC {
+                let excess_count = usize::min(MAX_GOSSIP_TRAFFIC - num_packets, packets.len());
+                self.stats
+                    .gossip_packets_dropped_count
+                    .add_relaxed(excess_count as u64);
+                packets.drain(0..excess_count);
             }
-            num_requests += more_reqs.packets.len();
-            requests.push(more_reqs)
+            packets.extend(packet.packets.into_iter());
         }
-
-        if num_requests >= MAX_GOSSIP_TRAFFIC {
-            warn!(
-                "Too much gossip traffic, ignoring some messages (requests={}, max requests={})",
-                num_requests, MAX_GOSSIP_TRAFFIC
-            );
-        }
-
         let (stakes, epoch_time_ms) = Self::get_stakes_and_epoch_time(bank_forks);
         // Using root_bank instead of working_bank here so that an enbaled
         // feature does not roll back (if the feature happens to get enabled in
@@ -2488,7 +2484,7 @@ impl ClusterInfo {
                 .clone()
         });
         self.process_packets(
-            requests,
+            packets,
             thread_pool,
             recycler,
             response_sender,
@@ -2541,6 +2537,11 @@ impl ClusterInfo {
             );
             datapoint_info!(
                 "cluster_info_stats2",
+                (
+                    "gossip_packets_dropped_count",
+                    self.stats.gossip_packets_dropped_count.clear(),
+                    i64
+                ),
                 ("retransmit_peers", self.stats.retransmit_peers.clear(), i64),
                 ("repair_peers", self.stats.repair_peers.clear(), i64),
                 (
