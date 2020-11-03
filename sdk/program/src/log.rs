@@ -97,7 +97,7 @@ pub fn sol_log_params(accounts: &[AccountInfo], data: &[u8]) {
     sol_log_slice(data);
 }
 
-/// Logs the current compute unit consumption
+/// Logs the remaining compute units the program may consume
 #[inline]
 pub fn sol_log_compute_units() {
     #[cfg(target_arch = "bpf")]
