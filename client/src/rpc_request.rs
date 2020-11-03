@@ -1,3 +1,4 @@
+use crate::rpc_response::RpcSimulateTransactionResult;
 use serde_json::{json, Value};
 use solana_sdk::pubkey::Pubkey;
 use std::fmt;
@@ -138,12 +139,38 @@ impl RpcRequest {
     }
 }
 
+#[derive(Debug)]
+pub enum RpcResponseErrorData {
+    Empty,
+    SendTransactionPreflightFailure(RpcSimulateTransactionResult),
+}
+
+impl fmt::Display for RpcResponseErrorData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            RpcResponseErrorData::SendTransactionPreflightFailure(
+                RpcSimulateTransactionResult {
+                    logs: Some(logs), ..
+                },
+            ) => {
+                // Give the user a hint that there is more useful logging information available...
+                write!(f, "{} log messages", logs.len())
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum RpcError {
     #[error("RPC request error: {0}")]
     RpcRequestError(String),
-    #[error("RPC response error {code}: {message}")]
-    RpcResponseError { code: i64, message: String },
+    #[error("RPC response error {code}: {message} [{data}]")]
+    RpcResponseError {
+        code: i64,
+        message: String,
+        data: RpcResponseErrorData,
+    },
     #[error("parse error: expected {0}")]
     ParseError(String), /* "expected" */
     // Anything in a `ForUser` needs to die.  The caller should be
