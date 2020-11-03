@@ -1,6 +1,8 @@
 use crate::{
     client_error::Result,
-    rpc_request::{RpcError, RpcRequest},
+    rpc_custom_error,
+    rpc_request::{RpcError, RpcRequest, RpcResponseErrorData},
+    rpc_response::RpcSimulateTransactionResult,
     rpc_sender::RpcSender,
 };
 use log::*;
@@ -31,7 +33,7 @@ impl HttpSender {
 struct RpcErrorObject {
     code: i64,
     message: String,
-    /*data field omitted*/
+    data: serde_json::Value,
 }
 
 impl RpcSender for HttpSender {
@@ -72,11 +74,27 @@ impl RpcSender for HttpSender {
                     if json["error"].is_object() {
                         return match serde_json::from_value::<RpcErrorObject>(json["error"].clone())
                         {
-                            Ok(rpc_error_object) => Err(RpcError::RpcResponseError {
-                                code: rpc_error_object.code,
-                                message: rpc_error_object.message,
+                            Ok(rpc_error_object) => {
+                                let data = match rpc_error_object.code {
+                                    rpc_custom_error::JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE => {
+                                        match serde_json::from_value::<RpcSimulateTransactionResult>(json["error"]["data"].clone()) {
+                                            Ok(data) => RpcResponseErrorData::SendTransactionPreflightFailure(data),
+                                            Err(err) => {
+                                                debug!("Failed to deserialize RpcSimulateTransactionResult: {:?}", err);
+                                                RpcResponseErrorData::Empty
+                                            }
+                                        }
+                                    },
+                                    _ => RpcResponseErrorData::Empty
+                                };
+
+                                Err(RpcError::RpcResponseError {
+                                    code: rpc_error_object.code,
+                                    message: rpc_error_object.message,
+                                    data,
+                                }
+                                .into())
                             }
-                            .into()),
                             Err(err) => Err(RpcError::RpcRequestError(format!(
                                 "Failed to deserialize RPC error response: {} [{}]",
                                 serde_json::to_string(&json["error"]).unwrap(),
