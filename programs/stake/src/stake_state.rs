@@ -16,7 +16,7 @@ use solana_sdk::{
     instruction::InstructionError,
     keyed_account::KeyedAccount,
     pubkey::Pubkey,
-    rent::Rent,
+    rent::{Rent, ACCOUNT_STORAGE_OVERHEAD},
     stake_history::{StakeHistory, StakeHistoryEntry},
 };
 use solana_vote_program::vote_state::{VoteState, VoteStateVersions};
@@ -764,10 +764,15 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             match self.state()? {
                 StakeState::Stake(meta, mut stake) => {
                     meta.authorized.check(signers, StakeAuthorize::Staker)?;
+                    let split_rent_exempt_reserve = calculate_split_rent_exempt_reserve(
+                        meta.rent_exempt_reserve,
+                        self.data_len()? as u64,
+                        split.data_len()? as u64,
+                    );
 
                     // verify enough lamports for rent in new stake with the split
-                    if split.lamports()? + lamports < meta.rent_exempt_reserve
-                     // verify enough lamports left in previous stake and not full withdrawal
+                    if split.lamports()? + lamports < split_rent_exempt_reserve
+                    // verify enough lamports left in previous stake and not full withdrawal
                         || (lamports + meta.rent_exempt_reserve > self.lamports()? && lamports != self.lamports()?)
                     {
                         return Err(InstructionError::InsufficientFunds);
@@ -787,26 +792,33 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                         // split account.
                         (
                             lamports - meta.rent_exempt_reserve,
-                            lamports - meta.rent_exempt_reserve,
+                            lamports - split_rent_exempt_reserve,
                         )
                     } else {
                         // Otherwise, the new split stake should reflect the entire split
                         // requested, less any lamports needed to cover the rent-exempt reserve
                         (
                             lamports,
-                            lamports - meta.rent_exempt_reserve.saturating_sub(split.lamports()?),
+                            lamports - split_rent_exempt_reserve.saturating_sub(split.lamports()?),
                         )
                     };
                     let split_stake = stake.split(remaining_stake_delta, split_stake_amount)?;
+                    let mut split_meta = meta;
+                    split_meta.rent_exempt_reserve = split_rent_exempt_reserve;
 
                     self.set_state(&StakeState::Stake(meta, stake))?;
-                    split.set_state(&StakeState::Stake(meta, split_stake))?;
+                    split.set_state(&StakeState::Stake(split_meta, split_stake))?;
                 }
                 StakeState::Initialized(meta) => {
                     meta.authorized.check(signers, StakeAuthorize::Staker)?;
+                    let split_rent_exempt_reserve = calculate_split_rent_exempt_reserve(
+                        meta.rent_exempt_reserve,
+                        self.data_len()? as u64,
+                        split.data_len()? as u64,
+                    );
 
                     // enough lamports for rent in new stake
-                    if lamports < meta.rent_exempt_reserve
+                    if lamports < split_rent_exempt_reserve
                     // verify enough lamports left in previous stake
                         || (lamports + meta.rent_exempt_reserve > self.lamports()? && lamports != self.lamports()?)
                     {
@@ -992,6 +1004,19 @@ pub fn calculate_points(
     } else {
         Err(InstructionError::InvalidAccountData)
     }
+}
+
+// utility function, used by Split
+//This emulates current Rent math in order to preserve backward compatibility. In the future, and
+//to support variable rent, the Split instruction should pass in the Rent sysvar instead.
+fn calculate_split_rent_exempt_reserve(
+    source_rent_exempt_reserve: u64,
+    source_data_len: u64,
+    split_data_len: u64,
+) -> u64 {
+    let lamports_per_byte_year =
+        source_rent_exempt_reserve / (source_data_len + ACCOUNT_STORAGE_OVERHEAD);
+    lamports_per_byte_year * (split_data_len + ACCOUNT_STORAGE_OVERHEAD)
 }
 
 // utility function, used by runtime::Stakes, tests
@@ -3008,8 +3033,8 @@ mod tests {
     fn test_split_with_rent() {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
-        let rent_exempt_reserve = 10;
+        let stake_lamports = 10_000_000;
+        let rent_exempt_reserve = 2_282_880;
         let signers = vec![stake_pubkey].into_iter().collect();
 
         let meta = Meta {
@@ -3068,7 +3093,7 @@ mod tests {
             );
 
             // split account already has way enough lamports
-            split_stake_keyed_account.account.borrow_mut().lamports = 1_000;
+            split_stake_keyed_account.account.borrow_mut().lamports = 10_000_000;
             assert_eq!(
                 stake_keyed_account.split(
                     stake_lamports - rent_exempt_reserve, // leave rent_exempt_reserve in original account
@@ -3099,7 +3124,7 @@ mod tests {
                 );
                 assert_eq!(
                     split_stake_keyed_account.account.borrow().lamports,
-                    1_000 + stake_lamports - rent_exempt_reserve
+                    10_000_000 + stake_lamports - rent_exempt_reserve
                 );
             }
         }
@@ -3200,8 +3225,8 @@ mod tests {
     #[test]
     fn test_split_to_account_with_rent_exempt_reserve() {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
-        let rent_exempt_reserve = 10;
+        let stake_lamports = 10_000_000;
+        let rent_exempt_reserve = 2_282_880;
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -3260,6 +3285,8 @@ mod tests {
             );
 
             if let StakeState::Stake(meta, stake) = state {
+                let expected_stake =
+                    stake_lamports / 2 - (rent_exempt_reserve.saturating_sub(initial_balance));
                 assert_eq!(
                     Ok(StakeState::Stake(
                         meta,
@@ -3273,6 +3300,131 @@ mod tests {
                         }
                     )),
                     split_stake_keyed_account.state()
+                );
+                assert_eq!(
+                    split_stake_keyed_account.account.borrow().lamports,
+                    expected_stake
+                        + rent_exempt_reserve
+                        + initial_balance.saturating_sub(rent_exempt_reserve)
+                );
+                assert_eq!(
+                    Ok(StakeState::Stake(
+                        meta,
+                        Stake {
+                            delegation: Delegation {
+                                stake: stake_lamports / 2 - rent_exempt_reserve,
+                                ..stake.delegation
+                            },
+                            ..stake
+                        }
+                    )),
+                    stake_keyed_account.state()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_split_to_smaller_account_with_rent_exempt_reserve() {
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
+        let stake_lamports = 10_000_000;
+        let rent_exempt_reserve = 2_282_880;
+
+        let split_stake_pubkey = solana_sdk::pubkey::new_rand();
+        let signers = vec![stake_pubkey].into_iter().collect();
+
+        let meta = Meta {
+            authorized: Authorized::auto(&stake_pubkey),
+            rent_exempt_reserve,
+            ..Meta::default()
+        };
+
+        let state = StakeState::Stake(
+            meta,
+            Stake::just_stake(stake_lamports - rent_exempt_reserve),
+        );
+
+        let expected_rent_exempt_reserve = calculate_split_rent_exempt_reserve(
+            meta.rent_exempt_reserve,
+            std::mem::size_of::<StakeState>() as u64 + 100,
+            std::mem::size_of::<StakeState>() as u64,
+        );
+
+        // Test various account prefunding, including empty, less than rent_exempt_reserve, exactly
+        // rent_exempt_reserve, and more than rent_exempt_reserve. The empty case is not covered in
+        // test_split, since that test uses a Meta with rent_exempt_reserve = 0
+        let split_lamport_balances = vec![
+            0,
+            1,
+            expected_rent_exempt_reserve,
+            expected_rent_exempt_reserve + 1,
+        ];
+        for initial_balance in split_lamport_balances {
+            let split_stake_account = Account::new_ref_data_with_space(
+                initial_balance,
+                &StakeState::Uninitialized,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .expect("stake_account");
+
+            let split_stake_keyed_account =
+                KeyedAccount::new(&split_stake_pubkey, true, &split_stake_account);
+
+            let stake_account = Account::new_ref_data_with_space(
+                stake_lamports,
+                &state,
+                std::mem::size_of::<StakeState>() + 100,
+                &id(),
+            )
+            .expect("stake_account");
+            let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+
+            // split more than available fails
+            assert_eq!(
+                stake_keyed_account.split(stake_lamports + 1, &split_stake_keyed_account, &signers),
+                Err(InstructionError::InsufficientFunds)
+            );
+
+            // should work
+            assert_eq!(
+                stake_keyed_account.split(stake_lamports / 2, &split_stake_keyed_account, &signers),
+                Ok(())
+            );
+            // no lamport leakage
+            assert_eq!(
+                stake_keyed_account.account.borrow().lamports
+                    + split_stake_keyed_account.account.borrow().lamports,
+                stake_lamports + initial_balance
+            );
+
+            if let StakeState::Stake(meta, stake) = state {
+                let expected_split_meta = Meta {
+                    authorized: Authorized::auto(&stake_pubkey),
+                    rent_exempt_reserve: expected_rent_exempt_reserve,
+                    ..Meta::default()
+                };
+                let expected_stake = stake_lamports / 2
+                    - (expected_rent_exempt_reserve.saturating_sub(initial_balance));
+
+                assert_eq!(
+                    Ok(StakeState::Stake(
+                        expected_split_meta,
+                        Stake {
+                            delegation: Delegation {
+                                stake: expected_stake,
+                                ..stake.delegation
+                            },
+                            ..stake
+                        }
+                    )),
+                    split_stake_keyed_account.state()
+                );
+                assert_eq!(
+                    split_stake_keyed_account.account.borrow().lamports,
+                    expected_stake
+                        + expected_rent_exempt_reserve
+                        + initial_balance.saturating_sub(expected_rent_exempt_reserve)
                 );
                 assert_eq!(
                     Ok(StakeState::Stake(
@@ -3294,8 +3446,8 @@ mod tests {
     #[test]
     fn test_split_100_percent_of_source() {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
-        let rent_exempt_reserve = 10;
+        let stake_lamports = 10_000_000;
+        let rent_exempt_reserve = 2_282_880;
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -3391,8 +3543,8 @@ mod tests {
     #[test]
     fn test_split_100_percent_of_source_to_account_with_lamports() {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
-        let rent_exempt_reserve = 10;
+        let stake_lamports = 10_000_000;
+        let rent_exempt_reserve = 2_282_880;
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -3472,6 +3624,139 @@ mod tests {
                     )),
                     stake_keyed_account.state()
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn test_split_rent_exemptness() {
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
+        let stake_lamports = 10_000_000;
+        let rent_exempt_reserve = 2_282_880;
+
+        let split_stake_pubkey = solana_sdk::pubkey::new_rand();
+        let signers = vec![stake_pubkey].into_iter().collect();
+
+        let meta = Meta {
+            authorized: Authorized::auto(&stake_pubkey),
+            rent_exempt_reserve,
+            ..Meta::default()
+        };
+
+        for state in &[
+            StakeState::Initialized(meta),
+            StakeState::Stake(
+                meta,
+                Stake::just_stake(stake_lamports - rent_exempt_reserve),
+            ),
+        ] {
+            // Test that splitting to a larger account with greater rent-exempt requirement fails
+            // if split amount is too small
+            let split_stake_account = Account::new_ref_data_with_space(
+                0,
+                &StakeState::Uninitialized,
+                std::mem::size_of::<StakeState>() + 10000,
+                &id(),
+            )
+            .expect("stake_account");
+            let split_stake_keyed_account =
+                KeyedAccount::new(&split_stake_pubkey, true, &split_stake_account);
+
+            let stake_account = Account::new_ref_data_with_space(
+                stake_lamports,
+                &state,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .expect("stake_account");
+            let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+
+            assert_eq!(
+                stake_keyed_account.split(stake_lamports, &split_stake_keyed_account, &signers),
+                Err(InstructionError::InsufficientFunds)
+            );
+
+            // Test that splitting from a larger account to a smaller one works.
+            // Split amount should not matter, assuming other fund criteria are met
+            let split_stake_account = Account::new_ref_data_with_space(
+                0,
+                &StakeState::Uninitialized,
+                std::mem::size_of::<StakeState>(),
+                &id(),
+            )
+            .expect("stake_account");
+            let split_stake_keyed_account =
+                KeyedAccount::new(&split_stake_pubkey, true, &split_stake_account);
+
+            let stake_account = Account::new_ref_data_with_space(
+                stake_lamports,
+                &state,
+                std::mem::size_of::<StakeState>() + 100,
+                &id(),
+            )
+            .expect("stake_account");
+            let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+
+            assert_eq!(
+                stake_keyed_account.split(stake_lamports, &split_stake_keyed_account, &signers),
+                Ok(())
+            );
+
+            assert_eq!(
+                split_stake_keyed_account.account.borrow().lamports,
+                stake_lamports
+            );
+
+            match state {
+                StakeState::Initialized(_) => {
+                    assert_eq!(Ok(*state), split_stake_keyed_account.state());
+                    assert_eq!(Ok(*state), stake_keyed_account.state());
+                }
+                StakeState::Stake(meta, stake) => {
+                    let expected_rent_exempt_reserve = calculate_split_rent_exempt_reserve(
+                        meta.rent_exempt_reserve,
+                        std::mem::size_of::<StakeState>() as u64 + 100,
+                        std::mem::size_of::<StakeState>() as u64,
+                    );
+                    let expected_split_meta = Meta {
+                        authorized: Authorized::auto(&stake_pubkey),
+                        rent_exempt_reserve: expected_rent_exempt_reserve,
+                        ..Meta::default()
+                    };
+                    let expected_stake = stake_lamports - expected_rent_exempt_reserve;
+
+                    assert_eq!(
+                        Ok(StakeState::Stake(
+                            expected_split_meta,
+                            Stake {
+                                delegation: Delegation {
+                                    stake: expected_stake,
+                                    ..stake.delegation
+                                },
+                                ..*stake
+                            }
+                        )),
+                        split_stake_keyed_account.state()
+                    );
+                    assert_eq!(
+                        split_stake_keyed_account.account.borrow().lamports,
+                        expected_stake + expected_rent_exempt_reserve
+                    );
+                    assert_eq!(
+                        Ok(StakeState::Stake(
+                            *meta,
+                            Stake {
+                                delegation: Delegation {
+                                    stake: 0,
+                                    ..stake.delegation
+                                },
+                                ..*stake
+                            }
+                        )),
+                        stake_keyed_account.state()
+                    );
+                }
+                _ => unreachable!(),
             }
         }
     }
@@ -3998,6 +4283,32 @@ mod tests {
         assert_eq!(
             stake.delegation.stake,
             stake_keyed_account.lamports().unwrap() - rent_exempt_reserve,
+        );
+    }
+
+    #[test]
+    fn test_calculate_lamports_per_byte_year() {
+        let rent_exempt_reserve = 2282880;
+        let data_len = 200;
+        assert_eq!(
+            calculate_split_rent_exempt_reserve(rent_exempt_reserve, data_len, data_len),
+            rent_exempt_reserve
+        );
+
+        let larger_data = 4008;
+        let expected_rent_exempt_reserve = 28786560;
+        assert_eq!(
+            calculate_split_rent_exempt_reserve(rent_exempt_reserve, data_len, larger_data),
+            expected_rent_exempt_reserve
+        );
+
+        assert_eq!(
+            calculate_split_rent_exempt_reserve(
+                expected_rent_exempt_reserve,
+                larger_data,
+                data_len
+            ),
+            rent_exempt_reserve
         );
     }
 }
