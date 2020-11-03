@@ -482,9 +482,13 @@ export class StakeProgram {
 
   /**
    * Max space of a Stake account
+   *
+   * This is generated from the solana-stake-program StakeState struct as
+   * `std::mem::size_of::<StakeState>()`:
+   * https://docs.rs/solana-stake-program/1.4.4/solana_stake_program/stake_state/enum.StakeState.html
    */
   static get space(): number {
-    return 4008;
+    return 200;
   }
 
   /**
