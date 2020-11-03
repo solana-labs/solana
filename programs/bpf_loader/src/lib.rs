@@ -268,7 +268,15 @@ impl Executor for BPFExecutor {
             log!(logger, "Call BPF program {}", program.unsigned_key());
             let mut instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
             let before = compute_meter.borrow().get_remaining();
-            let result = vm.execute_program_interpreted(&mut instruction_meter);
+            const IS_JIT_ENABLED: bool = false;
+            let result = if IS_JIT_ENABLED {
+                if vm.jit_compile().is_err() {
+                    return Err(BPFLoaderError::VirtualMachineCreationFailed.into());
+                }
+                unsafe { vm.execute_program_jit(&mut instruction_meter) }
+            } else {
+                vm.execute_program_interpreted(&mut instruction_meter)
+            };
             let after = compute_meter.borrow().get_remaining();
             log!(
                 logger,
