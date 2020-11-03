@@ -84,7 +84,7 @@ simply click Logout and re-connect with the correct address.
 
 ## Select a Network
 
-Solana maintains [three distinct networks](../clusters.md), each of which has
+Solana maintains [three distinct networks](../clusters), each of which has
 its own purpose in supporting the Solana ecosystem.  Mainnet Beta is selected by
 default on SolFlare, as this is the permanent network where exchanges and other
 production apps are deployed.  To select a different network, click on the name
@@ -129,7 +129,7 @@ After you submit and [sign the transaction](#signing-a-transaction) you will see
 your new stake account appear in the box labeled "Your Staking Accounts".
 
 Stake accounts created on SolFlare set your wallet address as the
-[staking and withdrawing authority](../staking/stake-accounts.md#understanding-account-authorities)
+[staking and withdrawing authority](/staking/stake-accounts#understanding-account-authorities)
 for your new account, which gives your wallet's key the authority to sign
 for any transactions related to the new stake account.
 

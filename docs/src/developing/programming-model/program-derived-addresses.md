@@ -32,7 +32,7 @@ determines the new owner.
 - Games or prediction markets that collect and redistribute prizes to the
   winners.
 
-## Proposed Solution
+## Solution
 
 The key to the design is two-fold:
 

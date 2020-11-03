@@ -1,5 +1,5 @@
 ---
-title: Builtin Programs
+title: "Builtin programs"
 ---
 
 Solana contains a small handful of builtin programs, which are required to run
@@ -51,7 +51,7 @@ Create vote accounts and vote on blocks
 
 ## BPF Loader
 
-Add programs to the chain.
+Add programs to the chain and execute them.
 
 - Program ID: `BPFLoader1111111111111111111111111111111111`
 - Instructions: [LoaderInstruction](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/loader_instruction/enum.LoaderInstruction.html)

@@ -550,10 +550,10 @@ SPL Token accounts are queried and modified using the `spl-token` command line
 utility. The examples provided in this section depend upon having it installed
 on the local system.
 
-`spl-token` is distributed from Rust [crates.io](https://crates.io) via the Rust
-`cargo` command line utility. The latest version of `cargo` can be installed
-using a handy one-liner for your platform at [rustup.rs](https://rustup.rs). Once
-`cargo` is installed, `spl-token` can be obtained with the following command:
+`spl-token` is distributed from Rust [crates.io](https://crates.io/crates/spl-token)
+via the Rust `cargo` command line utility. The latest version of `cargo` can be
+installed using a handy one-liner for your platform at [rustup.rs](https://rustup.rs).
+Once `cargo` is installed, `spl-token` can be obtained with the following command:
 
 ```
 cargo install spl-token-cli

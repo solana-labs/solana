@@ -210,6 +210,10 @@ The component of a [validator](terminology.md#validator) responsible for [progra
 
 A fraction of a [block](terminology.md#block); the smallest unit sent between [validators](terminology.md#validator).
 
+## signature
+
+A 64-byte ed25519 signature of R (32-bytes) and S (32-bytes). With the requirement that R is a packed Edwards point not of small order and S is a scalar in the range of 0 <= S < L.
+
 ## slot
 
 The period of time for which a [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block).
