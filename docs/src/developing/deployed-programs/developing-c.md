@@ -21,7 +21,8 @@ OUT_DIR := <path to place to resulting shared object>
 include ~/.local/share/solana/install/active_release/bin/sdk/bpf/c/bpf.mk
 ```
 
-The bpf-sdk may not be in the exact place specified above but if you setup your environment per [How to Build](#how-to-build) then it should be.
+The bpf-sdk may not be in the exact place specified above but if you setup your
+environment per [How to Build](#how-to-build) then it should be.
 
 Take a look at
 [helloworld](https://github.com/solana-labs/example-helloworld/tree/master/src/program-c)
@@ -31,7 +32,8 @@ for an example of a C program.
 
 First setup the environment:
 - Install the latest Rust stable from https://rustup.rs
-- Install the latest Solana command-line tools from https://docs.solana.com/cli/install-solana-cli-tools
+- Install the latest Solana command-line tools from
+  https://docs.solana.com/cli/install-solana-cli-tools
 
 Then build using make:
 ```bash

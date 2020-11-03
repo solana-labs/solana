@@ -2,6 +2,11 @@
 title: "Overview"
 ---
 
+Developers can write and deploy their own programs to the Solana blockchain.
+
+The [Helloworld example](examples.md#helloworld) is a good starting place to see
+how a program is written, built, deployed, and interacted with on-chain.
+
 ## Berkley Packet Filter (BPF)
 
 Solana on-chain programs are compiled via the [LLVM compiler
@@ -21,7 +26,8 @@ native instructions.
 
 ## Memory map
 
-The virtual address memory map used by Solana BPF programs is fixed and laid out as follows
+The virtual address memory map used by Solana BPF programs is fixed and laid out
+as follows
 
 - Program code starts at 0x100000000
 - Stack data starts at 0x200000000
@@ -29,9 +35,10 @@ The virtual address memory map used by Solana BPF programs is fixed and laid out
 - Program input parameters start at 0x400000000
 
 The above virtual addresses are start addresses but programs are given access to
-a subset of the memory map.  The program will panic if it attempts to read or write to
-a virtual address that it was not granted access to, and an `AccessViolation` error will be
-returned that contains the address and size of the attempted violation.
+a subset of the memory map.  The program will panic if it attempts to read or
+write to a virtual address that it was not granted access to, and an
+`AccessViolation` error will be returned that contains the address and size of
+the attempted violation.
 
 ## Stack
 
@@ -165,5 +172,7 @@ encoding is little endian):
 - 32 bytes of the program id
 
 For language specific information about serialization see:
-- [Rust program parameter deserialization](developing-rust.md#parameter-deserialization)
-- [C program parameter deserialization](developing-c.md#parameter-deserialization)
+- [Rust program parameter
+  deserialization](developing-rust.md#parameter-deserialization)
+- [C program parameter
+  deserialization](developing-c.md#parameter-deserialization)

@@ -21,4 +21,6 @@ tools](cli/install-solana-cli-tools.md):
 solana feature status
 ```
 
-If you encounter problems first ensure that the Solana tools version you are using match the version returned by `solana cluster-version`.  If they do not match [install the correct tool suite](cli/install-solana-cli-tools.md).
+If you encounter problems first ensure that the Solana tools version you are
+using match the version returned by `solana cluster-version`.  If they do not
+match [install the correct tool suite](cli/install-solana-cli-tools.md).

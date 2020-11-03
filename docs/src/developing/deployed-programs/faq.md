@@ -68,7 +68,7 @@ signer seeds passed to [`invoke_signed`](developing/programming-model/cpi.md)
 don't match the signer seeds used to create the program address
 [`create_program_address`](developing/programming-model/program-derived-addresses.md).
 
-## `rand` dependency causes compilation failure
+## `rand` Rust dependency causes compilation failure
 
 See [Rust Project Dependencies](developing-rust.md#project-dependencies)
 

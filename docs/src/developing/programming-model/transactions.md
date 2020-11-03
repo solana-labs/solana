@@ -72,9 +72,9 @@ found in the [Accounts](accounts.md) section.
 
 Each instruction caries a general purpose byte array that is passed to the
 program along with the accounts. The contents of the instruction data is program
-specific and typically used to convey what operations the program should perform,
-and any additional information those operations may need above and beyond what
-the accounts contain.
+specific and typically used to convey what operations the program should
+perform, and any additional information those operations may need above and
+beyond what the accounts contain.
 
 Programs are free to specify how information is encoded into the instruction
 data byte array. The choice of how data is encoded should take into account the
