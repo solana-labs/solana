@@ -125,7 +125,7 @@ const MIN_STAKE_FOR_GOSSIP: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL;
 /// Minimum number of staked nodes for enforcing stakes in gossip.
 const MIN_NUM_STAKED_NODES: usize = 500;
 /// Lookback window duration of bandwidth usage of pull requests.
-const BANDWIDTH_USAGE_LOOKBACK_DURATION: Duration = Duration::from_secs(7200);
+const BANDWIDTH_USAGE_LOOKBACK_DURATION: Duration = Duration::from_secs(3600);
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -2215,19 +2215,22 @@ impl ClusterInfo {
     ) -> Vec<PullData> {
         let mut scored_requests: Vec<_> = {
             let bandwidth_usage = self.bandwidth_usage.read().unwrap();
-            let score = |pull_data: &PullData| -> (u64, u64) {
+            let score = |pull_data: &PullData| -> f64 {
                 let caller = pull_data.caller.pubkey();
-                let stake = stakes.get(&caller).unwrap_or(&0);
-                let usage = bandwidth_usage.get(now, &caller).unwrap_or(&0);
-                (u64::max(*stake, 1), u64::max(*usage, 1))
+                let stake = *stakes.get(&caller).unwrap_or(&0);
+                let usage = *bandwidth_usage.get(now, &caller).unwrap_or(&0);
+                // Dampen impact of stakes so that low staked
+                // nodes are not totally left out.
+                let stake = (stake.max(1) as f64).ln();
+                stake.max(1.0) / (usage.max(1) as f64)
             };
             requests
                 .into_iter()
                 .map(|request| (score(&request), request))
                 .collect()
         };
-        // Sort in descending order of stake / bandwidth usage.
-        scored_requests.sort_unstable_by(|((s1, u1), _), ((s2, u2), _)| (s2 * u1).cmp(&(s1 * u2)));
+        // Sort in descending order of ln(stake) / bandwidth usage.
+        scored_requests.sort_unstable_by(|(a, _), (b, _)| b.partial_cmp(a).unwrap());
         scored_requests
             .into_iter()
             .map(|(_, request)| request)
@@ -4035,33 +4038,38 @@ mod tests {
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(node.info));
         let mut rng = thread_rng();
         let requests: Vec<_> = repeat_with(|| PullData::new_rand(&mut rng, None))
-            .take(3)
+            .take(5)
             .collect();
         let mut stakes = HashMap::<Pubkey, u64>::new();
-        stakes.insert(requests[0].caller.pubkey(), 11);
-        stakes.insert(requests[1].caller.pubkey(), 23);
-        stakes.insert(requests[2].caller.pubkey(), 47);
+        stakes.insert(requests[0].caller.pubkey(), 47);
+        stakes.insert(requests[1].caller.pubkey(), 31);
+        stakes.insert(requests[2].caller.pubkey(), 23);
+        // Zero stake for request[3].caller
+        stakes.insert(requests[4].caller.pubkey(), 11);
         let now = Instant::now();
         {
             let mut bandwidth_usage = cluster_info.bandwidth_usage.write().unwrap();
-            bandwidth_usage.add(now, requests[0].caller.pubkey(), 2);
-            bandwidth_usage.add(now, requests[1].caller.pubkey(), 7);
-            bandwidth_usage.add(now, requests[2].caller.pubkey(), 5);
+            bandwidth_usage.add(now, requests[0].caller.pubkey(), 5);
+            // Zero bandwidth usage for request[1]
+            bandwidth_usage.add(now, requests[2].caller.pubkey(), 7);
+            bandwidth_usage.add(now, requests[3].caller.pubkey(), 9);
+            bandwidth_usage.add(now, requests[4].caller.pubkey(), 2);
         }
         let reordered_requests = cluster_info.reorder_pull_requests(
             now + Duration::from_secs(235),
             requests.clone(),
             &stakes,
         );
-        // Stakes over bandwidth usage is: 11 / 2, 23 / 7, 47 / 5.
-        // So the ordering would be: 2, 0, 1.
+        // Stakes over bandwidth usage is:
+        //   ln(47) / 5, ln(31) / 0, ln(23) / 7, ln(0) / 9, ln(11) / 2
+        // So the ordering would be:
+        let order = vec![1, 4, 0, 2, 3];
         assert_eq!(
             reordered_requests,
-            vec![
-                requests[2].clone(),
-                requests[0].clone(),
-                requests[1].clone(),
-            ]
+            order
+                .into_iter()
+                .map(|i| requests[i].clone())
+                .collect::<Vec<_>>()
         );
     }
 
