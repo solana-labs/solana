@@ -2462,7 +2462,7 @@ impl ClusterInfo {
         while let Ok(packet) = requests_receiver.try_recv() {
             let num_packets = packets.len() + packet.packets.len();
             if num_packets > MAX_GOSSIP_TRAFFIC {
-                let excess_count = usize::min(MAX_GOSSIP_TRAFFIC - num_packets, packets.len());
+                let excess_count = usize::min(num_packets - MAX_GOSSIP_TRAFFIC, packets.len());
                 self.stats
                     .gossip_packets_dropped_count
                     .add_relaxed(excess_count as u64);
