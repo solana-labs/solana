@@ -1042,6 +1042,7 @@ fn test_snapshot_download() {
         &cluster.entry_point_info.rpc,
         &validator_archive_path,
         archive_snapshot_hash,
+        false,
     )
     .unwrap();
 

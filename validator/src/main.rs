@@ -447,6 +447,7 @@ fn download_then_check_genesis_hash(
     expected_genesis_hash: Option<Hash>,
     max_genesis_archive_unpacked_size: u64,
     no_genesis_fetch: bool,
+    use_progress_bar: bool,
 ) -> Result<Hash, String> {
     if no_genesis_fetch {
         let genesis_config = load_local_genesis(ledger_path, expected_genesis_hash)?;
@@ -454,26 +455,27 @@ fn download_then_check_genesis_hash(
     }
 
     let genesis_package = ledger_path.join("genesis.tar.bz2");
-    let genesis_config =
-        if let Ok(tmp_genesis_package) = download_genesis_if_missing(rpc_addr, &genesis_package) {
-            unpack_genesis_archive(
-                &tmp_genesis_package,
-                &ledger_path,
-                max_genesis_archive_unpacked_size,
-            )
-            .map_err(|err| format!("Failed to unpack downloaded genesis config: {}", err))?;
+    let genesis_config = if let Ok(tmp_genesis_package) =
+        download_genesis_if_missing(rpc_addr, &genesis_package, use_progress_bar)
+    {
+        unpack_genesis_archive(
+            &tmp_genesis_package,
+            &ledger_path,
+            max_genesis_archive_unpacked_size,
+        )
+        .map_err(|err| format!("Failed to unpack downloaded genesis config: {}", err))?;
 
-            let downloaded_genesis = GenesisConfig::load(&ledger_path)
-                .map_err(|err| format!("Failed to load downloaded genesis config: {}", err))?;
+        let downloaded_genesis = GenesisConfig::load(&ledger_path)
+            .map_err(|err| format!("Failed to load downloaded genesis config: {}", err))?;
 
-            check_genesis_hash(&downloaded_genesis, expected_genesis_hash)?;
-            std::fs::rename(tmp_genesis_package, genesis_package)
-                .map_err(|err| format!("Unable to rename: {:?}", err))?;
+        check_genesis_hash(&downloaded_genesis, expected_genesis_hash)?;
+        std::fs::rename(tmp_genesis_package, genesis_package)
+            .map_err(|err| format!("Unable to rename: {:?}", err))?;
 
-            downloaded_genesis
-        } else {
-            load_local_genesis(ledger_path, expected_genesis_hash)?
-        };
+        downloaded_genesis
+    } else {
+        load_local_genesis(ledger_path, expected_genesis_hash)?
+    };
 
     Ok(genesis_config.hash())
 }
@@ -626,6 +628,7 @@ impl Default for RpcBootstrapConfig {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn rpc_bootstrap(
     node: &Node,
     identity_keypair: &Arc<Keypair>,
@@ -636,6 +639,7 @@ fn rpc_bootstrap(
     validator_config: &mut ValidatorConfig,
     bootstrap_config: RpcBootstrapConfig,
     no_port_check: bool,
+    use_progress_bar: bool,
 ) {
     if !no_port_check {
         verify_reachable_ports(&node, cluster_entrypoint, &validator_config);
@@ -693,6 +697,7 @@ fn rpc_bootstrap(
                 validator_config.expected_genesis_hash,
                 bootstrap_config.max_genesis_archive_unpacked_size,
                 bootstrap_config.no_genesis_fetch,
+                use_progress_bar,
             );
 
             if let Ok(genesis_hash) = genesis_hash {
@@ -726,8 +731,12 @@ fn rpc_bootstrap(
                         let (_cluster_info, gossip_exit_flag, gossip_service) =
                             gossip.take().unwrap();
                         gossip_exit_flag.store(true, Ordering::Relaxed);
-                        let ret =
-                            download_snapshot(&rpc_contact_info.rpc, &ledger_path, snapshot_hash);
+                        let ret = download_snapshot(
+                            &rpc_contact_info.rpc,
+                            &ledger_path,
+                            snapshot_hash,
+                            use_progress_bar,
+                        );
                         gossip_service.join().unwrap();
                         ret
                     })
@@ -782,6 +791,7 @@ fn rpc_bootstrap(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_validator(
     node: Node,
     identity_keypair: &Arc<Keypair>,
@@ -792,6 +802,7 @@ fn create_validator(
     mut validator_config: ValidatorConfig,
     rpc_bootstrap_config: RpcBootstrapConfig,
     no_port_check: bool,
+    use_progress_bar: bool,
 ) -> Validator {
     if validator_config.cuda {
         solana_perf::perf_libs::init_cuda();
@@ -810,6 +821,7 @@ fn create_validator(
             &mut validator_config,
             rpc_bootstrap_config,
             no_port_check,
+            use_progress_bar,
         );
     }
 
@@ -1627,6 +1639,7 @@ pub fn main() {
             Some(logfile)
         }
     };
+    let use_progress_bar = logfile.is_none();
     let _logger_thread = start_logger(logfile);
 
     // Default to RUST_BACKTRACE=1 for more informative validator logs
@@ -1717,6 +1730,7 @@ pub fn main() {
         validator_config,
         rpc_bootstrap_config,
         no_port_check,
+        use_progress_bar,
     );
 
     if let Some(filename) = init_complete_file {

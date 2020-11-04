@@ -23,7 +23,11 @@ fn new_spinner_progress_bar() -> ProgressBar {
     progress_bar
 }
 
-pub fn download_file(url: &str, destination_file: &Path) -> Result<(), String> {
+pub fn download_file(
+    url: &str,
+    destination_file: &Path,
+    use_progress_bar: bool,
+) -> Result<(), String> {
     if destination_file.is_file() {
         return Err(format!("{:?} already exists", destination_file));
     }
@@ -34,7 +38,9 @@ pub fn download_file(url: &str, destination_file: &Path) -> Result<(), String> {
     let temp_destination_file = destination_file.with_extension(".tmp");
 
     let progress_bar = new_spinner_progress_bar();
-    progress_bar.set_message(&format!("{}Downloading {}...", TRUCK, url));
+    if use_progress_bar {
+        progress_bar.set_message(&format!("{}Downloading {}...", TRUCK, url));
+    }
 
     let response = reqwest::blocking::Client::new()
         .get(url)
@@ -53,28 +59,51 @@ pub fn download_file(url: &str, destination_file: &Path) -> Result<(), String> {
             .and_then(|content_length| content_length.parse().ok())
             .unwrap_or(0)
     };
-    progress_bar.set_length(download_size);
-    progress_bar.set_style(
-        ProgressStyle::default_bar()
-            .template(&format!(
-                "{}{}Downloading {} {}",
-                "{spinner:.green} ",
-                TRUCK,
-                url,
-                "[{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})"
-            ))
-            .progress_chars("=> "),
-    );
+
+    if use_progress_bar {
+        progress_bar.set_length(download_size);
+        progress_bar.set_style(
+            ProgressStyle::default_bar()
+                .template(&format!(
+                    "{}{}Downloading {} {}",
+                    "{spinner:.green} ",
+                    TRUCK,
+                    url,
+                    "[{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})"
+                ))
+                .progress_chars("=> "),
+        );
+    } else {
+        info!("Downloading {} bytes from {}", download_size, url);
+    }
 
     struct DownloadProgress<R> {
         progress_bar: ProgressBar,
         response: R,
+        last_print: Instant,
+        current_bytes: usize,
+        download_size: f32,
+        use_progress_bar: bool,
     }
 
     impl<R: Read> Read for DownloadProgress<R> {
         fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
             self.response.read(buf).map(|n| {
-                self.progress_bar.inc(n as u64);
+                if self.use_progress_bar {
+                    self.progress_bar.inc(n as u64);
+                } else {
+                    self.current_bytes += n;
+                    if self.last_print.elapsed().as_secs() > 5 {
+                        let bytes_f32 = self.current_bytes as f32;
+                        info!(
+                            "downloaded {} bytes {:.1}% {:.1} bytes/s",
+                            self.current_bytes,
+                            100f32 * (bytes_f32 / self.download_size),
+                            bytes_f32 / self.last_print.elapsed().as_secs_f32(),
+                        );
+                        self.last_print = Instant::now();
+                    }
+                }
                 n
             })
         }
@@ -83,6 +112,10 @@ pub fn download_file(url: &str, destination_file: &Path) -> Result<(), String> {
     let mut source = DownloadProgress {
         progress_bar,
         response,
+        last_print: Instant::now(),
+        current_bytes: 0,
+        download_size: (download_size as f32).max(1f32),
+        use_progress_bar,
     };
 
     File::create(&temp_destination_file)
@@ -110,6 +143,7 @@ pub fn download_file(url: &str, destination_file: &Path) -> Result<(), String> {
 pub fn download_genesis_if_missing(
     rpc_addr: &SocketAddr,
     genesis_package: &Path,
+    use_progress_bar: bool,
 ) -> Result<PathBuf, String> {
     if !genesis_package.exists() {
         let tmp_genesis_path = genesis_package.parent().unwrap().join("tmp-genesis");
@@ -119,6 +153,7 @@ pub fn download_genesis_if_missing(
         download_file(
             &format!("http://{}/{}", rpc_addr, "genesis.tar.bz2"),
             &tmp_genesis_package,
+            use_progress_bar,
         )?;
 
         Ok(tmp_genesis_package)
@@ -131,6 +166,7 @@ pub fn download_snapshot(
     rpc_addr: &SocketAddr,
     ledger_path: &Path,
     desired_snapshot_hash: (Slot, Hash),
+    use_progress_bar: bool,
 ) -> Result<(), String> {
     // Remove all snapshot not matching the desired hash
     let snapshot_packages = snapshot_utils::get_snapshot_archives(ledger_path);
@@ -171,6 +207,7 @@ pub fn download_snapshot(
                         .unwrap()
                 ),
                 &desired_snapshot_package,
+                use_progress_bar,
             )
             .is_ok()
             {
