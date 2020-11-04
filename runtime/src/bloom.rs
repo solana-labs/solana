@@ -329,6 +329,9 @@ mod test {
         let bloom: AtomicBloom<_> = bloom.into();
         assert_eq!(bloom.num_bits, 9731);
         assert_eq!(bloom.bits.len(), (9731 + 63) / 64);
+        for hash_value in &hash_values {
+            assert!(bloom.contains(hash_value));
+        }
         let bloom: Bloom<_> = bloom.into();
         assert_eq!(bloom.num_bits_set, num_bits_set);
         for hash_value in &hash_values {
@@ -337,6 +340,9 @@ mod test {
         // Round trip, re-inserting the same hash values.
         let bloom: AtomicBloom<_> = bloom.into();
         hash_values.par_iter().for_each(|v| bloom.add(v));
+        for hash_value in &hash_values {
+            assert!(bloom.contains(hash_value));
+        }
         let bloom: Bloom<_> = bloom.into();
         assert_eq!(bloom.num_bits_set, num_bits_set);
         assert_eq!(bloom.bits.len(), 9731);
@@ -352,6 +358,17 @@ mod test {
         assert_eq!(bloom.num_bits, 9731);
         assert_eq!(bloom.bits.len(), (9731 + 63) / 64);
         more_hash_values.par_iter().for_each(|v| bloom.add(v));
+        for hash_value in &hash_values {
+            assert!(bloom.contains(hash_value));
+        }
+        for hash_value in &more_hash_values {
+            assert!(bloom.contains(hash_value));
+        }
+        let false_positive = std::iter::repeat_with(|| solana_sdk::hash::new_rand(&mut rng))
+            .take(10_000)
+            .filter(|hash_value| bloom.contains(hash_value))
+            .count();
+        assert!(false_positive < 2000, "false_positive: {}", false_positive);
         let bloom: Bloom<_> = bloom.into();
         assert_eq!(bloom.bits.len(), 9731);
         assert!(bloom.num_bits_set > num_bits_set);
