@@ -12,7 +12,7 @@ use std::{
 
 struct Config {
     bpf_sdk: PathBuf,
-    bpf_out_dir: PathBuf,
+    bpf_out_dir: Option<PathBuf>,
     dump: bool,
     features: Vec<String>,
     manifest_path: Option<PathBuf>,
@@ -28,7 +28,7 @@ impl Default for Config {
                 .expect("Unable to get parent directory")
                 .to_path_buf()
                 .join("sdk/bpf"),
-            bpf_out_dir: env::current_dir().expect("Unable to get current directory"),
+            bpf_out_dir: None,
             features: vec![],
             manifest_path: None,
             no_default_features: false,
@@ -123,6 +123,10 @@ fn build_bpf(config: Config) {
         exit(1);
     });
 
+    let bpf_out_dir = config
+        .bpf_out_dir
+        .unwrap_or_else(|| metadata.target_directory.join("deploy"));
+
     let target_build_directory = metadata
         .target_directory
         .join("bpfel-unknown-unknown/release");
@@ -167,10 +171,8 @@ fn build_bpf(config: Config) {
 
     if let Some(program_name) = program_name {
         let program_unstripped_so = target_build_directory.join(&format!("{}.so", program_name));
-        let program_dump = config
-            .bpf_out_dir
-            .join(&format!("{}-dump.txt", program_name));
-        let program_so = config.bpf_out_dir.join(&format!("{}.so", program_name));
+        let program_dump = bpf_out_dir.join(&format!("{}-dump.txt", program_name));
+        let program_so = bpf_out_dir.join(&format!("{}.so", program_name));
 
         spawn(
             &config.bpf_sdk.join("scripts/strip.sh"),
@@ -183,6 +185,10 @@ fn build_bpf(config: Config) {
                 &[&program_unstripped_so, &program_dump],
             );
         }
+
+        println!();
+        println!("To deploy this program:");
+        println!("  $ solana deploy {}", program_so.display());
     } else if config.dump {
         println!("Note: --dump is only available for crates with a cdylib target");
     }
@@ -191,7 +197,6 @@ fn build_bpf(config: Config) {
 fn main() {
     let default_config = Config::default();
     let default_bpf_sdk = format!("{}", default_config.bpf_sdk.display());
-    let default_bpf_out_dir = format!("{}", default_config.bpf_out_dir.display());
 
     let mut args = env::args().collect::<Vec<_>>();
     // When run as a cargo subcommand, the first program argument is the subcommand name.
@@ -245,13 +250,12 @@ fn main() {
                 .long("bpf-out-dir")
                 .value_name("DIRECTORY")
                 .takes_value(true)
-                .default_value(&default_bpf_out_dir)
                 .help("Place final BPF build artifacts in this directory"),
         )
         .get_matches_from(args);
 
     let bpf_sdk = value_t_or_exit!(matches, "bpf_sdk", PathBuf);
-    let bpf_out_dir = value_t_or_exit!(matches, "bpf_out_dir", PathBuf);
+    let bpf_out_dir = value_t!(matches, "bpf_out_dir", PathBuf).ok();
 
     let config = Config {
         bpf_sdk: fs::canonicalize(&bpf_sdk).unwrap_or_else(|err| {
@@ -262,13 +266,15 @@ fn main() {
             );
             exit(1);
         }),
-        bpf_out_dir: if bpf_out_dir.is_absolute() {
-            bpf_out_dir
-        } else {
-            env::current_dir()
-                .expect("Unable to get current working directory")
-                .join(bpf_out_dir)
-        },
+        bpf_out_dir: bpf_out_dir.map(|bpf_out_dir| {
+            if bpf_out_dir.is_absolute() {
+                bpf_out_dir
+            } else {
+                env::current_dir()
+                    .expect("Unable to get current working directory")
+                    .join(bpf_out_dir)
+            }
+        }),
         dump: matches.is_present("dump"),
         features: values_t!(matches, "features", String)
             .ok()
