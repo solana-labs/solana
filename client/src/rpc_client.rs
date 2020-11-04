@@ -8,7 +8,7 @@ use crate::{
         RpcProgramAccountsConfig, RpcSendTransactionConfig, RpcSimulateTransactionConfig,
         RpcTokenAccountsFilter,
     },
-    rpc_request::{RpcError, RpcRequest, TokenAccountsFilter},
+    rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
     rpc_response::*,
     rpc_sender::RpcSender,
 };
@@ -171,10 +171,33 @@ impl RpcClient {
             ..config
         };
         let serialized_encoded = serialize_encode_transaction(transaction, encoding)?;
-        let signature_base58_str: String = self.send(
+        let signature_base58_str: String = match self.send(
             RpcRequest::SendTransaction,
             json!([serialized_encoded, config]),
-        )?;
+        ) {
+            Ok(signature_base58_str) => signature_base58_str,
+            Err(err) => {
+                if let ClientErrorKind::RpcError(RpcError::RpcResponseError {
+                    code,
+                    message,
+                    data,
+                }) = &err.kind
+                {
+                    debug!("{} {}", code, message);
+                    if let RpcResponseErrorData::SendTransactionPreflightFailure(
+                        RpcSimulateTransactionResult {
+                            logs: Some(logs), ..
+                        },
+                    ) = data
+                    {
+                        for (i, log) in logs.iter().enumerate() {
+                            debug!("{:>3}: {}", i + 1, log);
+                        }
+                    }
+                }
+                return Err(err);
+            }
+        };
 
         let signature = signature_base58_str
             .parse::<Signature>()

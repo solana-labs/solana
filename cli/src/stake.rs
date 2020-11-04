@@ -1618,9 +1618,9 @@ pub(crate) fn fetch_epoch_rewards(
                 kind:
                     ClientErrorKind::RpcError(rpc_request::RpcError::RpcResponseError {
                         code: rpc_custom_error::JSON_RPC_SERVER_ERROR_BLOCK_NOT_AVAILABLE,
-                        message: _,
+                        ..
                     }),
-                request: _,
+                ..
             }) => {
                 // RPC node doesn't have this block
                 break;
