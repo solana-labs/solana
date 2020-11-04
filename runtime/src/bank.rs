@@ -2439,7 +2439,7 @@ impl Bank {
                     let instruction_recorders = if enable_cpi_recording {
                         let ix_count = tx.message.instructions.len();
                         let mut recorders = Vec::with_capacity(ix_count);
-                        recorders.resize_with(ix_count, || InstructionRecorder::default());
+                        recorders.resize_with(ix_count, InstructionRecorder::default);
                         Some(recorders)
                     } else {
                         None

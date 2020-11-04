@@ -1318,7 +1318,7 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     let mut error_validator_config = ValidatorConfig::default();
     error_validator_config.broadcast_stage_type = faulty_node_type;
     let mut validator_configs = Vec::with_capacity(num_nodes - 1);
-    validator_configs.resize_with(num_nodes - 1, || ValidatorConfig::default());
+    validator_configs.resize_with(num_nodes - 1, ValidatorConfig::default);
 
     // Push a faulty_bootstrap = vec![error_validator_config];
     validator_configs.insert(0, error_validator_config);
