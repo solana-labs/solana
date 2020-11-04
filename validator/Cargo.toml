@@ -32,7 +32,7 @@ solana-vote-program = { path = "../programs/vote", version = "1.5.0" }
 solana-vote-signer = { path = "../vote-signer", version = "1.5.0" }
 
 [target."cfg(unix)".dependencies]
-libc = "0.2.72"
+libc = "0.2.80"
 signal-hook = "0.1.15"
 
 #[[bin]]
