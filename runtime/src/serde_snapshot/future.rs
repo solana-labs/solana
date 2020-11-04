@@ -18,7 +18,7 @@ impl solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableAccountStora
 impl From<&AccountStorageEntry> for SerializableAccountStorageEntry {
     fn from(rhs: &AccountStorageEntry) -> Self {
         Self {
-            id: rhs.id,
+            id: rhs.append_vec_id(),
             accounts_current_len: rhs.accounts.len(),
         }
     }
@@ -235,7 +235,7 @@ impl<'a> TypeContext<'a> for Context {
             serialize_iter_as_map(serializable_db.account_storage_entries.iter().map(|x| {
                 *entry_count.borrow_mut() += x.len();
                 (
-                    x.first().unwrap().slot,
+                    x.first().unwrap().slot(),
                     serialize_iter_as_seq(
                         x.iter()
                             .map(|x| Self::SerializableAccountStorageEntry::from(x.as_ref())),

@@ -7732,6 +7732,7 @@ mod tests {
 
     #[test]
     fn test_status_cache_ancestors() {
+        solana_logger::setup();
         let (genesis_config, _mint_keypair) = create_genesis_config(500);
         let parent = Arc::new(Bank::new(&genesis_config));
         let bank1 = Arc::new(new_from_parent(&parent));

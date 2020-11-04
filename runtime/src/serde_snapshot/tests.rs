@@ -27,11 +27,10 @@ fn copy_append_vecs<P: AsRef<Path>>(
     let storage_entries = accounts_db.get_snapshot_storages(Slot::max_value());
     for storage in storage_entries.iter().flatten() {
         let storage_path = storage.get_path();
-        let output_path = output_dir.as_ref().join(
-            storage_path
-                .file_name()
-                .expect("Invalid AppendVec file path"),
-        );
+        let output_path = output_dir.as_ref().join(AppendVec::new_relative_path(
+            storage.slot(),
+            storage.append_vec_id(),
+        ));
 
         std::fs::copy(storage_path, output_path)?;
     }

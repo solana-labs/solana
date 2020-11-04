@@ -250,11 +250,11 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
     for storage in snapshot_package.storages.iter().flatten() {
         storage.flush()?;
         let storage_path = storage.get_path();
-        let output_path = staging_accounts_dir.join(
-            storage_path
-                .file_name()
-                .expect("Invalid AppendVec file path"),
-        );
+        let output_path =
+            staging_accounts_dir.join(crate::append_vec::AppendVec::new_relative_path(
+                storage.slot(),
+                storage.append_vec_id(),
+            ));
 
         // `storage_path` - The file path where the AppendVec itself is located
         // `output_path` - The directory where the AppendVec will be placed in the staging directory.
