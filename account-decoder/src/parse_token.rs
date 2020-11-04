@@ -4,7 +4,9 @@ use crate::{
 };
 use solana_sdk::pubkey::Pubkey;
 use spl_token_v2_0::{
-    solana_sdk::{program_option::COption, program_pack::Pack, pubkey::Pubkey as SplTokenPubkey},
+    solana_program::{
+        program_option::COption, program_pack::Pack, pubkey::Pubkey as SplTokenPubkey,
+    },
     state::{Account, AccountState, Mint, Multisig},
 };
 use std::str::FromStr;

@@ -64,7 +64,7 @@ use solana_transaction_status::{
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use spl_token_v2_0::{
-    solana_sdk::program_pack::Pack,
+    solana_program::program_pack::Pack,
     state::{Account as TokenAccount, Mint},
 };
 use std::{
@@ -2715,7 +2715,7 @@ pub mod tests {
         vote_state::{Vote, VoteInit, MAX_LOCKOUT_HISTORY},
     };
     use spl_token_v2_0::{
-        solana_sdk::{program_option::COption, pubkey::Pubkey as SplTokenPubkey},
+        solana_program::{program_option::COption, pubkey::Pubkey as SplTokenPubkey},
         state::AccountState as TokenAccountState,
         state::Mint,
     };
