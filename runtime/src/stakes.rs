@@ -29,16 +29,17 @@ impl Stakes {
     pub fn history(&self) -> &StakeHistory {
         &self.stake_history
     }
-    pub fn clone_with_epoch(&self, epoch: Epoch) -> Self {
-        if self.epoch == epoch {
+    pub fn clone_with_epoch(&self, next_epoch: Epoch) -> Self {
+        let prev_epoch = self.epoch;
+        if prev_epoch == next_epoch {
             self.clone()
         } else {
-            let mut stake_history = self.stake_history.clone();
-
-            stake_history.add(
-                self.epoch,
+            // wrap up the prev epoch by adding new stake history entry for the prev epoch
+            let mut stake_history_upto_prev_epoch = self.stake_history.clone();
+            stake_history_upto_prev_epoch.add(
+                prev_epoch,
                 new_stake_history_entry(
-                    self.epoch,
+                    prev_epoch,
                     self.stake_delegations
                         .iter()
                         .map(|(_pubkey, stake_delegation)| stake_delegation),
@@ -46,24 +47,31 @@ impl Stakes {
                 ),
             );
 
+            // refresh the stake distribution of vote accounts for the next epoch, using new stake history
+            let vote_accounts_for_next_epoch = self
+                .vote_accounts
+                .iter()
+                .map(|(pubkey, (_stake, account))| {
+                    (
+                        *pubkey,
+                        (
+                            self.calculate_stake(
+                                pubkey,
+                                next_epoch,
+                                Some(&stake_history_upto_prev_epoch),
+                            ),
+                            account.clone(),
+                        ),
+                    )
+                })
+                .collect();
+
             Stakes {
                 stake_delegations: self.stake_delegations.clone(),
                 unused: self.unused,
-                epoch,
-                vote_accounts: self
-                    .vote_accounts
-                    .iter()
-                    .map(|(pubkey, (_stake, account))| {
-                        (
-                            *pubkey,
-                            (
-                                self.calculate_stake(pubkey, epoch, Some(&stake_history)),
-                                account.clone(),
-                            ),
-                        )
-                    })
-                    .collect(),
-                stake_history,
+                epoch: next_epoch,
+                stake_history: stake_history_upto_prev_epoch,
+                vote_accounts: vote_accounts_for_next_epoch,
             }
         }
     }
