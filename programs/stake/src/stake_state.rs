@@ -3229,8 +3229,9 @@ mod tests {
     #[test]
     fn test_split_to_account_with_rent_exempt_reserve() {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 10_000_000;
-        let rent_exempt_reserve = 2_282_880;
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let stake_lamports = rent_exempt_reserve * 3; // Enough to allow half to be split and remain rent-exempt
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -3331,8 +3332,9 @@ mod tests {
     #[test]
     fn test_split_to_smaller_account_with_rent_exempt_reserve() {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 10_000_000;
-        let rent_exempt_reserve = 2_282_880;
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let stake_lamports = rent_exempt_reserve * 3; // Enough to allow half to be split and remain rent-exempt
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -3450,7 +3452,8 @@ mod tests {
     #[test]
     fn test_split_to_larger_account_edge_case() {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let rent_exempt_reserve = 2_282_880;
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -3515,7 +3518,8 @@ mod tests {
     #[test]
     fn test_split_100_percent_of_source_to_larger_account_edge_case() {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let rent_exempt_reserve = 2_282_880;
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
         let stake_lamports = rent_exempt_reserve + 1;
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
@@ -3577,8 +3581,9 @@ mod tests {
     #[test]
     fn test_split_100_percent_of_source() {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 10_000_000;
-        let rent_exempt_reserve = 2_282_880;
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let stake_lamports = rent_exempt_reserve * 3; // Arbitrary amount over rent_exempt_reserve
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -3674,8 +3679,9 @@ mod tests {
     #[test]
     fn test_split_100_percent_of_source_to_account_with_lamports() {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 10_000_000;
-        let rent_exempt_reserve = 2_282_880;
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let stake_lamports = rent_exempt_reserve * 3; // Arbitrary amount over rent_exempt_reserve
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -3762,8 +3768,9 @@ mod tests {
     #[test]
     fn test_split_rent_exemptness() {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 10_000_000;
-        let rent_exempt_reserve = 2_282_880;
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let stake_lamports = rent_exempt_reserve + 1;
 
         let split_stake_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_pubkey].into_iter().collect();
@@ -4419,24 +4426,35 @@ mod tests {
 
     #[test]
     fn test_calculate_lamports_per_byte_year() {
-        let rent_exempt_reserve = 2282880;
-        let data_len = 200;
+        let rent = Rent::default();
+        let data_len = 200u64;
+        let rent_exempt_reserve = rent.minimum_balance(data_len as usize);
         assert_eq!(
             calculate_split_rent_exempt_reserve(rent_exempt_reserve, data_len, data_len),
             rent_exempt_reserve
         );
 
-        let larger_data = 4008;
-        let expected_rent_exempt_reserve = 28786560;
+        let larger_data = 4008u64;
+        let larger_rent_exempt_reserve = rent.minimum_balance(larger_data as usize);
         assert_eq!(
             calculate_split_rent_exempt_reserve(rent_exempt_reserve, data_len, larger_data),
-            expected_rent_exempt_reserve
+            larger_rent_exempt_reserve
+        );
+        assert_eq!(
+            calculate_split_rent_exempt_reserve(larger_rent_exempt_reserve, larger_data, data_len),
+            rent_exempt_reserve
         );
 
+        let even_larger_data = solana_sdk::system_instruction::MAX_PERMITTED_DATA_LENGTH;
+        let even_larger_rent_exempt_reserve = rent.minimum_balance(even_larger_data as usize);
+        assert_eq!(
+            calculate_split_rent_exempt_reserve(rent_exempt_reserve, data_len, even_larger_data),
+            even_larger_rent_exempt_reserve
+        );
         assert_eq!(
             calculate_split_rent_exempt_reserve(
-                expected_rent_exempt_reserve,
-                larger_data,
+                even_larger_rent_exempt_reserve,
+                even_larger_data,
                 data_len
             ),
             rent_exempt_reserve
