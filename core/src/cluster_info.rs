@@ -197,15 +197,29 @@ impl Counter {
     fn clear(&self) -> u64 {
         self.0.swap(0, Ordering::Relaxed)
     }
-    fn measure_task<F, R>(&self, task: F) -> R
-    where
-        F: FnOnce() -> R,
-    {
-        let now = Instant::now();
-        let out = task();
-        let micros = now.elapsed().as_micros();
-        self.0.fetch_add(micros as u64, Ordering::Relaxed);
-        out
+}
+
+struct ScopedTimer<'a> {
+    clock: Instant,
+    metric: &'a AtomicU64,
+}
+
+impl<'a> From<&'a Counter> for ScopedTimer<'a> {
+    // Output should be assigned to a *named* variable,
+    // otherwise it is immediately dropped.
+    #[must_use]
+    fn from(counter: &'a Counter) -> Self {
+        Self {
+            clock: Instant::now(),
+            metric: &counter.0,
+        }
+    }
+}
+
+impl Drop for ScopedTimer<'_> {
+    fn drop(&mut self) {
+        let micros = self.clock.elapsed().as_micros();
+        self.metric.fetch_add(micros as u64, Ordering::Relaxed);
     }
 }
 
@@ -1826,6 +1840,7 @@ impl ClusterInfo {
     }
 
     fn handle_batch_prune_messages(&self, messages: Vec<(Pubkey, PruneData)>) {
+        let _st = ScopedTimer::from(&self.stats.handle_batch_prune_messages_time);
         if messages.is_empty() {
             return;
         }
@@ -1880,6 +1895,7 @@ impl ClusterInfo {
         response_sender: &PacketSender,
         feature_set: Option<&FeatureSet>,
     ) {
+        let _st = ScopedTimer::from(&self.stats.handle_batch_pull_requests_time);
         if requests.is_empty() {
             return;
         }
@@ -2100,6 +2116,7 @@ impl ClusterInfo {
         stakes: &HashMap<Pubkey, u64>,
         epoch_time_ms: u64,
     ) {
+        let _st = ScopedTimer::from(&self.stats.handle_batch_pull_responses_time);
         if responses.is_empty() {
             return;
         }
@@ -2249,6 +2266,7 @@ impl ClusterInfo {
     ) where
         I: IntoIterator<Item = (SocketAddr, Ping)>,
     {
+        let _st = ScopedTimer::from(&self.stats.handle_batch_ping_messages_time);
         if let Some(response) = self.handle_ping_messages(pings, recycler) {
             let _ = response_sender.send(response);
         }
@@ -2280,6 +2298,7 @@ impl ClusterInfo {
     where
         I: IntoIterator<Item = (SocketAddr, Pong)>,
     {
+        let _st = ScopedTimer::from(&self.stats.handle_batch_pong_messages_time);
         let mut pongs = pongs.into_iter().peekable();
         if pongs.peek().is_some() {
             let mut ping_cache = self.ping_cache.write().unwrap();
@@ -2297,6 +2316,7 @@ impl ClusterInfo {
         stakes: &HashMap<Pubkey, u64>,
         response_sender: &PacketSender,
     ) {
+        let _st = ScopedTimer::from(&self.stats.handle_batch_push_messages_time);
         if messages.is_empty() {
             return;
         }
@@ -2467,46 +2487,25 @@ impl ClusterInfo {
                 Protocol::PongMessage(pong) => pong_messages.push((from_addr, pong)),
             }
         }
-        self.stats.handle_batch_ping_messages_time.measure_task(|| {
-            self.handle_batch_ping_messages(ping_messages, recycler, response_sender)
-        });
-        self.stats
-            .handle_batch_prune_messages_time
-            .measure_task(|| {
-                self.handle_batch_prune_messages(prune_messages);
-            });
-        self.stats.handle_batch_push_messages_time.measure_task(|| {
-            self.handle_batch_push_messages(
-                push_messages,
-                thread_pool,
-                recycler,
-                &stakes,
-                response_sender,
-            );
-        });
-        self.stats
-            .handle_batch_pull_responses_time
-            .measure_task(|| {
-                self.handle_batch_pull_responses(
-                    pull_responses,
-                    thread_pool,
-                    &stakes,
-                    epoch_time_ms,
-                );
-            });
-        self.stats.handle_batch_pong_messages_time.measure_task(|| {
-            self.handle_batch_pong_messages(pong_messages, Instant::now());
-        });
-        self.stats.handle_batch_pull_requests_time.measure_task(|| {
-            self.handle_batch_pull_requests(
-                pull_requests,
-                thread_pool,
-                recycler,
-                &stakes,
-                response_sender,
-                feature_set,
-            );
-        });
+        self.handle_batch_ping_messages(ping_messages, recycler, response_sender);
+        self.handle_batch_prune_messages(prune_messages);
+        self.handle_batch_push_messages(
+            push_messages,
+            thread_pool,
+            recycler,
+            &stakes,
+            response_sender,
+        );
+        self.handle_batch_pull_responses(pull_responses, thread_pool, &stakes, epoch_time_ms);
+        self.handle_batch_pong_messages(pong_messages, Instant::now());
+        self.handle_batch_pull_requests(
+            pull_requests,
+            thread_pool,
+            recycler,
+            &stakes,
+            response_sender,
+            feature_set,
+        );
         self.stats
             .process_gossip_packets_time
             .add_measure(&mut timer);
