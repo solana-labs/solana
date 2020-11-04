@@ -242,7 +242,22 @@ fn feature_activation_allowed(rpc_client: &RpcClient, quiet: bool) -> Result<boo
         .unwrap_or(false);
 
     if !feature_activation_allowed && !quiet {
-        println!("{}", style("Stake By Feature Set:").bold());
+        if active_stake_by_feature_set.get(&my_feature_set).is_none() {
+            println!(
+                "{}",
+                style("To activate features the tool and cluster feature sets must match, select a tool version that matches the cluster")
+                    .bold());
+        } else {
+            println!(
+                "{}",
+                style("To activate features the stake must be >= 95%").bold()
+            );
+        }
+        println!(
+            "{}",
+            style(format!("Tool Feture Set: {}", my_feature_set)).bold()
+        );
+        println!("{}", style("Cluster Feature Sets and Stakes:").bold());
         for (feature_set, percentage) in active_stake_by_feature_set.iter() {
             if *feature_set == 0 {
                 println!("unknown - {}%", percentage);
