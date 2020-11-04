@@ -1,11 +1,17 @@
 use crate::{account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction};
 
 /// Invoke a cross-program instruction
+///
+/// Note that the program id of the instruction being issued must also be included in
+/// `account_infos`.
 pub fn invoke(instruction: &Instruction, account_infos: &[AccountInfo]) -> ProgramResult {
     invoke_signed(instruction, account_infos, &[])
 }
 
 /// Invoke a cross-program instruction with program signatures
+///
+/// Note that the program id of the instruction being issued must also be included in
+/// `account_infos`.
 pub fn invoke_signed(
     instruction: &Instruction,
     account_infos: &[AccountInfo],
