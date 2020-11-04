@@ -258,8 +258,9 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
-            inner_instructions,
+            bad_inner_instructions: _,
             log_messages,
+            inner_instructions,
         } = value;
         let err = match status {
             Ok(()) => None,
@@ -278,8 +279,9 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
-            inner_instructions,
+            bad_inner_instructions: vec![],
             log_messages,
+            inner_instructions,
         }
     }
 }
@@ -293,8 +295,9 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
-            inner_instructions,
+            bad_inner_instructions: _,
             log_messages,
+            inner_instructions,
         } = value;
         let status = match &err {
             None => Ok(()),
@@ -312,8 +315,9 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
-            inner_instructions,
+            bad_inner_instructions: None,
             log_messages,
+            inner_instructions,
         })
     }
 }
