@@ -2460,15 +2460,14 @@ impl ClusterInfo {
         let packets: Vec<_> = requests_receiver.recv_timeout(RECV_TIMEOUT)?.packets.into();
         let mut packets = VecDeque::from(packets);
         while let Ok(packet) = requests_receiver.try_recv() {
-            let num_packets = packets.len() + packet.packets.len();
-            if num_packets > MAX_GOSSIP_TRAFFIC {
-                let excess_count = usize::min(num_packets - MAX_GOSSIP_TRAFFIC, packets.len());
+            packets.extend(packet.packets.into_iter());
+            let excess_count = packets.len().saturating_sub(MAX_GOSSIP_TRAFFIC);
+            if excess_count > 0 {
+                packets.drain(0..excess_count);
                 self.stats
                     .gossip_packets_dropped_count
                     .add_relaxed(excess_count as u64);
-                packets.drain(0..excess_count);
             }
-            packets.extend(packet.packets.into_iter());
         }
         let (stakes, epoch_time_ms) = Self::get_stakes_and_epoch_time(bank_forks);
         // Using root_bank instead of working_bank here so that an enbaled
