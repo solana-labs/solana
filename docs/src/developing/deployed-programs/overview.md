@@ -46,7 +46,7 @@ BPF uses stack frames instead of a variable stack pointer. Each stack frame is
 4KB in size.
 
 If a program violates that stack frame size, the compiler will report the
-overrun as a warning. 
+overrun as a warning.
 
 For example: `Error: Function
 _ZN16curve25519_dalek7edwards21EdwardsBasepointTable6create17h178b3d2411f7f082E
