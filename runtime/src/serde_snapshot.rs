@@ -275,9 +275,9 @@ where
         for (slot, entries) in storage.into_iter() {
             let sub_map = map.entry(slot).or_insert_with(HashMap::new);
             for entry in entries.into_iter() {
-                let mut entry: AccountStorageEntry = entry.into();
-                entry.slot = slot;
-                sub_map.insert(entry.id, Arc::new(entry));
+                let entry: AccountStorageEntry = entry.into();
+                entry.slot.store(slot, Ordering::Relaxed);
+                sub_map.insert(entry.append_vec_id(), Arc::new(entry));
             }
         }
         map
@@ -306,7 +306,8 @@ where
 
                 // Move the corresponding AppendVec from the snapshot into the directory pointed
                 // at by `local_dir`
-                let append_vec_relative_path = AppendVec::new_relative_path(slot, storage_entry.id);
+                let append_vec_relative_path =
+                    AppendVec::new_relative_path(slot, storage_entry.append_vec_id());
                 let append_vec_abs_path = stream_append_vecs_path
                     .as_ref()
                     .join(&append_vec_relative_path);
