@@ -43,12 +43,32 @@ the attempted violation.
 ## Stack
 
 BPF uses stack frames instead of a variable stack pointer. Each stack frame is
-4KB in size. If a program violates that stack frame size, the compiler will
-report the overrun as a warning. The reason a warning is reported rather than an
-error is because some dependent crates may include functionality that violates
-the stack frame restrictions even if the program doesn't use that functionality.
-If the program violates the stack size at runtime, an `AccessViolation` error
-will be reported.
+4KB in size.
+
+If a program violates that stack frame size, the compiler will report the
+overrun as a warning.
+
+For example: `Error: Function
+_ZN16curve25519_dalek7edwards21EdwardsBasepointTable6create17h178b3d2411f7f082E
+Stack offset of -30728 exceeded max offset of -4096 by 26632 bytes, please
+minimize large stack variables`
+
+The message identifies which symbol is exceeding its stack frame but the name
+might be mangled if it is a Rust or C++ symbol.  To demangle a Rust symbol use
+[rustfilt](https://github.com/luser/rustfilt).  The above warning came from a
+Rust program, so the demangled symbol name is:
+
+```bash
+$ rustfilt _ZN16curve25519_dalek7edwards21EdwardsBasepointTable6create17h178b3d2411f7f082E
+curve25519_dalek::edwards::EdwardsBasepointTable::create
+```
+
+To demangle a C++ symbol use `c++filt` from binutils.
+
+The reason a warning is reported rather than an error is because some dependent
+crates may include functionality that violates the stack frame restrictions even
+if the program doesn't use that functionality. If the program violates the stack
+size at runtime, an `AccessViolation` error will be reported.
 
 BPF stack frames occupy a virtual address range starting at 0x200000000.
 
