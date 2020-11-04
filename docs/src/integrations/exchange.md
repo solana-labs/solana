@@ -576,8 +576,10 @@ spl-token-cli 2.0.1
 SPL Token accounts carry additional requirements that native System Program
 accounts do not:
 
-1. SPL Token accounts are not implicitly created, so must be created explicitly
-before an SPL Token balance can be deposited
+1. SPL Token accounts must be created before an amount of tokens can be
+deposited.   Token accounts can be created explicitly with the
+`spl-token create-account` command, or implicitly by the
+`spl-token transfer --fund-recipient ...` command.
 1. SPL Token accounts must remain [rent-exempt](https://docs.solana.com/apps/rent#rent-exemption)
 for the duration of their existence and therefore require a small amount of
 native SOL tokens be deposited at account creation. For SPL Token v2 accounts,
@@ -585,7 +587,6 @@ this amount is 0.00203928 SOL (2,039,280 lamports).
 
 #### Command Line
 To create an SPL Token account with the following properties:
-1. At a random address
 1. Associated with the given mint
 1. Owned by the funding account's keypair
 
@@ -596,6 +597,14 @@ spl-token create-account <TOKEN_MINT_ADDRESS>
 #### Example
 ```
 $ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir
+Creating account 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
+Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5XxyJwS73Vi5WsZL88D7
+```
+
+Or to create an SPL Token account with a specific keypair:
+```
+$ solana-keygen new -o token-account.json
+$ spl-token create-account AkUFCWTXb3w9nY2n6SFJvBV6VwvFUCe4KBMCcgLsa2ir token-account.json
 Creating account 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 Signature: 4JsqZEPra2eDTHtHpB4FMWSfk3UgcCVmkKkP7zESZeMrKmFFkDkNd91pKP3vPVVZZPiu5XxyJwS73Vi5WsZL88D7
 ```
@@ -615,16 +624,17 @@ $ solana balance 6VzWGL51jLebvnDifvcuEDec17sK6Wupi4gYhm5RzfkV
 
 ### Token Transfers
 
-For SPL Token transfers to succeed, a few prerequisite conditions must be met:
-1. The recipient account must exist before the transfer is executed. As described
-in [account creation](#account-creation), SPL Token accounts are *not* explicitly
-created.
-1. Both the sender and recipient accounts must belong to the same mint.  SPL Token
-accounts can only hold one type of SPL token.
+The source account for a transfer is the actual token account that contains the
+amount.
+
+The recipient address however can be a normal wallet account.  If an associated
+token account for the given mint does not yet exist for that wallet, the
+transfer will create it provided that the `--fund-recipient` argument as
+provided.
 
 #### Command Line
 ```
-spl-token transfer <SENDER_ACCOUNT_PUBKEY> <AMOUNT> <RECIPIENT_ACCOUNT_PUBKEY>
+spl-token transfer <SENDER_ACCOUNT_ADDRESS> <AMOUNT> <RECIPIENT_WALLET_ADDRESS> --fund-recipient
 ```
 
 #### Example
@@ -655,12 +665,24 @@ made to exend the `preBalance` and `postBalance` transaction status metadata
 fields to include SPL Token balance transfers.
 
 ### Withdrawing
-The withdrawal address a user provides must point to an initialized SPL Token account
-of the correct mint. Before executing a withdrawal [transfer](#token-transfers),
-it is recommended that the exchange check the address as
-[described above](#validating-user-supplied-account-addresses-for-withdrawals)
-as well as query the account to verify its existence and that it belongs to the
-correct mint.
+The withdrawal address a user provides should be the same address used for
+regular SOL withdrawal.
+
+Before executing a withdrawal [transfer](#token-transfers),
+the exchange should check the address as
+[described above](#validating-user-supplied-account-addresses-for-withdrawals).
+
+From the withdrawal address, the associated token account for the correct mint
+determined and the transfer issued to that account.  Note that it's possible
+that the associated token account does not yet exist, at which point the
+exchange should fund the account on behalf of the user.  For SPL Token v2
+accounts, funding the withdrawal account will require 0.00203928 SOL (2,039,280
+lamports).
+
+Template `spl-token transfer` command for a withdrawal:
+```
+$ spl-token transfer --fund-recipient <exchange token account> <withdrawal amount> <withdrawal address>
+```
 
 ### Other Considerations
 
