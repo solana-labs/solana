@@ -654,8 +654,9 @@ mod tests {
                 fee: 1,
                 pre_balances: vec![43, 0, 1],
                 post_balances: vec![0, 42, 1],
-                inner_instructions: Some(vec![]),
+                bad_inner_instructions: None,
                 log_messages: Some(vec![]),
+                inner_instructions: Some(vec![]),
             }),
         };
         let block = ConfirmedBlock {
