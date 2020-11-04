@@ -1715,11 +1715,11 @@ impl Bank {
 
         // Add additional native programs specified in the genesis config
         for (name, program_id) in &genesis_config.native_instruction_processors {
-            self.add_native_program(name, program_id);
+            self.add_native_program(name, program_id, false);
         }
     }
 
-    pub fn add_native_program(&self, name: &str, program_id: &Pubkey) {
+    pub fn add_native_program(&self, name: &str, program_id: &Pubkey, force_overwrite: bool) {
         let mut already_genuine_program_exists = false;
         if let Some(mut account) = self.get_account(&program_id) {
             already_genuine_program_exists = native_loader::check_id(&account.owner);
@@ -1737,7 +1737,7 @@ impl Bank {
             }
         }
 
-        if !already_genuine_program_exists {
+        if !already_genuine_program_exists || force_overwrite {
             assert!(
                 !self.is_frozen(),
                 "Can't change frozen bank by adding not-existing new native program ({}, {}). \
@@ -3887,7 +3887,21 @@ impl Bank {
         process_instruction_with_context: ProcessInstructionWithContext,
     ) {
         debug!("Added program {} under {:?}", name, program_id);
-        self.add_native_program(name, &program_id);
+        self.add_native_program(name, &program_id, false);
+        self.message_processor
+            .add_program(program_id, process_instruction_with_context);
+    }
+
+    /// Add an instruction processor to intercept instructions before the dynamic loader.
+    /// Replace the builtin if it already exists
+    pub fn add_or_replace_builtin(
+        &mut self,
+        name: &str,
+        program_id: Pubkey,
+        process_instruction_with_context: ProcessInstructionWithContext,
+    ) {
+        debug!("Added or replaced program {} under {:?}", name, program_id);
+        self.add_native_program(name, &program_id, true);
         self.message_processor
             .add_program(program_id, process_instruction_with_context);
     }
@@ -4025,7 +4039,7 @@ impl Bank {
             let should_populate = init_or_warp && self.feature_set.is_active(&feature)
                 || !init_or_warp && new_feature_activations.contains(&feature);
             if should_populate {
-                self.add_builtin(
+                self.add_or_replace_builtin(
                     &builtin.name,
                     builtin.id,
                     builtin.process_instruction_with_context,
@@ -9232,6 +9246,16 @@ mod tests {
             .unwrap()
             .add_builtin("mock_program", program_id, mock_ix_processor);
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
+
+        Arc::get_mut(&mut bank).unwrap().add_or_replace_builtin(
+            "mock_program",
+            program_id,
+            mock_ix_processor,
+        );
+        assert_eq!(
+            bank.get_account_modified_slot(&program_id).unwrap().1,
+            bank.slot()
+        );
     }
 
     #[test]
@@ -9285,14 +9309,23 @@ mod tests {
 
         Arc::get_mut(&mut bank)
             .unwrap()
-            .add_native_program("mock_program", &program_id);
+            .add_native_program("mock_program", &program_id, false);
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
 
         let mut bank = Arc::new(new_from_parent(&bank));
         Arc::get_mut(&mut bank)
             .unwrap()
-            .add_native_program("mock_program", &program_id);
+            .add_native_program("mock_program", &program_id, false);
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
+
+        let mut bank = Arc::new(new_from_parent(&bank));
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_native_program("mock_program", &program_id, true);
+        assert_eq!(
+            bank.get_account_modified_slot(&program_id).unwrap().1,
+            bank.slot()
+        );
     }
 
     #[test]
@@ -9317,7 +9350,7 @@ mod tests {
 
         Arc::get_mut(&mut bank)
             .unwrap()
-            .add_native_program("mock_program", &program_id);
+            .add_native_program("mock_program", &program_id, false);
     }
 
     #[test]

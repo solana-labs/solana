@@ -130,7 +130,7 @@ fn do_bench_transactions(
         Pubkey::new(&BUILTIN_PROGRAM_ID),
         process_instruction,
     );
-    bank.add_native_program("solana_noop_program", &Pubkey::new(&NOOP_PROGRAM_ID));
+    bank.add_native_program("solana_noop_program", &Pubkey::new(&NOOP_PROGRAM_ID), false);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
     let transactions = create_transactions(&bank_client, &mint_keypair);
