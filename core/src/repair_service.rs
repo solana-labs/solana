@@ -286,7 +286,24 @@ impl RepairService {
                 let repair_total = repair_stats.shred.count
                     + repair_stats.highest_shred.count
                     + repair_stats.orphan.count;
-                info!("repair_stats: {:?}", repair_stats);
+                let slot_to_count: Vec<_> = repair_stats
+                    .shred
+                    .slot_pubkeys
+                    .iter()
+                    .chain(repair_stats.highest_shred.slot_pubkeys.iter())
+                    .chain(repair_stats.orphan.slot_pubkeys.iter())
+                    .map(|(slot, slot_repairs)| {
+                        (
+                            slot,
+                            slot_repairs
+                                .pubkey_repairs
+                                .iter()
+                                .map(|(_key, count)| count)
+                                .sum::<u64>(),
+                        )
+                    })
+                    .collect();
+                info!("repair_stats: {:?}", slot_to_count);
                 if repair_total > 0 {
                     datapoint_info!(
                         "serve_repair-repair",
