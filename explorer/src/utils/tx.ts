@@ -30,6 +30,8 @@ export const PROGRAM_IDS = {
   Vest111111111111111111111111111111111111111: "Vest Program",
   [VOTE_PROGRAM_ID.toBase58()]: "Vote Program",
   TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA: "SPL Token Program",
+  ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL:
+    "SPL Associated Token Account Program",
 } as const;
 
 export type LoaderName = typeof LOADER_IDS[keyof typeof LOADER_IDS];
