@@ -6,7 +6,7 @@ use solana_account_decoder::parse_token::token_amount_to_ui_amount;
 use solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey};
 use spl_token_v2_0::{
     instruction::{AuthorityType, TokenInstruction},
-    solana_sdk::program_option::COption,
+    solana_program::program_option::COption,
 };
 
 pub fn parse_token(
@@ -416,7 +416,7 @@ mod test {
     use solana_sdk::instruction::CompiledInstruction;
     use spl_token_v2_0::{
         instruction::*,
-        solana_sdk::{
+        solana_program::{
             instruction::CompiledInstruction as SplTokenCompiledInstruction, message::Message,
             pubkey::Pubkey as SplTokenPubkey,
         },
