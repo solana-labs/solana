@@ -135,7 +135,6 @@ fn bench_add_hash_atomic(bencher: &mut Bencher) {
         for hash_value in &hash_values {
             bloom.add(hash_value);
         }
-        let bloom: Bloom<_> = bloom.into();
         let index = rng.gen_range(0, hash_values.len());
         if !bloom.contains(&hash_values[index]) {
             fail += 1;

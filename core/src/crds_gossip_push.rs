@@ -20,7 +20,7 @@ use bincode::serialized_size;
 use indexmap::map::IndexMap;
 use itertools::Itertools;
 use rand::{seq::SliceRandom, Rng};
-use solana_runtime::bloom::Bloom;
+use solana_runtime::bloom::{AtomicBloom, Bloom};
 use solana_sdk::{hash::Hash, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::timestamp};
 use std::{
     cmp,
@@ -42,12 +42,11 @@ const PUSH_ACTIVE_TIMEOUT_MS: u64 = 60_000;
 // 10 minutes
 const MAX_PUSHED_TO_TIMEOUT_MS: u64 = 10 * 60 * 1000;
 
-#[derive(Clone)]
 pub struct CrdsGossipPush {
     /// max bytes per message
     pub max_bytes: usize,
     /// active set of validators for push
-    active_set: IndexMap<Pubkey, Bloom<Pubkey>>,
+    active_set: IndexMap<Pubkey, AtomicBloom<Pubkey>>,
     /// push message queue
     push_messages: HashMap<CrdsValueLabel, Hash>,
     /// Cache that tracks which validators a message was received from
@@ -287,11 +286,11 @@ impl CrdsGossipPush {
     }
 
     /// add the `from` to the peer's filter of nodes
-    pub fn process_prune_msg(&mut self, self_pubkey: &Pubkey, peer: &Pubkey, origins: &[Pubkey]) {
-        if let Some(peer) = self.active_set.get_mut(peer) {
+    pub fn process_prune_msg(&self, self_pubkey: &Pubkey, peer: &Pubkey, origins: &[Pubkey]) {
+        if let Some(filter) = self.active_set.get(peer) {
             for origin in origins {
                 if origin != self_pubkey {
-                    peer.add(origin);
+                    filter.add(origin);
                 }
             }
         }
@@ -348,7 +347,7 @@ impl CrdsGossipPush {
                         continue;
                     }
                     let size = cmp::max(CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS, network_size);
-                    let mut bloom = Bloom::random(size, 0.1, 1024 * 8 * 4);
+                    let bloom: AtomicBloom<_> = Bloom::random(size, 0.1, 1024 * 8 * 4).into();
                     bloom.add(&item.id);
                     new_items.insert(item.id, bloom);
                 }
@@ -426,6 +425,21 @@ impl CrdsGossipPush {
             v.retain(|_, (_, t)| *t > min_time);
             !v.is_empty()
         });
+    }
+
+    // Only for tests and simulations.
+    pub(crate) fn mock_clone(&self) -> Self {
+        let mut active_set = IndexMap::<Pubkey, AtomicBloom<Pubkey>>::new();
+        for (k, v) in &self.active_set {
+            active_set.insert(*k, v.mock_clone());
+        }
+        Self {
+            active_set,
+            push_messages: self.push_messages.clone(),
+            received_cache: self.received_cache.clone(),
+            last_pushed_to: self.last_pushed_to.clone(),
+            ..*self
+        }
     }
 }
 
