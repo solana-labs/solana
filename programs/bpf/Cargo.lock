@@ -1986,6 +1986,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-mem"
+version = "1.5.0"
+dependencies = [
+ "solana-program",
+]
+
+[[package]]
 name = "solana-bpf-rust-noop"
 version = "1.5.0"
 dependencies = [
