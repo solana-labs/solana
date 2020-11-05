@@ -1316,10 +1316,11 @@ fn test_fake_shreds_broadcast_leader() {
 fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     solana_logger::setup();
     let num_nodes = 2;
-    let validator_config = ValidatorConfig::default();
     let mut error_validator_config = ValidatorConfig::default();
     error_validator_config.broadcast_stage_type = faulty_node_type;
-    let mut validator_configs = vec![validator_config; num_nodes - 1];
+    let mut validator_configs = Vec::with_capacity(num_nodes - 1);
+    validator_configs.resize_with(num_nodes - 1, ValidatorConfig::default);
+
     // Push a faulty_bootstrap = vec![error_validator_config];
     validator_configs.insert(0, error_validator_config);
     let node_stakes = vec![300, 100];

@@ -459,7 +459,7 @@ fn test_program_bpf_invoke() {
     let mut programs = Vec::new();
     #[cfg(feature = "bpf_c")]
     {
-        programs.push((Languages::C, "invoke", "invoked"));
+        programs.push((Languages::C, "invoke", "invoked", "noop"));
     }
     #[cfg(feature = "bpf_rust")]
     {
@@ -467,6 +467,7 @@ fn test_program_bpf_invoke() {
             Languages::Rust,
             "solana_bpf_rust_invoke",
             "solana_bpf_rust_invoked",
+            "solana_bpf_rust_noop",
         ));
     }
     for program in programs.iter() {
@@ -487,6 +488,8 @@ fn test_program_bpf_invoke() {
             load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program.1);
         let invoked_program_id =
             load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program.2);
+        let noop_program_id =
+            load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program.3);
 
         let argument_keypair = Keypair::new();
         let account = Account::new(42, 100, &invoke_program_id);
@@ -529,7 +532,12 @@ fn test_program_bpf_invoke() {
             &[TEST_SUCCESS, bump_seed1, bump_seed2, bump_seed3],
             account_metas.clone(),
         );
-        let message = Message::new(&[instruction], Some(&mint_pubkey));
+        let noop_instruction = Instruction::new(
+            noop_program_id,
+            &(),
+            vec![]
+        );
+        let message = Message::new(&[instruction, noop_instruction], Some(&mint_pubkey));
         let tx = Transaction::new(
             &[
                 &mint_keypair,
@@ -581,6 +589,12 @@ fn test_program_bpf_invoke() {
             ],
         };
         assert_eq!(invoked_programs, expected_invoked_programs);
+
+        let no_invoked_programs: Vec<Pubkey> = inner_instructions[1]
+            .iter()
+            .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
+            .collect();
+        assert_eq!(no_invoked_programs.len(), 0);
 
         // failure cases
 

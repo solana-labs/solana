@@ -2437,10 +2437,10 @@ impl Bank {
                         Self::accounts_to_refcells(accounts, loaders);
 
                     let instruction_recorders = if enable_cpi_recording {
-                        Some(vec![
-                            InstructionRecorder::default();
-                            tx.message.instructions.len()
-                        ])
+                        let ix_count = tx.message.instructions.len();
+                        let mut recorders = Vec::with_capacity(ix_count);
+                        recorders.resize_with(ix_count, InstructionRecorder::default);
+                        Some(recorders)
                     } else {
                         None
                     };
