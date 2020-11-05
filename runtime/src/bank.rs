@@ -1719,12 +1719,11 @@ impl Bank {
         }
     }
 
+    // NOTE: must hold idempotent for the same set of arguments
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey, must_replace: bool) {
-        let mut already_genuine_program_exists = false;
-        if let Some(mut account) = self.get_account(&program_id) {
-            already_genuine_program_exists = native_loader::check_id(&account.owner);
-
-            if !already_genuine_program_exists {
+        let mut existing_genuine_program = self.get_account(&program_id);
+        if let Some(account) = &mut existing_genuine_program {
+            if !native_loader::check_id(&account.owner) {
                 // malicious account is pre-occupying at program_id
                 // forcibly burn and purge it
 
@@ -1738,13 +1737,39 @@ impl Bank {
         }
 
         if must_replace {
-            assert!(
-                already_genuine_program_exists,
-                "There is no account to replace with native program ({}, {}).",
-                name, program_id
-            );
-        } else if already_genuine_program_exists {
-            return;
+            // updating native program
+
+            match existing_genuine_program {
+                None => panic!(
+                    "There is no account to replace with native program ({}, {}).",
+                    name, program_id
+                ),
+                Some(account) => {
+                    if *name == String::from_utf8_lossy(&account.data) {
+                        // nop; it seems that already AccountsDB is updated.
+                        return;
+                    }
+                    // continue to replace account
+                }
+            }
+        } else {
+            // introducing native program
+
+            match existing_genuine_program {
+                None => (), // continue to add account
+                Some(_account) => {
+                    // nop; it seems that we already have account
+
+                    // before returning here to retain idempotent just make sure
+                    // the existing native program name is same with what we're
+                    // supposed to add here (but skipping) But I can't:
+                    // following assertion already catches several different names for same
+                    // program_id
+                    // depending on clusters...
+                    // assert_eq!(name.to_owned(), String::from_utf8_lossy(&account.data));
+                    return;
+                }
+            }
         }
 
         assert!(
@@ -3895,7 +3920,7 @@ impl Bank {
         program_id: Pubkey,
         process_instruction_with_context: ProcessInstructionWithContext,
     ) {
-        debug!("Added program {} under {:?}", name, program_id);
+        debug!("Adding program {} under {:?}", name, program_id);
         self.add_native_program(name, &program_id, false);
         self.message_processor
             .add_program(program_id, process_instruction_with_context);
@@ -3908,7 +3933,7 @@ impl Bank {
         program_id: Pubkey,
         process_instruction_with_context: ProcessInstructionWithContext,
     ) {
-        debug!("Replaced program {} under {:?}", name, program_id);
+        debug!("Replacing program {} under {:?}", name, program_id);
         self.add_native_program(name, &program_id, true);
         self.message_processor
             .add_program(program_id, process_instruction_with_context);
@@ -9334,12 +9359,24 @@ mod tests {
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
 
         let mut bank = Arc::new(new_from_parent(&bank));
+        // When replacing native_program, name must change to disambiguate from repeated
+        // invocations.
         Arc::get_mut(&mut bank)
             .unwrap()
-            .add_native_program("mock_program", &program_id, true);
+            .add_native_program("mock_program v2", &program_id, true);
         assert_eq!(
             bank.get_account_modified_slot(&program_id).unwrap().1,
             bank.slot()
+        );
+
+        let mut bank = Arc::new(new_from_parent(&bank));
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_native_program("mock_program v2", &program_id, true);
+        // replacing with same name shouldn't update account
+        assert_eq!(
+            bank.get_account_modified_slot(&program_id).unwrap().1,
+            bank.parent_slot()
         );
     }
 
@@ -9356,16 +9393,35 @@ mod tests {
         let slot = 123;
         let program_id = Pubkey::from_str("CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre").unwrap();
 
-        let mut bank = Arc::new(Bank::new_from_parent(
+        let bank = Bank::new_from_parent(
             &Arc::new(Bank::new(&genesis_config)),
             &Pubkey::default(),
             slot,
-        ));
+        );
         bank.freeze();
 
-        Arc::get_mut(&mut bank)
-            .unwrap()
-            .add_native_program("mock_program", &program_id, false);
+        bank.add_native_program("mock_program", &program_id, false);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "There is no account to replace with native program (mock_program, \
+                    CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre)."
+    )]
+    fn test_add_native_program_replace_none() {
+        use std::str::FromStr;
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
+
+        let slot = 123;
+        let program_id = Pubkey::from_str("CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre").unwrap();
+
+        let bank = Bank::new_from_parent(
+            &Arc::new(Bank::new(&genesis_config)),
+            &Pubkey::default(),
+            slot,
+        );
+
+        bank.add_native_program("mock_program", &program_id, true);
     }
 
     #[test]
