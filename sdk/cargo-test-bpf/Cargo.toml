@@ -10,6 +10,7 @@ edition = "2018"
 
 [dependencies]
 clap = "2.33.3"
+cargo_metadata = "0.12.0"
 
 [[bin]]
 name = "cargo-test-bpf"

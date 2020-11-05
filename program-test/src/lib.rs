@@ -354,17 +354,15 @@ pub struct ProgramTest {
 impl Default for ProgramTest {
     /// Initialize a new ProgramTest
     ///
-    /// The `bpf` environment variable controls how BPF programs are selected during operation:
-    ///     `export bpf=1`   -- use BPF programs if present, otherwise fall back to the
-    ///                         native instruction processors provided with the test
-    ///     `export bpf=0`   -- use native instruction processor if present, otherwise fall back to
-    ///                         the BPF program
-    ///                         (default)
-    /// and the `ProgramTest::prefer_bpf()` method may be used to override the selection at runtime
+    /// If the `BPF_OUT_DIR` environment variable is defined, BPF programs will be preferred over
+    /// over a native instruction processor.  The `ProgramTest::prefer_bpf()` method may be
+    /// used to override this preference at runtime.  `cargo test-bpf` will set `BPF_OUT_DIR`
+    /// automatically.
     ///
     /// BPF program shared objects and account data files are searched for in
-    /// * the current working directory (the default output location for `cargo build-bpf),
+    /// * the value of the `BPF_OUT_DIR` environment variable
     /// * the `tests/fixtures` sub-directory
+    /// * the current working directory
     ///
     fn default() -> Self {
         solana_logger::setup_with_default(
@@ -374,20 +372,18 @@ impl Default for ProgramTest {
              solana_runtime::system_instruction_processor=trace,\
              solana_program_test=info",
         );
-        let prefer_bpf = match std::env::var("bpf") {
-            Ok(val) => !matches!(val.as_str(), "0" | ""),
-            Err(_err) => false,
-        };
+        let mut prefer_bpf = false;
 
         let mut search_path = vec![];
-        if let Ok(dir) = std::env::var("CARGO_BUILD_TARGET_DIR") {
-            let deploy_dir = PathBuf::from(dir).join("deploy");
-            search_path.push(deploy_dir);
-        };
+        if let Ok(bpf_out_dir) = std::env::var("BPF_OUT_DIR") {
+            prefer_bpf = true;
+            search_path.push(PathBuf::from(bpf_out_dir));
+        }
+        search_path.push(PathBuf::from("tests/fixtures"));
         if let Ok(dir) = std::env::current_dir() {
             search_path.push(dir);
         }
-        search_path.push(PathBuf::from("tests/fixtures"));
+        debug!("search path: {:?}", search_path);
 
         Self {
             accounts: vec![],
