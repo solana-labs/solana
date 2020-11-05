@@ -10,7 +10,7 @@ use crate::{
     accounts_db::{ErrorCounters, SnapshotStorages},
     accounts_index::Ancestors,
     blockhash_queue::BlockhashQueue,
-    builtins,
+    builtins::{self, ActivationType},
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
@@ -215,7 +215,7 @@ pub struct Builtins {
     pub genesis_builtins: Vec<Builtin>,
 
     /// Builtin programs activated dynamically by feature
-    pub feature_builtins: Vec<(Builtin, Pubkey)>,
+    pub feature_builtins: Vec<(Builtin, Pubkey, ActivationType)>,
 }
 
 const MAX_CACHED_EXECUTORS: usize = 100; // 10 MB assuming programs are around 100k
@@ -676,7 +676,7 @@ pub struct Bank {
     bpf_compute_budget: Option<BpfComputeBudget>,
 
     /// Builtin programs activated dynamically by feature
-    feature_builtins: Arc<Vec<(Builtin, Pubkey)>>,
+    feature_builtins: Arc<Vec<(Builtin, Pubkey, ActivationType)>>,
 
     /// Last time when the cluster info vote listener has synced with this bank
     pub last_vote_sync: AtomicU64,
@@ -1715,16 +1715,15 @@ impl Bank {
 
         // Add additional native programs specified in the genesis config
         for (name, program_id) in &genesis_config.native_instruction_processors {
-            self.add_native_program(name, program_id);
+            self.add_native_program(name, program_id, false);
         }
     }
 
-    pub fn add_native_program(&self, name: &str, program_id: &Pubkey) {
-        let mut already_genuine_program_exists = false;
-        if let Some(mut account) = self.get_account(&program_id) {
-            already_genuine_program_exists = native_loader::check_id(&account.owner);
-
-            if !already_genuine_program_exists {
+    // NOTE: must hold idempotent for the same set of arguments
+    pub fn add_native_program(&self, name: &str, program_id: &Pubkey, must_replace: bool) {
+        let mut existing_genuine_program = self.get_account(&program_id);
+        if let Some(account) = &mut existing_genuine_program {
+            if !native_loader::check_id(&account.owner) {
                 // malicious account is pre-occupying at program_id
                 // forcibly burn and purge it
 
@@ -1737,19 +1736,54 @@ impl Bank {
             }
         }
 
-        if !already_genuine_program_exists {
-            assert!(
-                !self.is_frozen(),
-                "Can't change frozen bank by adding not-existing new native program ({}, {}). \
-                Maybe, inconsistent program activation is detected on snapshot restore?",
-                name,
-                program_id
-            );
+        if must_replace {
+            // updating native program
 
-            // Add a bogus executable native account, which will be loaded and ignored.
-            let account = native_loader::create_loadable_account(name);
-            self.store_account(&program_id, &account);
+            match existing_genuine_program {
+                None => panic!(
+                    "There is no account to replace with native program ({}, {}).",
+                    name, program_id
+                ),
+                Some(account) => {
+                    if *name == String::from_utf8_lossy(&account.data) {
+                        // nop; it seems that already AccountsDB is updated.
+                        return;
+                    }
+                    // continue to replace account
+                }
+            }
+        } else {
+            // introducing native program
+
+            match existing_genuine_program {
+                None => (), // continue to add account
+                Some(_account) => {
+                    // nop; it seems that we already have account
+
+                    // before returning here to retain idempotent just make sure
+                    // the existing native program name is same with what we're
+                    // supposed to add here (but skipping) But I can't:
+                    // following assertion already catches several different names for same
+                    // program_id
+                    // depending on clusters...
+                    // assert_eq!(name.to_owned(), String::from_utf8_lossy(&account.data));
+                    return;
+                }
+            }
         }
+
+        assert!(
+            !self.is_frozen(),
+            "Can't change frozen bank by adding not-existing new native program ({}, {}). \
+            Maybe, inconsistent program activation is detected on snapshot restore?",
+            name,
+            program_id
+        );
+
+        // Add a bogus executable native account, which will be loaded and ignored.
+        let account = native_loader::create_loadable_account(name);
+        self.store_account(&program_id, &account);
+
         debug!("Added native program {} under {:?}", name, program_id);
     }
 
@@ -3886,8 +3920,21 @@ impl Bank {
         program_id: Pubkey,
         process_instruction_with_context: ProcessInstructionWithContext,
     ) {
-        debug!("Added program {} under {:?}", name, program_id);
-        self.add_native_program(name, &program_id);
+        debug!("Adding program {} under {:?}", name, program_id);
+        self.add_native_program(name, &program_id, false);
+        self.message_processor
+            .add_program(program_id, process_instruction_with_context);
+    }
+
+    /// Replace a builtin instruction processor if it already exists
+    pub fn replace_builtin(
+        &mut self,
+        name: &str,
+        program_id: Pubkey,
+        process_instruction_with_context: ProcessInstructionWithContext,
+    ) {
+        debug!("Replacing program {} under {:?}", name, program_id);
+        self.add_native_program(name, &program_id, true);
         self.message_processor
             .add_program(program_id, process_instruction_with_context);
     }
@@ -4021,15 +4068,22 @@ impl Bank {
         new_feature_activations: &HashSet<Pubkey>,
     ) {
         let feature_builtins = self.feature_builtins.clone();
-        for (builtin, feature) in feature_builtins.iter() {
+        for (builtin, feature, activation_type) in feature_builtins.iter() {
             let should_populate = init_or_warp && self.feature_set.is_active(&feature)
                 || !init_or_warp && new_feature_activations.contains(&feature);
             if should_populate {
-                self.add_builtin(
-                    &builtin.name,
-                    builtin.id,
-                    builtin.process_instruction_with_context,
-                );
+                match activation_type {
+                    ActivationType::NewProgram => self.add_builtin(
+                        &builtin.name,
+                        builtin.id,
+                        builtin.process_instruction_with_context,
+                    ),
+                    ActivationType::NewVersion => self.replace_builtin(
+                        &builtin.name,
+                        builtin.id,
+                        builtin.process_instruction_with_context,
+                    ),
+                }
             }
         }
     }
@@ -9232,6 +9286,16 @@ mod tests {
             .unwrap()
             .add_builtin("mock_program", program_id, mock_ix_processor);
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
+
+        Arc::get_mut(&mut bank).unwrap().replace_builtin(
+            "mock_program v2",
+            program_id,
+            mock_ix_processor,
+        );
+        assert_eq!(
+            bank.get_account_modified_slot(&program_id).unwrap().1,
+            bank.slot()
+        );
     }
 
     #[test]
@@ -9285,14 +9349,35 @@ mod tests {
 
         Arc::get_mut(&mut bank)
             .unwrap()
-            .add_native_program("mock_program", &program_id);
+            .add_native_program("mock_program", &program_id, false);
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
 
         let mut bank = Arc::new(new_from_parent(&bank));
         Arc::get_mut(&mut bank)
             .unwrap()
-            .add_native_program("mock_program", &program_id);
+            .add_native_program("mock_program", &program_id, false);
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
+
+        let mut bank = Arc::new(new_from_parent(&bank));
+        // When replacing native_program, name must change to disambiguate from repeated
+        // invocations.
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_native_program("mock_program v2", &program_id, true);
+        assert_eq!(
+            bank.get_account_modified_slot(&program_id).unwrap().1,
+            bank.slot()
+        );
+
+        let mut bank = Arc::new(new_from_parent(&bank));
+        Arc::get_mut(&mut bank)
+            .unwrap()
+            .add_native_program("mock_program v2", &program_id, true);
+        // replacing with same name shouldn't update account
+        assert_eq!(
+            bank.get_account_modified_slot(&program_id).unwrap().1,
+            bank.parent_slot()
+        );
     }
 
     #[test]
@@ -9308,16 +9393,35 @@ mod tests {
         let slot = 123;
         let program_id = Pubkey::from_str("CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre").unwrap();
 
-        let mut bank = Arc::new(Bank::new_from_parent(
+        let bank = Bank::new_from_parent(
             &Arc::new(Bank::new(&genesis_config)),
             &Pubkey::default(),
             slot,
-        ));
+        );
         bank.freeze();
 
-        Arc::get_mut(&mut bank)
-            .unwrap()
-            .add_native_program("mock_program", &program_id);
+        bank.add_native_program("mock_program", &program_id, false);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "There is no account to replace with native program (mock_program, \
+                    CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre)."
+    )]
+    fn test_add_native_program_replace_none() {
+        use std::str::FromStr;
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
+
+        let slot = 123;
+        let program_id = Pubkey::from_str("CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre").unwrap();
+
+        let bank = Bank::new_from_parent(
+            &Arc::new(Bank::new(&genesis_config)),
+            &Pubkey::default(),
+            slot,
+        );
+
+        bank.add_native_program("mock_program", &program_id, true);
     }
 
     #[test]
