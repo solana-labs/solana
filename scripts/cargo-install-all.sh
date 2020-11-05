@@ -3,7 +3,7 @@
 # |cargo install| of the top-level crate will not install binaries for
 # other workspace crates or native program crates.
 here="$(dirname "$0")"
-cargo="$(readlink -f "${here}../cargo")"
+cargo="$(readlink -f "${here}/../cargo")"
 
 set -e
 
