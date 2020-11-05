@@ -179,12 +179,33 @@ fn build_bpf(config: Config) {
         let program_dump = bpf_out_dir.join(&format!("{}-dump.txt", program_name));
         let program_so = bpf_out_dir.join(&format!("{}.so", program_name));
 
-        spawn(
-            &config.bpf_sdk.join("scripts/strip.sh"),
-            &[&program_unstripped_so, &program_so],
-        );
+        fn file_older_or_missing(prerequisite_file: &Path, target_file: &Path) -> bool {
+            let prerequisite_metadata = fs::metadata(prerequisite_file).unwrap_or_else(|err| {
+                eprintln!(
+                    "Unable to get file metadata for {}: {}",
+                    prerequisite_file.display(),
+                    err
+                );
+                exit(1);
+            });
 
-        if config.dump {
+            if let Ok(target_metadata) = fs::metadata(target_file) {
+                use std::time::UNIX_EPOCH;
+                prerequisite_metadata.modified().unwrap_or(UNIX_EPOCH)
+                    > target_metadata.modified().unwrap_or(UNIX_EPOCH)
+            } else {
+                true
+            }
+        }
+
+        if file_older_or_missing(&program_unstripped_so, &program_so) {
+            spawn(
+                &config.bpf_sdk.join("scripts/strip.sh"),
+                &[&program_unstripped_so, &program_so],
+            );
+        }
+
+        if config.dump && file_older_or_missing(&program_unstripped_so, &program_dump) {
             spawn(
                 &config.bpf_sdk.join("scripts/dump.sh"),
                 &[&program_unstripped_so, &program_dump],
