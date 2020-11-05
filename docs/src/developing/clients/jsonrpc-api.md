@@ -122,18 +122,33 @@ Requests can be sent in batches by sending an array of JSON-RPC request objects 
 
 ## Configuring State Commitment
 
-Solana nodes choose which bank state to query based on a commitment requirement
-set by the client. Clients may specify either:
+For preflight checks and transaction processing, Solana nodes choose which bank
+state to query based on a commitment requirement set by the client. The
+commitment describes how finalized a block is at that point in time.  When
+querying the ledger state, it's recommended to use lower levels of commitment
+to report progress and higher levels to ensure the state will not be rolled back.
 
-- `"max"` - the node will query the most recent block confirmed by supermajority of the cluster as having reached
-maximum lockout.
-- `"root"` - the node will query the most recent block having reached maximum lockout on this node.
+In descending order of commitment (most finalized to least finalized), clients
+may specify:
+
+- `"max"` - the node will query the most recent block confirmed by supermajority
+of the cluster as having reached maximum lockout, meaning the cluster has
+recognized this block as finalized
+- `"root"` - the node will query the most recent block having reached maximum
+lockout on this node, meaning the node has recognized this block as finalized
 - `"singleGossip"` - the node will query the most recent block that has been voted on by supermajority of the cluster.
   - It incorporates votes from gossip and replay.
   - It does not count votes on descendants of a block, only direct votes on that block.
   - This confirmation level also upholds "optimistic confirmation" guarantees in
     release 1.3 and onwards.
-- `"recent"` - the node will query its most recent block.
+- `"recent"` - the node will query its most recent block.  Note that the block
+may not be complete.
+
+For processing many dependent transactions in series, it's recommended to use
+`"singleGossip"` commitment, which balances speed with rollback safety.
+For total safety, it's recommended to use`"max"` commitment.
+
+#### Example
 
 The commitment parameter should be included as the last element in the `params` array:
 
@@ -2668,9 +2683,10 @@ Submits a signed transaction to the cluster for processing.
 Before submitting, the following preflight checks are performed:
 
 1. The transaction signatures are verified
-2. The transaction is simulated against the latest max confirmed bank
-   and on failure an error will be returned. Preflight checks may be disabled if
-   desired.
+2. The transaction is simulated against the bank slot specified by the preflight
+   commitment. On failure an error will be returned. Preflight checks may be
+   disabled if desired. It is recommended to specify the same commitment and
+   preflight commitment to avoid confusing behavior.
 
 #### Parameters:
 
