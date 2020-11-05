@@ -3760,6 +3760,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-cargo-test-bpf"
+version = "1.5.0"
+dependencies = [
+ "clap",
+]
+
+[[package]]
 name = "solana-clap-utils"
 version = "1.5.0"
 dependencies = [
