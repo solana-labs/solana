@@ -64,6 +64,20 @@ where
 }
 
 fn test_bpf(config: Config) {
+    let mut metadata_command = cargo_metadata::MetadataCommand::new();
+    if let Some(manifest_path) = config.manifest_path.as_ref() {
+        metadata_command.manifest_path(manifest_path);
+    }
+
+    let metadata = metadata_command.exec().unwrap_or_else(|err| {
+        eprintln!("Failed to obtain package metadata: {}", err);
+        exit(1);
+    });
+
+    let bpf_out_dir = config
+        .bpf_out_dir
+        .unwrap_or_else(|| format!("{}", metadata.target_directory.join("deploy").display()));
+
     let mut cargo_args = vec![];
     if config.no_default_features {
         cargo_args.push("--no-default-features");
@@ -85,13 +99,14 @@ fn test_bpf(config: Config) {
         build_bpf_args.push("--bpf-sdk");
         build_bpf_args.push(bpf_sdk);
     }
-    if let Some(bpf_out_dir) = config.bpf_out_dir.as_ref() {
-        build_bpf_args.push("--bpf-out-dir");
-        build_bpf_args.push(bpf_out_dir);
-    }
+    build_bpf_args.push("--bpf-out-dir");
+    build_bpf_args.push(&bpf_out_dir);
+
     spawn(&config.cargo_build_bpf, &build_bpf_args);
 
-    env::set_var("bpf", "1"); // Hint to solana-program-test that it should load BPF programs
+    // Pass --bpf-out-dir along to the solana-program-test crate
+    env::set_var("BPF_OUT_DIR", bpf_out_dir);
+
     cargo_args.insert(0, "test");
     for extra_cargo_test_arg in &config.extra_cargo_test_args {
         cargo_args.push(&extra_cargo_test_arg);
@@ -108,6 +123,9 @@ fn main() {
             args.remove(1);
         }
     }
+
+    let em_dash = "--".to_string();
+    let args_contain_dashash = args.contains(&em_dash);
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
@@ -157,7 +175,7 @@ fn main() {
         )
         .arg(
             Arg::with_name("extra_cargo_test_args")
-                .value_name("extra args for cargo test")
+                .value_name("extra args for cargo test and the test binary")
                 .index(1)
                 .multiple(true)
                 .help("All extra arguments are passed through to cargo test"),
@@ -186,7 +204,20 @@ fn main() {
         config.cargo = PathBuf::from(cargo_build_bpf);
     }
 
-    test_bpf(config);
+    // clap.rs swallows "--" in the case when the user provides it as the first `extra_cargo_test_args`
+    //
+    // For example, this command-line "cargo-test-bpf -- --nocapture" results in `extra_cargo_test_args` only
+    // containing "--nocapture".  This is a problem because `cargo test` will never see the `--`.
+    //
+    // Whereas "cargo-test-bpf testname --  --nocapture" correctly produces a `extra_cargo_test_args`
+    // with "testname -- --nocapture".
+    //
+    // So if the original cargo-test-bpf arguments contain "--" but `extra_cargo_test_args` does
+    // not, then prepend "--".
+    //
+    if args_contain_dashash && !config.extra_cargo_test_args.contains(&em_dash) {
+        config.extra_cargo_test_args.insert(0, em_dash);
+    }
 
-    // TODO: args after -- go to ct
+    test_bpf(config);
 }
