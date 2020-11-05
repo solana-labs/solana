@@ -199,6 +199,30 @@ impl Counter {
     }
 }
 
+struct ScopedTimer<'a> {
+    clock: Instant,
+    metric: &'a AtomicU64,
+}
+
+impl<'a> From<&'a Counter> for ScopedTimer<'a> {
+    // Output should be assigned to a *named* variable,
+    // otherwise it is immediately dropped.
+    #[must_use]
+    fn from(counter: &'a Counter) -> Self {
+        Self {
+            clock: Instant::now(),
+            metric: &counter.0,
+        }
+    }
+}
+
+impl Drop for ScopedTimer<'_> {
+    fn drop(&mut self) {
+        let micros = self.clock.elapsed().as_micros();
+        self.metric.fetch_add(micros as u64, Ordering::Relaxed);
+    }
+}
+
 #[derive(Default)]
 struct GossipStats {
     entrypoint: Counter,
@@ -216,6 +240,12 @@ struct GossipStats {
     new_push_requests2: Counter,
     new_push_requests_num: Counter,
     filter_pull_response: Counter,
+    handle_batch_ping_messages_time: Counter,
+    handle_batch_pong_messages_time: Counter,
+    handle_batch_prune_messages_time: Counter,
+    handle_batch_pull_requests_time: Counter,
+    handle_batch_pull_responses_time: Counter,
+    handle_batch_push_messages_time: Counter,
     process_gossip_packets_time: Counter,
     process_pull_response: Counter,
     process_pull_response_count: Counter,
@@ -1810,6 +1840,7 @@ impl ClusterInfo {
     }
 
     fn handle_batch_prune_messages(&self, messages: Vec<(Pubkey, PruneData)>) {
+        let _st = ScopedTimer::from(&self.stats.handle_batch_prune_messages_time);
         if messages.is_empty() {
             return;
         }
@@ -1864,6 +1895,7 @@ impl ClusterInfo {
         response_sender: &PacketSender,
         feature_set: Option<&FeatureSet>,
     ) {
+        let _st = ScopedTimer::from(&self.stats.handle_batch_pull_requests_time);
         if requests.is_empty() {
             return;
         }
@@ -2084,6 +2116,7 @@ impl ClusterInfo {
         stakes: &HashMap<Pubkey, u64>,
         epoch_time_ms: u64,
     ) {
+        let _st = ScopedTimer::from(&self.stats.handle_batch_pull_responses_time);
         if responses.is_empty() {
             return;
         }
@@ -2233,6 +2266,7 @@ impl ClusterInfo {
     ) where
         I: IntoIterator<Item = (SocketAddr, Ping)>,
     {
+        let _st = ScopedTimer::from(&self.stats.handle_batch_ping_messages_time);
         if let Some(response) = self.handle_ping_messages(pings, recycler) {
             let _ = response_sender.send(response);
         }
@@ -2264,6 +2298,7 @@ impl ClusterInfo {
     where
         I: IntoIterator<Item = (SocketAddr, Pong)>,
     {
+        let _st = ScopedTimer::from(&self.stats.handle_batch_pong_messages_time);
         let mut pongs = pongs.into_iter().peekable();
         if pongs.peek().is_some() {
             let mut ping_cache = self.ping_cache.write().unwrap();
@@ -2281,6 +2316,7 @@ impl ClusterInfo {
         stakes: &HashMap<Pubkey, u64>,
         response_sender: &PacketSender,
     ) {
+        let _st = ScopedTimer::from(&self.stats.handle_batch_push_messages_time);
         if messages.is_empty() {
             return;
         }
@@ -2586,6 +2622,36 @@ impl ClusterInfo {
                 (
                     "process_gossip_packets_time",
                     self.stats.process_gossip_packets_time.clear(),
+                    i64
+                ),
+                (
+                    "handle_batch_ping_messages_time",
+                    self.stats.handle_batch_ping_messages_time.clear(),
+                    i64
+                ),
+                (
+                    "handle_batch_pong_messages_time",
+                    self.stats.handle_batch_pong_messages_time.clear(),
+                    i64
+                ),
+                (
+                    "handle_batch_prune_messages_time",
+                    self.stats.handle_batch_prune_messages_time.clear(),
+                    i64
+                ),
+                (
+                    "handle_batch_pull_requests_time",
+                    self.stats.handle_batch_pull_requests_time.clear(),
+                    i64
+                ),
+                (
+                    "handle_batch_pull_responses_time",
+                    self.stats.handle_batch_pull_responses_time.clear(),
+                    i64
+                ),
+                (
+                    "handle_batch_push_messages_time",
+                    self.stats.handle_batch_push_messages_time.clear(),
                     i64
                 ),
                 (
