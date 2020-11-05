@@ -10,7 +10,7 @@ use crate::{
     accounts_db::{ErrorCounters, SnapshotStorages},
     accounts_index::Ancestors,
     blockhash_queue::BlockhashQueue,
-    builtins,
+    builtins::{self, ActivationType},
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
@@ -215,7 +215,7 @@ pub struct Builtins {
     pub genesis_builtins: Vec<Builtin>,
 
     /// Builtin programs activated dynamically by feature
-    pub feature_builtins: Vec<(Builtin, Pubkey)>,
+    pub feature_builtins: Vec<(Builtin, Pubkey, ActivationType)>,
 }
 
 const MAX_CACHED_EXECUTORS: usize = 100; // 10 MB assuming programs are around 100k
@@ -676,7 +676,7 @@ pub struct Bank {
     bpf_compute_budget: Option<BpfComputeBudget>,
 
     /// Builtin programs activated dynamically by feature
-    feature_builtins: Arc<Vec<(Builtin, Pubkey)>>,
+    feature_builtins: Arc<Vec<(Builtin, Pubkey, ActivationType)>>,
 
     /// Last time when the cluster info vote listener has synced with this bank
     pub last_vote_sync: AtomicU64,
@@ -1719,7 +1719,7 @@ impl Bank {
         }
     }
 
-    pub fn add_native_program(&self, name: &str, program_id: &Pubkey, force_overwrite: bool) {
+    pub fn add_native_program(&self, name: &str, program_id: &Pubkey, must_replace: bool) {
         let mut already_genuine_program_exists = false;
         if let Some(mut account) = self.get_account(&program_id) {
             already_genuine_program_exists = native_loader::check_id(&account.owner);
@@ -1737,19 +1737,28 @@ impl Bank {
             }
         }
 
-        if !already_genuine_program_exists || force_overwrite {
+        if must_replace {
             assert!(
-                !self.is_frozen(),
-                "Can't change frozen bank by adding not-existing new native program ({}, {}). \
-                Maybe, inconsistent program activation is detected on snapshot restore?",
-                name,
-                program_id
+                already_genuine_program_exists,
+                "There is no account to replace with native program ({}, {}).",
+                name, program_id
             );
-
-            // Add a bogus executable native account, which will be loaded and ignored.
-            let account = native_loader::create_loadable_account(name);
-            self.store_account(&program_id, &account);
+        } else if already_genuine_program_exists {
+            return;
         }
+
+        assert!(
+            !self.is_frozen(),
+            "Can't change frozen bank by adding not-existing new native program ({}, {}). \
+            Maybe, inconsistent program activation is detected on snapshot restore?",
+            name,
+            program_id
+        );
+
+        // Add a bogus executable native account, which will be loaded and ignored.
+        let account = native_loader::create_loadable_account(name);
+        self.store_account(&program_id, &account);
+
         debug!("Added native program {} under {:?}", name, program_id);
     }
 
@@ -3892,15 +3901,14 @@ impl Bank {
             .add_program(program_id, process_instruction_with_context);
     }
 
-    /// Add an instruction processor to intercept instructions before the dynamic loader.
-    /// Replace the builtin if it already exists
-    pub fn add_or_replace_builtin(
+    /// Replace a builtin instruction processor if it already exists
+    pub fn replace_builtin(
         &mut self,
         name: &str,
         program_id: Pubkey,
         process_instruction_with_context: ProcessInstructionWithContext,
     ) {
-        debug!("Added or replaced program {} under {:?}", name, program_id);
+        debug!("Replaced program {} under {:?}", name, program_id);
         self.add_native_program(name, &program_id, true);
         self.message_processor
             .add_program(program_id, process_instruction_with_context);
@@ -4035,15 +4043,22 @@ impl Bank {
         new_feature_activations: &HashSet<Pubkey>,
     ) {
         let feature_builtins = self.feature_builtins.clone();
-        for (builtin, feature) in feature_builtins.iter() {
+        for (builtin, feature, activation_type) in feature_builtins.iter() {
             let should_populate = init_or_warp && self.feature_set.is_active(&feature)
                 || !init_or_warp && new_feature_activations.contains(&feature);
             if should_populate {
-                self.add_or_replace_builtin(
-                    &builtin.name,
-                    builtin.id,
-                    builtin.process_instruction_with_context,
-                );
+                match activation_type {
+                    ActivationType::NewProgram => self.add_builtin(
+                        &builtin.name,
+                        builtin.id,
+                        builtin.process_instruction_with_context,
+                    ),
+                    ActivationType::NewVersion => self.replace_builtin(
+                        &builtin.name,
+                        builtin.id,
+                        builtin.process_instruction_with_context,
+                    ),
+                }
             }
         }
     }
@@ -9247,7 +9262,7 @@ mod tests {
             .add_builtin("mock_program", program_id, mock_ix_processor);
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
 
-        Arc::get_mut(&mut bank).unwrap().add_or_replace_builtin(
+        Arc::get_mut(&mut bank).unwrap().replace_builtin(
             "mock_program",
             program_id,
             mock_ix_processor,
