@@ -9288,7 +9288,7 @@ mod tests {
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
 
         Arc::get_mut(&mut bank).unwrap().replace_builtin(
-            "mock_program",
+            "mock_program v2",
             program_id,
             mock_ix_processor,
         );
