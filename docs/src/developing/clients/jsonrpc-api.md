@@ -145,7 +145,7 @@ lockout on this node, meaning the node has recognized this block as finalized
 may not be complete.
 
 For processing many dependent transactions in series, it's recommended to use
-`"singleGossip"` commitment, which balances speed with rollback saftey.
+`"singleGossip"` commitment, which balances speed with rollback safety.
 For total safety, it's recommended to use`"max"` commitment.
 
 #### Example
