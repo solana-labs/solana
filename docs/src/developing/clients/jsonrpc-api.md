@@ -141,8 +141,8 @@ lockout on this node, meaning the node has recognized this block as finalized
   - It does not count votes on descendants of a block, only direct votes on that block.
   - This confirmation level also upholds "optimistic confirmation" guarantees in
     release 1.3 and onwards.
-- `"recent"` - the node will query its most recent block.  Note that the state at
-this slot is not derived from a finalized block.
+- `"recent"` - the node will query its most recent block.  Note that the block
+may not be complete.
 
 For processing many dependent transactions in series, it's recommended to use
 `"singleGossip"` commitment, which balances speed with rollback saftey.
