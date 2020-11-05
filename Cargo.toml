@@ -55,6 +55,7 @@ members = [
     "runtime",
     "sdk",
     "sdk/cargo-build-bpf",
+    "sdk/cargo-test-bpf",
     "scripts",
     "stake-accounts",
     "stake-monitor",
