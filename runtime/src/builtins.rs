@@ -30,8 +30,14 @@ fn genesis_builtins() -> Vec<Builtin> {
     ]
 }
 
+#[derive(AbiExample, Debug, Clone)]
+pub enum ActivationType {
+    NewProgram,
+    NewVersion,
+}
+
 /// Builtin programs activated dynamically by feature
-fn feature_builtins() -> Vec<(Builtin, Pubkey)> {
+fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
     vec![(
         Builtin::new(
             "secp256k1_program",
@@ -39,6 +45,7 @@ fn feature_builtins() -> Vec<(Builtin, Pubkey)> {
             solana_secp256k1_program::process_instruction,
         ),
         feature_set::secp256k1_program_enabled::id(),
+        ActivationType::NewProgram,
     )]
 }
 
