@@ -181,9 +181,8 @@ impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
             fee,
             pre_balances,
             post_balances,
-            bad_inner_instructions: None,
-            log_messages: None,
             inner_instructions: None,
+            log_messages: None,
         }
     }
 }

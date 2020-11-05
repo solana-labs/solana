@@ -112,9 +112,8 @@ impl TransactionStatusService {
                             fee,
                             pre_balances,
                             post_balances,
-                            bad_inner_instructions: None,
-                            log_messages,
                             inner_instructions,
+                            log_messages,
                         },
                     )
                     .expect("Expect database write to succeed");

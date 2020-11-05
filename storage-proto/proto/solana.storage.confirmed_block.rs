@@ -58,11 +58,9 @@ pub struct TransactionStatusMeta {
     #[prost(uint64, repeated, tag = "4")]
     pub post_balances: ::std::vec::Vec<u64>,
     #[prost(message, repeated, tag = "5")]
-    pub bad_inner_instructions: ::std::vec::Vec<InnerInstructions>,
+    pub inner_instructions: ::std::vec::Vec<InnerInstructions>,
     #[prost(string, repeated, tag = "6")]
     pub log_messages: ::std::vec::Vec<std::string::String>,
-    #[prost(message, repeated, tag = "7")]
-    pub inner_instructions: ::std::vec::Vec<InnerInstructions>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TransactionError {

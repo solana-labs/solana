@@ -149,11 +149,9 @@ pub struct TransactionStatusMeta {
     pub pre_balances: Vec<u64>,
     pub post_balances: Vec<u64>,
     #[serde(deserialize_with = "default_on_eof")]
-    pub bad_inner_instructions: Option<Vec<InnerInstructions>>,
+    pub inner_instructions: Option<Vec<InnerInstructions>>,
     #[serde(deserialize_with = "default_on_eof")]
     pub log_messages: Option<Vec<String>>,
-    #[serde(deserialize_with = "default_on_eof")]
-    pub inner_instructions: Option<Vec<InnerInstructions>>,
 }
 
 impl Default for TransactionStatusMeta {
@@ -163,9 +161,8 @@ impl Default for TransactionStatusMeta {
             fee: 0,
             pre_balances: vec![],
             post_balances: vec![],
-            bad_inner_instructions: None,
-            log_messages: None,
             inner_instructions: None,
+            log_messages: None,
         }
     }
 }

@@ -5682,9 +5682,8 @@ pub mod tests {
                             fee: 42,
                             pre_balances: pre_balances.clone(),
                             post_balances: post_balances.clone(),
-                            bad_inner_instructions: None,
-                            log_messages: Some(vec![]),
                             inner_instructions: Some(vec![]),
+                            log_messages: Some(vec![]),
                         },
                     )
                     .unwrap();
@@ -5697,9 +5696,8 @@ pub mod tests {
                             fee: 42,
                             pre_balances: pre_balances.clone(),
                             post_balances: post_balances.clone(),
-                            bad_inner_instructions: None,
-                            log_messages: Some(vec![]),
                             inner_instructions: Some(vec![]),
+                            log_messages: Some(vec![]),
                         },
                     )
                     .unwrap();
@@ -5710,7 +5708,6 @@ pub mod tests {
                         fee: 42,
                         pre_balances,
                         post_balances,
-                        bad_inner_instructions: None,
                         inner_instructions: Some(vec![]),
                         log_messages: Some(vec![]),
                     }),
@@ -5921,9 +5918,8 @@ pub mod tests {
                         fee: 5u64,
                         pre_balances: pre_balances_vec.clone(),
                         post_balances: post_balances_vec.clone(),
-                        bad_inner_instructions: None,
-                        log_messages: Some(log_messages_vec.clone()),
                         inner_instructions: Some(inner_instructions_vec.clone()),
+                        log_messages: Some(log_messages_vec.clone()),
                     },
                 )
                 .is_ok());
@@ -5934,9 +5930,8 @@ pub mod tests {
                 fee,
                 pre_balances,
                 post_balances,
-                bad_inner_instructions: _,
-                log_messages,
                 inner_instructions,
+                log_messages,
             } = transaction_status_cf
                 .get((0, Signature::default(), 0))
                 .unwrap()
@@ -5957,9 +5952,8 @@ pub mod tests {
                         fee: 9u64,
                         pre_balances: pre_balances_vec.clone(),
                         post_balances: post_balances_vec.clone(),
-                        bad_inner_instructions: None,
-                        log_messages: Some(log_messages_vec.clone()),
                         inner_instructions: Some(inner_instructions_vec.clone()),
+                        log_messages: Some(log_messages_vec.clone()),
                     },
                 )
                 .is_ok());
@@ -5970,9 +5964,8 @@ pub mod tests {
                 fee,
                 pre_balances,
                 post_balances,
-                bad_inner_instructions: _,
-                log_messages,
                 inner_instructions,
+                log_messages,
             } = transaction_status_cf
                 .get((0, Signature::new(&[2u8; 64]), 9))
                 .unwrap()
@@ -6211,9 +6204,8 @@ pub mod tests {
                 fee: 42u64,
                 pre_balances: pre_balances_vec,
                 post_balances: post_balances_vec,
-                bad_inner_instructions: None,
-                log_messages: Some(vec![]),
                 inner_instructions: Some(vec![]),
+                log_messages: Some(vec![]),
             };
 
             let signature1 = Signature::new(&[1u8; 64]);
@@ -6358,9 +6350,8 @@ pub mod tests {
                             fee: 42,
                             pre_balances: pre_balances.clone(),
                             post_balances: post_balances.clone(),
-                            bad_inner_instructions: None,
-                            log_messages: log_messages.clone(),
                             inner_instructions: inner_instructions.clone(),
+                            log_messages: log_messages.clone(),
                         },
                     )
                     .unwrap();
@@ -6371,9 +6362,8 @@ pub mod tests {
                         fee: 42,
                         pre_balances,
                         post_balances,
-                        bad_inner_instructions: None,
-                        log_messages,
                         inner_instructions,
+                        log_messages,
                     }),
                 }
             })
@@ -6813,9 +6803,8 @@ pub mod tests {
                             fee: x,
                             pre_balances: vec![],
                             post_balances: vec![],
-                            bad_inner_instructions: None,
-                            log_messages: Some(vec![]),
                             inner_instructions: Some(vec![]),
+                            log_messages: Some(vec![]),
                         },
                     )
                     .unwrap();
