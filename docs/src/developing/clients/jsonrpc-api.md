@@ -2684,7 +2684,7 @@ Before submitting, the following preflight checks are performed:
 
 1. The transaction signatures are verified
 2. The transaction is simulated against the bank slot specified by the preflight
-   commitment, and on failure an error will be returned. Preflight checks may be
+   commitment. On failure an error will be returned. Preflight checks may be
    disabled if desired. It is recommended to specify the same commitment and
    preflight commitment to avoid confusing behavior.
 
