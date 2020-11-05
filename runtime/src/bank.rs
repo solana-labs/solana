@@ -3790,7 +3790,6 @@ impl Bank {
         program_id: Pubkey,
         process_instruction_with_context: ProcessInstructionWithContext,
     ) {
-<<<<<<< HEAD
         self.add_builtin(
             name,
             program_id,
@@ -3800,38 +3799,36 @@ impl Bank {
 
     /// Add an instruction processor to intercept instructions before the dynamic loader.
     pub fn add_builtin(&mut self, name: &str, program_id: Pubkey, entrypoint: Entrypoint) {
-        self.add_native_program(name, &program_id);
+        self.add_native_program(name, &program_id, false);
         match entrypoint {
             Entrypoint::Program(process_instruction) => {
                 self.message_processor
                     .add_program(program_id, process_instruction);
-                debug!("Added builtin program {} under {:?}", name, program_id);
+                debug!("Adding builtin program {} under {:?}", name, program_id);
             }
             Entrypoint::Loader(process_instruction_with_context) => {
                 self.message_processor
                     .add_loader(program_id, process_instruction_with_context);
-                debug!("Added builtin loader {} under {:?}", name, program_id);
+                debug!("Adding builtin loader {} under {:?}", name, program_id);
             }
         }
-=======
-        debug!("Adding program {} under {:?}", name, program_id);
-        self.add_native_program(name, &program_id, false);
-        self.message_processor
-            .add_program(program_id, process_instruction_with_context);
     }
 
     /// Replace a builtin instruction processor if it already exists
-    pub fn replace_builtin(
-        &mut self,
-        name: &str,
-        program_id: Pubkey,
-        process_instruction_with_context: ProcessInstructionWithContext,
-    ) {
-        debug!("Replacing program {} under {:?}", name, program_id);
+    pub fn replace_builtin(&mut self, name: &str, program_id: Pubkey, entrypoint: Entrypoint) {
         self.add_native_program(name, &program_id, true);
-        self.message_processor
-            .add_program(program_id, process_instruction_with_context);
->>>>>>> bc62313c6... Allow feature builtins to overwrite existing builtins (#13403)
+        match entrypoint {
+            Entrypoint::Program(process_instruction) => {
+                self.message_processor
+                    .add_program(program_id, process_instruction);
+                debug!("Replacing builtin program {} under {:?}", name, program_id);
+            }
+            Entrypoint::Loader(process_instruction_with_context) => {
+                self.message_processor
+                    .add_loader(program_id, process_instruction_with_context);
+                debug!("Replacing builtin loader {} under {:?}", name, program_id);
+            }
+        }
     }
 
     pub fn clean_accounts(&self) {
@@ -3962,22 +3959,14 @@ impl Bank {
             let should_populate = init_or_warp && self.feature_set.is_active(&feature)
                 || !init_or_warp && new_feature_activations.contains(&feature);
             if should_populate {
-<<<<<<< HEAD
-                self.add_builtin(&builtin.name, builtin.id, builtin.entrypoint);
-=======
                 match activation_type {
-                    ActivationType::NewProgram => self.add_builtin(
-                        &builtin.name,
-                        builtin.id,
-                        builtin.process_instruction_with_context,
-                    ),
-                    ActivationType::NewVersion => self.replace_builtin(
-                        &builtin.name,
-                        builtin.id,
-                        builtin.process_instruction_with_context,
-                    ),
+                    ActivationType::NewProgram => {
+                        self.add_builtin(&builtin.name, builtin.id, builtin.entrypoint)
+                    }
+                    ActivationType::NewVersion => {
+                        self.replace_builtin(&builtin.name, builtin.id, builtin.entrypoint)
+                    }
                 }
->>>>>>> bc62313c6... Allow feature builtins to overwrite existing builtins (#13403)
             }
         }
     }
@@ -9165,7 +9154,7 @@ mod tests {
         Arc::get_mut(&mut bank).unwrap().replace_builtin(
             "mock_program v2",
             program_id,
-            mock_ix_processor,
+            Entrypoint::Program(mock_ix_processor),
         );
         assert_eq!(
             bank.get_account_modified_slot(&program_id).unwrap().1,

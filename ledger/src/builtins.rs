@@ -1,15 +1,9 @@
 use solana_runtime::{
-<<<<<<< HEAD
     bank::{Builtin, Builtins, Entrypoint},
+    builtins::ActivationType,
     feature_set,
 };
 use solana_sdk::{genesis_config::ClusterType, pubkey::Pubkey};
-=======
-    bank::{Builtin, Builtins},
-    builtins::ActivationType,
-};
-use solana_sdk::{feature_set, genesis_config::ClusterType, pubkey::Pubkey};
->>>>>>> bc62313c6... Allow feature builtins to overwrite existing builtins (#13403)
 
 /// Builtin programs that are always available
 fn genesis_builtins(cluster_type: ClusterType) -> Vec<Builtin> {
@@ -40,11 +34,7 @@ fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
 
     builtins
         .into_iter()
-<<<<<<< HEAD
-        .map(|(b, p)| (Builtin::new(&b.0, b.1, Entrypoint::Loader(b.2)), p))
-=======
-        .map(|(b, p, t)| (Builtin::new(&b.0, b.1, b.2), p, t))
->>>>>>> bc62313c6... Allow feature builtins to overwrite existing builtins (#13403)
+        .map(|(b, p, t)| (Builtin::new(&b.0, b.1, Entrypoint::Loader(b.2)), p, t))
         .collect()
 }
 
