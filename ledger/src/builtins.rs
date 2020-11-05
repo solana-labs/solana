@@ -1,5 +1,6 @@
 use solana_runtime::{
     bank::{Builtin, Builtins, Entrypoint},
+    builtins::ActivationType,
     feature_set,
 };
 use solana_sdk::{genesis_config::ClusterType, pubkey::Pubkey};
@@ -24,15 +25,16 @@ fn genesis_builtins(cluster_type: ClusterType) -> Vec<Builtin> {
 }
 
 /// Builtin programs activated dynamically by feature
-fn feature_builtins() -> Vec<(Builtin, Pubkey)> {
+fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
     let builtins = vec![(
         solana_bpf_loader_program!(),
         feature_set::bpf_loader2_program::id(),
+        ActivationType::NewProgram,
     )];
 
     builtins
         .into_iter()
-        .map(|(b, p)| (Builtin::new(&b.0, b.1, Entrypoint::Loader(b.2)), p))
+        .map(|(b, p, t)| (Builtin::new(&b.0, b.1, Entrypoint::Loader(b.2)), p, t))
         .collect()
 }
 
