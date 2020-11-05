@@ -3763,6 +3763,7 @@ dependencies = [
 name = "solana-cargo-test-bpf"
 version = "1.4.5"
 dependencies = [
+ "cargo_metadata",
  "clap",
 ]
 
