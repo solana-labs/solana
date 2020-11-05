@@ -539,7 +539,7 @@ impl ClusterInfo {
 
     // Should only be used by tests and simulations
     pub fn clone_with_id(&self, new_id: &Pubkey) -> Self {
-        let mut gossip = self.gossip.read().unwrap().clone();
+        let mut gossip = self.gossip.read().unwrap().mock_clone();
         gossip.id = *new_id;
         let mut my_contact_info = self.my_contact_info.read().unwrap().clone();
         my_contact_info.id = *new_id;
@@ -1856,8 +1856,7 @@ impl ClusterInfo {
         let mut prune_message_timeout = 0;
         let mut bad_prune_destination = 0;
         {
-            let mut gossip =
-                self.time_gossip_write_lock("process_prune", &self.stats.process_prune);
+            let gossip = self.time_gossip_read_lock("process_prune", &self.stats.process_prune);
             let now = timestamp();
             for (from, data) in messages {
                 match gossip.process_prune_msg(

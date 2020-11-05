@@ -17,7 +17,6 @@ use std::collections::{HashMap, HashSet};
 ///The min size for bloom filters
 pub const CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS: usize = 500;
 
-#[derive(Clone)]
 pub struct CrdsGossip {
     pub crds: Crds,
     pub id: Pubkey,
@@ -108,7 +107,7 @@ impl CrdsGossip {
 
     /// add the `from` to the peer's filter of nodes
     pub fn process_prune_msg(
-        &mut self,
+        &self,
         peer: &Pubkey,
         destination: &Pubkey,
         origin: &[Pubkey],
@@ -265,6 +264,16 @@ impl CrdsGossip {
         }
         self.pull.purge_failed_inserts(now);
         rv
+    }
+
+    // Only for tests and simulations.
+    pub(crate) fn mock_clone(&self) -> Self {
+        Self {
+            crds: self.crds.clone(),
+            push: self.push.mock_clone(),
+            pull: self.pull.clone(),
+            ..*self
+        }
     }
 }
 

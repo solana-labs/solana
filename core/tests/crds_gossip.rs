@@ -346,7 +346,7 @@ fn network_run_push(
                         network
                             .get(&from)
                             .map(|node| {
-                                let mut node = node.lock().unwrap();
+                                let node = node.lock().unwrap();
                                 let destination = node.id;
                                 let now = timestamp();
                                 node.process_prune_msg(&to, &destination, &prune_keys, now, now)
