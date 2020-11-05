@@ -322,9 +322,9 @@ impl program_stubs::SyscallStubs for SyscallStubs {
     }
 }
 
-fn find_file(filename: &str) -> Option<PathBuf> {
-    for path in &["", "tests/fixtures"] {
-        let candidate = Path::new(path).join(&filename);
+fn find_file(filename: &str, search_path: &[PathBuf]) -> Option<PathBuf> {
+    for path in search_path {
+        let candidate = path.join(&filename);
         if candidate.exists() {
             return Some(candidate);
         }
@@ -348,6 +348,7 @@ pub struct ProgramTest {
     builtins: Vec<Builtin>,
     bpf_compute_max_units: Option<u64>,
     prefer_bpf: bool,
+    search_path: Vec<PathBuf>,
 }
 
 impl Default for ProgramTest {
@@ -378,11 +379,22 @@ impl Default for ProgramTest {
             Err(_err) => false,
         };
 
+        let mut search_path = vec![];
+        if let Ok(dir) = std::env::var("CARGO_BUILD_TARGET_DIR") {
+            let deploy_dir = PathBuf::from(dir).join("deploy");
+            search_path.push(deploy_dir);
+        };
+        if let Ok(dir) = std::env::current_dir() {
+            search_path.push(dir);
+        }
+        search_path.push(PathBuf::from("tests/fixtures"));
+
         Self {
             accounts: vec![],
             builtins: vec![],
             bpf_compute_max_units: None,
             prefer_bpf,
+            search_path,
         }
     }
 }
@@ -433,7 +445,7 @@ impl ProgramTest {
             address,
             Account {
                 lamports,
-                data: read_file(find_file(filename).unwrap_or_else(|| {
+                data: read_file(find_file(filename, &self.search_path).unwrap_or_else(|| {
                     panic!("Unable to locate {}", filename);
                 })),
                 owner,
@@ -479,7 +491,7 @@ impl ProgramTest {
         process_instruction: Option<ProcessInstructionWithContext>,
     ) {
         let loader = solana_program::bpf_loader::id();
-        let program_file = find_file(&format!("{}.so", program_name));
+        let program_file = find_file(&format!("{}.so", program_name), &self.search_path);
 
         if process_instruction.is_none() && program_file.is_none() {
             panic!("Unable to add program {} ({})", program_name, program_id);
