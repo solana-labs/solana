@@ -78,6 +78,7 @@ else
 
   BINS=(
     cargo-build-bpf
+    cargo-test-bpf
     solana
     solana-bench-exchange
     solana-bench-tps
