@@ -533,11 +533,7 @@ fn test_program_bpf_invoke() {
             &[TEST_SUCCESS, bump_seed1, bump_seed2, bump_seed3],
             account_metas.clone(),
         );
-        let noop_instruction = Instruction::new(
-            noop_program_id,
-            &(),
-            vec![]
-        );
+        let noop_instruction = Instruction::new(noop_program_id, &(), vec![]);
         let message = Message::new(&[instruction, noop_instruction], Some(&mint_pubkey));
         let tx = Transaction::new(
             &[

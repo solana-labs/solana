@@ -270,6 +270,65 @@ info!(&format!("Some varialbe: {:?}", variable));
 The [debugging](debugging.md#logging) section has more information about working
 with program logs.
 
+## Panicking
+
+Rust's `panic!`, `assert!`, and internal panic results are printed to the
+[program logs](debugging.md#logging) by default.
+
+```
+INFO  solana_runtime::message_processor] Finalized account CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ
+INFO  solana_runtime::message_processor] Call BPF program CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ
+INFO  solana_runtime::message_processor] Program log: Panicked at: 'assertion failed: `(left == right)`
+      left: `1`,
+     right: `2`', rust/panic/src/lib.rs:22:5
+INFO  solana_runtime::message_processor] BPF program consumed 5453 of 200000 units
+INFO  solana_runtime::message_processor] BPF program CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ failed: BPF program panicked
+```
+
+### Custom Panic Handler
+
+Programs can override the default panic handler by providing their own
+implementation.
+
+First define the `custom-panic` feature in the program's `Cargo.toml`
+
+```toml
+[features]
+default = ["custom-panic"]
+custom-panic = []
+```
+
+Then provide a custom implementation of the panic handler:
+
+```rust
+#[cfg(all(feature = "custom-panic", target_arch = "bpf"))]
+#[no_mangle]
+fn custom_panic(info: &core::panic::PanicInfo<'_>) {
+    solana_program::info!("program custom panic enabled");
+    solana_program::info!(&format!("{}", info));
+}
+```
+
+In the above snippit, the default implementation is shown, but developers may
+replace that with something that better suits their needs.
+
+One of the side effects of supporting full panic messages by default is that
+programs incur the cost of pulling in more of Rust's `libstd` implementation
+into program's shared object.  Typical programs will already be pulling in a
+fair amount of `libstd` and may not notice much of an increase in the shared
+object size.  But programs that explicitly attempt to be very small by avoiding
+`libstd` may take a significant impact (~25kb).  To eliminate that impact,
+programs can provide their own custom panic handler with an empty
+implementation.
+
+```rust
+#[cfg(all(feature = "custom-panic", target_arch = "bpf"))]
+#[no_mangle]
+fn custom_panic(info: &core::panic::PanicInfo<'_>) {
+    // Do nothing to save space
+}
+```
+
 ## Compute Budget
 
 Use the system call
