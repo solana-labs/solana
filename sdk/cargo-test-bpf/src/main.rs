@@ -74,6 +74,15 @@ fn test_bpf(config: Config) {
         exit(1);
     });
 
+    let root_package = metadata.root_package().unwrap_or_else(|| {
+        eprintln!(
+            "Workspace does not have a root package: {}",
+            metadata.workspace_root.display()
+        );
+        exit(1);
+    });
+    let set_test_bpf_feature = root_package.features.contains_key("test-bpf");
+
     let bpf_out_dir = config
         .bpf_out_dir
         .unwrap_or_else(|| format!("{}", metadata.target_directory.join("deploy").display()));
@@ -108,6 +117,13 @@ fn test_bpf(config: Config) {
     env::set_var("BPF_OUT_DIR", bpf_out_dir);
 
     cargo_args.insert(0, "test");
+
+    // If the program crate declares the "test-bpf" feature, pass it along to the tests so they can
+    // distinguish between `cargo test` and `cargo test-bpf`
+    if set_test_bpf_feature {
+        cargo_args.push("--features");
+        cargo_args.push("test-bpf");
+    }
     for extra_cargo_test_arg in &config.extra_cargo_test_args {
         cargo_args.push(&extra_cargo_test_arg);
     }
