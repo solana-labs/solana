@@ -254,28 +254,27 @@ fn filter_account_result(
     encoding: Option<UiAccountEncoding>,
     bank: Option<Arc<Bank>>,
 ) -> (Box<dyn Iterator<Item = UiAccount>>, Slot) {
-    if let Some((account, fork)) = result {
-        // If fork < last_notified_slot this means that we last notified for a fork
-        // and should notify that the account state has been reverted.
-        if fork != last_notified_slot {
-            let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
-            if account.owner == spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
-                let bank = bank.unwrap(); // If result.is_some(), bank must also be Some
-                return (
-                    Box::new(iter::once(get_parsed_token_account(bank, pubkey, account))),
-                    fork,
-                );
-            } else {
-                return (
-                    Box::new(iter::once(UiAccount::encode(
-                        pubkey, account, encoding, None, None,
-                    ))),
-                    fork,
-                );
-            }
+    // If the account is not found, `last_modified_slot` will default to zero and
+    // we will notify clients that the account no longer exists if we haven't already
+    let (account, last_modified_slot) = result.unwrap_or_default();
+
+    // If last_modified_slot < last_notified_slot this means that we last notified for a fork
+    // and should notify that the account state has been reverted.
+    let results: Box<dyn Iterator<Item = UiAccount>> = if last_modified_slot != last_notified_slot {
+        let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
+        if account.owner == spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
+            let bank = bank.unwrap(); // If result.is_some(), bank must also be Some
+            Box::new(iter::once(get_parsed_token_account(bank, pubkey, account)))
+        } else {
+            Box::new(iter::once(UiAccount::encode(
+                pubkey, account, encoding, None, None,
+            )))
         }
-    }
-    (Box::new(iter::empty()), last_notified_slot)
+    } else {
+        Box::new(iter::empty())
+    };
+
+    (results, last_modified_slot)
 }
 
 fn filter_signature_result(
@@ -1012,8 +1011,10 @@ pub(crate) mod tests {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     };
     use solana_sdk::{
+        message::Message,
         signature::{Keypair, Signer},
-        system_transaction,
+        system_instruction, system_program, system_transaction,
+        transaction::Transaction,
     };
     use std::{fmt::Debug, sync::mpsc::channel, time::Instant};
     use tokio_01::{prelude::FutureExt, runtime::Runtime, timer::Delay};
@@ -1059,9 +1060,12 @@ pub(crate) mod tests {
         bank_forks.write().unwrap().insert(bank1);
         let alice = Keypair::new();
 
-        let (subscriber, _id_receiver, transport_receiver) =
-            Subscriber::new_test("accountNotification");
-        let sub_id = SubscriptionId::Number(0 as u64);
+        let (create_sub, _id_receiver, create_recv) = Subscriber::new_test("accountNotification");
+        let (close_sub, _id_receiver, close_recv) = Subscriber::new_test("accountNotification");
+
+        let create_sub_id = SubscriptionId::Number(0 as u64);
+        let close_sub_id = SubscriptionId::Number(1 as u64);
+
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions = RpcSubscriptions::new(
             &exit,
@@ -1078,8 +1082,8 @@ pub(crate) mod tests {
                 encoding: None,
                 data_slice: None,
             }),
-            sub_id.clone(),
-            subscriber,
+            create_sub_id.clone(),
+            create_sub,
         );
 
         assert!(subscriptions
@@ -1094,8 +1098,8 @@ pub(crate) mod tests {
             &alice,
             blockhash,
             1,
-            16,
-            &solana_stake_program::id(),
+            0,
+            &system_program::id(),
         );
         bank_forks
             .write()
@@ -1107,7 +1111,7 @@ pub(crate) mod tests {
         let mut commitment_slots = CommitmentSlots::default();
         commitment_slots.slot = 1;
         subscriptions.notify_subscribers(commitment_slots);
-        let (response, _) = robust_poll_or_panic(transport_receiver);
+        let (response, _) = robust_poll_or_panic(create_recv);
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "accountNotification",
@@ -1115,10 +1119,10 @@ pub(crate) mod tests {
                "result": {
                    "context": { "slot": 1 },
                    "value": {
-                       "data": "1111111111111111",
+                       "data": "",
                        "executable": false,
                        "lamports": 1,
-                       "owner": "Stake11111111111111111111111111111111111111",
+                       "owner": "11111111111111111111111111111111",
                        "rentEpoch": 0,
                     },
                },
@@ -1126,8 +1130,55 @@ pub(crate) mod tests {
            }
         });
         assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+        subscriptions.remove_account_subscription(&create_sub_id);
 
-        subscriptions.remove_account_subscription(&sub_id);
+        subscriptions.add_account_subscription(
+            alice.pubkey(),
+            Some(RpcAccountInfoConfig {
+                commitment: Some(CommitmentConfig::recent()),
+                encoding: None,
+                data_slice: None,
+            }),
+            close_sub_id.clone(),
+            close_sub,
+        );
+
+        let tx = {
+            let instruction =
+                system_instruction::transfer(&alice.pubkey(), &mint_keypair.pubkey(), 1);
+            let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
+            Transaction::new(&[&alice, &mint_keypair], message, blockhash)
+        };
+
+        bank_forks
+            .write()
+            .unwrap()
+            .get(1)
+            .unwrap()
+            .process_transaction(&tx)
+            .unwrap();
+        subscriptions.notify_subscribers(commitment_slots);
+        let (response, _) = robust_poll_or_panic(close_recv);
+        let expected = json!({
+           "jsonrpc": "2.0",
+           "method": "accountNotification",
+           "params": {
+               "result": {
+                   "context": { "slot": 1 },
+                   "value": {
+                       "data": "",
+                       "executable": false,
+                       "lamports": 0,
+                       "owner": "11111111111111111111111111111111",
+                       "rentEpoch": 0,
+                    },
+               },
+               "subscription": 1,
+           }
+        });
+        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+        subscriptions.remove_account_subscription(&close_sub_id);
+
         assert!(!subscriptions
             .subscriptions
             .account_subscriptions
