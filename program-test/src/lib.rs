@@ -116,12 +116,12 @@ pub fn builtin_process_instruction(
         })
         .collect();
 
-    // Execute the BPF entrypoint
+    // Execute the program
     let result =
         process_instruction(program_id, &account_infos, input).map_err(to_instruction_error);
 
     if result.is_ok() {
-        // Commit changes to the KeyedAccounts
+        // Commit AccountInfo changes back into KeyedAccounts
         for keyed_account in keyed_accounts {
             let mut account = keyed_account.account.borrow_mut();
             let key = keyed_account.unsigned_key();
@@ -195,7 +195,7 @@ impl program_stubs::SyscallStubs for SyscallStubs {
         signers_seeds: &[&[&[u8]]],
     ) -> ProgramResult {
         //
-        // TODO: Merge the business logic between here and the BPF invoke path in
+        // TODO: Merge the business logic below with the BPF invoke path in
         //       programs/bpf_loader/src/syscalls.rs
         //
         info!("SyscallStubs::sol_invoke_signed()");
@@ -305,10 +305,20 @@ impl program_stubs::SyscallStubs for SyscallStubs {
 
                     let mut data = account_info.try_borrow_mut_data()?;
                     let new_data = &account.borrow().data;
-                    if data.len() != new_data.len() {
-                        // TODO: Figure out how to change the callers account data size
+                    if *account_info.owner != account.borrow().owner {
+                        // TODO: Figure out how to allow the System Program to change the account owner
                         panic!(
-                            "Account resizing ({} -> {}) not supported yet",
+                            "Account ownership change not supported yet: {} -> {}. \
+                            Consider making this test conditional on `#[cfg(feature = \"test-bpf\")]`",
+                            *account_info.owner,
+                            account.borrow().owner
+                        );
+                    }
+                    if data.len() != new_data.len() {
+                        // TODO: Figure out how to allow the System Program to resize the account data
+                        panic!(
+                            "Account data resizing not supported yet: {} -> {}. \
+                            Consider making this test conditional on `#[cfg(feature = \"test-bpf\")]`",
                             data.len(),
                             new_data.len()
                         );
