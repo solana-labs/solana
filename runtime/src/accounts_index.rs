@@ -13,7 +13,7 @@ use std::{
     ops::{Range, RangeBounds},
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
-const ITER_BATCH_SIZE: usize = 1000;
+pub const ITER_BATCH_SIZE: usize = 1000;
 
 pub type SlotList<T> = Vec<(Slot, T)>;
 pub type SlotSlice<'s, T> = &'s [(Slot, T)];
