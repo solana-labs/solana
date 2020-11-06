@@ -4304,7 +4304,7 @@ pub(crate) mod tests {
         native_loader::NativeLoaderError,
         status_cache::MAX_CACHE_ENTRIES,
     };
-    use crossbeam_channel::unbounded;
+    use crossbeam_channel::bounded;
     use solana_sdk::{
         account_utils::StateMut,
         clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
@@ -10485,19 +10485,28 @@ pub(crate) mod tests {
 
         // Thread that runs scan and constantly checks for
         // consistency
-        let bank_ = bank0.clone();
         let pubkeys_to_modify_ = pubkeys_to_modify.clone();
         let exit_ = exit.clone();
-        let (start_scan_sender, start_scan_receiver) = unbounded();
+
+        // Channel over which the bank to scan is sent
+        let (bank_to_scan_sender, bank_to_scan_receiver): (
+            crossbeam_channel::Sender<Arc<Bank>>,
+            crossbeam_channel::Receiver<Arc<Bank>>,
+        ) = bounded(1);
         let scan_thread = Builder::new()
             .name("scan".to_string())
             .spawn(move || loop {
                 if exit_.load(Relaxed) {
                     return;
                 }
-                start_scan_sender.send(1).unwrap();
-                let accounts = bank_.get_program_accounts(&program_id);
-                if accounts.len() != 0 {
+                if let Ok(bank_to_scan) =
+                    bank_to_scan_receiver.recv_timeout(Duration::from_millis(10))
+                {
+                    let accounts = bank_to_scan.get_program_accounts(&program_id);
+                    // Should never seen empty accounts because not slot ever deleted
+                    // any of the original accounts, and the scan should reflect the
+                    // account state at some frozen slot `X` (no partial updates).
+                    assert!(!accounts.is_empty());
                     let mut expected_lamports = None;
                     let mut target_accounts_found = HashSet::new();
                     for (pubkey, account) in accounts {
@@ -10522,33 +10531,37 @@ pub(crate) mod tests {
 
         // Thread that constantly updates the accounts, sets
         // roots, and cleans
-        let exit_ = exit.clone();
         let update_thread = Builder::new()
             .name("update".to_string())
             .spawn(move || {
-                let mut current_bank = bank0;
+                let mut current_bank = bank0.clone();
+                let mut prev_bank = bank0;
                 loop {
-                    if exit_.load(Relaxed) {
+                    let lamports_this_round = current_bank.slot() + starting_lamports + 1;
+                    let account = Account::new(lamports_this_round, 0, &program_id);
+                    for key in pubkeys_to_modify.iter() {
+                        current_bank.store_account(key, &account);
+                    }
+                    current_bank.freeze();
+                    // Send the previous bank to the scan thread to perform the scan.
+                    // Meanwhile this thread will squash and update roots immediately after
+                    // so the roots will update while scanning.
+                    //
+                    // The capacity of the channel is 1 so that this thread will wait for the scan to finish before starting
+                    // the next iteration, allowing the scan to stay in sync with these updates
+                    // such that every scan will see this interruption.
+                    if bank_to_scan_sender.send(prev_bank).is_err() {
+                        // Channel was disconnected, exit
                         return;
                     }
-                    if start_scan_receiver
-                        .recv_timeout(Duration::from_millis(10))
-                        .is_ok()
-                    {
-                        let lamports_this_round = current_bank.slot() + starting_lamports + 1;
-                        let account = Account::new(lamports_this_round, 0, &program_id);
-                        for key in pubkeys_to_modify.iter() {
-                            current_bank.store_account(key, &account);
-                        }
-                        current_bank.freeze();
-                        current_bank.squash();
-                        current_bank.clean_accounts(false);
-                        current_bank = Arc::new(Bank::new_from_parent(
-                            &current_bank,
-                            &solana_sdk::pubkey::new_rand(),
-                            current_bank.slot() + 1,
-                        ));
-                    }
+                    current_bank.squash();
+                    current_bank.clean_accounts(false);
+                    prev_bank = current_bank.clone();
+                    current_bank = Arc::new(Bank::new_from_parent(
+                        &current_bank,
+                        &solana_sdk::pubkey::new_rand(),
+                        current_bank.slot() + 1,
+                    ));
                 }
             })
             .unwrap();
