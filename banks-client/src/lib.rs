@@ -10,9 +10,17 @@ use futures::future::join_all;
 pub use solana_banks_interface::{BanksClient, TransactionStatus};
 use solana_banks_interface::{BanksRequest, BanksResponse};
 use solana_sdk::{
-    account::Account, clock::Slot, commitment_config::CommitmentLevel,
-    fee_calculator::FeeCalculator, hash::Hash, pubkey::Pubkey, signature::Signature,
-    transaction::Transaction, transport,
+    account::{from_account, Account},
+    clock::Slot,
+    commitment_config::CommitmentLevel,
+    fee_calculator::FeeCalculator,
+    hash::Hash,
+    pubkey::Pubkey,
+    rent::Rent,
+    signature::Signature,
+    sysvar,
+    transaction::Transaction,
+    transport,
 };
 use std::io::{self, Error, ErrorKind};
 use tarpc::{
@@ -39,6 +47,9 @@ pub trait BanksClientExt {
     /// will use the transaction's blockhash to look up these same fee parameters and
     /// use them to calculate the transaction fee.
     async fn get_fees(&mut self) -> io::Result<(FeeCalculator, Hash, Slot)>;
+
+    /// Return the cluster rent
+    async fn get_rent(&mut self) -> io::Result<Rent>;
 
     /// Send a transaction and return after the transaction has been rejected or
     /// reached the given level of commitment.
@@ -106,6 +117,17 @@ impl BanksClientExt for BanksClient {
     async fn get_fees(&mut self) -> io::Result<(FeeCalculator, Hash, Slot)> {
         self.get_fees_with_commitment_and_context(context::current(), CommitmentLevel::Root)
             .await
+    }
+
+    async fn get_rent(&mut self) -> io::Result<Rent> {
+        let rent_sysvar = self
+            .get_account(sysvar::rent::id())
+            .await?
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Rent sysvar not present"))?;
+
+        from_account::<Rent>(&rent_sysvar).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::Other, "Failed to deserialize Rent sysvar")
+        })
     }
 
     async fn get_recent_blockhash(&mut self) -> io::Result<Hash> {
