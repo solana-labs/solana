@@ -1,18 +1,17 @@
-//! Stake state
-//! * delegate stakes to vote accounts
-//! * keep track of rewards
-//! * own mining pools
+//! Legacy stake state
+//! The minimum code needed to support the legacy_stake_processor
 
 use crate::{
     config::Config,
     id,
     stake_instruction::{LockupArgs, StakeError},
+    stake_state::{Authorized, Delegation, Lockup, Meta, PointValue, StakeAuthorize},
 };
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     account::Account,
     account_utils::{State, StateMut},
-    clock::{Clock, Epoch, UnixTimestamp},
+    clock::{Clock, Epoch},
     instruction::InstructionError,
     keyed_account::KeyedAccount,
     pubkey::Pubkey,
@@ -92,286 +91,11 @@ impl StakeState {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
-pub enum StakeAuthorize {
-    Staker,
-    Withdrawer,
-}
-
-#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
-pub struct Lockup {
-    /// UnixTimestamp at which this stake will allow withdrawal, unless the
-    ///   transaction is signed by the custodian
-    pub unix_timestamp: UnixTimestamp,
-    /// epoch height at which this stake will allow withdrawal, unless the
-    ///   transaction is signed by the custodian
-    pub epoch: Epoch,
-    /// custodian signature on a transaction exempts the operation from
-    ///  lockup constraints
-    pub custodian: Pubkey,
-}
-
-impl Lockup {
-    pub fn is_in_force(&self, clock: &Clock, custodian: Option<&Pubkey>) -> bool {
-        if custodian == Some(&self.custodian) {
-            return false;
-        }
-        self.unix_timestamp > clock.unix_timestamp || self.epoch > clock.epoch
-    }
-}
-
-#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
-pub struct Authorized {
-    pub staker: Pubkey,
-    pub withdrawer: Pubkey,
-}
-
-#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
-pub struct Meta {
-    pub rent_exempt_reserve: u64,
-    pub authorized: Authorized,
-    pub lockup: Lockup,
-}
-
-impl Meta {
-    pub fn set_lockup(
-        &mut self,
-        lockup: &LockupArgs,
-        signers: &HashSet<Pubkey>,
-    ) -> Result<(), InstructionError> {
-        if !signers.contains(&self.lockup.custodian) {
-            return Err(InstructionError::MissingRequiredSignature);
-        }
-        if let Some(unix_timestamp) = lockup.unix_timestamp {
-            self.lockup.unix_timestamp = unix_timestamp;
-        }
-        if let Some(epoch) = lockup.epoch {
-            self.lockup.epoch = epoch;
-        }
-        if let Some(custodian) = lockup.custodian {
-            self.lockup.custodian = custodian;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
-pub struct Delegation {
-    /// to whom the stake is delegated
-    pub voter_pubkey: Pubkey,
-    /// activated stake amount, set at delegate() time
-    pub stake: u64,
-    /// epoch at which this stake was activated, std::Epoch::MAX if is a bootstrap stake
-    pub activation_epoch: Epoch,
-    /// epoch the stake was deactivated, std::Epoch::MAX if not deactivated
-    pub deactivation_epoch: Epoch,
-    /// how much stake we can activate per-epoch as a fraction of currently effective stake
-    pub warmup_cooldown_rate: f64,
-}
-
-impl Default for Delegation {
-    fn default() -> Self {
-        Self {
-            voter_pubkey: Pubkey::default(),
-            stake: 0,
-            activation_epoch: 0,
-            deactivation_epoch: std::u64::MAX,
-            warmup_cooldown_rate: Config::default().warmup_cooldown_rate,
-        }
-    }
-}
-
-impl Delegation {
-    pub fn new(
-        voter_pubkey: &Pubkey,
-        stake: u64,
-        activation_epoch: Epoch,
-        warmup_cooldown_rate: f64,
-    ) -> Self {
-        Self {
-            voter_pubkey: *voter_pubkey,
-            stake,
-            activation_epoch,
-            warmup_cooldown_rate,
-            ..Delegation::default()
-        }
-    }
-    pub fn is_bootstrap(&self) -> bool {
-        self.activation_epoch == std::u64::MAX
-    }
-
-    pub fn stake(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
-        self.stake_activating_and_deactivating(epoch, history).0
-    }
-
-    #[allow(clippy::comparison_chain)]
-    pub fn stake_activating_and_deactivating(
-        &self,
-        epoch: Epoch,
-        history: Option<&StakeHistory>,
-    ) -> (u64, u64, u64) {
-        // first, calculate an effective stake and activating number
-        let (stake, activating) = self.stake_and_activating(epoch, history);
-
-        // then de-activate some portion if necessary
-        if epoch < self.deactivation_epoch {
-            (stake, activating, 0) // not deactivated
-        } else if epoch == self.deactivation_epoch {
-            (stake, 0, stake.min(self.stake)) // can only deactivate what's activated
-        } else if let Some((history, mut entry)) = history.and_then(|history| {
-            history
-                .get(&self.deactivation_epoch)
-                .map(|entry| (history, entry))
-        }) {
-            // && epoch > self.deactivation_epoch
-            let mut effective_stake = stake;
-            let mut next_epoch = self.deactivation_epoch;
-
-            // loop from my activation epoch until the current epoch
-            //   summing up my entitlement
-            loop {
-                if entry.deactivating == 0 {
-                    break;
-                }
-                // I'm trying to get to zero, how much of the deactivation in stake
-                //   this account is entitled to take
-                let weight = effective_stake as f64 / entry.deactivating as f64;
-
-                // portion of activating stake in this epoch I'm entitled to
-                effective_stake = effective_stake.saturating_sub(
-                    ((weight * entry.effective as f64 * self.warmup_cooldown_rate) as u64).max(1),
-                );
-
-                if effective_stake == 0 {
-                    break;
-                }
-
-                next_epoch += 1;
-                if next_epoch >= epoch {
-                    break;
-                }
-                if let Some(next_entry) = history.get(&next_epoch) {
-                    entry = next_entry;
-                } else {
-                    break;
-                }
-            }
-            (effective_stake, 0, effective_stake)
-        } else {
-            // no history or I've dropped out of history, so  fully deactivated
-            (0, 0, 0)
-        }
-    }
-
-    fn stake_and_activating(&self, epoch: Epoch, history: Option<&StakeHistory>) -> (u64, u64) {
-        if self.is_bootstrap() {
-            (self.stake, 0)
-        } else if epoch == self.activation_epoch {
-            (0, self.stake)
-        } else if epoch < self.activation_epoch {
-            (0, 0)
-        } else if let Some((history, mut entry)) = history.and_then(|history| {
-            history
-                .get(&self.activation_epoch)
-                .map(|entry| (history, entry))
-        }) {
-            // && !is_bootstrap() && epoch > self.activation_epoch
-            let mut effective_stake = 0;
-            let mut next_epoch = self.activation_epoch;
-
-            // loop from my activation epoch until the current epoch
-            //   summing up my entitlement
-            loop {
-                if entry.activating == 0 {
-                    break;
-                }
-                // how much of the growth in stake this account is
-                //  entitled to take
-                let weight = (self.stake - effective_stake) as f64 / entry.activating as f64;
-
-                // portion of activating stake in this epoch I'm entitled to
-                effective_stake +=
-                    ((weight * entry.effective as f64 * self.warmup_cooldown_rate) as u64).max(1);
-
-                if effective_stake >= self.stake {
-                    effective_stake = self.stake;
-                    break;
-                }
-
-                next_epoch += 1;
-                if next_epoch >= epoch || next_epoch >= self.deactivation_epoch {
-                    break;
-                }
-                if let Some(next_entry) = history.get(&next_epoch) {
-                    entry = next_entry;
-                } else {
-                    break;
-                }
-            }
-            (effective_stake, self.stake - effective_stake)
-        } else {
-            // no history or I've dropped out of history, so assume fully activated
-            (self.stake, 0)
-        }
-    }
-}
-
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
 pub struct Stake {
     pub delegation: Delegation,
     /// credits observed is credits from vote account state when delegated or redeemed
     pub credits_observed: u64,
-}
-
-impl Authorized {
-    pub fn auto(authorized: &Pubkey) -> Self {
-        Self {
-            staker: *authorized,
-            withdrawer: *authorized,
-        }
-    }
-    pub fn check(
-        &self,
-        signers: &HashSet<Pubkey>,
-        stake_authorize: StakeAuthorize,
-    ) -> Result<(), InstructionError> {
-        match stake_authorize {
-            StakeAuthorize::Staker if signers.contains(&self.staker) => Ok(()),
-            StakeAuthorize::Withdrawer if signers.contains(&self.withdrawer) => Ok(()),
-            _ => Err(InstructionError::MissingRequiredSignature),
-        }
-    }
-
-    pub fn authorize(
-        &mut self,
-        signers: &HashSet<Pubkey>,
-        new_authorized: &Pubkey,
-        stake_authorize: StakeAuthorize,
-    ) -> Result<(), InstructionError> {
-        match stake_authorize {
-            StakeAuthorize::Staker => {
-                // Allow either the staker or the withdrawer to change the staker key
-                if !signers.contains(&self.staker) && !signers.contains(&self.withdrawer) {
-                    return Err(InstructionError::MissingRequiredSignature);
-                }
-                self.staker = *new_authorized
-            }
-            StakeAuthorize::Withdrawer => {
-                self.check(signers, stake_authorize)?;
-                self.withdrawer = *new_authorized
-            }
-        }
-        Ok(())
-    }
-}
-
-/// captures a rewards round as lamports to be awarded
-///  and the total points over which those lamports
-///  are to be distributed
-//  basically read as rewards/points, but in integers instead of as an f64
-pub struct PointValue {
-    pub rewards: u64, // lamports to split
-    pub points: u128, // over these points
 }
 
 impl Stake {
@@ -1100,15 +824,6 @@ mod tests {
     use solana_sdk::{account::Account, native_token, pubkey::Pubkey, system_program};
     use solana_vote_program::vote_state;
     use std::cell::RefCell;
-
-    impl Meta {
-        pub fn auto(authorized: &Pubkey) -> Self {
-            Self {
-                authorized: Authorized::auto(authorized),
-                ..Meta::default()
-            }
-        }
-    }
 
     #[test]
     fn test_authorized_authorize() {
