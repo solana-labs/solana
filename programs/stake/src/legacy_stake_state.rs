@@ -9,11 +9,10 @@ use crate::{
 };
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
-    account::Account,
+    account::{Account, KeyedAccount},
     account_utils::{State, StateMut},
     clock::{Clock, Epoch},
     instruction::InstructionError,
-    keyed_account::KeyedAccount,
     pubkey::Pubkey,
     rent::Rent,
     stake_history::{StakeHistory, StakeHistoryEntry},

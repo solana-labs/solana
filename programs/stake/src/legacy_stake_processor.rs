@@ -1,19 +1,17 @@
 use crate::{config, legacy_stake_state::StakeAccount, stake_instruction::StakeInstruction};
 use log::*;
 use solana_sdk::{
+    account::{get_signers, next_keyed_account, KeyedAccount},
     instruction::InstructionError,
-    keyed_account::{from_keyed_account, get_signers, next_keyed_account, KeyedAccount},
-    process_instruction::InvokeContext,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
-    sysvar::{clock::Clock, rent::Rent, stake_history::StakeHistory},
+    sysvar::{clock::Clock, rent::Rent, stake_history::StakeHistory, Sysvar},
 };
 
 pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
-    _invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
@@ -27,7 +25,7 @@ pub fn process_instruction(
         StakeInstruction::Initialize(authorized, lockup) => me.initialize(
             &authorized,
             &lockup,
-            &from_keyed_account::<Rent>(next_keyed_account(keyed_accounts)?)?,
+            &Rent::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
         ),
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
             me.authorize(&signers, &authorized_pubkey, stake_authorize)
@@ -47,8 +45,8 @@ pub fn process_instruction(
 
             me.delegate(
                 &vote,
-                &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
-                &from_keyed_account::<StakeHistory>(next_keyed_account(keyed_accounts)?)?,
+                &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &StakeHistory::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
                 &config::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
                 &signers,
             )
@@ -61,8 +59,8 @@ pub fn process_instruction(
             let source_stake = &next_keyed_account(keyed_accounts)?;
             me.merge(
                 source_stake,
-                &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
-                &from_keyed_account::<StakeHistory>(next_keyed_account(keyed_accounts)?)?,
+                &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &StakeHistory::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
                 &signers,
             )
         }
@@ -72,14 +70,14 @@ pub fn process_instruction(
             me.withdraw(
                 lamports,
                 to,
-                &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
-                &from_keyed_account::<StakeHistory>(next_keyed_account(keyed_accounts)?)?,
+                &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
+                &StakeHistory::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
                 next_keyed_account(keyed_accounts)?,
                 keyed_accounts.next(),
             )
         }
         StakeInstruction::Deactivate => me.deactivate(
-            &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
+            &Clock::from_keyed_account(next_keyed_account(keyed_accounts)?)?,
             &signers,
         ),
 
