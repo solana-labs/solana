@@ -16,9 +16,9 @@ struct Config {
     cargo_build_bpf: PathBuf,
     extra_cargo_test_args: Vec<String>,
     features: Vec<String>,
-    manifest_path: Option<String>,
     no_default_features: bool,
     verbose: bool,
+    workspace: bool,
 }
 
 impl Default for Config {
@@ -30,9 +30,9 @@ impl Default for Config {
             cargo_build_bpf: PathBuf::from("cargo-build-bpf"),
             extra_cargo_test_args: vec![],
             features: vec![],
-            manifest_path: None,
             no_default_features: false,
             verbose: false,
+            workspace: false,
         }
     }
 }
@@ -63,41 +63,27 @@ where
     }
 }
 
-fn test_bpf(config: Config) {
-    let mut metadata_command = cargo_metadata::MetadataCommand::new();
-    if let Some(manifest_path) = config.manifest_path.as_ref() {
-        metadata_command.manifest_path(manifest_path);
-    }
-
-    let metadata = metadata_command.exec().unwrap_or_else(|err| {
-        eprintln!("Failed to obtain package metadata: {}", err);
-        exit(1);
-    });
-
-    let root_package = metadata.root_package().unwrap_or_else(|| {
-        eprintln!(
-            "Workspace does not have a root package: {}",
-            metadata.workspace_root.display()
-        );
-        exit(1);
-    });
-    let set_test_bpf_feature = root_package.features.contains_key("test-bpf");
+fn test_bpf_package(
+    config: &Config,
+    target_directory: &PathBuf,
+    package: &cargo_metadata::Package,
+) {
+    let set_test_bpf_feature = package.features.contains_key("test-bpf");
 
     let bpf_out_dir = config
         .bpf_out_dir
-        .unwrap_or_else(|| format!("{}", metadata.target_directory.join("deploy").display()));
+        .as_ref()
+        .cloned()
+        .unwrap_or_else(|| format!("{}", target_directory.join("deploy").display()));
 
-    let mut cargo_args = vec![];
+    let manifest_path = format!("{}", package.manifest_path.display());
+    let mut cargo_args = vec!["--manifest-path", &manifest_path];
     if config.no_default_features {
         cargo_args.push("--no-default-features");
     }
     for feature in &config.features {
         cargo_args.push("--features");
         cargo_args.push(feature);
-    }
-    if let Some(manifest_path) = config.manifest_path.as_ref() {
-        cargo_args.push("--manifest-path");
-        cargo_args.push(&manifest_path);
     }
     if config.verbose {
         cargo_args.push("--verbose");
@@ -128,6 +114,38 @@ fn test_bpf(config: Config) {
         cargo_args.push(&extra_cargo_test_arg);
     }
     spawn(&config.cargo, &cargo_args);
+}
+
+fn test_bpf(config: Config, manifest_path: Option<PathBuf>) {
+    let mut metadata_command = cargo_metadata::MetadataCommand::new();
+    if let Some(manifest_path) = manifest_path.as_ref() {
+        metadata_command.manifest_path(manifest_path);
+    }
+
+    let metadata = metadata_command.exec().unwrap_or_else(|err| {
+        eprintln!("Failed to obtain package metadata: {}", err);
+        exit(1);
+    });
+
+    if let Some(root_package) = metadata.root_package() {
+        if !config.workspace {
+            test_bpf_package(&config, &metadata.target_directory, root_package);
+            return;
+        }
+    }
+
+    let all_bpf_packages = metadata
+        .packages
+        .iter()
+        .filter(|package| {
+            package.manifest_path.with_file_name("Xargo.toml").exists()
+                && metadata.workspace_members.contains(&package.id)
+        })
+        .collect::<Vec<_>>();
+
+    for package in all_bpf_packages {
+        test_bpf_package(&config, &metadata.target_directory, package);
+    }
 }
 
 fn main() {
@@ -190,6 +208,13 @@ fn main() {
                 .help("Use verbose output"),
         )
         .arg(
+            Arg::with_name("workspace")
+                .long("workspace")
+                .takes_value(false)
+                .alias("all")
+                .help("Test all BPF packages in the workspace"),
+        )
+        .arg(
             Arg::with_name("extra_cargo_test_args")
                 .value_name("extra args for cargo test and the test binary")
                 .index(1)
@@ -207,9 +232,9 @@ fn main() {
         features: values_t!(matches, "features", String)
             .ok()
             .unwrap_or_else(Vec::new),
-        manifest_path: value_t!(matches, "manifest_path", String).ok(),
         no_default_features: matches.is_present("no_default_features"),
         verbose: matches.is_present("verbose"),
+        workspace: matches.is_present("workspace"),
         ..Config::default()
     };
 
@@ -235,5 +260,6 @@ fn main() {
         config.extra_cargo_test_args.insert(0, em_dash);
     }
 
-    test_bpf(config);
+    let manifest_path = value_t!(matches, "manifest_path", PathBuf).ok();
+    test_bpf(config, manifest_path);
 }
