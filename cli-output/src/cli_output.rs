@@ -520,7 +520,7 @@ impl fmt::Display for CliNonceAccount {
             )
         )?;
         let nonce = self.nonce.as_deref().unwrap_or("uninitialized");
-        writeln!(f, "Nonce: {}", nonce)?;
+        writeln!(f, "Nonce blockhash: {}", nonce)?;
         if let Some(fees) = self.lamports_per_signature {
             writeln!(f, "Fee: {} lamports per signature", fees)?;
         } else {
