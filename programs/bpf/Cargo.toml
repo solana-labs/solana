@@ -50,6 +50,7 @@ members = [
     "rust/iter",
     "rust/many_args",
     "rust/many_args_dep",
+    "rust/mem",
     "rust/noop",
     "rust/panic",
     "rust/param_passing",
