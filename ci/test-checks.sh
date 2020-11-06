@@ -10,6 +10,8 @@ source ci/rust-version.sh nightly
 eval "$(ci/channel-info.sh)"
 cargo="$(readlink -f "./cargo")"
 
+scripts/increment-cargo-version.sh check
+
 echo --- build environment
 (
   set -x
