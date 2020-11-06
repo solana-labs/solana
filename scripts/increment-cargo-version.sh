@@ -78,6 +78,19 @@ minor)
   ;;
 dropspecial)
   ;;
+check)
+  badTomls=()
+  for Cargo_toml in "${Cargo_tomls[@]}"; do
+    if ! grep "^version *= *\"$currentVersion\"$" "$Cargo_toml" &>/dev/null; then
+      badTomls+=("$Cargo_toml")
+    fi
+  done
+  if [[ ${#badTomls[@]} -ne 0 ]]; then
+    echo "Error: Incorrect crate version specified in: ${badTomls[*]}"
+    exit 1
+  fi
+  exit 0
+  ;;
 -*)
   if [[ $1 =~ ^-[A-Za-z0-9]*$ ]]; then
     SPECIAL="$1"
