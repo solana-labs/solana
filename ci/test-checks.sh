@@ -9,6 +9,8 @@ source ci/rust-version.sh stable
 source ci/rust-version.sh nightly
 eval "$(ci/channel-info.sh)"
 
+scripts/increment-cargo-version.sh check
+
 echo --- build environment
 (
   set -x
