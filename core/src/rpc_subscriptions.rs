@@ -182,7 +182,7 @@ where
     K: Eq + Hash + Clone + Copy,
     S: Clone + Serialize,
     B: Fn(&Bank, &K) -> X,
-    F: Fn(X, &K, Slot, Option<T>, Option<Arc<Bank>>) -> (Box<dyn Iterator<Item = S>>, Slot),
+    F: Fn(X, &K, Slot, Option<T>, Arc<Bank>) -> (Box<dyn Iterator<Item = S>>, Slot),
     X: Clone + Serialize + Default,
     T: Clone,
 {
@@ -206,29 +206,27 @@ where
                     commitment_slots.highest_confirmed_slot
                 }
             };
-            let bank = bank_forks.read().unwrap().get(slot).cloned();
-            let results = bank
-                .clone()
-                .map(|desired_bank| bank_method(&desired_bank, hashmap_key))
-                .unwrap_or_default();
-            let mut w_last_notified_slot = last_notified_slot.write().unwrap();
-            let (filter_results, result_slot) = filter_results(
-                results,
-                hashmap_key,
-                *w_last_notified_slot,
-                config.as_ref().cloned(),
-                bank,
-            );
-            for result in filter_results {
-                notifier.notify(
-                    Response {
-                        context: RpcResponseContext { slot },
-                        value: result,
-                    },
-                    sink,
+            if let Some(bank) = bank_forks.read().unwrap().get(slot).cloned() {
+                let results = bank_method(&bank, hashmap_key);
+                let mut w_last_notified_slot = last_notified_slot.write().unwrap();
+                let (filter_results, result_slot) = filter_results(
+                    results,
+                    hashmap_key,
+                    *w_last_notified_slot,
+                    config.as_ref().cloned(),
+                    bank,
                 );
-                notified_set.insert(sub_id.clone());
-                *w_last_notified_slot = result_slot;
+                for result in filter_results {
+                    notifier.notify(
+                        Response {
+                            context: RpcResponseContext { slot },
+                            value: result,
+                        },
+                        sink,
+                    );
+                    notified_set.insert(sub_id.clone());
+                    *w_last_notified_slot = result_slot;
+                }
             }
         }
     }
@@ -252,7 +250,7 @@ fn filter_account_result(
     pubkey: &Pubkey,
     last_notified_slot: Slot,
     encoding: Option<UiAccountEncoding>,
-    bank: Option<Arc<Bank>>,
+    bank: Arc<Bank>,
 ) -> (Box<dyn Iterator<Item = UiAccount>>, Slot) {
     // If the account is not found, `last_modified_slot` will default to zero and
     // we will notify clients that the account no longer exists if we haven't already
@@ -263,7 +261,6 @@ fn filter_account_result(
     let results: Box<dyn Iterator<Item = UiAccount>> = if last_modified_slot != last_notified_slot {
         let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
         if account.owner == spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
-            let bank = bank.unwrap(); // If result.is_some(), bank must also be Some
             Box::new(iter::once(get_parsed_token_account(bank, pubkey, account)))
         } else {
             Box::new(iter::once(UiAccount::encode(
@@ -282,7 +279,7 @@ fn filter_signature_result(
     _signature: &Signature,
     last_notified_slot: Slot,
     _config: Option<bool>,
-    _bank: Option<Arc<Bank>>,
+    _bank: Arc<Bank>,
 ) -> (Box<dyn Iterator<Item = RpcSignatureResult>>, Slot) {
     (
         Box::new(result.into_iter().map(|result| {
@@ -297,7 +294,7 @@ fn filter_program_results(
     program_id: &Pubkey,
     last_notified_slot: Slot,
     config: Option<ProgramConfig>,
-    bank: Option<Arc<Bank>>,
+    bank: Arc<Bank>,
 ) -> (Box<dyn Iterator<Item = RpcKeyedAccount>>, Slot) {
     let config = config.unwrap_or_default();
     let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
@@ -313,7 +310,6 @@ fn filter_program_results(
         && encoding == UiAccountEncoding::JsonParsed
         && !accounts_is_empty
     {
-        let bank = bank.unwrap(); // If !accounts_is_empty, bank must be Some
         Box::new(get_parsed_token_accounts(bank, keyed_accounts))
     } else {
         Box::new(
