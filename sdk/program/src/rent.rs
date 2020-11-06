@@ -46,6 +46,10 @@ impl Rent {
         (burned_portion, rent_collected - burned_portion)
     }
     /// minimum balance due for a given size Account::data.len()
+    ///
+    /// Note: a stripped-down version of this calculation is used in
+    /// calculate_split_rent_exempt_reserve in the stake program. When this function is updated, --
+    /// eg. when making rent variable -- the stake program will need to be refactored
     pub fn minimum_balance(&self, data_len: usize) -> u64 {
         let bytes = data_len as u64;
         (((ACCOUNT_STORAGE_OVERHEAD + bytes) * self.lamports_per_byte_year) as f64
