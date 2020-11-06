@@ -582,6 +582,45 @@ pub struct CliEpochReward {
     pub apr: f64,
 }
 
+fn show_votes_and_credits(
+    f: &mut fmt::Formatter,
+    votes: &[CliLockout],
+    epoch_voting_history: &[CliEpochVotingHistory],
+) -> fmt::Result {
+    if votes.is_empty() {
+        return Ok(());
+    }
+
+    writeln!(f, "Recent Votes:")?;
+    for vote in votes {
+        writeln!(f, "- slot: {}", vote.slot)?;
+        writeln!(f, "  confirmation count: {}", vote.confirmation_count)?;
+    }
+    writeln!(f, "Epoch Voting History:")?;
+    writeln!(
+        f,
+        "* missed credits include slots unavailable to vote on due to delinquent leaders",
+    )?;
+    for entry in epoch_voting_history {
+        writeln!(
+            f, // tame fmt so that this will be folded like following
+            "- epoch: {}",
+            entry.epoch
+        )?;
+        writeln!(
+            f,
+            "  credits range: [{}..{})",
+            entry.prev_credits, entry.credits
+        )?;
+        writeln!(
+            f,
+            "  credits/slots: {}/{}",
+            entry.credits_earned, entry.slots_in_epoch
+        )?;
+    }
+    Ok(())
+}
+
 fn show_epoch_rewards(
     f: &mut fmt::Formatter,
     epoch_rewards: &Option<Vec<CliEpochReward>>,
@@ -1009,24 +1048,7 @@ impl fmt::Display for CliVoteAccount {
             unix_timestamp_to_string(self.recent_timestamp.timestamp),
             self.recent_timestamp.slot
         )?;
-        if !self.votes.is_empty() {
-            writeln!(f, "Recent Votes:")?;
-            for vote in &self.votes {
-                writeln!(
-                    f,
-                    "- slot: {}\n  confirmation count: {}",
-                    vote.slot, vote.confirmation_count
-                )?;
-            }
-            writeln!(f, "Epoch Voting History:")?;
-            for epoch_info in &self.epoch_voting_history {
-                writeln!(
-                    f,
-                    "- epoch: {}\n  slots in epoch: {}\n  credits earned: {}",
-                    epoch_info.epoch, epoch_info.slots_in_epoch, epoch_info.credits_earned,
-                )?;
-            }
-        }
+        show_votes_and_credits(f, &self.votes, &self.epoch_voting_history)?;
         show_epoch_rewards(f, &self.epoch_rewards)?;
         Ok(())
     }
@@ -1065,6 +1087,8 @@ pub struct CliEpochVotingHistory {
     pub epoch: Epoch,
     pub slots_in_epoch: u64,
     pub credits_earned: u64,
+    pub credits: u64,
+    pub prev_credits: u64,
 }
 
 #[derive(Serialize, Deserialize)]

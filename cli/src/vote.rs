@@ -685,13 +685,15 @@ pub fn process_show_vote_account(
         for vote in &vote_state.votes {
             votes.push(vote.into());
         }
-        for (epoch, credits, prev_credits) in vote_state.epoch_credits() {
+        for (epoch, credits, prev_credits) in vote_state.epoch_credits().iter().copied() {
             let credits_earned = credits - prev_credits;
-            let slots_in_epoch = epoch_schedule.get_slots_in_epoch(*epoch);
+            let slots_in_epoch = epoch_schedule.get_slots_in_epoch(epoch);
             epoch_voting_history.push(CliEpochVotingHistory {
-                epoch: *epoch,
+                epoch,
                 slots_in_epoch,
                 credits_earned,
+                credits,
+                prev_credits,
             });
         }
     }
