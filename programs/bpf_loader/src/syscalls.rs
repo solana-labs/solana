@@ -41,7 +41,7 @@ use thiserror::Error as ThisError;
 pub enum SyscallError {
     #[error("{0}: {1:?}")]
     InvalidString(Utf8Error, Vec<u8>),
-    #[error("BPF program called abort()!")]
+    #[error("BPF program panicked")]
     Abort,
     #[error("BPF program Panicked in {0} at {1}:{2}")]
     Panic(String, u64, u64),

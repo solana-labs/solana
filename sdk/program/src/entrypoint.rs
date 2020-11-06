@@ -45,12 +45,30 @@ pub const HEAP_LENGTH: usize = 32 * 1024;
 #[macro_export]
 macro_rules! entrypoint {
     ($process_instruction:ident) => {
-        #[cfg(all(not(feature = "custom-heap"), not(test)))]
+        /// A program can provide their own custom heap implementation by adding
+        /// a `custom-heap` feature to `Cargo.toml` and implementing their own
+        /// `global_allocator`.
+        #[cfg(all(not(feature = "custom-heap"), target_arch = "bpf"))]
         #[global_allocator]
         static A: $crate::entrypoint::BumpAllocator = $crate::entrypoint::BumpAllocator {
             start: $crate::entrypoint::HEAP_START_ADDRESS,
             len: $crate::entrypoint::HEAP_LENGTH,
         };
+
+        /// A program can provide their own custom panic implementation by
+        /// adding a `custom-panic` feature to `Cargo.toml` and implementing
+        /// their own `custom_panic`.
+        ///
+        /// A good way to reduce the final size of the program is to provide a
+        /// `custom_panic` implementation that does nothing.  Doing so will cut
+        /// ~25kb from a noop program.  That number goes down the more the
+        /// programs pulls in Rust's libstd for other purposes.
+        #[cfg(all(not(feature = "custom-panic"), target_arch = "bpf"))]
+        #[no_mangle]
+        fn custom_panic(info: &core::panic::PanicInfo<'_>) {
+            // Full panic reporting
+            $crate::info!(&format!("{}", info));
+        }
 
         /// # Safety
         #[no_mangle]
