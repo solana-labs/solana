@@ -395,14 +395,6 @@ impl Default for ProgramTest {
     }
 }
 
-// Values returned by `ProgramTest::start`
-pub struct StartOutputs {
-    pub banks_client: BanksClient,
-    pub payer: Keypair,
-    pub recent_blockhash: Hash,
-    pub rent: Rent,
-}
-
 impl ProgramTest {
     pub fn new(
         program_name: &str,
@@ -552,7 +544,7 @@ impl ProgramTest {
     ///
     /// Returns a `BanksClient` interface into the test environment as well as a payer `Keypair`
     /// with SOL for sending transactions
-    pub async fn start(self) -> StartOutputs {
+    pub async fn start(self) -> (BanksClient, Keypair, Hash) {
         {
             use std::sync::Once;
             static ONCE: Once = Once::new();
@@ -571,8 +563,7 @@ impl ProgramTest {
             bootstrap_validator_stake_lamports,
         );
         let mut genesis_config = gci.genesis_config;
-        let rent = Rent::default();
-        genesis_config.rent = rent;
+        genesis_config.rent = Rent::default();
         genesis_config.fee_rate_governor =
             solana_program::fee_calculator::FeeRateGovernor::default();
         let payer = gci.mint_keypair;
@@ -624,11 +615,6 @@ impl ProgramTest {
             .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
 
         let recent_blockhash = banks_client.get_recent_blockhash().await.unwrap();
-        StartOutputs {
-            banks_client,
-            payer,
-            recent_blockhash,
-            rent,
-        }
+        (banks_client, payer, recent_blockhash)
     }
 }
