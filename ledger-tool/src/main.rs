@@ -2034,7 +2034,7 @@ fn main() {
                             total_stake: u64,
                             rent_exempt_reserve: u64,
                             credits: u128,
-                            original_rewards: u64,
+                            base_rewards: u64,
                             commission: u8,
                             vote_rewards: u64,
                             stake_rewards: u64,
@@ -2072,7 +2072,7 @@ fn main() {
                                         staker,
                                         point_value,
                                     ) => {
-                                        detail.original_rewards = *all;
+                                        detail.base_rewards = *all;
                                         detail.vote_rewards = *voter;
                                         detail.stake_rewards = *staker;
                                         detail.point_value = Some(point_value.clone());
@@ -2221,16 +2221,18 @@ fn main() {
                                         data_size: usize,
                                         delegation: String,
                                         effective_stake: String,
-                                        total_stake: String,
+                                        delegated_stake: String,
                                         rent_exempt_reserve: String,
                                         activation_epoch: String,
                                         deactivation_epoch: String,
                                         earned_epochs: String,
                                         earned_credits: String,
+                                        base_rewards: String,
                                         stake_rewards: String,
                                         vote_rewards: String,
-                                        grand_total_rewards: String,
-                                        grand_total_points: String,
+                                        commission: String,
+                                        cluster_rewards: String,
+                                        cluster_points: String,
                                     };
                                     fn format_or_na<T: std::fmt::Display>(
                                         data: Option<T>,
@@ -2246,7 +2248,9 @@ fn main() {
                                         data_size: base_account.data.len(),
                                         delegation: format_or_na(detail.map(|d| d.voter)),
                                         effective_stake: format_or_na(detail.map(|d| d.stake)),
-                                        total_stake: format_or_na(detail.map(|d| d.total_stake)),
+                                        delegated_stake: format_or_na(
+                                            detail.map(|d| d.total_stake),
+                                        ),
                                         rent_exempt_reserve: format_or_na(
                                             detail.map(|d| d.rent_exempt_reserve),
                                         ),
@@ -2263,14 +2267,16 @@ fn main() {
                                         ),
                                         earned_epochs: format_or_na(detail.map(|d| d.epochs)),
                                         earned_credits: format_or_na(detail.map(|d| d.credits)),
+                                        base_rewards: format_or_na(detail.map(|d| d.base_rewards)),
                                         stake_rewards: format_or_na(
                                             detail.map(|d| d.stake_rewards),
                                         ),
                                         vote_rewards: format_or_na(detail.map(|d| d.vote_rewards)),
-                                        grand_total_rewards: format_or_na(
+                                        commission: format_or_na(detail.map(|d| d.commission)),
+                                        cluster_rewards: format_or_na(
                                             last_point_value.as_ref().map(|pv| pv.rewards),
                                         ),
-                                        grand_total_points: format_or_na(
+                                        cluster_points: format_or_na(
                                             last_point_value.as_ref().map(|pv| pv.points),
                                         ),
                                     };
