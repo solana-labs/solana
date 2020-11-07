@@ -2047,6 +2047,9 @@ fn main() {
                             HashMap::new();
                         let mut last_point_value = None;
                         let tracer = |event: &RewardCalculationEvent| {
+                            // Currently RewardCalculationEvent enum has only Staking variant
+                            // because only staking tracing is supported!
+                            #[allow(irrefutable_let_patterns)]
                             if let RewardCalculationEvent::Staking(pubkey, event) = event {
                                 let detail = stake_calcuration_details.entry(**pubkey).or_default();
                                 match event {

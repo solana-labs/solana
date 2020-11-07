@@ -547,7 +547,6 @@ pub enum RewardType {
 
 #[derive(Debug)]
 pub enum RewardCalculationEvent<'a, 'b> {
-    Fee, // still not wired
     Staking(&'a Pubkey, &'b InflationPointCalculationEvent),
 }
 
