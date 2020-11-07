@@ -40,6 +40,10 @@ pub enum InflationPointCalcEvent {
     Commission(u8),
 }
 
+fn null_tracer() -> Option<impl FnMut(&InflationPointCalcEvent)> {
+    None::<fn(&_)>
+}
+
 impl Default for StakeState {
     fn default() -> Self {
         StakeState::Uninitialized
@@ -1041,7 +1045,7 @@ pub fn calculate_points(
         let vote_state: VoteState =
             StateMut::<VoteStateVersions>::state(vote_account)?.convert_to_current();
 
-        Ok(stake.calculate_points(&vote_state, stake_history, &mut None::<fn(&_)>))
+        Ok(stake.calculate_points(&vote_state, stake_history, &mut null_tracer()))
     } else {
         Err(InstructionError::InvalidAccountData)
     }
@@ -2478,7 +2482,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut None::<fn(&_)>,
+                &mut null_tracer(),
             )
         );
 
@@ -2496,7 +2500,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut None::<fn(&_)>,
+                &mut null_tracer(),
             )
         );
 
@@ -2531,7 +2535,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut None::<fn(&_)>,
+                &mut null_tracer(),
             )
         );
 
@@ -2545,7 +2549,7 @@ mod tests {
         // no overflow on points
         assert_eq!(
             u128::from(stake.delegation.stake) * epoch_slots,
-            stake.calculate_points(&vote_state, None, &mut None::<fn(&_)>)
+            stake.calculate_points(&vote_state, None, &mut null_tracer())
         );
     }
 
@@ -2572,7 +2576,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut None::<fn(&_)>,
+                &mut null_tracer(),
             )
         );
 
@@ -2590,7 +2594,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut None::<fn(&_)>,
+                &mut null_tracer(),
             )
         );
 
@@ -2605,7 +2609,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut None::<fn(&_)>,
+                &mut null_tracer(),
             )
         );
 
@@ -2623,7 +2627,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut None::<fn(&_)>,
+                &mut null_tracer(),
             )
         );
 
@@ -2639,7 +2643,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut None::<fn(&_)>,
+                &mut null_tracer(),
             )
         );
 
@@ -2661,7 +2665,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut None::<fn(&_)>,
+                &mut null_tracer(),
             )
         );
 
@@ -2677,7 +2681,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut None::<fn(&_)>,
+                &mut null_tracer(),
             )
         );
         vote_state.commission = 99;
@@ -2690,7 +2694,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut None::<fn(&_)>,
+                &mut null_tracer(),
             )
         );
     }
