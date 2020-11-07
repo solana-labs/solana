@@ -6,7 +6,7 @@ use rand::seq::SliceRandom;
 use raptorq::{Decoder, Encoder};
 use solana_ledger::entry::{create_ticks, Entry};
 use solana_ledger::shred::{
-    max_entries_per_n_shred, max_ticks_per_n_shreds, Shred, Shredder,
+    max_entries_per_n_shred, max_ticks_per_n_shreds, ProcessShredsStats, Shred, Shredder,
     MAX_DATA_SHREDS_PER_FEC_BLOCK, RECOMMENDED_FEC_RATE, SHRED_PAYLOAD_SIZE,
     SIZE_OF_DATA_SHRED_IGNORED_TAIL, SIZE_OF_DATA_SHRED_PAYLOAD,
 };
@@ -40,7 +40,9 @@ fn make_shreds(num_shreds: usize) -> Vec<Shred> {
     let entries = make_large_unchained_entries(txs_per_entry, num_entries);
     let shredder =
         Shredder::new(1, 0, RECOMMENDED_FEC_RATE, Arc::new(Keypair::new()), 0, 0).unwrap();
-    let data_shreds = shredder.entries_to_data_shreds(&entries, true, 0).0;
+    let data_shreds = shredder
+        .entries_to_data_shreds(&entries, true, 0, &mut ProcessShredsStats::default())
+        .0;
     assert!(data_shreds.len() >= num_shreds);
     data_shreds
 }

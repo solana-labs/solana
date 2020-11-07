@@ -445,7 +445,7 @@ pub mod test {
         entry::create_ticks,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
-        shred::{max_ticks_per_n_shreds, Shredder, RECOMMENDED_FEC_RATE},
+        shred::{max_ticks_per_n_shreds, ProcessShredsStats, Shredder, RECOMMENDED_FEC_RATE},
     };
     use solana_runtime::bank::Bank;
     use solana_sdk::{
@@ -474,7 +474,8 @@ pub mod test {
         let shredder = Shredder::new(slot, 0, RECOMMENDED_FEC_RATE, keypair, 0, 0)
             .expect("Expected to create a new shredder");
 
-        let coding_shreds = shredder.data_shreds_to_coding_shreds(&data_shreds[0..]);
+        let coding_shreds = shredder
+            .data_shreds_to_coding_shreds(&data_shreds[0..], &mut ProcessShredsStats::default());
         (
             data_shreds.clone(),
             coding_shreds.clone(),
