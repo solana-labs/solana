@@ -21,7 +21,7 @@ use solana_ledger::{
     rooted_slot_iterator::RootedSlotIterator,
 };
 use solana_runtime::{
-    bank::{Bank, RewardCalcEvent},
+    bank::{Bank, RewardCalculationEvent},
     bank_forks::{BankForks, CompressionType, SnapshotConfig},
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     snapshot_utils,
@@ -2042,15 +2042,15 @@ fn main() {
                             deactivation_epoch: Option<Epoch>,
                             point_value: Option<PointValue>,
                         }
-                        use solana_stake_program::stake_state::InflationPointCalcEvent;
+                        use solana_stake_program::stake_state::InflationPointCalculationEvent;
                         let mut stake_calcuration_details: HashMap<Pubkey, CalculationDetail> =
                             HashMap::new();
                         let mut last_point_value = None;
-                        let tracer = |event: &RewardCalcEvent| {
-                            if let RewardCalcEvent::Staking(pubkey, event) = event {
+                        let tracer = |event: &RewardCalculationEvent| {
+                            if let RewardCalculationEvent::Staking(pubkey, event) = event {
                                 let detail = stake_calcuration_details.entry(**pubkey).or_default();
                                 match event {
-                                    InflationPointCalcEvent::CalculatedPoints(
+                                    InflationPointCalculationEvent::CalculatedPoints(
                                         point,
                                         stake,
                                         credits,
@@ -2063,7 +2063,7 @@ fn main() {
                                             detail.credits += *credits;
                                         }
                                     }
-                                    InflationPointCalcEvent::SplitRewards(
+                                    InflationPointCalculationEvent::SplitRewards(
                                         all,
                                         voter,
                                         staker,
@@ -2083,13 +2083,13 @@ fn main() {
                                             last_point_value = point_value;
                                         }
                                     }
-                                    InflationPointCalcEvent::Commission(commission) => {
+                                    InflationPointCalculationEvent::Commission(commission) => {
                                         detail.commission = *commission;
                                     }
-                                    InflationPointCalcEvent::RentExemptReserve(reserve) => {
+                                    InflationPointCalculationEvent::RentExemptReserve(reserve) => {
                                         detail.rent_exempt_reserve = *reserve;
                                     }
-                                    InflationPointCalcEvent::Delegation(delegation) => {
+                                    InflationPointCalculationEvent::Delegation(delegation) => {
                                         detail.voter = delegation.voter_pubkey;
                                         detail.total_stake = delegation.stake;
                                         detail.activation_epoch = delegation.activation_epoch;

@@ -32,7 +32,7 @@ pub enum StakeState {
 }
 
 #[derive(Debug)]
-pub enum InflationPointCalcEvent {
+pub enum InflationPointCalculationEvent {
     CalculatedPoints(u128, u128, u128),
     SplitRewards(u64, u64, u64, PointValue),
     RentExemptReserve(u64),
@@ -40,7 +40,7 @@ pub enum InflationPointCalcEvent {
     Commission(u8),
 }
 
-fn null_tracer() -> Option<impl FnMut(&InflationPointCalcEvent)> {
+fn null_tracer() -> Option<impl FnMut(&InflationPointCalculationEvent)> {
     None::<fn(&_)>
 }
 
@@ -398,23 +398,28 @@ impl Stake {
         point_value: &PointValue,
         vote_state: &VoteState,
         stake_history: Option<&StakeHistory>,
-        tracer: &mut Option<impl FnMut(&InflationPointCalcEvent)>,
+        inflation_point_calc_tracer: &mut Option<impl FnMut(&InflationPointCalculationEvent)>,
     ) -> Option<(u64, u64)> {
-        self.calculate_rewards(point_value, vote_state, stake_history, tracer)
-            .map(|(stakers_reward, voters_reward, credits_observed)| {
-                self.credits_observed = credits_observed;
-                self.delegation.stake += stakers_reward;
-                (stakers_reward, voters_reward)
-            })
+        self.calculate_rewards(
+            point_value,
+            vote_state,
+            stake_history,
+            inflation_point_calc_tracer,
+        )
+        .map(|(stakers_reward, voters_reward, credits_observed)| {
+            self.credits_observed = credits_observed;
+            self.delegation.stake += stakers_reward;
+            (stakers_reward, voters_reward)
+        })
     }
 
     pub fn calculate_points(
         &self,
         vote_state: &VoteState,
         stake_history: Option<&StakeHistory>,
-        tracer: &mut Option<impl FnMut(&InflationPointCalcEvent)>,
+        inflation_point_calc_tracer: &mut Option<impl FnMut(&InflationPointCalculationEvent)>,
     ) -> u128 {
-        self.calculate_points_and_credits(vote_state, stake_history, tracer)
+        self.calculate_points_and_credits(vote_state, stake_history, inflation_point_calc_tracer)
             .0
     }
 
@@ -425,7 +430,7 @@ impl Stake {
         &self,
         new_vote_state: &VoteState,
         stake_history: Option<&StakeHistory>,
-        tracer: &mut Option<impl FnMut(&InflationPointCalcEvent)>,
+        inflation_point_calc_tracer: &mut Option<impl FnMut(&InflationPointCalculationEvent)>,
     ) -> (u128, u64) {
         // if there is no newer credits since observed, return no point
         if new_vote_state.credits() <= self.credits_observed {
@@ -461,8 +466,8 @@ impl Stake {
             // finally calculate points for this epoch
             points += stake * earned_credits;
 
-            if let Some(tracer) = tracer {
-                tracer(&InflationPointCalcEvent::CalculatedPoints(
+            if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
+                inflation_point_calc_tracer(&InflationPointCalculationEvent::CalculatedPoints(
                     points,
                     stake,
                     earned_credits,
@@ -484,10 +489,13 @@ impl Stake {
         point_value: &PointValue,
         vote_state: &VoteState,
         stake_history: Option<&StakeHistory>,
-        tracer: &mut Option<impl FnMut(&InflationPointCalcEvent)>,
+        inflation_point_calc_tracer: &mut Option<impl FnMut(&InflationPointCalculationEvent)>,
     ) -> Option<(u64, u64, u64)> {
-        let (points, credits_observed) =
-            self.calculate_points_and_credits(vote_state, stake_history, tracer);
+        let (points, credits_observed) = self.calculate_points_and_credits(
+            vote_state,
+            stake_history,
+            inflation_point_calc_tracer,
+        );
 
         if points == 0 || point_value.points == 0 {
             return None;
@@ -506,8 +514,8 @@ impl Stake {
             return None;
         }
         let (voter_rewards, staker_rewards, is_split) = vote_state.commission_split(rewards);
-        if let Some(tracer) = tracer {
-            tracer(&InflationPointCalcEvent::SplitRewards(
+        if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
+            inflation_point_calc_tracer(&InflationPointCalculationEvent::SplitRewards(
                 rewards,
                 voter_rewards,
                 staker_rewards,
@@ -1006,21 +1014,26 @@ pub fn redeem_rewards(
     vote_account: &mut Account,
     point_value: &PointValue,
     stake_history: Option<&StakeHistory>,
-    tracer: &mut Option<impl FnMut(&InflationPointCalcEvent)>,
+    inflation_point_calc_tracer: &mut Option<impl FnMut(&InflationPointCalculationEvent)>,
 ) -> Result<(u64, u64), InstructionError> {
     if let StakeState::Stake(meta, mut stake) = stake_account.state()? {
         let vote_state: VoteState =
             StateMut::<VoteStateVersions>::state(vote_account)?.convert_to_current();
-        if let Some(tracer) = tracer {
-            tracer(&InflationPointCalcEvent::RentExemptReserve(
+        if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
+            inflation_point_calc_tracer(&InflationPointCalculationEvent::RentExemptReserve(
                 meta.rent_exempt_reserve,
             ));
-            tracer(&InflationPointCalcEvent::Commission(vote_state.commission));
+            inflation_point_calc_tracer(&InflationPointCalculationEvent::Commission(
+                vote_state.commission,
+            ));
         }
 
-        if let Some((stakers_reward, voters_reward)) =
-            stake.redeem_rewards(point_value, &vote_state, stake_history, tracer)
-        {
+        if let Some((stakers_reward, voters_reward)) = stake.redeem_rewards(
+            point_value,
+            &vote_state,
+            stake_history,
+            inflation_point_calc_tracer,
+        ) {
             stake_account.lamports += stakers_reward;
             vote_account.lamports += voters_reward;
 

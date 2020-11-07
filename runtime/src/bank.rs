@@ -67,7 +67,9 @@ use solana_sdk::{
     timing::years_as_slots,
     transaction::{self, Result, Transaction, TransactionError},
 };
-use solana_stake_program::stake_state::{self, Delegation, InflationPointCalcEvent, PointValue};
+use solana_stake_program::stake_state::{
+    self, Delegation, InflationPointCalculationEvent, PointValue,
+};
 use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteState};
 use std::{
     cell::RefCell,
@@ -544,9 +546,9 @@ pub enum RewardType {
 }
 
 #[derive(Debug)]
-pub enum RewardCalcEvent<'a, 'b> {
+pub enum RewardCalculationEvent<'a, 'b> {
     Fee, // still not wired
-    Staking(&'a Pubkey, &'b InflationPointCalcEvent),
+    Staking(&'a Pubkey, &'b InflationPointCalculationEvent),
 }
 
 impl fmt::Display for RewardType {
@@ -762,7 +764,7 @@ impl Bank {
             parent,
             collector_id,
             slot,
-            &mut None::<fn(&RewardCalcEvent)>,
+            &mut None::<fn(&RewardCalculationEvent)>,
         )
     }
 
@@ -770,16 +772,16 @@ impl Bank {
         parent: &Arc<Bank>,
         collector_id: &Pubkey,
         slot: Slot,
-        tracer: impl FnMut(&RewardCalcEvent),
+        reward_calc_tracer: impl FnMut(&RewardCalculationEvent),
     ) -> Self {
-        Self::_new_from_parent(parent, collector_id, slot, &mut Some(tracer))
+        Self::_new_from_parent(parent, collector_id, slot, &mut Some(reward_calc_tracer))
     }
 
     fn _new_from_parent(
         parent: &Arc<Bank>,
         collector_id: &Pubkey,
         slot: Slot,
-        tracer: &mut Option<impl FnMut(&RewardCalcEvent)>,
+        reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
     ) -> Self {
         parent.freeze();
         assert_ne!(slot, parent.slot());
@@ -873,7 +875,7 @@ impl Bank {
         }
 
         new.update_slot_hashes();
-        new.update_rewards(parent.epoch(), tracer);
+        new.update_rewards(parent.epoch(), reward_calc_tracer);
         new.update_stake_history(Some(parent.epoch()));
         new.update_clock(Some(parent.epoch()));
         new.update_fees();
@@ -1288,7 +1290,7 @@ impl Bank {
     fn update_rewards(
         &mut self,
         prev_epoch: Epoch,
-        tracer: &mut Option<impl FnMut(&RewardCalcEvent)>,
+        reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
     ) {
         if prev_epoch == self.epoch() {
             return;
@@ -1315,7 +1317,8 @@ impl Bank {
 
         let old_vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
 
-        let validator_point_value = self.pay_validator_rewards(validator_rewards, tracer);
+        let validator_point_value =
+            self.pay_validator_rewards(validator_rewards, reward_calc_tracer);
 
         if !self
             .feature_set
@@ -1389,7 +1392,7 @@ impl Bank {
     ///
     fn stake_delegation_accounts(
         &self,
-        tracer: &mut Option<impl FnMut(&RewardCalcEvent)>,
+        reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
     ) -> HashMap<Pubkey, (Vec<(Pubkey, Account)>, Account)> {
         let mut accounts = HashMap::new();
 
@@ -1407,10 +1410,10 @@ impl Bank {
                         let entry = accounts
                             .entry(delegation.voter_pubkey)
                             .or_insert((Vec::new(), vote_account));
-                        if let Some(tracer) = tracer {
-                            tracer(&RewardCalcEvent::Staking(
+                        if let Some(reward_calc_tracer) = reward_calc_tracer {
+                            reward_calc_tracer(&RewardCalculationEvent::Staking(
                                 stake_pubkey,
-                                &InflationPointCalcEvent::Delegation(*delegation),
+                                &InflationPointCalculationEvent::Delegation(*delegation),
                             ));
                         }
                         entry.0.push((*stake_pubkey, stake_account));
@@ -1427,11 +1430,11 @@ impl Bank {
     fn pay_validator_rewards(
         &mut self,
         rewards: u64,
-        tracer: &mut Option<impl FnMut(&RewardCalcEvent)>,
+        reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
     ) -> f64 {
         let stake_history = self.stakes.read().unwrap().history().clone();
 
-        let mut stake_delegation_accounts = self.stake_delegation_accounts(tracer);
+        let mut stake_delegation_accounts = self.stake_delegation_accounts(reward_calc_tracer);
 
         let points: u128 = stake_delegation_accounts
             .iter()
@@ -1460,11 +1463,11 @@ impl Bank {
 
             for (stake_pubkey, stake_account) in stake_group.iter_mut() {
                 // curry closure to add the contextual stake_pubkey
-                let mut tracer = tracer.as_mut().map(|outer| {
+                let mut reward_calc_tracer = reward_calc_tracer.as_mut().map(|outer| {
                     let stake_pubkey = *stake_pubkey;
                     // inner
                     move |inner_event: &_| {
-                        outer(&RewardCalcEvent::Staking(&stake_pubkey, inner_event))
+                        outer(&RewardCalculationEvent::Staking(&stake_pubkey, inner_event))
                     }
                 });
                 let redeemed = stake_state::redeem_rewards(
@@ -1472,7 +1475,7 @@ impl Bank {
                     vote_account,
                     &point_value,
                     Some(&stake_history),
-                    &mut tracer.as_mut(),
+                    &mut reward_calc_tracer.as_mut(),
                 );
                 if let Ok((stakers_reward, _voters_reward)) = redeemed {
                     self.store_account(&stake_pubkey, &stake_account);
@@ -6023,7 +6026,7 @@ mod tests {
         bank.add_account_and_update_capitalization(&vote_id, &vote_account);
 
         let validator_points: u128 = bank
-            .stake_delegation_accounts(&mut None::<fn(&RewardCalcEvent)>)
+            .stake_delegation_accounts(&mut None::<fn(&RewardCalculationEvent)>)
             .iter()
             .flat_map(|(_vote_pubkey, (stake_group, vote_account))| {
                 stake_group
