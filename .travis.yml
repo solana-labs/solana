@@ -26,7 +26,7 @@ jobs:
         - .travis/export-github-repo.sh explorer/ explorer
 
     - &release-artifacts
-      if: type IN (api, cron) OR tag IS present
+      if: type = pull_request AND branch = master
       name: "macOS release artifacts"
       os: osx
       language: rust
