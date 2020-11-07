@@ -34,8 +34,7 @@ jobs:
         - stable
       install:
         - source ci/rust-version.sh
-        - brew install coreutils
-        - PATH="$PATH:/usr/local/opt/coreutils/libexec/gnubin"
+        - PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
         - readlink -f .
       script:
         - source ci/env.sh
