@@ -2105,7 +2105,7 @@ fn main() {
                             &base_bank,
                             base_bank.collector_id(),
                             next_epoch,
-                            &mut Some(tracer),
+                            tracer,
                         );
                         warped_bank.freeze();
                         let mut csv_writer = if arg_matches.is_present("csv_filename") {

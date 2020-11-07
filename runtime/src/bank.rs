@@ -770,9 +770,9 @@ impl Bank {
         parent: &Arc<Bank>,
         collector_id: &Pubkey,
         slot: Slot,
-        tracer: &mut Option<impl FnMut(&RewardCalcEvent)>,
+        tracer: impl FnMut(&RewardCalcEvent),
     ) -> Self {
-        Self::_new_from_parent(parent, collector_id, slot, tracer)
+        Self::_new_from_parent(parent, collector_id, slot, &mut Some(tracer))
     }
 
     fn _new_from_parent(
