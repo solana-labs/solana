@@ -79,6 +79,7 @@ fn main() {
             "invoked",
             "iter",
             "many_args",
+            "mem",
             "noop",
             "panic",
             "param_passing",
