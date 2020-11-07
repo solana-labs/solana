@@ -4,7 +4,7 @@
 #![feature(compiler_builtins_lib)]
 
 extern crate compiler_builtins;
-use solana_program::entrypoint::SUCCESS;
+use solana_sdk::entrypoint::SUCCESS;
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {

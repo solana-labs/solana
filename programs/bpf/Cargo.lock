@@ -1904,9 +1904,9 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-mem"
-version = "1.5.0"
+version = "1.3.30"
 dependencies = [
- "solana-program",
+ "solana-sdk",
 ]
 
 [[package]]
