@@ -550,6 +550,10 @@ pub enum RewardCalculationEvent<'a, 'b> {
     Staking(&'a Pubkey, &'b InflationPointCalculationEvent),
 }
 
+fn null_tracer() -> Option<impl FnMut(&RewardCalculationEvent)> {
+    None::<fn(&RewardCalculationEvent)>
+}
+
 impl fmt::Display for RewardType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -759,12 +763,7 @@ impl Bank {
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
     pub fn new_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
-        Self::_new_from_parent(
-            parent,
-            collector_id,
-            slot,
-            &mut None::<fn(&RewardCalculationEvent)>,
-        )
+        Self::_new_from_parent(parent, collector_id, slot, &mut null_tracer())
     }
 
     pub fn new_from_parent_with_tracer(
@@ -6025,7 +6024,7 @@ mod tests {
         bank.add_account_and_update_capitalization(&vote_id, &vote_account);
 
         let validator_points: u128 = bank
-            .stake_delegation_accounts(&mut None::<fn(&RewardCalculationEvent)>)
+            .stake_delegation_accounts(&mut null_tracer())
             .iter()
             .flat_map(|(_vote_pubkey, (stake_group, vote_account))| {
                 stake_group
