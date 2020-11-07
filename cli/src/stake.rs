@@ -1714,11 +1714,12 @@ pub fn process_show_stake_account(
 
             if state.stake_type == CliStakeType::Stake {
                 if let Some(activation_epoch) = state.activation_epoch {
-                    state.epoch_rewards = Some(fetch_epoch_rewards(
-                        rpc_client,
-                        stake_account_address,
-                        activation_epoch,
-                    )?);
+                    let rewards =
+                        fetch_epoch_rewards(rpc_client, stake_account_address, activation_epoch);
+                    match rewards {
+                        Ok(rewards) => state.epoch_rewards = Some(rewards),
+                        Err(error) => eprintln!("Failed to fetch epoch rewards: {:?}", error),
+                    };
                 }
             }
             Ok(config.output_format.formatted_string(&state))

@@ -698,11 +698,14 @@ pub fn process_show_vote_account(
         }
     }
 
-    let epoch_rewards = Some(crate::stake::fetch_epoch_rewards(
-        rpc_client,
-        vote_account_address,
-        1,
-    )?);
+    let epoch_rewards = match crate::stake::fetch_epoch_rewards(rpc_client, vote_account_address, 1)
+    {
+        Ok(rewards) => Some(rewards),
+        Err(error) => {
+            eprintln!("Failed to fetch epoch rewards: {:?}", error);
+            None
+        }
+    };
 
     let vote_account_data = CliVoteAccount {
         account_balance: vote_account.lamports,
