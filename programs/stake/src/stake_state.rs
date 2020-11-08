@@ -276,54 +276,81 @@ impl Delegation {
         }
     }
 
-    fn stake_and_activating(&self, epoch: Epoch, history: Option<&StakeHistory>) -> (u64, u64) {
+    fn stake_and_activating(
+        &self,
+        target_epoch: Epoch,
+        history: Option<&StakeHistory>,
+    ) -> (u64, u64) {
         if self.is_bootstrap() {
+            // fully effective immediately
             (self.stake, 0)
-        } else if epoch == self.activation_epoch {
+        } else if target_epoch == self.activation_epoch {
+            // all is activating
             (0, self.stake)
-        } else if epoch < self.activation_epoch {
+        } else if target_epoch < self.activation_epoch {
+            // not yet enabled
             (0, 0)
-        } else if let Some((history, mut entry)) = history.and_then(|history| {
-            history
-                .get(&self.activation_epoch)
-                .map(|entry| (history, entry))
-        }) {
-            // && !is_bootstrap() && epoch > self.activation_epoch
-            let mut effective_stake = 0;
-            let mut next_epoch = self.activation_epoch;
+        } else if let Some((history, mut prev_epoch, mut prev_cluster_stake)) =
+            history.and_then(|history| {
+                history
+                    .get(&self.activation_epoch)
+                    .map(|cluster_stake_at_activation_epoch| {
+                        (
+                            history,
+                            self.activation_epoch,
+                            cluster_stake_at_activation_epoch,
+                        )
+                    })
+            })
+        {
+            // target_epoch > self.activation_epoch
 
-            // loop from my activation epoch until the current epoch
-            //   summing up my entitlement
+            // loop from my activation epoch until the target epoch summing up my entitlement
+            // current stake is updated using its previous epoch's cluster stake
+            let mut current_epoch;
+            let mut current_effective_stake = 0;
             loop {
-                if entry.activating == 0 {
+                current_epoch = prev_epoch + 1;
+                // if there is no activating stake at prev epoch, we should have been fully effective at this moment
+                if prev_cluster_stake.activating == 0 {
                     break;
                 }
+
                 // how much of the growth in stake this account is
                 //  entitled to take
-                let weight = (self.stake - effective_stake) as f64 / entry.activating as f64;
+                let remaining_activating_stake = self.stake - current_effective_stake;
+                let weight =
+                    remaining_activating_stake as f64 / prev_cluster_stake.activating as f64;
 
-                // portion of activating stake in this epoch I'm entitled to
-                effective_stake +=
-                    ((weight * entry.effective as f64 * self.warmup_cooldown_rate) as u64).max(1);
+                // portion of newly effective cluster stake I'm entitled to at current epoch
+                let newly_effective_cluster_stake =
+                    prev_cluster_stake.effective as f64 * self.warmup_cooldown_rate;
+                let newly_effective_stake =
+                    ((weight * newly_effective_cluster_stake) as u64).max(1);
 
-                if effective_stake >= self.stake {
-                    effective_stake = self.stake;
+                current_effective_stake += newly_effective_stake;
+                if current_effective_stake >= self.stake {
+                    current_effective_stake = self.stake;
                     break;
                 }
 
-                next_epoch += 1;
-                if next_epoch >= epoch || next_epoch >= self.deactivation_epoch {
+                if current_epoch >= target_epoch || current_epoch >= self.deactivation_epoch {
                     break;
                 }
-                if let Some(next_entry) = history.get(&next_epoch) {
-                    entry = next_entry;
+                if let Some(current_cluster_stake) = history.get(&current_epoch) {
+                    prev_epoch = current_epoch;
+                    prev_cluster_stake = current_cluster_stake;
                 } else {
                     break;
                 }
             }
-            (effective_stake, self.stake - effective_stake)
+
+            (
+                current_effective_stake,
+                self.stake - current_effective_stake,
+            )
         } else {
-            // no history or I've dropped out of history, so assume fully activated
+            // no history or I've dropped out of history, so assume fully effective
             (self.stake, 0)
         }
     }
