@@ -5,6 +5,7 @@ use clap::{
 use itertools::Itertools;
 use log::*;
 use regex::Regex;
+use serde::Serialize;
 use serde_json::json;
 use solana_clap_utils::{
     input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
@@ -20,7 +21,7 @@ use solana_ledger::{
     rooted_slot_iterator::RootedSlotIterator,
 };
 use solana_runtime::{
-    bank::Bank,
+    bank::{Bank, RewardCalculationEvent},
     bank_forks::{BankForks, CompressionType, SnapshotConfig},
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     snapshot_utils,
@@ -38,7 +39,7 @@ use solana_sdk::{
     shred_version::compute_shred_version,
     system_program,
 };
-use solana_stake_program::stake_state::{self, StakeState};
+use solana_stake_program::stake_state::{self, PointValue, StakeState};
 use solana_vote_program::{
     self,
     vote_state::{self, VoteState},
@@ -1192,6 +1193,13 @@ fn main() {
                     .help("Recalculate capitalization before warping; circumvents \
                           bank's out-of-sync capitalization"),
             )
+            .arg(
+                Arg::with_name("csv_filename")
+                    .long("csv-filename")
+                    .value_name("FILENAME")
+                    .takes_value(true)
+                    .help("Output file in the csv format"),
+            )
         ).subcommand(
             SubCommand::with_name("purge")
             .about("Delete a range of slots from the ledger.")
@@ -2017,9 +2025,100 @@ fn main() {
                         base_bank
                             .lazy_rent_collection
                             .store(true, std::sync::atomic::Ordering::Relaxed);
-                        let warped_bank =
-                            Bank::new_from_parent(&base_bank, base_bank.collector_id(), next_epoch);
+                        #[derive(Default, Debug)]
+                        struct CalculationDetail {
+                            epochs: usize,
+                            voter: Pubkey,
+                            point: u128,
+                            stake: u128,
+                            total_stake: u64,
+                            rent_exempt_reserve: u64,
+                            credits: u128,
+                            base_rewards: u64,
+                            commission: u8,
+                            vote_rewards: u64,
+                            stake_rewards: u64,
+                            activation_epoch: Epoch,
+                            deactivation_epoch: Option<Epoch>,
+                            point_value: Option<PointValue>,
+                        }
+                        use solana_stake_program::stake_state::InflationPointCalculationEvent;
+                        let mut stake_calcuration_details: HashMap<Pubkey, CalculationDetail> =
+                            HashMap::new();
+                        let mut last_point_value = None;
+                        let tracer = |event: &RewardCalculationEvent| {
+                            // Currently RewardCalculationEvent enum has only Staking variant
+                            // because only staking tracing is supported!
+                            #[allow(irrefutable_let_patterns)]
+                            if let RewardCalculationEvent::Staking(pubkey, event) = event {
+                                let detail = stake_calcuration_details.entry(**pubkey).or_default();
+                                match event {
+                                    InflationPointCalculationEvent::CalculatedPoints(
+                                        point,
+                                        stake,
+                                        credits,
+                                    ) => {
+                                        // Don't sum for epochs where no credits are earned
+                                        if *credits > 0 {
+                                            detail.epochs += 1;
+                                            detail.point += *point;
+                                            detail.stake += *stake;
+                                            detail.credits += *credits;
+                                        }
+                                    }
+                                    InflationPointCalculationEvent::SplitRewards(
+                                        all,
+                                        voter,
+                                        staker,
+                                        point_value,
+                                    ) => {
+                                        detail.base_rewards = *all;
+                                        detail.vote_rewards = *voter;
+                                        detail.stake_rewards = *staker;
+                                        detail.point_value = Some(point_value.clone());
+                                        // we have duplicate copies of `PointValue`s for possible
+                                        // miscalculation; do some minimum sanity check
+                                        let point_value = detail.point_value.clone();
+                                        if point_value.is_some() {
+                                            if last_point_value.is_some() {
+                                                assert_eq!(last_point_value, point_value,);
+                                            }
+                                            last_point_value = point_value;
+                                        }
+                                    }
+                                    InflationPointCalculationEvent::Commission(commission) => {
+                                        detail.commission = *commission;
+                                    }
+                                    InflationPointCalculationEvent::RentExemptReserve(reserve) => {
+                                        detail.rent_exempt_reserve = *reserve;
+                                    }
+                                    InflationPointCalculationEvent::Delegation(delegation) => {
+                                        detail.voter = delegation.voter_pubkey;
+                                        detail.total_stake = delegation.stake;
+                                        detail.activation_epoch = delegation.activation_epoch;
+                                        if delegation.deactivation_epoch < Epoch::max_value() {
+                                            detail.deactivation_epoch =
+                                                Some(delegation.deactivation_epoch);
+                                        }
+                                    }
+                                }
+                            }
+                        };
+                        let warped_bank = Bank::new_from_parent_with_tracer(
+                            &base_bank,
+                            base_bank.collector_id(),
+                            next_epoch,
+                            tracer,
+                        );
                         warped_bank.freeze();
+                        let mut csv_writer = if arg_matches.is_present("csv_filename") {
+                            let csv_filename =
+                                value_t_or_exit!(arg_matches, "csv_filename", String);
+                            let file = File::create(&csv_filename).unwrap();
+                            Some(csv::WriterBuilder::new().from_writer(file))
+                        } else {
+                            None
+                        };
 
                         println!("Slot: {} => {}", base_bank.slot(), warped_bank.slot());
                         println!("Epoch: {} => {}", base_bank.epoch(), warped_bank.epoch());
@@ -2041,9 +2140,10 @@ fn main() {
                         );
 
                         let mut overall_delta = 0;
+
                         let modified_accounts =
                             warped_bank.get_all_accounts_modified_since_parent();
-                        let mut sorted_accounts = modified_accounts
+                        let mut rewarded_accounts = modified_accounts
                             .iter()
                             .map(|(pubkey, account)| {
                                 (
@@ -2056,32 +2156,133 @@ fn main() {
                                 )
                             })
                             .collect::<Vec<_>>();
-                        sorted_accounts.sort_unstable_by_key(|(pubkey, account, base_lamports)| {
-                            (
-                                account.owner,
-                                *base_lamports,
-                                account.lamports - base_lamports,
-                                *pubkey,
+                        rewarded_accounts.sort_unstable_by_key(
+                            |(pubkey, account, base_lamports)| {
+                                (
+                                    account.owner,
+                                    *base_lamports,
+                                    account.lamports - base_lamports,
+                                    *pubkey,
+                                )
+                            },
+                        );
+
+                        let mut unchanged_accounts = stake_calcuration_details
+                            .keys()
+                            .collect::<HashSet<_>>()
+                            .difference(
+                                &rewarded_accounts
+                                    .iter()
+                                    .map(|(pubkey, ..)| *pubkey)
+                                    .collect(),
                             )
+                            .map(|pubkey| (**pubkey, warped_bank.get_account(pubkey).unwrap()))
+                            .collect::<Vec<_>>();
+                        unchanged_accounts.sort_unstable_by_key(|(pubkey, account)| {
+                            (account.owner, account.lamports, *pubkey)
                         });
-                        for (pubkey, warped_account, _) in sorted_accounts {
+                        let unchanged_accounts = unchanged_accounts.into_iter();
+
+                        let rewarded_accounts = rewarded_accounts
+                            .into_iter()
+                            .map(|(pubkey, account, ..)| (*pubkey, account.clone()));
+
+                        let all_accounts = unchanged_accounts.chain(rewarded_accounts);
+                        for (pubkey, warped_account) in all_accounts {
+                            // Don't output sysvars; it's always updated but not related to
+                            // inflation.
+                            if solana_sdk::sysvar::is_sysvar_id(&pubkey) {
+                                continue;
+                            }
+
                             if let Some(base_account) = base_bank.get_account(&pubkey) {
-                                if base_account.lamports != warped_account.lamports {
-                                    let delta = warped_account.lamports - base_account.lamports;
-                                    println!(
-                                        "{:<45}({}): {} => {} (+{} {:>4.9}%)",
-                                        format!("{}", pubkey), // format! is needed to pad/justify correctly.
-                                        base_account.owner,
-                                        Sol(base_account.lamports),
-                                        Sol(warped_account.lamports),
-                                        Sol(delta),
-                                        ((warped_account.lamports as f64)
-                                            / (base_account.lamports as f64)
-                                            * 100_f64)
-                                            - 100_f64,
-                                    );
-                                    overall_delta += delta;
+                                let delta = warped_account.lamports - base_account.lamports;
+                                let detail = stake_calcuration_details.get(&pubkey);
+                                println!(
+                                    "{:<45}({}): {} => {} (+{} {:>4.9}%) {:?}",
+                                    format!("{}", pubkey), // format! is needed to pad/justify correctly.
+                                    base_account.owner,
+                                    Sol(base_account.lamports),
+                                    Sol(warped_account.lamports),
+                                    Sol(delta),
+                                    ((warped_account.lamports as f64)
+                                        / (base_account.lamports as f64)
+                                        * 100_f64)
+                                        - 100_f64,
+                                    detail,
+                                );
+                                if let Some(ref mut csv_writer) = csv_writer {
+                                    #[derive(Serialize)]
+                                    struct InflationRecord {
+                                        account: String,
+                                        owner: String,
+                                        old_balance: u64,
+                                        new_balance: u64,
+                                        data_size: usize,
+                                        delegation: String,
+                                        effective_stake: String,
+                                        delegated_stake: String,
+                                        rent_exempt_reserve: String,
+                                        activation_epoch: String,
+                                        deactivation_epoch: String,
+                                        earned_epochs: String,
+                                        earned_credits: String,
+                                        base_rewards: String,
+                                        stake_rewards: String,
+                                        vote_rewards: String,
+                                        commission: String,
+                                        cluster_rewards: String,
+                                        cluster_points: String,
+                                    };
+                                    fn format_or_na<T: std::fmt::Display>(
+                                        data: Option<T>,
+                                    ) -> String {
+                                        data.map(|data| format!("{}", data))
+                                            .unwrap_or_else(|| "N/A".to_owned())
+                                    };
+                                    let record = InflationRecord {
+                                        account: format!("{}", pubkey),
+                                        owner: format!("{}", base_account.owner),
+                                        old_balance: base_account.lamports,
+                                        new_balance: warped_account.lamports,
+                                        data_size: base_account.data.len(),
+                                        delegation: format_or_na(detail.map(|d| d.voter)),
+                                        effective_stake: format_or_na(detail.map(|d| d.stake)),
+                                        delegated_stake: format_or_na(
+                                            detail.map(|d| d.total_stake),
+                                        ),
+                                        rent_exempt_reserve: format_or_na(
+                                            detail.map(|d| d.rent_exempt_reserve),
+                                        ),
+                                        activation_epoch: format_or_na(detail.map(|d| {
+                                            if d.activation_epoch < Epoch::max_value() {
+                                                d.activation_epoch
+                                            } else {
+                                                // bootstraped
+                                                0
+                                            }
+                                        })),
+                                        deactivation_epoch: format_or_na(
+                                            detail.and_then(|d| d.deactivation_epoch),
+                                        ),
+                                        earned_epochs: format_or_na(detail.map(|d| d.epochs)),
+                                        earned_credits: format_or_na(detail.map(|d| d.credits)),
+                                        base_rewards: format_or_na(detail.map(|d| d.base_rewards)),
+                                        stake_rewards: format_or_na(
+                                            detail.map(|d| d.stake_rewards),
+                                        ),
+                                        vote_rewards: format_or_na(detail.map(|d| d.vote_rewards)),
+                                        commission: format_or_na(detail.map(|d| d.commission)),
+                                        cluster_rewards: format_or_na(
+                                            last_point_value.as_ref().map(|pv| pv.rewards),
+                                        ),
+                                        cluster_points: format_or_na(
+                                            last_point_value.as_ref().map(|pv| pv.points),
+                                        ),
+                                    };
+                                    csv_writer.serialize(&record).unwrap();
                                 }
+                                overall_delta += delta;
                             } else {
                                 error!("new account!?: {}", pubkey);
                             }
