@@ -2030,7 +2030,7 @@ fn main() {
                             epochs: usize,
                             voter: Pubkey,
                             point: u128,
-                            stake: u128,
+                            stake: u64,
                             total_stake: u64,
                             rent_exempt_reserve: u64,
                             credits: u128,
@@ -2055,16 +2055,17 @@ fn main() {
                                 match event {
                                     InflationPointCalculationEvent::CalculatedPoints(
                                         point,
-                                        stake,
                                         credits,
                                     ) => {
                                         // Don't sum for epochs where no credits are earned
                                         if *credits > 0 {
                                             detail.epochs += 1;
                                             detail.point += *point;
-                                            detail.stake += *stake;
                                             detail.credits += *credits;
                                         }
+                                    }
+                                    InflationPointCalculationEvent::Stake(stake) => {
+                                        detail.stake = *stake;
                                     }
                                     InflationPointCalculationEvent::SplitRewards(
                                         all,
