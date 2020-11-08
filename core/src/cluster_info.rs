@@ -1978,8 +1978,10 @@ impl ClusterInfo {
             let (check, ping) = ping_cache.check(now, node, &mut pingf);
             if let Some(ping) = ping {
                 let ping = Protocol::PingMessage(ping);
-                let ping = Packet::from_data(&node.1, ping);
-                packets.packets.push(ping);
+                match Packet::from_data(&node.1, ping) {
+                    Ok(packet) => packets.packets.push(packet),
+                    Err(err) => error!("failed to write ping packet: {:?}", err),
+                };
             }
             if !check {
                 self.stats
@@ -2083,14 +2085,18 @@ impl ClusterInfo {
             let from_addr = pull_responses[stat.to].1;
             let response = pull_responses[stat.to].0[stat.responses_index].clone();
             let protocol = Protocol::PullResponse(self_id, vec![response]);
-            let new_packet = Packet::from_data(&from_addr, protocol);
-            if self.outbound_budget.take(new_packet.meta.size) {
-                sent.insert(index);
-                total_bytes += new_packet.meta.size;
-                packets.packets.push(new_packet)
-            } else {
-                inc_new_counter_info!("gossip_pull_request-no_budget", 1);
-                break;
+            match Packet::from_data(&from_addr, protocol) {
+                Err(err) => error!("failed to write pull-response packet: {:?}", err),
+                Ok(packet) => {
+                    if self.outbound_budget.take(packet.meta.size) {
+                        sent.insert(index);
+                        total_bytes += packet.meta.size;
+                        packets.packets.push(packet)
+                    } else {
+                        inc_new_counter_info!("gossip_pull_request-no_budget", 1);
+                        break;
+                    }
+                }
             }
         }
         time.stop();
@@ -2281,8 +2287,13 @@ impl ClusterInfo {
             .filter_map(|(addr, ping)| {
                 let pong = Pong::new(&ping, &self.keypair).ok()?;
                 let pong = Protocol::PongMessage(pong);
-                let packet = Packet::from_data(&addr, pong);
-                Some(packet)
+                match Packet::from_data(&addr, pong) {
+                    Ok(packet) => Some(packet),
+                    Err(err) => {
+                        error!("failed to write pong packet: {:?}", err);
+                        None
+                    }
+                }
             })
             .collect();
         if packets.is_empty() {
@@ -2413,8 +2424,10 @@ impl ClusterInfo {
         inc_new_counter_debug!("cluster_info-push_message-pushes", new_push_requests.len());
         for (address, request) in new_push_requests {
             if ContactInfo::is_valid_address(&address) {
-                let packet = Packet::from_data(&address, &request);
-                packets.packets.push(packet);
+                match Packet::from_data(&address, &request) {
+                    Ok(packet) => packets.packets.push(packet),
+                    Err(err) => error!("failed to write push-request packet: {:?}", err),
+                }
             } else {
                 trace!("Dropping Gossip push response, as destination is unknown");
             }
