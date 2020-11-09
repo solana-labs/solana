@@ -28,9 +28,7 @@ fi
 cat > "$CONFIG_FILE" <<EOF
 {
   "name": "$PROJECT_NAME",
-  "scope": "solana-labs"
-}
-{
+  "scope": "solana-labs",
   "redirects": [
     { "source": "/apps", "destination": "/developing/programming-model/overview" },
     { "source": "/apps/bakcwards-compatibility/", "destination": "/developing/backwards-compatibility" },
@@ -44,9 +42,9 @@ cat > "$CONFIG_FILE" <<EOF
     { "source": "/apps/rent/", "destination": "/developing/programming-model/accounts" },
     { "source": "/apps/sysvars/", "destination": "/developing/programming-model/sysvars" },
     { "source": "/apps/webwallet/", "destination": "/developing/deployed-programs/examples" },
-    { "source": "/implemented-proposals/cross-program-invocation", "destination": "/developing/programming-model/cross-program-invocations" },
-    { "source": "/implemented-proposals/program-derived-addresses", "destination": "/developing/" },
-    { "source": "/implemented-proposals/secp256k1_instruction", "destination": "/developing/" },
+    { "source": "/implemented-proposals/cross-program-invocation", "destination": "/developing/programming-model/cpi" },
+    { "source": "/implemented-proposals/program-derived-addresses", "destination": "/developing/programming-model/program-derived-addresses" },
+    { "source": "/implemented-proposals/secp256k1_instruction", "destination": "/developing/programming-model/secpk1-instructions" }
   ]
 }
 EOF
