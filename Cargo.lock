@@ -3929,6 +3929,7 @@ dependencies = [
  "jsonrpc-http-server",
  "jsonrpc-pubsub",
  "jsonrpc-ws-server",
+ "lazy_static",
  "log 0.4.8",
  "lru",
  "matches",
