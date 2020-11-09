@@ -35,7 +35,9 @@ correction.
 
 In order to calculate the estimated timestamp for a particular Bank, the runtime
 first needs to get the most recent vote timestamps from the active validator
-set. The `Bank::vote_accounts()` method provides the vote accounts state.
+set. The `Bank::vote_accounts()` method provides the vote accounts state, and
+these can be filtered to all accounts whose most recent timestamp was provided
+within the last epoch.
 
 From each vote timestamp, an estimate for the current Bank is calculated using
 the epoch's target ns_per_slot for any delta between the Bank slot and the
