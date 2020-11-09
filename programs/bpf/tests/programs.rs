@@ -533,11 +533,7 @@ fn test_program_bpf_invoke() {
             &[TEST_SUCCESS, bump_seed1, bump_seed2, bump_seed3],
             account_metas.clone(),
         );
-        let noop_instruction = Instruction::new(
-            noop_program_id,
-            &(),
-            vec![]
-        );
+        let noop_instruction = Instruction::new(noop_program_id, &(), vec![]);
         let message = Message::new(&[instruction, noop_instruction], Some(&mint_pubkey));
         let tx = Transaction::new(
             &[
@@ -763,8 +759,8 @@ fn assert_instruction_count() {
             ("multiple_static", 8),
             ("noop", 57),
             ("relative_call", 10),
-            ("sanity", 1140),
-            ("sanity++", 1140),
+            ("sanity", 176),
+            ("sanity++", 176),
             ("struct_pass", 8),
             ("struct_ret", 22),
         ]);
@@ -772,16 +768,16 @@ fn assert_instruction_count() {
     #[cfg(feature = "bpf_rust")]
     {
         programs.extend_from_slice(&[
-            ("solana_bpf_rust_128bit", 543),
-            ("solana_bpf_rust_alloc", 19082),
+            ("solana_bpf_rust_128bit", 572),
+            ("solana_bpf_rust_alloc", 12777),
             ("solana_bpf_rust_dep_crate", 2),
             ("solana_bpf_rust_external_spend", 538),
-            ("solana_bpf_rust_iter", 723),
-            ("solana_bpf_rust_many_args", 231),
+            ("solana_bpf_rust_iter", 724),
+            ("solana_bpf_rust_many_args", 237),
             ("solana_bpf_rust_noop", 488),
-            ("solana_bpf_rust_param_passing", 46),
+            ("solana_bpf_rust_param_passing", 48),
             ("solana_bpf_rust_ristretto", 19399),
-            ("solana_bpf_rust_sanity", 1965),
+            ("solana_bpf_rust_sanity", 894),
         ]);
     }
 
