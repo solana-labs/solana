@@ -9803,6 +9803,48 @@ mod tests {
     }
 
     #[test]
+    fn test_bank_hash_internal_state_different_squash() {
+        solana_logger::setup();
+        let (genesis_config, mint_keypair) = create_genesis_config(2_000);
+        let bank0 = Bank::new(&genesis_config);
+        let bank1 = Bank::new(&genesis_config);
+        let initial_state = bank0.hash_internal_state();
+        assert_eq!(bank1.hash_internal_state(), initial_state);
+
+        let pubkey = solana_sdk::pubkey::new_rand();
+        bank0.transfer(1_000, &mint_keypair, &pubkey).unwrap();
+        assert_ne!(bank0.hash_internal_state(), initial_state);
+        bank1.transfer(1_000, &mint_keypair, &pubkey).unwrap();
+        assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
+
+        // Create children with different squashing
+        // 0 <- 2 (s) <- 4 (s)
+        // and
+        // 1 <- 3 <- 5 (s)
+        // ensure that 4.bank_hash() == 5.bank_hash()
+        let bank0 = Arc::new(bank0);
+        let bank2 = new_from_parent(&bank0);
+        bank2.squash();
+        let bank2 = Arc::new(bank2);
+        let bank4 = new_from_parent(&bank2);
+        bank4.squash();
+
+        info!("done with 2 & 4, starting 3 & 5");
+
+        let bank1 = Arc::new(bank1);
+        let bank3 = new_from_parent(&bank1);
+        let bank3 = Arc::new(bank3);
+        let bank5 = new_from_parent(&bank3);
+        bank5.squash();
+        info!("bank5:*********************");
+        bank5.print_accounts_stats();
+        info!("bank4:*********************");
+        bank4.print_accounts_stats();
+        info!("done:*********************");
+        assert_eq!(bank5.hash_internal_state(), bank4.hash_internal_state());
+    }
+
+    #[test]
     fn test_get_timestamp_estimate() {
         let validator_vote_keypairs0 = ValidatorVoteKeypairs::new_rand();
         let validator_vote_keypairs1 = ValidatorVoteKeypairs::new_rand();
