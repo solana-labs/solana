@@ -1545,10 +1545,9 @@ impl Bank {
             .filter_map(|(pubkey, (_, account))| {
                 VoteState::from(&account).and_then(|state| {
                     let timestamp_slot = state.last_timestamp.slot;
-                    if (self
+                    if self
                         .feature_set
                         .is_active(&feature_set::timestamp_bounding::id())
-                        && self.ancestors.contains_key(&timestamp_slot))
                         || self.slot().checked_sub(timestamp_slot)?
                             <= DEPRECATED_TIMESTAMP_SLOT_RANGE as u64
                     {
