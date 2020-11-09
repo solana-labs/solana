@@ -46,20 +46,20 @@ the `acme` module with a call to a function defined in the `token` module:
 mod acme {
     use token;
 
-    fn launch_missiles(keyed_accounts: &[KeyedAccount]) -> Result<()> {
+    fn launch_missiles(accounts: &[AccountInfo]) -> Result<()> {
         ...
     }
 
-    fn pay_and_launch_missiles(keyed_accounts: &[KeyedAccount]) -> Result<()> {
-        token::pay(&keyed_accounts[1..])?;
+    fn pay_and_launch_missiles(accounts: &[AccountInfo]) -> Result<()> {
+        token::pay(&accounts[1..])?;
 
-        launch_missiles(keyed_accounts)?;
+        launch_missiles(accounts)?;
     }
 ```
 
 The above code would require that the `token` crate be dynamically linked so
 that a custom linker could intercept calls and validate accesses to
-`keyed_accounts`. Even though the client intends to modify both `token` and
+`accounts`. Even though the client intends to modify both `token` and
 `acme` accounts, only `token` program is permitted to modify the `token`
 account, and only the `acme` program is allowed to modify the `acme` account.
 
@@ -71,22 +71,27 @@ the runtime.
 mod acme {
     use token_instruction;
 
-    fn launch_missiles(keyed_accounts: &[KeyedAccount]) -> Result<()> {
+    fn launch_missiles(accounts: &[AccountInfo]) -> Result<()> {
         ...
     }
 
-    fn pay_and_launch_missiles(keyed_accounts: &[KeyedAccount]) -> Result<()> {
-        let alice_pubkey = keyed_accounts[1].key;
+    fn pay_and_launch_missiles(accounts: &[AccountInfo]) -> Result<()> {
+        let alice_pubkey = accounts[1].key;
         let instruction = token_instruction::pay(&alice_pubkey);
         invoke(&instruction, accounts)?;
 
-        launch_missiles(keyed_accounts)?;
+        launch_missiles(accounts)?;
     }
 ```
 
 `invoke()` is built into Solana's runtime and is responsible for routing the
 given instruction to the `token` program via the instruction's `program_id`
 field.
+
+Note that `invoke` requires the caller to pass all the accounts required by the
+instruction being invoked.  This means that both the executable account (the
+ones that matches the instruction's program id) and the accounts passed to the
+instruction procesor.
 
 Before invoking `pay()`, the runtime must ensure that `acme` didn't modify any
 accounts owned by `token`. It does this by applying the runtime's policy to the
