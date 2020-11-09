@@ -220,58 +220,80 @@ impl Delegation {
     #[allow(clippy::comparison_chain)]
     pub fn stake_activating_and_deactivating(
         &self,
-        epoch: Epoch,
+        target_epoch: Epoch,
         history: Option<&StakeHistory>,
     ) -> (u64, u64, u64) {
-        // first, calculate an effective stake and activating number
-        let (stake, activating) = self.stake_and_activating(epoch, history);
+        let delegated_stake = self.stake;
+
+        // first, calculate an effective and activating stake
+        let (effective_stake, activating_stake) = self.stake_and_activating(target_epoch, history);
 
         // then de-activate some portion if necessary
-        if epoch < self.deactivation_epoch {
-            (stake, activating, 0) // not deactivated
-        } else if epoch == self.deactivation_epoch {
-            (stake, 0, stake.min(self.stake)) // can only deactivate what's activated
-        } else if let Some((history, mut entry)) = history.and_then(|history| {
-            history
-                .get(&self.deactivation_epoch)
-                .map(|entry| (history, entry))
-        }) {
-            // && epoch > self.deactivation_epoch
-            let mut effective_stake = stake;
-            let mut next_epoch = self.deactivation_epoch;
+        if target_epoch < self.deactivation_epoch {
+            // not deactivated
+            (effective_stake, activating_stake, 0)
+        } else if target_epoch == self.deactivation_epoch {
+            // can only deactivate what's activated
+            (effective_stake, 0, effective_stake.min(delegated_stake))
+        } else if let Some((history, mut prev_epoch, mut prev_cluster_stake)) =
+            history.and_then(|history| {
+                history
+                    .get(&self.deactivation_epoch)
+                    .map(|cluster_stake_at_deactivation_epoch| {
+                        (
+                            history,
+                            self.deactivation_epoch,
+                            cluster_stake_at_deactivation_epoch,
+                        )
+                    })
+            })
+        {
+            // target_epoch > self.deactivation_epoch
 
-            // loop from my activation epoch until the current epoch
-            //   summing up my entitlement
+            // loop from my deactivation epoch until the target epoch
+            // current effective stake is updated using its previous epoch's cluster stake
+            let mut current_epoch;
+            let mut current_effective_stake = effective_stake;
             loop {
-                if entry.deactivating == 0 {
+                current_epoch = prev_epoch + 1;
+                // if there is no deactivating stake at prev epoch, we should have been
+                // fully undelegated at this moment
+                if prev_cluster_stake.deactivating == 0 {
                     break;
                 }
+
                 // I'm trying to get to zero, how much of the deactivation in stake
                 //   this account is entitled to take
-                let weight = effective_stake as f64 / entry.deactivating as f64;
+                let weight =
+                    current_effective_stake as f64 / prev_cluster_stake.deactivating as f64;
 
-                // portion of activating stake in this epoch I'm entitled to
-                effective_stake = effective_stake.saturating_sub(
-                    ((weight * entry.effective as f64 * self.warmup_cooldown_rate) as u64).max(1),
-                );
+                // portion of newly not-effective cluster stake I'm entitled to at current epoch
+                let newly_not_effective_cluster_stake =
+                    prev_cluster_stake.effective as f64 * self.warmup_cooldown_rate;
+                let newly_not_effective_stake =
+                    ((weight * newly_not_effective_cluster_stake) as u64).max(1);
 
-                if effective_stake == 0 {
+                current_effective_stake =
+                    current_effective_stake.saturating_sub(newly_not_effective_stake);
+                if current_effective_stake == 0 {
                     break;
                 }
 
-                next_epoch += 1;
-                if next_epoch >= epoch {
+                if current_epoch >= target_epoch {
                     break;
                 }
-                if let Some(next_entry) = history.get(&next_epoch) {
-                    entry = next_entry;
+                if let Some(current_cluster_stake) = history.get(&current_epoch) {
+                    prev_epoch = current_epoch;
+                    prev_cluster_stake = current_cluster_stake;
                 } else {
                     break;
                 }
             }
-            (effective_stake, 0, effective_stake)
+
+            // deactivating stake should equal to all of currently remaining effective stake
+            (current_effective_stake, 0, current_effective_stake)
         } else {
-            // no history or I've dropped out of history, so  fully deactivated
+            // no history or I've dropped out of history, so assume fully deactivated
             (0, 0, 0)
         }
     }
@@ -281,12 +303,14 @@ impl Delegation {
         target_epoch: Epoch,
         history: Option<&StakeHistory>,
     ) -> (u64, u64) {
+        let delegated_stake = self.stake;
+
         if self.is_bootstrap() {
             // fully effective immediately
-            (self.stake, 0)
+            (delegated_stake, 0)
         } else if target_epoch == self.activation_epoch {
             // all is activating
-            (0, self.stake)
+            (0, delegated_stake)
         } else if target_epoch < self.activation_epoch {
             // not yet enabled
             (0, 0)
@@ -306,19 +330,20 @@ impl Delegation {
             // target_epoch > self.activation_epoch
 
             // loop from my activation epoch until the target epoch summing up my entitlement
-            // current stake is updated using its previous epoch's cluster stake
+            // current effective stake is updated using its previous epoch's cluster stake
             let mut current_epoch;
             let mut current_effective_stake = 0;
             loop {
                 current_epoch = prev_epoch + 1;
-                // if there is no activating stake at prev epoch, we should have been fully effective at this moment
+                // if there is no activating stake at prev epoch, we should have been
+                // fully effective at this moment
                 if prev_cluster_stake.activating == 0 {
                     break;
                 }
 
                 // how much of the growth in stake this account is
                 //  entitled to take
-                let remaining_activating_stake = self.stake - current_effective_stake;
+                let remaining_activating_stake = delegated_stake - current_effective_stake;
                 let weight =
                     remaining_activating_stake as f64 / prev_cluster_stake.activating as f64;
 
@@ -329,8 +354,8 @@ impl Delegation {
                     ((weight * newly_effective_cluster_stake) as u64).max(1);
 
                 current_effective_stake += newly_effective_stake;
-                if current_effective_stake >= self.stake {
-                    current_effective_stake = self.stake;
+                if current_effective_stake >= delegated_stake {
+                    current_effective_stake = delegated_stake;
                     break;
                 }
 
