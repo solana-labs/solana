@@ -8,10 +8,16 @@ source ci/_
 (
   echo --- git diff --check
   set -x
+
+  if [[ -n $CI_BASE_BRANCH ]]
+  then branch="$CI_BASE_BRANCH"
+  else branch="master"
+  fi
+
   # Look for failed mergify.io backports by searching leftover conflict markers
   # Also check for any trailing whitespaces!
-  git fetch origin "$CI_BASE_BRANCH"
-  git diff "$(git merge-base HEAD "origin/$CI_BASE_BRANCH")..HEAD" --check --oneline
+  git fetch origin "$branch"
+  git diff "$(git merge-base HEAD "origin/$branch")" --check --oneline
 )
 
 echo
