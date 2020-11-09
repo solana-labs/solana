@@ -378,4 +378,50 @@ mod tests {
         bank_forks.insert(child_bank);
         assert_eq!(bank_forks.active_banks(), vec![1]);
     }
+
+    #[test]
+    fn test_bank_forks_different_set_root() {
+        solana_logger::setup();
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank0 = Bank::new(&genesis_config);
+        let mut bank_forks0 = BankForks::new(bank0);
+
+        let bank1 = Bank::new(&genesis_config);
+        let mut bank_forks1 = BankForks::new(bank1);
+        bank_forks0.set_root(0, &None, None);
+
+        let num_slots = 20;
+        for slot in 1..num_slots {
+            let child1 = Bank::new_from_parent(&bank_forks0[slot - 1], &Pubkey::default(), slot);
+            bank_forks0.insert(child1);
+            bank_forks0.set_root(slot, &None, None);
+
+            let child2 = Bank::new_from_parent(&bank_forks1[slot - 1], &Pubkey::default(), slot);
+            bank_forks1.insert(child2);
+        }
+        let child1 =
+            Bank::new_from_parent(&bank_forks0[num_slots - 1], &Pubkey::default(), num_slots);
+        let child2 =
+            Bank::new_from_parent(&bank_forks1[num_slots - 1], &Pubkey::default(), num_slots);
+        bank_forks1.set_root(num_slots - 1, &None, None);
+
+        child1.freeze();
+        child2.freeze();
+
+        /*let recent_timestamp: UnixTimestamp = bank0.unix_timestamp_from_genesis();
+        use solana_vote_program::vote_state::BlockTimestamp;
+        use solana_sdk::clock::UnixTimestamp;
+        crate::bank::update_vote_account_timestamp(
+            BlockTimestamp {
+                slot: child1.slot(),
+                timestamp: recent_timestamp + 1,
+            },
+            &child1,
+            &validator_vote_keypairs.vote_keypair.pubkey(),
+        );*/
+
+        warn!("child0.ancestors: {:?}", child1.ancestors);
+        warn!("child1.ancestors: {:?}", child2.ancestors);
+        assert_eq!(child1.hash(), child2.hash());
+    }
 }
