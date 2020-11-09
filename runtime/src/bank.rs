@@ -4258,6 +4258,17 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
     }
 }
 
+use solana_vote_program::vote_state::BlockTimestamp;
+use solana_vote_program::vote_state::VoteStateVersions;
+pub fn update_vote_account_timestamp(timestamp: BlockTimestamp, bank: &Bank, vote_pubkey: &Pubkey) {
+    let mut vote_account = bank.get_account(vote_pubkey).unwrap_or_default();
+    let mut vote_state = VoteState::from(&vote_account).unwrap_or_default();
+    vote_state.last_timestamp = timestamp;
+    let versioned = VoteStateVersions::Current(Box::new(vote_state));
+    VoteState::to(&versioned, &mut vote_account).unwrap();
+    bank.store_account(vote_pubkey, &vote_account);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -9845,15 +9856,6 @@ mod tests {
         // Account is now empty, and the account lamports were burnt
         assert_eq!(bank.get_balance(&inline_spl_token_v2_0::id()), 0);
         assert_eq!(bank.capitalization(), original_capitalization - 100);
-    }
-
-    fn update_vote_account_timestamp(timestamp: BlockTimestamp, bank: &Bank, vote_pubkey: &Pubkey) {
-        let mut vote_account = bank.get_account(vote_pubkey).unwrap_or_default();
-        let mut vote_state = VoteState::from(&vote_account).unwrap_or_default();
-        vote_state.last_timestamp = timestamp;
-        let versioned = VoteStateVersions::Current(Box::new(vote_state));
-        VoteState::to(&versioned, &mut vote_account).unwrap();
-        bank.store_account(vote_pubkey, &vote_account);
     }
 
     #[test]
