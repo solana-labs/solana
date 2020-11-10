@@ -571,7 +571,7 @@ impl fmt::Display for CliKeyedStakeState {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliEpochReward {
     pub epoch: Epoch,
@@ -652,7 +652,7 @@ fn show_epoch_rewards(
     Ok(())
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliStakeState {
     pub stake_type: CliStakeType,
@@ -838,7 +838,7 @@ impl fmt::Display for CliStakeState {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Debug, Deserialize, PartialEq)]
 pub enum CliStakeType {
     Stake,
     RewardsPool,
@@ -914,7 +914,7 @@ pub struct CliStakeHistoryEntry {
     pub deactivating_stake: u64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliAuthorized {
     pub staker: String,
@@ -930,7 +930,7 @@ impl From<&Authorized> for CliAuthorized {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliLockup {
     pub unix_timestamp: UnixTimestamp,

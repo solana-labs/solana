@@ -474,6 +474,13 @@ impl RpcClient {
         self.get_epoch_info_with_commitment(CommitmentConfig::default())
     }
 
+    pub fn get_stake_activation(&self, pubkey: &Pubkey) -> ClientResult<RpcStakeActivation> {
+        self.send(
+            RpcRequest::GetStakeActivation,
+            json!([pubkey.to_string(), CommitmentConfig::default()]),
+        )
+    }
+
     pub fn get_epoch_info_with_commitment(
         &self,
         commitment_config: CommitmentConfig,

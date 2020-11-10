@@ -36,11 +36,7 @@ use solana_sdk::{
     native_token::lamports_to_sol,
     pubkey::{self, Pubkey},
     signature::Signature,
-    system_instruction, system_program,
-    sysvar::{
-        self,
-        stake_history::{self},
-    },
+    system_instruction, system_program, sysvar,
     transaction::Transaction,
 };
 use solana_transaction_status::UiTransactionEncoding;
@@ -1339,20 +1335,16 @@ pub fn process_show_stakes(
     }
     let all_stake_accounts = rpc_client
         .get_program_accounts_with_config(&solana_stake_program::id(), program_accounts_config)?;
-    let stake_history_account = rpc_client.get_account(&stake_history::id())?;
     let clock_account = rpc_client.get_account(&sysvar::clock::id())?;
     let clock: Clock = from_account(&clock_account).ok_or_else(|| {
         CliError::RpcRequestError("Failed to deserialize clock sysvar".to_string())
     })?;
     progress_bar.finish_and_clear();
 
-    let stake_history = from_account(&stake_history_account).ok_or_else(|| {
-        CliError::RpcRequestError("Failed to deserialize stake history".to_string())
-    })?;
-
     let mut stake_accounts: Vec<CliKeyedStakeState> = vec![];
     for (stake_pubkey, stake_account) in all_stake_accounts {
         if let Ok(stake_state) = stake_account.state() {
+            let stake_activation = rpc_client.get_stake_activation(&stake_pubkey)?;
             match stake_state {
                 StakeState::Initialized(_) => {
                     if vote_account_pubkeys.is_none() {
@@ -1362,7 +1354,7 @@ pub fn process_show_stakes(
                                 stake_account.lamports,
                                 &stake_state,
                                 use_lamports_unit,
-                                &stake_history,
+                                &stake_activation,
                                 &clock,
                             ),
                         });
@@ -1380,7 +1372,7 @@ pub fn process_show_stakes(
                                 stake_account.lamports,
                                 &stake_state,
                                 use_lamports_unit,
-                                &stake_history,
+                                &stake_activation,
                                 &clock,
                             ),
                         });

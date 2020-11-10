@@ -22,6 +22,7 @@ use solana_cli_output::{
     return_signers, CliEpochReward, CliStakeHistory, CliStakeHistoryEntry, CliStakeState,
     CliStakeType,
 };
+use solana_client::rpc_response::{RpcStakeActivation, StakeActivationState};
 use solana_client::{
     blockhash_query::BlockhashQuery,
     client_error::{ClientError, ClientErrorKind},
@@ -1499,7 +1500,7 @@ pub fn build_stake_state(
     account_balance: u64,
     stake_state: &StakeState,
     use_lamports_unit: bool,
-    stake_history: &StakeHistory,
+    stake_activation: &RpcStakeActivation,
     clock: &Clock,
 ) -> CliStakeState {
     match stake_state {
@@ -1512,9 +1513,17 @@ pub fn build_stake_state(
             stake,
         ) => {
             let current_epoch = clock.epoch;
-            let (active_stake, activating_stake, deactivating_stake) = stake
-                .delegation
-                .stake_activating_and_deactivating(current_epoch, Some(stake_history));
+            let (active_stake, activating_stake, deactivating_stake) = match stake_activation.state
+            {
+                StakeActivationState::Activating => {
+                    (stake_activation.active, stake_activation.inactive, 0)
+                }
+                StakeActivationState::Active => (stake_activation.active, 0, 0),
+                StakeActivationState::Deactivating => {
+                    (stake_activation.active, 0, stake_activation.inactive)
+                }
+                StakeActivationState::Inactive => (0, 0, 0),
+            };
             let lockup = if lockup.is_in_force(clock, None) {
                 Some(lockup.into())
             } else {
@@ -1695,20 +1704,17 @@ pub fn process_show_stake_account(
     }
     match stake_account.state() {
         Ok(stake_state) => {
-            let stake_history_account = rpc_client.get_account(&stake_history::id())?;
-            let stake_history = from_account(&stake_history_account).ok_or_else(|| {
-                CliError::RpcRequestError("Failed to deserialize stake history".to_string())
-            })?;
             let clock_account = rpc_client.get_account(&clock::id())?;
             let clock: Clock = from_account(&clock_account).ok_or_else(|| {
                 CliError::RpcRequestError("Failed to deserialize clock sysvar".to_string())
             })?;
+            let stake_activation = rpc_client.get_stake_activation(stake_account_address)?;
 
             let mut state = build_stake_state(
                 stake_account.lamports,
                 &stake_state,
                 use_lamports_unit,
-                &stake_history,
+                &stake_activation,
                 &clock,
             );
 
