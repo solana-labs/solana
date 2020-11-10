@@ -1,6 +1,7 @@
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
 use solana_ledger::blockstore::{Blockstore, CompletedDataSetInfo};
+use solana_ledger::entry::Entry;
 use solana_sdk::signature::Signature;
 use std::{
     sync::{
@@ -61,10 +62,7 @@ impl CompletedDataSetsService {
             } = completed_set_info;
             match blockstore.get_entries_in_data_block(slot, start_index, end_index, None) {
                 Ok(entries) => {
-                    let transactions = entries
-                        .into_iter()
-                        .flat_map(|e| e.transactions.into_iter().map(|t| t.signatures[0]))
-                        .collect::<Vec<Signature>>();
+                    let transactions = Self::get_transaction_signatures(entries);
                     if !transactions.is_empty() {
                         rpc_subscriptions.notify_signatures_received((slot, transactions));
                     }
@@ -76,7 +74,51 @@ impl CompletedDataSetsService {
         Ok(())
     }
 
+    fn get_transaction_signatures(entries: Vec<Entry>) -> Vec<Signature> {
+        entries
+            .into_iter()
+            .flat_map(|e| {
+                e.transactions
+                    .into_iter()
+                    .filter_map(|mut t| t.signatures.drain(..).next())
+            })
+            .collect::<Vec<Signature>>()
+    }
+
     pub fn join(self) -> thread::Result<()> {
         self.thread_hdl.join()
+    }
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+    use solana_sdk::hash::Hash;
+    use solana_sdk::signature::{Keypair, Signer};
+    use solana_sdk::transaction::Transaction;
+
+    #[test]
+    fn test_zero_signatures() {
+        let tx = Transaction::new_with_payer(&[], None);
+        let entries = vec![Entry::new(&Hash::default(), 1, vec![tx])];
+        let signatures = CompletedDataSetsService::get_transaction_signatures(entries);
+        assert!(signatures.is_empty());
+    }
+
+    #[test]
+    fn test_multi_signatures() {
+        let kp = Keypair::new();
+        let tx =
+            Transaction::new_signed_with_payer(&[], Some(&kp.pubkey()), &[&kp], Hash::default());
+        let entries = vec![Entry::new(&Hash::default(), 1, vec![tx.clone()])];
+        let signatures = CompletedDataSetsService::get_transaction_signatures(entries);
+        assert_eq!(signatures.len(), 1);
+
+        let entries = vec![
+            Entry::new(&Hash::default(), 1, vec![tx.clone(), tx.clone()]),
+            Entry::new(&Hash::default(), 1, vec![tx]),
+        ];
+        let signatures = CompletedDataSetsService::get_transaction_signatures(entries);
+        assert_eq!(signatures.len(), 3);
     }
 }
