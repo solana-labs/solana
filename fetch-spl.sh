@@ -37,11 +37,7 @@ fetch_program() {
 
 }
 
-<<<<<<< HEAD
-fetch_program token 2.0.3 TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA BPFLoader1111111111111111111111111111111111
-=======
 fetch_program token 2.0.6 TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA BPFLoader2111111111111111111111111111111111
->>>>>>> 328233474... Bump token version fetched for localnet (#13490)
 fetch_program memo  1.0.0 Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo BPFLoader1111111111111111111111111111111111
 
 echo "${genesis_args[@]}" > spl-genesis-args.sh
