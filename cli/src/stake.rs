@@ -1514,7 +1514,7 @@ pub fn build_stake_state(
             let current_epoch = clock.epoch;
             let (active_stake, activating_stake, deactivating_stake) = stake
                 .delegation
-                .stake_activating_and_deactivating(current_epoch, Some(stake_history));
+                .stake_activating_and_deactivating(current_epoch, Some(stake_history), true);
             let lockup = if lockup.is_in_force(clock, None) {
                 Some(lockup.into())
             } else {
