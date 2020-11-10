@@ -1548,7 +1548,8 @@ impl Bank {
                     if (self
                         .feature_set
                         .is_active(&feature_set::timestamp_bounding::id())
-                        && self.ancestors.contains_key(&timestamp_slot))
+                        && self.slot().checked_sub(timestamp_slot)?
+                            <= self.epoch_schedule().slots_per_epoch)
                         || self.slot().checked_sub(timestamp_slot)?
                             <= DEPRECATED_TIMESTAMP_SLOT_RANGE as u64
                     {
@@ -4259,7 +4260,7 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::{
         accounts_index::{AccountMap, Ancestors},
@@ -9847,7 +9848,11 @@ mod tests {
         assert_eq!(bank.capitalization(), original_capitalization - 100);
     }
 
-    fn update_vote_account_timestamp(timestamp: BlockTimestamp, bank: &Bank, vote_pubkey: &Pubkey) {
+    pub fn update_vote_account_timestamp(
+        timestamp: BlockTimestamp,
+        bank: &Bank,
+        vote_pubkey: &Pubkey,
+    ) {
         let mut vote_account = bank.get_account(vote_pubkey).unwrap_or_default();
         let mut vote_state = VoteState::from(&vote_account).unwrap_or_default();
         vote_state.last_timestamp = timestamp;
