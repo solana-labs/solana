@@ -610,10 +610,20 @@ uint64_t entrypoint(const uint8_t *input);
  */
 #include <stdio.h>
 void sol_log_(const char *s, uint64_t len) {
-  printf("sol_log: %s\n", s);
+  printf("Program log: %s\n", s);
 }
 void sol_log_64(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5) {
-  printf("sol_log_64: %llu, %llu, %llu, %llu, %llu\n", arg1, arg2, arg3, arg4, arg5);
+  printf("Program log: %llu, %llu, %llu, %llu, %llu\n", arg1, arg2, arg3, arg4, arg5);
+}
+void sol_log_pubkey(const SolPubkey *pubkey) {
+  printf("Program log: ");
+  for (int i = 0; i < SIZE_PUBKEY; i++) {
+    printf("%02 ", pubkey->x[i]);
+  }
+  printf("\n");
+}
+void sol_log_compute_units_() {
+  printf("Program consumption: __ units remaining\n");
 }
 #endif
 
