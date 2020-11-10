@@ -1515,14 +1515,14 @@ pub fn build_stake_state(
             let current_epoch = clock.epoch;
             let (active_stake, activating_stake, deactivating_stake) = match stake_activation.state
             {
+                StakeActivationState::Active => (stake_activation.active, 0, 0),
+                StakeActivationState::Inactive => (0, 0, 0),
                 StakeActivationState::Activating => {
                     (stake_activation.active, stake_activation.inactive, 0)
                 }
-                StakeActivationState::Active => (stake_activation.active, 0, 0),
                 StakeActivationState::Deactivating => {
                     (stake_activation.active, 0, stake_activation.inactive)
                 }
-                StakeActivationState::Inactive => (0, 0, 0),
             };
             let lockup = if lockup.is_in_force(clock, None) {
                 Some(lockup.into())
