@@ -292,9 +292,21 @@ impl BankForks {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_utils::{create_genesis_config, GenesisConfigInfo};
+    use crate::{
+        bank::tests::update_vote_account_timestamp,
+        genesis_utils::{
+            create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
+        },
+    };
     use solana_sdk::hash::Hash;
-    use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::{
+        clock::UnixTimestamp,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+        stake_weighted_timestamp::DEPRECATED_TIMESTAMP_SLOT_RANGE,
+        sysvar::epoch_schedule::EpochSchedule,
+    };
+    use solana_vote_program::vote_state::BlockTimestamp;
 
     #[test]
     fn test_bank_forks_new() {
@@ -377,5 +389,68 @@ mod tests {
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
         bank_forks.insert(child_bank);
         assert_eq!(bank_forks.active_banks(), vec![1]);
+    }
+
+    #[test]
+    fn test_bank_forks_different_set_root() {
+        solana_logger::setup();
+        let leader_keypair = Keypair::new();
+        let GenesisConfigInfo {
+            mut genesis_config,
+            mint_keypair: _,
+            voting_keypair,
+        } = create_genesis_config_with_leader(10_000, &leader_keypair.pubkey(), 1_000);
+        let slots_in_epoch = 32;
+        genesis_config.epoch_schedule = EpochSchedule::new(slots_in_epoch);
+
+        let bank0 = Bank::new(&genesis_config);
+        let mut bank_forks0 = BankForks::new(bank0);
+        bank_forks0.set_root(0, &None, None);
+
+        let bank1 = Bank::new(&genesis_config);
+        let mut bank_forks1 = BankForks::new(bank1);
+
+        let additional_timestamp_secs = 2;
+
+        let num_slots = slots_in_epoch + 1 // Advance past first epoch boundary
+            + DEPRECATED_TIMESTAMP_SLOT_RANGE as u64 + 1; // ... and past deprecated slot range
+        for slot in 1..num_slots {
+            // Just after the epoch boundary, timestamp a vote that will shift
+            // Clock::unix_timestamp from Bank::unix_timestamp_from_genesis()
+            let update_timestamp_case = slot == slots_in_epoch;
+
+            let child1 = Bank::new_from_parent(&bank_forks0[slot - 1], &Pubkey::default(), slot);
+            let child2 = Bank::new_from_parent(&bank_forks1[slot - 1], &Pubkey::default(), slot);
+
+            if update_timestamp_case {
+                for child in &[&child1, &child2] {
+                    let recent_timestamp: UnixTimestamp = child.unix_timestamp_from_genesis();
+                    update_vote_account_timestamp(
+                        BlockTimestamp {
+                            slot: child.slot(),
+                            timestamp: recent_timestamp + additional_timestamp_secs,
+                        },
+                        &child,
+                        &voting_keypair.pubkey(),
+                    );
+                }
+            }
+
+            // Set root in bank_forks0 to truncate the ancestor history
+            bank_forks0.insert(child1);
+            bank_forks0.set_root(slot, &None, None);
+
+            // Don't set root in bank_forks1 to keep the ancestor history
+            bank_forks1.insert(child2);
+        }
+        let child1 = &bank_forks0.working_bank();
+        let child2 = &bank_forks1.working_bank();
+
+        child1.freeze();
+        child2.freeze();
+
+        info!("child0.ancestors: {:?}", child1.ancestors);
+        info!("child1.ancestors: {:?}", child2.ancestors);
+        assert_eq!(child1.hash(), child2.hash());
     }
 }
