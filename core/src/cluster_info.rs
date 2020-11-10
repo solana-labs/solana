@@ -1539,11 +1539,17 @@ impl ClusterInfo {
                     };
                 }
                 Some(data) => {
-                    let data_size = serialized_size(&data).unwrap();
-                    if buffer_size + data_size < max_chunk_size {
+                    let data_size = match serialized_size(&data) {
+                        Ok(size) => size,
+                        Err(err) => {
+                            error!("serialized_size failed: {}", err);
+                            continue;
+                        }
+                    };
+                    if buffer_size + data_size <= max_chunk_size {
                         buffer_size += data_size;
                         buffer.push(data);
-                    } else if data_size < max_chunk_size {
+                    } else if data_size <= max_chunk_size {
                         buffer_size = data_size;
                         return Some(std::mem::replace(&mut buffer, vec![data]));
                     } else {
