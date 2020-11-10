@@ -457,6 +457,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         } else {
             if !last_notification_msg.is_empty() {
                 let alarm_duration = Instant::now().duration_since(last_success);
+                let alarm_duration = alarm_duration - config.interval; // Subtract the period before the first error
                 let alarm_duration = Duration::from_secs(alarm_duration.as_secs()); // Drop milliseconds in message
 
                 let all_clear_msg = format!(
