@@ -92,21 +92,19 @@ pub const MAX_CRDS_OBJECT_SIZE: usize = 928;
 /// Chosen to be able to handle 1Gbps of pure gossip traffic
 /// 128MB/PACKET_DATA_SIZE
 const MAX_GOSSIP_TRAFFIC: usize = 128_000_000 / PACKET_DATA_SIZE;
-
-/// Keep the serialized size of SnapshotHashes/AccountsHashes a node publishes
-/// under ..._MAX_PAYLOAD_SIZE by limiting number of hashes in a CrdsValue.
+/// Max size of serialized crds-values in a Protocol::PushMessage packet. This
+/// is equal to PACKET_DATA_SIZE minus serialized size of an empty push
+/// message: Protocol::PushMessage(Pubkey::default(), Vec::default())
+const PUSH_MESSAGE_MAX_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - 44;
+/// Maximum number of hashes in SnapshotHashes/AccountsHashes a node publishes
+/// such that the serialized size of the push/pull message stays bellow
+/// PACKET_DATA_SIZE.
 // TODO: Update this to 26 once payload sizes are upgraded across fleet.
 pub const MAX_SNAPSHOT_HASHES: usize = 16;
 /// Number of bytes in the randomly generated token sent with ping messages.
 const GOSSIP_PING_TOKEN_SIZE: usize = 32;
 const GOSSIP_PING_CACHE_CAPACITY: usize = 16384;
 const GOSSIP_PING_CACHE_TTL: Duration = Duration::from_secs(640);
-
-lazy_static::lazy_static! {
-    /// Maximum serialized sized of crds-values in a Protocol::PushMessage.
-    static ref PUSH_MESSAGE_MAX_PAYLOAD_SIZE: u64 = PACKET_DATA_SIZE as u64
-        - serialized_size(&Protocol::PushMessage(Pubkey::default(), Vec::default())).unwrap();
-}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -1519,7 +1517,7 @@ impl ClusterInfo {
     /// Note: some messages cannot be contained within that size so in the worst case this returns
     /// N nested Vecs with 1 item each.
     fn split_gossip_messages<I, T>(
-        max_chunk_size: u64,
+        max_chunk_size: usize,
         data_feed: I,
     ) -> impl Iterator<Item = Vec<T>>
     where
@@ -1540,7 +1538,7 @@ impl ClusterInfo {
                 }
                 Some(data) => {
                     let data_size = match serialized_size(&data) {
-                        Ok(size) => size,
+                        Ok(size) => size as usize,
                         Err(err) => {
                             error!("serialized_size failed: {}", err);
                             continue;
@@ -1642,7 +1640,7 @@ impl ClusterInfo {
         let messages: Vec<_> = push_messages
             .into_iter()
             .flat_map(|(peer, msgs)| {
-                Self::split_gossip_messages(*PUSH_MESSAGE_MAX_PAYLOAD_SIZE, msgs)
+                Self::split_gossip_messages(PUSH_MESSAGE_MAX_PAYLOAD_SIZE, msgs)
                     .map(move |payload| (peer, Protocol::PushMessage(self_id, payload)))
             })
             .collect();
@@ -3349,6 +3347,15 @@ mod tests {
     }
 
     #[test]
+    fn test_push_message_max_payload_size() {
+        let header = Protocol::PushMessage(Pubkey::default(), Vec::default());
+        assert_eq!(
+            PUSH_MESSAGE_MAX_PAYLOAD_SIZE,
+            PACKET_DATA_SIZE - serialized_size(&header).unwrap() as usize
+        );
+    }
+
+    #[test]
     fn test_cluster_spy_gossip() {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         //check that gossip doesn't try to push to invalid addresses
@@ -3805,7 +3812,7 @@ mod tests {
             .take(NUM_CRDS_VALUES)
             .collect();
         let splits: Vec<_> =
-            ClusterInfo::split_gossip_messages(*PUSH_MESSAGE_MAX_PAYLOAD_SIZE, values.clone())
+            ClusterInfo::split_gossip_messages(PUSH_MESSAGE_MAX_PAYLOAD_SIZE, values.clone())
                 .collect();
         let self_pubkey = solana_sdk::pubkey::new_rand();
         assert!(splits.len() * 3 < NUM_CRDS_VALUES);
@@ -3820,10 +3827,10 @@ mod tests {
             Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen()),
             rng.gen(),
         ));
-        let header_size = PACKET_DATA_SIZE as u64 - *PUSH_MESSAGE_MAX_PAYLOAD_SIZE;
+        let header_size = PACKET_DATA_SIZE - PUSH_MESSAGE_MAX_PAYLOAD_SIZE;
         for values in splits {
             // Assert that sum of parts equals the whole.
-            let size: u64 = header_size
+            let size: u64 = header_size as u64
                 + values
                     .iter()
                     .map(|v| serialized_size(v).unwrap())
@@ -3846,7 +3853,7 @@ mod tests {
         }));
 
         let mut i = 0;
-        while value.size() < *PUSH_MESSAGE_MAX_PAYLOAD_SIZE {
+        while value.size() < PUSH_MESSAGE_MAX_PAYLOAD_SIZE as u64 {
             value.data = CrdsData::SnapshotHashes(SnapshotHash {
                 from: Pubkey::default(),
                 hashes: vec![(0, Hash::default()); i],
@@ -3855,7 +3862,7 @@ mod tests {
             i += 1;
         }
         let split: Vec<_> =
-            ClusterInfo::split_gossip_messages(*PUSH_MESSAGE_MAX_PAYLOAD_SIZE, vec![value])
+            ClusterInfo::split_gossip_messages(PUSH_MESSAGE_MAX_PAYLOAD_SIZE, vec![value])
                 .collect();
         assert_eq!(split.len(), 0);
     }
@@ -3863,14 +3870,14 @@ mod tests {
     fn test_split_messages(value: CrdsValue) {
         const NUM_VALUES: u64 = 30;
         let value_size = value.size();
-        let num_values_per_payload = (*PUSH_MESSAGE_MAX_PAYLOAD_SIZE / value_size).max(1);
+        let num_values_per_payload = (PUSH_MESSAGE_MAX_PAYLOAD_SIZE as u64 / value_size).max(1);
 
         // Expected len is the ceiling of the division
         let expected_len = (NUM_VALUES + num_values_per_payload - 1) / num_values_per_payload;
         let msgs = vec![value; NUM_VALUES as usize];
 
         let split: Vec<_> =
-            ClusterInfo::split_gossip_messages(*PUSH_MESSAGE_MAX_PAYLOAD_SIZE, msgs).collect();
+            ClusterInfo::split_gossip_messages(PUSH_MESSAGE_MAX_PAYLOAD_SIZE, msgs).collect();
         assert!(split.len() as u64 <= expected_len);
     }
 
@@ -4087,7 +4094,7 @@ mod tests {
             wallclock: 0,
         };
         let vote = CrdsValue::new_signed(CrdsData::Vote(1, vote), &Keypair::new());
-        assert!(bincode::serialized_size(&vote).unwrap() <= *PUSH_MESSAGE_MAX_PAYLOAD_SIZE);
+        assert!(bincode::serialized_size(&vote).unwrap() <= PUSH_MESSAGE_MAX_PAYLOAD_SIZE as u64);
     }
 
     #[test]
