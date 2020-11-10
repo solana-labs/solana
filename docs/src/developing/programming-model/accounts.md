@@ -13,12 +13,13 @@ tells the runtime who is allowed to access the data and how.
 Unlike a file, the account includes metadata for the lifetime of the file. That
 lifetime is expressed in "tokens", which is a number of fractional native
 tokens, called _lamports_. Accounts are held in validator memory and pay
-["rent"](#rent) to stay there. Each validator periodically scans all
-accounts and collects rent. Any account that drops to zero lamports is purged.
+["rent"](#rent) to stay there. Each validator periodically scans all accounts
+and collects rent. Any account that drops to zero lamports is purged.  Accounts
+can also be marked [rent-exempt](#rent-exemption) if they contain a sufficnet
+number of lamports.
 
 In the same way that a Linux user uses a path to look up a file, a Solana client
-uses an _address_ to look up an account. The address is usually a 256-bit public
-key.
+uses an _address_ to look up an account. The address is a 256-bit public key.
 
 ## Signers
 
@@ -32,19 +33,22 @@ then use that information to make authority decisions.
 
 ## Read-only
 
-Transactions can mark some accounts as _read-only accounts_. The runtime permits
-read-only accounts to be read concurrently by multiple programs. If a program
-attempts to modify a read-only account, the transaction is rejected by the
-runtime.
+Transactions can [indicate](transactions.md#message-header-format) that some of
+the accounts it references be treated as _read-only accounts_ in order to enable
+parallel account processing between transactions. The runtime permits read-only
+accounts to be read concurrently by multiple programs. If a program attempts to
+modify a read-only account, the transaction is rejected by the runtime.
 
 ## Executable
 
-If an account is marked "executable" in its metadata, it can be used by a
-_loader_ to run programs. For example, a BPF-compiled program is marked
-executable by the BPF loader during deployment once the loader has determined
-that the BPF bytecode in the account's data is valid. No program is allowed to
-modify the contents of an executable account once deployed and executable mark
-is permanent.
+If an account is marked "executable" in its metadata then it is considered a
+program which can be executed by including the account's public key an
+instruction's [program id](transactions.md#program-id). Accounts are marked as
+executable during a successful program deployment process by the loader that
+owns the account.  For example, during BPF program deployment, once the loader
+has determined that the BPF bytecode in the account's data is valid, the loader
+permanently marks the program account as executable.  Once executable, the
+runtime enforces that the account's data (the program) is immutable.
 
 ## Creating
 
@@ -56,7 +60,7 @@ megabytes.
 An account address can be any arbitrary 256 bit value, and there are mechanisms
 for advanced users to create derived addresses
 (`SystemProgram::CreateAccountWithSeed`,
-[`Pubkey::CreateProgramAddress`](program-derived-addresses.md)).
+[`Pubkey::CreateProgramAddress`](calling-between-programs.md#program-derived-addresses)).
 
 Accounts that have never been created via the system program can also be passed
 to programs. When an instruction references an account that hasn't been
@@ -73,51 +77,12 @@ operation the program controls or performs.
 
 A created account is initialized to be _owned_ by a built-in program called the
 System program and is called a _system account_ aptly. An account includes
-"owner" metadata. The owner is a program ID. The runtime grants the program
-write access to the account if its ID matches the owner. For the case of the
+"owner" metadata. The owner is a program id. The runtime grants the program
+write access to the account if its id matches the owner. For the case of the
 System program, the runtime allows clients to transfer lamports and importantly
-_assign_ account ownership, meaning changing owner to different program ID. If
+_assign_ account ownership, meaning changing owner to different program id. If
 an account is not owned by a program, the program is only permitted to read its
 data and credit the account.
-
-## Runtime Capability of Programs
-
-The runtime only permits the owner program to debit the account or modify its
-data. The program then defines additional rules for whether the client can
-modify accounts it owns. In the case of the System program, it allows users to
-transfer lamports by recognizing transaction signatures. If it sees the client
-signed the transaction using the keypair's _private key_, it knows the client
-authorized the token transfer.
-
-In other words, the entire set of accounts owned by a given program can be
-regarded as a key-value store where a key is the account address and value is
-program-specific arbitrary binary data. A program author can decide how to
-manage the program's whole state as possibly many accounts.
-
-After the runtime executes each of the transaction's instructions, it uses the
-account metadata to verify that the access policy was not violated. If a program
-violates the policy, the runtime discards all account changes made by all
-instructions in the transaction and marks the transaction as failed.
-
-### Policy
-
-After a program has processed an instruction the runtime verifies that the
-program only performed operations it was permitted to, and that the results
-adhere to the runtime policy.
-
-The policy is as follows:
-- Only the owner of the account may change owner.
-  - And only if the account is writable.
-  - And only if the data is zero-initialized or empty.
-- An account not assigned to the program cannot have its balance decrease.
-- The balance of read-only and executable accounts may not change.
-- Only the system program can change the size of the data and only if the system
-  program owns the account.
-- Only the owner may change account data.
-  - And if the account is writable.
-  - And if the account is not executable.
-- Executable is one-way (false->true) and only the account owner may set it.
-- No one modification to the rent_epoch associated with this account.
 
 ## Rent
 
