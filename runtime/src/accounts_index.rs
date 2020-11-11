@@ -220,6 +220,70 @@ impl<T: 'static + Clone> AccountsIndex<T> {
             // deadlock
             let max_root = self.max_root();
             *w_ongoing_scan_roots.entry(max_root).or_default() += 1;
+
+            // First we show that for any bank `B` that is a descendant of
+            // the current `max_root`, it must be true that and `B.ancestors.contains(max_root)`,
+            // regardless of the pattern of `squash()` behavior, `where` `ancestors` is the set
+            // of ancestors that is tracked in each bank.
+            //
+            // Proof: At startup, if starting from a snapshot, generate_index() adds all banks
+            // in the snapshot to the index via `add_root()` and so `max_root` will be the
+            // greatest of these. Thus, so the claim holds at startup since there are no
+            // descendants of `max_root`.
+            //
+            // Now we proceed by induction on each `BankForks::set_root()`.
+            // Assume the claim holds when the `max_root` is `R`. Call the set of
+            // descendants of `R` present in BankForks `R_descendants`.
+            //
+            // Then for any banks `B` in `R_descendants`, it must be that `B.ancestors.contains(S)`,
+            // where `S` is any ancestor of `B` such that `S >= R`.
+            //
+            // For example:
+            //          `R` -> `A` -> `C` -> `B`
+            // Then `B.ancestors == {R, A, C}`
+            //
+            // Next we call `BankForks::set_root()` at some descendant of `R`, `R_new`,
+            // where `R_new > R`.
+            //
+            // When we squash `R_new`, `max_root` in the AccountsIndex here is now set to `R_new`,
+            // and all nondescendants of `R_new` are pruned.
+            //
+            // Now consider any outstanding references to banks in the system that are descended from
+            // `max_root == R_new`. Take any one of these references and call it `B`. Because `B` is
+            // a descendant of `R_new`, this means `B` was also a descendant of `R`. Thus `B`
+            // must be a member of `R_descendants` because `B` was constructed and added to
+            // BankForks before the `set_root`.
+            //
+            // This means by the guarantees of `R_descendants` described above, because
+            // `R_new` is an ancestor of `B`, and `R < R_new < B`, then B.ancestors.contains(R_new)`.
+            //
+            // Now until the next `set_root`, any new banks constructed from `new_from_parent` will
+            // also have `max_root == R_new` in their ancestor set, so the claim holds for those descendants
+            // as well. Once the next `set_root` happens, we once again update `max_root` and the same
+            // inductive argument can be applied again to show the claim holds.
+
+            // Check that the `max_root` is present in `ancestors`. From the proof above, if
+            // `max_root` is not present in `ancestors`, this means the bank `B` with the
+            // given `ancestors` is not descended from `max_root, which means
+            // either:
+            // 1) `B` is on a different fork or
+            // 2) `B` is an ancestor of `max_root`.
+            // In both cases we can ignore the given ancestors and instead just rely on the roots
+            // present as `max_root` indicates the roots present in the index are more up to date
+            // than the ancestors given.
+            let ancestors = if ancestors.contains_key(max_root) {
+                ancestors
+            } else {
+                HashMap::new()
+            };
+
+            // Find the first non-rooted ancestor
+            let mut min_non_rooted_scan_ancestor = std::u64::MAX;
+            for ancestor in ancestors.keys() {
+                if ancestor > max_root && ancestor < min_non_rooted_scan_ancestor {
+                    min_non_rooted_scan_ancestor = ancestor;
+                }
+            }
             max_root
         };
 
@@ -246,6 +310,9 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         self.do_scan_accounts(ancestors, func, range, None);
     }
 
+    // Scan accounts and return latest version of each account that is either:
+    // 1) rooted or
+    // 2) present in ancestors
     fn do_scan_accounts<'a, F, R>(
         &'a self,
         ancestors: &Ancestors,
