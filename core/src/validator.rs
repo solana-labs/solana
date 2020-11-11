@@ -1015,11 +1015,14 @@ fn wait_for_supermajority(
         }
     }
 
-    info!(
-        "Waiting for 80% of activated stake at slot {} to be in gossip...",
-        bank.slot()
-    );
     for i in 1.. {
+        if i % 10 == 1 {
+            info!(
+                "Waiting for 80% of activated stake at slot {} to be in gossip...",
+                bank.slot()
+            );
+        }
+
         let gossip_stake_percent = get_stake_percent_in_gossip(&bank, &cluster_info, i % 10 == 0);
 
         if gossip_stake_percent >= 80 {
