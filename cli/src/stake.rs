@@ -35,6 +35,7 @@ use solana_sdk::{
     account::from_account,
     account_utils::StateMut,
     clock::{Clock, Epoch, Slot, UnixTimestamp, SECONDS_PER_DAY},
+    feature, feature_set,
     message::Message,
     pubkey::Pubkey,
     system_instruction::SystemError,
@@ -1501,6 +1502,7 @@ pub fn build_stake_state(
     use_lamports_unit: bool,
     stake_history: &StakeHistory,
     clock: &Clock,
+    stake_program_v2_enabled: bool,
 ) -> CliStakeState {
     match stake_state {
         StakeState::Stake(
@@ -1512,9 +1514,12 @@ pub fn build_stake_state(
             stake,
         ) => {
             let current_epoch = clock.epoch;
-            let (active_stake, activating_stake, deactivating_stake) = stake
-                .delegation
-                .stake_activating_and_deactivating(current_epoch, Some(stake_history));
+            let (active_stake, activating_stake, deactivating_stake) =
+                stake.delegation.stake_activating_and_deactivating(
+                    current_epoch,
+                    Some(stake_history),
+                    stake_program_v2_enabled,
+                );
             let lockup = if lockup.is_in_force(clock, None) {
                 Some(lockup.into())
             } else {
@@ -1710,6 +1715,7 @@ pub fn process_show_stake_account(
                 use_lamports_unit,
                 &stake_history,
                 &clock,
+                is_stake_program_v2_enabled(rpc_client), // At v1.6, this check can be removed and simply passed as `true`
             );
 
             if state.stake_type == CliStakeType::Stake {
@@ -1879,6 +1885,15 @@ pub fn process_delegate_stake(
         );
         log_instruction_custom_error::<StakeError>(result, &config)
     }
+}
+
+pub fn is_stake_program_v2_enabled(rpc_client: &RpcClient) -> bool {
+    rpc_client
+        .get_account(&feature_set::stake_program_v2::id())
+        .ok()
+        .and_then(|account| feature::from_account(&account))
+        .and_then(|feature| feature.activated_at)
+        .is_some()
 }
 
 #[cfg(test)]
