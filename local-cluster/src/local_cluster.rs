@@ -642,14 +642,10 @@ impl Cluster for LocalCluster {
         let restart_context = self.create_restart_context(pubkey, &mut cluster_validator_info);
         let cluster_validator_info =
             Self::restart_node_with_context(cluster_validator_info, restart_context);
-        self.add_restarted_node(pubkey, cluster_validator_info);
+        self.add_node(pubkey, cluster_validator_info);
     }
 
-    fn add_restarted_node(
-        &mut self,
-        pubkey: &Pubkey,
-        cluster_validator_info: ClusterValidatorInfo,
-    ) {
+    fn add_node(&mut self, pubkey: &Pubkey, cluster_validator_info: ClusterValidatorInfo) {
         self.validators.insert(*pubkey, cluster_validator_info);
     }
 

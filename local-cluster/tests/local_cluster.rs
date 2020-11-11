@@ -1985,7 +1985,7 @@ fn test_future_tower_master_slave() {
 }
 
 #[test]
-fn test_hard_fork() {
+fn test_hard_fork_invalidates_tower() {
     solana_logger::setup();
 
     // First set up the cluster with 2 nodes
@@ -2022,11 +2022,12 @@ fn test_hard_fork() {
 
     let val_a_ledger_path = cluster.lock().unwrap().ledger_path(&validator_a_pubkey);
 
+    let min_root = 15;
     loop {
         sleep(Duration::from_millis(100));
 
         if let Some(root) = root_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
-            if root >= 15 {
+            if root >= min_root {
                 break;
             }
         }
@@ -2035,8 +2036,8 @@ fn test_hard_fork() {
     let mut validator_a_info = cluster.lock().unwrap().exit_node(&validator_a_pubkey);
     let mut validator_b_info = cluster.lock().unwrap().exit_node(&validator_b_pubkey);
 
-    // setup hard fork!
-    let hard_fork_slot = 10;
+    // setup hard fork at slot < a previously rooted slot!
+    let hard_fork_slot = min_root - 5;
     let hard_fork_slots = Some(vec![hard_fork_slot]);
     let mut hard_forks = solana_sdk::hard_forks::HardForks::default();
     hard_forks.register(hard_fork_slot);
@@ -2067,7 +2068,7 @@ fn test_hard_fork() {
         cluster_for_a
             .lock()
             .unwrap()
-            .add_restarted_node(&validator_a_pubkey, restarted_validator_info);
+            .add_node(&validator_a_pubkey, restarted_validator_info);
     });
 
     // test validator A actually to wait for supermajority
