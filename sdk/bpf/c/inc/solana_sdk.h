@@ -636,13 +636,6 @@ void sol_log_pubkey(const SolPubkey *pubkey) {
   }
   printf("\n");
 }
-void sol_log_pubkey(const SolPubkey *pubkey) {
-  printf("sol_log_pubkey: ");
-  for (int i = 0; i < SIZE_PUBKEY; i++) {
-    printf("%02X ", pubkey->x[i]);
-  }
-  printf("\n");
-}
 void sol_log_compute_units_() {
   printf("Program consumption: __ units remaining\n");
 }
