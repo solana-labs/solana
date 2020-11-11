@@ -31,10 +31,10 @@ use solana_client::{
     rpc_request::{self, DELINQUENT_VALIDATOR_SLOT_DISTANCE},
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
+use solana_runtime::{feature::Feature, feature_set};
 use solana_sdk::{
     account_utils::StateMut,
     clock::{Clock, Epoch, Slot, UnixTimestamp, SECONDS_PER_DAY},
-    feature, feature_set,
     message::Message,
     pubkey::Pubkey,
     system_instruction::SystemError,
@@ -1891,7 +1891,7 @@ pub fn is_stake_program_v2_enabled(rpc_client: &RpcClient) -> bool {
     rpc_client
         .get_account(&feature_set::stake_program_v2::id())
         .ok()
-        .and_then(|account| feature::from_account(&account))
+        .and_then(|account| Feature::from_account(&account))
         .and_then(|feature| feature.activated_at)
         .is_some()
 }
