@@ -2206,7 +2206,7 @@ export class Connection {
       case 'recent':
       case 'single':
       case 'singleGossip': {
-        timeoutMs = 10 * 1000;
+        timeoutMs = 30 * 1000;
         break;
       }
       // exhaust enums to ensure full coverage
@@ -2225,7 +2225,9 @@ export class Connection {
     if (response === null) {
       const duration = (Date.now() - start) / 1000;
       throw new Error(
-        `Transaction was not confirmed in ${duration.toFixed(2)} seconds`,
+        `Transaction was not confirmed in ${duration.toFixed(
+          2,
+        )} seconds. It is unknown if it succeeded or failed. Check signature ${signature} using the Solana Explorer or CLI tools.`,
       );
     }
 
