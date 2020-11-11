@@ -725,13 +725,24 @@ fn post_process_restored_tower(
     restored_tower
         .and_then(|tower| {
             let root_bank = bank_forks.root_bank();
+            let slot_history = root_bank.get_slot_history();
+            let tower = tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history);
+
             if let Some(wait_slot_for_supermajority) = config.wait_for_supermajority {
-                if root_bank.slot() == wait_slot_for_supermajority { // <= is this check too strict?
+                if root_bank.slot() == wait_slot_for_supermajority {
                     // intentionally fail to restore tower; we're supposedly in a new hard fork; past
                     // out-of-chain vote state doesn't make sense at all
                     // what if --wait-for-supermajority again if the validator restarted?
-                    warn!("bla bla");
-                    //datapoint_warn!(...);
+                    let message = format!("Hardfork is detected; discarding tower restoration result: {:?}", tower);
+                    datapoint_error!(
+                        "tower_error",
+                        (
+                            "error",
+                            message,
+                            String
+                        ),
+                    );
+                    error!("{}", message);
 
                     // unconditionally relax tower requirement so that we can always restore tower
                     // from root bank.
@@ -740,8 +751,7 @@ fn post_process_restored_tower(
                 }
             }
 
-            let slot_history = root_bank.get_slot_history();
-            tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history)
+            tower
         })
         .unwrap_or_else(|err| {
             let voting_has_been_active =
