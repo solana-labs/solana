@@ -4071,7 +4071,8 @@ impl Bank {
     }
 
     pub fn stake_program_v2_enabled(&self) -> bool {
-        self.feature_set.stake_program_v2_enabled()
+        self.feature_set
+            .is_active(&feature_set::stake_program_v2::id())
     }
 
     // This is called from snapshot restore AND for each epoch boundary

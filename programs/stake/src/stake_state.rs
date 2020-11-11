@@ -318,7 +318,8 @@ impl Delegation {
             // fully effective immediately
             (delegated_stake, 0)
         } else if fix_stake_deactivate && self.activation_epoch == self.deactivation_epoch {
-            // order important; and this correctly consider boostrap stakes first
+            // activated but instantly deactivated; no stake at all regardless of target_epoch
+            // this must be after the bootstrap check and // before all-is-activating check
             (0, 0)
         } else if target_epoch == self.activation_epoch {
             // all is activating

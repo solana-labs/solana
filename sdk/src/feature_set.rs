@@ -155,10 +155,6 @@ impl FeatureSet {
         self.is_active(&cumulative_rent_related_fixes::id())
     }
 
-    pub fn stake_program_v2_enabled(&self) -> bool {
-        self.is_active(&stake_program_v2::id())
-    }
-
     /// All features enabled, useful for testing
     pub fn all_enabled() -> Self {
         Self {
