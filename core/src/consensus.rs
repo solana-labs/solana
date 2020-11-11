@@ -646,9 +646,7 @@ impl Tower {
                     // By the time we reach here, any ancestors of the `last_vote`,
                     // should have been filtered out, as they all have a descendant,
                     // namely the `last_vote` itself.
-                    if !self.is_stray_last_vote() {
-                        assert!(!last_vote_ancestors.contains(candidate_slot));
-                    }
+                    assert!(!last_vote_ancestors.contains(candidate_slot));
 
                     // Evaluate which vote accounts in the bank are locked out
                     // in the interval candidate_slot..last_vote, which means
