@@ -480,6 +480,43 @@ mod tests {
     }
 
     #[test]
+    fn test_create_account_with_seed_separate_base_account() {
+        let new_owner = Pubkey::new(&[9; 32]);
+        let from = solana_sdk::pubkey::new_rand();
+        let base = solana_sdk::pubkey::new_rand();
+        let seed = "shiny pepper";
+        let to = Pubkey::create_with_seed(&base, seed, &new_owner).unwrap();
+
+        let from_account = Account::new_ref(100, 0, &system_program::id());
+        let to_account = Account::new_ref(0, 0, &Pubkey::default());
+        let base_account = Account::new_ref(0, 0, &Pubkey::default());
+
+        assert_eq!(
+            process_instruction(
+                &Pubkey::default(),
+                &[
+                    KeyedAccount::new(&from, true, &from_account),
+                    KeyedAccount::new(&to, false, &to_account),
+                    KeyedAccount::new(&base, true, &base_account)
+                ],
+                &bincode::serialize(&SystemInstruction::CreateAccountWithSeed {
+                    base,
+                    seed: seed.to_string(),
+                    lamports: 50,
+                    space: 2,
+                    owner: new_owner
+                })
+                .unwrap()
+            ),
+            Ok(())
+        );
+        assert_eq!(from_account.borrow().lamports, 50);
+        assert_eq!(to_account.borrow().lamports, 50);
+        assert_eq!(to_account.borrow().owner, new_owner);
+        assert_eq!(to_account.borrow().data, [0, 0]);
+    }
+
+    #[test]
     fn test_address_create_with_seed_mismatch() {
         let from = solana_sdk::pubkey::new_rand();
         let seed = "dull boy";
