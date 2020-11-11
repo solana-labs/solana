@@ -1985,6 +1985,7 @@ fn test_future_tower_master_slave() {
 }
 
 #[test]
+#[serial]
 fn test_hard_fork() {
     solana_logger::setup();
 
