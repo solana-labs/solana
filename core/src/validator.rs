@@ -723,6 +723,17 @@ fn post_process_restored_tower(
     restored_tower
         .and_then(|tower| {
             let root_bank = bank_forks.root_bank();
+            if let Some(wait_slot_for_supermajority) = config.wait_for_supermajority {
+                if root_bank.slot() == wait_slot_for_supermajority { // <= is this check too strict?
+                    // intentionally fail to restore tower; we're supposedly in a new hard fork; past
+                    // out-of-chain vote state doesn't make sense at all
+                    // what if --wait-for-supermajority again if the validator restarted?
+                    warn!("bla bla");
+                    //datapoint_warn!(...);
+                    return Err(crate::consensus::TowerError::HardFork(wait_slot_for_supermajority));
+                }
+            }
+
             let slot_history = root_bank.get_slot_history();
             tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history)
         })
