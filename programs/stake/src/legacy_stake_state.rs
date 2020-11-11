@@ -99,7 +99,7 @@ pub struct Stake {
 
 impl Stake {
     pub fn stake(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
-        self.delegation.stake(epoch, history)
+        self.delegation.stake(epoch, history, false)
     }
 
     pub fn redeem_rewards(
@@ -144,7 +144,7 @@ impl Stake {
         for (epoch, final_epoch_credits, initial_epoch_credits) in
             new_vote_state.epoch_credits().iter().copied()
         {
-            let stake = u128::from(self.delegation.stake(epoch, stake_history));
+            let stake = u128::from(self.delegation.stake(epoch, stake_history, false));
 
             // figure out how much this stake has seen that
             //   for which the vote account has a record
@@ -595,7 +595,9 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     .check(&signers, StakeAuthorize::Withdrawer)?;
                 // if we have a deactivation epoch and we're in cooldown
                 let staked = if clock.epoch >= stake.delegation.deactivation_epoch {
-                    stake.delegation.stake(clock.epoch, Some(stake_history))
+                    stake
+                        .delegation
+                        .stake(clock.epoch, Some(stake_history), false)
                 } else {
                     // Assume full stake if the stake account hasn't been
                     //  de-activated, because in the future the exposed stake
@@ -692,11 +694,12 @@ pub fn calculate_points(
     }
 }
 
-// utility function, used by runtime::Stakes, tests
+// utility function, used by runtime::Stakes and tests
 pub fn new_stake_history_entry<'a, I>(
     epoch: Epoch,
     stakes: I,
     history: Option<&StakeHistory>,
+    fix_stake_deactivate: bool,
 ) -> StakeHistoryEntry
 where
     I: Iterator<Item = &'a Delegation>,
@@ -707,7 +710,10 @@ where
         (a.0 + b.0, a.1 + b.1, a.2 + b.2)
     }
     let (effective, activating, deactivating) = stakes.fold((0, 0, 0), |sum, stake| {
-        add(sum, stake.stake_activating_and_deactivating(epoch, history))
+        add(
+            sum,
+            stake.stake_activating_and_deactivating(epoch, history, fix_stake_deactivate),
+        )
     });
 
     StakeHistoryEntry {
@@ -1040,6 +1046,7 @@ mod tests {
                 epoch,
                 delegations.iter().chain(bootstrap_delegation.iter()),
                 Some(&stake_history),
+                false,
             );
             stake_history.add(epoch, entry);
         }
@@ -1062,25 +1069,34 @@ mod tests {
         let mut stake_history = StakeHistory::default();
         // assert that this stake follows step function if there's no history
         assert_eq!(
-            stake.stake_activating_and_deactivating(stake.activation_epoch, Some(&stake_history)),
+            stake.stake_activating_and_deactivating(
+                stake.activation_epoch,
+                Some(&stake_history),
+                false
+            ),
             (0, stake.stake, 0)
         );
         for epoch in stake.activation_epoch + 1..stake.deactivation_epoch {
             assert_eq!(
-                stake.stake_activating_and_deactivating(epoch, Some(&stake_history)),
+                stake.stake_activating_and_deactivating(epoch, Some(&stake_history), false),
                 (stake.stake, 0, 0)
             );
         }
         // assert that this stake is full deactivating
         assert_eq!(
-            stake.stake_activating_and_deactivating(stake.deactivation_epoch, Some(&stake_history)),
+            stake.stake_activating_and_deactivating(
+                stake.deactivation_epoch,
+                Some(&stake_history),
+                false
+            ),
             (stake.stake, 0, stake.stake)
         );
         // assert that this stake is fully deactivated if there's no history
         assert_eq!(
             stake.stake_activating_and_deactivating(
                 stake.deactivation_epoch + 1,
-                Some(&stake_history)
+                Some(&stake_history),
+                false,
             ),
             (0, 0, 0)
         );
@@ -1095,7 +1111,7 @@ mod tests {
         );
         // assert that this stake is broken, because above setup is broken
         assert_eq!(
-            stake.stake_activating_and_deactivating(1, Some(&stake_history)),
+            stake.stake_activating_and_deactivating(1, Some(&stake_history), false),
             (0, stake.stake, 0)
         );
 
@@ -1110,7 +1126,7 @@ mod tests {
         );
         // assert that this stake is broken, because above setup is broken
         assert_eq!(
-            stake.stake_activating_and_deactivating(2, Some(&stake_history)),
+            stake.stake_activating_and_deactivating(2, Some(&stake_history), false),
             (increment, stake.stake - increment, 0)
         );
 
@@ -1129,7 +1145,8 @@ mod tests {
         assert_eq!(
             stake.stake_activating_and_deactivating(
                 stake.deactivation_epoch + 1,
-                Some(&stake_history)
+                Some(&stake_history),
+                false,
             ),
             (stake.stake, 0, stake.stake) // says "I'm still waiting for deactivation"
         );
@@ -1147,7 +1164,8 @@ mod tests {
         assert_eq!(
             stake.stake_activating_and_deactivating(
                 stake.deactivation_epoch + 2,
-                Some(&stake_history)
+                Some(&stake_history),
+                false,
             ),
             (stake.stake - increment, 0, stake.stake - increment) // hung, should be lower
         );
@@ -1212,7 +1230,7 @@ mod tests {
                 (0, history.deactivating)
             };
             assert_eq!(
-                stake.stake_activating_and_deactivating(epoch, Some(&stake_history)),
+                stake.stake_activating_and_deactivating(epoch, Some(&stake_history), false),
                 (expected_stake, expected_activating, expected_deactivating)
             );
         }
@@ -1239,7 +1257,7 @@ mod tests {
         for epoch in 0..epochs {
             let stake = delegations
                 .iter()
-                .map(|delegation| delegation.stake(epoch, Some(&stake_history)))
+                .map(|delegation| delegation.stake(epoch, Some(&stake_history), false))
                 .sum::<u64>();
             max_stake = max_stake.max(stake);
             min_stake = min_stake.min(stake);
@@ -1298,7 +1316,7 @@ mod tests {
 
         let mut prev_total_effective_stake = delegations
             .iter()
-            .map(|delegation| delegation.stake(0, Some(&stake_history)))
+            .map(|delegation| delegation.stake(0, Some(&stake_history), false))
             .sum::<u64>();
 
         // uncomment and add ! for fun with graphing
@@ -1306,7 +1324,7 @@ mod tests {
         for epoch in 1..epochs {
             let total_effective_stake = delegations
                 .iter()
-                .map(|delegation| delegation.stake(epoch, Some(&stake_history)))
+                .map(|delegation| delegation.stake(epoch, Some(&stake_history), false))
                 .sum::<u64>();
 
             let delta = if total_effective_stake > prev_total_effective_stake {
