@@ -19,7 +19,7 @@
 //! commit for each slot entry would be indexed.
 
 use crate::{
-    accounts_index::{AccountsIndex, Ancestors, SlotList, SlotSlice},
+    accounts_index::{AccountsIndex, AncestorBanks, Ancestors, SlotList, SlotSlice},
     append_vec::{AppendVec, StoredAccount, StoredMeta},
 };
 use blake3::traits::digest::Digest;
@@ -1281,19 +1281,27 @@ impl AccountsDB {
         }
     }
 
-    pub fn scan_accounts<F, A>(&self, ancestors: &Ancestors, scan_func: F) -> A
+    pub fn scan_accounts<F, A>(
+        &self,
+        ancestors: &Ancestors,
+        ancestor_banks: AncestorBanks,
+        scan_func: F,
+    ) -> A
     where
         F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>),
         A: Default,
     {
         let mut collector = A::default();
-        self.accounts_index
-            .scan_accounts(ancestors, |pubkey, (account_info, slot)| {
+        self.accounts_index.scan_accounts(
+            ancestors,
+            ancestor_banks,
+            |pubkey, (account_info, slot)| {
                 let account_slot = self
                     .get_account_from_storage(slot, account_info)
                     .map(|account| (pubkey, account, slot));
                 scan_func(&mut collector, account_slot)
-            });
+            },
+        );
         collector
     }
 
@@ -3043,7 +3051,7 @@ pub mod tests {
         assert_eq!(&db.load_slow(&ancestors, &key).unwrap().0, &account1);
 
         let accounts: Vec<Account> =
-            db.scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
+            db.unchecked_scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
                 if let Some(data) = option {
                     accounts.push(data.1);
                 }
@@ -4368,7 +4376,7 @@ pub mod tests {
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         let accounts: Vec<Account> =
-            db.scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
+            db.unchecked_scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
                 if let Some(data) = option {
                     accounts.push(data.1);
                 }
@@ -4377,7 +4385,7 @@ pub mod tests {
 
         let ancestors = vec![(1, 1), (0, 0)].into_iter().collect();
         let accounts: Vec<Account> =
-            db.scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
+            db.unchecked_scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
                 if let Some(data) = option {
                     accounts.push(data.1);
                 }

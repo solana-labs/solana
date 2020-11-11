@@ -1,3 +1,4 @@
+use crate::bank::Bank;
 use ouroboros::self_referencing;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::ops::{
@@ -18,6 +19,7 @@ pub const ITER_BATCH_SIZE: usize = 1000;
 pub type SlotList<T> = Vec<(Slot, T)>;
 pub type SlotSlice<'s, T> = &'s [(Slot, T)];
 pub type Ancestors = HashMap<Slot, usize>;
+pub type AncestorBanks = BTreeMap<Slot, Arc<Bank>>;
 
 pub type RefCount = u64;
 pub type AccountMap<K, V> = BTreeMap<K, V>;
@@ -199,6 +201,10 @@ impl<T: 'static + Clone> AccountsIndex<T> {
     fn do_checked_scan_accounts<'a, F, R>(
         &'a self,
         ancestors: &Ancestors,
+        // These bank references prevent the banks from being dropped
+        // by the `Bank::Drop` implementation during the scan. Sorted
+        // from greatest to smallest
+        ancestor_banks: AncestorBanks,
         func: F,
         range: Option<R>,
     ) where
@@ -221,71 +227,135 @@ impl<T: 'static + Clone> AccountsIndex<T> {
             let max_root = self.max_root();
             *w_ongoing_scan_roots.entry(max_root).or_default() += 1;
 
-            // First we show that for any bank `B` that is a descendant of
-            // the current `max_root`, it must be true that and `B.ancestors.contains(max_root)`,
-            // regardless of the pattern of `squash()` behavior, `where` `ancestors` is the set
-            // of ancestors that is tracked in each bank.
-            //
-            // Proof: At startup, if starting from a snapshot, generate_index() adds all banks
-            // in the snapshot to the index via `add_root()` and so `max_root` will be the
-            // greatest of these. Thus, so the claim holds at startup since there are no
-            // descendants of `max_root`.
-            //
-            // Now we proceed by induction on each `BankForks::set_root()`.
-            // Assume the claim holds when the `max_root` is `R`. Call the set of
-            // descendants of `R` present in BankForks `R_descendants`.
-            //
-            // Then for any banks `B` in `R_descendants`, it must be that `B.ancestors.contains(S)`,
-            // where `S` is any ancestor of `B` such that `S >= R`.
-            //
-            // For example:
-            //          `R` -> `A` -> `C` -> `B`
-            // Then `B.ancestors == {R, A, C}`
-            //
-            // Next we call `BankForks::set_root()` at some descendant of `R`, `R_new`,
-            // where `R_new > R`.
-            //
-            // When we squash `R_new`, `max_root` in the AccountsIndex here is now set to `R_new`,
-            // and all nondescendants of `R_new` are pruned.
-            //
-            // Now consider any outstanding references to banks in the system that are descended from
-            // `max_root == R_new`. Take any one of these references and call it `B`. Because `B` is
-            // a descendant of `R_new`, this means `B` was also a descendant of `R`. Thus `B`
-            // must be a member of `R_descendants` because `B` was constructed and added to
-            // BankForks before the `set_root`.
-            //
-            // This means by the guarantees of `R_descendants` described above, because
-            // `R_new` is an ancestor of `B`, and `R < R_new < B`, then B.ancestors.contains(R_new)`.
-            //
-            // Now until the next `set_root`, any new banks constructed from `new_from_parent` will
-            // also have `max_root == R_new` in their ancestor set, so the claim holds for those descendants
-            // as well. Once the next `set_root` happens, we once again update `max_root` and the same
-            // inductive argument can be applied again to show the claim holds.
-
-            // Check that the `max_root` is present in `ancestors`. From the proof above, if
-            // `max_root` is not present in `ancestors`, this means the bank `B` with the
-            // given `ancestors` is not descended from `max_root, which means
-            // either:
-            // 1) `B` is on a different fork or
-            // 2) `B` is an ancestor of `max_root`.
-            // In both cases we can ignore the given ancestors and instead just rely on the roots
-            // present as `max_root` indicates the roots present in the index are more up to date
-            // than the ancestors given.
-            let ancestors = if ancestors.contains_key(max_root) {
-                ancestors
-            } else {
-                HashMap::new()
-            };
-
-            // Find the first non-rooted ancestor
-            let mut min_non_rooted_scan_ancestor = std::u64::MAX;
-            for ancestor in ancestors.keys() {
-                if ancestor > max_root && ancestor < min_non_rooted_scan_ancestor {
-                    min_non_rooted_scan_ancestor = ancestor;
-                }
-            }
             max_root
         };
+
+        // The earliest discoverable ancestor bank in the parent chain must be <= max_root,
+        // because in Bank::squash(), we add all the roots to the index before we truncate
+        // the parent chain. Also the `ancestor_banks` should include the calling bank
+        // itself, so the unwrap() is safe.
+        assert!(max_root >= *ancestor_banks.keys().next().unwrap());
+
+        // Ensure the calling bank was included in the ancestors set, i.e. ensure the ancestors
+        // were inclusive of the bank.
+        let slot_to_scan = ancestor_banks.keys().next_back().unwrap();
+        assert!(ancestors.contains_key(slot_to_scan));
+
+        // First we show that for any bank `B` that is a descendant of
+        // the current `max_root`, it must be true that and `B.ancestors.contains(max_root)`,
+        // regardless of the pattern of `squash()` behavior, `where` `ancestors` is the set
+        // of ancestors that is tracked in each bank.
+        //
+        // Proof: At startup, if starting from a snapshot, generate_index() adds all banks
+        // in the snapshot to the index via `add_root()` and so `max_root` will be the
+        // greatest of these. Thus, so the claim holds at startup since there are no
+        // descendants of `max_root`.
+        //
+        // Now we proceed by induction on each `BankForks::set_root()`.
+        // Assume the claim holds when the `max_root` is `R`. Call the set of
+        // descendants of `R` present in BankForks `R_descendants`.
+        //
+        // Then for any banks `B` in `R_descendants`, it must be that `B.ancestors.contains(S)`,
+        // where `S` is any ancestor of `B` such that `S >= R`.
+        //
+        // For example:
+        //          `R` -> `A` -> `C` -> `B`
+        // Then `B.ancestors == {R, A, C}`
+        //
+        // Next we call `BankForks::set_root()` at some descendant of `R`, `R_new`,
+        // where `R_new > R`.
+        //
+        // When we squash `R_new`, `max_root` in the AccountsIndex here is now set to `R_new`,
+        // and all nondescendants of `R_new` are pruned.
+        //
+        // Now consider any outstanding references to banks in the system that are descended from
+        // `max_root == R_new`. Take any one of these references and call it `B`. Because `B` is
+        // a descendant of `R_new`, this means `B` was also a descendant of `R`. Thus `B`
+        // must be a member of `R_descendants` because `B` was constructed and added to
+        // BankForks before the `set_root`.
+        //
+        // This means by the guarantees of `R_descendants` described above, because
+        // `R_new` is an ancestor of `B`, and `R < R_new < B`, then B.ancestors.contains(R_new)`.
+        //
+        // Now until the next `set_root`, any new banks constructed from `new_from_parent` will
+        // also have `max_root == R_new` in their ancestor set, so the claim holds for those descendants
+        // as well. Once the next `set_root` happens, we once again update `max_root` and the same
+        // inductive argument can be applied again to show the claim holds.
+
+        // Check that the `max_root` is present in `ancestors`. From the proof above, if
+        // `max_root` is not present in `ancestors`, this means the bank `B` with the
+        // given `ancestors` is not descended from `max_root, which means
+        // either:
+        // 1) `B` is on a different fork or
+        // 2) `B` is an ancestor of `max_root`.
+        // In both cases we can ignore the given ancestors and instead just rely on the roots
+        // present as `max_root` indicates the roots present in the index are more up to date
+        // than the ancestors given.
+        let empty = HashMap::new();
+        let ancestors_contained_max_root = ancestors.contains_key(&max_root);
+        let ancestors = if ancestors_contained_max_root {
+            ancestors
+        } else {
+            // Accounts for cases like:
+            /*
+                Diagram 1:
+
+                  Build fork structure:
+                        slot 0
+                          |
+                        slot 1
+                      /        \
+                 slot 2         |
+                    |       slot 3 (root)
+            slot 4 (scan)
+
+            */
+            // By the time the scan on slot 4 is called, slot 2 may already have been
+            // dropped. The state in slot 2 would have been purged and is not saved in any
+            // roots. In this case, a scan on slot 4 wouldn't accurately reflect
+            // the state when bank 4 was frozen. In casees like this, we default to a scan
+            // on the latest roots by removing all `ancestors`.
+            &empty
+        };
+
+        // Now we know for sure `ancestors`, if not empty, contains `max_root`
+        //
+        // Now there are two cases, either `ancestors` is empty or nonempty
+        // 1) If ancestors is empty, then this is the same as a scan on a rooted bank,
+        // and `ongoing_scan_roots` provides protection against cleanup of roots necessary
+        // for the scan, and  passing `Some(max_root)` to `do_scan_accounts()` ensures newer
+        // roots don't appear in the scan.
+        //
+        // 2) If ancestors is non-empty, then each ancestor >= `max_root` or
+        // ancestor < `max_root`.
+        //
+        //  a) The set of ancestors < max_root must contain `max_root`
+        // (checked above otherwise `ancestors` would be empty), which means that all
+        // `ancestors <= max_root` are all roots, and their state is protected by the same
+        // guarantees as 1).
+        //
+        //  b) As for the `ancestors >= max_root`, we show that these ancestors must exist
+        // in `ancestor_banks`. Let `A > max_root` be such an ancestor. From the
+        // `assert!(max_root >= *ancestor_banks.keys().next().unwrap());` above, we know that
+        // `max_root >= ancestor_banks.first_key()`, so together with `A > max_root`, this implies
+        // `A >= ancestor_banks.first_key()`. This means `A` is >= the smallest ancestor bank in
+        // `ancestor_banks`.
+        // Because `ancestor_banks` contain all ancestors >= `ancestor_banks.first_key()`,
+        // and `A` is such an ancestor, then `ancestor_banks.contains(A)`.
+        // Thus this bank `A` will not be cleaned during the scan because we hold the reference
+        // that prevents `Bank::drop()` from running and clean will not clean slots > `max_root`.
+        for ancestor in ancestors.keys() {
+            // Recall from Diagram 1 above that if the ancestors were on a different fork than
+            // `max_root`, the ancestors would have been purged/emptied.
+            if *ancestor >= max_root {
+                // Check 2b) holds from proof above. Also, together with the
+                // assert!(ancestors.contains_key(slot_to_scan)) above check ensures
+                // every ancestor in `ancestors` is <= the calling bank because if
+                // there was one greater, then this assert!(ancestor_banks.contains_key(ancestor))
+                // would fail.
+                assert!(ancestor_banks.contains_key(ancestor));
+            }
+        }
 
         self.do_scan_accounts(ancestors, func, range, Some(max_root));
         {
@@ -389,11 +459,15 @@ impl<T: 'static + Clone> AccountsIndex<T> {
     }
 
     /// call func with every pubkey and index visible from a given set of ancestors
-    pub(crate) fn scan_accounts<F>(&self, ancestors: &Ancestors, func: F)
-    where
+    pub(crate) fn scan_accounts<F>(
+        &self,
+        ancestors: &Ancestors,
+        ancestor_banks: AncestorBanks,
+        func: F,
+    ) where
         F: FnMut(&Pubkey, (&T, Slot)),
     {
-        self.do_checked_scan_accounts(ancestors, func, None::<Range<Pubkey>>);
+        self.do_checked_scan_accounts(ancestors, ancestor_banks, func, None::<Range<Pubkey>>);
     }
 
     pub(crate) fn unchecked_scan_accounts<F>(&self, ancestors: &Ancestors, func: F)
@@ -703,7 +777,7 @@ mod tests {
         assert!(index.get(&key.pubkey(), None, None).is_none());
 
         let mut num = 0;
-        index.scan_accounts(&ancestors, |_pubkey, _index| num += 1);
+        index.unchecked_scan_accounts(&ancestors, |_pubkey, _index| num += 1);
         assert_eq!(num, 0);
     }
 
@@ -720,7 +794,7 @@ mod tests {
         assert!(index.get(&key.pubkey(), None, None).is_none());
 
         let mut num = 0;
-        index.scan_accounts(&ancestors, |_pubkey, _index| num += 1);
+        index.unchecked_scan_accounts(&ancestors, |_pubkey, _index| num += 1);
         assert_eq!(num, 0);
     }
 
@@ -736,7 +810,7 @@ mod tests {
         assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
 
         let mut num = 0;
-        index.scan_accounts(&ancestors, |_pubkey, _index| num += 1);
+        index.unchecked_scan_accounts(&ancestors, |_pubkey, _index| num += 1);
         assert_eq!(num, 0);
     }
 
@@ -754,7 +828,7 @@ mod tests {
 
         let mut num = 0;
         let mut found_key = false;
-        index.scan_accounts(&ancestors, |pubkey, _index| {
+        index.unchecked_scan_accounts(&ancestors, |pubkey, _index| {
             if pubkey == &key.pubkey() {
                 found_key = true
             };
@@ -880,7 +954,7 @@ mod tests {
         let ancestors: Ancestors = HashMap::new();
 
         let mut scanned_keys = HashSet::new();
-        index.scan_accounts(&ancestors, |pubkey, _index| {
+        index.unchecked_scan_accounts(&ancestors, |pubkey, _index| {
             scanned_keys.insert(*pubkey);
         });
         assert_eq!(scanned_keys.len(), num_pubkeys);
@@ -1078,7 +1152,7 @@ mod tests {
 
         let mut num = 0;
         let mut found_key = false;
-        index.scan_accounts(&Ancestors::new(), |pubkey, _index| {
+        index.unchecked_scan_accounts(&Ancestors::new(), |pubkey, _index| {
             if pubkey == &key.pubkey() {
                 found_key = true;
                 assert_eq!(_index, (&true, 3));
