@@ -1039,8 +1039,11 @@ impl JsonRpcRequestProcessor {
             solana_sdk::account::from_account::<StakeHistory>(&stake_history_account)
                 .ok_or_else(Error::internal_error)?;
 
-        let (active, activating, deactivating) =
-            delegation.stake_activating_and_deactivating(epoch, Some(&stake_history));
+        let (active, activating, deactivating) = delegation.stake_activating_and_deactivating(
+            epoch,
+            Some(&stake_history),
+            bank.stake_program_v2_enabled(),
+        );
         let stake_activation_state = if deactivating > 0 {
             StakeActivationState::Deactivating
         } else if activating > 0 {
