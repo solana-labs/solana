@@ -612,13 +612,32 @@ impl ProgramTest {
             }));
         }
 
+        // Realistic fee_calculator part 1: Fake a single signature by calling
+        // `bank.commit_transactions()` so that the fee calculator in the child bank will be
+        // initialized with a non-zero fee.
+        assert_eq!(bank.signature_count(), 0);
+        bank.commit_transactions(&[], None, &mut [], &[], 0, 1);
+        assert_eq!(bank.signature_count(), 1);
+
         // Advance beyond slot 0 for a slightly more realistic test environment
         let bank = Arc::new(bank);
         let bank = Bank::new_from_parent(&bank, bank.collector_id(), bank.slot() + 1);
         debug!("Bank slot: {}", bank.slot());
 
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        // Realistic fee_calculator part 2: Tick until a new blockhash is produced to pick up the
+        // non-zero fee calculator
+        let last_blockhash = bank.last_blockhash();
+        while last_blockhash == bank.last_blockhash() {
+            bank.register_tick(&Hash::default());
+        }
+        assert_ne!(
+            bank.get_fee_calculator(&bank.last_blockhash())
+                .expect("fee_calculator")
+                .lamports_per_signature,
+            0
+        );
 
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let transport = start_local_server(&bank_forks).await;
         let mut banks_client = start_client(transport)
             .await
