@@ -100,6 +100,10 @@ const MAX_GOSSIP_TRAFFIC: usize = 128_000_000 / PACKET_DATA_SIZE;
 /// is equal to PACKET_DATA_SIZE minus serialized size of an empty push
 /// message: Protocol::PushMessage(Pubkey::default(), Vec::default())
 const PUSH_MESSAGE_MAX_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - 44;
+/// Max size of serialized crds-values in a Protocol::PullResponse packet.
+/// This is equal to PACKET_DATA_SIZE minus serialized size of an empty pull
+/// response: Protocol::PullResponse(Pubkey::default(), Vec::default())
+const PULL_RESPONSE_MAX_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - 44;
 const DUPLICATE_SHRED_MAX_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - 115;
 /// Maximum number of hashes in SnapshotHashes/AccountsHashes a node publishes
 /// such that the serialized size of the push/pull message stays below
@@ -2078,7 +2082,7 @@ impl ClusterInfo {
         stakes: &HashMap<Pubkey, u64>,
         require_stake_for_gossip: bool,
     ) -> Packets {
-        let mut time = Measure::start("handle_pull_requests");
+        let _st = ScopedTimer::from(&self.stats.handle_pull_requests_time);
         let callers = crds_value::filter_current(requests.iter().map(|r| &r.caller));
         self.time_gossip_write_lock("process_pull_reqs", &self.stats.process_pull_requests)
             .process_pull_requests(callers.cloned(), timestamp());
@@ -2091,52 +2095,47 @@ impl ClusterInfo {
                 self.check_pull_request(Instant::now(), &mut rng, &mut packets);
             requests.into_iter().filter(check_pull_request).collect()
         };
-
-        let now = Instant::now();
-        let timestamp = timestamp();
-        let num_requests = requests.len();
-        let requests = self.reorder_pull_requests(now, requests, stakes);
-
-        let mut total_bytes = 0;
-        let mut sent_requests = 0;
-        let mut sent_packets = 0;
-
-        for request in requests {
-            let caller_pubkey = request.caller.pubkey();
-            let (responses, done) = self.make_reponse_packets(
-                request,
-                output_size_limit,
-                timestamp,
-                stakes,
-                require_stake_for_gossip,
-            );
-            let bytes: usize = responses.iter().map(|packet| packet.meta.size).sum();
-            sent_packets += responses.len();
-            total_bytes += bytes;
-            for packet in responses {
-                packets.packets.push(packet);
+        let now = timestamp();
+        let responses = self
+            .reorder_pull_requests(Instant::now(), requests, stakes)
+            .into_iter()
+            .flat_map(|(caller, requests)| {
+                let packets = self.make_pull_response_packets(
+                    requests,
+                    output_size_limit,
+                    now,
+                    stakes,
+                    require_stake_for_gossip,
+                );
+                std::iter::repeat(caller).zip(packets)
+            })
+            .take_while(|(_, packet)| {
+                if self.outbound_budget.take(packet.meta.size) {
+                    true
+                } else {
+                    self.stats.handle_pull_requests_no_budget.add_relaxed(1);
+                    false
+                }
+            })
+            .group_by(|(caller, _)| *caller);
+        let response_bytes: Vec<_> = responses
+            .into_iter()
+            .map(|(caller, group)| {
+                let mut bytes = 0;
+                for (_, packet) in group {
+                    bytes += packet.meta.size;
+                    packets.packets.push(packet);
+                }
+                (caller, bytes)
+            })
+            .collect();
+        {
+            let mut bandwidth_usage = self.bandwidth_usage.write().unwrap();
+            let now = Instant::now();
+            for (caller, bytes) in response_bytes {
+                bandwidth_usage.add(now, caller, bytes as u64);
             }
-            self.bandwidth_usage
-                .write()
-                .unwrap()
-                .add(now, caller_pubkey, bytes as u64);
-            if !done {
-                self.stats.handle_pull_requests_no_budget.add_relaxed(1);
-                break;
-            }
-            sent_requests += 1;
         }
-
-        time.stop();
-        inc_new_counter_info!("gossip_pull_request-sent_requests", sent_packets);
-        inc_new_counter_info!(
-            "gossip_pull_request-dropped_requests",
-            num_requests - sent_requests
-        );
-        debug!(
-            "handle_pull_requests: {} sent: {} total: {} total_bytes: {}",
-            time, sent_requests, num_requests, total_bytes
-        );
         packets
     }
 
@@ -2207,16 +2206,23 @@ impl ClusterInfo {
 
     // Reorders pull requests prioritizing based on stakes
     // and bandwidth usage over a lookback window.
-    fn reorder_pull_requests(
+    fn reorder_pull_requests<I: IntoIterator<Item = PullData>>(
         &self,
         now: Instant,
-        requests: Vec<PullData>,
+        requests: I,
         stakes: &HashMap<Pubkey, u64>,
-    ) -> Vec<PullData> {
-        let mut scored_requests: Vec<_> = {
+    ) -> Vec<(Pubkey /*caller's pubkey*/, Vec<PullData>)> {
+        // Group requests by their caller's pubkey.
+        let requests: Vec<_> = requests
+            .into_iter()
+            .map(|r| (r.caller.pubkey(), r))
+            .into_group_map()
+            .into_iter()
+            .collect();
+        // Score requests by their stakes and bandwidth usage.
+        let mut requests: Vec<_> = {
             let bandwidth_usage = self.bandwidth_usage.read().unwrap();
-            let score = |pull_data: &PullData| -> f64 {
-                let caller = pull_data.caller.pubkey();
+            let score = |caller| -> f64 {
                 let stake = *stakes.get(&caller).unwrap_or(&0);
                 let usage = *bandwidth_usage.get(now, &caller).unwrap_or(&0);
                 // Dampen impact of stakes so that low staked
@@ -2226,54 +2232,58 @@ impl ClusterInfo {
             };
             requests
                 .into_iter()
-                .map(|request| (score(&request), request))
+                .map(|(caller, requests)| (score(caller), caller, requests))
                 .collect()
         };
         // Sort in descending order of ln(stake) / bandwidth usage.
-        scored_requests.sort_unstable_by(|(a, _), (b, _)| b.partial_cmp(a).unwrap());
-        scored_requests
+        requests.sort_unstable_by(|(a, _, _), (b, _, _)| b.partial_cmp(a).unwrap());
+        requests
             .into_iter()
-            .map(|(_, request)| request)
+            .map(|(_, caller, requests)| (caller, requests))
             .collect()
     }
 
-    // Generates response packets for the given pull request.
-    // The second value of tuple is true if all the responses are generated.
-    // Otherwise it indicates no outbound budget.
-    fn make_reponse_packets(
+    fn make_pull_response_packets<I: IntoIterator<Item = PullData>>(
         &self,
-        request: PullData,
+        requests: I,
         output_size_limit: usize, // Limit number of crds values returned.
         now: u64,
         stakes: &HashMap<Pubkey, u64>,
         require_stake_for_gossip: bool,
-    ) -> (Vec<Packet>, bool) {
+    ) -> impl Iterator<Item = Packet> {
+        let (from_addrs, requests): (Vec<_>, Vec<_>) = requests
+            .into_iter()
+            .map(|r| (r.from_addr, (r.caller, r.filter)))
+            .unzip();
         let mut responses = self
             .time_gossip_read_lock(
                 "generate_pull_responses",
                 &self.stats.generate_pull_responses,
             )
-            .generate_pull_responses(&[(request.caller, request.filter)], output_size_limit, now);
+            .generate_pull_responses(&requests, output_size_limit, now);
         if require_stake_for_gossip {
             for resp in &mut responses {
                 retain_staked(resp, stakes);
             }
         }
-        let mut packets = vec![];
         let self_pubkey = self.id();
-        for response in responses.into_iter().flatten() {
-            let protocol = Protocol::PullResponse(self_pubkey, vec![response]);
-            match Packet::from_data(Some(&request.from_addr), protocol) {
-                Err(err) => error!("failed to write pull-response packet: {:?}", err),
-                Ok(packet) => {
-                    if !self.outbound_budget.take(packet.meta.size) {
-                        return (packets, false);
-                    }
-                    packets.push(packet);
-                }
-            }
-        }
-        (packets, true)
+        from_addrs
+            .into_iter()
+            .zip(responses)
+            .flat_map(move |(from_addr, responses)| {
+                Self::split_gossip_messages(PULL_RESPONSE_MAX_PAYLOAD_SIZE, responses)
+                    .into_iter()
+                    .filter_map(move |response| {
+                        let response = Protocol::PullResponse(self_pubkey, response);
+                        match Packet::from_data(Some(&from_addr), response) {
+                            Err(err) => {
+                                error!("failed to write pull-response packet: {:?}", err);
+                                None
+                            }
+                            Ok(packet) => Some(packet),
+                        }
+                    })
+            })
     }
 
     // Returns (failed, timeout, success)
@@ -3488,6 +3498,15 @@ mod tests {
     }
 
     #[test]
+    fn test_pull_response_max_payload_size() {
+        let header = Protocol::PullResponse(Pubkey::default(), Vec::default());
+        assert_eq!(
+            PULL_RESPONSE_MAX_PAYLOAD_SIZE,
+            PACKET_DATA_SIZE - serialized_size(&header).unwrap() as usize
+        );
+    }
+
+    #[test]
     fn test_cluster_spy_gossip() {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         //check that gossip doesn't try to push to invalid addresses
@@ -4068,7 +4087,7 @@ mod tests {
             reordered_requests,
             order
                 .into_iter()
-                .map(|i| requests[i].clone())
+                .map(|i| (requests[i].caller.pubkey(), vec![requests[i].clone()]))
                 .collect::<Vec<_>>()
         );
     }
