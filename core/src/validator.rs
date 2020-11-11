@@ -720,6 +720,8 @@ fn post_process_restored_tower(
     ledger_path: &Path,
     bank_forks: &BankForks,
 ) -> Tower {
+    let mut should_require_tower = config.require_tower;
+
     restored_tower
         .and_then(|tower| {
             let root_bank = bank_forks.root_bank();
@@ -730,6 +732,10 @@ fn post_process_restored_tower(
                     // what if --wait-for-supermajority again if the validator restarted?
                     warn!("bla bla");
                     //datapoint_warn!(...);
+
+                    // unconditionally relax tower requirement so that we can always restore tower
+                    // from root bank.
+                    should_require_tower = false;
                     return Err(crate::consensus::TowerError::HardFork(wait_slot_for_supermajority));
                 }
             }
@@ -750,7 +756,7 @@ fn post_process_restored_tower(
                     ),
                 );
             }
-            if config.require_tower && voting_has_been_active {
+            if should_require_tower && voting_has_been_active {
                 error!("Requested mandatory tower restore failed: {}", err);
                 error!(
                     "And there is an existing vote_account containing actual votes. \
