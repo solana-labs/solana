@@ -7,7 +7,7 @@ use indexmap::IndexMap;
 use indicatif::{ProgressBar, ProgressStyle};
 use pickledb::PickleDb;
 use serde::{Deserialize, Serialize};
-use solana_banks_client::{BanksClient, BanksClientExt};
+use solana_banks_client::BanksClient;
 use solana_sdk::{
     commitment_config::CommitmentLevel,
     instruction::Instruction,

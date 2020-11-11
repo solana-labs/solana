@@ -9,7 +9,6 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-async-trait = "0.1.36"
 bincode = "1.3.1"
 futures = "0.3"
 solana-banks-interface = { path = "../banks-interface", version = "1.5.0" }
