@@ -24,7 +24,7 @@ use solana_sdk::{
     instruction::InstructionError,
     keyed_account::{is_executable, next_keyed_account, KeyedAccount},
     loader_instruction::LoaderInstruction,
-    process_instruction::{ComputeMeter, Executor, InvokeContext},
+    process_instruction::{stable_log, ComputeMeter, Executor, InvokeContext},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
 };
@@ -62,7 +62,7 @@ pub enum BPFError {
 impl UserDefinedError for BPFError {}
 
 /// Point all log messages to the log collector
-macro_rules! log{
+macro_rules! log {
     ($logger:ident, $message:expr) => {
         if let Ok(logger) = $logger.try_borrow_mut() {
             if logger.log_enabled() {
@@ -229,6 +229,7 @@ impl Executor for BPFExecutor {
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
         let logger = invoke_context.get_logger();
+        let invoke_depth = invoke_context.invoke_depth();
 
         let mut keyed_accounts_iter = keyed_accounts.iter();
         let program = next_keyed_account(&mut keyed_accounts_iter)?;
@@ -255,7 +256,7 @@ impl Executor for BPFExecutor {
                 }
             };
 
-            log!(logger, "Call BPF program {}", program.unsigned_key());
+            stable_log::program_invoke(&logger, program.unsigned_key(), invoke_depth);
             let instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
             let before = compute_meter.borrow().get_remaining();
             let result = vm.execute_program_metered(
@@ -267,7 +268,8 @@ impl Executor for BPFExecutor {
             let after = compute_meter.borrow().get_remaining();
             log!(
                 logger,
-                "BPF program consumed {} of {} units",
+                "Program {} consumed {} of {} compute units",
+                program.unsigned_key(),
                 before - after,
                 before
             );
@@ -275,33 +277,25 @@ impl Executor for BPFExecutor {
                 Ok(status) => {
                     if status != SUCCESS {
                         let error: InstructionError = status.into();
-                        log!(
-                            logger,
-                            "BPF program {} failed: {}",
-                            program.unsigned_key(),
-                            error
-                        );
+                        stable_log::program_failure(&logger, program.unsigned_key(), &error);
                         return Err(error);
                     }
                 }
                 Err(error) => {
-                    log!(
-                        logger,
-                        "BPF program {} failed: {}",
-                        program.unsigned_key(),
-                        error
-                    );
-                    return match error {
+                    let error = match error {
                         EbpfError::UserError(BPFError::SyscallError(
                             SyscallError::InstructionError(error),
-                        )) => Err(error),
-                        _ => Err(BPFLoaderError::VirtualMachineFailedToRunProgram.into()),
+                        )) => error,
+                        _ => BPFLoaderError::VirtualMachineFailedToRunProgram.into(),
                     };
+
+                    stable_log::program_failure(&logger, program.unsigned_key(), &error);
+                    return Err(error);
                 }
             }
         }
         deserialize_parameters(program_id, parameter_accounts, &parameter_bytes)?;
-        log!(logger, "BPF program {} success", program.unsigned_key());
+        stable_log::program_success(&logger, program.unsigned_key());
         Ok(())
     }
 }

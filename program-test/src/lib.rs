@@ -381,7 +381,7 @@ impl Default for ProgramTest {
         solana_logger::setup_with_default(
             "solana_bpf_loader=debug,\
              solana_rbpf::vm=debug,\
-             solana_runtime::message_processor=info,\
+             solana_runtime::message_processor=debug,\
              solana_runtime::system_instruction_processor=trace,\
              solana_program_test=info",
         );
