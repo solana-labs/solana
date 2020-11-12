@@ -161,12 +161,36 @@ impl BanksClient {
             })
     }
 
-    /// Send a transaction and return after the transaction has been finalized or rejected.
+    /// Send a transaction and return until the transaction has been finalized or rejected.
     pub fn process_transaction(
         &mut self,
         transaction: Transaction,
     ) -> impl Future<Output = transport::Result<()>> + '_ {
         self.process_transaction_with_commitment(transaction, CommitmentLevel::default())
+    }
+
+    pub async fn process_transactions_with_commitment(
+        &mut self,
+        transactions: Vec<Transaction>,
+        commitment: CommitmentLevel,
+    ) -> transport::Result<()> {
+        let mut clients: Vec<_> = transactions.iter().map(|_| self.clone()).collect();
+        let futures = clients
+            .iter_mut()
+            .zip(transactions)
+            .map(|(client, transaction)| {
+                client.process_transaction_with_commitment(transaction, commitment)
+            });
+        let statuses = join_all(futures).await;
+        statuses.into_iter().collect() // Convert Vec<Result<_, _>> to Result<Vec<_>>
+    }
+
+    /// Send transactions and return until the transaction has been finalized or rejected.
+    pub fn process_transactions(
+        &mut self,
+        transactions: Vec<Transaction>,
+    ) -> impl Future<Output = transport::Result<()>> + '_ {
+        self.process_transactions_with_commitment(transactions, CommitmentLevel::default())
     }
 
     /// Return the most recent rooted slot height. All transactions at or below this height
