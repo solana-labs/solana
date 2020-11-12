@@ -23,6 +23,10 @@ pub struct UdpSocketPair {
 pub type PortRange = (u16, u16);
 
 pub(crate) const HEADER_LENGTH: usize = 4;
+pub(crate) fn ip_echo_server_reply_length() -> usize {
+    let largest_ip_addr = IpAddr::from([0u16; 8]); // IPv6 variant
+    HEADER_LENGTH + bincode::serialized_size(&largest_ip_addr).unwrap() as usize
+}
 
 fn ip_echo_server_request(
     ip_echo_server_addr: &SocketAddr,
