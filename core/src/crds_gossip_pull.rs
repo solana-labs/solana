@@ -242,10 +242,9 @@ impl CrdsGossipPull {
     ) -> Vec<(f32, &'a ContactInfo)> {
         let mut rng = rand::thread_rng();
         let active_cutoff = now.saturating_sub(PULL_ACTIVE_TIMEOUT_MS);
-        crds.table
-            .values()
+        crds.get_nodes()
             .filter_map(|value| {
-                let info = value.value.contact_info()?;
+                let info = value.value.contact_info().unwrap();
                 // Stop pulling from nodes which have not been active recently.
                 if value.local_timestamp < active_cutoff {
                     // In order to mitigate eclipse attack, for staked nodes
@@ -865,7 +864,7 @@ mod test {
         let mut num_inserts = 0;
         for _ in 0..20_000 {
             if crds
-                .insert(CrdsValue::new_rand(&mut rng), rng.gen())
+                .insert(CrdsValue::new_rand(&mut rng, None), rng.gen())
                 .is_ok()
             {
                 num_inserts += 1;
