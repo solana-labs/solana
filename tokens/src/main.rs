@@ -20,10 +20,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     match command_args.command {
         Command::DistributeTokens(mut args) => {
-            spl_token_helpers::update_token_args(&client, &mut args)?;
+            spl_token_helpers::update_token_args(&client, &mut args.spl_token_args)?;
             commands::process_allocations(&client, &args)?;
         }
-        Command::Balances(args) => {
+        Command::Balances(mut args) => {
+            spl_token_helpers::update_decimals(&client, &mut args.spl_token_args)?;
             commands::process_balances(&client, &args)?;
         }
         Command::TransactionLog(args) => {
