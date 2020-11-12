@@ -1,4 +1,4 @@
-use crate::HEADER_LENGTH;
+use crate::{ip_echo_server_reply_length, HEADER_LENGTH};
 use bytes::Bytes;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
@@ -177,11 +177,7 @@ pub fn ip_echo_server(tcp: std::net::TcpListener) -> IpEchoServer {
                     } else {
                         // "\0\0\0\0" header is added to ensure a valid response will never
                         // conflict with the first four bytes of a valid HTTP response.
-                        let mut bytes = vec![
-                            0;
-                            HEADER_LENGTH + bincode::serialized_size(&peer_addr.ip()).unwrap()
-                                as usize
-                        ];
+                        let mut bytes = vec![0u8; ip_echo_server_reply_length()];
                         bincode::serialize_into(&mut bytes[HEADER_LENGTH..], &peer_addr.ip())
                             .unwrap();
                         Ok(Bytes::from(bytes))
