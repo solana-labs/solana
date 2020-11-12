@@ -987,10 +987,11 @@ mod test {
         crds.insert(new.clone(), now).unwrap();
 
         // set request creation time to now.
-        let now = now + PULL_ACTIVE_TIMEOUT_MS - 100;
+        let now = now + 50_000;
         node.mark_pull_request_creation_time(&new.label().pubkey(), now);
 
         // odds of getting the other request should be close to 1.
+        let now = now + 1_000;
         for _ in 0..10 {
             let req = node.new_pull_request(
                 &thread_pool,
