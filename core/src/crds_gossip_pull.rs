@@ -31,6 +31,8 @@ pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
 pub const CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS: u64 = 60000;
 // Retention period of hashes of received outdated values.
 const FAILED_INSERTS_RETENTION_MS: u64 = 20_000;
+// Do not pull from peers which have not been updated for this long.
+const PULL_ACTIVE_TIMEOUT_MS: u64 = 60_000;
 pub const FALSE_RATE: f64 = 0.1f64;
 pub const KEYS: f64 = 8f64;
 
@@ -238,9 +240,23 @@ impl CrdsGossipPull {
         gossip_validators: Option<&HashSet<Pubkey>>,
         stakes: &HashMap<Pubkey, u64>,
     ) -> Vec<(f32, &'a ContactInfo)> {
+        let mut rng = rand::thread_rng();
+        let active_cutoff = now.saturating_sub(PULL_ACTIVE_TIMEOUT_MS);
         crds.table
             .values()
-            .filter_map(|v| v.value.contact_info())
+            .filter_map(|value| {
+                let info = value.value.contact_info()?;
+                // Stop pulling from nodes which have not been active recently.
+                if value.local_timestamp < active_cutoff {
+                    // In order to mitigate eclipse attack, for staked nodes
+                    // continue retrying periodically.
+                    let stake = stakes.get(&info.id).unwrap_or(&0);
+                    if *stake == 0 || !rng.gen_ratio(1, 16) {
+                        return None;
+                    }
+                }
+                Some(info)
+            })
             .filter(|v| {
                 v.id != *self_id
                     && ContactInfo::is_valid_address(&v.gossip)
@@ -949,6 +965,7 @@ mod test {
 
     #[test]
     fn test_new_mark_creation_time() {
+        let now: u64 = 1_605_127_770_789;
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut crds = Crds::default();
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
@@ -957,29 +974,31 @@ mod test {
         )));
         let node_pubkey = entry.label().pubkey();
         let mut node = CrdsGossipPull::default();
-        crds.insert(entry.clone(), 0).unwrap();
+        crds.insert(entry.clone(), now).unwrap();
         let old = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &solana_sdk::pubkey::new_rand(),
             0,
         )));
-        crds.insert(old.clone(), 0).unwrap();
+        crds.insert(old.clone(), now).unwrap();
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &solana_sdk::pubkey::new_rand(),
             0,
         )));
-        crds.insert(new.clone(), 0).unwrap();
+        crds.insert(new.clone(), now).unwrap();
 
-        // set request creation time to max_value
-        node.mark_pull_request_creation_time(&new.label().pubkey(), u64::max_value());
+        // set request creation time to now.
+        let now = now + 50_000;
+        node.mark_pull_request_creation_time(&new.label().pubkey(), now);
 
-        // odds of getting the other request should be 1 in u64::max_value()
+        // odds of getting the other request should be close to 1.
+        let now = now + 1_000;
         for _ in 0..10 {
             let req = node.new_pull_request(
                 &thread_pool,
                 &crds,
                 &node_pubkey,
                 0,
-                u64::max_value(),
+                now,
                 None,
                 &HashMap::new(),
                 PACKET_DATA_SIZE,
