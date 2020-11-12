@@ -3,7 +3,7 @@
 #![cfg(feature = "full")]
 
 use crate::sanitize::{Sanitize, SanitizeError};
-use crate::secp256k1::verify_eth_addresses;
+use crate::secp256k1_instruction::verify_eth_addresses;
 use crate::{
     hash::Hash,
     instruction::{CompiledInstruction, Instruction, InstructionError},
