@@ -5,6 +5,8 @@
   "scripts": {
     "start": "docusaurus start",
     "build": "docusaurus build",
+    "clear": "docusaurus clear",
+    "help": "docusaurus --help",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "format": "prettier --check \"**/*.{js,jsx,json,md,scss}\"",
@@ -13,8 +15,8 @@
     "lint:fix": "npm run lint -- --fix"
   },
   "dependencies": {
-    "@docusaurus/core": "^2.0.0-alpha.58",
-    "@docusaurus/preset-classic": "^2.0.0-alpha.58",
+    "@docusaurus/core": "^2.0.0-alpha.65",
+    "@docusaurus/preset-classic": "^2.0.0-alpha.65",
     "@docusaurus/theme-search-algolia": "^2.0.0-alpha.32",
     "babel-eslint": "^10.1.0",
     "clsx": "^1.1.1",

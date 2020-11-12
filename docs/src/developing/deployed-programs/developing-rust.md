@@ -240,7 +240,7 @@ single-threaded environment, and must be deterministic:
   should be used instead.
 - The runtime enforces a limit on the number of instructions a program can
   execute during the processing of one instruction.  See [computation
-  budget](developing/programming-model/computation-budget.md) for more
+  budget](developing/programming-model/compute-budget.md) for more
   information.
 
 ## Logging

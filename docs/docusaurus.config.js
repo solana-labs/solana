@@ -6,7 +6,8 @@ module.exports = {
     baseUrl: "/",
     favicon: "img/favicon.ico",
     organizationName: "solana-labs", // Usually your GitHub org/user name.
-    projectName: "solana", // Usually your repo name.
+	projectName: "solana", // Usually your repo name.
+	onBrokenLinks: 'throw',
     themeConfig: {
 	navbar: {
 	    logo: {
@@ -21,7 +22,7 @@ module.exports = {
 		    position: "left",
 		},
 		{
-		    to: "apps",
+		    to: "developing/programming-model/overview",
 		    label: "Develop",
 		    position: "left",
 		},

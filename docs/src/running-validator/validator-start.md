@@ -141,7 +141,7 @@ solana-keygen pubkey ASK
 
 and then entering your seed phrase.
 
-See [Paper Wallet Usage](../paper-wallet/paper-wallet-usage.md) for more info.
+See [Paper Wallet Usage](../wallet-guide/paper-wallet.md) for more info.
 
 ---
 
@@ -261,7 +261,7 @@ To force validator logging to the console add a `--log -` argument, otherwise
 the validator will automatically log to a file.
 
 > Note: You can use a
-> [paper wallet seed phrase](../paper-wallet/paper-wallet-usage.md)
+> [paper wallet seed phrase](../wallet-guide/paper-wallet.md)
 > for your `--identity` and/or
 > `--vote-account` keypairs. To use these, pass the respective argument as
 > `solana-validator --identity ASK ... --vote-account ASK ...` and you will be

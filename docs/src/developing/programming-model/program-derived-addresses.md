@@ -5,7 +5,7 @@ title: Program Derived Addresses
 ## Problem
 
 Programs cannot generate signatures when issuing instructions to other programs
-as defined in the [Cross-Program Invocations](cross-program-invocation.md)
+as defined in the [Cross-Program Invocations](cpi.md)
 design.
 
 The lack of programmatic signature generation limits the kinds of programs that
@@ -42,7 +42,7 @@ The key to the design is two-fold:
 
 2. Allow programs to programmatically sign for programa addresses that are
    present in instructions invoked via [Cross-Program
-   Invocations](cross-program-invocation.md).
+   Invocations](cpi.md).
 
 Given the two conditions, users can securely transfer or assign the authority of
 on-chain assets to program addresses and the program can then assign that

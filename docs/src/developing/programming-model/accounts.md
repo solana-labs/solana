@@ -13,7 +13,7 @@ tells the runtime who is allowed to access the data and how.
 Unlike a file, the account includes metadata for the lifetime of the file. That
 lifetime is expressed in "tokens", which is a number of fractional native
 tokens, called _lamports_. Accounts are held in validator memory and pay
-["rent"](apps/rent.md) to stay there. Each validator periodically scans all
+["rent"](#rent) to stay there. Each validator periodically scans all
 accounts and collects rent. Any account that drops to zero lamports is purged.
 
 In the same way that a Linux user uses a path to look up a file, a Solana client
@@ -149,7 +149,7 @@ rent-exemption is described below.
 Note: The rent rate can change in the future.
 
 As of writing, the fixed rent fee is 19.055441478439427 lamports per byte-epoch
-on the testnet and mainnet-beta clusters. An [epoch](../terminology.md#epoch) is
+on the testnet and mainnet-beta clusters. An [epoch](terminology.md#epoch) is
 targeted to be 2 days (For devnet, the rent fee is 0.3608183131797095 lamports
 per byte-epoch with its 54m36s-long epoch).
 
@@ -198,7 +198,7 @@ Program executable accounts are required by the runtime to be rent-exempt to
 avoid being purged.
 
 Note: Use the [`getMinimumBalanceForRentExemption` RPC
-endpoint](jsonrpc-api.md#getminimumbalanceforrentexemption) to calculate the
+endpoint](developing/clients/jsonrpc-api.md#getminimumbalanceforrentexemption) to calculate the
 minimum balance for a particular account size. The following calculation is
 illustrative only.
 

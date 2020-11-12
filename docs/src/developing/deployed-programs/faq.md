@@ -26,7 +26,7 @@ See [call depth](overview.md#call-depth)
 ## Computational constraints
 
 See [computational
-constraints](developing/programming-model/computation-budget.md)
+constraints](developing/programming-model/compute-budget.md)
 
 ## Float Rust types
 
