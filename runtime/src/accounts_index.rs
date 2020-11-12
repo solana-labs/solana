@@ -292,58 +292,70 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         // present as `max_root` indicates the roots present in the index are more up to date
         // than the ancestors given.
         let empty = HashMap::new();
-        let ancestors_contained_max_root = ancestors.contains_key(&max_root);
-        let ancestors = if ancestors_contained_max_root {
+        let ancestors = if ancestors.contains_key(&max_root) {
             ancestors
         } else {
-            // Accounts for cases like:
             /*
-                Diagram 1:
+            This takes of edge cases like:
 
-                  Build fork structure:
+            Diagram 1:
+
                         slot 0
                           |
                         slot 1
                       /        \
                  slot 2         |
-                    |       slot 3 (root)
+                    |       slot 3 (max root)
             slot 4 (scan)
 
+            By the time the scan on slot 4 is called, slot 2 may already have been
+            cleaned by a clean on slot 3, but slot 4 may not have been cleaned.
+            The state in slot 2 would have been purged and is not saved in any roots.
+            In this case, a scan on slot 4 wouldn't accurately reflect he state when bank 4
+            was frozen. In cases like this, we default to a scan on the latest roots by
+            removing all `ancestors`.
             */
-            // By the time the scan on slot 4 is called, slot 2 may already have been
-            // dropped. The state in slot 2 would have been purged and is not saved in any
-            // roots. In this case, a scan on slot 4 wouldn't accurately reflect
-            // the state when bank 4 was frozen. In casees like this, we default to a scan
-            // on the latest roots by removing all `ancestors`.
             &empty
         };
 
-        // Now we know for sure `ancestors`, if not empty, contains `max_root`
-        //
-        // Now there are two cases, either `ancestors` is empty or nonempty
-        // 1) If ancestors is empty, then this is the same as a scan on a rooted bank,
-        // and `ongoing_scan_roots` provides protection against cleanup of roots necessary
-        // for the scan, and  passing `Some(max_root)` to `do_scan_accounts()` ensures newer
-        // roots don't appear in the scan.
-        //
-        // 2) If ancestors is non-empty, then each ancestor >= `max_root` or
-        // ancestor < `max_root`.
-        //
-        //  a) The set of ancestors < max_root must contain `max_root`
-        // (checked above otherwise `ancestors` would be empty), which means that all
-        // `ancestors <= max_root` are all roots, and their state is protected by the same
-        // guarantees as 1).
-        //
-        //  b) As for the `ancestors >= max_root`, we show that these ancestors must exist
-        // in `ancestor_banks`. Let `A > max_root` be such an ancestor. From the
-        // `assert!(max_root >= *ancestor_banks.keys().next().unwrap());` above, we know that
-        // `max_root >= ancestor_banks.first_key()`, so together with `A > max_root`, this implies
-        // `A >= ancestor_banks.first_key()`. This means `A` is >= the smallest ancestor bank in
-        // `ancestor_banks`.
-        // Because `ancestor_banks` contain all ancestors >= `ancestor_banks.first_key()`,
-        // and `A` is such an ancestor, then `ancestor_banks.contains(A)`.
-        // Thus this bank `A` will not be cleaned during the scan because we hold the reference
-        // that prevents `Bank::drop()` from running and clean will not clean slots > `max_root`.
+        /*
+        Now there are two cases, either `ancestors` is empty or nonempty:
+
+        1) If ancestors is empty, then this is the same as a scan on a rooted bank,
+        and `ongoing_scan_roots` provides protection against cleanup of roots necessary
+        for the scan, and  passing `Some(max_root)` to `do_scan_accounts()` ensures newer
+        roots don't appear in the scan.
+
+        2) If ancestors is non-empty, then from the `ancestors_contains(&max_root)` above, we know
+        that the fork structure must look something like:
+
+        Diagram 2:
+
+                Build fork structure:
+                        slot 0
+                          |
+                        slot 1
+                    /            \
+        slot 2 (max_root)         |
+                |            slot 3 (potential newer max root)
+              slot 4
+                |
+             slot 5 (scan)
+
+        Consider both types of ancestors, ancestor <= `max_root` and
+        ancestor > `max_root`.
+
+        a) The set of `ancestors <= max_root` are all rooted, which means their state
+        is protected by the same guarantees as 1).
+
+        b) As for the `ancestors > max_root`, those banks have at least one reference discoverable
+        through the chain of `Bank::BankRc::parent` starting from the calling bank. For instance
+        bank 5's parent reference keeps bank 4 alive, which will prevent the `Bank::drop()` from
+        running and cleaning up bank 4. Furthermore, no cleans can happen past the max_root == 2, so
+        because this `ancestor > max_root`, slot 4 not be cleaned in the middle of the scan
+        either.
+        */
+
         for ancestor in ancestors.keys() {
             // Recall from Diagram 1 above that if the ancestors were on a different fork than
             // `max_root`, the ancestors would have been purged/emptied.
