@@ -371,6 +371,15 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "VerifierError(LDDWCannotBeLast)")]
+    fn test_bpf_loader_check_load_dw() {
+        let prog = &[
+            0x18, 0x00, 0x00, 0x00, 0x88, 0x77, 0x66, 0x55, // first half of lddw
+        ];
+        bpf_verifier::check(prog, true).unwrap();
+    }
+
+    #[test]
     fn test_bpf_loader_write() {
         let program_id = solana_sdk::pubkey::new_rand();
         let program_key = solana_sdk::pubkey::new_rand();
