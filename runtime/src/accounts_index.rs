@@ -329,6 +329,13 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         self.do_checked_scan_accounts(ancestors, func, None::<Range<Pubkey>>);
     }
 
+    pub(crate) fn unchecked_scan_accounts<F>(&self, ancestors: &Ancestors, func: F)
+    where
+        F: FnMut(&Pubkey, (&T, Slot)),
+    {
+        self.do_unchecked_scan_accounts(ancestors, func, None::<Range<Pubkey>>);
+    }
+
     /// call func with every pubkey and index visible from a given set of ancestors with range
     pub(crate) fn range_scan_accounts<F, R>(&self, ancestors: &Ancestors, range: R, func: F)
     where

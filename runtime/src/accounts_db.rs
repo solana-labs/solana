@@ -1297,6 +1297,22 @@ impl AccountsDB {
         collector
     }
 
+    pub fn unchecked_scan_accounts<F, A>(&self, ancestors: &Ancestors, scan_func: F) -> A
+    where
+        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>),
+        A: Default,
+    {
+        let mut collector = A::default();
+        self.accounts_index
+            .unchecked_scan_accounts(ancestors, |pubkey, (account_info, slot)| {
+                let account_slot = self
+                    .get_account_from_storage(slot, account_info)
+                    .map(|account| (pubkey, account, slot));
+                scan_func(&mut collector, account_slot)
+            });
+        collector
+    }
+
     pub fn range_scan_accounts<F, A, R>(&self, ancestors: &Ancestors, range: R, scan_func: F) -> A
     where
         F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>),

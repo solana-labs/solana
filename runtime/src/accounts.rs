@@ -462,16 +462,16 @@ impl Accounts {
     }
 
     pub fn calculate_capitalization(&self, ancestors: &Ancestors) -> u64 {
-        let balances = self
-            .load_all(ancestors)
-            .into_iter()
-            .map(|(_pubkey, account, _slot)| {
-                AccountsDB::account_balance_for_capitalization(
-                    account.lamports,
-                    &account.owner,
-                    account.executable,
-                )
-            });
+        let balances =
+            self.load_all_unchecked(ancestors)
+                .into_iter()
+                .map(|(_pubkey, account, _slot)| {
+                    AccountsDB::account_balance_for_capitalization(
+                        account.lamports,
+                        &account.owner,
+                        account.executable,
+                    )
+                });
 
         AccountsDB::checked_sum_for_capitalization(balances)
     }
@@ -530,6 +530,19 @@ impl Accounts {
 
     pub fn load_all(&self, ancestors: &Ancestors) -> Vec<(Pubkey, Account, Slot)> {
         self.accounts_db.scan_accounts(
+            ancestors,
+            |collector: &mut Vec<(Pubkey, Account, Slot)>, some_account_tuple| {
+                if let Some((pubkey, account, slot)) =
+                    some_account_tuple.filter(|(_, account, _)| Self::is_loadable(account))
+                {
+                    collector.push((*pubkey, account, slot))
+                }
+            },
+        )
+    }
+
+    fn load_all_unchecked(&self, ancestors: &Ancestors) -> Vec<(Pubkey, Account, Slot)> {
+        self.accounts_db.unchecked_scan_accounts(
             ancestors,
             |collector: &mut Vec<(Pubkey, Account, Slot)>, some_account_tuple| {
                 if let Some((pubkey, account, slot)) =
