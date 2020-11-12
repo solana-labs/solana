@@ -22,16 +22,23 @@ pub struct UdpSocketPair {
 
 pub type PortRange = (u16, u16);
 
+pub(crate) const HEADER_LENGTH: usize = 4;
+pub(crate) fn ip_echo_server_reply_length() -> usize {
+    let largest_ip_addr = IpAddr::from([0u16; 8]); // IPv6 variant
+    HEADER_LENGTH + bincode::serialized_size(&largest_ip_addr).unwrap() as usize
+}
+
 fn ip_echo_server_request(
     ip_echo_server_addr: &SocketAddr,
     msg: IpEchoServerMessage,
 ) -> Result<IpAddr, String> {
-    let mut data = Vec::new();
+    let mut data = vec![0u8; ip_echo_server_reply_length()];
 
     let timeout = Duration::new(5, 0);
     TcpStream::connect_timeout(ip_echo_server_addr, timeout)
         .and_then(|mut stream| {
-            let mut bytes = vec![0; 4]; // Start with 4 null bytes to avoid looking like an HTTP GET/POST request
+            // Start with HEADER_LENGTH null bytes to avoid looking like an HTTP GET/POST request
+            let mut bytes = vec![0; HEADER_LENGTH];
 
             bytes.append(&mut bincode::serialize(&msg).expect("serialize IpEchoServerMessage"));
 
@@ -42,20 +49,21 @@ fn ip_echo_server_request(
             stream.set_read_timeout(Some(Duration::new(10, 0)))?;
             stream.write_all(&bytes)?;
             stream.shutdown(std::net::Shutdown::Write)?;
-            stream.read_to_end(&mut data)
+            stream.read(data.as_mut_slice())
         })
         .and_then(|_| {
             // It's common for users to accidentally confuse the validator's gossip port and JSON
             // RPC port.  Attempt to detect when this occurs by looking for the standard HTTP
             // response header and provide the user with a helpful error message
-            if data.len() < 4 {
+            if data.len() < HEADER_LENGTH {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
                     format!("Response too short, received {} bytes", data.len()),
                 ));
             }
 
-            let response_header: String = data[0..4].iter().map(|b| *b as char).collect();
+            let response_header: String =
+                data[0..HEADER_LENGTH].iter().map(|b| *b as char).collect();
             if response_header != "\0\0\0\0" {
                 if response_header == "HTTP" {
                     let http_response = data.iter().map(|b| *b as char).collect::<String>();
@@ -76,7 +84,7 @@ fn ip_echo_server_request(
                 ));
             }
 
-            bincode::deserialize(&data[4..]).map_err(|err| {
+            bincode::deserialize(&data[HEADER_LENGTH..]).map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
                     format!("Failed to deserialize: {:?}", err),
