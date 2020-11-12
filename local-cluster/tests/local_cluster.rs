@@ -1985,6 +1985,122 @@ fn test_future_tower_master_slave() {
 }
 
 #[test]
+fn test_hard_fork_invalidates_tower() {
+    solana_logger::setup();
+
+    // First set up the cluster with 2 nodes
+    let slots_per_epoch = 2048;
+    let node_stakes = vec![60, 40];
+
+    let validator_keys = vec![
+        "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+        "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
+    ]
+    .iter()
+    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+    .take(node_stakes.len())
+    .collect::<Vec<_>>();
+    let validators = validator_keys
+        .iter()
+        .map(|(kp, _)| kp.pubkey())
+        .collect::<Vec<_>>();
+
+    let validator_a_pubkey = validators[0];
+    let validator_b_pubkey = validators[1];
+
+    let config = ClusterConfig {
+        cluster_lamports: 100_000,
+        node_stakes: node_stakes.clone(),
+        validator_configs: vec![ValidatorConfig::default(); node_stakes.len()],
+        validator_keys: Some(validator_keys),
+        slots_per_epoch,
+        stakers_slot_offset: slots_per_epoch,
+        skip_warmup_slots: true,
+        ..ClusterConfig::default()
+    };
+    let cluster = std::sync::Arc::new(std::sync::Mutex::new(LocalCluster::new(&config)));
+
+    let val_a_ledger_path = cluster.lock().unwrap().ledger_path(&validator_a_pubkey);
+
+    let min_root = 15;
+    loop {
+        sleep(Duration::from_millis(100));
+
+        if let Some(root) = root_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
+            if root >= min_root {
+                break;
+            }
+        }
+    }
+
+    let mut validator_a_info = cluster.lock().unwrap().exit_node(&validator_a_pubkey);
+    let mut validator_b_info = cluster.lock().unwrap().exit_node(&validator_b_pubkey);
+
+    // setup hard fork at slot < a previously rooted slot!
+    let hard_fork_slot = min_root - 5;
+    let hard_fork_slots = Some(vec![hard_fork_slot]);
+    let mut hard_forks = solana_sdk::hard_forks::HardForks::default();
+    hard_forks.register(hard_fork_slot);
+
+    let expected_shred_version = solana_sdk::shred_version::compute_shred_version(
+        &cluster.lock().unwrap().genesis_config.hash(),
+        Some(&hard_forks),
+    );
+
+    validator_a_info.config.new_hard_forks = hard_fork_slots.clone();
+    validator_a_info.config.wait_for_supermajority = Some(hard_fork_slot);
+    validator_a_info.config.expected_shred_version = Some(expected_shred_version);
+
+    validator_b_info.config.new_hard_forks = hard_fork_slots;
+    validator_b_info.config.wait_for_supermajority = Some(hard_fork_slot);
+    validator_b_info.config.expected_shred_version = Some(expected_shred_version);
+
+    // restart validator A first
+    let cluster_for_a = cluster.clone();
+    // Spawn a thread because wait_for_supermajority blocks in Validator::new()!
+    let thread = std::thread::spawn(move || {
+        let restart_context = cluster_for_a
+            .lock()
+            .unwrap()
+            .create_restart_context(&validator_a_pubkey, &mut validator_a_info);
+        let restarted_validator_info =
+            LocalCluster::restart_node_with_context(validator_a_info, restart_context);
+        cluster_for_a
+            .lock()
+            .unwrap()
+            .add_node(&validator_a_pubkey, restarted_validator_info);
+    });
+
+    // test validator A actually to wait for supermajority
+    let mut last_vote = None;
+    for _ in 0..10 {
+        sleep(Duration::from_millis(1000));
+
+        let new_last_vote = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey).unwrap();
+        if let Some(last_vote) = last_vote {
+            assert_eq!(last_vote, new_last_vote);
+        } else {
+            last_vote = Some(new_last_vote);
+        }
+    }
+
+    // restart validator B normally
+    cluster
+        .lock()
+        .unwrap()
+        .restart_node(&validator_b_pubkey, validator_b_info);
+
+    // validator A should now start so join its thread here
+    thread.join().unwrap();
+
+    // new slots should be rooted after hard-fork cluster relaunch
+    cluster
+        .lock()
+        .unwrap()
+        .check_for_new_roots(16, &"hard fork");
+}
+
+#[test]
 #[serial]
 fn test_no_optimistic_confirmation_violation_with_tower() {
     do_test_optimistic_confirmation_violation_with_or_without_tower(true);
