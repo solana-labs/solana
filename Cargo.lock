@@ -4580,6 +4580,7 @@ dependencies = [
 name = "solana-program-test"
 version = "1.5.0"
 dependencies = [
+ "async-trait",
  "base64 0.12.3",
  "chrono",
  "chrono-humanize",
@@ -4591,6 +4592,7 @@ dependencies = [
  "solana-program 1.5.0",
  "solana-runtime",
  "solana-sdk",
+ "tokio 0.3.2",
 ]
 
 [[package]]
