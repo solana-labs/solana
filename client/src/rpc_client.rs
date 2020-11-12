@@ -353,6 +353,38 @@ impl RpcClient {
         self.send(RpcRequest::GetVoteAccounts, json!([commitment_config]))
     }
 
+    pub fn wait_for_max_stake(
+        &self,
+        commitment: CommitmentConfig,
+        max_stake_percent: f32,
+    ) -> ClientResult<()> {
+        let mut current_percent;
+        loop {
+            let vote_accounts = self.get_vote_accounts_with_commitment(commitment)?;
+
+            let mut max = 0;
+            let total_active_stake = vote_accounts
+                .current
+                .iter()
+                .chain(vote_accounts.delinquent.iter())
+                .map(|vote_account| {
+                    max = std::cmp::max(max, vote_account.activated_stake);
+                    vote_account.activated_stake
+                })
+                .sum::<u64>();
+            current_percent = 100f32 * max as f32 / total_active_stake as f32;
+            if current_percent < max_stake_percent {
+                break;
+            }
+            info!(
+                "Waiting for stake to drop below {} current: {:.1}",
+                max_stake_percent, current_percent
+            );
+            sleep(Duration::from_secs(10));
+        }
+        Ok(())
+    }
+
     pub fn get_cluster_nodes(&self) -> ClientResult<Vec<RpcContactInfo>> {
         self.send(RpcRequest::GetClusterNodes, Value::Null)
     }

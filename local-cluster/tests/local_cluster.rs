@@ -1341,6 +1341,26 @@ fn test_faulty_node(faulty_node_type: BroadcastStageType) {
 }
 
 #[test]
+fn test_wait_for_max_stake() {
+    solana_logger::setup();
+    let mut validator_config = ValidatorConfig::default();
+    validator_config.rpc_config.enable_validator_exit = true;
+    let config = ClusterConfig {
+        cluster_lamports: 10_000,
+        node_stakes: vec![100; 4],
+        validator_configs: vec![validator_config; 4],
+        ..ClusterConfig::default()
+    };
+    let cluster = LocalCluster::new(&config);
+    let client = RpcClient::new_socket(cluster.entry_point_info.rpc);
+
+    assert!(client
+        .wait_for_max_stake(CommitmentConfig::default(), 33.0f32)
+        .is_ok());
+    assert!(client.get_slot().unwrap() > 10);
+}
+
+#[test]
 // Test that when a leader is leader for banks B_i..B_{i+n}, and B_i is not
 // votable, then B_{i+1} still chains to B_i
 fn test_no_voting() {

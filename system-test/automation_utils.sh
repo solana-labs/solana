@@ -69,18 +69,8 @@ function wait_for_bootstrap_validator_stake_drop {
   source "${REPO_ROOT}"/net/common.sh
   loadConfigFile
 
-  while true; do
   # shellcheck disable=SC2154
-    bootstrap_validator_validator_info="$(ssh "${sshOptions[@]}" "${validatorIpList[0]}" '$HOME/.cargo/bin/solana --url http://127.0.0.1:8899 validators | grep "$($HOME/.cargo/bin/solana-keygen pubkey ~/solana/config/bootstrap-validator/identity.json)"')"
-    bootstrap_validator_stake_percentage="$(echo "$bootstrap_validator_validator_info" | awk '{gsub(/[\(,\),\%]/,""); print $9}')"
-
-    if [[ $(echo "$bootstrap_validator_stake_percentage < $max_stake" | bc) -ne 0 ]]; then
-      echo "Bootstrap validator stake has fallen below $max_stake to $bootstrap_validator_stake_percentage"
-      break
-    fi
-    echo "Max bootstrap validator stake: $max_stake.  Current stake: $bootstrap_validator_stake_percentage.  Sleeping 30s for stake to distribute."
-    sleep 30
-  done
+  ssh "${sshOptions[@]}" "${validatorIpList[0]}" '$HOME/.cargo/bin/solana wait-for-max-stake $max_stake --url http://127.0.0.1:8899'
 }
 
 function get_slot {

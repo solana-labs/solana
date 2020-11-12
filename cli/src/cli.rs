@@ -149,6 +149,9 @@ pub enum CliCommand {
         limit: usize,
         show_transactions: bool,
     },
+    WaitForMaxStake {
+        max_stake_percent: f32,
+    },
     // Nonce commands
     AuthorizeNonceAccount {
         nonce_account: Pubkey,
@@ -622,6 +625,13 @@ pub fn parse_command(
                     allow_excessive_balance: matches.is_present("allow_excessive_balance"),
                 },
                 signers,
+            })
+        }
+        ("wait-for-max-stake", Some(matches)) => {
+            let max_stake_percent = value_t_or_exit!(matches, "max_percent", f32);
+            Ok(CliCommandInfo {
+                command: CliCommand::WaitForMaxStake { max_stake_percent },
+                signers: vec![],
             })
         }
         // Stake Commands
@@ -1565,6 +1575,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *use_lamports_unit,
             vote_account_pubkeys.as_deref(),
         ),
+        CliCommand::WaitForMaxStake { max_stake_percent } => {
+            process_wait_for_max_stake(&rpc_client, config, *max_stake_percent)
+        }
         CliCommand::ShowValidators { use_lamports_unit } => {
             process_show_validators(&rpc_client, config, *use_lamports_unit)
         }
