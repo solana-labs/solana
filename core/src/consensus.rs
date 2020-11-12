@@ -1182,6 +1182,9 @@ pub enum TowerError {
 
     #[error("The tower is fatally inconsistent with blockstore: {0}")]
     FatallyInconsistent(&'static str),
+
+    #[error("The tower is useless because of new hard fork: {0}")]
+    HardFork(Slot),
 }
 
 impl TowerError {
