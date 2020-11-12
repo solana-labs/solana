@@ -45,7 +45,10 @@ pub const HEAP_LENGTH: usize = 32 * 1024;
 #[macro_export]
 macro_rules! entrypoint {
     ($process_instruction:ident) => {
-        #[cfg(all(not(feature = "custom-heap"), not(test)))]
+        /// A program can provide their own custom heap implementation by adding
+        /// a `custom-heap` feature to `Cargo.toml` and implementing their own
+        /// `global_allocator`.
+        #[cfg(all(not(feature = "custom-heap"), target_arch = "bpf"))]
         #[global_allocator]
         static A: $crate::entrypoint::BumpAllocator = $crate::entrypoint::BumpAllocator {
             start: $crate::entrypoint::HEAP_START_ADDRESS,
