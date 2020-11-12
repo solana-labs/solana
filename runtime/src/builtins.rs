@@ -2,7 +2,54 @@ use crate::{
     bank::{Builtin, Builtins, Entrypoint},
     feature_set, system_instruction_processor,
 };
+<<<<<<< HEAD
 use solana_sdk::{pubkey::Pubkey, system_program};
+=======
+use solana_sdk::{
+    feature_set,
+    instruction::InstructionError,
+    keyed_account::KeyedAccount,
+    process_instruction::{stable_log, InvokeContext, ProcessInstructionWithContext},
+    pubkey::Pubkey,
+    system_program,
+};
+
+fn process_instruction_with_program_logging(
+    process_instruction: ProcessInstructionWithContext,
+    program_id: &Pubkey,
+    keyed_accounts: &[KeyedAccount],
+    instruction_data: &[u8],
+    invoke_context: &mut dyn InvokeContext,
+) -> Result<(), InstructionError> {
+    let logger = invoke_context.get_logger();
+    stable_log::program_invoke(&logger, program_id, invoke_context.invoke_depth());
+
+    let result = process_instruction(program_id, keyed_accounts, instruction_data, invoke_context);
+
+    match &result {
+        Ok(()) => stable_log::program_success(&logger, program_id),
+        Err(err) => stable_log::program_failure(&logger, program_id, err),
+    }
+    result
+}
+
+macro_rules! with_program_logging {
+    ($process_instruction:expr) => {
+        |program_id: &Pubkey,
+         keyed_accounts: &[KeyedAccount],
+         instruction_data: &[u8],
+         invoke_context: &mut dyn InvokeContext| {
+            process_instruction_with_program_logging(
+                $process_instruction,
+                program_id,
+                keyed_accounts,
+                instruction_data,
+                invoke_context,
+            )
+        }
+    };
+}
+>>>>>>> b4deeb8e3... Add stable program logging for BPF and native programs
 
 /// Builtin programs that are always available
 fn genesis_builtins() -> Vec<Builtin> {
@@ -10,24 +57,42 @@ fn genesis_builtins() -> Vec<Builtin> {
         Builtin::new(
             "system_program",
             system_program::id(),
+<<<<<<< HEAD
             Entrypoint::Program(system_instruction_processor::process_instruction),
+=======
+            with_program_logging!(system_instruction_processor::process_instruction),
+>>>>>>> b4deeb8e3... Add stable program logging for BPF and native programs
         ),
         Builtin::new(
             "vote_program",
             solana_vote_program::id(),
+<<<<<<< HEAD
             Entrypoint::Program(solana_vote_program::vote_instruction::process_instruction),
+=======
+            with_program_logging!(solana_vote_program::vote_instruction::process_instruction),
+>>>>>>> b4deeb8e3... Add stable program logging for BPF and native programs
         ),
         // Remove legacy_stake_processor and move stake_instruction::process_instruction back to
         // genesis_builtins around the v1.6 timeframe
         Builtin::new(
             "stake_program",
             solana_stake_program::id(),
+<<<<<<< HEAD
             Entrypoint::Program(solana_stake_program::legacy_stake_processor::process_instruction),
+=======
+            with_program_logging!(
+                solana_stake_program::legacy_stake_processor::process_instruction
+            ),
+>>>>>>> b4deeb8e3... Add stable program logging for BPF and native programs
         ),
         Builtin::new(
             "config_program",
             solana_config_program::id(),
+<<<<<<< HEAD
             Entrypoint::Program(solana_config_program::config_processor::process_instruction),
+=======
+            with_program_logging!(solana_config_program::config_processor::process_instruction),
+>>>>>>> b4deeb8e3... Add stable program logging for BPF and native programs
         ),
     ]
 }

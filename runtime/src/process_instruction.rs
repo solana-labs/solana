@@ -47,6 +47,8 @@ pub trait InvokeContext {
     fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError>;
     /// Pop a program ID off of the invocation stack
     fn pop(&mut self);
+    /// Current depth of the invocation stake
+    fn invoke_depth(&self) -> usize;
     /// Verify and update PreAccount state based on program execution
     fn verify_and_update(
         &mut self,
@@ -162,8 +164,84 @@ pub trait ComputeMeter {
 /// Log messages
 pub trait Logger {
     fn log_enabled(&self) -> bool;
+<<<<<<< HEAD:runtime/src/process_instruction.rs
     /// Log a message
     fn log(&mut self, message: &str);
+=======
+
+    /// Log a message.
+    ///
+    /// Unless explicitly stated, log messages are not considered stable and may change in the
+    /// future as necessary
+    fn log(&self, message: &str);
+>>>>>>> b4deeb8e3... Add stable program logging for BPF and native programs:sdk/src/process_instruction.rs
+}
+
+///
+/// Stable program log messages
+///
+/// The format of these log messages should not be modified to avoid breaking downstream consumers
+/// of program logging
+///
+pub mod stable_log {
+    use super::*;
+
+    /// Log a program invoke.
+    ///
+    /// The general form is:
+    ///     "Program <address> invoke [<depth>]"
+    pub fn program_invoke(
+        logger: &Rc<RefCell<dyn Logger>>,
+        program_id: &Pubkey,
+        invoke_depth: usize,
+    ) {
+        if let Ok(logger) = logger.try_borrow_mut() {
+            if logger.log_enabled() {
+                logger.log(&format!("Program {} invoke [{}]", program_id, invoke_depth));
+            }
+        }
+    }
+
+    /// Log a message from the program itself.
+    ///
+    /// The general form is:
+    ///     "Program log: <program-generated output>"
+    /// That is, any program-generated output is guaranteed to be prefixed by "Program log: "
+    pub fn program_log(logger: &Rc<RefCell<dyn Logger>>, message: &str) {
+        if let Ok(logger) = logger.try_borrow_mut() {
+            if logger.log_enabled() {
+                logger.log(&format!("Program log: {}", message))
+            }
+        }
+    }
+
+    /// Log successful program execution.
+    ///
+    /// The general form is:
+    ///     "Program <address> success"
+    pub fn program_success(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey) {
+        if let Ok(logger) = logger.try_borrow_mut() {
+            if logger.log_enabled() {
+                logger.log(&format!("Program {} success", program_id));
+            }
+        }
+    }
+
+    /// Log program execution failure
+    ///
+    /// The general form is:
+    ///     "Program <address> failed: <program error details>"
+    pub fn program_failure(
+        logger: &Rc<RefCell<dyn Logger>>,
+        program_id: &Pubkey,
+        err: &InstructionError,
+    ) {
+        if let Ok(logger) = logger.try_borrow_mut() {
+            if logger.log_enabled() {
+                logger.log(&format!("Program {} failed: {}", program_id, err));
+            }
+        }
+    }
 }
 
 /// Program executor
@@ -177,3 +255,103 @@ pub trait Executor: Debug + Send + Sync {
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError>;
 }
+<<<<<<< HEAD:runtime/src/process_instruction.rs
+=======
+
+#[derive(Debug, Default, Clone)]
+pub struct MockComputeMeter {
+    pub remaining: u64,
+}
+impl ComputeMeter for MockComputeMeter {
+    fn consume(&mut self, amount: u64) -> Result<(), InstructionError> {
+        let exceeded = self.remaining < amount;
+        self.remaining = self.remaining.saturating_sub(amount);
+        if exceeded {
+            return Err(InstructionError::ComputationalBudgetExceeded);
+        }
+        Ok(())
+    }
+    fn get_remaining(&self) -> u64 {
+        self.remaining
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct MockLogger {
+    pub log: Rc<RefCell<Vec<String>>>,
+}
+impl Logger for MockLogger {
+    fn log_enabled(&self) -> bool {
+        true
+    }
+    fn log(&self, message: &str) {
+        self.log.borrow_mut().push(message.to_string());
+    }
+}
+
+pub struct MockInvokeContext {
+    pub key: Pubkey,
+    pub logger: MockLogger,
+    pub bpf_compute_budget: BpfComputeBudget,
+    pub compute_meter: MockComputeMeter,
+    pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
+    invoke_depth: usize,
+}
+impl Default for MockInvokeContext {
+    fn default() -> Self {
+        MockInvokeContext {
+            key: Pubkey::default(),
+            logger: MockLogger::default(),
+            bpf_compute_budget: BpfComputeBudget::default(),
+            compute_meter: MockComputeMeter {
+                remaining: std::i64::MAX as u64,
+            },
+            programs: vec![],
+            invoke_depth: 0,
+        }
+    }
+}
+impl InvokeContext for MockInvokeContext {
+    fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
+        self.invoke_depth += 1;
+        Ok(())
+    }
+    fn pop(&mut self) {
+        self.invoke_depth -= 1;
+    }
+    fn invoke_depth(&self) -> usize {
+        self.invoke_depth
+    }
+    fn verify_and_update(
+        &mut self,
+        _message: &Message,
+        _instruction: &CompiledInstruction,
+        _accounts: &[Rc<RefCell<Account>>],
+    ) -> Result<(), InstructionError> {
+        Ok(())
+    }
+    fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
+        Ok(&self.key)
+    }
+    fn get_programs(&self) -> &[(Pubkey, ProcessInstructionWithContext)] {
+        &self.programs
+    }
+    fn get_logger(&self) -> Rc<RefCell<dyn Logger>> {
+        Rc::new(RefCell::new(self.logger.clone()))
+    }
+    fn get_bpf_compute_budget(&self) -> &BpfComputeBudget {
+        &self.bpf_compute_budget
+    }
+    fn get_compute_meter(&self) -> Rc<RefCell<dyn ComputeMeter>> {
+        Rc::new(RefCell::new(self.compute_meter.clone()))
+    }
+    fn add_executor(&self, _pubkey: &Pubkey, _executor: Arc<dyn Executor>) {}
+    fn get_executor(&self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
+        None
+    }
+    fn record_instruction(&self, _instruction: &Instruction) {}
+    fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
+        true
+    }
+}
+>>>>>>> b4deeb8e3... Add stable program logging for BPF and native programs:sdk/src/process_instruction.rs

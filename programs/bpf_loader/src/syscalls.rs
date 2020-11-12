@@ -19,6 +19,10 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     instruction::{AccountMeta, Instruction, InstructionError},
     message::Message,
+<<<<<<< HEAD
+=======
+    process_instruction::{stable_log, ComputeMeter, InvokeContext, Logger},
+>>>>>>> b4deeb8e3... Add stable program logging for BPF and native programs
     program_error::ProgramError,
     pubkey::{Pubkey, PubkeyError},
 };
@@ -334,6 +338,7 @@ impl<'a> SyscallObject<BPFError> for SyscallLog<'a> {
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
         self.compute_meter.consume(self.cost)?;
+<<<<<<< HEAD
         let mut logger = self
             .logger
             .try_borrow_mut()
@@ -350,6 +355,18 @@ impl<'a> SyscallObject<BPFError> for SyscallLog<'a> {
                 },
             )?;
         }
+=======
+        translate_string_and_do(
+            addr,
+            len,
+            ro_regions,
+            &self.loader_id,
+            &mut |string: &str| {
+                stable_log::program_log(&self.logger, string);
+                Ok(0)
+            },
+        )?;
+>>>>>>> b4deeb8e3... Add stable program logging for BPF and native programs
         Ok(0)
     }
 }
@@ -372,6 +389,7 @@ impl SyscallObject<BPFError> for SyscallLogU64 {
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
         self.compute_meter.consume(self.cost)?;
+<<<<<<< HEAD
         let mut logger = self
             .logger
             .try_borrow_mut()
@@ -379,9 +397,15 @@ impl SyscallObject<BPFError> for SyscallLogU64 {
         if logger.log_enabled() {
             logger.log(&format!(
                 "Program log: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
+=======
+        stable_log::program_log(
+            &self.logger,
+            &format!(
+                "{:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
+>>>>>>> b4deeb8e3... Add stable program logging for BPF and native programs
                 arg1, arg2, arg3, arg4, arg5
-            ));
-        }
+            ),
+        );
         Ok(0)
     }
 }
@@ -405,6 +429,7 @@ impl<'a> SyscallObject<BPFError> for SyscallLogPubkey<'a> {
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
         self.compute_meter.consume(self.cost)?;
+<<<<<<< HEAD
         let mut logger = self
             .logger
             .try_borrow_mut()
@@ -413,6 +438,10 @@ impl<'a> SyscallObject<BPFError> for SyscallLogPubkey<'a> {
             let pubkey = translate_type!(Pubkey, pubkey_addr, ro_regions, self.loader_id)?;
             logger.log(&format!("Program log: {}", pubkey));
         }
+=======
+        let pubkey = translate_type!(Pubkey, pubkey_addr, ro_regions, self.loader_id)?;
+        stable_log::program_log(&self.logger, &pubkey.to_string());
+>>>>>>> b4deeb8e3... Add stable program logging for BPF and native programs
         Ok(0)
     }
 }

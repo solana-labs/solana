@@ -257,6 +257,9 @@ impl InvokeContext for ThisInvokeContext {
     fn pop(&mut self) {
         self.program_ids.pop();
     }
+    fn invoke_depth(&self) -> usize {
+        self.program_ids.len()
+    }
     fn verify_and_update(
         &mut self,
         message: &Message,
@@ -314,8 +317,13 @@ impl Logger for ThisLogger {
     fn log_enabled(&self) -> bool {
         log_enabled!(log::Level::Info) || self.log_collector.is_some()
     }
+<<<<<<< HEAD
     fn log(&mut self, message: &str) {
         info!("{}", message);
+=======
+    fn log(&self, message: &str) {
+        debug!("{}", message);
+>>>>>>> b4deeb8e3... Add stable program logging for BPF and native programs
         if let Some(log_collector) = &self.log_collector {
             log_collector.log(message);
         }
