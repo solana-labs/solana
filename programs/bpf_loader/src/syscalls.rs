@@ -21,7 +21,7 @@ use solana_sdk::{
     instruction::{AccountMeta, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     message::Message,
-    process_instruction::{ComputeMeter, InvokeContext, Logger},
+    process_instruction::{stable_log, ComputeMeter, InvokeContext, Logger},
     program_error::ProgramError,
     pubkey::{Pubkey, PubkeyError},
 };
@@ -371,22 +371,16 @@ impl<'a> SyscallObject<BPFError> for SyscallLog<'a> {
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
         self.compute_meter.consume(self.cost)?;
-        let logger = self
-            .logger
-            .try_borrow_mut()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
-        if logger.log_enabled() {
-            translate_string_and_do(
-                addr,
-                len,
-                ro_regions,
-                &self.loader_id,
-                &mut |string: &str| {
-                    logger.log(&format!("Program log: {}", string));
-                    Ok(0)
-                },
-            )?;
-        }
+        translate_string_and_do(
+            addr,
+            len,
+            ro_regions,
+            &self.loader_id,
+            &mut |string: &str| {
+                stable_log::program_log(&self.logger, string);
+                Ok(0)
+            },
+        )?;
         Ok(0)
     }
 }
@@ -409,16 +403,13 @@ impl SyscallObject<BPFError> for SyscallLogU64 {
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
         self.compute_meter.consume(self.cost)?;
-        let logger = self
-            .logger
-            .try_borrow_mut()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
-        if logger.log_enabled() {
-            logger.log(&format!(
-                "Program log: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
+        stable_log::program_log(
+            &self.logger,
+            &format!(
+                "{:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
                 arg1, arg2, arg3, arg4, arg5
-            ));
-        }
+            ),
+        );
         Ok(0)
     }
 }
@@ -474,14 +465,8 @@ impl<'a> SyscallObject<BPFError> for SyscallLogPubkey<'a> {
         _rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
         self.compute_meter.consume(self.cost)?;
-        let logger = self
-            .logger
-            .try_borrow_mut()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
-        if logger.log_enabled() {
-            let pubkey = translate_type!(Pubkey, pubkey_addr, ro_regions, self.loader_id)?;
-            logger.log(&format!("Program log: {}", pubkey));
-        }
+        let pubkey = translate_type!(Pubkey, pubkey_addr, ro_regions, self.loader_id)?;
+        stable_log::program_log(&self.logger, &pubkey.to_string());
         Ok(0)
     }
 }

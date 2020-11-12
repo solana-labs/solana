@@ -79,7 +79,7 @@ up)
 
   (
     set -x
-    RUST_LOG=${RUST_LOG:-solana=info}
+    RUST_LOG=${RUST_LOG:-solana=info,solana_runtime::message_processor=debug}
     ARGS=(
       --detach
       --name solana-localnet

@@ -256,6 +256,9 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn pop(&mut self) {
         self.program_ids.pop();
     }
+    fn invoke_depth(&self) -> usize {
+        self.program_ids.len()
+    }
     fn verify_and_update(
         &mut self,
         message: &Message,
@@ -314,7 +317,7 @@ impl Logger for ThisLogger {
         log_enabled!(log::Level::Info) || self.log_collector.is_some()
     }
     fn log(&self, message: &str) {
-        info!("{}", message);
+        debug!("{}", message);
         if let Some(log_collector) = &self.log_collector {
             log_collector.log(message);
         }
