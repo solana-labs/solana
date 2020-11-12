@@ -1,13 +1,15 @@
 //! The solana-program-test provides a BanksClient-based test framework BPF programs
 
+use async_trait::async_trait;
 use chrono_humanize::{Accuracy, HumanTime, Tense};
 use log::*;
 use solana_banks_client::start_client;
 use solana_banks_server::banks_server::start_local_server;
 use solana_program::{
-    account_info::AccountInfo, entrypoint::ProgramResult, hash::Hash, instruction::Instruction,
-    instruction::InstructionError, message::Message, native_token::sol_to_lamports,
-    program_error::ProgramError, program_stubs, pubkey::Pubkey, rent::Rent,
+    account_info::AccountInfo, entrypoint::ProgramResult, fee_calculator::FeeCalculator,
+    hash::Hash, instruction::Instruction, instruction::InstructionError, message::Message,
+    native_token::sol_to_lamports, program_error::ProgramError, program_stubs, pubkey::Pubkey,
+    rent::Rent,
 };
 use solana_runtime::{
     bank::{Bank, Builtin},
@@ -26,10 +28,11 @@ use std::{
     collections::HashMap,
     convert::TryFrom,
     fs::File,
-    io::Read,
+    io::{self, Read},
     path::{Path, PathBuf},
     rc::Rc,
     sync::{Arc, RwLock},
+    time::{Duration, Instant},
 };
 
 // Export types so test clients can limit their solana crate dependencies
@@ -579,6 +582,7 @@ impl ProgramTest {
         let payer = gci.mint_keypair;
         debug!("Payer address: {}", payer.pubkey());
         debug!("Genesis config: {}", genesis_config);
+        let target_tick_duration = genesis_config.poh_config.target_tick_duration;
 
         let mut bank = Bank::new(&genesis_config);
 
@@ -628,10 +632,12 @@ impl ProgramTest {
         // non-zero fee calculator
         let last_blockhash = bank.last_blockhash();
         while last_blockhash == bank.last_blockhash() {
-            bank.register_tick(&Hash::default());
+            bank.register_tick(&Hash::new_unique());
         }
+        let last_blockhash = bank.last_blockhash();
+        // Make sure the new last_blockhash now requires a fee
         assert_ne!(
-            bank.get_fee_calculator(&bank.last_blockhash())
+            bank.get_fee_calculator(&last_blockhash)
                 .expect("fee_calculator")
                 .lamports_per_signature,
             0
@@ -639,11 +645,61 @@ impl ProgramTest {
 
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let transport = start_local_server(&bank_forks).await;
-        let mut banks_client = start_client(transport)
+        let banks_client = start_client(transport)
             .await
             .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
 
-        let recent_blockhash = banks_client.get_recent_blockhash().await.unwrap();
-        (banks_client, payer, recent_blockhash)
+        // Run a simulated PohService to provide the client with new blockhashes.  New blockhashes
+        // are required when sending multiple otherwise identical transactions in series from a
+        // test
+        tokio::spawn(async move {
+            loop {
+                bank_forks
+                    .read()
+                    .unwrap()
+                    .working_bank()
+                    .register_tick(&Hash::new_unique());
+                tokio::time::sleep(target_tick_duration).await;
+            }
+        });
+
+        (banks_client, payer, last_blockhash)
+    }
+}
+
+#[async_trait]
+pub trait ProgramTestBanksClientExt {
+    async fn get_new_blockhash(&mut self, blockhash: &Hash) -> io::Result<(Hash, FeeCalculator)>;
+}
+
+#[async_trait]
+impl ProgramTestBanksClientExt for BanksClient {
+    /// Get a new blockhash, similar in spirit to RpcClient::get_new_blockhash()
+    ///
+    /// This probably should eventually be moved into BanksClient proper in some form
+    async fn get_new_blockhash(&mut self, blockhash: &Hash) -> io::Result<(Hash, FeeCalculator)> {
+        let mut num_retries = 0;
+        let start = Instant::now();
+        while start.elapsed().as_secs() < 5 {
+            if let Ok((fee_calculator, new_blockhash, _slot)) = self.get_fees().await {
+                if new_blockhash != *blockhash {
+                    return Ok((new_blockhash, fee_calculator));
+                }
+            }
+            debug!("Got same blockhash ({:?}), will retry...", blockhash);
+
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            num_retries += 1;
+        }
+
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!(
+                "Unable to get new blockhash after {}ms (retried {} times), stuck at {}",
+                start.elapsed().as_millis(),
+                num_retries,
+                blockhash
+            ),
+        ))
     }
 }
