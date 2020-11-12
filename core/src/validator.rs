@@ -58,6 +58,7 @@ use solana_sdk::{
     timing::timestamp,
 };
 use solana_vote_program::vote_state::VoteState;
+use std::time::Instant;
 use std::{
     collections::HashSet,
     net::SocketAddr,
@@ -914,24 +915,36 @@ fn new_banks_from_ledger(
     )
 }
 
-fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_version: u16) {
-    use std::time::Instant;
-    let blockstore = Blockstore::open(ledger_path).unwrap();
-    let mut do_copy_and_clear = false;
-
+fn blockstore_contains_bad_shred_version(
+    blockstore: &Blockstore,
+    start_slot: Slot,
+    shred_version: u16,
+) -> bool {
+    let now = Instant::now();
     // Search for shreds with incompatible version in blockstore
     if let Ok(slot_meta_iterator) = blockstore.slot_meta_iterator(start_slot) {
+        info!("Searching for incorrect shreds..");
         for (slot, _meta) in slot_meta_iterator {
             if let Ok(shreds) = blockstore.get_data_shreds_for_slot(slot, 0) {
                 for shred in &shreds {
                     if shred.version() != shred_version {
-                        do_copy_and_clear = true;
-                        break;
+                        return true;
                     }
                 }
             }
+            if now.elapsed().as_secs() > 60 {
+                info!("Didn't find incorrect shreds after 60 seconds, aborting");
+                return false;
+            }
         }
     }
+    false
+}
+
+fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_version: u16) {
+    let blockstore = Blockstore::open(ledger_path).unwrap();
+    let do_copy_and_clear =
+        blockstore_contains_bad_shred_version(&blockstore, start_slot, shred_version);
 
     // If found, then copy shreds to another db and clear from start_slot
     if do_copy_and_clear {
