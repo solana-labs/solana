@@ -639,7 +639,7 @@ Result:
 
 #### Transaction Structure
 
-Transactions are quite different from those on other blockchains. Be sure to review [Anatomy of a Transaction](../transaction.md) to learn about transactions on Solana.
+Transactions are quite different from those on other blockchains. Be sure to review [Anatomy of a Transaction](developing/programming-model/transactions.md) to learn about transactions on Solana.
 
 The JSON structure of a transaction is defined as follows:
 

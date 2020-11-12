@@ -113,7 +113,7 @@ and then it will be submitted to the network.
 ## Staking SOL Tokens
 SolFlare supports creating and managing stake accounts and delegations.  To learn
 about how staking on Solana works in general, check out our
-[Staking Guide](../staking.md).
+[Staking Guide](../staking).
 
 ### Create a Stake Account
 You can use some of the SOL tokens in your wallet to create a new stake account.
@@ -129,7 +129,7 @@ After you submit and [sign the transaction](#signing-a-transaction) you will see
 your new stake account appear in the box labeled "Your Staking Accounts".
 
 Stake accounts created on SolFlare set your wallet address as the
-[staking and withdrawing authority](/staking/stake-accounts#understanding-account-authorities)
+[staking and withdrawing authority](../staking/stake-accounts#understanding-account-authorities)
 for your new account, which gives your wallet's key the authority to sign
 for any transactions related to the new stake account.
 
@@ -141,13 +141,13 @@ exist at a different address from your wallet.
 SolFlare will locate any display all stake accounts on the
 [selected network](#select-a-network)
 for which your wallet address is assigned as the
-[stake authority](../staking/stake-accounts.md#understanding-account-authorities).
+[stake authority](../staking/stake-accounts#understanding-account-authorities).
 Stake accounts that were created outside of SolFlare will also be displayed and
 can be managed as long as the wallet you logged in with is assigned as the stake
 authority.
 
 ### Delegate tokens in a Stake Account
-Once you have [selected a validator](../staking.md#select-a-validator), you may
+Once you have [selected a validator](../staking#select-a-validator), you may
 delegate the tokens in one of your stake accounts to them.  From the Staking
 dashboard, click "Delegate" at the right side of a displayed stake account.
 Select the validator you wish to delegate to from the drop down list and click

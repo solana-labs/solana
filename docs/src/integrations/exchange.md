@@ -150,11 +150,11 @@ generate a Solana keypair using any of our [wallet tools](../wallet-guide/cli.md
 
 We recommend using a unique deposit account for each of your users.
 
-Solana accounts are charged [rent](../apps/rent.md) on creation and once per
+Solana accounts are charged [rent](developing/programming-model/accounts.md#rent) on creation and once per
 epoch, but they can be made rent-exempt if they contain 2-years worth of rent in
 SOL. In order to find the minimum rent-exempt balance for your deposit accounts,
 query the
-[`getMinimumBalanceForRentExemption` endpoint](../apps/jsonrpc-api.md#getminimumbalanceforrentexemption):
+[`getMinimumBalanceForRentExemption` endpoint](developing/clients/jsonrpc-api.md#getminimumbalanceforrentexemption):
 
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getMinimumBalanceForRentExemption","params":[0]}' localhost:8899
@@ -179,7 +179,7 @@ The easiest way to track all the deposit accounts for your exchange is to poll
 for each confirmed block and inspect for addresses of interest, using the
 JSON-RPC service of your Solana api node.
 
-- To identify which blocks are available, send a [`getConfirmedBlocks` request](../apps/jsonrpc-api.md#getconfirmedblocks),
+- To identify which blocks are available, send a [`getConfirmedBlocks` request](developing/clients/jsonrpc-api.md#getconfirmedblocks),
   passing the last block you have already processed as the start-slot parameter:
 
 ```bash
@@ -190,7 +190,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 
 Not every slot produces a block, so there may be gaps in the sequence of integers.
 
-- For each block, request its contents with a [`getConfirmedBlock` request](../apps/jsonrpc-api.md#getconfirmedblock):
+- For each block, request its contents with a [`getConfirmedBlock` request](developing/clients/jsonrpc-api.md#getconfirmedblock):
 
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedBlock","params":[5, "json"]}' localhost:8899
@@ -273,7 +273,7 @@ can request the block from RPC in binary format, and parse it using either our
 
 You can also query the transaction history of a specific address.
 
-- Send a [`getConfirmedSignaturesForAddress`](../apps/jsonrpc-api.md#getconfirmedsignaturesforaddress)
+- Send a [`getConfirmedSignaturesForAddress`](developing/clients/jsonrpc-api.md#getconfirmedsignaturesforaddress)
   request to the api node, specifying a range of recent slots:
 
 ```bash
@@ -291,7 +291,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 ```
 
 - For each signature returned, get the transaction details by sending a
-  [`getConfirmedTransaction`](../apps/jsonrpc-api.md#getconfirmedtransaction) request:
+  [`getConfirmedTransaction`](developing/clients/jsonrpc-api.md#getconfirmedtransaction) request:
 
 ```bash
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedTransaction","params":["dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6", "json"]}' localhost:8899
@@ -388,7 +388,7 @@ expires before retrying a withdrawal transfer that does not appear to have been
 confirmed or finalized by the cluster. Otherwise, you risk a double spend. See
 more on [blockhash expiration](#blockhash-expiration) below.
 
-First, get a recent blockhash using the [`getFees` endpoint](../apps/jsonrpc-api.md#getfees)
+First, get a recent blockhash using the [`getFees` endpoint](developing/clients/jsonrpc-api.md#getfees)
 or the CLI command:
 
 ```bash
@@ -403,12 +403,12 @@ solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --blockhash <RECENT_BLOCKHASH>
 ```
 
 You can also build, sign, and serialize the transaction manually, and fire it off to
-the cluster using the JSON-RPC [`sendTransaction` endpoint](../apps/jsonrpc-api.md#sendtransaction).
+the cluster using the JSON-RPC [`sendTransaction` endpoint](developing/clients/jsonrpc-api.md#sendtransaction).
 
 #### Transaction Confirmations & Finality
 
 Get the status of a batch of transactions using the
-[`getSignatureStatuses` JSON-RPC endpoint](../apps/jsonrpc-api.md#getsignaturestatuses).
+[`getSignatureStatuses` JSON-RPC endpoint](developing/clients/jsonrpc-api.md#getsignaturestatuses).
 The `confirmations` field reports how many
 [confirmed blocks](../terminology.md#confirmed-block) have elapsed since the
 transaction was processed. If `confirmations: null`, it is [finalized](../terminology.md#finality).
@@ -448,15 +448,15 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 #### Blockhash Expiration
 
 When you request a recent blockhash for your withdrawal transaction using the
-[`getFees` endpoint](../apps/jsonrpc-api.md#getfees) or `solana fees`, the
+[`getFees` endpoint](developing/clients/jsonrpc-api.md#getfees) or `solana fees`, the
 response will include the `lastValidSlot`, the last slot in which the blockhash
 will be valid. You can check the cluster slot with a
-[`getSlot` query](../apps/jsonrpc-api.md#getslot); once the cluster slot is
+[`getSlot` query](developing/clients/jsonrpc-api.md#getslot); once the cluster slot is
 greater than `lastValidSlot`, the withdrawal transaction using that blockhash
 should never succeed.
 
 You can also doublecheck whether a particular blockhash is still valid by sending a
-[`getFeeCalculatorForBlockhash`](../apps/jsonrpc-api.md#getfeecalculatorforblockhash)
+[`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash)
 request with the blockhash as a parameter. If the response value is null, the
 blockhash is expired, and the withdrawal transaction should never succeed.
 
@@ -580,7 +580,7 @@ accounts do not:
 deposited.   Token accounts can be created explicitly with the
 `spl-token create-account` command, or implicitly by the
 `spl-token transfer --fund-recipient ...` command.
-1. SPL Token accounts must remain [rent-exempt](https://docs.solana.com/apps/rent#rent-exemption)
+1. SPL Token accounts must remain [rent-exempt](developing/programming-model/accounts.md#rent-exemption)
 for the duration of their existence and therefore require a small amount of
 native SOL tokens be deposited at account creation. For SPL Token v2 accounts,
 this amount is 0.00203928 SOL (2,039,280 lamports).
@@ -657,7 +657,7 @@ method described above. Each new block should be scanned for successful transact
 issuing SPL Token [Transfer](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L92)
 or [Transfer2](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L252)
 instructions referencing user accounts, then querying the
-[token account balance](https://docs.solana.com/apps/jsonrpc-api#gettokenaccountbalance)
+[token account balance](developing/clients/jsonrpc-api.md#gettokenaccountbalance)
 updates.
 
 [Considerations](https://github.com/solana-labs/solana/issues/12318) are being
