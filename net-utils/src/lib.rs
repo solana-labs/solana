@@ -32,7 +32,7 @@ fn ip_echo_server_request(
     ip_echo_server_addr: &SocketAddr,
     msg: IpEchoServerMessage,
 ) -> Result<IpAddr, String> {
-    let mut data = Vec::new();
+    let mut data = vec![0u8; ip_echo_server_reply_length()];
 
     let timeout = Duration::new(5, 0);
     TcpStream::connect_timeout(ip_echo_server_addr, timeout)
@@ -49,7 +49,7 @@ fn ip_echo_server_request(
             stream.set_read_timeout(Some(Duration::new(10, 0)))?;
             stream.write_all(&bytes)?;
             stream.shutdown(std::net::Shutdown::Write)?;
-            stream.read_to_end(&mut data)
+            stream.read(data.as_mut_slice())
         })
         .and_then(|_| {
             // It's common for users to accidentally confuse the validator's gossip port and JSON
