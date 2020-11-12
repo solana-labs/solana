@@ -22,6 +22,8 @@ pub struct UdpSocketPair {
 
 pub type PortRange = (u16, u16);
 
+pub(crate) const HEADER_LENGTH: usize = 4;
+
 fn ip_echo_server_request(
     ip_echo_server_addr: &SocketAddr,
     msg: IpEchoServerMessage,
@@ -31,7 +33,8 @@ fn ip_echo_server_request(
     let timeout = Duration::new(5, 0);
     TcpStream::connect_timeout(ip_echo_server_addr, timeout)
         .and_then(|mut stream| {
-            let mut bytes = vec![0; 4]; // Start with 4 null bytes to avoid looking like an HTTP GET/POST request
+            // Start with HEADER_LENGTH null bytes to avoid looking like an HTTP GET/POST request
+            let mut bytes = vec![0; HEADER_LENGTH];
 
             bytes.append(&mut bincode::serialize(&msg).expect("serialize IpEchoServerMessage"));
 
@@ -48,14 +51,15 @@ fn ip_echo_server_request(
             // It's common for users to accidentally confuse the validator's gossip port and JSON
             // RPC port.  Attempt to detect when this occurs by looking for the standard HTTP
             // response header and provide the user with a helpful error message
-            if data.len() < 4 {
+            if data.len() < HEADER_LENGTH {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
                     format!("Response too short, received {} bytes", data.len()),
                 ));
             }
 
-            let response_header: String = data[0..4].iter().map(|b| *b as char).collect();
+            let response_header: String =
+                data[0..HEADER_LENGTH].iter().map(|b| *b as char).collect();
             if response_header != "\0\0\0\0" {
                 if response_header == "HTTP" {
                     let http_response = data.iter().map(|b| *b as char).collect::<String>();
@@ -76,7 +80,7 @@ fn ip_echo_server_request(
                 ));
             }
 
-            bincode::deserialize(&data[4..]).map_err(|err| {
+            bincode::deserialize(&data[HEADER_LENGTH..]).map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
                     format!("Failed to deserialize: {:?}", err),
