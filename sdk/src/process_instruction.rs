@@ -33,6 +33,8 @@ pub trait InvokeContext {
     fn push(&mut self, key: &Pubkey) -> Result<(), InstructionError>;
     /// Pop a program ID off of the invocation stack
     fn pop(&mut self);
+    /// Current depth of the invocation stake
+    fn invoke_depth(&self) -> usize;
     /// Verify and update PreAccount state based on program execution
     fn verify_and_update(
         &mut self,
@@ -155,8 +157,79 @@ pub trait ComputeMeter {
 /// Log messages
 pub trait Logger {
     fn log_enabled(&self) -> bool;
-    /// Log a message
+
+    /// Log a message.
+    ///
+    /// Unless explicitly stated, log messages are not considered stable and may change in the
+    /// future as necessary
     fn log(&self, message: &str);
+}
+
+///
+/// Stable program log messages
+///
+/// The format of these log messages should not be modified to avoid breaking downstream consumers
+/// of program logging
+///
+pub mod stable_log {
+    use super::*;
+
+    /// Log a program invoke.
+    ///
+    /// The general form is:
+    ///     "Program <address> invoke [<depth>]"
+    pub fn program_invoke(
+        logger: &Rc<RefCell<dyn Logger>>,
+        program_id: &Pubkey,
+        invoke_depth: usize,
+    ) {
+        if let Ok(logger) = logger.try_borrow_mut() {
+            if logger.log_enabled() {
+                logger.log(&format!("Program {} invoke [{}]", program_id, invoke_depth));
+            }
+        }
+    }
+
+    /// Log a message from the program itself.
+    ///
+    /// The general form is:
+    ///     "Program log: <program-generated output>"
+    /// That is, any program-generated output is guaranteed to be prefixed by "Program log: "
+    pub fn program_log(logger: &Rc<RefCell<dyn Logger>>, message: &str) {
+        if let Ok(logger) = logger.try_borrow_mut() {
+            if logger.log_enabled() {
+                logger.log(&format!("Program log: {}", message))
+            }
+        }
+    }
+
+    /// Log successful program execution.
+    ///
+    /// The general form is:
+    ///     "Program <address> success"
+    pub fn program_success(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey) {
+        if let Ok(logger) = logger.try_borrow_mut() {
+            if logger.log_enabled() {
+                logger.log(&format!("Program {} success", program_id));
+            }
+        }
+    }
+
+    /// Log program execution failure
+    ///
+    /// The general form is:
+    ///     "Program <address> failed: <program error details>"
+    pub fn program_failure(
+        logger: &Rc<RefCell<dyn Logger>>,
+        program_id: &Pubkey,
+        err: &InstructionError,
+    ) {
+        if let Ok(logger) = logger.try_borrow_mut() {
+            if logger.log_enabled() {
+                logger.log(&format!("Program {} failed: {}", program_id, err));
+            }
+        }
+    }
 }
 
 /// Program executor
@@ -208,6 +281,7 @@ pub struct MockInvokeContext {
     pub bpf_compute_budget: BpfComputeBudget,
     pub compute_meter: MockComputeMeter,
     pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
+    invoke_depth: usize,
 }
 impl Default for MockInvokeContext {
     fn default() -> Self {
@@ -219,14 +293,21 @@ impl Default for MockInvokeContext {
                 remaining: std::i64::MAX as u64,
             },
             programs: vec![],
+            invoke_depth: 0,
         }
     }
 }
 impl InvokeContext for MockInvokeContext {
     fn push(&mut self, _key: &Pubkey) -> Result<(), InstructionError> {
+        self.invoke_depth += 1;
         Ok(())
     }
-    fn pop(&mut self) {}
+    fn pop(&mut self) {
+        self.invoke_depth -= 1;
+    }
+    fn invoke_depth(&self) -> usize {
+        self.invoke_depth
+    }
     fn verify_and_update(
         &mut self,
         _message: &Message,
