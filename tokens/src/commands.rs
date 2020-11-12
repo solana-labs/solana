@@ -11,7 +11,9 @@ use indexmap::IndexMap;
 use indicatif::{ProgressBar, ProgressStyle};
 use pickledb::PickleDb;
 use serde::{Deserialize, Serialize};
-use solana_account_decoder::parse_token::{pubkey_from_spl_token_v2_0, spl_token_v2_0_pubkey};
+use solana_account_decoder::parse_token::{
+    pubkey_from_spl_token_v2_0, spl_token_v2_0_pubkey, token_amount_to_ui_amount,
+};
 use solana_banks_client::{BanksClient, BanksClientExt};
 use solana_sdk::{
     commitment_config::CommitmentLevel,
@@ -31,7 +33,10 @@ use solana_transaction_status::parse_token::spl_token_v2_0_instruction;
 use spl_associated_token_account_v1_0::{
     create_associated_token_account, get_associated_token_address,
 };
-use spl_token_v2_0::solana_program::program_error::ProgramError;
+use spl_token_v2_0::{
+    solana_program::{program_error::ProgramError, program_pack::Pack},
+    state::Account as SplTokenAccount,
+};
 use std::{
     cmp::{self},
     io,
@@ -635,33 +640,79 @@ async fn check_payer_balances(
     Ok(())
 }
 
-pub async fn process_balances(
-    client: &mut BanksClient,
-    args: &BalancesArgs,
-) -> Result<(), csv::Error> {
+pub async fn process_balances(client: &mut BanksClient, args: &BalancesArgs) -> Result<(), Error> {
     let allocations: Vec<Allocation> = read_allocations(&args.input_csv, None)?;
     let allocations = merge_allocations(&allocations);
+
+    let token = if let Some(spl_token_args) = &args.spl_token_args {
+        spl_token_args.mint.to_string()
+    } else {
+        "◎".to_string()
+    };
+    println!("{} {}", style("Token:").bold(), token);
 
     println!(
         "{}",
         style(format!(
             "{:<44}  {:>24}  {:>24}  {:>24}",
-            "Recipient", "Expected Balance (◎)", "Actual Balance (◎)", "Difference (◎)"
+            "Recipient", "Expected Balance", "Actual Balance", "Difference"
         ))
         .bold()
     );
 
     for allocation in &allocations {
-        let address = allocation.recipient.parse().unwrap();
-        let expected = lamports_to_sol(sol_to_lamports(allocation.amount));
-        let actual = lamports_to_sol(client.get_balance(address).await.unwrap());
-        println!(
-            "{:<44}  {:>24.9}  {:>24.9}  {:>24.9}",
-            allocation.recipient,
-            expected,
-            actual,
-            actual - expected
-        );
+        let address: Pubkey = allocation.recipient.parse().unwrap();
+        if let Some(spl_token_args) = &args.spl_token_args {
+            let expected = allocation.amount;
+            let associated_token_address = get_associated_token_address(
+                &spl_token_v2_0_pubkey(&address),
+                &spl_token_v2_0_pubkey(&spl_token_args.mint),
+            );
+            let recipient_account = client
+                .get_account(pubkey_from_spl_token_v2_0(&associated_token_address))
+                .await?
+                .unwrap_or_default();
+            let (actual, difference) =
+                if let Ok(recipient_token) = SplTokenAccount::unpack(&recipient_account.data) {
+                    let actual =
+                        token_amount_to_ui_amount(recipient_token.amount, spl_token_args.decimals)
+                            .ui_amount;
+                    (
+                        style(format!(
+                            "{:>24.1$}",
+                            actual, spl_token_args.decimals as usize
+                        )),
+                        format!(
+                            "{:>24.1$}",
+                            actual - expected,
+                            spl_token_args.decimals as usize
+                        ),
+                    )
+                } else {
+                    (
+                        style("Associated token account not yet created".to_string()).yellow(),
+                        "".to_string(),
+                    )
+                };
+            println!(
+                "{:<44}  {:>24.4$}  {:>24}  {:>24}",
+                allocation.recipient,
+                expected,
+                actual,
+                difference,
+                spl_token_args.decimals as usize
+            );
+        } else {
+            let expected = lamports_to_sol(sol_to_lamports(allocation.amount));
+            let actual = lamports_to_sol(client.get_balance(address).await.unwrap());
+            println!(
+                "{:<44}  {:>24.9}  {:>24.9}  {:>24.9}",
+                allocation.recipient,
+                expected,
+                actual,
+                actual - expected,
+            );
+        }
     }
 
     Ok(())

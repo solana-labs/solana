@@ -1,5 +1,5 @@
 use crate::{
-    args::DistributeTokensArgs,
+    args::{DistributeTokensArgs, SplTokenArgs},
     commands::{Allocation, Error, FundingSource},
 };
 use solana_account_decoder::parse_token::{pubkey_from_spl_token_v2_0, token_amount_to_ui_amount};
@@ -12,18 +12,31 @@ use spl_token_v2_0::{
 
 pub async fn update_token_args(
     client: &mut BanksClient,
-    args: &mut DistributeTokensArgs,
+    args: &mut Option<SplTokenArgs>,
 ) -> Result<(), Error> {
-    if let Some(spl_token_args) = &mut args.spl_token_args {
+    if let Some(spl_token_args) = args {
         let sender_account = client
             .get_account(spl_token_args.token_account_address)
             .await?
             .unwrap_or_default();
         let mint_address =
             pubkey_from_spl_token_v2_0(&SplTokenAccount::unpack(&sender_account.data)?.mint);
-        let mint_account = client.get_account(mint_address).await?.unwrap_or_default();
-        let mint = Mint::unpack(&mint_account.data)?;
         spl_token_args.mint = mint_address;
+        update_decimals(client, args).await?;
+    }
+    Ok(())
+}
+
+pub async fn update_decimals(
+    client: &mut BanksClient,
+    args: &mut Option<SplTokenArgs>,
+) -> Result<(), Error> {
+    if let Some(spl_token_args) = args {
+        let mint_account = client
+            .get_account(spl_token_args.mint)
+            .await?
+            .unwrap_or_default();
+        let mint = Mint::unpack(&mint_account.data)?;
         spl_token_args.decimals = mint.decimals;
     }
     Ok(())

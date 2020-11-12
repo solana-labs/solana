@@ -29,11 +29,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         Command::DistributeTokens(mut args) => {
             runtime.block_on(spl_token_helpers::update_token_args(
                 &mut banks_client,
-                &mut args,
+                &mut args.spl_token_args,
             ))?;
             runtime.block_on(commands::process_allocations(&mut banks_client, &args))?;
         }
-        Command::Balances(args) => {
+        Command::Balances(mut args) => {
+            runtime.block_on(spl_token_helpers::update_decimals(
+                &mut banks_client,
+                &mut args.spl_token_args,
+            ))?;
             runtime.block_on(commands::process_balances(&mut banks_client, &args))?;
         }
         Command::TransactionLog(args) => {

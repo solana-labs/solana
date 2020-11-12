@@ -5,7 +5,7 @@ use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand,
 };
 use solana_clap_utils::{
-    input_parsers::value_of,
+    input_parsers::{pubkey_of_signer, value_of},
     input_validators::{is_amount, is_valid_pubkey, is_valid_signer},
     keypair::{pubkey_from_path, signer_from_path},
 };
@@ -286,6 +286,27 @@ where
                 ),
         )
         .subcommand(
+            SubCommand::with_name("spl-token-balances")
+                .about("Balance of SPL token associated accounts")
+                .arg(
+                    Arg::with_name("input_csv")
+                        .long("input-csv")
+                        .required(true)
+                        .takes_value(true)
+                        .value_name("FILE")
+                        .help("Allocations CSV file"),
+                )
+                .arg(
+                    Arg::with_name("mint_address")
+                        .long("mint")
+                        .required(true)
+                        .takes_value(true)
+                        .value_name("MINT_ADDRESS")
+                        .validator(is_valid_pubkey)
+                        .help("SPL token mint of distribution"),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("transaction-log")
                 .about("Print the database to a CSV file")
                 .arg(
@@ -466,10 +487,17 @@ fn parse_distribute_spl_tokens_args(
     })
 }
 
-fn parse_balances_args(matches: &ArgMatches<'_>) -> BalancesArgs {
-    BalancesArgs {
+fn parse_balances_args(matches: &ArgMatches<'_>) -> Result<BalancesArgs, Box<dyn Error>> {
+    let mut wallet_manager = maybe_wallet_manager()?;
+    let spl_token_args =
+        pubkey_of_signer(matches, "mint_address", &mut wallet_manager)?.map(|mint| SplTokenArgs {
+            mint,
+            ..SplTokenArgs::default()
+        });
+    Ok(BalancesArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),
-    }
+        spl_token_args,
+    })
 }
 
 fn parse_transaction_log_args(matches: &ArgMatches<'_>) -> TransactionLogArgs {
@@ -498,7 +526,8 @@ where
         ("distribute-spl-tokens", Some(matches)) => {
             Command::DistributeTokens(parse_distribute_spl_tokens_args(matches)?)
         }
-        ("balances", Some(matches)) => Command::Balances(parse_balances_args(matches)),
+        ("balances", Some(matches)) => Command::Balances(parse_balances_args(matches)?),
+        ("spl-token-balances", Some(matches)) => Command::Balances(parse_balances_args(matches)?),
         ("transaction-log", Some(matches)) => {
             Command::TransactionLog(parse_transaction_log_args(matches))
         }

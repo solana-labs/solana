@@ -29,6 +29,7 @@ pub struct SplTokenArgs {
 
 pub struct BalancesArgs {
     pub input_csv: String,
+    pub spl_token_args: Option<SplTokenArgs>,
 }
 
 pub struct TransactionLogArgs {
