@@ -1,3 +1,4 @@
+use crate::HEADER_LENGTH;
 use bytes::Bytes;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
@@ -52,13 +53,14 @@ pub fn ip_echo_server(tcp: std::net::TcpListener) -> IpEchoServer {
 
             let processor = reader
                 .and_then(move |data| {
-                    if data.len() < 4 {
+                    if data.len() < HEADER_LENGTH {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
                             format!("Request too short, received {} bytes", data.len()),
                         ));
                     }
-                    let request_header: String = data[0..4].iter().map(|b| *b as char).collect();
+                    let request_header: String =
+                        data[0..HEADER_LENGTH].iter().map(|b| *b as char).collect();
                     if request_header != "\0\0\0\0" {
                         // Explicitly check for HTTP GET/POST requests to more gracefully handle
                         // the case where a user accidentally tried to use a gossip entrypoint in
@@ -74,7 +76,7 @@ pub fn ip_echo_server(tcp: std::net::TcpListener) -> IpEchoServer {
 
                     let expected_len =
                         bincode::serialized_size(&IpEchoServerMessage::default()).unwrap() as usize;
-                    let actual_len = data[4..].len();
+                    let actual_len = data[HEADER_LENGTH..].len();
                     if actual_len < expected_len {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
@@ -85,7 +87,7 @@ pub fn ip_echo_server(tcp: std::net::TcpListener) -> IpEchoServer {
                         ));
                     }
 
-                    bincode::deserialize::<IpEchoServerMessage>(&data[4..])
+                    bincode::deserialize::<IpEchoServerMessage>(&data[HEADER_LENGTH..])
                         .map(Some)
                         .map_err(|err| {
                             io::Error::new(
@@ -177,10 +179,11 @@ pub fn ip_echo_server(tcp: std::net::TcpListener) -> IpEchoServer {
                         // conflict with the first four bytes of a valid HTTP response.
                         let mut bytes = vec![
                             0;
-                            4 + bincode::serialized_size(&peer_addr.ip()).unwrap()
+                            HEADER_LENGTH + bincode::serialized_size(&peer_addr.ip()).unwrap()
                                 as usize
                         ];
-                        bincode::serialize_into(&mut bytes[4..], &peer_addr.ip()).unwrap();
+                        bincode::serialize_into(&mut bytes[HEADER_LENGTH..], &peer_addr.ip())
+                            .unwrap();
                         Ok(Bytes::from(bytes))
                     }
                 });
