@@ -83,7 +83,7 @@ fn check_imm_endian(insn: &ebpf::Insn, insn_ptr: usize) -> Result<(), BPFError> 
 }
 
 fn check_load_dw(prog: &[u8], insn_ptr: usize) -> Result<(), BPFError> {
-    if insn_ptr >= (prog.len() / ebpf::INSN_SIZE) {
+    if insn_ptr + 1 >= (prog.len() / ebpf::INSN_SIZE) {
         // Last instruction cannot be LD_DW because there would be no 2nd DW
         return Err(VerifierError::LDDWCannotBeLast.into());
     }
