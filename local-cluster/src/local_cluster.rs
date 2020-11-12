@@ -615,7 +615,11 @@ impl Cluster for LocalCluster {
         node
     }
 
-    fn restart_node(&mut self, pubkey: &Pubkey, mut cluster_validator_info: ClusterValidatorInfo) {
+    fn create_restart_context(
+        &mut self,
+        pubkey: &Pubkey,
+        cluster_validator_info: &mut ClusterValidatorInfo,
+    ) -> (solana_core::cluster_info::Node, Option<ContactInfo>) {
         // Update the stored ContactInfo for this node
         let node = Node::new_localhost_with_pubkey(&pubkey);
         cluster_validator_info.info.contact_info = node.info.clone();
@@ -627,10 +631,28 @@ impl Cluster for LocalCluster {
                 self.entry_point_info = node.info.clone();
                 None
             } else {
-                Some(&self.entry_point_info)
+                Some(self.entry_point_info.clone())
             }
         };
 
+        (node, entry_point_info)
+    }
+
+    fn restart_node(&mut self, pubkey: &Pubkey, mut cluster_validator_info: ClusterValidatorInfo) {
+        let restart_context = self.create_restart_context(pubkey, &mut cluster_validator_info);
+        let cluster_validator_info =
+            Self::restart_node_with_context(cluster_validator_info, restart_context);
+        self.add_node(pubkey, cluster_validator_info);
+    }
+
+    fn add_node(&mut self, pubkey: &Pubkey, cluster_validator_info: ClusterValidatorInfo) {
+        self.validators.insert(*pubkey, cluster_validator_info);
+    }
+
+    fn restart_node_with_context(
+        mut cluster_validator_info: ClusterValidatorInfo,
+        (node, entry_point_info): (Node, Option<ContactInfo>),
+    ) -> ClusterValidatorInfo {
         // Restart the node
         let validator_info = &cluster_validator_info.info;
         cluster_validator_info.config.account_paths =
@@ -641,12 +663,11 @@ impl Cluster for LocalCluster {
             &validator_info.ledger_path,
             &validator_info.voting_keypair.pubkey(),
             vec![validator_info.voting_keypair.clone()],
-            entry_point_info,
+            entry_point_info.as_ref(),
             &cluster_validator_info.config,
         );
-
         cluster_validator_info.validator = Some(restarted_node);
-        self.validators.insert(*pubkey, cluster_validator_info);
+        cluster_validator_info
     }
 
     fn exit_restart_node(&mut self, pubkey: &Pubkey, validator_config: ValidatorConfig) {

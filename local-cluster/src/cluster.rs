@@ -40,5 +40,15 @@ pub trait Cluster {
     fn get_contact_info(&self, pubkey: &Pubkey) -> Option<&ContactInfo>;
     fn exit_node(&mut self, pubkey: &Pubkey) -> ClusterValidatorInfo;
     fn restart_node(&mut self, pubkey: &Pubkey, cluster_validator_info: ClusterValidatorInfo);
+    fn create_restart_context(
+        &mut self,
+        pubkey: &Pubkey,
+        cluster_validator_info: &mut ClusterValidatorInfo,
+    ) -> (solana_core::cluster_info::Node, Option<ContactInfo>);
+    fn restart_node_with_context(
+        cluster_validator_info: ClusterValidatorInfo,
+        restart_context: (solana_core::cluster_info::Node, Option<ContactInfo>),
+    ) -> ClusterValidatorInfo;
+    fn add_node(&mut self, pubkey: &Pubkey, cluster_validator_info: ClusterValidatorInfo);
     fn exit_restart_node(&mut self, pubkey: &Pubkey, config: ValidatorConfig);
 }
