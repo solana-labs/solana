@@ -8,6 +8,7 @@ repository = "https://github.com/solana-labs/solana"
 version = "1.4.7"
 
 [dependencies]
+async-trait = "0.1.36"
 base64 = "0.12.3"
 chrono = "0.4.19"
 chrono-humanize = "0.1.1"
@@ -19,3 +20,4 @@ solana-logger = { path = "../logger", version = "1.4.7" }
 solana-program = { path = "../sdk/program", version = "1.4.7" }
 solana-runtime = { path = "../runtime", version = "1.4.7" }
 solana-sdk = { path = "../sdk", version = "1.4.7" }
+tokio = { version = "0.3", features = ["full"] }
