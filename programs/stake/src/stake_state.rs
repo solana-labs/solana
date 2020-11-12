@@ -1717,13 +1717,13 @@ mod tests {
 
             assert_eq!(
                 expected_stakes,
-                (0..expected_stakes.len())
+                &(0..expected_stakes.len())
                     .map(|epoch| stake.stake_activating_and_deactivating(
                         epoch as u64,
                         Some(&stake_history),
                         fix_stake_deactivate
                     ))
-                    .collect::<Vec<_>>()
+                    .collect::<Vec<_>>()[..]
             );
         }
 
