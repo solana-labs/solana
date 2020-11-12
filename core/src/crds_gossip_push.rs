@@ -386,7 +386,7 @@ impl CrdsGossipPush {
                     // In order to mitigate eclipse attack, for staked nodes
                     // continue retrying periodically.
                     let stake = stakes.get(&info.id).unwrap_or(&0);
-                    if *stake == 0 || rng.gen_ratio(7, 8) {
+                    if *stake == 0 || !rng.gen_ratio(1, 16) {
                         return None;
                     }
                 }
