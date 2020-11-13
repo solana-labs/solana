@@ -16,6 +16,7 @@ struct Config {
     dump: bool,
     features: Vec<String>,
     no_default_features: bool,
+    offline: bool,
     verbose: bool,
     workspace: bool,
 }
@@ -33,6 +34,7 @@ impl Default for Config {
             dump: false,
             features: vec![],
             no_default_features: false,
+            offline: false,
             verbose: false,
             workspace: false,
         }
@@ -211,6 +213,9 @@ fn build_bpf(config: Config, manifest_path: Option<PathBuf>) {
     if let Some(manifest_path) = manifest_path {
         metadata_command.manifest_path(manifest_path);
     }
+    if config.offline {
+        metadata_command.other_options(vec!["--offline".to_string()]);
+    }
 
     let metadata = metadata_command.exec().unwrap_or_else(|err| {
         eprintln!("Failed to obtain package metadata: {}", err);
@@ -267,6 +272,12 @@ fn main() {
                 .long("dump")
                 .takes_value(false)
                 .help("Dump ELF information to a text file on success"),
+        )
+        .arg(
+            Arg::with_name("offline")
+                .long("offline")
+                .takes_value(false)
+                .help("Run without accessing the network"),
         )
         .arg(
             Arg::with_name("verbose")
@@ -338,6 +349,7 @@ fn main() {
             .ok()
             .unwrap_or_else(Vec::new),
         no_default_features: matches.is_present("no_default_features"),
+        offline: matches.is_present("offline"),
         verbose: matches.is_present("verbose"),
         workspace: matches.is_present("workspace"),
     };
