@@ -2562,7 +2562,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 Result:
 ```json
-{"jsonrpc":"2.0","result":{"solana-core": "1.4.8"},"id":1}
+{"jsonrpc":"2.0","result":{"solana-core": "1.4.9"},"id":1}
 ```
 
 ### getVoteAccounts
