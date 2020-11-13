@@ -4444,7 +4444,6 @@ dependencies = [
  "solana-logger 1.5.0",
  "solana-version",
  "tokio 0.1.22",
- "tokio-codec",
  "url 2.1.1",
 ]
 
