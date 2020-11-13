@@ -32,9 +32,9 @@ pub struct AccountMapEntryInner<T> {
 
 #[self_referencing]
 pub struct ReadAccountMapEntry<T: 'static> {
-    pub owned_entry: AccountMapEntry<T>,
+    owned_entry: AccountMapEntry<T>,
     #[borrows(owned_entry)]
-    pub slot_list_guard: RwLockReadGuard<'this, SlotList<T>>,
+    slot_list_guard: RwLockReadGuard<'this, SlotList<T>>,
 }
 
 impl<T: Clone> ReadAccountMapEntry<T> {
@@ -47,19 +47,19 @@ impl<T: Clone> ReadAccountMapEntry<T> {
     }
 
     pub fn slot_list(&self) -> &SlotList<T> {
-        &*self.slot_list_guard
+        &*self.borrow_slot_list_guard()
     }
 
     pub fn ref_count(&self) -> &AtomicU64 {
-        &self.owned_entry.ref_count
+        &self.borrow_owned_entry_contents().ref_count
     }
 }
 
 #[self_referencing]
 pub struct WriteAccountMapEntry<T: 'static> {
-    pub owned_entry: AccountMapEntry<T>,
+    owned_entry: AccountMapEntry<T>,
     #[borrows(owned_entry)]
-    pub slot_list_guard: RwLockWriteGuard<'this, SlotList<T>>,
+    slot_list_guard: RwLockWriteGuard<'this, SlotList<T>>,
 }
 
 impl<T: 'static + Clone> WriteAccountMapEntry<T> {
@@ -72,15 +72,18 @@ impl<T: 'static + Clone> WriteAccountMapEntry<T> {
     }
 
     pub fn slot_list(&mut self) -> &SlotList<T> {
-        &*self.slot_list_guard
+        &*self.borrow_slot_list_guard()
     }
 
-    pub fn slot_list_mut(&mut self) -> &mut SlotList<T> {
-        &mut *self.slot_list_guard
+    pub fn slot_list_mut<RT>(
+        &mut self,
+        user: impl for<'this> FnOnce(&mut RwLockWriteGuard<'this, SlotList<T>>) -> RT,
+    ) -> RT {
+        self.with_slot_list_guard_mut(user)
     }
 
     pub fn ref_count(&self) -> &AtomicU64 {
-        &self.owned_entry.ref_count
+        &self.borrow_owned_entry_contents().ref_count
     }
 
     // Try to update an item in the slot list the given `slot` If an item for the slot
@@ -97,12 +100,12 @@ impl<T: 'static + Clone> WriteAccountMapEntry<T> {
         assert!(same_slot_previous_updates.len() <= 1);
         if let Some((list_index, (s, previous_update_value))) = same_slot_previous_updates.pop() {
             reclaims.push((*s, previous_update_value.clone()));
-            self.slot_list_mut().remove(list_index);
+            self.slot_list_mut(|list| list.remove(list_index));
         } else {
             // Only increment ref count if the account was not prevously updated in this slot
             self.ref_count().fetch_add(1, Ordering::Relaxed);
         }
-        self.slot_list_mut().push((slot, account_info));
+        self.slot_list_mut(|list| list.push((slot, account_info)));
     }
 }
 
@@ -301,22 +304,24 @@ impl<T: 'static + Clone> AccountsIndex<T> {
     // if this account has no more entries.
     pub fn purge(&self, pubkey: &Pubkey) -> (SlotList<T>, bool) {
         let mut write_account_map_entry = self.get_account_write_entry(pubkey).unwrap();
-        let slot_list = write_account_map_entry.slot_list_mut();
-        let reclaims = self.get_rooted_entries(&slot_list);
-        slot_list.retain(|(slot, _)| !self.is_root(*slot));
-        (reclaims, slot_list.is_empty())
+        write_account_map_entry.slot_list_mut(|slot_list| {
+            let reclaims = self.get_rooted_entries(slot_list);
+            slot_list.retain(|(slot, _)| !self.is_root(*slot));
+            (reclaims, slot_list.is_empty())
+        })
     }
 
     pub fn purge_exact(&self, pubkey: &Pubkey, slots: HashSet<Slot>) -> (SlotList<T>, bool) {
         let mut write_account_map_entry = self.get_account_write_entry(pubkey).unwrap();
-        let slot_list = write_account_map_entry.slot_list_mut();
-        let reclaims = slot_list
-            .iter()
-            .filter(|(slot, _)| slots.contains(&slot))
-            .cloned()
-            .collect();
-        slot_list.retain(|(slot, _)| !slots.contains(slot));
-        (reclaims, slot_list.is_empty())
+        write_account_map_entry.slot_list_mut(|slot_list| {
+            let reclaims = slot_list
+                .iter()
+                .filter(|(slot, _)| slots.contains(&slot))
+                .cloned()
+                .collect();
+            slot_list.retain(|(slot, _)| !slots.contains(slot));
+            (reclaims, slot_list.is_empty())
+        })
     }
 
     // Given a SlotSlice `L`, a list of ancestors and a maximum slot, find the latest element
@@ -442,7 +447,9 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         max_clean_root: Option<Slot>,
     ) {
         if let Some(mut locked_entry) = self.get_account_write_entry(pubkey) {
-            self.purge_older_root_entries(locked_entry.slot_list_mut(), reclaims, max_clean_root);
+            locked_entry.slot_list_mut(|slot_list| {
+                self.purge_older_root_entries(slot_list, reclaims, max_clean_root);
+            });
         }
     }
 
@@ -453,12 +460,13 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         reclaims: &mut SlotList<T>,
     ) {
         if let Some(mut locked_entry) = self.get_account_write_entry(pubkey) {
-            let slot_list = locked_entry.slot_list_mut();
-            slot_list.retain(|(slot, entry)| {
-                if *slot == purge_slot {
-                    reclaims.push((*slot, entry.clone()));
-                }
-                *slot != purge_slot
+            locked_entry.slot_list_mut(|slot_list| {
+                slot_list.retain(|(slot, entry)| {
+                    if *slot == purge_slot {
+                        reclaims.push((*slot, entry.clone()));
+                    }
+                    *slot != purge_slot
+                });
             });
         }
     }
