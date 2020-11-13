@@ -1222,22 +1222,24 @@ impl Bank {
                 epoch >= leader_schedule_epoch.saturating_sub(MAX_LEADER_SCHEDULE_STAKES)
             });
 
-            let vote_stakes: HashMap<_, _> = self
-                .stakes
-                .read()
-                .unwrap()
-                .vote_accounts()
-                .iter()
-                .map(|(epoch, (stake, _))| (*epoch, *stake))
-                .collect();
             let new_epoch_stakes =
                 EpochStakes::new(&self.stakes.read().unwrap(), leader_schedule_epoch);
-            info!(
-                "new epoch stakes, epoch: {}, stakes: {:#?}, total_stake: {}",
-                leader_schedule_epoch,
-                vote_stakes,
-                new_epoch_stakes.total_stake(),
-            );
+            {
+                let vote_stakes: HashMap<_, _> = self
+                    .stakes
+                    .read()
+                    .unwrap()
+                    .vote_accounts()
+                    .iter()
+                    .map(|(pubkey, (stake, _))| (*pubkey, *stake))
+                    .collect();
+                info!(
+                    "new epoch stakes, epoch: {}, stakes: {:#?}, total_stake: {}",
+                    leader_schedule_epoch,
+                    vote_stakes,
+                    new_epoch_stakes.total_stake(),
+                );
+            }
             self.epoch_stakes
                 .insert(leader_schedule_epoch, new_epoch_stakes);
         }
