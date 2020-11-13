@@ -36,15 +36,16 @@ use std::{
 use tokio::time::sleep;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-struct Allocation {
+pub struct Allocation {
     recipient: String,
-    amount: f64,
+    pub amount: f64,
     lockup_date: String,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum FundingSource {
     FeePayer,
+    SplTokenAccount,
     StakeAccount,
     SystemAccount,
 }
@@ -276,7 +277,11 @@ async fn distribute_allocations(
         .iter()
         .map(|message| message.header.num_required_signatures as usize)
         .sum();
-    check_payer_balances(num_signatures, allocations, client, args).await?;
+    if args.spl_token_args.is_some() {
+        check_spl_token_balances(num_signatures, allocations, client, args).await?;
+    } else {
+        check_payer_balances(num_signatures, allocations, client, args).await?;
+    }
 
     for ((allocation, message), (new_stake_account_keypair, lockup_date)) in
         allocations.iter().zip(messages).zip(stake_extras)
