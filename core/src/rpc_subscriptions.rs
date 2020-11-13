@@ -936,6 +936,19 @@ impl RpcSubscriptions {
                 num_signatures_notified,
                 signatures_time,
             );
+            datapoint_info!(
+                "rpc_subscriptions",
+                ("source", source.to_string(), String),
+                ("num_account_subscriptions", pubkeys.len(), i64),
+                ("num_account_pubkeys_notified", num_pubkeys_notified, i64),
+                ("accounts_time", accounts_time.as_us() as i64, i64),
+                ("num_program_subscriptions", programs.len(), i64),
+                ("num_programs_notified", num_programs_notified, i64),
+                ("programs_time", programs_time.as_us() as i64, i64),
+                ("num_signature_subscriptions", signatures.len(), i64),
+                ("num_signatures_notified", num_signatures_notified, i64),
+                ("signatures_time", signatures_time.as_us() as i64, i64)
+            );
         }
     }
 
