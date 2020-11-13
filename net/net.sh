@@ -498,11 +498,13 @@ prepareDeploy() {
   case $deployMethod in
   tar)
     if [[ -n $releaseChannel ]]; then
+      echo "Downloading release from channel: $releaseChannel"
       rm -f "$SOLANA_ROOT"/solana-release.tar.bz2
       declare updateDownloadUrl=http://release.solana.com/"$releaseChannel"/solana-release-x86_64-unknown-linux-gnu.tar.bz2
       (
         set -x
-        curl --retry 5 --retry-delay 2 --retry-connrefused \
+        curl -L -I "$updateDownloadUrl"
+        curl -L --retry 5 --retry-delay 2 --retry-connrefused \
           -o "$SOLANA_ROOT"/solana-release.tar.bz2 "$updateDownloadUrl"
       )
       tarballFilename="$SOLANA_ROOT"/solana-release.tar.bz2
@@ -510,7 +512,7 @@ prepareDeploy() {
     (
       set -x
       rm -rf "$SOLANA_ROOT"/solana-release
-      (cd "$SOLANA_ROOT"; tar jxv) < "$tarballFilename"
+      cd "$SOLANA_ROOT"; tar jfxv "$tarballFilename"
       cat "$SOLANA_ROOT"/solana-release/version.yml
     )
     ;;
