@@ -178,7 +178,7 @@ to log a message containing the remaining number of compute units the program
 may consume before execution is halted
 
 See [compute
-budget](developing/programming-model/../../../programming-model/compute-budget.md)
+budget](developing/programming-model/../../../programming-model/runtime.md/#compute-budget)
 for more information.
 
 ## ELF Dump
@@ -200,14 +200,4 @@ $ make dump_<program name>
 
 ## Examples
 
-TODO
-
-### Logging
-
-### Transferring Lamports
-
-### Writing Account Data
-
-### Custom Heap
-
-### Cross-program Invocations
+The [Solana Program Library github](https://github.com/solana-labs/solana-program-library/tree/master/examples/c) repo contains a collection of C examples

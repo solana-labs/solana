@@ -28,10 +28,11 @@ features = []
 
 Solana Rust programs may depend directly on each other in order to gain access
 to instruction helpers when making [cross-program
-invocations](developing/../../programming-model/cpi.md).  When doing so it's
-important to not pull in the dependent program's entrypoint symbols because they
-may conflict with the program's own.  To avoid this ,programs should define an
-`exclude_entrypoint` feature in `Cargo.toml`j and use to exclude the entrypoint.
+invocations](developing/../../programming-model/calling-between-programs.md#cross-program-invocations).
+When doing so it's important to not pull in the dependent program's entrypoint
+symbols because they may conflict with the program's own.  To avoid this
+,programs should define an `exclude_entrypoint` feature in `Cargo.toml`j and use
+to exclude the entrypoint.
 
 - [Define the
   feature](https://github.com/solana-labs/solana-program-library/blob/a5babd6cbea0d3f29d8c57d2ecbbd2a2bd59c8a9/token/program/Cargo.toml#L12)
@@ -48,29 +49,19 @@ using the `exclude_entrypoint` feature.
 At a minimum, Solana Rust programs must pull in the
 [solana-program](https://crates.io/crates/solana-program) crate.
 
-Programs are constrained to run deterministically, so random numbers are not
-available. Sometimes a program may depend on a crate that depends itself on
-`rand` even if the program does not use any of the random number functionality.
-If a program depends on `rand`, the compilation will fail because there is no
-`get-random` support for Solana. The error will typically look like this:
+Solana BPF programs have some [restrictions](#Restrictions) that may prevent the
+inclusion of some crates as dependencies or require special handling.
 
-```
-error: target is not supported, for more information see: https://docs.rs/getrandom/#unsupported-targets
-   --> /Users/jack/.cargo/registry/src/github.com-1ecc6299db9ec823/getrandom-0.1.14/src/lib.rs:257:9
-    |
-257 | /         compile_error!("\
-258 | |             target is not supported, for more information see: \
-259 | |             https://docs.rs/getrandom/#unsupported-targets\
-260 | |         ");
-    | |___________^
-```
-
-To work around this dependency issue, add the following dependency to the
-program's `Cargo.toml`:
-
-```
-getrandom = { version = "0.1.14", features = ["dummy"] }
-```
+For example:
+- Crates that require the architecture be a subset of the ones supported by the
+  official toolchain.  There is no workaround for this unless that crate is
+  forked and BPF added to that those architecture checks.
+- Crates may depend on `rand` which is not supported in Solana's deterministic
+  program environment.  To include a `rand` dependent crate refer to [Depending
+  on Rand](#depending-on-rand).
+- Crates may overflow the stack even if the stack overflowing code isn't
+  included in the program itself.  For more information refer to
+  [Stack](overview.md#stack).
 
 ## How to Build
 
@@ -96,7 +87,19 @@ $ cargo build-bpf
 
 ## How to Test
 
-TODO
+Solana programs can be unit tested via the traditional `cargo test` mechanism by
+exercising program functions directly.
+
+To help facilitate testing in an environment that more closely matches a live
+cluster, developers can use the
+[`program-test`](https://crates.io/crates/solana-program-test) crate.  The
+`program-test` crate starts up a local instance of the runtime and allows tests
+to send multiple transactions while keeping state for the duration of the test.
+
+For more information the [test in sysvar
+example](https://github.com/solana-labs/solana-program-library/blob/master/examples/rust/sysvar/tests/functional.rs)
+shows how an instruction containing syavar account is sent and processed by the
+program.
 
 ## Program Entrypoint
 
@@ -240,8 +243,34 @@ single-threaded environment, and must be deterministic:
   should be used instead.
 - The runtime enforces a limit on the number of instructions a program can
   execute during the processing of one instruction.  See [computation
-  budget](developing/programming-model/compute-budget.md) for more
+  budget](developing/programming-model/runtime.md#compute-budget) for more
   information.
+
+## Depending on Rand
+
+Programs are constrained to run deterministically, so random numbers are not
+available. Sometimes a program may depend on a crate that depends itself on
+`rand` even if the program does not use any of the random number functionality.
+If a program depends on `rand`, the compilation will fail because there is no
+`get-random` support for Solana. The error will typically look like this:
+
+```
+error: target is not supported, for more information see: https://docs.rs/getrandom/#unsupported-targets
+   --> /Users/jack/.cargo/registry/src/github.com-1ecc6299db9ec823/getrandom-0.1.14/src/lib.rs:257:9
+    |
+257 | /         compile_error!("\
+258 | |             target is not supported, for more information see: \
+259 | |             https://docs.rs/getrandom/#unsupported-targets\
+260 | |         ");
+    | |___________^
+```
+
+To work around this dependency issue, add the following dependency to the
+program's `Cargo.toml`:
+
+```
+getrandom = { version = "0.1.14", features = ["dummy"] }
+```
 
 ## Logging
 
@@ -337,7 +366,7 @@ to log a message containing the remaining number of compute units the program
 may consume before execution is halted
 
 See [compute
-budget](developing/programming-model/../../../programming-model/compute-budget.md)
+budget](developing/programming-model/../../../programming-model/runtime.md#compute-budget)
 for more information.
 
 ## ELF Dump
@@ -359,16 +388,6 @@ $ cargo build-bpf --dump
 
 ## Examples
 
-TODO
-
-### Logging
-
-### Transferring Lamports
-
-### Writing Account Data
-
-### Using a Sysvar
-
-### Custom Heap
-
-### Cross-program Invocations
+The [Solana Program Library
+github](https://github.com/solana-labs/solana-program-library/tree/master/examples/rust)
+repo contains a collection of Rust examples.

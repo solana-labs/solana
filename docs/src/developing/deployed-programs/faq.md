@@ -15,7 +15,7 @@ This error means that that cross-program invocation exceeded the allowed
 invocation call depth.
 
 See [cross-program invocation Call
-Depth](developing/programming-model/cpi.md#call-depth)
+Depth](developing/programming-model/calling-between-programs.md#call-depth)
 
 ## `CallDepthExceeded` error
 
@@ -26,7 +26,7 @@ See [call depth](overview.md#call-depth)
 ## Computational constraints
 
 See [computational
-constraints](developing/programming-model/compute-budget.md)
+constraints](developing/programming-model/runtime.md#compute-budget)
 
 ## Float Rust types
 
@@ -64,9 +64,9 @@ an account is expected to be signed but is not.
 
 An implementation of a program might also cause this error when performing a
 cross-program invocation that requires a signed program address, but the passed
-signer seeds passed to [`invoke_signed`](developing/programming-model/cpi.md)
+signer seeds passed to [`invoke_signed`](developing/programming-model/calling-between-programs.md)
 don't match the signer seeds used to create the program address
-[`create_program_address`](developing/programming-model/program-derived-addresses.md).
+[`create_program_address`](developing/programming-model/calling-between-programs.md#program-derived-addresses).
 
 ## `rand` Rust dependency causes compilation failure
 

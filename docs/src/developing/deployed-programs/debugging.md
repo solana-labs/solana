@@ -9,15 +9,8 @@ that will allow RPC clients to interact with their program.
 
 ## Running unit tests
 
-TODO
-
-## Running on a Local Cluster
-
-TODO
-
-## Transaction Simulation
-
-TODO
+- [Testing with Rust](developing-rust.md#how-to-test)
+- [Testing with C](developing-c.md#how-to-test)
 
 ## Logging
 
@@ -92,7 +85,7 @@ operations they wish to profile.
   program](developing-c.md#compute-budget)
 
 See [compute
-budget](developing/programming-model/../../../programming-model/compute-budget.md)
+budget](developing/programming-model/../../../programming-model/runtime.md/#compute-budget)
 for more information.
 
 ## ELF Dump

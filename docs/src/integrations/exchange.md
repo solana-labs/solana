@@ -382,9 +382,10 @@ For greater flexibility, you can submit withdrawal transfers asynchronously. In
 these cases, it is your responsibility to verify that the transaction succeeded
 and was finalized by the cluster.
 
-**Note:** Each transaction contains a [recent blockhash](../transaction.md#blockhash-format)
-to indicate its liveness. It is **critical** to wait until this blockhash
-expires before retrying a withdrawal transfer that does not appear to have been
+**Note:** Each transaction contains a [recent
+blockhash](developing/programming-model/transactions.md#blockhash-format) to
+indicate its liveness. It is **critical** to wait until this blockhash expires
+before retrying a withdrawal transfer that does not appear to have been
 confirmed or finalized by the cluster. Otherwise, you risk a double spend. See
 more on [blockhash expiration](#blockhash-expiration) below.
 

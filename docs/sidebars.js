@@ -61,32 +61,13 @@ module.exports = {
     "Developing": [
       {
         type: "category",
-        label: "Programming model",
+        label: "Programming Model",
         items: [
           "developing/programming-model/overview",
           "developing/programming-model/transactions",
           "developing/programming-model/accounts",
-          "developing/programming-model/sysvars",
-          "developing/programming-model/runtime-features",
-          "developing/programming-model/compute-budget",
-          "developing/programming-model/cpi",
-          "developing/programming-model/program-derived-addresses",
-          "developing/programming-model/secpk1-instructions",
-
-        ],
-      },
-      "developing/builtin-programs",
-      {
-        type: "category",
-        label: "Deployed programs",
-        items: [
-          "developing/deployed-programs/overview",
-          "developing/deployed-programs/developing-rust",
-          "developing/deployed-programs/developing-c",
-          "developing/deployed-programs/deploying",
-          "developing/deployed-programs/debugging",
-          "developing/deployed-programs/examples",
-          "developing/deployed-programs/faq",
+          "developing/programming-model/runtime",
+          "developing/programming-model/calling-between-programs",
         ],
       },
       {
@@ -95,6 +76,27 @@ module.exports = {
         items: [
           "developing/clients/jsonrpc-api",
           "developing/clients/javascript-api",
+        ],
+      },
+      {
+        type: "category",
+        label: "Builtins",
+        items: [
+          "developing/builtins/programs",
+          "developing/builtins/sysvars",
+        ],
+      },
+      {
+        type: "category",
+        label: "Deployed Programs",
+        items: [
+          "developing/deployed-programs/overview",
+          "developing/deployed-programs/developing-rust",
+          "developing/deployed-programs/developing-c",
+          "developing/deployed-programs/deploying",
+          "developing/deployed-programs/debugging",
+          "developing/deployed-programs/examples",
+          "developing/deployed-programs/faq",
         ],
       },
       "developing/backwards-compatibility",
@@ -199,10 +201,6 @@ module.exports = {
               "implemented-proposals/ed_overview/ed_references",
             ],
           },
-          "implemented-proposals/ed_overview/ed_storage_rent_economics",
-          "implemented-proposals/ed_overview/ed_economic_sustainability",
-          "implemented-proposals/ed_overview/ed_mvp",
-          "implemented-proposals/ed_overview/ed_references",
         ],
       },
       "implemented-proposals/abi-management",
