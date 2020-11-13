@@ -4,7 +4,6 @@ use log::*;
 use serde_derive::{Deserialize, Serialize};
 use std::{io, net::SocketAddr, time::Duration};
 use tokio::{net::TcpListener, prelude::*, reactor::Handle, runtime::Runtime};
-use tokio_codec::{BytesCodec, Decoder};
 
 pub type IpEchoServer = Runtime;
 
@@ -28,6 +27,13 @@ impl IpEchoServerMessage {
     }
 }
 
+pub(crate) fn ip_echo_server_request_length() -> usize {
+    const REQUEST_TERMINUS_LENGTH: usize = 1;
+    HEADER_LENGTH
+        + bincode::serialized_size(&IpEchoServerMessage::default()).unwrap() as usize
+        + REQUEST_TERMINUS_LENGTH
+}
+
 /// Starts a simple TCP server on the given port that echos the IP address of any peer that
 /// connects.  Used by |get_public_ip_addr|
 pub fn ip_echo_server(tcp: std::net::TcpListener) -> IpEchoServer {
@@ -41,18 +47,19 @@ pub fn ip_echo_server(tcp: std::net::TcpListener) -> IpEchoServer {
         .filter_map(|socket| match socket.peer_addr() {
             Ok(peer_addr) => {
                 info!("connection from {:?}", peer_addr);
-                Some((peer_addr, BytesCodec::new().framed(socket)))
+                Some((peer_addr, socket))
             }
             Err(err) => {
                 info!("peer_addr failed for {:?}: {:?}", socket, err);
                 None
             }
         })
-        .for_each(move |(peer_addr, framed)| {
-            let (writer, reader) = framed.split();
+        .for_each(move |(peer_addr, socket)| {
+            let data = vec![0u8; ip_echo_server_request_length()];
+            let (reader, writer) = socket.split();
 
-            let processor = reader
-                .and_then(move |data| {
+            let processor = tokio::io::read_exact(reader, data)
+                .and_then(move |(_, data)| {
                     if data.len() < HEADER_LENGTH {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
@@ -170,22 +177,18 @@ pub fn ip_echo_server(tcp: std::net::TcpListener) -> IpEchoServer {
                     }
                 })
                 .and_then(move |valid_request| {
-                    if valid_request.is_none() {
-                        Ok(Bytes::from(
-                            "HTTP/1.1 400 Bad Request\nContent-length: 0\n\n",
-                        ))
+                    let bytes = if valid_request.is_none() {
+                        Bytes::from("HTTP/1.1 400 Bad Request\nContent-length: 0\n\n")
                     } else {
                         // "\0\0\0\0" header is added to ensure a valid response will never
                         // conflict with the first four bytes of a valid HTTP response.
                         let mut bytes = vec![0u8; ip_echo_server_reply_length()];
                         bincode::serialize_into(&mut bytes[HEADER_LENGTH..], &peer_addr.ip())
                             .unwrap();
-                        Ok(Bytes::from(bytes))
-                    }
-                });
-
-            let connection = writer
-                .send_all(processor)
+                        Bytes::from(bytes)
+                    };
+                    tokio::io::write_all(writer, bytes)
+                })
                 .timeout(Duration::from_secs(5))
                 .then(|result| {
                     if let Err(err) = result {
@@ -194,7 +197,7 @@ pub fn ip_echo_server(tcp: std::net::TcpListener) -> IpEchoServer {
                     Ok(())
                 });
 
-            tokio::spawn(connection)
+            tokio::spawn(processor)
         });
 
     let mut rt = Runtime::new().expect("Failed to create Runtime");
