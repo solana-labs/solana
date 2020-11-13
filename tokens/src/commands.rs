@@ -251,36 +251,36 @@ async fn distribute_allocations(
     args: &DistributeTokensArgs,
 ) -> Result<(), Error> {
     type StakeExtras = Vec<(Keypair, Option<DateTime<Utc>>)>;
-    let (messages, stake_extras): (Vec<Message>, StakeExtras) = allocations
-        .iter()
-        .map(|allocation| {
-            let new_stake_account_keypair = Keypair::new();
-            let lockup_date = if allocation.lockup_date == "" {
-                None
-            } else {
-                Some(allocation.lockup_date.parse::<DateTime<Utc>>().unwrap())
-            };
+    let mut messages: Vec<Message> = vec![];
+    let mut stake_extras: StakeExtras = vec![];
+    for allocation in allocations.iter() {
+        let new_stake_account_keypair = Keypair::new();
+        let lockup_date = if allocation.lockup_date == "" {
+            None
+        } else {
+            Some(allocation.lockup_date.parse::<DateTime<Utc>>().unwrap())
+        };
 
-            let decimals = if let Some(spl_token_args) = &args.spl_token_args {
-                spl_token_args.decimals as usize
-            } else {
-                9
-            };
-            println!(
-                "{:<44}  {:>24.2$}",
-                allocation.recipient, allocation.amount, decimals
-            );
-            let instructions = distribution_instructions(
-                allocation,
-                &new_stake_account_keypair.pubkey(),
-                args,
-                lockup_date,
-            );
-            let fee_payer_pubkey = args.fee_payer.pubkey();
-            let message = Message::new(&instructions, Some(&fee_payer_pubkey));
-            (message, (new_stake_account_keypair, lockup_date))
-        })
-        .unzip();
+        let decimals = if let Some(spl_token_args) = &args.spl_token_args {
+            spl_token_args.decimals as usize
+        } else {
+            9
+        };
+        println!(
+            "{:<44}  {:>24.2$}",
+            allocation.recipient, allocation.amount, decimals
+        );
+        let instructions = distribution_instructions(
+            allocation,
+            &new_stake_account_keypair.pubkey(),
+            args,
+            lockup_date,
+        );
+        let fee_payer_pubkey = args.fee_payer.pubkey();
+        let message = Message::new(&instructions, Some(&fee_payer_pubkey));
+        messages.push(message);
+        stake_extras.push((new_stake_account_keypair, lockup_date));
+    }
 
     let num_signatures = messages
         .iter()
