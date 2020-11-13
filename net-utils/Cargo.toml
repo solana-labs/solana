@@ -22,7 +22,6 @@ solana-clap-utils = { path = "../clap-utils", version = "1.5.0" }
 solana-logger = { path = "../logger", version = "1.5.0" }
 solana-version = { path = "../version", version = "1.5.0" }
 tokio = "0.1"
-tokio-codec = "0.1"
 url = "2.1.1"
 
 [lib]
