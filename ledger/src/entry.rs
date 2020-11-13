@@ -921,7 +921,7 @@ mod tests {
             ..Entry::default()
         };
         let max_hash_tx_entry = Entry {
-            transactions: vec![tx.clone()],
+            transactions: vec![tx],
             num_hashes: u64::MAX,
             ..Entry::default()
         };
@@ -966,13 +966,13 @@ mod tests {
         tick_hash_count = 0;
 
         // partial tx entry without tick entry should succeed
-        entries = vec![partial_tx_entry.clone()];
+        entries = vec![partial_tx_entry];
         assert!(entries.verify_tick_hash_count(&mut tick_hash_count, hashes_per_tick));
         assert_eq!(tick_hash_count, hashes_per_tick - 1);
         tick_hash_count = 0;
 
         // full tx entry with tick entry should succeed
-        entries = vec![full_tx_entry.clone(), no_hash_tick_entry.clone()];
+        entries = vec![full_tx_entry.clone(), no_hash_tick_entry];
         assert!(entries.verify_tick_hash_count(&mut tick_hash_count, hashes_per_tick));
         assert_eq!(tick_hash_count, 0);
 
@@ -989,7 +989,7 @@ mod tests {
         tick_hash_count = 0;
 
         // tx entry and a tick should succeed
-        entries = vec![single_hash_tx_entry.clone(), partial_tick_entry.clone()];
+        entries = vec![single_hash_tx_entry.clone(), partial_tick_entry];
         assert!(entries.verify_tick_hash_count(&mut tick_hash_count, hashes_per_tick));
         assert_eq!(tick_hash_count, 0);
 
@@ -1008,7 +1008,7 @@ mod tests {
         tick_hash_count = 0;
 
         // check overflow saturation should fail
-        entries = vec![max_hash_tx_entry.clone(), full_tick_entry];
+        entries = vec![max_hash_tx_entry, full_tick_entry];
         assert!(!entries.verify_tick_hash_count(&mut tick_hash_count, hashes_per_tick));
         assert_eq!(tick_hash_count, u64::MAX);
     }
