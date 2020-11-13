@@ -34,6 +34,7 @@ pub fn check_spl_token_balances(
     allocations: &[Allocation],
     client: &RpcClient,
     args: &DistributeTokensArgs,
+    created_accounts: u64,
 ) -> Result<(), Error> {
     let spl_token_args = args
         .spl_token_args
@@ -48,11 +49,14 @@ pub fn check_spl_token_balances(
         .checked_mul(num_signatures as u64)
         .unwrap();
 
+    let token_account_rent_exempt_balance =
+        client.get_minimum_balance_for_rent_exemption(SplTokenAccount::LEN)?;
+    let account_creation_amount = created_accounts * token_account_rent_exempt_balance;
     let fee_payer_balance = client.get_balance(&args.fee_payer.pubkey())?;
-    if fee_payer_balance < fees {
+    if fee_payer_balance < fees + account_creation_amount {
         return Err(Error::InsufficientFunds(
             vec![FundingSource::FeePayer].into(),
-            lamports_to_sol(fees),
+            lamports_to_sol(fees + account_creation_amount),
         ));
     }
     let source_token_account = client

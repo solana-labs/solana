@@ -11,7 +11,7 @@ use indexmap::IndexMap;
 use indicatif::{ProgressBar, ProgressStyle};
 use pickledb::PickleDb;
 use serde::{Deserialize, Serialize};
-use solana_account_decoder::parse_token::spl_token_v2_0_pubkey;
+use solana_account_decoder::parse_token::{pubkey_from_spl_token_v2_0, spl_token_v2_0_pubkey};
 use solana_client::{
     client_error::{ClientError, Result as ClientResult},
     rpc_client::RpcClient,
@@ -31,6 +31,9 @@ use solana_stake_program::{
     stake_state::{Authorized, Lockup, StakeAuthorize},
 };
 use solana_transaction_status::parse_token::spl_token_v2_0_instruction;
+use spl_associated_token_account_v1_0::{
+    create_associated_token_account, get_associated_token_address,
+};
 use spl_token_v2_0::solana_program::program_error::ProgramError;
 use std::{
     cmp::{self},
@@ -163,6 +166,7 @@ fn distribution_instructions(
     new_stake_account_address: &Pubkey,
     args: &DistributeTokensArgs,
     lockup_date: Option<DateTime<Utc>>,
+    do_create_associated_token_account: bool,
 ) -> Vec<Instruction> {
     if args.stake_args.is_none() && args.spl_token_args.is_none() {
         let from = args.sender_keypair.pubkey();
@@ -173,19 +177,33 @@ fn distribution_instructions(
     }
 
     if let Some(spl_token_args) = &args.spl_token_args {
-        let to = allocation.recipient.parse().unwrap();
+        let wallet_address = allocation.recipient.parse().unwrap();
+        let associated_token_address = get_associated_token_address(
+            &wallet_address,
+            &spl_token_v2_0_pubkey(&spl_token_args.mint),
+        );
+        let mut instructions = vec![];
+        if do_create_associated_token_account {
+            let create_dta_instruction = create_associated_token_account(
+                &spl_token_v2_0_pubkey(&args.fee_payer.pubkey()),
+                &wallet_address,
+                &spl_token_v2_0_pubkey(&spl_token_args.mint),
+            );
+            instructions.push(spl_token_v2_0_instruction(create_dta_instruction));
+        }
         let spl_instruction = spl_token_v2_0::instruction::transfer_checked(
             &spl_token_v2_0::id(),
             &spl_token_v2_0_pubkey(&spl_token_args.token_account_address),
             &spl_token_v2_0_pubkey(&spl_token_args.mint),
-            &spl_token_v2_0_pubkey(&to),
+            &associated_token_address,
             &spl_token_v2_0_pubkey(&args.sender_keypair.pubkey()),
             &[],
             spl_token_amount(allocation.amount, spl_token_args.decimals),
             spl_token_args.decimals,
         )
         .unwrap();
-        return vec![spl_token_v2_0_instruction(spl_instruction)];
+        instructions.push(spl_token_v2_0_instruction(spl_instruction));
+        return instructions;
     }
 
     let stake_args = args.stake_args.as_ref().unwrap();
@@ -256,6 +274,7 @@ fn distribute_allocations(
     type StakeExtras = Vec<(Keypair, Option<DateTime<Utc>>)>;
     let mut messages: Vec<Message> = vec![];
     let mut stake_extras: StakeExtras = vec![];
+    let mut created_accounts = 0;
     for allocation in allocations.iter() {
         let new_stake_account_keypair = Keypair::new();
         let lockup_date = if allocation.lockup_date == "" {
@@ -264,10 +283,27 @@ fn distribute_allocations(
             Some(allocation.lockup_date.parse::<DateTime<Utc>>().unwrap())
         };
 
-        let decimals = if let Some(spl_token_args) = &args.spl_token_args {
-            spl_token_args.decimals as usize
+        let (decimals, do_create_associated_token_account) = if let Some(spl_token_args) =
+            &args.spl_token_args
+        {
+            let wallet_address = allocation.recipient.parse().unwrap();
+            let associated_token_address = get_associated_token_address(
+                &wallet_address,
+                &spl_token_v2_0_pubkey(&spl_token_args.mint),
+            );
+            let do_create_associated_token_account = client
+                .get_multiple_accounts(&[pubkey_from_spl_token_v2_0(&associated_token_address)])?
+                [0]
+            .is_none();
+            if do_create_associated_token_account {
+                created_accounts += 1;
+            }
+            (
+                spl_token_args.decimals as usize,
+                do_create_associated_token_account,
+            )
         } else {
-            9
+            (9, false)
         };
         println!(
             "{:<44}  {:>24.2$}",
@@ -278,6 +314,7 @@ fn distribute_allocations(
             &new_stake_account_keypair.pubkey(),
             args,
             lockup_date,
+            do_create_associated_token_account,
         );
         let fee_payer_pubkey = args.fee_payer.pubkey();
         let message = Message::new(&instructions, Some(&fee_payer_pubkey));
@@ -290,7 +327,7 @@ fn distribute_allocations(
         .map(|message| message.header.num_required_signatures as usize)
         .sum();
     if args.spl_token_args.is_some() {
-        check_spl_token_balances(num_signatures, allocations, client, args)?;
+        check_spl_token_balances(num_signatures, allocations, client, args, created_accounts)?;
     } else {
         check_payer_balances(num_signatures, allocations, client, args)?;
     }
@@ -1106,6 +1143,7 @@ mod tests {
             &new_stake_account_address,
             &args,
             Some(lockup_date),
+            false,
         );
         let lockup_instruction =
             bincode::deserialize(&instructions[SET_LOCKUP_INDEX].data).unwrap();
