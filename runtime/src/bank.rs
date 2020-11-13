@@ -3046,6 +3046,8 @@ impl Bank {
         let partition_width = (PREFIX_MAX - partition_count + 1) / partition_count + 1;
         let mut start_key_prefix = if start_index == 0 && end_index == 0 {
             0
+        } else if start_index + 1 == partition_count {
+            PREFIX_MAX
         } else {
             (start_index + 1) * partition_width
         };
