@@ -1065,10 +1065,10 @@ pub fn main() {
                 .long("gossip-host")
                 .value_name("HOST")
                 .takes_value(true)
-                .conflicts_with("entrypoint")
                 .validator(solana_net_utils::is_host)
-                .help("IP address for the node to advertise in gossip when \
-                      --entrypoint is not provided [default: 127.0.0.1]"),
+                .help("Gossip DNS name or IP address for the node to advertise in gossip \
+                       [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
+
         )
         .arg(
             Arg::with_name("public_rpc_addr")
@@ -1647,21 +1647,27 @@ pub fn main() {
         env::set_var("RUST_BACKTRACE", "1")
     }
 
-    let gossip_host = if let Some(entrypoint_addr) = entrypoint_addr {
-        solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
-            eprintln!(
-                "Failed to contact cluster entrypoint {}: {}",
-                entrypoint_addr, err
-            );
-            exit(1);
-        })
-    } else {
-        solana_net_utils::parse_host(matches.value_of("gossip_host").unwrap_or("127.0.0.1"))
-            .unwrap_or_else(|err| {
-                eprintln!("Error: {}", err);
+    let gossip_host = matches
+        .value_of("gossip_host")
+        .map(|gossip_host| {
+            solana_net_utils::parse_host(gossip_host).unwrap_or_else(|err| {
+                eprintln!("Failed to parse --gossip-host: {}", err);
                 exit(1);
             })
-    };
+        })
+        .unwrap_or_else(|| {
+            if let Some(entrypoint_addr) = entrypoint_addr {
+                solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
+                    eprintln!(
+                        "Failed to contact cluster entrypoint {}: {}",
+                        entrypoint_addr, err
+                    );
+                    exit(1);
+                })
+            } else {
+                std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1))
+            }
+        });
 
     let gossip_addr = SocketAddr::new(
         gossip_host,

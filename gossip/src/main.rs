@@ -94,7 +94,7 @@ fn parse_matches() -> ArgMatches<'static> {
                         .value_name("HOST")
                         .takes_value(true)
                         .validator(solana_net_utils::is_host)
-                        .help("Gossip DNS name or IP address for the node \
+                        .help("Gossip DNS name or IP address for the node to advertise in gossip \
                                [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
                 )
                 .arg(
