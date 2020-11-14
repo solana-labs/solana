@@ -344,6 +344,7 @@ pub struct RpcSubscriptions {
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
     exit: Arc<AtomicBool>,
+    enable_vote_subscription: bool,
 }
 
 impl Drop for RpcSubscriptions {
@@ -360,6 +361,22 @@ impl RpcSubscriptions {
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
+    ) -> Self {
+        Self::new_with_vote_subscription(
+            exit,
+            bank_forks,
+            block_commitment_cache,
+            optimistically_confirmed_bank,
+            false,
+        )
+    }
+
+    pub fn new_with_vote_subscription(
+        exit: &Arc<AtomicBool>,
+        bank_forks: Arc<RwLock<BankForks>>,
+        block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+        optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
+        enable_vote_subscription: bool,
     ) -> Self {
         let (notification_sender, notification_receiver): (
             Sender<NotificationEntry>,
@@ -422,17 +439,20 @@ impl RpcSubscriptions {
             block_commitment_cache,
             optimistically_confirmed_bank,
             exit: exit.clone(),
+            enable_vote_subscription,
         }
     }
 
+    // For tests only...
     pub fn default_with_bank_forks(bank_forks: Arc<RwLock<BankForks>>) -> Self {
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-        Self::new(
+        Self::new_with_vote_subscription(
             &Arc::new(AtomicBool::new(false)),
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::default())),
             optimistically_confirmed_bank,
+            true,
         )
     }
 
@@ -706,9 +726,15 @@ impl RpcSubscriptions {
     }
 
     pub fn add_vote_subscription(&self, sub_id: SubscriptionId, subscriber: Subscriber<RpcVote>) {
-        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-        let mut subscriptions = self.subscriptions.vote_subscriptions.write().unwrap();
-        subscriptions.insert(sub_id, sink);
+        if self.enable_vote_subscription {
+            let sink = subscriber.assign_id(sub_id.clone()).unwrap();
+            let mut subscriptions = self.subscriptions.vote_subscriptions.write().unwrap();
+            subscriptions.insert(sub_id, sink);
+        } else {
+            let _ = subscriber.reject(jsonrpc_core::Error::new(
+                jsonrpc_core::ErrorCode::MethodNotFound,
+            ));
+        }
     }
 
     pub fn remove_vote_subscription(&self, id: &SubscriptionId) -> bool {
