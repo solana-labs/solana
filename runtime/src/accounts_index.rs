@@ -295,7 +295,7 @@ impl<T: 'static + Clone> AccountsIndex<T> {
             By the time the scan on slot 4 is called, slot 2 may already have been
             cleaned by a clean on slot 3, but slot 4 may not have been cleaned.
             The state in slot 2 would have been purged and is not saved in any roots.
-            In this case, a scan on slot 4 wouldn't accurately reflect he state when bank 4
+            In this case, a scan on slot 4 wouldn't accurately reflect the state when bank 4
             was frozen. In cases like this, we default to a scan on the latest roots by
             removing all `ancestors`.
             */

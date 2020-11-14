@@ -42,7 +42,7 @@ use solana_sdk::{
     poh_config::PohConfig,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
-    system_transaction,
+    system_program, system_transaction,
 };
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
@@ -53,7 +53,7 @@ use std::{
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
     sync::Arc,
-    thread::sleep,
+    thread::{sleep, Builder},
     time::Duration,
 };
 use tempfile::TempDir;
@@ -2141,6 +2141,127 @@ fn test_no_optimistic_confirmation_violation_with_tower() {
 #[serial]
 fn test_optimistic_confirmation_violation_without_tower() {
     do_test_optimistic_confirmation_violation_with_or_without_tower(false);
+}
+
+#[test]
+#[serial]
+fn test_load_program_accounts() {
+    solana_logger::setup();
+    // First set up the cluster with 2 nodes
+    let slots_per_epoch = 2048;
+    let node_stakes = vec![51, 50];
+    let validator_keys: Vec<_> = vec![
+        "4qhhXNTbKD1a5vxDDLZcHKj7ELNeiivtUBxn3wUK1F5VRsQVP89VUhfXqSfgiFB14GfuBgtrQ96n9NvWQADVkcCg",
+        "3kHBzVwie5vTEaY6nFCPeFT8qDpoXzn7dCEioGRNBTnUDpvwnG85w8Wq63gVWpVTP8k2a8cgcWRjSXyUkEygpXWS",
+    ]
+    .iter()
+    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+    .take(node_stakes.len())
+    .collect();
+    let config = ClusterConfig {
+        cluster_lamports: 100_000,
+        node_stakes: node_stakes.clone(),
+        validator_configs: vec![ValidatorConfig::default(); node_stakes.len()],
+        validator_keys: Some(validator_keys),
+        slots_per_epoch,
+        stakers_slot_offset: slots_per_epoch,
+        skip_warmup_slots: true,
+        ..ClusterConfig::default()
+    };
+    let cluster = LocalCluster::new(&config);
+
+    // transfer back and forth
+    let funding_keypair = Keypair::from_bytes(&cluster.funding_keypair.to_bytes()).unwrap();
+    let funding_pubkey = funding_keypair.pubkey();
+    let other_keypair = Keypair::new();
+    let other_pubkey = other_keypair.pubkey();
+    info!(
+        "funding key: {}, other key: {}",
+        funding_pubkey, other_pubkey
+    );
+    let client = cluster
+        .get_validator_client(&cluster.entry_point_info.id)
+        .unwrap();
+    let exit = Arc::new(AtomicBool::new(false));
+    let exit_ = exit.clone();
+    let t_update = Builder::new()
+        .name("update".to_string())
+        .spawn(move || loop {
+            if exit_.load(Ordering::Relaxed) {
+                return;
+            }
+            let (blockhash, _fee_calculator, _last_valid_slot) = client
+                .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+                .unwrap();
+            for i in 0..100 {
+                client
+                    .async_transfer(i, &funding_keypair, &other_keypair.pubkey(), blockhash)
+                    .unwrap();
+                sleep(Duration::from_millis(5));
+            }
+            for i in 0..100 {
+                client
+                    .async_transfer(i, &other_keypair, &funding_keypair.pubkey(), blockhash)
+                    .unwrap();
+                sleep(Duration::from_millis(5));
+            }
+        })
+        .unwrap();
+
+    // Scan, the total funds should add up to the original
+    let all_pubkeys = cluster.get_node_pubkeys();
+    let other_validator_id = all_pubkeys
+        .into_iter()
+        .find(|x| *x != cluster.entry_point_info.id)
+        .unwrap();
+    let client = cluster.get_validator_client(&other_validator_id).unwrap();
+    let expected_total_balance = client
+        .get_balance(&cluster.funding_keypair.pubkey())
+        .unwrap();
+    let exit_ = exit.clone();
+    let t_scan = Builder::new()
+        .name("scan".to_string())
+        .spawn(move || loop {
+            if exit_.load(Ordering::Relaxed) {
+                return;
+            }
+            if let Some(total_scan_balance) = client
+                .get_program_accounts(&system_program::id())
+                .ok()
+                .map(|result| {
+                    result
+                        .into_iter()
+                        .map(|(key, account)| {
+                            if key == funding_pubkey || key == other_pubkey {
+                                info!("key: {} balance: {}", key, account.lamports);
+                                account.lamports
+                            } else {
+                                0
+                            }
+                        })
+                        .sum::<u64>()
+                })
+            {
+                info!("total scan balance: {}", total_scan_balance);
+                assert_eq!(total_scan_balance, expected_total_balance);
+            }
+        })
+        .unwrap();
+
+    let client = cluster.get_validator_client(&other_validator_id).unwrap();
+    loop {
+        let root = client
+            .get_slot_with_commitment(CommitmentConfig::root())
+            .expect("get root");
+        if root > 30 {
+            break;
+        }
+        sleep(Duration::from_millis(10));
+    }
+
+    exit.store(true, Ordering::Relaxed);
+    t_update.join().unwrap();
+    t_scan.join().unwrap();
 }
 
 fn wait_for_next_snapshot(

@@ -2620,6 +2620,11 @@ impl Bank {
                         bpf_compute_budget,
                     );
 
+                    info!(
+                        "processed tx sig: {:?}, result: {:?}",
+                        tx.signatures[0], process_result
+                    );
+
                     if enable_log_recording {
                         let mut log_messages: TransactionLogMessages =
                             Rc::try_unwrap(log_collector.unwrap_or_default())

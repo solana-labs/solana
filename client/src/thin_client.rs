@@ -276,6 +276,12 @@ impl ThinClient {
         )
     }
 
+    pub fn get_program_accounts(&self, pubkey: &Pubkey) -> TransportResult<Vec<(Pubkey, Account)>> {
+        self.rpc_client()
+            .get_program_accounts(pubkey)
+            .map_err(|e| e.into())
+    }
+
     pub fn wait_for_balance_with_commitment(
         &self,
         pubkey: &Pubkey,
@@ -555,6 +561,11 @@ impl AsyncClient for ThinClient {
         serialize_into(&mut wr, &transaction)
             .expect("serialize Transaction in pub fn transfer_signed");
         assert!(buf.len() < PACKET_DATA_SIZE);
+        info!(
+            "sending {} to {}",
+            transaction.signatures[0],
+            self.tpu_addr()
+        );
         self.transactions_socket
             .send_to(&buf[..], &self.tpu_addr())?;
         Ok(transaction.signatures[0])
