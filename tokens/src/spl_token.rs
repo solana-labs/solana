@@ -96,7 +96,7 @@ mod tests {
     use crate::{
         commands::{process_allocations, tests::tmp_file_path, Allocation},
         db::{self, check_output_file},
-        spl_token_helpers::spl_token_amount,
+        spl_token::spl_token_amount,
     };
     use solana_account_decoder::parse_token::{spl_token_id_v2_0, spl_token_v2_0_pubkey};
     use solana_program_test::*;
