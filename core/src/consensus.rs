@@ -385,9 +385,15 @@ impl Tower {
         slot
     }
 
-    pub fn new_vote_from_bank(&self, bank: &Bank, vote_account_pubkey: &Pubkey) -> (Vote, usize) {
+    pub fn new_vote_from_bank(&self, bank: &Bank, vote_account_pubkey: &Pubkey, bad_vote_rate: u32) -> (Vote, usize) {
+        use rand::{thread_rng, Rng};
         let voted_slot = Self::last_voted_slot_in_bank(bank, vote_account_pubkey);
-        Self::new_vote(&self.lockouts, bank.slot(), bank.hash(), voted_slot)
+        let hash = if bad_vote_rate != 0 && thread_rng().gen_ratio(1, bad_vote_rate) {
+            solana_sdk::hash::new_rand(&mut thread_rng())
+        } else {
+            bank.hash()
+        };
+        Self::new_vote(&self.lockouts, bank.slot(), hash, voted_slot)
     }
 
     pub fn record_bank_vote(&mut self, vote: Vote) -> Option<Slot> {

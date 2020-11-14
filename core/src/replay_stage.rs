@@ -106,6 +106,7 @@ pub struct ReplayStageConfig {
     pub rewards_recorder_sender: Option<RewardsRecorderSender>,
     pub cache_block_time_sender: Option<CacheBlockTimeSender>,
     pub bank_notification_sender: Option<BankNotificationSender>,
+    pub bad_vote_rate: u32,
 }
 
 #[derive(Default)]
@@ -238,6 +239,7 @@ impl ReplayStage {
             rewards_recorder_sender,
             cache_block_time_sender,
             bank_notification_sender,
+            bad_vote_rate,
         } = config;
 
         trace!("replay stage");
@@ -455,6 +457,7 @@ impl ReplayStage {
                             &mut heaviest_subtree_fork_choice,
                             &cache_block_time_sender,
                             &bank_notification_sender,
+                            bad_vote_rate,
                         );
                     };
                     voting_time.stop();
@@ -1047,12 +1050,13 @@ impl ReplayStage {
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         cache_block_time_sender: &Option<CacheBlockTimeSender>,
         bank_notification_sender: &Option<BankNotificationSender>,
+        bad_vote_rate: u32,
     ) {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
         }
         trace!("handle votable bank {}", bank.slot());
-        let (vote, tower_index) = tower.new_vote_from_bank(bank, vote_account_pubkey);
+        let (vote, tower_index) = tower.new_vote_from_bank(bank, vote_account_pubkey, bad_vote_rate);
         let new_root = tower.record_bank_vote(vote);
         let last_vote = tower.last_vote_and_timestamp();
 

@@ -108,6 +108,7 @@ pub struct ValidatorConfig {
     pub bpf_jit: bool,
     pub send_transaction_retry_ms: u64,
     pub send_transaction_leader_forward_count: u64,
+    pub bad_vote_rate: u32,
 }
 
 impl Default for ValidatorConfig {
@@ -148,6 +149,7 @@ impl Default for ValidatorConfig {
             bpf_jit: false,
             send_transaction_retry_ms: 2000,
             send_transaction_leader_forward_count: 2,
+            bad_vote_rate: 0,
         }
     }
 }
@@ -591,6 +593,7 @@ impl Validator {
                 trusted_validators: config.trusted_validators.clone(),
                 repair_validators: config.repair_validators.clone(),
                 accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
+                bad_vote_rate: config.bad_vote_rate,
             },
         );
 
