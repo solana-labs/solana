@@ -350,7 +350,11 @@ async fn distribute_allocations(
     Ok(())
 }
 
-fn read_allocations(input_csv: &str, transfer_amount: Option<f64>) -> io::Result<Vec<Allocation>> {
+fn read_allocations(
+    input_csv: &str,
+    transfer_amount: Option<f64>,
+    require_lockup_heading: bool,
+) -> io::Result<Vec<Allocation>> {
     let mut rdr = ReaderBuilder::new().trim(Trim::All).from_path(input_csv)?;
     let allocations = if let Some(amount) = transfer_amount {
         let recipients: Vec<String> = rdr
@@ -365,8 +369,21 @@ fn read_allocations(input_csv: &str, transfer_amount: Option<f64>) -> io::Result
                 lockup_date: "".to_string(),
             })
             .collect()
-    } else {
+    } else if require_lockup_heading {
         rdr.deserialize().map(|entry| entry.unwrap()).collect()
+    } else {
+        let recipients: Vec<(String, f64)> = rdr
+            .deserialize()
+            .map(|recipient| recipient.unwrap())
+            .collect();
+        recipients
+            .into_iter()
+            .map(|(recipient, amount)| Allocation {
+                recipient,
+                amount,
+                lockup_date: "".to_string(),
+            })
+            .collect()
     };
     Ok(allocations)
 }
@@ -383,7 +400,12 @@ pub async fn process_allocations(
     client: &mut BanksClient,
     args: &DistributeTokensArgs,
 ) -> Result<Option<usize>, Error> {
-    let mut allocations: Vec<Allocation> = read_allocations(&args.input_csv, args.transfer_amount)?;
+    let require_lockup_heading = args.stake_args.is_some();
+    let mut allocations: Vec<Allocation> = read_allocations(
+        &args.input_csv,
+        args.transfer_amount,
+        require_lockup_heading,
+    )?;
     let is_sol = args.spl_token_args.is_none();
 
     let starting_total_tokens = Token::from(allocations.iter().map(|x| x.amount).sum(), is_sol);
@@ -607,7 +629,7 @@ async fn check_payer_balances(
 }
 
 pub async fn process_balances(client: &mut BanksClient, args: &BalancesArgs) -> Result<(), Error> {
-    let allocations: Vec<Allocation> = read_allocations(&args.input_csv, None)?;
+    let allocations: Vec<Allocation> = read_allocations(&args.input_csv, None, false)?;
     let allocations = merge_allocations(&allocations);
 
     let token = if let Some(spl_token_args) = &args.spl_token_args {
@@ -962,8 +984,75 @@ pub(crate) mod tests {
         wtr.flush().unwrap();
 
         assert_eq!(
-            read_allocations(&input_csv, None).unwrap(),
+            read_allocations(&input_csv, None, false).unwrap(),
+            vec![allocation.clone()]
+        );
+        assert_eq!(
+            read_allocations(&input_csv, None, true).unwrap(),
             vec![allocation]
+        );
+    }
+
+    #[test]
+    fn test_read_allocations_no_lockup() {
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let file = NamedTempFile::new().unwrap();
+        let input_csv = file.path().to_str().unwrap().to_string();
+        let mut wtr = csv::WriterBuilder::new().from_writer(file);
+        wtr.serialize(("recipient".to_string(), "amount".to_string()))
+            .unwrap();
+        wtr.serialize((&pubkey0.to_string(), 42.0)).unwrap();
+        wtr.serialize((&pubkey1.to_string(), 43.0)).unwrap();
+        wtr.flush().unwrap();
+
+        let expected_allocations = vec![
+            Allocation {
+                recipient: pubkey0.to_string(),
+                amount: 42.0,
+                lockup_date: "".to_string(),
+            },
+            Allocation {
+                recipient: pubkey1.to_string(),
+                amount: 43.0,
+                lockup_date: "".to_string(),
+            },
+        ];
+        assert_eq!(
+            read_allocations(&input_csv, None, false).unwrap(),
+            expected_allocations
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_read_allocations_malformed() {
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let file = NamedTempFile::new().unwrap();
+        let input_csv = file.path().to_str().unwrap().to_string();
+        let mut wtr = csv::WriterBuilder::new().from_writer(file);
+        wtr.serialize(("recipient".to_string(), "amount".to_string()))
+            .unwrap();
+        wtr.serialize((&pubkey0.to_string(), 42.0)).unwrap();
+        wtr.serialize((&pubkey1.to_string(), 43.0)).unwrap();
+        wtr.flush().unwrap();
+
+        let expected_allocations = vec![
+            Allocation {
+                recipient: pubkey0.to_string(),
+                amount: 42.0,
+                lockup_date: "".to_string(),
+            },
+            Allocation {
+                recipient: pubkey1.to_string(),
+                amount: 43.0,
+                lockup_date: "".to_string(),
+            },
+        ];
+        assert_eq!(
+            read_allocations(&input_csv, None, true).unwrap(),
+            expected_allocations
         );
     }
 
@@ -1001,7 +1090,7 @@ pub(crate) mod tests {
             },
         ];
         assert_eq!(
-            read_allocations(&input_csv, Some(amount)).unwrap(),
+            read_allocations(&input_csv, Some(amount), false).unwrap(),
             expected_allocations
         );
     }
