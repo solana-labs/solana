@@ -4953,6 +4953,7 @@ dependencies = [
  "solana-client",
  "solana-core",
  "solana-logger 1.4.10",
+ "solana-program-test",
  "solana-remote-wallet",
  "solana-runtime",
  "solana-sdk",

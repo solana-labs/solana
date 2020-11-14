@@ -46,9 +46,9 @@ use tokio::time::sleep;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Allocation {
-    recipient: String,
+    pub recipient: String,
     pub amount: f64,
-    lockup_date: String,
+    pub lockup_date: String,
 }
 
 #[derive(Debug, PartialEq)]
@@ -966,7 +966,7 @@ pub async fn test_process_distribute_stake_with_client(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use solana_banks_client::start_client;
     use solana_banks_server::banks_server::start_local_server;
@@ -1206,7 +1206,7 @@ mod tests {
         }
     }
 
-    fn tmp_file_path(name: &str, pubkey: &Pubkey) -> String {
+    pub fn tmp_file_path(name: &str, pubkey: &Pubkey) -> String {
         use std::env;
         let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
 
