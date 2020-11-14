@@ -1265,6 +1265,12 @@ pub fn main() {
                 .help("IP address to bind the RPC port [default: use --bind-address]"),
         )
         .arg(
+            Arg::with_name("rpc_pubsub_enable_vote_subscription")
+                .long("rpc-pubsub-enable-vote-subscription")
+                .takes_value(false)
+                .help("Enable the unstable RPC PubSub `voteSubscribe` subscription"),
+        )
+        .arg(
             Arg::with_name("rpc_pubsub_max_connections")
                 .long("rpc-pubsub-max-connections")
                 .value_name("NUMBER")
@@ -1469,6 +1475,7 @@ pub fn main() {
             )
         }),
         pubsub_config: PubSubConfig {
+            enable_vote_subscription: matches.is_present("rpc_pubsub_enable_vote_subscription"),
             max_connections: value_t_or_exit!(matches, "rpc_pubsub_max_connections", usize),
             max_fragment_size: value_t_or_exit!(matches, "rpc_pubsub_max_fragment_size", usize),
             max_in_buffer_capacity: value_t_or_exit!(

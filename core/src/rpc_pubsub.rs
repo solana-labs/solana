@@ -1002,11 +1002,12 @@ mod tests {
         // Setup Subscriptions
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-        let subscriptions = RpcSubscriptions::new(
+        let subscriptions = RpcSubscriptions::new_with_vote_subscription(
             &exit,
             bank_forks,
             block_commitment_cache,
             optimistically_confirmed_bank,
+            true,
         );
         rpc.subscriptions = Arc::new(subscriptions);
         rpc.vote_subscribe(session, subscriber);
