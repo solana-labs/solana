@@ -1551,7 +1551,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 {"jsonrpc":"2.0","result":true,"id":1}
 ```
 
-### Subscription Websocket
+## Subscription Websocket
 
 After connecting to the RPC PubSub websocket at `ws://<ADDRESS>/`:
 
@@ -1973,7 +1973,11 @@ Unsubscribe from root notifications
 {"jsonrpc": "2.0","result": true,"id": 1}
 ```
 
-### voteSubscribe
+### voteSubscribe - Unstable, disabled by default
+
+**This subscription is unstable and only available if the validator was started
+with the `--rpc-pubsub-enable-vote-subscription` flag.  The format of this
+subscription may change in the future**
 
 Subscribe to receive notification anytime a new vote is observed in gossip.
 These votes are pre-consensus therefore there is no guarantee these votes will
