@@ -344,11 +344,12 @@ impl Validator {
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
 
-        let subscriptions = Arc::new(RpcSubscriptions::new(
+        let subscriptions = Arc::new(RpcSubscriptions::new_with_vote_subscription(
             &exit,
             bank_forks.clone(),
             block_commitment_cache.clone(),
             optimistically_confirmed_bank.clone(),
+            config.pubsub_config.enable_vote_subscription,
         ));
 
         let (completed_data_sets_sender, completed_data_sets_receiver) =
