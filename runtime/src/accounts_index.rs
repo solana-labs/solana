@@ -394,8 +394,8 @@ impl<T: 'static + Clone> AccountsIndex<T> {
             .read()
             .unwrap()
             .keys()
-            .cloned()
             .next()
+            .cloned()
     }
 
     // Given a SlotSlice `L`, a list of ancestors and a maximum slot, find the latest element

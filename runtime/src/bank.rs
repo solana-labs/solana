@@ -10503,7 +10503,7 @@ pub(crate) mod tests {
                     bank_to_scan_receiver.recv_timeout(Duration::from_millis(10))
                 {
                     let accounts = bank_to_scan.get_program_accounts(&program_id);
-                    // Should never seen empty accounts because not slot ever deleted
+                    // Should never seen empty accounts because no slot ever deleted
                     // any of the original accounts, and the scan should reflect the
                     // account state at some frozen slot `X` (no partial updates).
                     assert!(!accounts.is_empty());
