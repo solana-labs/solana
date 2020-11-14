@@ -105,6 +105,7 @@ pub struct ValidatorConfig {
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub contact_debug_interval: u64,
     pub bpf_jit: bool,
+    pub bad_vote_rate: u32,
 }
 
 impl Default for ValidatorConfig {
@@ -142,6 +143,7 @@ impl Default for ValidatorConfig {
             debug_keys: None,
             contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL,
             bpf_jit: false,
+            bad_vote_rate: 0,
         }
     }
 }
@@ -582,6 +584,7 @@ impl Validator {
                 trusted_validators: config.trusted_validators.clone(),
                 repair_validators: config.repair_validators.clone(),
                 accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
+                bad_vote_rate: config.bad_vote_rate,
             },
         );
 

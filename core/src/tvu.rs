@@ -74,6 +74,7 @@ pub struct TvuConfig {
     pub trusted_validators: Option<HashSet<Pubkey>>,
     pub repair_validators: Option<HashSet<Pubkey>>,
     pub accounts_hash_fault_injection_slots: u64,
+    pub bad_vote_rate: u32,
 }
 
 impl Tvu {
@@ -222,6 +223,7 @@ impl Tvu {
             rewards_recorder_sender,
             cache_block_time_sender,
             bank_notification_sender,
+            bad_vote_rate: tvu_config.bad_vote_rate,
         };
 
         let replay_stage = ReplayStage::new(

@@ -148,6 +148,37 @@ fn test_spend_and_verify_all_nodes_3() {
 
 #[test]
 #[serial]
+fn test_vote_hash_mismatch() {
+    solana_logger::setup();
+    let num_nodes = 3;
+    let mut validator_config = ValidatorConfig::default();
+    let mut validator_configs = vec![validator_config.clone(); num_nodes - 1];
+    validator_config.bad_vote_rate = 10;
+    validator_configs.push(validator_config);
+    let config = ClusterConfig {
+        cluster_lamports: 10_000,
+        poh_config: PohConfig::new_sleep(Duration::from_millis(200)),
+        node_stakes: vec![100; num_nodes],
+        validator_configs,
+        ..ClusterConfig::default()
+    };
+    warn!("Starting cluster..");
+    let mut cluster = LocalCluster::new(&config);
+    warn!("Waiting for cluster..");
+    for _ in 0..100 {
+        let client = cluster
+            .get_validator_client(&cluster.entry_point_info.id)
+            .unwrap();
+        if let Ok(slot) = client.get_slot() {
+            warn!("slot: {}", slot);
+        }
+        sleep(Duration::from_secs(1));
+    }
+    warn!("done..");
+}
+
+#[test]
+#[serial]
 fn test_local_cluster_signature_subscribe() {
     solana_logger::setup();
     let num_nodes = 2;
