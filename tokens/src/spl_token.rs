@@ -2,9 +2,16 @@ use crate::{
     args::{DistributeTokensArgs, SplTokenArgs},
     commands::{Allocation, Error, FundingSource},
 };
-use solana_account_decoder::parse_token::{pubkey_from_spl_token_v2_0, token_amount_to_ui_amount};
+use console::style;
+use solana_account_decoder::parse_token::{
+    pubkey_from_spl_token_v2_0, spl_token_v2_0_pubkey, token_amount_to_ui_amount,
+};
 use solana_banks_client::{BanksClient, BanksClientExt};
-use solana_sdk::native_token::lamports_to_sol;
+use solana_sdk::{instruction::Instruction, native_token::lamports_to_sol};
+use solana_transaction_status::parse_token::spl_token_v2_0_instruction;
+use spl_associated_token_account_v1_0::{
+    create_associated_token_account, get_associated_token_address,
+};
 use spl_token_v2_0::{
     solana_program::program_pack::Pack,
     state::{Account as SplTokenAccount, Mint},
@@ -44,6 +51,46 @@ pub async fn update_decimals(
 
 pub fn spl_token_amount(amount: f64, decimals: u8) -> u64 {
     (amount * 10_usize.pow(decimals as u32) as f64) as u64
+}
+
+pub fn build_spl_token_instructions(
+    allocation: &Allocation,
+    args: &DistributeTokensArgs,
+    do_create_associated_token_account: bool,
+) -> Vec<Instruction> {
+    let spl_token_args = args
+        .spl_token_args
+        .as_ref()
+        .expect("spl_token_args must be some");
+    let wallet_address = allocation.recipient.parse().unwrap();
+    let associated_token_address = get_associated_token_address(
+        &wallet_address,
+        &spl_token_v2_0_pubkey(&spl_token_args.mint),
+    );
+    let mut instructions = vec![];
+    if do_create_associated_token_account {
+        let create_associated_token_account_instruction = create_associated_token_account(
+            &spl_token_v2_0_pubkey(&args.fee_payer.pubkey()),
+            &wallet_address,
+            &spl_token_v2_0_pubkey(&spl_token_args.mint),
+        );
+        instructions.push(spl_token_v2_0_instruction(
+            create_associated_token_account_instruction,
+        ));
+    }
+    let spl_instruction = spl_token_v2_0::instruction::transfer_checked(
+        &spl_token_v2_0::id(),
+        &spl_token_v2_0_pubkey(&spl_token_args.token_account_address),
+        &spl_token_v2_0_pubkey(&spl_token_args.mint),
+        &associated_token_address,
+        &spl_token_v2_0_pubkey(&args.sender_keypair.pubkey()),
+        &[],
+        spl_token_amount(allocation.amount, spl_token_args.decimals),
+        spl_token_args.decimals,
+    )
+    .unwrap();
+    instructions.push(spl_token_v2_0_instruction(spl_instruction));
+    instructions
 }
 
 pub async fn check_spl_token_balances(
@@ -87,6 +134,49 @@ pub async fn check_spl_token_balances(
             token_amount_to_ui_amount(allocation_amount, spl_token_args.decimals).ui_amount,
         ));
     }
+    Ok(())
+}
+
+pub async fn print_token_balances(
+    client: &mut BanksClient,
+    allocation: &Allocation,
+    spl_token_args: &SplTokenArgs,
+) -> Result<(), Error> {
+    let address = allocation.recipient.parse().unwrap();
+    let expected = allocation.amount;
+    let associated_token_address = get_associated_token_address(
+        &spl_token_v2_0_pubkey(&address),
+        &spl_token_v2_0_pubkey(&spl_token_args.mint),
+    );
+    let recipient_account = client
+        .get_account(pubkey_from_spl_token_v2_0(&associated_token_address))
+        .await?
+        .unwrap_or_default();
+    let (actual, difference) =
+        if let Ok(recipient_token) = SplTokenAccount::unpack(&recipient_account.data) {
+            let actual = token_amount_to_ui_amount(recipient_token.amount, spl_token_args.decimals)
+                .ui_amount;
+            (
+                style(format!(
+                    "{:>24.1$}",
+                    actual, spl_token_args.decimals as usize
+                )),
+                format!(
+                    "{:>24.1$}",
+                    actual - expected,
+                    spl_token_args.decimals as usize
+                ),
+            )
+        } else {
+            (
+                style("Associated token account not yet created".to_string()).yellow(),
+                "".to_string(),
+            )
+        };
+    println!(
+        "{:<44}  {:>24.4$}  {:>24}  {:>24}",
+        allocation.recipient, expected, actual, difference, spl_token_args.decimals as usize
+    );
     Ok(())
 }
 
