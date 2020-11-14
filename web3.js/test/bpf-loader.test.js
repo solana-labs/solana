@@ -171,9 +171,11 @@ describe('load BPF Rust program', () => {
     }
 
     expect(logs.length).toBeGreaterThanOrEqual(2);
-    expect(logs[0]).toEqual(`Call BPF program ${program.publicKey.toBase58()}`);
+    expect(logs[0]).toEqual(
+      `Program ${program.publicKey.toBase58()} invoke [1]`,
+    );
     expect(logs[logs.length - 1]).toEqual(
-      `BPF program ${program.publicKey.toBase58()} success`,
+      `Program ${program.publicKey.toBase58()} success`,
     );
   });
 
@@ -197,9 +199,11 @@ describe('load BPF Rust program', () => {
     }
 
     expect(logs.length).toBeGreaterThanOrEqual(2);
-    expect(logs[0]).toEqual(`Call BPF program ${program.publicKey.toBase58()}`);
+    expect(logs[0]).toEqual(
+      `Program ${program.publicKey.toBase58()} invoke [1]`,
+    );
     expect(logs[logs.length - 1]).toEqual(
-      `BPF program ${program.publicKey.toBase58()} success`,
+      `Program ${program.publicKey.toBase58()} success`,
     );
   });
 
@@ -224,9 +228,11 @@ describe('load BPF Rust program', () => {
     }
 
     expect(logs.length).toBeGreaterThanOrEqual(2);
-    expect(logs[0]).toEqual(`Call BPF program ${program.publicKey.toBase58()}`);
+    expect(logs[0]).toEqual(
+      `Program ${program.publicKey.toBase58()} invoke [1]`,
+    );
     expect(logs[logs.length - 1]).toEqual(
-      `BPF program ${program.publicKey.toBase58()} success`,
+      `Program ${program.publicKey.toBase58()} success`,
     );
   });
 
