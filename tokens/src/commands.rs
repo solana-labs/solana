@@ -11,9 +11,7 @@ use indexmap::IndexMap;
 use indicatif::{ProgressBar, ProgressStyle};
 use pickledb::PickleDb;
 use serde::{Deserialize, Serialize};
-use solana_account_decoder::parse_token::{
-    pubkey_from_spl_token_v2_0, spl_token_v2_0_pubkey, token_amount_to_ui_amount,
-};
+use solana_account_decoder::parse_token::{pubkey_from_spl_token_v2_0, spl_token_v2_0_pubkey};
 use solana_client::{
     client_error::{ClientError, Result as ClientResult},
     rpc_client::RpcClient,
@@ -32,14 +30,8 @@ use solana_stake_program::{
     stake_instruction::{self, LockupArgs},
     stake_state::{Authorized, Lockup, StakeAuthorize},
 };
-use solana_transaction_status::parse_token::spl_token_v2_0_instruction;
-use spl_associated_token_account_v1_0::{
-    create_associated_token_account, get_associated_token_address,
-};
-use spl_token_v2_0::{
-    solana_program::{program_error::ProgramError, program_pack::Pack},
-    state::Account as SplTokenAccount,
-};
+use spl_associated_token_account_v1_0::get_associated_token_address;
+use spl_token_v2_0::solana_program::program_error::ProgramError;
 use std::{
     cmp::{self},
     io,
@@ -49,9 +41,9 @@ use std::{
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Allocation {
-    recipient: String,
+    pub recipient: String,
     pub amount: f64,
-    lockup_date: String,
+    pub lockup_date: String,
 }
 
 #[derive(Debug, PartialEq)]
@@ -181,34 +173,8 @@ fn distribution_instructions(
         return vec![instruction];
     }
 
-    if let Some(spl_token_args) = &args.spl_token_args {
-        let wallet_address = allocation.recipient.parse().unwrap();
-        let associated_token_address = get_associated_token_address(
-            &wallet_address,
-            &spl_token_v2_0_pubkey(&spl_token_args.mint),
-        );
-        let mut instructions = vec![];
-        if do_create_associated_token_account {
-            let create_dta_instruction = create_associated_token_account(
-                &spl_token_v2_0_pubkey(&args.fee_payer.pubkey()),
-                &wallet_address,
-                &spl_token_v2_0_pubkey(&spl_token_args.mint),
-            );
-            instructions.push(spl_token_v2_0_instruction(create_dta_instruction));
-        }
-        let spl_instruction = spl_token_v2_0::instruction::transfer_checked(
-            &spl_token_v2_0::id(),
-            &spl_token_v2_0_pubkey(&spl_token_args.token_account_address),
-            &spl_token_v2_0_pubkey(&spl_token_args.mint),
-            &associated_token_address,
-            &spl_token_v2_0_pubkey(&args.sender_keypair.pubkey()),
-            &[],
-            spl_token_amount(allocation.amount, spl_token_args.decimals),
-            spl_token_args.decimals,
-        )
-        .unwrap();
-        instructions.push(spl_token_v2_0_instruction(spl_instruction));
-        return instructions;
+    if args.spl_token_args.is_some() {
+        return build_spl_token_instructions(allocation, args, do_create_associated_token_account);
     }
 
     let stake_args = args.stake_args.as_ref().unwrap();
@@ -670,47 +636,10 @@ pub fn process_balances(client: &RpcClient, args: &BalancesArgs) -> Result<(), E
     );
 
     for allocation in &allocations {
-        let address: Pubkey = allocation.recipient.parse().unwrap();
         if let Some(spl_token_args) = &args.spl_token_args {
-            let expected = allocation.amount;
-            let associated_token_address = get_associated_token_address(
-                &spl_token_v2_0_pubkey(&address),
-                &spl_token_v2_0_pubkey(&spl_token_args.mint),
-            );
-            let recipient_account = client
-                .get_account(&pubkey_from_spl_token_v2_0(&associated_token_address))
-                .unwrap_or_default();
-            let (actual, difference) =
-                if let Ok(recipient_token) = SplTokenAccount::unpack(&recipient_account.data) {
-                    let actual =
-                        token_amount_to_ui_amount(recipient_token.amount, spl_token_args.decimals)
-                            .ui_amount;
-                    (
-                        style(format!(
-                            "{:>24.1$}",
-                            actual, spl_token_args.decimals as usize
-                        )),
-                        format!(
-                            "{:>24.1$}",
-                            actual - expected,
-                            spl_token_args.decimals as usize
-                        ),
-                    )
-                } else {
-                    (
-                        style("Associated token account not yet created".to_string()).yellow(),
-                        "".to_string(),
-                    )
-                };
-            println!(
-                "{:<44}  {:>24.4$}  {:>24}  {:>24}",
-                allocation.recipient,
-                expected,
-                actual,
-                difference,
-                spl_token_args.decimals as usize
-            );
+            print_token_balances(client, allocation, spl_token_args)?;
         } else {
+            let address: Pubkey = allocation.recipient.parse().unwrap();
             let expected = lamports_to_sol(sol_to_lamports(allocation.amount));
             let actual = lamports_to_sol(client.get_balance(&address).unwrap());
             println!(
