@@ -777,6 +777,7 @@ impl RpcSubscriptions {
                         debug!("slot notify: {:?}", slot_info);
                         let subscriptions = subscriptions.slot_subscriptions.read().unwrap();
                         for (_, sink) in subscriptions.iter() {
+                            inc_new_counter_info!("rpc-subscription-notify-slot", 1);
                             notifier.notify(slot_info, sink);
                         }
                     }
@@ -787,6 +788,7 @@ impl RpcSubscriptions {
                         debug!("vote notify: {:?}", vote_info);
                         let subscriptions = subscriptions.vote_subscriptions.read().unwrap();
                         for (_, sink) in subscriptions.iter() {
+                            inc_new_counter_info!("rpc-subscription-notify-vote", 1);
                             notifier.notify(
                                 RpcVote {
                                     slots: vote_info.slots.clone(),
@@ -801,6 +803,7 @@ impl RpcSubscriptions {
                         debug!("root notify: {:?}", root);
                         let subscriptions = subscriptions.root_subscriptions.read().unwrap();
                         for (_, sink) in subscriptions.iter() {
+                            inc_new_counter_info!("rpc-subscription-notify-root", 1);
                             notifier.notify(root, sink);
                         }
                     }
@@ -941,6 +944,7 @@ impl RpcSubscriptions {
                 num_signatures_notified,
                 signatures_time,
             );
+            inc_new_counter_info!("rpc-subscription-notify-bank-or-gossip", total_notified);
             datapoint_info!(
                 "rpc_subscriptions",
                 ("source", source.to_string(), String),
