@@ -139,11 +139,11 @@ Send SPL tokens to the recipients in `<RECIPIENTS_CSV>`.
 Example recipients.csv:
 
 ```text
-recipient,amount,lockup_date
-CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT,75.4,
-C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s,10,
-7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr,42.1,
-7qQPmVAQxEQ5djPDCtiEUrxaPf8wKtLG1m6SB1brejJ1,20,
+recipient,amount
+CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT,75.4
+C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s,10
+7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr,42.1
+7qQPmVAQxEQ5djPDCtiEUrxaPf8wKtLG1m6SB1brejJ1,20
 ```
 
 You can check the status of the recipients before beginning a distribution. You
@@ -194,11 +194,11 @@ the `--dry-run` parameter, or `solana-tokens balances`.
 Example updated recipients.csv:
 
 ```text
-recipient,amount,lockup_date
-CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT,100,
-C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s,100,
-7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr,100,
-7qQPmVAQxEQ5djPDCtiEUrxaPf8wKtLG1m6SB1brejJ1,100,
+recipient,amount
+CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT,100
+C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s,100
+7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr,100
+7qQPmVAQxEQ5djPDCtiEUrxaPf8wKtLG1m6SB1brejJ1,100
 ```
 
 Using dry-run:
