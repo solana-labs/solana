@@ -3637,24 +3637,13 @@ impl Bank {
     }
 
     pub fn get_program_accounts(self: &Arc<Self>, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
-        self.rc.accounts.load_by_program(
-            &self.ancestors,
-            self.parents_inclusive()
-                .into_iter()
-                .map(|bank| (bank.slot(), bank))
-                .collect(),
-            program_id,
-        )
+        self.rc
+            .accounts
+            .load_by_program(&self.ancestors, program_id)
     }
 
     pub fn get_all_accounts_with_modified_slots(self: &Arc<Self>) -> Vec<(Pubkey, Account, Slot)> {
-        self.rc.accounts.load_all(
-            &self.ancestors,
-            self.parents_inclusive()
-                .into_iter()
-                .map(|bank| (bank.slot(), bank))
-                .collect(),
-        )
+        self.rc.accounts.load_all(&self.ancestors)
     }
 
     pub fn get_program_accounts_modified_since_parent(
@@ -3686,16 +3675,9 @@ impl Bank {
         filter_by_address: &HashSet<Pubkey>,
         filter: AccountAddressFilter,
     ) -> Vec<(Pubkey, u64)> {
-        self.rc.accounts.load_largest_accounts(
-            &self.ancestors,
-            self.parents_inclusive()
-                .into_iter()
-                .map(|bank| (bank.slot(), bank))
-                .collect(),
-            num,
-            filter_by_address,
-            filter,
-        )
+        self.rc
+            .accounts
+            .load_largest_accounts(&self.ancestors, num, filter_by_address, filter)
     }
 
     pub fn transaction_count(&self) -> u64 {

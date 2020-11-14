@@ -19,7 +19,6 @@ pub const ITER_BATCH_SIZE: usize = 1000;
 pub type SlotList<T> = Vec<(Slot, T)>;
 pub type SlotSlice<'s, T> = &'s [(Slot, T)];
 pub type Ancestors = HashMap<Slot, usize>;
-pub type AncestorBanks = BTreeMap<Slot, Arc<Bank>>;
 
 pub type RefCount = u64;
 pub type AccountMap<K, V> = BTreeMap<K, V>;
@@ -201,10 +200,6 @@ impl<T: 'static + Clone> AccountsIndex<T> {
     fn do_checked_scan_accounts<'a, F, R>(
         &'a self,
         ancestors: &Ancestors,
-        // These bank references prevent the banks from being dropped
-        // by the `Bank::Drop` implementation during the scan. Sorted
-        // from greatest to smallest
-        ancestor_banks: AncestorBanks,
         func: F,
         range: Option<R>,
     ) where
@@ -229,17 +224,6 @@ impl<T: 'static + Clone> AccountsIndex<T> {
 
             max_root
         };
-
-        // The earliest discoverable ancestor bank in the parent chain must be <= max_root,
-        // because in Bank::squash(), we add all the roots to the index before we truncate
-        // the parent chain. Also the `ancestor_banks` should include the calling bank
-        // itself, so the unwrap() is safe.
-        assert!(max_root >= *ancestor_banks.keys().next().unwrap());
-
-        // Ensure the calling bank was included in the ancestors set, i.e. ensure the ancestors
-        // were inclusive of the bank.
-        let slot_to_scan = ancestor_banks.keys().next_back().unwrap();
-        assert!(ancestors.contains_key(slot_to_scan));
 
         // First we show that for any bank `B` that is a descendant of
         // the current `max_root`, it must be true that and `B.ancestors.contains(max_root)`,
@@ -355,20 +339,6 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         because this `ancestor > max_root`, slot 4 not be cleaned in the middle of the scan
         either.
         */
-
-        for ancestor in ancestors.keys() {
-            // Recall from Diagram 1 above that if the ancestors were on a different fork than
-            // `max_root`, the ancestors would have been purged/emptied.
-            if *ancestor >= max_root {
-                // Check 2b) holds from proof above. Also, together with the
-                // assert!(ancestors.contains_key(slot_to_scan)) above check ensures
-                // every ancestor in `ancestors` is <= the calling bank because if
-                // there was one greater, then this assert!(ancestor_banks.contains_key(ancestor))
-                // would fail.
-                assert!(ancestor_banks.contains_key(ancestor));
-            }
-        }
-
         self.do_scan_accounts(ancestors, func, range, Some(max_root));
         {
             let mut ongoing_scan_roots = self.ongoing_scan_roots.write().unwrap();
@@ -471,15 +441,11 @@ impl<T: 'static + Clone> AccountsIndex<T> {
     }
 
     /// call func with every pubkey and index visible from a given set of ancestors
-    pub(crate) fn scan_accounts<F>(
-        &self,
-        ancestors: &Ancestors,
-        ancestor_banks: AncestorBanks,
-        func: F,
-    ) where
+    pub(crate) fn scan_accounts<F>(&self, ancestors: &Ancestors, func: F)
+    where
         F: FnMut(&Pubkey, (&T, Slot)),
     {
-        self.do_checked_scan_accounts(ancestors, ancestor_banks, func, None::<Range<Pubkey>>);
+        self.do_checked_scan_accounts(ancestors, func, None::<Range<Pubkey>>);
     }
 
     pub(crate) fn unchecked_scan_accounts<F>(&self, ancestors: &Ancestors, func: F)

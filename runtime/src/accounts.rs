@@ -2,7 +2,7 @@ use crate::{
     accounts_db::{
         AccountInfo, AccountStorage, AccountsDB, AppendVecId, BankHashInfo, ErrorCounters,
     },
-    accounts_index::{AccountsIndex, AncestorBanks, Ancestors},
+    accounts_index::{AccountsIndex, Ancestors},
     append_vec::StoredAccount,
     bank::{HashAgeKind, TransactionProcessResult},
     blockhash_queue::BlockhashQueue,
@@ -434,14 +434,12 @@ impl Accounts {
     pub fn load_largest_accounts(
         &self,
         ancestors: &Ancestors,
-        ancestor_banks: AncestorBanks,
         num: usize,
         filter_by_address: &HashSet<Pubkey>,
         filter: AccountAddressFilter,
     ) -> Vec<(Pubkey, u64)> {
         let mut accounts_balances = self.accounts_db.scan_accounts(
             ancestors,
-            ancestor_banks,
             |collector: &mut Vec<(Pubkey, u64)>, option| {
                 if let Some(data) = option
                     .filter(|(pubkey, account, _)| {
@@ -518,12 +516,10 @@ impl Accounts {
     pub fn load_by_program(
         &self,
         ancestors: &Ancestors,
-        ancestor_banks: AncestorBanks,
         program_id: &Pubkey,
     ) -> Vec<(Pubkey, Account)> {
         self.accounts_db.scan_accounts(
             ancestors,
-            ancestor_banks,
             |collector: &mut Vec<(Pubkey, Account)>, some_account_tuple| {
                 Self::load_while_filtering(collector, some_account_tuple, |account| {
                     account.owner == *program_id
@@ -532,14 +528,9 @@ impl Accounts {
         )
     }
 
-    pub fn load_all(
-        &self,
-        ancestors: &Ancestors,
-        ancestor_banks: AncestorBanks,
-    ) -> Vec<(Pubkey, Account, Slot)> {
+    pub fn load_all(&self, ancestors: &Ancestors) -> Vec<(Pubkey, Account, Slot)> {
         self.accounts_db.scan_accounts(
             ancestors,
-            ancestor_banks,
             |collector: &mut Vec<(Pubkey, Account, Slot)>, some_account_tuple| {
                 if let Some((pubkey, account, slot)) =
                     some_account_tuple.filter(|(_, account, _)| Self::is_loadable(account))
