@@ -18,6 +18,8 @@ use std::{
 
 #[derive(Debug, Clone)]
 pub struct PubSubConfig {
+    pub enable_vote_subscription: bool,
+
     // See the corresponding fields in
     // https://github.com/paritytech/ws-rs/blob/be4d47575bae55c60d9f51b47480d355492a94fc/src/lib.rs#L131
     // for a complete description of each field in this struct
@@ -30,8 +32,9 @@ pub struct PubSubConfig {
 impl Default for PubSubConfig {
     fn default() -> Self {
         Self {
-            max_connections: 1000,             // Arbitrary, default of 100 is too low
-            max_fragment_size: 50 * 1024,      // 50KB
+            enable_vote_subscription: false,
+            max_connections: 1000, // Arbitrary, default of 100 is too low
+            max_fragment_size: 50 * 1024, // 50KB
             max_in_buffer_capacity: 50 * 1024, // 50KB
             max_out_buffer_capacity: 15 * 1024 * 1024, // max account size (10MB), then 5MB extra for base64 encoding overhead/etc
         }
