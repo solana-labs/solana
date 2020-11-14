@@ -164,17 +164,12 @@ pub trait ComputeMeter {
 /// Log messages
 pub trait Logger {
     fn log_enabled(&self) -> bool;
-<<<<<<< HEAD:runtime/src/process_instruction.rs
-    /// Log a message
-    fn log(&mut self, message: &str);
-=======
 
     /// Log a message.
     ///
     /// Unless explicitly stated, log messages are not considered stable and may change in the
     /// future as necessary
     fn log(&self, message: &str);
->>>>>>> b4deeb8e3... Add stable program logging for BPF and native programs:sdk/src/process_instruction.rs
 }
 
 ///
@@ -195,10 +190,8 @@ pub mod stable_log {
         program_id: &Pubkey,
         invoke_depth: usize,
     ) {
-        if let Ok(logger) = logger.try_borrow_mut() {
-            if logger.log_enabled() {
-                logger.log(&format!("Program {} invoke [{}]", program_id, invoke_depth));
-            }
+        if logger.log_enabled() {
+            logger.log(&format!("Program {} invoke [{}]", program_id, invoke_depth));
         }
     }
 
@@ -208,10 +201,8 @@ pub mod stable_log {
     ///     "Program log: <program-generated output>"
     /// That is, any program-generated output is guaranteed to be prefixed by "Program log: "
     pub fn program_log(logger: &Rc<RefCell<dyn Logger>>, message: &str) {
-        if let Ok(logger) = logger.try_borrow_mut() {
-            if logger.log_enabled() {
-                logger.log(&format!("Program log: {}", message))
-            }
+        if logger.log_enabled() {
+            logger.log(&format!("Program log: {}", message))
         }
     }
 
@@ -220,10 +211,8 @@ pub mod stable_log {
     /// The general form is:
     ///     "Program <address> success"
     pub fn program_success(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey) {
-        if let Ok(logger) = logger.try_borrow_mut() {
-            if logger.log_enabled() {
-                logger.log(&format!("Program {} success", program_id));
-            }
+        if logger.log_enabled() {
+            logger.log(&format!("Program {} success", program_id));
         }
     }
 
@@ -236,10 +225,8 @@ pub mod stable_log {
         program_id: &Pubkey,
         err: &InstructionError,
     ) {
-        if let Ok(logger) = logger.try_borrow_mut() {
-            if logger.log_enabled() {
-                logger.log(&format!("Program {} failed: {}", program_id, err));
-            }
+        if logger.log_enabled() {
+            logger.log(&format!("Program {} failed: {}", program_id, err));
         }
     }
 }
