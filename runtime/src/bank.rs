@@ -10447,8 +10447,11 @@ pub(crate) mod tests {
         assert!(!debug.is_empty());
     }
 
-    #[test]
-    fn test_store_scan_consistency_root() {
+    fn test_store_scan_consistency<F: 'static>(update_f: F)
+    where
+        F: Fn(Arc<Bank>, crossbeam_channel::Sender<Arc<Bank>>, Arc<HashSet<Pubkey>>, Pubkey, u64)
+            + std::marker::Send,
+    {
         // Set up initial bank
         let mut genesis_config = create_genesis_config_with_leader(
             10,
@@ -10534,6 +10537,27 @@ pub(crate) mod tests {
         let update_thread = Builder::new()
             .name("update".to_string())
             .spawn(move || {
+                update_f(
+                    bank0,
+                    bank_to_scan_sender,
+                    pubkeys_to_modify,
+                    program_id,
+                    starting_lamports,
+                );
+            })
+            .unwrap();
+
+        // Let threads run for a while, check the scans didn't see any mixed slots
+        std::thread::sleep(Duration::new(5, 0));
+        exit.store(true, Relaxed);
+        scan_thread.join().unwrap();
+        update_thread.join().unwrap();
+    }
+
+    #[test]
+    fn test_store_scan_consistency_root() {
+        test_store_scan_consistency(
+            |bank0, bank_to_scan_sender, pubkeys_to_modify, program_id, starting_lamports| {
                 let mut current_bank = bank0.clone();
                 let mut prev_bank = bank0;
                 loop {
@@ -10555,7 +10579,7 @@ pub(crate) mod tests {
                         return;
                     }
                     current_bank.squash();
-                    current_bank.clean_accounts(false);
+                    current_bank.clean_accounts(true);
                     prev_bank = current_bank.clone();
                     current_bank = Arc::new(Bank::new_from_parent(
                         &current_bank,
@@ -10563,13 +10587,7 @@ pub(crate) mod tests {
                         current_bank.slot() + 1,
                     ));
                 }
-            })
-            .unwrap();
-
-        // Let threads run for a while, check the scans didn't see any mixed slots
-        std::thread::sleep(Duration::new(5, 0));
-        exit.store(true, Relaxed);
-        scan_thread.join().unwrap();
-        update_thread.join().unwrap();
+            },
+        );
     }
 }
