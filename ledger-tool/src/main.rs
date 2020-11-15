@@ -2029,6 +2029,7 @@ fn main() {
                         struct CalculationDetail {
                             epochs: usize,
                             voter: Pubkey,
+                            voter_owner: Pubkey,
                             point: u128,
                             stake: u128,
                             total_stake: u64,
@@ -2092,8 +2093,12 @@ fn main() {
                                     InflationPointCalculationEvent::RentExemptReserve(reserve) => {
                                         detail.rent_exempt_reserve = *reserve;
                                     }
-                                    InflationPointCalculationEvent::Delegation(delegation) => {
+                                    InflationPointCalculationEvent::Delegation(
+                                        delegation,
+                                        owner,
+                                    ) => {
                                         detail.voter = delegation.voter_pubkey;
+                                        detail.voter_owner = *owner;
                                         detail.total_stake = delegation.stake;
                                         detail.activation_epoch = delegation.activation_epoch;
                                         if delegation.deactivation_epoch < Epoch::max_value() {
@@ -2220,6 +2225,7 @@ fn main() {
                                         new_balance: u64,
                                         data_size: usize,
                                         delegation: String,
+                                        delegation_owner: String,
                                         effective_stake: String,
                                         delegated_stake: String,
                                         rent_exempt_reserve: String,
@@ -2247,6 +2253,9 @@ fn main() {
                                         new_balance: warped_account.lamports,
                                         data_size: base_account.data.len(),
                                         delegation: format_or_na(detail.map(|d| d.voter)),
+                                        delegation_owner: format_or_na(
+                                            detail.map(|d| d.voter_owner),
+                                        ),
                                         effective_stake: format_or_na(detail.map(|d| d.stake)),
                                         delegated_stake: format_or_na(
                                             detail.map(|d| d.total_stake),
