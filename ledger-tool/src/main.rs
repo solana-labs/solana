@@ -2070,7 +2070,7 @@ fn main() {
                                 let new_cap = base_bank.capitalization();
                                 warn!(
                                     "Skewing capitalization a bit to enable stake_program_v2 as \
-                                     requested: increaing {} from {} to {}",
+                                     requested: increasing {} from {} to {}",
                                     feature_account_balance, old_cap, new_cap,
                                 );
                                 assert_eq!(old_cap + feature_account_balance, new_cap);
