@@ -23,7 +23,7 @@ use solana_perf::{
 };
 use solana_runtime::{
     accounts_db::ErrorCounters,
-    bank::{Bank, TransactionBalancesSet, TransactionProcessResult},
+    bank::{Bank, TransactionBalancesSet, TransactionProcessResult, TransactionTokenBalancesSet},
     bank_utils,
     transaction_batch::TransactionBatch,
     vote_sender_types::ReplayVoteSender,
@@ -530,6 +530,13 @@ impl BankingStage {
         } else {
             vec![]
         };
+
+        let pre_token_balances = if transaction_status_sender.is_some() {
+            bank.collect_token_balances(batch)
+        } else {
+            vec![]
+        };
+
         let (
             mut loaded_accounts,
             results,
@@ -574,12 +581,14 @@ impl BankingStage {
             bank_utils::find_and_send_votes(txs, &tx_results, Some(gossip_vote_sender));
             if let Some(sender) = transaction_status_sender {
                 let post_balances = bank.collect_balances(batch);
+                let post_token_balances = bank.collect_token_balances(batch);
                 send_transaction_status_batch(
                     bank.clone(),
                     batch.transactions(),
                     batch.iteration_order_vec(),
                     tx_results.processing_results,
                     TransactionBalancesSet::new(pre_balances, post_balances),
+                    TransactionTokenBalancesSet::new(pre_token_balances, post_token_balances),
                     inner_instructions,
                     transaction_logs,
                     sender,

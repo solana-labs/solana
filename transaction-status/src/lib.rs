@@ -15,6 +15,7 @@ use crate::{
     parse_accounts::{parse_accounts, ParsedAccount},
     parse_instruction::{parse, ParsedInstruction},
 };
+use solana_account_decoder::parse_token::UiTokenAmount;
 pub use solana_runtime::bank::RewardType;
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
@@ -27,7 +28,6 @@ use solana_sdk::{
     transaction::{Result, Transaction, TransactionError},
 };
 use std::fmt;
-
 /// A duplicate representation of an Instruction for pretty JSON serialization
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
@@ -115,6 +115,21 @@ pub struct UiInnerInstructions {
     pub instructions: Vec<UiInstruction>,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TransactionTokenBalance {
+    pub account_index: u8,
+    pub mint: String,
+    pub ui_token_amount: UiTokenAmount,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UiTransactionTokenBalance {
+    pub account_index: u8,
+    pub mint: String,
+    pub ui_token_amount: UiTokenAmount,
+}
+
 impl UiInnerInstructions {
     fn parse(inner_instructions: InnerInstructions, message: &Message) -> Self {
         Self {
@@ -124,6 +139,16 @@ impl UiInnerInstructions {
                 .iter()
                 .map(|ix| UiInstruction::parse(ix, message))
                 .collect(),
+        }
+    }
+}
+
+impl UiTransactionTokenBalance {
+    fn parse(token_balance: TransactionTokenBalance) -> Self {
+        Self {
+            account_index: token_balance.account_index,
+            mint: token_balance.mint,
+            ui_token_amount: token_balance.ui_token_amount,
         }
     }
 }
@@ -152,6 +177,10 @@ pub struct TransactionStatusMeta {
     pub inner_instructions: Option<Vec<InnerInstructions>>,
     #[serde(deserialize_with = "default_on_eof")]
     pub log_messages: Option<Vec<String>>,
+    #[serde(deserialize_with = "default_on_eof")]
+    pub pre_token_balances: Option<Vec<TransactionTokenBalance>>,
+    #[serde(deserialize_with = "default_on_eof")]
+    pub post_token_balances: Option<Vec<TransactionTokenBalance>>,
 }
 
 impl Default for TransactionStatusMeta {
@@ -163,6 +192,8 @@ impl Default for TransactionStatusMeta {
             post_balances: vec![],
             inner_instructions: None,
             log_messages: None,
+            pre_token_balances: None,
+            post_token_balances: None,
         }
     }
 }
@@ -178,6 +209,8 @@ pub struct UiTransactionStatusMeta {
     pub post_balances: Vec<u64>,
     pub inner_instructions: Option<Vec<UiInnerInstructions>>,
     pub log_messages: Option<Vec<String>>,
+    pub pre_token_balances: Option<Vec<UiTransactionTokenBalance>>,
+    pub post_token_balances: Option<Vec<UiTransactionTokenBalance>>,
 }
 
 impl UiTransactionStatusMeta {
@@ -194,6 +227,16 @@ impl UiTransactionStatusMeta {
                     .collect()
             }),
             log_messages: meta.log_messages,
+            pre_token_balances: meta.pre_token_balances.map(|bal| {
+                bal.into_iter()
+                    .map(|bal| UiTransactionTokenBalance::parse(bal))
+                    .collect()
+            }),
+            post_token_balances: meta.post_token_balances.map(|bal| {
+                bal.into_iter()
+                    .map(|bal| UiTransactionTokenBalance::parse(bal))
+                    .collect()
+            }),
         }
     }
 }
@@ -210,6 +253,26 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
                 .inner_instructions
                 .map(|ixs| ixs.into_iter().map(|ix| ix.into()).collect()),
             log_messages: meta.log_messages,
+            pre_token_balances: meta.pre_token_balances.map(|balance| {
+                balance
+                    .into_iter()
+                    .map(|balance| UiTransactionTokenBalance {
+                        account_index: balance.account_index,
+                        mint: balance.mint,
+                        ui_token_amount: balance.ui_token_amount,
+                    })
+                    .collect()
+            }),
+            post_token_balances: meta.post_token_balances.map(|balance| {
+                balance
+                    .into_iter()
+                    .map(|balance| UiTransactionTokenBalance {
+                        account_index: balance.account_index,
+                        mint: balance.mint,
+                        ui_token_amount: balance.ui_token_amount,
+                    })
+                    .collect()
+            }),
         }
     }
 }

@@ -656,6 +656,8 @@ mod tests {
                 post_balances: vec![0, 42, 1],
                 inner_instructions: Some(vec![]),
                 log_messages: Some(vec![]),
+                pre_token_balances: Some(vec![]),
+                post_token_balances: Some(vec![]),
             }),
         };
         let block = ConfirmedBlock {

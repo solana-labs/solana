@@ -17,7 +17,7 @@ use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
     bank::{
         Bank, InnerInstructionsList, TransactionBalancesSet, TransactionLogMessages,
-        TransactionProcessResult, TransactionResults,
+        TransactionProcessResult, TransactionResults, TransactionTokenBalancesSet,
     },
     bank_forks::BankForks,
     bank_utils,
@@ -103,7 +103,7 @@ fn execute_batch(
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
-    let (tx_results, balances, inner_instructions, transaction_logs) =
+    let (tx_results, balances, token_balances, inner_instructions, transaction_logs) =
         batch.bank().load_execute_and_commit_transactions(
             batch,
             MAX_PROCESSING_AGE,
@@ -127,6 +127,7 @@ fn execute_batch(
             batch.iteration_order_vec(),
             processing_results,
             balances,
+            token_balances,
             inner_instructions,
             transaction_logs,
             sender,
@@ -1031,6 +1032,7 @@ pub struct TransactionStatusBatch {
     pub iteration_order: Option<Vec<usize>>,
     pub statuses: Vec<TransactionProcessResult>,
     pub balances: TransactionBalancesSet,
+    pub token_balances: TransactionTokenBalancesSet,
     pub inner_instructions: Vec<Option<InnerInstructionsList>>,
     pub transaction_logs: Vec<TransactionLogMessages>,
 }
@@ -1043,6 +1045,7 @@ pub fn send_transaction_status_batch(
     iteration_order: Option<Vec<usize>>,
     statuses: Vec<TransactionProcessResult>,
     balances: TransactionBalancesSet,
+    token_balances: TransactionTokenBalancesSet,
     inner_instructions: Vec<Option<InnerInstructionsList>>,
     transaction_logs: Vec<TransactionLogMessages>,
     transaction_status_sender: TransactionStatusSender,
@@ -1054,6 +1057,7 @@ pub fn send_transaction_status_batch(
         iteration_order,
         statuses,
         balances,
+        token_balances,
         inner_instructions,
         transaction_logs,
     }) {
@@ -2898,6 +2902,7 @@ pub mod tests {
                 ..
             },
             _balances,
+            _token_balances,
             _inner_instructions,
             _log_messages,
         ) = batch.bank().load_execute_and_commit_transactions(

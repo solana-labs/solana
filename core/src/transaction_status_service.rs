@@ -1,12 +1,15 @@
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 use itertools::izip;
+use solana_account_decoder::parse_token::UiTokenAmount;
 use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusBatch};
 use solana_runtime::{
     bank::{Bank, HashAgeKind},
     transaction_utils::OrderedIterator,
 };
 use solana_sdk::nonce_account;
-use solana_transaction_status::{InnerInstructions, TransactionStatusMeta};
+use solana_transaction_status::{
+    InnerInstructions, TransactionStatusMeta, TransactionTokenBalance,
+};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -55,6 +58,7 @@ impl TransactionStatusService {
             iteration_order,
             statuses,
             balances,
+            token_balances,
             inner_instructions,
             transaction_logs,
         } = write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))?;
@@ -65,6 +69,8 @@ impl TransactionStatusService {
             (status, hash_age_kind),
             pre_balances,
             post_balances,
+            pre_token_balances,
+            post_token_balances,
             inner_instructions,
             log_messages,
         ) in izip!(
@@ -72,6 +78,8 @@ impl TransactionStatusService {
             statuses,
             balances.pre_balances,
             balances.post_balances,
+            token_balances.pre_token_balances,
+            token_balances.post_token_balances,
             inner_instructions,
             transaction_logs
         ) {
@@ -101,6 +109,36 @@ impl TransactionStatusService {
 
                 let log_messages = Some(log_messages);
 
+                let pre_token_balances = Some(
+                    pre_token_balances
+                        .iter()
+                        .map(|balance| TransactionTokenBalance {
+                            account_index: balance.account_index as u8,
+                            mint: balance.mint.clone(),
+                            ui_token_amount: UiTokenAmount {
+                                ui_amount: balance.ui_token_amount.ui_amount,
+                                decimals: balance.ui_token_amount.decimals,
+                                amount: balance.ui_token_amount.amount.clone(),
+                            },
+                        })
+                        .collect(),
+                );
+
+                let post_token_balances = Some(
+                    post_token_balances
+                        .iter()
+                        .map(|balance| TransactionTokenBalance {
+                            account_index: balance.account_index as u8,
+                            mint: balance.mint.clone(),
+                            ui_token_amount: UiTokenAmount {
+                                ui_amount: balance.ui_token_amount.ui_amount,
+                                decimals: balance.ui_token_amount.decimals,
+                                amount: balance.ui_token_amount.amount.clone(),
+                            },
+                        })
+                        .collect(),
+                );
+
                 blockstore
                     .write_transaction_status(
                         slot,
@@ -114,6 +152,8 @@ impl TransactionStatusService {
                             post_balances,
                             inner_instructions,
                             log_messages,
+                            pre_token_balances,
+                            post_token_balances,
                         },
                     )
                     .expect("Expect database write to succeed");
