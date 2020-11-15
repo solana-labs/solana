@@ -26,12 +26,15 @@
 
 use crate::contact_info::ContactInfo;
 use crate::crds_shards::CrdsShards;
-use crate::crds_value::{CrdsValue, CrdsValueLabel};
+use crate::crds_value::{CrdsData, CrdsValue, CrdsValueLabel};
 use bincode::serialize;
 use indexmap::map::{Entry, IndexMap};
+use indexmap::set::IndexSet;
 use rayon::{prelude::*, ThreadPool};
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::Keypair;
+use solana_sdk::timing::timestamp;
 use std::cmp;
 use std::collections::HashMap;
 use std::ops::Index;
@@ -44,6 +47,8 @@ pub struct Crds {
     pub table: IndexMap<CrdsValueLabel, VersionedCrdsValue>,
     pub num_inserts: usize,
     pub shards: CrdsShards,
+    // Indices of all crds values which are node ContactInfo.
+    nodes: IndexSet<usize>,
 }
 
 #[derive(PartialEq, Debug)]
@@ -86,14 +91,22 @@ impl VersionedCrdsValue {
             value_hash,
         }
     }
+
+    /// New random VersionedCrdsValue for tests and simulations.
+    pub fn new_rand<R: rand::Rng>(rng: &mut R, keypair: Option<&Keypair>) -> Self {
+        let delay = 10 * 60 * 1000; // 10 minutes
+        let now = timestamp() - delay + rng.gen_range(0, 2 * delay);
+        Self::new(now, CrdsValue::new_rand(rng, keypair))
+    }
 }
 
 impl Default for Crds {
     fn default() -> Self {
         Crds {
-            table: IndexMap::new(),
+            table: IndexMap::default(),
             num_inserts: 0,
             shards: CrdsShards::new(CRDS_SHARDS_BITS),
+            nodes: IndexSet::default(),
         }
     }
 }
@@ -123,7 +136,11 @@ impl Crds {
         let label = new_value.value.label();
         match self.table.entry(label) {
             Entry::Vacant(entry) => {
-                assert!(self.shards.insert(entry.index(), &new_value));
+                let entry_index = entry.index();
+                assert!(self.shards.insert(entry_index, &new_value));
+                if let CrdsData::ContactInfo(_) = new_value.value.data {
+                    assert!(self.nodes.insert(entry_index));
+                }
                 entry.insert(new_value);
                 self.num_inserts += 1;
                 Ok(None)
@@ -164,6 +181,19 @@ impl Crds {
     pub fn get_contact_info(&self, pubkey: &Pubkey) -> Option<&ContactInfo> {
         let label = CrdsValueLabel::ContactInfo(*pubkey);
         self.table.get(&label)?.value.contact_info()
+    }
+
+    /// Returns all entries which are ContactInfo.
+    pub fn get_nodes(&self) -> impl Iterator<Item = &VersionedCrdsValue> {
+        self.nodes.iter().map(move |i| self.table.index(*i))
+    }
+
+    /// Returns ContactInfo of all known nodes.
+    pub fn get_nodes_contact_info(&self) -> impl Iterator<Item = &ContactInfo> {
+        self.get_nodes().map(|v| match &v.value.data {
+            CrdsData::ContactInfo(info) => info,
+            _ => panic!("this should not happen!"),
+        })
     }
 
     fn update_label_timestamp(&mut self, id: &CrdsValueLabel, now: u64) {
@@ -209,12 +239,23 @@ impl Crds {
     pub fn remove(&mut self, key: &CrdsValueLabel) -> Option<VersionedCrdsValue> {
         let (index, _, value) = self.table.swap_remove_full(key)?;
         assert!(self.shards.remove(index, &value));
-        // The previously last element in the table is now moved to the
-        // 'index' position. Shards need to be updated accordingly.
-        if index < self.table.len() {
+        if let CrdsData::ContactInfo(_) = value.value.data {
+            assert!(self.nodes.swap_remove(&index));
+        }
+        // If index == self.table.len(), then the removed entry was the last
+        // entry in the table, in which case no other keys were modified.
+        // Otherwise, the previously last element in the table is now moved to
+        // the 'index' position; and so shards and nodes need to be updated
+        // accordingly.
+        let size = self.table.len();
+        if index < size {
             let value = self.table.index(index);
-            assert!(self.shards.remove(self.table.len(), value));
+            assert!(self.shards.remove(size, value));
             assert!(self.shards.insert(index, value));
+            if let CrdsData::ContactInfo(_) = value.value.data {
+                assert!(self.nodes.swap_remove(&size));
+                assert!(self.nodes.insert(index));
+            }
         }
         Some(value)
     }
@@ -224,7 +265,6 @@ impl Crds {
 mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
-    use crate::crds_value::CrdsData;
     use rand::{thread_rng, Rng};
     use rayon::ThreadPoolBuilder;
 
@@ -323,7 +363,7 @@ mod test {
         let mut rng = thread_rng();
         let mut crds = Crds::default();
         let mut timeouts = HashMap::new();
-        let val = CrdsValue::new_rand(&mut rng);
+        let val = CrdsValue::new_rand(&mut rng, None);
         timeouts.insert(Pubkey::default(), 3);
         assert_eq!(crds.insert(val.clone(), 0), Ok(None));
         assert!(crds.find_old_labels(&thread_pool, 2, &timeouts).is_empty());
@@ -397,27 +437,29 @@ mod test {
         }
 
         let mut crds = Crds::default();
-        let pubkeys: Vec<_> = std::iter::repeat_with(solana_sdk::pubkey::new_rand)
-            .take(256)
-            .collect();
+        let keypairs: Vec<_> = std::iter::repeat_with(Keypair::new).take(256).collect();
         let mut rng = thread_rng();
         let mut num_inserts = 0;
+        let mut num_overrides = 0;
         for _ in 0..4096 {
-            let pubkey = pubkeys[rng.gen_range(0, pubkeys.len())];
-            let value = VersionedCrdsValue::new(
-                rng.gen(), // local_timestamp
-                CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                    &pubkey,
-                    rng.gen(), // now
-                ))),
-            );
-            if crds.insert_versioned(value).is_ok() {
-                check_crds_shards(&crds);
-                num_inserts += 1;
+            let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
+            let value = VersionedCrdsValue::new_rand(&mut rng, Some(keypair));
+            match crds.insert_versioned(value) {
+                Ok(None) => {
+                    num_inserts += 1;
+                    check_crds_shards(&crds);
+                }
+                Ok(Some(_)) => {
+                    num_inserts += 1;
+                    num_overrides += 1;
+                    check_crds_shards(&crds);
+                }
+                Err(_) => (),
             }
         }
         assert_eq!(num_inserts, crds.num_inserts);
         assert!(num_inserts > 700);
+        assert!(num_overrides > 500);
         assert!(crds.table.len() > 200);
         assert!(num_inserts > crds.table.len());
         check_crds_shards(&crds);
@@ -427,6 +469,55 @@ mod test {
             let key = crds.table.get_index(index).unwrap().0.clone();
             crds.remove(&key);
             check_crds_shards(&crds);
+        }
+    }
+
+    #[test]
+    fn test_crds_nodes() {
+        fn check_crds_nodes(crds: &Crds) -> usize {
+            let num_nodes = crds
+                .table
+                .values()
+                .filter(|value| matches!(value.value.data, CrdsData::ContactInfo(_)))
+                .count();
+            assert_eq!(num_nodes, crds.get_nodes_contact_info().count());
+            num_nodes
+        }
+        let mut rng = thread_rng();
+        let keypairs: Vec<_> = std::iter::repeat_with(Keypair::new).take(256).collect();
+        let mut crds = Crds::default();
+        let mut num_inserts = 0;
+        let mut num_overrides = 0;
+        for _ in 0..4096 {
+            let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
+            let value = VersionedCrdsValue::new_rand(&mut rng, Some(keypair));
+            match crds.insert_versioned(value) {
+                Ok(None) => {
+                    num_inserts += 1;
+                    check_crds_nodes(&crds);
+                }
+                Ok(Some(_)) => {
+                    num_inserts += 1;
+                    num_overrides += 1;
+                    check_crds_nodes(&crds);
+                }
+                Err(_) => (),
+            }
+        }
+        assert_eq!(num_inserts, crds.num_inserts);
+        assert!(num_inserts > 700);
+        assert!(num_overrides > 500);
+        assert!(crds.table.len() > 200);
+        assert!(num_inserts > crds.table.len());
+        let num_nodes = check_crds_nodes(&crds);
+        assert!(num_nodes * 3 < crds.table.len());
+        assert!(num_nodes > 150);
+        // Remove values one by one and assert that nodes indices stay valid.
+        while !crds.table.is_empty() {
+            let index = rng.gen_range(0, crds.table.len());
+            let key = crds.table.get_index(index).unwrap().0.clone();
+            crds.remove(&key);
+            check_crds_nodes(&crds);
         }
     }
 

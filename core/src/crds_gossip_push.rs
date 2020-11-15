@@ -377,10 +377,9 @@ impl CrdsGossipPush {
         let mut rng = rand::thread_rng();
         let max_weight = u16::MAX as f32 - 1.0;
         let active_cutoff = now.saturating_sub(PUSH_ACTIVE_TIMEOUT_MS);
-        crds.table
-            .values()
+        crds.get_nodes()
             .filter_map(|value| {
-                let info = value.value.contact_info()?;
+                let info = value.value.contact_info().unwrap();
                 // Stop pushing to nodes which have not been active recently.
                 if value.local_timestamp < active_cutoff {
                     // In order to mitigate eclipse attack, for staked nodes

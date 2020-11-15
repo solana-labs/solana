@@ -1,14 +1,16 @@
+use crate::cluster_info::MAX_SNAPSHOT_HASHES;
 use crate::contact_info::ContactInfo;
 use crate::deprecated;
 use crate::epoch_slots::EpochSlots;
 use bincode::{serialize, serialized_size};
+use rand::Rng;
 use solana_sdk::sanitize::{Sanitize, SanitizeError};
 use solana_sdk::timing::timestamp;
 use solana_sdk::{
     clock::Slot,
     hash::Hash,
-    pubkey::Pubkey,
-    signature::{Keypair, Signable, Signature},
+    pubkey::{self, Pubkey},
+    signature::{Keypair, Signable, Signature, Signer},
     transaction::Transaction,
 };
 use std::{
@@ -109,6 +111,29 @@ impl Sanitize for CrdsData {
     }
 }
 
+/// Random timestamp for tests and benchmarks.
+fn new_rand_timestamp<R: Rng>(rng: &mut R) -> u64 {
+    let delay = 10 * 60 * 1000; // 10 minutes
+    timestamp() - delay + rng.gen_range(0, 2 * delay)
+}
+
+impl CrdsData {
+    /// New random CrdsData for tests and benchmarks.
+    fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> CrdsData {
+        let kind = rng.gen_range(0, 5);
+        // TODO: Implement other kinds of CrdsData here.
+        // TODO: Assign ranges to each arm proportional to their frequency in
+        // the mainnet crds table.
+        match kind {
+            0 => CrdsData::ContactInfo(ContactInfo::new_rand(rng, pubkey)),
+            1 => CrdsData::LowestSlot(rng.gen(), LowestSlot::new_rand(rng, pubkey)),
+            2 => CrdsData::SnapshotHashes(SnapshotHash::new_rand(rng, pubkey)),
+            3 => CrdsData::AccountsHashes(SnapshotHash::new_rand(rng, pubkey)),
+            _ => CrdsData::Version(Version::new_rand(rng, pubkey)),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
 pub struct SnapshotHash {
     pub from: Pubkey,
@@ -138,6 +163,23 @@ impl SnapshotHash {
             wallclock: timestamp(),
         }
     }
+
+    /// New random SnapshotHash for tests and benchmarks.
+    pub(crate) fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
+        let num_hashes = rng.gen_range(0, MAX_SNAPSHOT_HASHES) + 1;
+        let hashes = std::iter::repeat_with(|| {
+            let slot = 47825632 + rng.gen_range(0, 512);
+            let hash = solana_sdk::hash::new_rand(rng);
+            (slot, hash)
+        })
+        .take(num_hashes)
+        .collect();
+        Self {
+            from: pubkey.unwrap_or_else(pubkey::new_rand),
+            hashes,
+            wallclock: new_rand_timestamp(rng),
+        }
+    }
 }
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
 pub struct LowestSlot {
@@ -158,6 +200,18 @@ impl LowestSlot {
             slots: BTreeSet::new(),
             stash: vec![],
             wallclock,
+        }
+    }
+
+    /// New random LowestSlot for tests and benchmarks.
+    fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
+        Self {
+            from: pubkey.unwrap_or_else(pubkey::new_rand),
+            root: rng.gen(),
+            lowest: rng.gen(),
+            slots: BTreeSet::default(),
+            stash: Vec::default(),
+            wallclock: new_rand_timestamp(rng),
         }
     }
 }
@@ -252,6 +306,21 @@ impl Version {
             version: solana_version::Version::default(),
         }
     }
+
+    /// New random Version for tests and benchmarks.
+    fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
+        Self {
+            from: pubkey.unwrap_or_else(pubkey::new_rand),
+            wallclock: new_rand_timestamp(rng),
+            version: solana_version::Version {
+                major: rng.gen(),
+                minor: rng.gen(),
+                patch: rng.gen(),
+                commit: Some(rng.gen()),
+                feature_set: rng.gen(),
+            },
+        }
+    }
 }
 
 /// Type of the replicated value
@@ -312,14 +381,19 @@ impl CrdsValue {
         value
     }
 
-    /// New random crds value for tests and benchmarks.
-    pub fn new_rand<R: ?Sized>(rng: &mut R) -> CrdsValue
-    where
-        R: rand::Rng,
-    {
-        let now = rng.gen();
-        let contact_info = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), now);
-        Self::new_signed(CrdsData::ContactInfo(contact_info), &Keypair::new())
+    /// New random CrdsValue for tests and benchmarks.
+    pub fn new_rand<R: Rng>(rng: &mut R, keypair: Option<&Keypair>) -> CrdsValue {
+        match keypair {
+            None => {
+                let keypair = Keypair::new();
+                let data = CrdsData::new_rand(rng, Some(keypair.pubkey()));
+                Self::new_signed(data, &keypair)
+            }
+            Some(keypair) => {
+                let data = CrdsData::new_rand(rng, Some(keypair.pubkey()));
+                Self::new_signed(data, keypair)
+            }
+        }
     }
 
     /// Totally unsecure unverifiable wallclock of the node that generated this message
