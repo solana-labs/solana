@@ -1416,13 +1416,17 @@ impl Bank {
                     self.get_account(&delegation.voter_pubkey),
                 ) {
                     (Some(stake_account), Some(vote_account)) => {
+                        let vote_owner = vote_account.owner;
                         let entry = accounts
                             .entry(delegation.voter_pubkey)
                             .or_insert((Vec::new(), vote_account));
                         if let Some(reward_calc_tracer) = reward_calc_tracer {
                             reward_calc_tracer(&RewardCalculationEvent::Staking(
                                 stake_pubkey,
-                                &InflationPointCalculationEvent::Delegation(*delegation),
+                                &InflationPointCalculationEvent::Delegation(
+                                    *delegation,
+                                    vote_owner,
+                                ),
                             ));
                         }
                         entry.0.push((*stake_pubkey, stake_account));

@@ -30,6 +30,8 @@ use solana_runtime::{
 use solana_sdk::{
     account::Account,
     clock::{Epoch, Slot},
+    feature::{self, Feature},
+    feature_set,
     genesis_config::{ClusterType, GenesisConfig},
     hash::Hash,
     inflation::Inflation,
@@ -1186,6 +1188,14 @@ fn main() {
                     .help("Always enable inflation when warping even if it's disabled"),
             )
             .arg(
+                Arg::with_name("enable_stake_program_v2")
+                    .required(false)
+                    .long("enable-stake-program-v2")
+                    .takes_value(false)
+                    .help("Enable stake program v2 (several inflation-related staking \
+                           bugs are feature-gated behind this)"),
+            )
+            .arg(
                 Arg::with_name("recalculate_capitalization")
                     .required(false)
                     .long("recalculate-capitalization")
@@ -2022,13 +2032,56 @@ fn main() {
                         let next_epoch = base_bank
                             .epoch_schedule()
                             .get_first_slot_in_epoch(warp_epoch);
+                        // disable eager rent collection because this creates many unrelated
+                        // rent collection account updates
                         base_bank
                             .lazy_rent_collection
                             .store(true, std::sync::atomic::Ordering::Relaxed);
+
+                        if arg_matches.is_present("enable_stake_program_v2")
+                            && !base_bank.stake_program_v2_enabled()
+                        {
+                            let feature_account_balance = std::cmp::max(
+                                genesis_config.rent.minimum_balance(Feature::size_of()),
+                                1,
+                            );
+                            base_bank.store_account(
+                                &feature_set::stake_program_v2::id(),
+                                &feature::create_account(
+                                    &Feature { activated_at: None },
+                                    feature_account_balance,
+                                ),
+                            );
+
+                            if base_bank
+                                .get_account(&feature_set::secp256k1_program_enabled::id())
+                                .is_some()
+                            {
+                                // steal some lamports from the pretty old feature not to affect
+                                // capitalizaion, which doesn't affect inflation behavior!
+                                base_bank.store_account(
+                                    &feature_set::secp256k1_program_enabled::id(),
+                                    &Account::default(),
+                                );
+                            } else {
+                                // we have no choice; maybe locally created blank cluster with
+                                // not-Development cluster type.
+                                let old_cap = base_bank.set_capitalization();
+                                let new_cap = base_bank.capitalization();
+                                warn!(
+                                    "Skewing capitalization a bit to enable stake_program_v2 as \
+                                     requested: increasing {} from {} to {}",
+                                    feature_account_balance, old_cap, new_cap,
+                                );
+                                assert_eq!(old_cap + feature_account_balance, new_cap);
+                            }
+                        }
+
                         #[derive(Default, Debug)]
                         struct CalculationDetail {
                             epochs: usize,
                             voter: Pubkey,
+                            voter_owner: Pubkey,
                             point: u128,
                             stake: u128,
                             total_stake: u64,
@@ -2092,8 +2145,12 @@ fn main() {
                                     InflationPointCalculationEvent::RentExemptReserve(reserve) => {
                                         detail.rent_exempt_reserve = *reserve;
                                     }
-                                    InflationPointCalculationEvent::Delegation(delegation) => {
+                                    InflationPointCalculationEvent::Delegation(
+                                        delegation,
+                                        owner,
+                                    ) => {
                                         detail.voter = delegation.voter_pubkey;
+                                        detail.voter_owner = *owner;
                                         detail.total_stake = delegation.stake;
                                         detail.activation_epoch = delegation.activation_epoch;
                                         if delegation.deactivation_epoch < Epoch::max_value() {
@@ -2220,6 +2277,7 @@ fn main() {
                                         new_balance: u64,
                                         data_size: usize,
                                         delegation: String,
+                                        delegation_owner: String,
                                         effective_stake: String,
                                         delegated_stake: String,
                                         rent_exempt_reserve: String,
@@ -2247,6 +2305,9 @@ fn main() {
                                         new_balance: warped_account.lamports,
                                         data_size: base_account.data.len(),
                                         delegation: format_or_na(detail.map(|d| d.voter)),
+                                        delegation_owner: format_or_na(
+                                            detail.map(|d| d.voter_owner),
+                                        ),
                                         effective_stake: format_or_na(detail.map(|d| d.stake)),
                                         delegated_stake: format_or_na(
                                             detail.map(|d| d.total_stake),
