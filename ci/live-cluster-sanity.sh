@@ -61,7 +61,6 @@ test_with_live_cluster "mainnet-beta" \
     --trusted-validator DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ \
     --trusted-validator CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S \
     --expected-genesis-hash 5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d \
-    --expected-shred-version 64864 \
     # for your pain-less copy-paste
 
 # UPDATE docs/src/clusters.md TOO!!
@@ -72,5 +71,4 @@ test_with_live_cluster "testnet" \
     --trusted-validator Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN \
     --trusted-validator 9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv \
     --expected-genesis-hash 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY \
-    --expected-shred-version 1579 \
     # for your pain-less copy-paste
