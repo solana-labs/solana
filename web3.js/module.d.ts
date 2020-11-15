@@ -142,12 +142,20 @@ declare module '@solana/web3.js' {
     instructions: CompiledInstruction[];
   };
 
+  export type TokenBalance = {
+    accountIndex: number;
+    mint: string;
+    uiTokenAmount: TokenAmount;
+  };
+
   export type ConfirmedTransactionMeta = {
     fee: number;
     innerInstructions?: CompiledInnerInstruction[];
     preBalances: Array<number>;
     postBalances: Array<number>;
     logMessages?: Array<string>;
+    preTokenBalances?: Array<TokenBalance>;
+    postTokenBalances?: Array<TokenBalance>;
     err: TransactionError | null;
   };
 
@@ -162,6 +170,8 @@ declare module '@solana/web3.js' {
     preBalances: Array<number>;
     postBalances: Array<number>;
     logMessages?: Array<string>;
+    preTokenBalances?: Array<TokenBalance>;
+    postTokenBalances?: Array<TokenBalance>;
     err: TransactionError | null;
   };
 
