@@ -2032,10 +2032,12 @@ fn main() {
                         let next_epoch = base_bank
                             .epoch_schedule()
                             .get_first_slot_in_epoch(warp_epoch);
-                        // disable eager rent collection because this creates many unrelated rent collection account updates
+                        // disable eager rent collection because this creates many unrelated
+                        // rent collection account updates
                         base_bank
                             .lazy_rent_collection
                             .store(true, std::sync::atomic::Ordering::Relaxed);
+
                         if arg_matches.is_present("enable_stake_program_v2")
                             && !base_bank.stake_program_v2_enabled()
                         {
@@ -2065,13 +2067,13 @@ fn main() {
                                 // we have no choice; maybe locally created blank cluster with
                                 // not-Development cluster type.
                                 let old_cap = base_bank.set_capitalization();
+                                let new_cap = base_bank.capitalization();
                                 warn!(
                                     "Skewing capitalization a bit to enable stake_program_v2 as \
                                      requested: increaing {} from {} to {}",
-                                    feature_account_balance,
-                                    old_cap,
-                                    base_bank.capitalization()
+                                    feature_account_balance, old_cap, new_cap,
                                 );
+                                assert_eq!(old_cap + feature_account_balance, new_cap);
                             }
                         }
 
