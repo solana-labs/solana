@@ -45,7 +45,7 @@ use solana_sdk::{
     hash::{extend_and_hash, hashv, Hash},
     incinerator,
     inflation::Inflation,
-    instruction::CompiledInstruction,
+    instruction::{CompiledInstruction, InstructionError},
     message::Message,
     native_loader,
     native_token::sol_to_lamports,
@@ -69,7 +69,8 @@ use solana_sdk::{
 use solana_stake_program::stake_state::{
     self, Delegation, InflationPointCalculationEvent, PointValue,
 };
-use solana_vote_program::vote_instruction::VoteInstruction;
+use solana_vote_program::vote_instruction::VoteError;
+use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteState};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -752,6 +753,9 @@ pub struct Bank {
     /// The number of transactions processed without error
     transaction_count: AtomicU64,
 
+    /// Number of vote hash mismatches seen, not absolute
+    vote_hash_mismatch_count: AtomicU64,
+
     /// Bank tick height
     tick_height: AtomicU64,
 
@@ -1025,6 +1029,7 @@ impl Bank {
                     .map(|drop_callback| drop_callback.clone_box()),
             )),
             freeze_started: AtomicBool::new(false),
+            vote_hash_mismatch_count: AtomicU64::new(parent.vote_hash_mismatch_count()),
         };
 
         datapoint_info!(
@@ -1161,6 +1166,7 @@ impl Bank {
             feature_set: new(),
             drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
+            vote_hash_mismatch_count: AtomicU64::new(0),
         };
         bank.finish_init(genesis_config, additional_builtins);
 
@@ -3009,9 +3015,10 @@ impl Bank {
                 if *err_count == 0 {
                     debug!("tx error: {:?} {:?}", r, tx);
                 }
-                *err_count += 1;
             }
         }
+        self.vote_hash_mismatch_count
+            .fetch_add(vote_hash_mismatch_errors, Relaxed);
         if *err_count > 0 {
             debug!(
                 "{} errors of {} txs",
@@ -3029,6 +3036,26 @@ impl Bank {
             tx_count,
             signature_count,
         )
+    }
+
+    fn check_for_vote_hash_mismatch(
+        tx: &Transaction,
+        e: &solana_sdk::transaction::TransactionError,
+    ) -> u64 {
+        if let TransactionError::InstructionError(ix_index, InstructionError::Custom(code)) = e {
+            if let Some(ix) = tx.message.instructions.get(*ix_index as usize) {
+                if let Some(instruction_key) =
+                    tx.message.account_keys.get(ix.program_id_index as usize)
+                {
+                    if *code == VoteError::SlotHashMismatch as u32
+                        && solana_vote_program::check_id(instruction_key)
+                    {
+                        return 1;
+                    }
+                }
+            }
+        }
+        0
     }
 
     fn filter_program_errors_and_collect_fee(
@@ -4034,6 +4061,10 @@ impl Bank {
 
     fn increment_transaction_count(&self, tx_count: u64) {
         self.transaction_count.fetch_add(tx_count, Relaxed);
+    }
+
+    pub fn vote_hash_mismatch_count(&self) -> u64 {
+        self.vote_hash_mismatch_count.load(Relaxed)
     }
 
     pub fn signature_count(&self) -> u64 {

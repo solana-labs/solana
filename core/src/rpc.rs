@@ -451,6 +451,10 @@ impl JsonRpcRequestProcessor {
         }
     }
 
+    pub fn get_vote_hash_mismatch_count(&self, commitment: Option<CommitmentConfig>) -> u64 {
+        self.bank(commitment).vote_hash_mismatch_count()
+    }
+
     fn get_slot(&self, commitment: Option<CommitmentConfig>) -> u64 {
         self.bank(commitment).slot()
     }
@@ -1677,6 +1681,9 @@ pub trait RpcSol {
     #[rpc(meta, name = "getSlot")]
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64>;
 
+    #[rpc(meta, name = "getVoteHashMismatchCount")]
+    fn get_vote_hash_mismatch_count(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64>;
+
     #[rpc(meta, name = "getTransactionCount")]
     fn get_transaction_count(
         &self,
@@ -2232,6 +2239,10 @@ impl RpcSol for RpcSolImpl {
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64> {
         debug!("get_slot rpc request received");
         Ok(meta.get_slot(commitment))
+    }
+
+    fn get_vote_hash_mismatch_count(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64> {
+        Ok(meta.get_vote_hash_mismatch_count(commitment))
     }
 
     fn get_transaction_count(
