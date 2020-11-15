@@ -242,8 +242,11 @@ impl Crds {
         if let CrdsData::ContactInfo(_) = value.value.data {
             assert!(self.nodes.swap_remove(&index));
         }
-        // The previously last element in the table is now moved to the
-        // 'index' position. Shards and nodes need to be updated accordingly.
+        // If index == self.table.len(), then the removed entry was the last
+        // entry in the table, in which case no other keys were modified.
+        // Otherwise, the previously last element in the table is now moved to
+        // the 'index' position; and so shards and nodes need to be updated
+        // accordingly.
         let size = self.table.len();
         if index < size {
             let value = self.table.index(index);
