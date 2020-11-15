@@ -17,7 +17,7 @@ fn bench_find_old_labels(bencher: &mut Bencher) {
     let mut rng = thread_rng();
     let mut crds = Crds::default();
     let now = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS + CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 1000;
-    std::iter::repeat_with(|| (CrdsValue::new_rand(&mut rng), rng.gen_range(0, now)))
+    std::iter::repeat_with(|| (CrdsValue::new_rand(&mut rng, None), rng.gen_range(0, now)))
         .take(50_000)
         .for_each(|(v, ts)| assert!(crds.insert(v, ts).is_ok()));
     let mut timeouts = HashMap::new();
