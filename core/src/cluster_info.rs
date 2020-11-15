@@ -624,15 +624,13 @@ impl ClusterInfo {
         &self,
         gossip_addr: &SocketAddr,
     ) -> Option<ContactInfo> {
-        for versioned_value in self.gossip.read().unwrap().crds.table.values() {
-            if let Some(contact_info) = CrdsValue::contact_info(&versioned_value.value) {
-                if contact_info.gossip == *gossip_addr {
-                    return Some(contact_info.clone());
-                }
-            }
-        }
-
-        None
+        self.gossip
+            .read()
+            .unwrap()
+            .crds
+            .get_nodes_contact_info()
+            .find(|peer| peer.gossip == *gossip_addr)
+            .cloned()
     }
 
     pub fn my_contact_info(&self) -> ContactInfo {
@@ -1105,9 +1103,7 @@ impl ClusterInfo {
             .read()
             .unwrap()
             .crds
-            .table
-            .values()
-            .filter_map(|x| x.value.contact_info())
+            .get_nodes_contact_info()
             .filter(|x| x.id != self.id() && ContactInfo::is_valid_address(&x.rpc))
             .cloned()
             .collect()
@@ -1119,13 +1115,8 @@ impl ClusterInfo {
             .read()
             .unwrap()
             .crds
-            .table
-            .values()
-            .filter_map(|x| {
-                x.value
-                    .contact_info()
-                    .map(|ci| (ci.clone(), x.local_timestamp))
-            })
+            .get_nodes()
+            .map(|x| (x.value.contact_info().unwrap().clone(), x.local_timestamp))
             .collect()
     }
 
@@ -1135,9 +1126,7 @@ impl ClusterInfo {
             .read()
             .unwrap()
             .crds
-            .table
-            .values()
-            .filter_map(|x| x.value.contact_info())
+            .get_nodes_contact_info()
             // shred_version not considered for gossip peers (ie, spy nodes do not set shred_version)
             .filter(|x| x.id != me && ContactInfo::is_valid_address(&x.gossip))
             .cloned()
@@ -1148,9 +1137,7 @@ impl ClusterInfo {
     pub fn all_tvu_peers(&self) -> Vec<ContactInfo> {
         self.time_gossip_read_lock("all_tvu_peers", &self.stats.all_tvu_peers)
             .crds
-            .table
-            .values()
-            .filter_map(|x| x.value.contact_info())
+            .get_nodes_contact_info()
             .filter(|x| ContactInfo::is_valid_address(&x.tvu) && x.id != self.id())
             .cloned()
             .collect()
@@ -1160,9 +1147,7 @@ impl ClusterInfo {
     pub fn tvu_peers(&self) -> Vec<ContactInfo> {
         self.time_gossip_read_lock("tvu_peers", &self.stats.tvu_peers)
             .crds
-            .table
-            .values()
-            .filter_map(|x| x.value.contact_info())
+            .get_nodes_contact_info()
             .filter(|x| {
                 ContactInfo::is_valid_address(&x.tvu)
                     && x.id != self.id()
@@ -1176,9 +1161,7 @@ impl ClusterInfo {
     pub fn retransmit_peers(&self) -> Vec<ContactInfo> {
         self.time_gossip_read_lock("retransmit_peers", &self.stats.retransmit_peers)
             .crds
-            .table
-            .values()
-            .filter_map(|x| x.value.contact_info())
+            .get_nodes_contact_info()
             .filter(|x| {
                 x.id != self.id()
                     && x.shred_version == self.my_shred_version()
@@ -1294,9 +1277,7 @@ impl ClusterInfo {
             .read()
             .unwrap()
             .crds
-            .table
-            .values()
-            .filter_map(|x| x.value.contact_info())
+            .get_nodes_contact_info()
             .filter(|x| x.id != self.id() && ContactInfo::is_valid_address(&x.tpu))
             .cloned()
             .collect()
@@ -1494,14 +1475,8 @@ impl ClusterInfo {
                         let found_entrypoint = self
                             .time_gossip_read_lock("entrypoint", &self.stats.entrypoint)
                             .crds
-                            .table
-                            .iter()
-                            .any(|(_, v)| {
-                                v.value
-                                    .contact_info()
-                                    .map(|ci| ci.gossip == entrypoint.gossip)
-                                    .unwrap_or(false)
-                            });
+                            .get_nodes_contact_info()
+                            .any(|node| node.gossip == entrypoint.gossip);
                         !found_entrypoint
                     }
                 }
