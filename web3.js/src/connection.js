@@ -373,6 +373,12 @@ type ParsedInnerInstruction = {
   instructions: (ParsedInstruction | PartiallyDecodedInstruction)[],
 };
 
+type TokenBalance = {
+  accountIndex: number,
+  mint: string,
+  uiTokenAmount: TokenAmount,
+};
+
 /**
  * Metadata for a parsed confirmed transaction on the ledger
  *
