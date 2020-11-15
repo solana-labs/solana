@@ -147,34 +147,64 @@ fn test_spend_and_verify_all_nodes_3() {
 }
 
 #[test]
+#[ignore]
 #[serial]
 fn test_vote_hash_mismatch() {
     solana_logger::setup();
-    let num_nodes = 3;
+    error!("test_vote_hash_mismatch");
+    let num_nodes = 4;
     let mut validator_config = ValidatorConfig::default();
+    let debug_votes = false;
+    if debug_votes {
+        let mut debug_keys = HashSet::new();
+        debug_keys.insert(solana_vote_program::id());
+        validator_config.debug_keys = Some(Arc::new(debug_keys));
+    }
     let mut validator_configs = vec![validator_config.clone(); num_nodes - 1];
     validator_config.bad_vote_rate = 10;
     validator_configs.push(validator_config);
     let config = ClusterConfig {
         cluster_lamports: 10_000,
-        poh_config: PohConfig::new_sleep(Duration::from_millis(200)),
+        poh_config: PohConfig::new_sleep(Duration::from_millis(50)),
         node_stakes: vec![100; num_nodes],
         validator_configs,
         ..ClusterConfig::default()
     };
     warn!("Starting cluster..");
-    let mut cluster = LocalCluster::new(&config);
+    let cluster = LocalCluster::new(&config);
+    let keys = cluster.get_node_pubkeys();
     warn!("Waiting for cluster..");
-    for _ in 0..100 {
-        let client = cluster
-            .get_validator_client(&cluster.entry_point_info.id)
-            .unwrap();
-        if let Ok(slot) = client.get_slot() {
-            warn!("slot: {}", slot);
+    let mut slot = 0;
+    let mut max_mismatch_count = 0;
+    for j in 0..40 {
+        for (i, key) in keys.iter().enumerate() {
+            let client = cluster.get_validator_client(&key).unwrap();
+
+            let rpc_client = RpcClient::new_socket(cluster.entry_point_info.rpc);
+
+            if let Ok(the_slot) = client.get_slot_with_commitment(CommitmentConfig::recent()) {
+                slot = the_slot;
+            }
+            let res = rpc_client.get_vote_hash_mismatch_count(CommitmentConfig::recent());
+            debug!("{} {} res: {:?}", j, i, res);
+            if let Ok(count) = res {
+                max_mismatch_count = std::cmp::max(count, max_mismatch_count);
+                if count > 0 {
+                    break;
+                }
+                warn!("{} vote hash mismatch: {}", i, count);
+            }
         }
-        sleep(Duration::from_secs(1));
+        if max_mismatch_count > 0 {
+            break;
+        }
+        sleep(Duration::from_secs(2));
     }
-    warn!("done..");
+    warn!(
+        "done max mismatch count: {} slot: {}",
+        max_mismatch_count, slot
+    );
+    assert!(max_mismatch_count > 0);
 }
 
 #[test]

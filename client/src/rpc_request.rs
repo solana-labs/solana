@@ -56,6 +56,7 @@ pub enum RpcRequest {
     SendTransaction,
     SimulateTransaction,
     SignVote,
+    GetVoteHashMismatchCount,
 }
 
 impl fmt::Display for RpcRequest {
@@ -111,6 +112,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::SendTransaction => "sendTransaction",
             RpcRequest::SimulateTransaction => "simulateTransaction",
             RpcRequest::SignVote => "signVote",
+            RpcRequest::GetVoteHashMismatchCount => "getVoteHashMismatchCount",
         };
 
         write!(f, "{}", method)
