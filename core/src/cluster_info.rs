@@ -1526,7 +1526,7 @@ impl ClusterInfo {
     {
         let mut data_feed = data_feed.into_iter().fuse();
         let mut buffer = vec![];
-        let mut buffer_size = 0;
+        let mut buffer_size = 0; // Serialized size of buffered values.
         std::iter::from_fn(move || loop {
             match data_feed.next() {
                 None => {
