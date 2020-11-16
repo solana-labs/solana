@@ -2553,11 +2553,14 @@ None
 The result field will be a JSON object with the following fields:
 
 - `solana-core`, software version of solana-core
+- `feature-set`, unique identifier of the current software's feature set
 
 #### Example:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getVersion"}' http://localhost:8899
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getVersion"}
+'
 ```
 
 Result:
