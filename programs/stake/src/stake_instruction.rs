@@ -553,10 +553,7 @@ mod tests {
                 } else if config::check_id(&meta.pubkey) {
                     config::create_account(0, &config::Config::default())
                 } else if sysvar::rent::check_id(&meta.pubkey) {
-<<<<<<< HEAD
                     sysvar::rent::create_account(1, &Rent::default())
-=======
-                    account::create_account(&Rent::default(), 1)
                 } else if meta.pubkey == invalid_stake_state_pubkey() {
                     let mut account = Account::default();
                     account.owner = id();
@@ -565,7 +562,6 @@ mod tests {
                     let mut account = Account::default();
                     account.owner = solana_vote_program::id();
                     account
->>>>>>> 2b3faa194... Reject faked stake/vote accounts in stake mgmt. (#13615)
                 } else {
                     Account::default()
                 })
