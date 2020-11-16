@@ -532,9 +532,18 @@ mod tests {
         sysvar::stake_history::StakeHistory,
     };
     use std::cell::RefCell;
+    use std::str::FromStr;
 
     fn create_default_account() -> RefCell<Account> {
         RefCell::new(Account::default())
+    }
+
+    fn bad_stake_pubkey() -> Pubkey {
+        Pubkey::from_str("BadStake11111111111111111111111111111111111").unwrap()
+    }
+
+    fn bad_vote_pubkey() -> Pubkey {
+        Pubkey::from_str("BadVote111111111111111111111111111111111111").unwrap()
     }
 
     fn process_instruction(instruction: &Instruction) -> Result<(), InstructionError> {
@@ -552,6 +561,14 @@ mod tests {
                     config::create_account(0, &config::Config::default())
                 } else if sysvar::rent::check_id(&meta.pubkey) {
                     account::create_account(&Rent::default(), 1)
+                } else if meta.pubkey == bad_stake_pubkey() {
+                    let mut account = Account::default();
+                    account.owner = id();
+                    account
+                } else if meta.pubkey == bad_vote_pubkey() {
+                    let mut account = Account::default();
+                    account.owner = solana_vote_program::id();
+                    account
                 } else {
                     Account::default()
                 })
@@ -599,14 +616,14 @@ mod tests {
                     &Pubkey::default(),
                     &Pubkey::default(),
                     100,
-                    &Pubkey::default()
+                    &bad_stake_pubkey(),
                 )[1]
             ),
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
             process_instruction(
-                &merge(&Pubkey::default(), &Pubkey::default(), &Pubkey::default(),)[0]
+                &merge(&Pubkey::default(), &bad_stake_pubkey(), &Pubkey::default(),)[0]
             ),
             Err(InstructionError::InvalidAccountData),
         );
@@ -616,7 +633,7 @@ mod tests {
                     &Pubkey::default(),
                     &Pubkey::default(),
                     100,
-                    &Pubkey::default(),
+                    &bad_stake_pubkey(),
                     &Pubkey::default(),
                     "seed"
                 )[1]
@@ -627,7 +644,7 @@ mod tests {
             process_instruction(&delegate_stake(
                 &Pubkey::default(),
                 &Pubkey::default(),
-                &Pubkey::default()
+                &bad_vote_pubkey(),
             )),
             Err(InstructionError::InvalidAccountData),
         );
@@ -764,12 +781,14 @@ mod tests {
         );
 
         // gets the check non-deserialize-able account in delegate_stake
+        let mut bad_vote_account = create_default_account();
+        bad_vote_account.get_mut().owner = solana_vote_program::id();
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
                 &[
                     KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
-                    KeyedAccount::new(&Pubkey::default(), false, &create_default_account()),
+                    KeyedAccount::new(&Pubkey::default(), false, &bad_vote_account),
                     KeyedAccount::new(
                         &sysvar::clock::id(),
                         false,
