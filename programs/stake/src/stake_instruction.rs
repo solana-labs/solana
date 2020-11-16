@@ -538,11 +538,11 @@ mod tests {
         RefCell::new(Account::default())
     }
 
-    fn bad_stake_pubkey() -> Pubkey {
+    fn invalid_stake_state_pubkey() -> Pubkey {
         Pubkey::from_str("BadStake11111111111111111111111111111111111").unwrap()
     }
 
-    fn bad_vote_pubkey() -> Pubkey {
+    fn invalid_vote_state_pubkey() -> Pubkey {
         Pubkey::from_str("BadVote111111111111111111111111111111111111").unwrap()
     }
 
@@ -561,11 +561,11 @@ mod tests {
                     config::create_account(0, &config::Config::default())
                 } else if sysvar::rent::check_id(&meta.pubkey) {
                     account::create_account(&Rent::default(), 1)
-                } else if meta.pubkey == bad_stake_pubkey() {
+                } else if meta.pubkey == invalid_stake_state_pubkey() {
                     let mut account = Account::default();
                     account.owner = id();
                     account
-                } else if meta.pubkey == bad_vote_pubkey() {
+                } else if meta.pubkey == invalid_vote_state_pubkey() {
                     let mut account = Account::default();
                     account.owner = solana_vote_program::id();
                     account
@@ -616,14 +616,18 @@ mod tests {
                     &Pubkey::default(),
                     &Pubkey::default(),
                     100,
-                    &bad_stake_pubkey(),
+                    &invalid_stake_state_pubkey(),
                 )[1]
             ),
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
             process_instruction(
-                &merge(&Pubkey::default(), &bad_stake_pubkey(), &Pubkey::default(),)[0]
+                &merge(
+                    &Pubkey::default(),
+                    &invalid_stake_state_pubkey(),
+                    &Pubkey::default(),
+                )[0]
             ),
             Err(InstructionError::InvalidAccountData),
         );
@@ -633,7 +637,7 @@ mod tests {
                     &Pubkey::default(),
                     &Pubkey::default(),
                     100,
-                    &bad_stake_pubkey(),
+                    &invalid_stake_state_pubkey(),
                     &Pubkey::default(),
                     "seed"
                 )[1]
@@ -644,7 +648,7 @@ mod tests {
             process_instruction(&delegate_stake(
                 &Pubkey::default(),
                 &Pubkey::default(),
-                &bad_vote_pubkey(),
+                &invalid_vote_state_pubkey(),
             )),
             Err(InstructionError::InvalidAccountData),
         );
