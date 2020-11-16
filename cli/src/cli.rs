@@ -1227,7 +1227,7 @@ fn do_process_deploy(
         CliError::DynamicProgramError(format!("Unable to read program file: {}", err))
     })?;
 
-    Executable::<BPFError>::from_elf(&program_data, Some(|x| bpf_verifier::check(x, true)))
+    Executable::<BPFError>::from_elf(&program_data, Some(|x| bpf_verifier::check(x, false)))
         .map_err(|err| CliError::DynamicProgramError(format!("ELF error: {}", err)))?;
 
     let loader_id = if use_deprecated_loader {
