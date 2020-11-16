@@ -821,6 +821,10 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         config: &Config,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError> {
+        if vote_account.owner()? != solana_vote_program::id() {
+            return Err(InstructionError::IncorrectProgramId);
+        }
+
         match self.state()? {
             StakeState::Initialized(meta) => {
                 meta.authorized.check(signers, StakeAuthorize::Staker)?;
@@ -882,6 +886,10 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         split: &KeyedAccount,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError> {
+        if split.owner()? != id() {
+            return Err(InstructionError::IncorrectProgramId);
+        }
+
         if let StakeState::Uninitialized = split.state()? {
             // verify enough account lamports
             if lamports > self.lamports()? {
@@ -981,6 +989,10 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         stake_history: &StakeHistory,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError> {
+        if source_stake.owner()? != id() {
+            return Err(InstructionError::IncorrectProgramId);
+        }
+
         let meta = match self.state()? {
             StakeState::Stake(meta, stake) => {
                 // stake must be fully de-activated
@@ -1479,6 +1491,21 @@ mod tests {
                 &signers
             )
             .is_ok());
+
+        // signed but faked vote account
+        let faked_vote_account = vote_account.clone();
+        faked_vote_account.borrow_mut().owner = solana_sdk::pubkey::new_rand();
+        let faked_vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &faked_vote_account);
+        assert_eq!(
+            stake_keyed_account.delegate(
+                &faked_vote_keyed_account,
+                &clock,
+                &StakeHistory::default(),
+                &Config::default(),
+                &signers,
+            ),
+            Err(solana_sdk::instruction::InstructionError::IncorrectProgramId)
+        );
 
         // verify that delegate() looks right, compare against hand-rolled
         let stake = StakeState::stake_from(&stake_keyed_account.account.borrow()).unwrap();
@@ -3559,6 +3586,40 @@ mod tests {
     }
 
     #[test]
+    fn test_split_fake_stake_dest() {
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
+        let stake_lamports = 42;
+
+        let split_stake_pubkey = solana_sdk::pubkey::new_rand();
+        let signers = vec![stake_pubkey].into_iter().collect();
+
+        let split_stake_account = Account::new_ref_data_with_space(
+            0,
+            &StakeState::Uninitialized,
+            std::mem::size_of::<StakeState>(),
+            &solana_sdk::pubkey::new_rand(),
+        )
+        .expect("stake_account");
+
+        let split_stake_keyed_account =
+            KeyedAccount::new(&split_stake_pubkey, true, &split_stake_account);
+
+        let stake_account = Account::new_ref_data_with_space(
+            stake_lamports,
+            &StakeState::Stake(Meta::auto(&stake_pubkey), Stake::just_stake(stake_lamports)),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+
+        assert_eq!(
+            stake_keyed_account.split(stake_lamports / 2, &split_stake_keyed_account, &signers),
+            Err(InstructionError::IncorrectProgramId),
+        );
+    }
+
+    #[test]
     fn test_split_to_account_with_rent_exempt_reserve() {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
@@ -4419,6 +4480,51 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_merge_fake_stake_source() {
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
+        let source_stake_pubkey = solana_sdk::pubkey::new_rand();
+        let authorized_pubkey = solana_sdk::pubkey::new_rand();
+        let stake_lamports = 42;
+
+        let signers = vec![authorized_pubkey].into_iter().collect();
+
+        let stake_account = Account::new_ref_data_with_space(
+            stake_lamports,
+            &StakeState::Stake(
+                Meta::auto(&authorized_pubkey),
+                Stake::just_stake(stake_lamports),
+            ),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+
+        let source_stake_account = Account::new_ref_data_with_space(
+            stake_lamports,
+            &StakeState::Stake(
+                Meta::auto(&authorized_pubkey),
+                Stake::just_stake(stake_lamports),
+            ),
+            std::mem::size_of::<StakeState>(),
+            &solana_sdk::pubkey::new_rand(),
+        )
+        .expect("source_stake_account");
+        let source_stake_keyed_account =
+            KeyedAccount::new(&source_stake_pubkey, true, &source_stake_account);
+
+        assert_eq!(
+            stake_keyed_account.merge(
+                &source_stake_keyed_account,
+                &Clock::default(),
+                &StakeHistory::default(),
+                &signers
+            ),
+            Err(InstructionError::IncorrectProgramId)
+        );
     }
 
     #[test]
