@@ -2794,7 +2794,7 @@ fn update_slot_meta(
     };
 
     update_completed_data_indexes(
-        is_last_in_slot || is_last_in_data,
+        is_last_in_data,
         index,
         received_data_shreds,
         &mut slot_meta.completed_data_indexes,
