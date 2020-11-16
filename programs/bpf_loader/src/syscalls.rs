@@ -1558,27 +1558,27 @@ mod tests {
         )
         .is_err());
 
-        // // Pubkeys
-        // let mut data = vec![solana_sdk::pubkey::new_rand(); 5];
-        // let addr = data.as_ptr() as *const _ as u64;
-        // let memory_mapping = MemoryMapping::new_from_regions(vec![MemoryRegion {
-        //     host_addr: addr,
-        //     vm_addr: 100,
-        //     len: (data.len() * std::mem::size_of::<Pubkey>()) as u64,
-        //     is_writable: false,
-        // }]);
-        // let translated_data = translate_slice!(
-        //     memory_mapping,
-        //     AccessType::Load,
-        //     100,
-        //     Pubkey,
-        //     data.len(),
-        //     &bpf_loader::id()
-        // )
-        // .unwrap();
-        // assert_eq!(data, translated_data);
-        // data[0] = solana_sdk::pubkey::new_rand(); // Both should point to same place
-        // assert_eq!(data, translated_data);
+        // Pubkeys
+        let mut data = vec![solana_sdk::pubkey::new_rand(); 5];
+        let addr = data.as_ptr() as *const _ as u64;
+        let memory_mapping = MemoryMapping::new_from_regions(vec![MemoryRegion {
+            host_addr: addr,
+            vm_addr: 100,
+            len: (data.len() * std::mem::size_of::<Pubkey>()) as u64,
+            is_writable: false,
+        }]);
+        let translated_data = translate_slice!(
+            memory_mapping,
+            AccessType::Load,
+            100,
+            Pubkey,
+            data.len(),
+            &bpf_loader::id()
+        )
+        .unwrap();
+        assert_eq!(data, translated_data);
+        data[0] = solana_sdk::pubkey::new_rand(); // Both should point to same place
+        assert_eq!(data, translated_data);
     }
 
     #[test]
