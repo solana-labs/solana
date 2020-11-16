@@ -4958,8 +4958,6 @@ dependencies = [
  "indicatif",
  "pickledb",
  "serde",
- "solana-banks-client",
- "solana-banks-server",
  "solana-clap-utils",
  "solana-cli-config",
  "solana-client",
@@ -4969,10 +4967,9 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-stake-program",
+ "solana-transaction-status",
  "tempfile",
  "thiserror",
- "tokio 0.3.2",
- "url 2.1.1",
 ]
 
 [[package]]

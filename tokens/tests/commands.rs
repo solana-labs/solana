@@ -1,8 +1,7 @@
-use solana_banks_client::start_tcp_client;
+use solana_client::rpc_client::RpcClient;
 use solana_core::test_validator::TestValidator;
 use solana_tokens::commands::test_process_distribute_tokens_with_client;
 use std::fs::remove_dir_all;
-use tokio::runtime::Runtime;
 
 #[test]
 fn test_process_distribute_with_rpc_client() {
@@ -15,10 +14,8 @@ fn test_process_distribute_with_rpc_client() {
         ..
     } = TestValidator::run();
 
-    Runtime::new().unwrap().block_on(async {
-        let mut banks_client = start_tcp_client(leader_data.rpc_banks).await.unwrap();
-        test_process_distribute_tokens_with_client(&mut banks_client, alice, None).await
-    });
+    let client = RpcClient::new_socket(leader_data.rpc);
+    test_process_distribute_tokens_with_client(&client, alice, None);
 
     // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
     server.close().unwrap();
