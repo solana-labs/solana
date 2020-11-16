@@ -1264,7 +1264,10 @@ impl RpcClient {
         self.send_and_confirm_transaction_with_spinner_and_config(
             transaction,
             commitment,
-            RpcSendTransactionConfig::default(),
+            RpcSendTransactionConfig {
+                preflight_commitment: Some(commitment.commitment),
+                ..RpcSendTransactionConfig::default()
+            },
         )
     }
 
