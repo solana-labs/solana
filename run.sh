@@ -37,6 +37,10 @@ ledgerDir=$PWD/config/ledger
 SOLANA_RUN_SH_CLUSTER_TYPE=${SOLANA_RUN_SH_CLUSTER_TYPE:-development}
 
 set -x
+if ! solana address; then
+  echo Generating default keypair
+  solana-keygen new --no-passphrase
+fi
 validator_identity="$dataDir/validator-identity.json"
 if [[ -e $validator_identity ]]; then
   echo "Use existing validator keypair"
@@ -55,12 +59,6 @@ if [[ -e $validator_stake_account ]]; then
 else
   solana-keygen new --no-passphrase -so "$validator_stake_account"
 fi
-faucet="$dataDir"/faucet.json
-if [[ -e $faucet ]]; then
-  echo "Use existing faucet keypair"
-else
-  solana-keygen new --no-passphrase -fso "$faucet"
-fi
 
 if [[ -e "$ledgerDir"/genesis.bin || -e "$ledgerDir"/genesis.tar.bz2 ]]; then
   echo "Use existing genesis"
@@ -73,7 +71,6 @@ else
   # shellcheck disable=SC2086
   solana-genesis \
     --hashes-per-tick sleep \
-    --faucet-pubkey "$dataDir"/faucet.json \
     --faucet-lamports 500000000000000000 \
     --bootstrap-validator \
       "$dataDir"/validator-identity.json \
@@ -92,7 +89,7 @@ abort() {
 }
 trap abort INT TERM EXIT
 
-solana-faucet --keypair "$dataDir"/faucet.json &
+solana-faucet &
 faucet=$!
 
 args=(
