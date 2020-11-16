@@ -23,6 +23,8 @@ use solana_ledger::{
 use solana_runtime::{
     bank::{Bank, RewardCalculationEvent},
     bank_forks::{BankForks, CompressionType, SnapshotConfig},
+    feature::Feature,
+    feature_set,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     snapshot_utils,
     snapshot_utils::SnapshotVersion,
@@ -30,8 +32,6 @@ use solana_runtime::{
 use solana_sdk::{
     account::Account,
     clock::{Epoch, Slot},
-    feature::{self, Feature},
-    feature_set,
     genesis_config::{ClusterType, GenesisConfig},
     hash::Hash,
     inflation::Inflation,
@@ -2045,10 +2045,12 @@ fn main() {
                                 genesis_config.rent.minimum_balance(Feature::size_of()),
                                 1,
                             );
+                            let feature = Feature {
+                                activated_at: Some(0),
+                            };
                             base_bank.store_account(
                                 &feature_set::stake_program_v2::id(),
-                                &feature::create_account(
-                                    &Feature { activated_at: None },
+                                &feature.create_account(
                                     feature_account_balance,
                                 ),
                             );
