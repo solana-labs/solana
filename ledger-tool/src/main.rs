@@ -2050,9 +2050,7 @@ fn main() {
                             };
                             base_bank.store_account(
                                 &feature_set::stake_program_v2::id(),
-                                &feature.create_account(
-                                    feature_account_balance,
-                                ),
+                                &feature.create_account(feature_account_balance),
                             );
 
                             if base_bank
