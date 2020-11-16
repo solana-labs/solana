@@ -488,7 +488,7 @@ impl WindowService {
 
                     let mut handle_timeout = || {
                         if now.elapsed() > Duration::from_secs(30) {
-                            warn!("Window does not seem to be receiving data. Ensure port configuration is correct...");
+                            warn!("{} Window does not seem to be receiving data. Ensure port configuration is correct...", id);
                             now = Instant::now();
                         }
                     };
