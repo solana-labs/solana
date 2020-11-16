@@ -10,6 +10,9 @@ source scripts/read-cargo-variable.sh
 
 solana_ver=$(readCargoVariable version sdk/Cargo.toml)
 solana_dir=$PWD
+cargo="$solana_dir"/cargo
+cargo_build_bpf="$solana_dir"/cargo-build-bpf
+cargo_test_bpf="$solana_dir"/cargo-test-bpf
 
 mkdir -p target/downstream-projects
 cd target/downstream-projects
@@ -18,23 +21,18 @@ update_solana_dependencies() {
   declare tomls=()
   while IFS='' read -r line; do tomls+=("$line"); done < <(find "$1" -name Cargo.toml)
 
+  sed -i -e "s#\(solana-program = \"\)[^\"]*\(\"\)#\1$solana_ver\2#g" "${tomls[@]}" || return $?
   sed -i -e "s#\(solana-sdk = \"\).*\(\"\)#\1$solana_ver\2#g" "${tomls[@]}" || return $?
-  sed -i -e "s#\(solana-sdk = { version = \"\).*\(\"\)#\1$solana_ver\2#g" "${tomls[@]}" || return $?
-  sed -i -e "s#\(solana-client = \"\).*\(\"\)#\1$solana_ver\2#g" "${tomls[@]}" || return $?
-}
-
-update_spl_token_dependencies() {
-  declare tomls=()
-  while IFS='' read -r line; do tomls+=("$line"); done < <(find "$1" -name Cargo.toml)
-
-  declare spl_token_ver="$2"
-  sed -i -e "s#\(spl-token = { version = \"\).*\(\"\)#\1$spl_token_ver\2#g" "${tomls[@]}" || return $?
+  sed -i -e "s#\(solana-sdk = { version = \"\)[^\"]*\(\"\)#\1$solana_ver\2#g" "${tomls[@]}" || return $?
+  sed -i -e "s#\(solana-client = \"\)[^\"]*\(\"\)#\1$solana_ver\2#g" "${tomls[@]}" || return $?
+  sed -i -e "s#\(solana-client = { version = \"\)[^\"]*\(\"\)#\1$solana_ver\2#g" "${tomls[@]}" || return $?
 }
 
 patch_crates_io() {
   cat >> "$1" <<EOF
 [patch.crates-io]
-solana-client = { path = "$solana_dir/client"}
+solana-client = { path = "$solana_dir/client" }
+solana-program = { path = "$solana_dir/sdk/program" }
 solana-sdk = { path = "$solana_dir/sdk" }
 EOF
 }
@@ -50,7 +48,7 @@ example_helloworld() {
     patch_crates_io src/program-rust/Cargo.toml
     echo "[workspace]" >> src/program-rust/Cargo.toml
 
-    "$solana_dir"/cargo-build-bpf \
+    $cargo_build_bpf \
       --manifest-path src/program-rust/Cargo.toml \
       --no-default-features --features program
 
@@ -65,11 +63,18 @@ spl() {
     git clone https://github.com/solana-labs/solana-program-library.git spl
     cd spl
 
-    update_solana_dependencies .
-    patch_crates_io Cargo.toml
+    ./patch.crates-io.sh "$solana_dir"
 
-    "$solana_dir"/cargo-build-bpf --manifest-path memo/program/Cargo.toml
-    "$solana_dir"/cargo-build-bpf --manifest-path token/program/Cargo.toml
+    $cargo build
+
+    # Generic `cargo test`/`cargo test-bpf` disabled due to BPF VM interface changes between Solana 1.4
+    # and 1.5...
+    #$cargo test
+    #$cargo_test_bpf
+
+    $cargo_test_bpf --manifest-path token/program/Cargo.toml
+    $cargo_test_bpf --manifest-path associated-token-account/program/Cargo.toml
+    $cargo_test_bpf --manifest-path feature-proposal/program/Cargo.toml
   )
 }
 
@@ -81,17 +86,16 @@ serum_dex() {
     cd serum-dex
 
     update_solana_dependencies .
-    update_spl_token_dependencies . 2.0.8
     patch_crates_io Cargo.toml
     patch_crates_io dex/Cargo.toml
     echo "[workspace]" >> dex/Cargo.toml
 
-    "$solana_dir"/cargo stable build
+    $cargo build
 
-    "$solana_dir"/cargo-build-bpf \
+    $cargo_build_bpf \
       --manifest-path dex/Cargo.toml --no-default-features --features program
 
-    "$solana_dir"/cargo stable test \
+    $cargo test \
       --manifest-path dex/Cargo.toml --no-default-features --features program
   )
 }
