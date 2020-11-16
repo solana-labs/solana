@@ -1320,10 +1320,11 @@ dependencies = [
 
 [[package]]
 name = "goauth"
-version = "0.7.2"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5945153d9c566dd5544eca9da4aa430a16343129221a2064cb600d1e6c307212"
+checksum = "877c55b7ac37895bd6e4ca0b357c074248358c95e20cf1cf2b462603121f7b87"
 dependencies = [
+ "arc-swap",
  "futures 0.3.8",
  "log 0.4.8",
  "reqwest",
