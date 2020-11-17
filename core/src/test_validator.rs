@@ -6,7 +6,9 @@ use crate::{
 };
 use solana_ledger::create_new_tmp_ledger;
 use solana_sdk::{
+    clock::DEFAULT_DEV_SLOTS_PER_EPOCH,
     hash::Hash,
+    native_token::sol_to_lamports,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
@@ -33,7 +35,7 @@ impl Default for TestValidatorOptions {
         TestValidatorOptions {
             fees: 0,
             bootstrap_validator_lamports: BOOTSTRAP_VALIDATOR_LAMPORTS,
-            mint_lamports: 1_000_000,
+            mint_lamports: sol_to_lamports(1_000_000.0),
         }
     }
 }
@@ -43,6 +45,23 @@ impl TestValidator {
         Self::run_with_options(TestValidatorOptions::default())
     }
 
+    /// Instantiates a TestValidator with custom fees. The bootstrap_validator_lamports will
+    /// default to enough to cover 1 epoch of votes. This is an abitrary value based on current and
+    /// foreseen uses of TestValidator. May need to be bumped if uses change in the future.
+    pub fn run_with_fees(fees: u64) -> Self {
+        let bootstrap_validator_lamports = fees * DEFAULT_DEV_SLOTS_PER_EPOCH * 5;
+        Self::run_with_options(TestValidatorOptions {
+            fees,
+            bootstrap_validator_lamports,
+            ..TestValidatorOptions::default()
+        })
+    }
+
+    /// Instantiates a TestValidator with completely customized options.
+    ///
+    /// Note: if `fees` are non-zero, be sure to set a value for `bootstrap_validator_lamports`
+    /// that can cover enough vote transaction fees for the test. TestValidatorOptions::default()
+    /// may not be sufficient.
     pub fn run_with_options(options: TestValidatorOptions) -> Self {
         use solana_ledger::genesis_utils::{
             create_genesis_config_with_leader_ex, GenesisConfigInfo,
@@ -57,6 +76,14 @@ impl TestValidator {
         let node_keypair = Arc::new(Keypair::new());
         let node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
         let contact_info = node.info.clone();
+
+        if fees > 0 && bootstrap_validator_lamports < fees * DEFAULT_DEV_SLOTS_PER_EPOCH {
+            warn!(
+                "TestValidator::bootstrap_validator_lamports less than one epoch. \
+                Only enough to cover {:?} slots",
+                bootstrap_validator_lamports / fees
+            );
+        }
 
         let GenesisConfigInfo {
             mut genesis_config,
