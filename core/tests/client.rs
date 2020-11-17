@@ -12,7 +12,8 @@ use solana_runtime::{
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
 };
 use solana_sdk::{
-    commitment_config::CommitmentConfig, rpc_port, signature::Signer, system_transaction,
+    commitment_config::CommitmentConfig, native_token::sol_to_lamports, rpc_port,
+    signature::Signer, system_transaction,
 };
 use std::{
     fs::remove_dir_all,
@@ -50,11 +51,14 @@ fn test_rpc_client() {
 
     assert_eq!(client.get_balance(&bob_pubkey).unwrap(), 0);
 
-    assert_eq!(client.get_balance(&alice.pubkey()).unwrap(), 1_000_000);
+    assert_eq!(
+        client.get_balance(&alice.pubkey()).unwrap(),
+        sol_to_lamports(1_000_000.0)
+    );
 
     let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
 
-    let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
+    let tx = system_transaction::transfer(&alice, &bob_pubkey, sol_to_lamports(20.0), blockhash);
     let signature = client.send_transaction(&tx).unwrap();
 
     let mut confirmed_tx = false;
@@ -75,8 +79,14 @@ fn test_rpc_client() {
 
     assert!(confirmed_tx);
 
-    assert_eq!(client.get_balance(&bob_pubkey).unwrap(), 20);
-    assert_eq!(client.get_balance(&alice.pubkey()).unwrap(), 999_980);
+    assert_eq!(
+        client.get_balance(&bob_pubkey).unwrap(),
+        sol_to_lamports(20.0)
+    );
+    assert_eq!(
+        client.get_balance(&alice.pubkey()).unwrap(),
+        sol_to_lamports(999_980.0)
+    );
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();

@@ -1,6 +1,5 @@
 use solana_banks_client::start_tcp_client;
-use solana_core::test_validator::{TestValidator, TestValidatorOptions};
-use solana_sdk::native_token::sol_to_lamports;
+use solana_core::test_validator::TestValidator;
 use solana_tokens::commands::test_process_distribute_tokens_with_client;
 use std::fs::remove_dir_all;
 use tokio::runtime::Runtime;
@@ -14,10 +13,7 @@ fn test_process_distribute_with_rpc_client() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run_with_options(TestValidatorOptions {
-        mint_lamports: sol_to_lamports(9_000_000.0),
-        ..TestValidatorOptions::default()
-    });
+    } = TestValidator::run();
 
     Runtime::new().unwrap().block_on(async {
         let mut banks_client = start_tcp_client(leader_data.rpc_banks).await.unwrap();

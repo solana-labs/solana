@@ -8,6 +8,7 @@ use solana_ledger::create_new_tmp_ledger;
 use solana_sdk::{
     clock::DEFAULT_DEV_SLOTS_PER_EPOCH,
     hash::Hash,
+    native_token::sol_to_lamports,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
@@ -34,7 +35,7 @@ impl Default for TestValidatorOptions {
         TestValidatorOptions {
             fees: 0,
             bootstrap_validator_lamports: BOOTSTRAP_VALIDATOR_LAMPORTS,
-            mint_lamports: 1_000_000,
+            mint_lamports: sol_to_lamports(1_000_000.0),
         }
     }
 }
