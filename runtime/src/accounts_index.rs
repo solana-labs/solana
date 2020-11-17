@@ -317,16 +317,16 @@ impl<T: 'static + Clone> AccountsIndex<T> {
                 Build fork structure:
                         slot 0
                           |
-                        slot 1
+                    slot 1 (max_root)
                     /            \
-        slot 2 (max_root)         |
+             slot 2              |
                 |            slot 3 (potential newer max root)
               slot 4
                 |
              slot 5 (scan)
 
         Consider both types of ancestors, ancestor <= `max_root` and
-        ancestor > `max_root`.
+        ancestor > `max_root`, where `max_root == 1` as illustrated above.
 
         a) The set of `ancestors <= max_root` are all rooted, which means their state
         is protected by the same guarantees as 1).
@@ -334,9 +334,9 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         b) As for the `ancestors > max_root`, those banks have at least one reference discoverable
         through the chain of `Bank::BankRc::parent` starting from the calling bank. For instance
         bank 5's parent reference keeps bank 4 alive, which will prevent the `Bank::drop()` from
-        running and cleaning up bank 4. Furthermore, no cleans can happen past the max_root == 2, so
-        because this `ancestor > max_root`, slot 4 not be cleaned in the middle of the scan
-        either.
+        running and cleaning up bank 4. Furthermore, no cleans can happen past the saved max_root == 1,
+        so a potential newer max root at 3 will not clean up any of the ancestors > 1, so slot 4
+        will not be cleaned in the middle of the scan either.
         */
         self.do_scan_accounts(ancestors, func, range, Some(max_root));
         {
