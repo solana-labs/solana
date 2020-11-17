@@ -1144,13 +1144,7 @@ impl Bank {
                 self.get_timestamp_estimate(estimate_type, epoch_start_timestamp)
             {
                 if timestamp_estimate > unix_timestamp {
-                    datapoint_info!(
-                        "bank-timestamp-correction",
-                        ("from_genesis", unix_timestamp, i64),
-                        ("corrected", timestamp_estimate, i64),
-                    );
                     unix_timestamp = timestamp_estimate;
-
                     let ancestor_timestamp = self.clock().unix_timestamp;
                     if self
                         .feature_set
@@ -1159,6 +1153,13 @@ impl Bank {
                     {
                         unix_timestamp = ancestor_timestamp;
                     }
+                    datapoint_info!(
+                        "bank-timestamp-correction",
+                        ("slot", self.slot(), i64),
+                        ("from_genesis", unix_timestamp, i64),
+                        ("corrected", timestamp_estimate, i64),
+                        ("ancestor_timestamp", ancestor_timestamp, i64),
+                    );
                 }
             }
         }
