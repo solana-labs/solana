@@ -2490,7 +2490,8 @@ impl Blockstore {
             .collect();
 
         let data_shreds = data_shreds?;
-        assert!(data_shreds.last().unwrap().data_complete());
+        let last_shred = data_shreds.last().unwrap();
+        assert!(last_shred.data_complete() || last_shred.last_in_slot());
 
         let deshred_payload = Shredder::deshred(&data_shreds).map_err(|e| {
             BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(format!(
@@ -7303,5 +7304,25 @@ pub mod tests {
             }
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_remove_shred_data_complete_flag() {
+        let (mut shreds, entries) = make_slot_entries(0, 0, 1);
+
+        let ledger_path = get_tmp_ledger_path!();
+        let ledger = Blockstore::open(&ledger_path).unwrap();
+
+        // Remove the data complete flag from the last shred
+        shreds[0].unset_data_complete();
+
+        ledger.insert_shreds(shreds, None, false).unwrap();
+
+        // Check that the `data_complete` flag was unset in the stored shred, but the
+        // `last_in_slot` flag is set.
+        let stored_shred = &ledger.get_data_shreds_for_slot(0, 0).unwrap()[0];
+        assert!(!stored_shred.data_complete());
+        assert!(stored_shred.last_in_slot());
+        assert_eq!(entries, ledger.get_any_valid_slot_entries(0, 0));
     }
 }
