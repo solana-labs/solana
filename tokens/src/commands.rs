@@ -492,9 +492,7 @@ fn check_payer_balances(
 ) -> Result<(), Error> {
     let mut undistributed_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
 
-    let (_blockhash, fee_calculator, _last_valid_slot) = client
-        .get_recent_blockhash_with_commitment(CommitmentConfig::default())?
-        .value;
+    let (_blockhash, fee_calculator) = client.get_recent_blockhash()?;
     let fees = fee_calculator
         .lamports_per_signature
         .checked_mul(num_signatures as u64)
@@ -846,8 +844,12 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana_client::rpc_client::get_rpc_request_str;
     use solana_core::test_validator::{TestValidator, TestValidatorOptions};
-    use solana_sdk::signature::{read_keypair_file, write_keypair_file};
+    use solana_sdk::{
+        clock::DEFAULT_MS_PER_SLOT,
+        signature::{read_keypair_file, write_keypair_file},
+    };
     use solana_stake_program::stake_instruction::StakeInstruction;
     use std::fs::remove_dir_all;
 
@@ -1129,7 +1131,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_check_payer_balances_distribute_tokens_single_payer() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
@@ -1139,14 +1140,22 @@ mod tests {
             alice,
             ledger_path,
             ..
-        } = TestValidator::run_with_options(TestValidatorOptions {
-            mint_lamports: sol_to_lamports(9_000_000.0),
-            fees,
-            ..TestValidatorOptions::default()
-        });
-        let client = RpcClient::new_socket(leader_data.rpc);
+        } = TestValidator::run_with_fees(fees);
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
+
+        // This is a quick hack until TestValidator can be initialized with fees from block 0
+        while client
+            .get_recent_blockhash()
+            .unwrap()
+            .1
+            .lamports_per_signature
+            == 0
+        {
+            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+        }
 
         let allocation_amount = 1000.0;
 
@@ -1227,7 +1236,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_check_payer_balances_distribute_tokens_separate_payers() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
@@ -1237,15 +1245,23 @@ mod tests {
             alice,
             ledger_path,
             ..
-        } = TestValidator::run_with_options(TestValidatorOptions {
-            mint_lamports: sol_to_lamports(9_000_000.0),
-            fees,
-            ..TestValidatorOptions::default()
-        });
-        let client = RpcClient::new_socket(leader_data.rpc);
+        } = TestValidator::run_with_fees(fees);
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
 
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
+
+        // This is a quick hack until TestValidator can be initialized with fees from block 0
+        while client
+            .get_recent_blockhash()
+            .unwrap()
+            .1
+            .lamports_per_signature
+            == 0
+        {
+            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+        }
 
         let allocation_amount = 1000.0;
 
@@ -1260,10 +1276,7 @@ mod tests {
         )
         .unwrap();
         client
-            .send_and_confirm_transaction_with_spinner_and_commitment(
-                &transaction,
-                CommitmentConfig::recent(),
-            )
+            .send_and_confirm_transaction_with_spinner(&transaction)
             .unwrap();
 
         // Fully funded payers
@@ -1355,7 +1368,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_check_payer_balances_distribute_stakes_single_payer() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
@@ -1365,15 +1377,23 @@ mod tests {
             alice,
             ledger_path,
             ..
-        } = TestValidator::run_with_options(TestValidatorOptions {
-            mint_lamports: sol_to_lamports(9_000_000.0),
-            fees,
-            ..TestValidatorOptions::default()
-        });
-        let client = RpcClient::new_socket(leader_data.rpc);
+        } = TestValidator::run_with_fees(fees);
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
 
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
+
+        // This is a quick hack until TestValidator can be initialized with fees from block 0
+        while client
+            .get_recent_blockhash()
+            .unwrap()
+            .1
+            .lamports_per_signature
+            == 0
+        {
+            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+        }
 
         let allocation_amount = 1000.0;
         let unlocked_sol = 1.0;
@@ -1443,10 +1463,7 @@ mod tests {
         )
         .unwrap();
         client
-            .send_and_confirm_transaction_with_spinner_and_commitment(
-                &transaction,
-                CommitmentConfig::recent(),
-            )
+            .send_and_confirm_transaction_with_spinner(&transaction)
             .unwrap();
 
         args.sender_keypair = read_keypair_file(&partially_funded_payer_keypair_file)
@@ -1472,7 +1489,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_check_payer_balances_distribute_stakes_separate_payers() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
@@ -1482,15 +1498,23 @@ mod tests {
             alice,
             ledger_path,
             ..
-        } = TestValidator::run_with_options(TestValidatorOptions {
-            mint_lamports: sol_to_lamports(9_000_000.0),
-            fees,
-            ..TestValidatorOptions::default()
-        });
-        let client = RpcClient::new_socket(leader_data.rpc);
+        } = TestValidator::run_with_fees(fees);
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
 
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
+
+        // This is a quick hack until TestValidator can be initialized with fees from block 0
+        while client
+            .get_recent_blockhash()
+            .unwrap()
+            .1
+            .lamports_per_signature
+            == 0
+        {
+            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+        }
 
         let allocation_amount = 1000.0;
         let unlocked_sol = 1.0;
@@ -1507,10 +1531,7 @@ mod tests {
         )
         .unwrap();
         client
-            .send_and_confirm_transaction_with_spinner_and_commitment(
-                &transaction,
-                CommitmentConfig::recent(),
-            )
+            .send_and_confirm_transaction_with_spinner(&transaction)
             .unwrap();
 
         // Fully funded payers
