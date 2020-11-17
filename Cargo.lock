@@ -4964,6 +4964,7 @@ dependencies = [
  "solana-cli-config",
  "solana-client",
  "solana-core",
+ "solana-logger 1.5.0",
  "solana-remote-wallet",
  "solana-runtime",
  "solana-sdk",

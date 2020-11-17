@@ -9,7 +9,7 @@ use solana_client::{
     nonce_utils,
     rpc_client::RpcClient,
 };
-use solana_core::test_validator::{TestValidator, TestValidatorOptions};
+use solana_core::test_validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
@@ -21,17 +21,14 @@ use std::{fs::remove_dir_all, sync::mpsc::channel};
 
 #[test]
 fn test_transfer() {
+    solana_logger::setup();
     let TestValidator {
         server,
         leader_data,
         alice: mint_keypair,
         ledger_path,
         ..
-    } = TestValidator::run_with_options(TestValidatorOptions {
-        fees: 1,
-        bootstrap_validator_lamports: 42_000,
-        ..TestValidatorOptions::default()
-    });
+    } = TestValidator::run_with_fees(1);
 
     let (sender, receiver) = channel();
     run_local_faucet(mint_keypair, sender, None);
@@ -252,17 +249,14 @@ fn test_transfer() {
 
 #[test]
 fn test_transfer_multisession_signing() {
+    solana_logger::setup();
     let TestValidator {
         server,
         leader_data,
         alice: mint_keypair,
         ledger_path,
         ..
-    } = TestValidator::run_with_options(TestValidatorOptions {
-        fees: 1,
-        bootstrap_validator_lamports: 42_000,
-        ..TestValidatorOptions::default()
-    });
+    } = TestValidator::run_with_fees(1);
 
     let (sender, receiver) = channel();
     run_local_faucet(mint_keypair, sender, None);
@@ -382,17 +376,14 @@ fn test_transfer_multisession_signing() {
 
 #[test]
 fn test_transfer_all() {
+    solana_logger::setup();
     let TestValidator {
         server,
         leader_data,
         alice: mint_keypair,
         ledger_path,
         ..
-    } = TestValidator::run_with_options(TestValidatorOptions {
-        fees: 1,
-        bootstrap_validator_lamports: 42_000,
-        ..TestValidatorOptions::default()
-    });
+    } = TestValidator::run_with_fees(1);
 
     let (sender, receiver) = channel();
     run_local_faucet(mint_keypair, sender, None);

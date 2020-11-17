@@ -10,7 +10,7 @@ use solana_client::{
     rpc_client::RpcClient,
 };
 use solana_core::contact_info::ContactInfo;
-use solana_core::test_validator::{TestValidator, TestValidatorOptions};
+use solana_core::test_validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
@@ -231,17 +231,14 @@ fn full_battery_tests(
 
 #[test]
 fn test_create_account_with_seed() {
+    solana_logger::setup();
     let TestValidator {
         server,
         leader_data,
         alice: mint_keypair,
         ledger_path,
         ..
-    } = TestValidator::run_with_options(TestValidatorOptions {
-        fees: 1,
-        bootstrap_validator_lamports: 42_000,
-        ..TestValidatorOptions::default()
-    });
+    } = TestValidator::run_with_fees(1);
 
     let (sender, receiver) = channel();
     run_local_faucet(mint_keypair, sender, None);
