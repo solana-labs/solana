@@ -13,6 +13,8 @@ use std::{
 };
 
 fn main() -> Result<(), Box<dyn error::Error>> {
+    let default_keypair = solana_cli_config::Config::default().keypair_path;
+
     solana_logger::setup_with_default("solana=info");
     solana_metrics::set_panic_hook("faucet");
     let matches = App::new(crate_name!())
@@ -25,7 +27,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_name("PATH")
                 .takes_value(true)
                 .required(true)
-                .help("File from which to read the mint's keypair"),
+                .default_value(&default_keypair)
+                .help("File from which to read the faucet's keypair"),
         )
         .arg(
             Arg::with_name("slice")
@@ -51,7 +54,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
         .get_matches();
 
-    let mint_keypair = read_keypair_file(matches.value_of("keypair").unwrap())
+    let faucet_keypair = read_keypair_file(matches.value_of("keypair").unwrap())
         .expect("failed to read client keypair");
 
     let time_slice = value_of(&matches, "slice");
@@ -61,7 +64,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let faucet_addr = socketaddr!(0, FAUCET_PORT);
 
     let faucet = Arc::new(Mutex::new(Faucet::new(
-        mint_keypair,
+        faucet_keypair,
         time_slice,
         per_time_cap,
         per_request_cap,
