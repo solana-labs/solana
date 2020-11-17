@@ -561,11 +561,6 @@ impl AsyncClient for ThinClient {
         serialize_into(&mut wr, &transaction)
             .expect("serialize Transaction in pub fn transfer_signed");
         assert!(buf.len() < PACKET_DATA_SIZE);
-        info!(
-            "sending {} to {}",
-            transaction.signatures[0],
-            self.tpu_addr()
-        );
         self.transactions_socket
             .send_to(&buf[..], &self.tpu_addr())?;
         Ok(transaction.signatures[0])

@@ -2233,7 +2233,6 @@ fn test_load_program_accounts() {
                         .into_iter()
                         .map(|(key, account)| {
                             if key == funding_pubkey || key == other_pubkey {
-                                info!("key: {} balance: {}", key, account.lamports);
                                 account.lamports
                             } else {
                                 0
@@ -2242,7 +2241,6 @@ fn test_load_program_accounts() {
                         .sum::<u64>()
                 })
             {
-                info!("total scan balance: {}", total_scan_balance);
                 assert_eq!(total_scan_balance, expected_total_balance);
             }
         })
