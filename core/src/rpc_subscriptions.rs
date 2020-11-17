@@ -795,8 +795,14 @@ impl RpcSubscriptions {
             match notification_receiver.recv_timeout(Duration::from_millis(RECEIVE_DELAY_MILLIS)) {
                 Ok(notification_entry) => match notification_entry {
                     NotificationEntry::Slot(slot_info) => {
-                        debug!("slot notify: {:?}", slot_info);
                         let subscriptions = subscriptions.slot_subscriptions.read().unwrap();
+                        let num_subscriptions = subscriptions.len();
+                        if num_subscriptions > 0 {
+                            debug!(
+                                "slot notify: {:?}, num_subscriptions: {:?}",
+                                slot_info, num_subscriptions
+                            );
+                        }
                         for (_, sink) in subscriptions.iter() {
                             inc_new_counter_info!("rpc-subscription-notify-slot", 1);
                             notifier.notify(slot_info, sink);
@@ -806,8 +812,14 @@ impl RpcSubscriptions {
                     // unlike `NotificationEntry::Gossip`, which also accounts for slots seen
                     // in VoteState's from bank states built in ReplayStage.
                     NotificationEntry::Vote(ref vote_info) => {
-                        debug!("vote notify: {:?}", vote_info);
                         let subscriptions = subscriptions.vote_subscriptions.read().unwrap();
+                        let num_subscriptions = subscriptions.len();
+                        if num_subscriptions > 0 {
+                            debug!(
+                                "vote notify: {:?}, num_subscriptions: {:?}",
+                                vote_info, num_subscriptions
+                            );
+                        }
                         for (_, sink) in subscriptions.iter() {
                             inc_new_counter_info!("rpc-subscription-notify-vote", 1);
                             notifier.notify(
@@ -821,8 +833,14 @@ impl RpcSubscriptions {
                         }
                     }
                     NotificationEntry::Root(root) => {
-                        debug!("root notify: {:?}", root);
                         let subscriptions = subscriptions.root_subscriptions.read().unwrap();
+                        let num_subscriptions = subscriptions.len();
+                        if num_subscriptions > 0 {
+                            debug!(
+                                "root notify: {:?}, num_subscriptions: {:?}",
+                                root, num_subscriptions
+                            );
+                        }
                         for (_, sink) in subscriptions.iter() {
                             inc_new_counter_info!("rpc-subscription-notify-root", 1);
                             notifier.notify(root, sink);
