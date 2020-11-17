@@ -167,16 +167,16 @@ impl Meta {
         Ok(())
     }
 
-    pub fn reduce_overage_rent_exempt_reserve(
+    pub fn rewrite_rent_exempt_reserve(
         &mut self,
         rent: &Rent,
         data_len: usize,
     ) -> Option<(u64, u64)> {
         let corrected_rent_exempt_reserve = rent.minimum_balance(data_len);
         if corrected_rent_exempt_reserve != self.rent_exempt_reserve {
-            // we forcibly update rent_excempt_reserve even if rent_exempt_reserve > account
-            // balance, hoping user might restore rent_exempt status by depositing.
-            // TODO: split is overflow safe?
+            // We forcibly update rent_excempt_reserve even
+            // if rent_exempt_reserve > account_balance, hoping user might restore
+            // rent_exempt status by depositing.
             let (old, new) = (self.rent_exempt_reserve, corrected_rent_exempt_reserve);
             self.rent_exempt_reserve = corrected_rent_exempt_reserve;
             Some((old, new))
@@ -408,6 +408,27 @@ impl Delegation {
         } else {
             // no history or I've dropped out of history, so assume fully effective
             (self.stake, 0)
+        }
+    }
+
+    fn rewrite_stake(
+        &mut self,
+        account_balance: u64,
+        rent_exempt_balance: u64,
+    ) -> Option<(u64, u64)> {
+        // note that this will intentionally overwrite innocent
+        // deactivated-then-immeditealy-withdrawn stake accounts as well
+        // this is chosen to minimize the risks from complicated logic,
+        // over some unneeded rewrites
+        let corrected_stake = account_balance.saturating_sub(rent_exempt_balance);
+        if self.stake != corrected_stake {
+            // this could result in creating a 0-staked account;
+            // rewards and staking calc can handle it.
+            let (old, new) = (self.stake, corrected_stake);
+            self.stake = corrected_stake;
+            Some((old, new))
+        } else {
+            None
         }
     }
 }
@@ -703,25 +724,6 @@ impl Stake {
         } else {
             self.delegation.deactivation_epoch = epoch;
             Ok(())
-        }
-    }
-
-    fn reduce_overage(
-        &mut self,
-        account_balance: u64,
-        rent_exempt_balance: u64,
-    ) -> Option<(u64, u64)> {
-        // at this moment, balance >>> rent_excempt_balance (no overflow risk)
-        //   => no there could be possibility of non-rent-exempt stake accounts
-        // this will overwrite innocent deactivating and immeditealy withdrawn stake accounts as well is this ok?
-        let corrected_stake = account_balance.saturating_sub(rent_exempt_balance);
-        if self.delegation.stake > corrected_stake {
-            // this could result in creating 0 stake account..; is this safe?
-            let (old, new) = (self.delegation.stake, corrected_stake);
-            self.delegation.stake = corrected_stake;
-            Some((old, new))
-        } else {
-            None
         }
     }
 }
@@ -1223,39 +1225,38 @@ fn calculate_split_rent_exempt_reserve(
     lamports_per_byte_year * (split_data_len + ACCOUNT_STORAGE_OVERHEAD)
 }
 
-pub type ReducedOverageStakeResult = (&'static str, (u64, u64), (u64, u64));
+pub type RewriteStakeStatus = (&'static str, (u64, u64), (u64, u64));
 
-pub fn reduce_overage_stakes(
+pub fn rewrite_stakes(
     stake_account: &mut Account,
     rent: &Rent,
-) -> Result<ReducedOverageStakeResult, InstructionError> {
+) -> Result<RewriteStakeStatus, InstructionError> {
     match stake_account.state()? {
         StakeState::Initialized(mut meta) => {
-            let meta_result =
-                meta.reduce_overage_rent_exempt_reserve(rent, stake_account.data.len());
+            let meta_status = meta.rewrite_rent_exempt_reserve(rent, stake_account.data.len());
 
-            if meta_result.is_none() {
+            if meta_status.is_none() {
                 return Err(InstructionError::InvalidAccountData);
             }
 
             stake_account.set_state(&StakeState::Initialized(meta))?;
-            Ok(("initialized", meta_result.unwrap_or_default(), (0, 0)))
+            Ok(("initialized", meta_status.unwrap_or_default(), (0, 0)))
         }
         StakeState::Stake(mut meta, mut stake) => {
-            let meta_result =
-                meta.reduce_overage_rent_exempt_reserve(rent, stake_account.data.len());
-            let stake_result =
-                stake.reduce_overage(stake_account.lamports, meta.rent_exempt_reserve);
+            let meta_status = meta.rewrite_rent_exempt_reserve(rent, stake_account.data.len());
+            let stake_status = stake
+                .delegation
+                .rewrite_stake(stake_account.lamports, meta.rent_exempt_reserve);
 
-            if meta_result.is_none() && stake_result.is_none() {
+            if meta_status.is_none() && stake_status.is_none() {
                 return Err(InstructionError::InvalidAccountData);
             }
 
             stake_account.set_state(&StakeState::Stake(meta, stake))?;
             Ok((
                 "stake",
-                meta_result.unwrap_or_default(),
-                stake_result.unwrap_or_default(),
+                meta_status.unwrap_or_default(),
+                stake_status.unwrap_or_default(),
             ))
         }
         _ => Err(InstructionError::InvalidAccountData),
@@ -4942,6 +4943,133 @@ mod tests {
             stake.delegation.stake,
             stake_keyed_account.lamports().unwrap() - rent_exempt_reserve,
         );
+    }
+
+    #[test]
+    fn test_meta_rewrite_rent_exempt_reserve() {
+        let right_data_len = std::mem::size_of::<StakeState>() as u64;
+        let rent = Rent::default();
+        let expected_rent_exempt_reserve = rent.minimum_balance(right_data_len as usize);
+
+        let test_cases = [
+            (
+                right_data_len + 100,
+                Some((
+                    rent.minimum_balance(right_data_len as usize + 100),
+                    expected_rent_exempt_reserve,
+                )),
+            ), // large data_len, too small rent exempt
+            (right_data_len, None), // correct
+            (
+                right_data_len - 100,
+                Some((
+                    rent.minimum_balance(right_data_len as usize - 100),
+                    expected_rent_exempt_reserve,
+                )),
+            ), // small data_len, too large rent exempt
+        ];
+        for (data_len, expected_rewrite) in &test_cases {
+            let rent_exempt_reserve = rent.minimum_balance(*data_len as usize);
+            let mut meta = Meta {
+                rent_exempt_reserve,
+                ..Meta::default()
+            };
+            let actual_rewrite = meta.rewrite_rent_exempt_reserve(&rent, right_data_len as usize);
+            assert_eq!(actual_rewrite, *expected_rewrite);
+            assert_eq!(meta.rent_exempt_reserve, expected_rent_exempt_reserve);
+        }
+    }
+
+    #[test]
+    fn test_stake_rewrite_stake() {
+        let right_data_len = std::mem::size_of::<StakeState>() as u64;
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(right_data_len as usize);
+        let expected_stake = 1000;
+        let account_balance = rent_exempt_reserve + expected_stake;
+
+        let test_cases = [
+            (9999, Some((9999, expected_stake))), // large stake
+            (1000, None),                         // correct
+            (42, Some((42, expected_stake))),     // small stake
+        ];
+        for (staked_amount, expected_rewrite) in &test_cases {
+            let mut delegation = Delegation {
+                stake: *staked_amount,
+                ..Delegation::default()
+            };
+            let actual_rewrite = delegation.rewrite_stake(account_balance, rent_exempt_reserve);
+            assert_eq!(actual_rewrite, *expected_rewrite);
+            assert_eq!(delegation.stake, expected_stake);
+        }
+    }
+
+    enum ExpectedRewriteResult {
+        NotRewritten,
+        Rewritten,
+    }
+
+    #[test]
+    fn test_rewrite_stakes_initialized() {
+        let right_data_len = std::mem::size_of::<StakeState>();
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(right_data_len as usize);
+        let expected_stake = 1000;
+        let account_balance = rent_exempt_reserve + expected_stake;
+
+        let test_cases = [
+            (1, ExpectedRewriteResult::Rewritten),
+            (0, ExpectedRewriteResult::NotRewritten),
+        ];
+        for (offset, expected_rewrite) in &test_cases {
+            let meta = Meta {
+                rent_exempt_reserve: rent_exempt_reserve + offset,
+                ..Meta::default()
+            };
+            let mut account = Account::new(account_balance, right_data_len, &id());
+            account.set_state(&StakeState::Initialized(meta)).unwrap();
+            let result = rewrite_stakes(&mut account, &rent);
+            match expected_rewrite {
+                ExpectedRewriteResult::NotRewritten => assert!(result.is_err()),
+                ExpectedRewriteResult::Rewritten => assert!(result.is_ok()),
+            }
+        }
+    }
+
+    #[test]
+    fn test_rewrite_stakes_stake() {
+        let right_data_len = std::mem::size_of::<StakeState>();
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(right_data_len as usize);
+        let expected_stake = 1000;
+        let account_balance = rent_exempt_reserve + expected_stake;
+
+        let test_cases = [
+            (1, 9999, ExpectedRewriteResult::Rewritten), // bad meta, bad stake
+            (1, 1000, ExpectedRewriteResult::Rewritten), // bad meta, good stake
+            (0, 9999, ExpectedRewriteResult::Rewritten), // good meta, bad stake
+            (0, 1000, ExpectedRewriteResult::NotRewritten), // good meta, good stake
+        ];
+        for (offset, staked_amount, expected_rewrite) in &test_cases {
+            let meta = Meta {
+                rent_exempt_reserve: rent_exempt_reserve + offset,
+                ..Meta::default()
+            };
+            let stake = Stake {
+                delegation: (Delegation {
+                    stake: *staked_amount,
+                    ..Delegation::default()
+                }),
+                ..Stake::default()
+            };
+            let mut account = Account::new(account_balance, right_data_len, &id());
+            account.set_state(&StakeState::Stake(meta, stake)).unwrap();
+            let result = rewrite_stakes(&mut account, &rent);
+            match expected_rewrite {
+                ExpectedRewriteResult::NotRewritten => assert!(result.is_err()),
+                ExpectedRewriteResult::Rewritten => assert!(result.is_ok()),
+            }
+        }
     }
 
     #[test]

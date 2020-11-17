@@ -701,7 +701,7 @@ pub struct Bank {
 
     pub lazy_rent_collection: AtomicBool,
 
-    pub no_overage_stake_rewrite: AtomicBool,
+    pub no_stake_rewrite: AtomicBool,
 
     // this is temporary field only to remove rewards_pool entirely
     pub rewards_pool_pubkeys: Arc<HashSet<Pubkey>>,
@@ -851,9 +851,7 @@ impl Bank {
             skip_drop: AtomicBool::new(false),
             cluster_type: parent.cluster_type,
             lazy_rent_collection: AtomicBool::new(parent.lazy_rent_collection.load(Relaxed)),
-            no_overage_stake_rewrite: AtomicBool::new(
-                parent.no_overage_stake_rewrite.load(Relaxed),
-            ),
+            no_stake_rewrite: AtomicBool::new(parent.no_stake_rewrite.load(Relaxed)),
             rewards_pool_pubkeys: parent.rewards_pool_pubkeys.clone(),
             cached_executors: RwLock::new((*parent.cached_executors.read().unwrap()).clone()),
             transaction_debug_keys: parent.transaction_debug_keys.clone(),
@@ -877,9 +875,9 @@ impl Bank {
             new.apply_feature_activations(false);
         }
 
-        if new.enable_overage_rewrite(parent_epoch) {
+        if new.enable_stake_rewrite(parent_epoch) {
             // Remove me after a while around v1.6
-            new.reduce_overage_stakes();
+            new.rewrite_stakes();
         }
         let cloned = new
             .stakes
@@ -902,28 +900,25 @@ impl Bank {
         new
     }
 
-    fn enable_overage_rewrite(&self, parent_epoch: Epoch) -> bool {
-        if self.no_overage_stake_rewrite.load(Relaxed) {
+    fn enable_stake_rewrite(&self, parent_epoch: Epoch) -> bool {
+        if self.no_stake_rewrite.load(Relaxed) {
             return false;
         }
 
-        if !self.stake_program_v2_enabled() {
+        let activated_slot = if let Some(epoch) = self.stake_program_v2_slot() {
+            epoch
+        } else {
             return false;
+        };
+        if activated_slot == 0 {
+            return self.slot() == 0;
         }
+        let (activated_epoch, _) = self.get_epoch_and_slot_index(activated_slot);
 
-        match self.cluster_type() {
-            ClusterType::Development => {
-                // run at every epoch for the rewrite code to get maximum exposure while
-                // developing and detect bad stakes in tests
-                self.epoch() > parent_epoch
-            }
-            ClusterType::Devnet | ClusterType::Testnet | ClusterType::MainnetBeta => {
-                // to avoid any potential risk of wrongly rewriting accounts in the future,
-                // only do this once on mainnet, sacrificing small risk of unknown
-                // bugs which again creates bad stake accounts..
-                Some(self.epoch()) == self.stake_program_v2_epoch()
-            }
-        }
+        // to avoid any potential risk of wrongly rewriting accounts in the future,
+        // only do this once, taking small risk of unknown
+        // bugs which again creates bad stake accounts..
+        self.epoch() > parent_epoch && self.epoch() == activated_epoch
     }
 
     /// Like `new_from_parent` but additionally:
@@ -995,7 +990,7 @@ impl Bank {
             skip_drop: new(),
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
-            no_overage_stake_rewrite: new(),
+            no_stake_rewrite: new(),
             rewards_pool_pubkeys: new(),
             cached_executors: RwLock::new(CowCachedExecutors::new(Arc::new(RwLock::new(
                 CachedExecutors::new(MAX_CACHED_EXECUTORS),
@@ -1330,7 +1325,7 @@ impl Bank {
         self.epoch_schedule.get_slots_in_epoch(prev_epoch) as f64 / self.slots_per_year
     }
 
-    fn reduce_overage_stakes(&self) {
+    fn rewrite_stakes(&self) -> (usize, usize) {
         let mut examined_count = 0;
         let mut rewriteen_count = 0;
         self.cloned_stake_delegations()
@@ -1338,13 +1333,11 @@ impl Bank {
             .for_each(|(stake_pubkey, _delegation)| {
                 examined_count += 1;
                 if let Some(mut stake_account) = self.get_account(&stake_pubkey) {
-                    if let Ok(result) = stake_state::reduce_overage_stakes(
-                        &mut stake_account,
-                        &self.rent_collector.rent,
-                    ) {
+                    if let Ok(result) =
+                        stake_state::rewrite_stakes(&mut stake_account, &self.rent_collector.rent)
+                    {
                         self.store_account(&stake_pubkey, &stake_account);
-                        let message =
-                            format!("reduced overage stake: {}, {:?}", stake_pubkey, result,);
+                        let message = format!("rewrote stake: {}, {:?}", stake_pubkey, result,);
                         info!("{}", message);
                         datapoint_info!("stake_info", ("info", message, String));
                         rewriteen_count += 1;
@@ -1353,7 +1346,7 @@ impl Bank {
             });
 
         let msg = format!(
-            "bank (slot: {}): reduce_overage_stakes: {} accounts rewritten / {} accounts examined",
+            "bank (slot: {}): rewrite_stakes: {} accounts rewritten / {} accounts examined",
             self.slot(),
             rewriteen_count,
             examined_count,
@@ -1364,6 +1357,8 @@ impl Bank {
             // don't spam log; this is called at every slot for testing only on development clusters
             trace!("{}", msg);
         }
+
+        (examined_count, rewriteen_count)
     }
 
     // update rewards based on the previous epoch
@@ -3039,7 +3034,7 @@ impl Bank {
     #[cfg(test)]
     fn restore_old_behavior_for_fragile_tests(&self) {
         self.lazy_rent_collection.store(true, Relaxed);
-        self.no_overage_stake_rewrite.store(true, Relaxed);
+        self.no_stake_rewrite.store(true, Relaxed);
     }
 
     fn enable_eager_rent_collection(&self) -> bool {
@@ -4160,14 +4155,9 @@ impl Bank {
             .is_active(&feature_set::stake_program_v2::id())
     }
 
-    pub fn stake_program_v2_epoch(&self) -> Option<Epoch> {
+    pub fn stake_program_v2_slot(&self) -> Option<Slot> {
         self.feature_set
             .activated_slot(&feature_set::stake_program_v2::id())
-            .map(|slot| {
-                let (activated_epoch, _) = self.get_epoch_and_slot_index(slot);
-
-                activated_epoch
-            })
     }
 
     // This is called from snapshot restore AND for each epoch boundary
@@ -7804,7 +7794,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_bank_stake_delegations() {
+    fn test_bank_cloned_stake_delegations() {
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
@@ -10678,5 +10668,99 @@ pub(crate) mod tests {
                 }
             },
         );
+    }
+
+    #[test]
+    fn test_enable_stake_rewrite_genesis() {
+        let genesis_config = create_genesis_config_with_leader(
+            10,
+            &solana_sdk::pubkey::new_rand(),
+            374_999_998_287_840,
+        )
+        .genesis_config;
+        let no_collector = Pubkey::default();
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+        assert_eq!(bank0.enable_stake_rewrite(bank0.epoch()), true);
+        let bank1 = Arc::new(Bank::new_from_parent(
+            &bank0,
+            &no_collector,
+            bank0.slot() + 1,
+        ));
+        assert_eq!(bank1.enable_stake_rewrite(bank0.epoch()), false);
+        let bank2 = Arc::new(Bank::new_from_parent(
+            &bank1,
+            &no_collector,
+            bank1.get_slots_in_epoch(0),
+        ));
+        assert_eq!(bank2.enable_stake_rewrite(bank1.epoch()), false);
+        let bank3 = Arc::new(Bank::new_from_parent(
+            &bank2,
+            &no_collector,
+            bank2.slot() + 1,
+        ));
+        assert_eq!(bank3.enable_stake_rewrite(bank2.epoch()), false);
+    }
+
+    #[test]
+    fn test_enable_stake_rewrite_after_genesis() {
+        let mut genesis_config = create_genesis_config_with_leader(
+            10,
+            &solana_sdk::pubkey::new_rand(),
+            374_999_998_287_840,
+        )
+        .genesis_config;
+        genesis_config
+            .accounts
+            .remove(&feature_set::stake_program_v2::id());
+        let no_collector = Pubkey::default();
+
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+        assert_eq!(bank0.enable_stake_rewrite(bank0.epoch()), false);
+        let bank1 = Arc::new(Bank::new_from_parent(
+            &bank0,
+            &no_collector,
+            bank0.slot() + 1,
+        ));
+        assert_eq!(bank1.enable_stake_rewrite(bank0.epoch()), false);
+
+        let feature_account_balance =
+            std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
+        bank1.store_account(
+            &feature_set::stake_program_v2::id(),
+            &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
+        );
+
+        let bank2 = Arc::new(Bank::new_from_parent(
+            &bank1,
+            &no_collector,
+            bank1.get_slots_in_epoch(0),
+        ));
+        assert_eq!(bank2.enable_stake_rewrite(bank1.epoch()), true);
+        let bank3 = Arc::new(Bank::new_from_parent(
+            &bank2,
+            &no_collector,
+            bank2.slot() + 1,
+        ));
+        assert_eq!(bank3.enable_stake_rewrite(bank2.epoch()), false);
+    }
+
+    #[test]
+    fn test_stake_rewrite() {
+        let GenesisConfigInfo { genesis_config, .. } =
+            create_genesis_config_with_leader(500, &solana_sdk::pubkey::new_rand(), 1);
+        let bank = Arc::new(Bank::new(&genesis_config));
+
+        // quickest way of creting bad stake account
+        let bootstrap_stake_pubkey = bank
+            .cloned_stake_delegations()
+            .keys()
+            .next()
+            .copied()
+            .unwrap();
+        let mut bootstrap_stake_account = bank.get_account(&bootstrap_stake_pubkey).unwrap();
+        bootstrap_stake_account.lamports = 10000000;
+        bank.store_account(&bootstrap_stake_pubkey, &bootstrap_stake_account);
+
+        assert_eq!(bank.rewrite_stakes(), (1, 1));
     }
 }
