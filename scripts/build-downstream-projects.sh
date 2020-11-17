@@ -49,8 +49,7 @@ example_helloworld() {
     echo "[workspace]" >> src/program-rust/Cargo.toml
 
     $cargo_build_bpf \
-      --manifest-path src/program-rust/Cargo.toml \
-      --no-default-features --features program
+      --manifest-path src/program-rust/Cargo.toml
 
     # TODO: Build src/program-c/...
   )
