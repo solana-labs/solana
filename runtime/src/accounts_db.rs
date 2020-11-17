@@ -744,6 +744,14 @@ impl AccountsDB {
         // hold a lock to prevent slot shrinking from running because it might modify some rooted
         // slot storages which can not happen as long as we're cleaning accounts because we're also
         // modifying the rooted slot storages!
+        let max_clean_root = match (self.accounts_index.min_ongoing_scan_root(), max_clean_root) {
+            (None, None) => None,
+            (Some(min_scan_root), None) => Some(min_scan_root),
+            (None, Some(max_clean_root)) => Some(max_clean_root),
+            (Some(min_scan_root), Some(max_clean_root)) => {
+                Some(std::cmp::min(min_scan_root, max_clean_root))
+            }
+        };
         let mut candidates = self.shrink_candidate_slots.lock().unwrap();
 
         self.report_store_stats();
@@ -1281,6 +1289,22 @@ impl AccountsDB {
         let mut collector = A::default();
         self.accounts_index
             .scan_accounts(ancestors, |pubkey, (account_info, slot)| {
+                let account_slot = self
+                    .get_account_from_storage(slot, account_info)
+                    .map(|account| (pubkey, account, slot));
+                scan_func(&mut collector, account_slot)
+            });
+        collector
+    }
+
+    pub fn unchecked_scan_accounts<F, A>(&self, ancestors: &Ancestors, scan_func: F) -> A
+    where
+        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>),
+        A: Default,
+    {
+        let mut collector = A::default();
+        self.accounts_index
+            .unchecked_scan_accounts(ancestors, |pubkey, (account_info, slot)| {
                 let account_slot = self
                     .get_account_from_storage(slot, account_info)
                     .map(|account| (pubkey, account, slot));

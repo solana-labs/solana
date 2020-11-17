@@ -13,7 +13,7 @@ use std::{
     ops::{Range, RangeBounds},
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
-const ITER_BATCH_SIZE: usize = 1000;
+pub const ITER_BATCH_SIZE: usize = 1000;
 
 pub type SlotList<T> = Vec<(Slot, T)>;
 pub type SlotSlice<'s, T> = &'s [(Slot, T)];
@@ -112,6 +112,7 @@ impl<T: 'static + Clone> WriteAccountMapEntry<T> {
 #[derive(Debug, Default)]
 pub struct RootsTracker {
     roots: HashSet<Slot>,
+    max_root: Slot,
     uncleaned_roots: HashSet<Slot>,
     previous_uncleaned_roots: HashSet<Slot>,
 }
@@ -184,6 +185,7 @@ impl<'a, T: 'static + Clone> Iterator for AccountsIndexIterator<'a, T> {
 pub struct AccountsIndex<T> {
     pub account_maps: RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
     roots_tracker: RwLock<RootsTracker>,
+    ongoing_scan_roots: RwLock<BTreeMap<Slot, u64>>,
 }
 
 impl<T: 'static + Clone> AccountsIndex<T> {
@@ -194,15 +196,70 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         AccountsIndexIterator::new(&self.account_maps, range)
     }
 
-    fn do_scan_accounts<'a, F, R>(&'a self, ancestors: &Ancestors, mut func: F, range: Option<R>)
-    where
+    fn do_checked_scan_accounts<'a, F, R>(
+        &'a self,
+        ancestors: &Ancestors,
+        func: F,
+        range: Option<R>,
+    ) where
+        F: FnMut(&Pubkey, (&T, Slot)),
+        R: RangeBounds<Pubkey>,
+    {
+        let max_root = {
+            let mut w_ongoing_scan_roots = self
+                // This lock is also grabbed by clean_accounts(), so clean
+                // has at most cleaned up to the current `max_root` (since
+                // clean only happens *after* BankForks::set_root() which sets
+                // the `max_root`)
+                .ongoing_scan_roots
+                .write()
+                .unwrap();
+            // `max_root()` grabs a lock while
+            // the `ongoing_scan_roots` lock is held,
+            // make sure inverse doesn't happen to avoid
+            // deadlock
+            let max_root = self.max_root();
+            *w_ongoing_scan_roots.entry(max_root).or_default() += 1;
+            max_root
+        };
+
+        self.do_scan_accounts(ancestors, func, range, Some(max_root));
+        {
+            let mut ongoing_scan_roots = self.ongoing_scan_roots.write().unwrap();
+            let count = ongoing_scan_roots.get_mut(&max_root).unwrap();
+            *count -= 1;
+            if *count == 0 {
+                ongoing_scan_roots.remove(&max_root);
+            }
+        }
+    }
+
+    fn do_unchecked_scan_accounts<'a, F, R>(
+        &'a self,
+        ancestors: &Ancestors,
+        func: F,
+        range: Option<R>,
+    ) where
+        F: FnMut(&Pubkey, (&T, Slot)),
+        R: RangeBounds<Pubkey>,
+    {
+        self.do_scan_accounts(ancestors, func, range, None);
+    }
+
+    fn do_scan_accounts<'a, F, R>(
+        &'a self,
+        ancestors: &Ancestors,
+        mut func: F,
+        range: Option<R>,
+        max_root: Option<Slot>,
+    ) where
         F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey>,
     {
         for pubkey_list in self.iter(range) {
             for (pubkey, list) in pubkey_list {
                 let list_r = &list.slot_list.read().unwrap();
-                if let Some(index) = self.latest_slot(Some(ancestors), &list_r, None) {
+                if let Some(index) = self.latest_slot(Some(ancestors), &list_r, max_root) {
                     func(&pubkey, (&list_r[index].1, list_r[index].0));
                 }
             }
@@ -269,7 +326,14 @@ impl<T: 'static + Clone> AccountsIndex<T> {
     where
         F: FnMut(&Pubkey, (&T, Slot)),
     {
-        self.do_scan_accounts(ancestors, func, None::<Range<Pubkey>>);
+        self.do_checked_scan_accounts(ancestors, func, None::<Range<Pubkey>>);
+    }
+
+    pub(crate) fn unchecked_scan_accounts<F>(&self, ancestors: &Ancestors, func: F)
+    where
+        F: FnMut(&Pubkey, (&T, Slot)),
+    {
+        self.do_unchecked_scan_accounts(ancestors, func, None::<Range<Pubkey>>);
     }
 
     /// call func with every pubkey and index visible from a given set of ancestors with range
@@ -278,7 +342,8 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey>,
     {
-        self.do_scan_accounts(ancestors, func, Some(range));
+        // Only the rent logic should be calling this, which doesn't need the safety checks
+        self.do_unchecked_scan_accounts(ancestors, func, Some(range));
     }
 
     pub fn get_rooted_entries(&self, slice: SlotSlice<T>) -> SlotList<T> {
@@ -324,23 +389,27 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         })
     }
 
+    pub fn min_ongoing_scan_root(&self) -> Option<Slot> {
+        self.ongoing_scan_roots
+            .read()
+            .unwrap()
+            .keys()
+            .next()
+            .cloned()
+    }
+
     // Given a SlotSlice `L`, a list of ancestors and a maximum slot, find the latest element
-    // in `L`, where the slot `S < max_slot`, and `S` is an ancestor or root.
+    // in `L`, where the slot `S` is an ancestor or root, and if `S` is a root, then `S <= max_root`
     fn latest_slot(
         &self,
         ancestors: Option<&Ancestors>,
         slice: SlotSlice<T>,
-        max_slot: Option<Slot>,
+        max_root: Option<Slot>,
     ) -> Option<usize> {
         let mut current_max = 0;
-        let max_slot = max_slot.unwrap_or(std::u64::MAX);
-
         let mut rv = None;
         for (i, (slot, _t)) in slice.iter().rev().enumerate() {
-            if *slot >= current_max
-                && *slot <= max_slot
-                && self.is_ancestor_or_root(ancestors, *slot)
-            {
+            if *slot >= current_max && self.is_ancestor_or_root(*slot, ancestors, max_root) {
                 rv = Some((slice.len() - 1) - i);
                 current_max = *slot;
             }
@@ -352,8 +421,17 @@ impl<T: 'static + Clone> AccountsIndex<T> {
     // Checks that the given slot is either:
     // 1) in the `ancestors` set
     // 2) or is a root
-    fn is_ancestor_or_root(&self, ancestors: Option<&Ancestors>, slot: Slot) -> bool {
-        ancestors.map_or(false, |ancestors| ancestors.contains_key(&slot)) || (self.is_root(slot))
+    fn is_ancestor_or_root(
+        &self,
+        slot: Slot,
+        ancestors: Option<&Ancestors>,
+        max_root: Option<Slot>,
+    ) -> bool {
+        ancestors.map_or(false, |ancestors| ancestors.contains_key(&slot)) ||
+        // If the slot is a root, it must be less than the maximum root specified. This
+        // allows scans on non-rooted slots to specify and read data from
+        // ancestors > max_root, while not seeing rooted data update during the scan
+        (max_root.map_or(true, |max_root| slot <= max_root) && (self.is_root(slot)))
     }
 
     /// Get an account
@@ -483,7 +561,13 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
         w_roots_tracker.roots.insert(slot);
         w_roots_tracker.uncleaned_roots.insert(slot);
+        w_roots_tracker.max_root = std::cmp::max(slot, w_roots_tracker.max_root);
     }
+
+    fn max_root(&self) -> Slot {
+        self.roots_tracker.read().unwrap().max_root
+    }
+
     /// Remove the slot when the storage for the slot is freed
     /// Accounts no longer reference this slot.
     pub fn clean_dead_slot(&self, slot: Slot) {
@@ -969,19 +1053,20 @@ mod tests {
         index.add_root(5);
         assert_eq!(index.latest_slot(None, &slot_slice, None).unwrap(), 1);
 
-        // Given a maximum -= root, should still return the root
+        // Given a max_root == root, should still return the root
         assert_eq!(index.latest_slot(None, &slot_slice, Some(5)).unwrap(), 1);
 
-        // Given a maximum < root, should filter out the root
+        // Given a max_root < root, should filter out the root
         assert!(index.latest_slot(None, &slot_slice, Some(4)).is_none());
 
-        // Given a maximum, should filter out the ancestors > maximum
+        // Given a max_root, should filter out roots < max_root, but specified
+        // ancestors should not be affected
         let ancestors: HashMap<Slot, usize> = vec![(3, 1), (7, 1)].into_iter().collect();
         assert_eq!(
             index
                 .latest_slot(Some(&ancestors), &slot_slice, Some(4))
                 .unwrap(),
-            2
+            3
         );
         assert_eq!(
             index
@@ -990,20 +1075,12 @@ mod tests {
             3
         );
 
-        // Given no maximum, should just return the greatest ancestor or root
+        // Given no max_root, should just return the greatest ancestor or root
         assert_eq!(
             index
                 .latest_slot(Some(&ancestors), &slot_slice, None)
                 .unwrap(),
             3
-        );
-
-        // Because the given maximum `m == root`, ancestors > root
-        assert_eq!(
-            index
-                .latest_slot(Some(&ancestors), &slot_slice, Some(5))
-                .unwrap(),
-            1
         );
     }
 

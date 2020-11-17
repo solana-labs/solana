@@ -4029,7 +4029,7 @@ impl Bank {
             // accounts that were included in the bank delta hash when the bank was frozen,
             // and if we clean them here, any newly created snapshot's hash for this bank
             // may not match the frozen hash.
-            Some(self.slot() - 1)
+            Some(self.slot().saturating_sub(1))
         } else {
             None
         };
@@ -4295,7 +4295,7 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
 pub(crate) mod tests {
     use super::*;
     use crate::{
-        accounts_index::{AccountMap, Ancestors},
+        accounts_index::{AccountMap, Ancestors, ITER_BATCH_SIZE},
         genesis_utils::{
             activate_all_features, create_genesis_config_with_leader,
             create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
@@ -4304,6 +4304,7 @@ pub(crate) mod tests {
         native_loader::NativeLoaderError,
         status_cache::MAX_CACHE_ENTRIES,
     };
+    use crossbeam_channel::bounded;
     use solana_sdk::{
         account_utils::StateMut,
         clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
@@ -4332,7 +4333,7 @@ pub(crate) mod tests {
         vote_instruction,
         vote_state::{self, BlockTimestamp, Vote, VoteInit, VoteState, MAX_LOCKOUT_HISTORY},
     };
-    use std::{result, time::Duration};
+    use std::{result, thread::Builder, time::Duration};
 
     #[test]
     fn test_hash_age_kind_is_durable_nonce() {
@@ -10444,5 +10445,149 @@ pub(crate) mod tests {
         bank.finish_init(&genesis_config, None);
         let debug = format!("{:#?}", bank);
         assert!(!debug.is_empty());
+    }
+
+    fn test_store_scan_consistency<F: 'static>(update_f: F)
+    where
+        F: Fn(Arc<Bank>, crossbeam_channel::Sender<Arc<Bank>>, Arc<HashSet<Pubkey>>, Pubkey, u64)
+            + std::marker::Send,
+    {
+        // Set up initial bank
+        let mut genesis_config = create_genesis_config_with_leader(
+            10,
+            &solana_sdk::pubkey::new_rand(),
+            374_999_998_287_840,
+        )
+        .genesis_config;
+        genesis_config.rent = Rent::free();
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        // Set up pubkeys to write to
+        let total_pubkeys = ITER_BATCH_SIZE * 10;
+        let total_pubkeys_to_modify = 10;
+        let all_pubkeys: Vec<Pubkey> = std::iter::repeat_with(solana_sdk::pubkey::new_rand)
+            .take(total_pubkeys)
+            .collect();
+        let program_id = system_program::id();
+        let starting_lamports = 1;
+        let starting_account = Account::new(starting_lamports, 0, &program_id);
+
+        // Write accounts to the store
+        for key in &all_pubkeys {
+            bank0.store_account(&key, &starting_account);
+        }
+
+        // Set aside a subset of accounts to modify
+        let pubkeys_to_modify: Arc<HashSet<Pubkey>> = Arc::new(
+            all_pubkeys
+                .into_iter()
+                .take(total_pubkeys_to_modify)
+                .collect(),
+        );
+        let exit = Arc::new(AtomicBool::new(false));
+
+        // Thread that runs scan and constantly checks for
+        // consistency
+        let pubkeys_to_modify_ = pubkeys_to_modify.clone();
+        let exit_ = exit.clone();
+
+        // Channel over which the bank to scan is sent
+        let (bank_to_scan_sender, bank_to_scan_receiver): (
+            crossbeam_channel::Sender<Arc<Bank>>,
+            crossbeam_channel::Receiver<Arc<Bank>>,
+        ) = bounded(1);
+        let scan_thread = Builder::new()
+            .name("scan".to_string())
+            .spawn(move || loop {
+                if exit_.load(Relaxed) {
+                    return;
+                }
+                if let Ok(bank_to_scan) =
+                    bank_to_scan_receiver.recv_timeout(Duration::from_millis(10))
+                {
+                    let accounts = bank_to_scan.get_program_accounts(&program_id);
+                    // Should never seen empty accounts because no slot ever deleted
+                    // any of the original accounts, and the scan should reflect the
+                    // account state at some frozen slot `X` (no partial updates).
+                    assert!(!accounts.is_empty());
+                    let mut expected_lamports = None;
+                    let mut target_accounts_found = HashSet::new();
+                    for (pubkey, account) in accounts {
+                        let account_balance = account.lamports;
+                        if pubkeys_to_modify_.contains(&pubkey) {
+                            target_accounts_found.insert(pubkey);
+                            if let Some(expected_lamports) = expected_lamports {
+                                assert_eq!(account_balance, expected_lamports);
+                            } else {
+                                // All pubkeys in the specified set should have the same balance
+                                expected_lamports = Some(account_balance);
+                            }
+                        }
+                    }
+
+                    // Should've found all the accounts, i.e. no partial cleans should
+                    // be detected
+                    assert_eq!(target_accounts_found.len(), total_pubkeys_to_modify);
+                }
+            })
+            .unwrap();
+
+        // Thread that constantly updates the accounts, sets
+        // roots, and cleans
+        let update_thread = Builder::new()
+            .name("update".to_string())
+            .spawn(move || {
+                update_f(
+                    bank0,
+                    bank_to_scan_sender,
+                    pubkeys_to_modify,
+                    program_id,
+                    starting_lamports,
+                );
+            })
+            .unwrap();
+
+        // Let threads run for a while, check the scans didn't see any mixed slots
+        std::thread::sleep(Duration::new(5, 0));
+        exit.store(true, Relaxed);
+        scan_thread.join().unwrap();
+        update_thread.join().unwrap();
+    }
+
+    #[test]
+    fn test_store_scan_consistency_root() {
+        test_store_scan_consistency(
+            |bank0, bank_to_scan_sender, pubkeys_to_modify, program_id, starting_lamports| {
+                let mut current_bank = bank0.clone();
+                let mut prev_bank = bank0;
+                loop {
+                    let lamports_this_round = current_bank.slot() + starting_lamports + 1;
+                    let account = Account::new(lamports_this_round, 0, &program_id);
+                    for key in pubkeys_to_modify.iter() {
+                        current_bank.store_account(key, &account);
+                    }
+                    current_bank.freeze();
+                    // Send the previous bank to the scan thread to perform the scan.
+                    // Meanwhile this thread will squash and update roots immediately after
+                    // so the roots will update while scanning.
+                    //
+                    // The capacity of the channel is 1 so that this thread will wait for the scan to finish before starting
+                    // the next iteration, allowing the scan to stay in sync with these updates
+                    // such that every scan will see this interruption.
+                    if bank_to_scan_sender.send(prev_bank).is_err() {
+                        // Channel was disconnected, exit
+                        return;
+                    }
+                    current_bank.squash();
+                    current_bank.clean_accounts(true);
+                    prev_bank = current_bank.clone();
+                    current_bank = Arc::new(Bank::new_from_parent(
+                        &current_bank,
+                        &solana_sdk::pubkey::new_rand(),
+                        current_bank.slot() + 1,
+                    ));
+                }
+            },
+        );
     }
 }
