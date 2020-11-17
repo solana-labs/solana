@@ -433,6 +433,24 @@ impl Shred {
         }
     }
 
+    #[cfg(test)]
+    pub fn unset_data_complete(&mut self) {
+        if self.is_data() {
+            self.data_header.flags &= !DATA_COMPLETE_SHRED;
+        }
+
+        // Data header starts after the shred common header
+        let mut start = SIZE_OF_COMMON_SHRED_HEADER;
+        let size_of_data_shred_header = SIZE_OF_DATA_SHRED_HEADER;
+        Self::serialize_obj_into(
+            &mut start,
+            size_of_data_shred_header,
+            &mut self.payload,
+            &self.data_header,
+        )
+        .expect("Failed to write data header into shred buffer");
+    }
+
     pub fn data_complete(&self) -> bool {
         if self.is_data() {
             self.data_header.flags & DATA_COMPLETE_SHRED == DATA_COMPLETE_SHRED
