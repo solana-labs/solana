@@ -105,6 +105,7 @@ pub enum SysvarAccountType {
 pub struct UiClock {
     pub slot: Slot,
     pub epoch: Epoch,
+    pub epoch_start_timestamp: UnixTimestamp,
     pub leader_schedule_epoch: Epoch,
     pub unix_timestamp: UnixTimestamp,
 }
@@ -114,6 +115,7 @@ impl From<Clock> for UiClock {
         Self {
             slot: clock.slot,
             epoch: clock.epoch,
+            epoch_start_timestamp: clock.epoch_start_timestamp,
             leader_schedule_epoch: clock.leader_schedule_epoch,
             unix_timestamp: clock.unix_timestamp,
         }
