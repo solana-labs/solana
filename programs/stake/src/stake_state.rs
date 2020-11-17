@@ -964,7 +964,9 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                         return Err(InstructionError::InsufficientFunds);
                     }
 
-                    split.set_state(&StakeState::Initialized(meta))?;
+                    let mut split_meta = meta;
+                    split_meta.rent_exempt_reserve = split_rent_exempt_reserve;
+                    split.set_state(&StakeState::Initialized(split_meta))?;
                 }
                 StakeState::Uninitialized => {
                     if !signers.contains(&self.unsigned_key()) {
@@ -4238,22 +4240,26 @@ mod tests {
                 stake_lamports
             );
 
+            let expected_rent_exempt_reserve = calculate_split_rent_exempt_reserve(
+                meta.rent_exempt_reserve,
+                std::mem::size_of::<StakeState>() as u64 + 100,
+                std::mem::size_of::<StakeState>() as u64,
+            );
+            let expected_split_meta = Meta {
+                authorized: Authorized::auto(&stake_pubkey),
+                rent_exempt_reserve: expected_rent_exempt_reserve,
+                ..Meta::default()
+            };
+
             match state {
                 StakeState::Initialized(_) => {
-                    assert_eq!(Ok(*state), split_stake_keyed_account.state());
+                    assert_eq!(
+                        Ok(StakeState::Initialized(expected_split_meta)),
+                        split_stake_keyed_account.state()
+                    );
                     assert_eq!(Ok(*state), stake_keyed_account.state());
                 }
                 StakeState::Stake(meta, stake) => {
-                    let expected_rent_exempt_reserve = calculate_split_rent_exempt_reserve(
-                        meta.rent_exempt_reserve,
-                        std::mem::size_of::<StakeState>() as u64 + 100,
-                        std::mem::size_of::<StakeState>() as u64,
-                    );
-                    let expected_split_meta = Meta {
-                        authorized: Authorized::auto(&stake_pubkey),
-                        rent_exempt_reserve: expected_rent_exempt_reserve,
-                        ..Meta::default()
-                    };
                     let expected_stake = stake_lamports - expected_rent_exempt_reserve;
 
                     assert_eq!(
