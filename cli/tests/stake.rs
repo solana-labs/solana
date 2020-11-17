@@ -9,7 +9,7 @@ use solana_client::{
     nonce_utils,
     rpc_client::RpcClient,
 };
-use solana_core::test_validator::{TestValidator, TestValidatorOptions};
+use solana_core::test_validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
     account_utils::StateMut,
@@ -848,11 +848,7 @@ fn test_stake_authorize_with_fee_payer() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run_with_options(TestValidatorOptions {
-        fees: SIG_FEE,
-        bootstrap_validator_lamports: 42_000,
-        ..TestValidatorOptions::default()
-    });
+    } = TestValidator::run_with_fees(SIG_FEE);
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -985,11 +981,7 @@ fn test_stake_split() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run_with_options(TestValidatorOptions {
-        fees: 1,
-        bootstrap_validator_lamports: 42_000,
-        ..TestValidatorOptions::default()
-    });
+    } = TestValidator::run_with_fees(1);
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -1140,11 +1132,7 @@ fn test_stake_set_lockup() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run_with_options(TestValidatorOptions {
-        fees: 1,
-        bootstrap_validator_lamports: 42_000,
-        ..TestValidatorOptions::default()
-    });
+    } = TestValidator::run_with_fees(1);
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
