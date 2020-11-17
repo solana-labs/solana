@@ -701,6 +701,8 @@ pub struct Bank {
 
     pub lazy_rent_collection: AtomicBool,
 
+    pub no_overage_stake_rewrite: AtomicBool,
+
     // this is temporary field only to remove rewards_pool entirely
     pub rewards_pool_pubkeys: Arc<HashSet<Pubkey>>,
 
@@ -828,6 +830,7 @@ impl Bank {
             capitalization: AtomicU64::new(parent.capitalization()),
             inflation: parent.inflation.clone(),
             transaction_count: AtomicU64::new(parent.transaction_count()),
+            // we will .clone_with_epoch() this soon after stake data update; so just .clone() for now
             stakes: RwLock::new(parent.stakes.read().unwrap().clone()),
             epoch_stakes: parent.epoch_stakes.clone(),
             parent_hash: parent.hash(),
@@ -848,6 +851,9 @@ impl Bank {
             skip_drop: AtomicBool::new(false),
             cluster_type: parent.cluster_type,
             lazy_rent_collection: AtomicBool::new(parent.lazy_rent_collection.load(Relaxed)),
+            no_overage_stake_rewrite: AtomicBool::new(
+                parent.no_overage_stake_rewrite.load(Relaxed),
+            ),
             rewards_pool_pubkeys: parent.rewards_pool_pubkeys.clone(),
             cached_executors: RwLock::new((*parent.cached_executors.read().unwrap()).clone()),
             transaction_debug_keys: parent.transaction_debug_keys.clone(),
@@ -866,8 +872,14 @@ impl Bank {
         });
 
         // Following code may touch AccountsDB, requiring proper ancestors
-        if parent.epoch() < new.epoch() {
+        let parent_epoch = parent.epoch();
+        if parent_epoch < new.epoch() {
             new.apply_feature_activations(false);
+        }
+
+        if new.enable_overage_rewrite(parent_epoch) {
+            // Remove me after a while around v1.6
+            new.reduce_overage_stakes();
         }
         let cloned = new
             .stakes
@@ -879,15 +891,39 @@ impl Bank {
         let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
         new.update_epoch_stakes(leader_schedule_epoch);
         new.update_slot_hashes();
-        new.update_rewards(parent.epoch(), reward_calc_tracer);
-        new.update_stake_history(Some(parent.epoch()));
-        new.update_clock(Some(parent.epoch()));
+        new.update_rewards(parent_epoch, reward_calc_tracer);
+        new.update_stake_history(Some(parent_epoch));
+        new.update_clock(Some(parent_epoch));
         new.update_fees();
         if !new.fix_recent_blockhashes_sysvar_delay() {
             new.update_recent_blockhashes();
         }
 
         new
+    }
+
+    fn enable_overage_rewrite(&self, parent_epoch: Epoch) -> bool {
+        if self.no_overage_stake_rewrite.load(Relaxed) {
+            return false;
+        }
+
+        if !self.stake_program_v2_enabled() {
+            return false;
+        }
+
+        match self.cluster_type() {
+            ClusterType::Development => {
+                // run at every epoch for the rewrite code to get maximum exposure while
+                // developing and detect bad stakes in tests
+                self.epoch() > parent_epoch
+            }
+            ClusterType::Devnet | ClusterType::Testnet | ClusterType::MainnetBeta => {
+                // to avoid any potential risk of wrongly rewriting accounts in the future,
+                // only do this once on mainnet, sacrificing small risk of unknown
+                // bugs which again creates bad stake accounts..
+                Some(self.epoch()) == self.stake_program_v2_epoch()
+            }
+        }
     }
 
     /// Like `new_from_parent` but additionally:
@@ -959,6 +995,7 @@ impl Bank {
             skip_drop: new(),
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
+            no_overage_stake_rewrite: new(),
             rewards_pool_pubkeys: new(),
             cached_executors: RwLock::new(CowCachedExecutors::new(Arc::new(RwLock::new(
                 CachedExecutors::new(MAX_CACHED_EXECUTORS),
@@ -1291,6 +1328,42 @@ impl Bank {
         //  an epoch as a fraction of a year
         //  calculated as: slots_elapsed / (slots / year)
         self.epoch_schedule.get_slots_in_epoch(prev_epoch) as f64 / self.slots_per_year
+    }
+
+    fn reduce_overage_stakes(&self) {
+        let mut examined_count = 0;
+        let mut rewriteen_count = 0;
+        self.cloned_stake_delegations()
+            .into_iter()
+            .for_each(|(stake_pubkey, _delegation)| {
+                examined_count += 1;
+                if let Some(mut stake_account) = self.get_account(&stake_pubkey) {
+                    if let Ok(result) = stake_state::reduce_overage_stakes(
+                        &mut stake_account,
+                        &self.rent_collector.rent,
+                    ) {
+                        self.store_account(&stake_pubkey, &stake_account);
+                        let message =
+                            format!("reduced overage stake: {}, {:?}", stake_pubkey, result,);
+                        info!("{}", message);
+                        datapoint_info!("stake_info", ("info", message, String));
+                        rewriteen_count += 1;
+                    }
+                }
+            });
+
+        let msg = format!(
+            "bank (slot: {}): reduce_overage_stakes: {} accounts rewritten / {} accounts examined",
+            self.slot(),
+            rewriteen_count,
+            examined_count,
+        );
+        if self.cluster_type() != ClusterType::Development {
+            info!("{}", msg);
+        } else {
+            // don't spam log; this is called at every slot for testing only on development clusters
+            trace!("{}", msg);
+        }
     }
 
     // update rewards based on the previous epoch
@@ -2963,6 +3036,12 @@ impl Bank {
         inc_new_counter_info!("collect_rent_eagerly-ms", measure.as_ms() as usize);
     }
 
+    #[cfg(test)]
+    fn restore_old_behavior_for_fragile_tests(&self) {
+        self.lazy_rent_collection.store(true, Relaxed);
+        self.no_overage_stake_rewrite.store(true, Relaxed);
+    }
+
     fn enable_eager_rent_collection(&self) -> bool {
         if self.lazy_rent_collection.load(Relaxed) {
             return false;
@@ -3905,8 +3984,7 @@ impl Bank {
     }
 
     /// current stake delegations for this bank
-    /// Note: this method is exposed publicly for external usage
-    pub fn stake_delegations(&self) -> HashMap<Pubkey, Delegation> {
+    pub fn cloned_stake_delegations(&self) -> HashMap<Pubkey, Delegation> {
         self.stakes.read().unwrap().stake_delegations().clone()
     }
 
@@ -4080,6 +4158,16 @@ impl Bank {
     pub fn stake_program_v2_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::stake_program_v2::id())
+    }
+
+    pub fn stake_program_v2_epoch(&self) -> Option<Epoch> {
+        self.feature_set
+            .activated_slot(&feature_set::stake_program_v2::id())
+            .map(|slot| {
+                let (activated_epoch, _) = self.get_epoch_and_slot_index(slot);
+
+                activated_epoch
+            })
     }
 
     // This is called from snapshot restore AND for each epoch boundary
@@ -5111,7 +5199,7 @@ pub(crate) mod tests {
         let root_bank = Bank::new(&genesis_config);
         // until we completely transition to the eager rent collection,
         // we must ensure lazy rent collection doens't get broken!
-        root_bank.lazy_rent_collection.store(true, Relaxed);
+        root_bank.restore_old_behavior_for_fragile_tests();
         let root_bank = Arc::new(root_bank);
         let bank = create_child_bank_for_rent_test(&root_bank, &genesis_config, mock_program_id);
 
@@ -6029,7 +6117,7 @@ pub(crate) mod tests {
 
         // enable lazy rent collection because this test depends on rent-due accounts
         // not being eagerly-collected for exact rewards calculation
-        bank.lazy_rent_collection.store(true, Relaxed);
+        bank.restore_old_behavior_for_fragile_tests();
 
         assert_eq!(bank.capitalization(), 42 * 1_000_000_000);
         assert!(bank.rewards.read().unwrap().is_empty());
@@ -6148,7 +6236,7 @@ pub(crate) mod tests {
 
         // enable lazy rent collection because this test depends on rent-due accounts
         // not being eagerly-collected for exact rewards calculation
-        bank.lazy_rent_collection.store(true, Relaxed);
+        bank.restore_old_behavior_for_fragile_tests();
 
         assert_eq!(bank.capitalization(), 42 * 1_000_000_000);
         assert!(bank.rewards.read().unwrap().is_empty());
@@ -7724,7 +7812,7 @@ pub(crate) mod tests {
         } = create_genesis_config_with_leader(500, &solana_sdk::pubkey::new_rand(), 1);
         let bank = Arc::new(Bank::new(&genesis_config));
 
-        let stake_delegations = bank.stake_delegations();
+        let stake_delegations = bank.cloned_stake_delegations();
         assert_eq!(stake_delegations.len(), 1); // bootstrap validator has
                                                 // to have a stake delegation
 
@@ -7760,7 +7848,7 @@ pub(crate) mod tests {
 
         bank.process_transaction(&transaction).unwrap();
 
-        let stake_delegations = bank.stake_delegations();
+        let stake_delegations = bank.cloned_stake_delegations();
         assert_eq!(stake_delegations.len(), 2);
         assert!(stake_delegations.get(&stake_keypair.pubkey()).is_some());
     }
@@ -7819,7 +7907,7 @@ pub(crate) mod tests {
     fn test_bank_get_program_accounts() {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let parent = Arc::new(Bank::new(&genesis_config));
-        parent.lazy_rent_collection.store(true, Relaxed);
+        parent.restore_old_behavior_for_fragile_tests();
 
         let genesis_accounts: Vec<_> = parent.get_all_accounts_with_modified_slots();
         assert!(
@@ -9213,7 +9301,7 @@ pub(crate) mod tests {
         let pubkey2 = solana_sdk::pubkey::new_rand();
 
         let mut bank = Arc::new(Bank::new(&genesis_config));
-        bank.lazy_rent_collection.store(true, Relaxed);
+        bank.restore_old_behavior_for_fragile_tests();
         assert_eq!(bank.process_stale_slot_with_budget(0, 0), 0);
         assert_eq!(bank.process_stale_slot_with_budget(133, 0), 133);
 
@@ -10263,7 +10351,7 @@ pub(crate) mod tests {
         // Make sure rent collection doesn't overwrite `large_account_pubkey`, which
         // keeps slot 1 alive in the accounts database. Otherwise, slot 1 and it's bank
         // hash would be removed from accounts, preventing `rehash()` from succeeding
-        bank1.lazy_rent_collection.store(true, Relaxed);
+        bank1.restore_old_behavior_for_fragile_tests();
         bank1.freeze();
         let bank1_hash = bank1.hash();
 

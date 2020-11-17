@@ -166,6 +166,24 @@ impl Meta {
         }
         Ok(())
     }
+
+    pub fn reduce_overage_rent_exempt_reserve(
+        &mut self,
+        rent: &Rent,
+        data_len: usize,
+    ) -> Option<(u64, u64)> {
+        let corrected_rent_exempt_reserve = rent.minimum_balance(data_len);
+        if corrected_rent_exempt_reserve != self.rent_exempt_reserve {
+            // we forcibly update rent_excempt_reserve even if rent_exempt_reserve > account
+            // balance, hoping user might restore rent_exempt status by depositing.
+            // TODO: split is overflow safe?
+            let (old, new) = (self.rent_exempt_reserve, corrected_rent_exempt_reserve);
+            self.rent_exempt_reserve = corrected_rent_exempt_reserve;
+            Some((old, new))
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
@@ -687,6 +705,25 @@ impl Stake {
             Ok(())
         }
     }
+
+    fn reduce_overage(
+        &mut self,
+        account_balance: u64,
+        rent_exempt_balance: u64,
+    ) -> Option<(u64, u64)> {
+        // at this moment, balance >>> rent_excempt_balance (no overflow risk)
+        //   => no there could be possibility of non-rent-exempt stake accounts
+        // this will overwrite innocent deactivating and immeditealy withdrawn stake accounts as well is this ok?
+        let corrected_stake = account_balance.saturating_sub(rent_exempt_balance);
+        if self.delegation.stake > corrected_stake {
+            // this could result in creating 0 stake account..; is this safe?
+            let (old, new) = (self.delegation.stake, corrected_stake);
+            self.delegation.stake = corrected_stake;
+            Some((old, new))
+        } else {
+            None
+        }
+    }
 }
 
 pub trait StakeAccount {
@@ -1184,6 +1221,45 @@ fn calculate_split_rent_exempt_reserve(
     let lamports_per_byte_year =
         source_rent_exempt_reserve / (source_data_len + ACCOUNT_STORAGE_OVERHEAD);
     lamports_per_byte_year * (split_data_len + ACCOUNT_STORAGE_OVERHEAD)
+}
+
+pub type ReducedOverageStakeResult = (&'static str, (u64, u64), (u64, u64));
+
+pub fn reduce_overage_stakes(
+    stake_account: &mut Account,
+    rent: &Rent,
+) -> Result<ReducedOverageStakeResult, InstructionError> {
+    match stake_account.state()? {
+        StakeState::Initialized(mut meta) => {
+            let meta_result =
+                meta.reduce_overage_rent_exempt_reserve(rent, stake_account.data.len());
+
+            if meta_result.is_none() {
+                return Err(InstructionError::InvalidAccountData);
+            }
+
+            stake_account.set_state(&StakeState::Initialized(meta))?;
+            Ok(("initialized", meta_result.unwrap_or_default(), (0, 0)))
+        }
+        StakeState::Stake(mut meta, mut stake) => {
+            let meta_result =
+                meta.reduce_overage_rent_exempt_reserve(rent, stake_account.data.len());
+            let stake_result =
+                stake.reduce_overage(stake_account.lamports, meta.rent_exempt_reserve);
+
+            if meta_result.is_none() && stake_result.is_none() {
+                return Err(InstructionError::InvalidAccountData);
+            }
+
+            stake_account.set_state(&StakeState::Stake(meta, stake))?;
+            Ok((
+                "stake",
+                meta_result.unwrap_or_default(),
+                stake_result.unwrap_or_default(),
+            ))
+        }
+        _ => Err(InstructionError::InvalidAccountData),
+    }
 }
 
 // utility function, used by runtime::Stakes, tests
