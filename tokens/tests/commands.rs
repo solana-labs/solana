@@ -7,6 +7,7 @@ use tokio::runtime::Runtime;
 
 #[test]
 fn test_process_distribute_with_rpc_client() {
+    solana_logger::setup();
     let TestValidator {
         server,
         leader_data,
