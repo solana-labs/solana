@@ -1,4 +1,3 @@
-use crate::bank::Bank;
 use ouroboros::self_referencing;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::ops::{
