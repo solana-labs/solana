@@ -48,6 +48,7 @@ use std::{
 
 pub struct RpcClient {
     sender: Box<dyn RpcSender + Send + Sync + 'static>,
+    commitment_config: CommitmentConfig,
     default_cluster_transaction_encoding: RwLock<Option<UiTransactionEncoding>>,
 }
 
@@ -72,27 +73,41 @@ fn serialize_encode_transaction(
 }
 
 impl RpcClient {
-    pub fn new_sender<T: RpcSender + Send + Sync + 'static>(sender: T) -> Self {
+    fn new_sender<T: RpcSender + Send + Sync + 'static>(
+        sender: T,
+        commitment_config: CommitmentConfig,
+    ) -> Self {
         Self {
             sender: Box::new(sender),
             default_cluster_transaction_encoding: RwLock::new(None),
+            commitment_config,
         }
     }
 
     pub fn new(url: String) -> Self {
-        Self::new_sender(HttpSender::new(url))
+        Self::new_with_commitment(url, CommitmentConfig::default())
+    }
+
+    pub fn new_with_commitment(url: String, commitment_config: CommitmentConfig) -> Self {
+        Self::new_sender(HttpSender::new(url), commitment_config)
     }
 
     pub fn new_with_timeout(url: String, timeout: Duration) -> Self {
-        Self::new_sender(HttpSender::new_with_timeout(url, timeout))
+        Self::new_sender(
+            HttpSender::new_with_timeout(url, timeout),
+            CommitmentConfig::default(),
+        )
     }
 
     pub fn new_mock(url: String) -> Self {
-        Self::new_sender(MockSender::new(url))
+        Self::new_sender(MockSender::new(url), CommitmentConfig::default())
     }
 
     pub fn new_mock_with_mocks(url: String, mocks: Mocks) -> Self {
-        Self::new_sender(MockSender::new_with_mocks(url, mocks))
+        Self::new_sender(
+            MockSender::new_with_mocks(url, mocks),
+            CommitmentConfig::default(),
+        )
     }
 
     pub fn new_socket(addr: SocketAddr) -> Self {
@@ -106,8 +121,12 @@ impl RpcClient {
 
     pub fn confirm_transaction(&self, signature: &Signature) -> ClientResult<bool> {
         Ok(self
-            .confirm_transaction_with_commitment(signature, CommitmentConfig::default())?
+            .confirm_transaction_with_commitment(signature, self.commitment_config)?
             .value)
+    }
+
+    pub fn commitment(&self) -> CommitmentConfig {
+        self.commitment_config
     }
 
     pub fn confirm_transaction_with_commitment(
@@ -128,7 +147,13 @@ impl RpcClient {
     }
 
     pub fn send_transaction(&self, transaction: &Transaction) -> ClientResult<Signature> {
-        self.send_transaction_with_config(transaction, RpcSendTransactionConfig::default())
+        self.send_transaction_with_config(
+            transaction,
+            RpcSendTransactionConfig {
+                preflight_commitment: Some(self.commitment_config.commitment),
+                ..RpcSendTransactionConfig::default()
+            },
+        )
     }
 
     fn default_cluster_transaction_encoding(&self) -> Result<UiTransactionEncoding, RpcError> {
@@ -221,7 +246,13 @@ impl RpcClient {
         &self,
         transaction: &Transaction,
     ) -> RpcResult<RpcSimulateTransactionResult> {
-        self.simulate_transaction_with_config(transaction, RpcSimulateTransactionConfig::default())
+        self.simulate_transaction_with_config(
+            transaction,
+            RpcSimulateTransactionConfig {
+                commitment: Some(self.commitment_config),
+                ..RpcSimulateTransactionConfig::default()
+            },
+        )
     }
 
     pub fn simulate_transaction_with_config(
@@ -249,7 +280,7 @@ impl RpcClient {
         &self,
         signature: &Signature,
     ) -> ClientResult<Option<transaction::Result<()>>> {
-        self.get_signature_status_with_commitment(signature, CommitmentConfig::default())
+        self.get_signature_status_with_commitment(signature, self.commitment_config)
     }
 
     pub fn get_signature_statuses(
@@ -307,7 +338,7 @@ impl RpcClient {
     }
 
     pub fn get_slot(&self) -> ClientResult<Slot> {
-        self.get_slot_with_commitment(CommitmentConfig::default())
+        self.get_slot_with_commitment(self.commitment_config)
     }
 
     pub fn get_slot_with_commitment(
@@ -325,7 +356,7 @@ impl RpcClient {
     }
 
     pub fn total_supply(&self) -> ClientResult<u64> {
-        self.total_supply_with_commitment(CommitmentConfig::default())
+        self.total_supply_with_commitment(self.commitment_config)
     }
 
     pub fn total_supply_with_commitment(
@@ -343,7 +374,7 @@ impl RpcClient {
     }
 
     pub fn get_vote_accounts(&self) -> ClientResult<RpcVoteAccountStatus> {
-        self.get_vote_accounts_with_commitment(CommitmentConfig::default())
+        self.get_vote_accounts_with_commitment(self.commitment_config)
     }
 
     pub fn get_vote_accounts_with_commitment(
@@ -503,7 +534,7 @@ impl RpcClient {
     }
 
     pub fn get_epoch_info(&self) -> ClientResult<EpochInfo> {
-        self.get_epoch_info_with_commitment(CommitmentConfig::default())
+        self.get_epoch_info_with_commitment(self.commitment_config)
     }
 
     pub fn get_epoch_info_with_commitment(
@@ -517,7 +548,7 @@ impl RpcClient {
         &self,
         slot: Option<Slot>,
     ) -> ClientResult<Option<RpcLeaderSchedule>> {
-        self.get_leader_schedule_with_commitment(slot, CommitmentConfig::default())
+        self.get_leader_schedule_with_commitment(slot, self.commitment_config)
     }
 
     pub fn get_leader_schedule_with_commitment(
@@ -612,7 +643,7 @@ impl RpcClient {
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> ClientResult<Account> {
-        self.get_account_with_commitment(pubkey, CommitmentConfig::default())?
+        self.get_account_with_commitment(pubkey, self.commitment_config)?
             .value
             .ok_or_else(|| RpcError::ForUser(format!("AccountNotFound: pubkey={}", pubkey)).into())
     }
@@ -660,7 +691,7 @@ impl RpcClient {
 
     pub fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> ClientResult<Vec<Option<Account>>> {
         Ok(self
-            .get_multiple_accounts_with_commitment(pubkeys, CommitmentConfig::default())?
+            .get_multiple_accounts_with_commitment(pubkeys, self.commitment_config)?
             .value)
     }
 
@@ -714,7 +745,7 @@ impl RpcClient {
     /// Request the balance of the account `pubkey`.
     pub fn get_balance(&self, pubkey: &Pubkey) -> ClientResult<u64> {
         Ok(self
-            .get_balance_with_commitment(pubkey, CommitmentConfig::default())?
+            .get_balance_with_commitment(pubkey, self.commitment_config)?
             .value)
     }
 
@@ -756,7 +787,7 @@ impl RpcClient {
 
     /// Request the transaction count.
     pub fn get_transaction_count(&self) -> ClientResult<u64> {
-        self.get_transaction_count_with_commitment(CommitmentConfig::default())
+        self.get_transaction_count_with_commitment(self.commitment_config)
     }
 
     pub fn get_transaction_count_with_commitment(
@@ -768,7 +799,7 @@ impl RpcClient {
 
     pub fn get_recent_blockhash(&self) -> ClientResult<(Hash, FeeCalculator)> {
         let (blockhash, fee_calculator, _last_valid_slot) = self
-            .get_recent_blockhash_with_commitment(CommitmentConfig::default())?
+            .get_recent_blockhash_with_commitment(self.commitment_config)?
             .value;
         Ok((blockhash, fee_calculator))
     }
@@ -825,10 +856,7 @@ impl RpcClient {
         blockhash: &Hash,
     ) -> ClientResult<Option<FeeCalculator>> {
         Ok(self
-            .get_fee_calculator_for_blockhash_with_commitment(
-                blockhash,
-                CommitmentConfig::default(),
-            )?
+            .get_fee_calculator_for_blockhash_with_commitment(blockhash, self.commitment_config)?
             .value)
     }
 
@@ -904,7 +932,7 @@ impl RpcClient {
 
     pub fn get_token_account(&self, pubkey: &Pubkey) -> ClientResult<Option<UiTokenAccount>> {
         Ok(self
-            .get_token_account_with_commitment(pubkey, CommitmentConfig::default())?
+            .get_token_account_with_commitment(pubkey, self.commitment_config)?
             .value)
     }
 
@@ -965,7 +993,7 @@ impl RpcClient {
 
     pub fn get_token_account_balance(&self, pubkey: &Pubkey) -> ClientResult<UiTokenAmount> {
         Ok(self
-            .get_token_account_balance_with_commitment(pubkey, CommitmentConfig::default())?
+            .get_token_account_balance_with_commitment(pubkey, self.commitment_config)?
             .value)
     }
 
@@ -989,7 +1017,7 @@ impl RpcClient {
             .get_token_accounts_by_delegate_with_commitment(
                 delegate,
                 token_account_filter,
-                CommitmentConfig::default(),
+                self.commitment_config,
             )?
             .value)
     }
@@ -1028,7 +1056,7 @@ impl RpcClient {
             .get_token_accounts_by_owner_with_commitment(
                 owner,
                 token_account_filter,
-                CommitmentConfig::default(),
+                self.commitment_config,
             )?
             .value)
     }
@@ -1060,7 +1088,7 @@ impl RpcClient {
 
     pub fn get_token_supply(&self, mint: &Pubkey) -> ClientResult<UiTokenAmount> {
         Ok(self
-            .get_token_supply_with_commitment(mint, CommitmentConfig::default())?
+            .get_token_supply_with_commitment(mint, self.commitment_config)?
             .value)
     }
 
@@ -1141,7 +1169,7 @@ impl RpcClient {
 
     /// Poll the server to confirm a transaction.
     pub fn poll_for_signature(&self, signature: &Signature) -> ClientResult<()> {
-        self.poll_for_signature_with_commitment(signature, CommitmentConfig::default())
+        self.poll_for_signature_with_commitment(signature, self.commitment_config)
     }
 
     /// Poll the server to confirm a transaction.
@@ -1249,10 +1277,9 @@ impl RpcClient {
         &self,
         transaction: &Transaction,
     ) -> ClientResult<Signature> {
-        self.send_and_confirm_transaction_with_spinner_and_config(
+        self.send_and_confirm_transaction_with_spinner_and_commitment(
             transaction,
-            CommitmentConfig::default(),
-            RpcSendTransactionConfig::default(),
+            self.commitment_config,
         )
     }
 
