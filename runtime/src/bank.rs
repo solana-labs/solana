@@ -905,7 +905,7 @@ impl Bank {
             return false;
         }
 
-        let activated_slot = if let Some(epoch) = self.stake_program_v2_slot() {
+        let activated_slot = if let Some(epoch) = self.rewrite_stake_slot() {
             epoch
         } else {
             return false;
@@ -4155,9 +4155,9 @@ impl Bank {
             .is_active(&feature_set::stake_program_v2::id())
     }
 
-    pub fn stake_program_v2_slot(&self) -> Option<Slot> {
+    pub fn rewrite_stake_slot(&self) -> Option<Slot> {
         self.feature_set
-            .activated_slot(&feature_set::stake_program_v2::id())
+            .activated_slot(&feature_set::rewrite_stake::id())
     }
 
     // This is called from snapshot restore AND for each epoch boundary
@@ -10711,7 +10711,7 @@ pub(crate) mod tests {
         .genesis_config;
         genesis_config
             .accounts
-            .remove(&feature_set::stake_program_v2::id());
+            .remove(&feature_set::rewrite_stake::id());
         let no_collector = Pubkey::default();
 
         let bank0 = Arc::new(Bank::new(&genesis_config));
@@ -10726,7 +10726,7 @@ pub(crate) mod tests {
         let feature_account_balance =
             std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
         bank1.store_account(
-            &feature_set::stake_program_v2::id(),
+            &feature_set::rewrite_stake::id(),
             &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
         );
 
