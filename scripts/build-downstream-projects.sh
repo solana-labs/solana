@@ -50,7 +50,6 @@ example_helloworld() {
 
     $cargo_build_bpf \
       --manifest-path src/program-rust/Cargo.toml \
-      --no-default-features --features program
 
     # TODO: Build src/program-c/...
   )
