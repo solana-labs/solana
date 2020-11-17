@@ -6,7 +6,7 @@
     "@project-serum/serum": "^0.13.11",
     "@react-hook/debounce": "^3.0.0",
     "@sentry/react": "^5.27.4",
-    "@solana/web3.js": "^0.87.0",
+    "@solana/web3.js": "^0.87.1",
     "@testing-library/jest-dom": "^5.11.6",
     "@testing-library/react": "^11.1.2",
     "@testing-library/user-event": "^12.2.2",
