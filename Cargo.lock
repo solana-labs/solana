@@ -4075,12 +4075,8 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-clap-utils",
-<<<<<<< HEAD
- "solana-logger 1.4.9",
-=======
  "solana-cli-config",
- "solana-logger 1.5.0",
->>>>>>> ab5814cd9... Cargo.lock
+ "solana-logger 1.4.9",
  "solana-metrics",
  "solana-sdk",
  "solana-version",
