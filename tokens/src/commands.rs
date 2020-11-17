@@ -14,16 +14,19 @@ use serde::{Deserialize, Serialize};
 use solana_account_decoder::parse_token::{
     pubkey_from_spl_token_v2_0, spl_token_v2_0_pubkey, token_amount_to_ui_amount,
 };
-use solana_banks_client::{BanksClient, BanksClientExt};
+use solana_client::{
+    client_error::{ClientError, Result as ClientResult},
+    rpc_client::RpcClient,
+    rpc_config::RpcSendTransactionConfig,
+};
 use solana_sdk::{
-    commitment_config::CommitmentLevel,
+    commitment_config::CommitmentConfig,
     instruction::Instruction,
     message::Message,
     native_token::{lamports_to_sol, sol_to_lamports},
     signature::{unique_signers, Signature, Signer},
     system_instruction,
     transaction::Transaction,
-    transport::{self, TransportError},
 };
 use solana_stake_program::{
     stake_instruction::{self, LockupArgs},
@@ -34,9 +37,9 @@ use spl_token_v2_0::solana_program::program_error::ProgramError;
 use std::{
     cmp::{self},
     io,
+    thread::sleep,
     time::Duration,
 };
-use tokio::time::sleep;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Allocation {
@@ -88,7 +91,7 @@ pub enum Error {
     #[error("PickleDb error")]
     PickleDbError(#[from] pickledb::error::Error),
     #[error("Transport error")]
-    TransportError(#[from] TransportError),
+    ClientError(#[from] ClientError),
     #[error("Missing lockup authority")]
     MissingLockupAuthority,
     #[error("insufficient funds in {0:?}, requires {1} SOL")]
@@ -140,16 +143,16 @@ fn apply_previous_transactions(
     allocations.retain(|x| x.amount > 0);
 }
 
-async fn transfer<S: Signer>(
-    client: &mut BanksClient,
+fn transfer<S: Signer>(
+    client: &RpcClient,
     lamports: u64,
     sender_keypair: &S,
     to_pubkey: &Pubkey,
-) -> io::Result<Transaction> {
+) -> ClientResult<Transaction> {
     let create_instruction =
         system_instruction::transfer(&sender_keypair.pubkey(), &to_pubkey, lamports);
     let message = Message::new(&[create_instruction], Some(&sender_keypair.pubkey()));
-    let recent_blockhash = client.get_recent_blockhash().await?;
+    let (recent_blockhash, _fees) = client.get_recent_blockhash()?;
     Ok(Transaction::new(
         &[sender_keypair],
         message,
@@ -235,8 +238,8 @@ fn distribution_instructions(
     instructions
 }
 
-async fn distribute_allocations(
-    client: &mut BanksClient,
+fn distribute_allocations(
+    client: &RpcClient,
     db: &mut PickleDb,
     allocations: &[Allocation],
     args: &DistributeTokensArgs,
@@ -260,10 +263,11 @@ async fn distribute_allocations(
                     &wallet_address,
                     &spl_token_v2_0_pubkey(&spl_token_args.mint),
                 );
-                let do_create_associated_token_account = client
-                    .get_account(pubkey_from_spl_token_v2_0(&associated_token_address))
-                    .await?
-                    .is_none();
+                let do_create_associated_token_account =
+                    client.get_multiple_accounts(&[pubkey_from_spl_token_v2_0(
+                        &associated_token_address,
+                    )])?[0]
+                        .is_none();
                 if do_create_associated_token_account {
                     created_accounts += 1;
                 }
@@ -297,10 +301,9 @@ async fn distribute_allocations(
         .map(|message| message.header.num_required_signatures as usize)
         .sum();
     if args.spl_token_args.is_some() {
-        check_spl_token_balances(num_signatures, allocations, client, args, created_accounts)
-            .await?;
+        check_spl_token_balances(num_signatures, allocations, client, args, created_accounts)?;
     } else {
-        check_payer_balances(num_signatures, allocations, client, args).await?;
+        check_payer_balances(num_signatures, allocations, client, args)?;
     }
 
     for ((allocation, message), (new_stake_account_keypair, lockup_date)) in
@@ -322,13 +325,19 @@ async fn distribute_allocations(
             }
         }
         let signers = unique_signers(signers);
-        let result: transport::Result<(Transaction, u64)> = {
+        let result: ClientResult<(Transaction, u64)> = {
             if args.dry_run {
                 Ok((Transaction::new_unsigned(message), std::u64::MAX))
             } else {
-                let (_fee_calculator, blockhash, last_valid_slot) = client.get_fees().await?;
+                let (blockhash, _fee_calculator, last_valid_slot) = client
+                    .get_recent_blockhash_with_commitment(CommitmentConfig::default())?
+                    .value;
                 let transaction = Transaction::new(&signers, message, blockhash);
-                client.send_transaction(transaction.clone()).await?;
+                let config = RpcSendTransactionConfig {
+                    skip_preflight: true,
+                    ..RpcSendTransactionConfig::default()
+                };
+                client.send_transaction_with_config(&transaction, config)?;
                 Ok((transaction, last_valid_slot))
             }
         };
@@ -424,8 +433,8 @@ fn new_spinner_progress_bar() -> ProgressBar {
     progress_bar
 }
 
-pub async fn process_allocations(
-    client: &mut BanksClient,
+pub fn process_allocations(
+    client: &RpcClient,
     args: &DistributeTokensArgs,
 ) -> Result<Option<usize>, Error> {
     let require_lockup_heading = args.stake_args.is_some();
@@ -451,7 +460,7 @@ pub async fn process_allocations(
     let mut db = db::open_db(&args.transaction_db, args.dry_run)?;
 
     // Start by finalizing any transactions from the previous run.
-    let confirmations = finalize_transactions(client, &mut db, args.dry_run).await?;
+    let confirmations = finalize_transactions(client, &mut db, args.dry_run)?;
 
     let transaction_infos = db::read_transaction_infos(&db);
     apply_previous_transactions(&mut allocations, &transaction_infos);
@@ -492,9 +501,9 @@ pub async fn process_allocations(
         style(format!("{:<44}  {:>24}", "Recipient", "Expected Balance",)).bold()
     );
 
-    distribute_allocations(client, &mut db, &allocations, args).await?;
+    distribute_allocations(client, &mut db, &allocations, args)?;
 
-    let opt_confirmations = finalize_transactions(client, &mut db, args.dry_run).await?;
+    let opt_confirmations = finalize_transactions(client, &mut db, args.dry_run)?;
 
     if !args.dry_run {
         if let Some(output_path) = &args.output_path {
@@ -505,8 +514,8 @@ pub async fn process_allocations(
     Ok(opt_confirmations)
 }
 
-async fn finalize_transactions(
-    client: &mut BanksClient,
+fn finalize_transactions(
+    client: &RpcClient,
     db: &mut PickleDb,
     dry_run: bool,
 ) -> Result<Option<usize>, Error> {
@@ -514,7 +523,7 @@ async fn finalize_transactions(
         return Ok(None);
     }
 
-    let mut opt_confirmations = update_finalized_transactions(client, db).await?;
+    let mut opt_confirmations = update_finalized_transactions(client, db)?;
 
     let progress_bar = new_spinner_progress_bar();
 
@@ -527,8 +536,8 @@ async fn finalize_transactions(
         }
 
         // Sleep for about 1 slot
-        sleep(Duration::from_millis(500)).await;
-        let opt_conf = update_finalized_transactions(client, db).await?;
+        sleep(Duration::from_millis(500));
+        let opt_conf = update_finalized_transactions(client, db)?;
         opt_confirmations = opt_conf;
     }
 
@@ -537,8 +546,8 @@ async fn finalize_transactions(
 
 // Update the finalized bit on any transactions that are now rooted
 // Return the lowest number of confirmations on the unfinalized transactions or None if all are finalized.
-async fn update_finalized_transactions(
-    client: &mut BanksClient,
+fn update_finalized_transactions(
+    client: &RpcClient,
     db: &mut PickleDb,
 ) -> Result<Option<usize>, Error> {
     let transaction_infos = db::read_transaction_infos(db);
@@ -558,9 +567,9 @@ async fn update_finalized_transactions(
         .filter(|sig| *sig != Signature::default()) // Filter out dry-run signatures
         .collect();
     let transaction_statuses = client
-        .get_transaction_statuses(unconfirmed_signatures)
-        .await?;
-    let root_slot = client.get_root_slot().await?;
+        .get_signature_statuses(&unconfirmed_signatures)?
+        .value;
+    let root_slot = client.get_slot()?;
 
     let mut confirmations = None;
     for ((transaction, last_valid_slot), opt_transaction_status) in unconfirmed_transactions
@@ -585,15 +594,15 @@ async fn update_finalized_transactions(
     Ok(confirmations)
 }
 
-async fn check_payer_balances(
+fn check_payer_balances(
     num_signatures: usize,
     allocations: &[Allocation],
-    client: &mut BanksClient,
+    client: &RpcClient,
     args: &DistributeTokensArgs,
 ) -> Result<(), Error> {
     let mut undistributed_tokens: u64 = allocations.iter().map(|x| x.amount).sum();
 
-    let (fee_calculator, _blockhash, _last_valid_slot) = client.get_fees().await?;
+    let (_blockhash, fee_calculator) = client.get_recent_blockhash()?;
     let fees = fee_calculator
         .lamports_per_signature
         .checked_mul(num_signatures as u64)
@@ -611,7 +620,7 @@ async fn check_payer_balances(
     };
 
     if let Some((unlocked_sol_source, total_unlocked_sol)) = unlocked_sol_source {
-        let staker_balance = client.get_balance(distribution_source).await?;
+        let staker_balance = client.get_balance(&distribution_source)?;
         if staker_balance < undistributed_tokens {
             return Err(Error::InsufficientFunds(
                 vec![FundingSource::StakeAccount].into(),
@@ -619,7 +628,7 @@ async fn check_payer_balances(
             ));
         }
         if args.fee_payer.pubkey() == unlocked_sol_source {
-            let balance = client.get_balance(args.fee_payer.pubkey()).await?;
+            let balance = client.get_balance(&args.fee_payer.pubkey())?;
             if balance < fees + total_unlocked_sol {
                 return Err(Error::InsufficientFunds(
                     vec![FundingSource::SystemAccount, FundingSource::FeePayer].into(),
@@ -627,14 +636,14 @@ async fn check_payer_balances(
                 ));
             }
         } else {
-            let fee_payer_balance = client.get_balance(args.fee_payer.pubkey()).await?;
+            let fee_payer_balance = client.get_balance(&args.fee_payer.pubkey())?;
             if fee_payer_balance < fees {
                 return Err(Error::InsufficientFunds(
                     vec![FundingSource::FeePayer].into(),
                     lamports_to_sol(fees),
                 ));
             }
-            let unlocked_sol_balance = client.get_balance(unlocked_sol_source).await?;
+            let unlocked_sol_balance = client.get_balance(&unlocked_sol_source)?;
             if unlocked_sol_balance < total_unlocked_sol {
                 return Err(Error::InsufficientFunds(
                     vec![FundingSource::SystemAccount].into(),
@@ -643,7 +652,7 @@ async fn check_payer_balances(
             }
         }
     } else if args.fee_payer.pubkey() == distribution_source {
-        let balance = client.get_balance(args.fee_payer.pubkey()).await?;
+        let balance = client.get_balance(&args.fee_payer.pubkey())?;
         if balance < fees + undistributed_tokens {
             return Err(Error::InsufficientFunds(
                 vec![FundingSource::SystemAccount, FundingSource::FeePayer].into(),
@@ -651,14 +660,14 @@ async fn check_payer_balances(
             ));
         }
     } else {
-        let fee_payer_balance = client.get_balance(args.fee_payer.pubkey()).await?;
+        let fee_payer_balance = client.get_balance(&args.fee_payer.pubkey())?;
         if fee_payer_balance < fees {
             return Err(Error::InsufficientFunds(
                 vec![FundingSource::FeePayer].into(),
                 lamports_to_sol(fees),
             ));
         }
-        let sender_balance = client.get_balance(distribution_source).await?;
+        let sender_balance = client.get_balance(&distribution_source)?;
         if sender_balance < undistributed_tokens {
             return Err(Error::InsufficientFunds(
                 vec![FundingSource::SystemAccount].into(),
@@ -669,7 +678,7 @@ async fn check_payer_balances(
     Ok(())
 }
 
-pub async fn process_balances(client: &mut BanksClient, args: &BalancesArgs) -> Result<(), Error> {
+pub fn process_balances(client: &RpcClient, args: &BalancesArgs) -> Result<(), Error> {
     let allocations: Vec<Allocation> =
         read_allocations(&args.input_csv, None, false, args.spl_token_args.is_some())?;
     let allocations = merge_allocations(&allocations);
@@ -692,11 +701,11 @@ pub async fn process_balances(client: &mut BanksClient, args: &BalancesArgs) -> 
 
     for allocation in &allocations {
         if let Some(spl_token_args) = &args.spl_token_args {
-            print_token_balances(client, allocation, spl_token_args).await?;
+            print_token_balances(client, allocation, spl_token_args)?;
         } else {
             let address: Pubkey = allocation.recipient.parse().unwrap();
             let expected = lamports_to_sol(allocation.amount);
-            let actual = lamports_to_sol(client.get_balance(address).await.unwrap());
+            let actual = lamports_to_sol(client.get_balance(&address).unwrap());
             println!(
                 "{:<44}  {:>24.9}  {:>24.9}  {:>24.9}",
                 allocation.recipient,
@@ -719,8 +728,8 @@ pub fn process_transaction_log(args: &TransactionLogArgs) -> Result<(), Error> {
 use crate::db::check_output_file;
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 use tempfile::{tempdir, NamedTempFile};
-pub async fn test_process_distribute_tokens_with_client(
-    client: &mut BanksClient,
+pub fn test_process_distribute_tokens_with_client(
+    client: &RpcClient,
     sender_keypair: Keypair,
     transfer_amount: Option<u64>,
 ) {
@@ -731,17 +740,12 @@ pub async fn test_process_distribute_tokens_with_client(
         &sender_keypair,
         &fee_payer.pubkey(),
     )
-    .await
     .unwrap();
     client
-        .process_transaction_with_commitment(transaction, CommitmentLevel::Recent)
-        .await
+        .send_and_confirm_transaction_with_spinner(&transaction)
         .unwrap();
     assert_eq!(
-        client
-            .get_balance_with_commitment(fee_payer.pubkey(), CommitmentLevel::Recent)
-            .await
-            .unwrap(),
+        client.get_balance(&fee_payer.pubkey()).unwrap(),
         sol_to_lamports(1.0),
     );
 
@@ -784,7 +788,7 @@ pub async fn test_process_distribute_tokens_with_client(
         spl_token_args: None,
         transfer_amount,
     };
-    let confirmations = process_allocations(client, &args).await.unwrap();
+    let confirmations = process_allocations(client, &args).unwrap();
     assert_eq!(confirmations, None);
 
     let transaction_infos =
@@ -793,33 +797,24 @@ pub async fn test_process_distribute_tokens_with_client(
     assert_eq!(transaction_infos[0].recipient, alice_pubkey);
     assert_eq!(transaction_infos[0].amount, expected_amount);
 
-    assert_eq!(
-        client.get_balance(alice_pubkey).await.unwrap(),
-        expected_amount,
-    );
+    assert_eq!(client.get_balance(&alice_pubkey).unwrap(), expected_amount);
 
     check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
 
     // Now, run it again, and check there's no double-spend.
-    process_allocations(client, &args).await.unwrap();
+    process_allocations(client, &args).unwrap();
     let transaction_infos =
         db::read_transaction_infos(&db::open_db(&transaction_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
     assert_eq!(transaction_infos[0].recipient, alice_pubkey);
     assert_eq!(transaction_infos[0].amount, expected_amount);
 
-    assert_eq!(
-        client.get_balance(alice_pubkey).await.unwrap(),
-        expected_amount,
-    );
+    assert_eq!(client.get_balance(&alice_pubkey).unwrap(), expected_amount);
 
     check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
 }
 
-pub async fn test_process_distribute_stake_with_client(
-    client: &mut BanksClient,
-    sender_keypair: Keypair,
-) {
+pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keypair: Keypair) {
     let fee_payer = Keypair::new();
     let transaction = transfer(
         client,
@@ -827,11 +822,9 @@ pub async fn test_process_distribute_stake_with_client(
         &sender_keypair,
         &fee_payer.pubkey(),
     )
-    .await
     .unwrap();
     client
-        .process_transaction_with_commitment(transaction, CommitmentLevel::Recent)
-        .await
+        .send_and_confirm_transaction_with_spinner(&transaction)
         .unwrap();
 
     let stake_account_keypair = Keypair::new();
@@ -853,11 +846,10 @@ pub async fn test_process_distribute_stake_with_client(
     );
     let message = Message::new(&instructions, Some(&sender_keypair.pubkey()));
     let signers = [&sender_keypair, &stake_account_keypair];
-    let blockhash = client.get_recent_blockhash().await.unwrap();
+    let (blockhash, _fees) = client.get_recent_blockhash().unwrap();
     let transaction = Transaction::new(&signers, message, blockhash);
     client
-        .process_transaction_with_commitment(transaction, CommitmentLevel::Recent)
-        .await
+        .send_and_confirm_transaction_with_spinner(&transaction)
         .unwrap();
 
     let expected_amount = sol_to_lamports(1000.0);
@@ -904,7 +896,7 @@ pub async fn test_process_distribute_stake_with_client(
         sender_keypair: Box::new(sender_keypair),
         transfer_amount: None,
     };
-    let confirmations = process_allocations(client, &args).await.unwrap();
+    let confirmations = process_allocations(client, &args).unwrap();
     assert_eq!(confirmations, None);
 
     let transaction_infos =
@@ -914,19 +906,19 @@ pub async fn test_process_distribute_stake_with_client(
     assert_eq!(transaction_infos[0].amount, expected_amount);
 
     assert_eq!(
-        client.get_balance(alice_pubkey).await.unwrap(),
+        client.get_balance(&alice_pubkey).unwrap(),
         sol_to_lamports(1.0),
     );
     let new_stake_account_address = transaction_infos[0].new_stake_account_address.unwrap();
     assert_eq!(
-        client.get_balance(new_stake_account_address).await.unwrap(),
+        client.get_balance(&new_stake_account_address).unwrap(),
         expected_amount - sol_to_lamports(1.0),
     );
 
     check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
 
     // Now, run it again, and check there's no double-spend.
-    process_allocations(client, &args).await.unwrap();
+    process_allocations(client, &args).unwrap();
     let transaction_infos =
         db::read_transaction_infos(&db::open_db(&transaction_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
@@ -934,11 +926,11 @@ pub async fn test_process_distribute_stake_with_client(
     assert_eq!(transaction_infos[0].amount, expected_amount);
 
     assert_eq!(
-        client.get_balance(alice_pubkey).await.unwrap(),
+        client.get_balance(&alice_pubkey).unwrap(),
         sol_to_lamports(1.0),
     );
     assert_eq!(
-        client.get_balance(new_stake_account_address).await.unwrap(),
+        client.get_balance(&new_stake_account_address).unwrap(),
         expected_amount - sol_to_lamports(1.0),
     );
 
@@ -946,57 +938,82 @@ pub async fn test_process_distribute_stake_with_client(
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+mod tests {
     use super::*;
-    use solana_banks_client::start_client;
-    use solana_banks_server::banks_server::start_local_server;
-    use solana_runtime::{bank::Bank, bank_forks::BankForks};
+    use solana_client::rpc_client::get_rpc_request_str;
+    use solana_core::test_validator::TestValidator;
     use solana_sdk::{
-        fee_calculator::FeeRateGovernor,
-        genesis_config::create_genesis_config,
+        clock::DEFAULT_MS_PER_SLOT,
         signature::{read_keypair_file, write_keypair_file},
     };
     use solana_stake_program::stake_instruction::StakeInstruction;
-    use std::sync::{Arc, RwLock};
-    use tokio::runtime::Runtime;
+    use std::fs::remove_dir_all;
+
+    // This is a quick hack until TestValidator can be initialized with fees from block 0
+    fn test_validator_block_0_fee_workaround(client: &RpcClient) {
+        while client
+            .get_recent_blockhash()
+            .unwrap()
+            .1
+            .lamports_per_signature
+            == 0
+        {
+            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+        }
+    }
 
     #[test]
     fn test_process_token_allocations() {
-        let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
-        Runtime::new().unwrap().block_on(async {
-            let transport = start_local_server(&bank_forks).await;
-            let mut banks_client = start_client(transport).await.unwrap();
-            test_process_distribute_tokens_with_client(&mut banks_client, sender_keypair, None)
-                .await;
-        });
+        let TestValidator {
+            server,
+            leader_data,
+            alice,
+            ledger_path,
+            ..
+        } = TestValidator::run();
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+        test_process_distribute_tokens_with_client(&client, alice, None);
+
+        // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
+        server.close().unwrap();
+        remove_dir_all(ledger_path).unwrap();
     }
 
     #[test]
     fn test_process_transfer_amount_allocations() {
-        let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
-        Runtime::new().unwrap().block_on(async {
-            let transport = start_local_server(&bank_forks).await;
-            let mut banks_client = start_client(transport).await.unwrap();
-            test_process_distribute_tokens_with_client(
-                &mut banks_client,
-                sender_keypair,
-                Some(sol_to_lamports(1.5)),
-            )
-            .await;
-        });
+        let TestValidator {
+            server,
+            leader_data,
+            alice,
+            ledger_path,
+            ..
+        } = TestValidator::run();
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+        test_process_distribute_tokens_with_client(&client, alice, Some(sol_to_lamports(1.5)));
+
+        // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
+        server.close().unwrap();
+        remove_dir_all(ledger_path).unwrap();
     }
 
     #[test]
     fn test_process_stake_allocations() {
-        let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
-        Runtime::new().unwrap().block_on(async {
-            let transport = start_local_server(&bank_forks).await;
-            let mut banks_client = start_client(transport).await.unwrap();
-            test_process_distribute_stake_with_client(&mut banks_client, sender_keypair).await;
-        });
+        let TestValidator {
+            server,
+            leader_data,
+            alice,
+            ledger_path,
+            ..
+        } = TestValidator::run();
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+        test_process_distribute_stake_with_client(&client, alice);
+
+        // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
+        server.close().unwrap();
+        remove_dir_all(ledger_path).unwrap();
     }
 
     #[test]
@@ -1268,7 +1285,7 @@ pub(crate) mod tests {
         }
     }
 
-    pub fn tmp_file_path(name: &str, pubkey: &Pubkey) -> String {
+    fn tmp_file_path(name: &str, pubkey: &Pubkey) -> String {
         use std::env;
         let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
 
@@ -1305,185 +1322,180 @@ pub(crate) mod tests {
     fn test_check_payer_balances_distribute_tokens_single_payer() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
-        let (mut genesis_config, sender_keypair) =
-            create_genesis_config(sol_to_lamports(9_000_000.0));
-        genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
-        Runtime::new().unwrap().block_on(async {
-            let transport = start_local_server(&bank_forks).await;
-            let mut banks_client = start_client(transport).await.unwrap();
+        let TestValidator {
+            server,
+            leader_data,
+            alice,
+            ledger_path,
+            ..
+        } = TestValidator::run_with_fees(fees);
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+        let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
+        write_keypair_file(&alice, &sender_keypair_file).unwrap();
 
-            let sender_keypair_file = tmp_file_path("keypair_file", &sender_keypair.pubkey());
-            write_keypair_file(&sender_keypair, &sender_keypair_file).unwrap();
+        test_validator_block_0_fee_workaround(&client);
 
-            let allocation_amount = 1000.0;
+        let allocation_amount = 1000.0;
 
-            // Fully funded payer
-            let (allocations, mut args) = initialize_check_payer_balances_inputs(
-                sol_to_lamports(allocation_amount),
-                &sender_keypair_file,
-                &sender_keypair_file,
-                None,
+        // Fully funded payer
+        let (allocations, mut args) = initialize_check_payer_balances_inputs(
+            sol_to_lamports(allocation_amount),
+            &sender_keypair_file,
+            &sender_keypair_file,
+            None,
+        );
+        check_payer_balances(1, &allocations, &client, &args).unwrap();
+
+        // Unfunded payer
+        let unfunded_payer = Keypair::new();
+        let unfunded_payer_keypair_file = tmp_file_path("keypair_file", &unfunded_payer.pubkey());
+        write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
+        args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
+            .unwrap()
+            .into();
+        args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
+            .unwrap()
+            .into();
+
+        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
+        if let Error::InsufficientFunds(sources, amount) = err_result {
+            assert_eq!(
+                sources,
+                vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
             );
-            check_payer_balances(1, &allocations, &mut banks_client, &args)
-                .await
-                .unwrap();
+            assert!((amount - (allocation_amount + fees_in_sol)).abs() < f64::EPSILON);
+        } else {
+            panic!("check_payer_balances should have errored");
+        }
 
-            // Unfunded payer
-            let unfunded_payer = Keypair::new();
-            let unfunded_payer_keypair_file =
-                tmp_file_path("keypair_file", &unfunded_payer.pubkey());
-            write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
-            args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
-                .unwrap()
-                .into();
-            args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
-                .unwrap()
-                .into();
-
-            let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
-                .await
-                .unwrap_err();
-            if let Error::InsufficientFunds(sources, amount) = err_result {
-                assert_eq!(
-                    sources,
-                    vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
-                );
-                assert!((amount - (allocation_amount + fees_in_sol)).abs() < f64::EPSILON);
-            } else {
-                panic!("check_payer_balances should have errored");
-            }
-
-            // Payer funded enough for distribution only
-            let partially_funded_payer = Keypair::new();
-            let partially_funded_payer_keypair_file =
-                tmp_file_path("keypair_file", &partially_funded_payer.pubkey());
-            write_keypair_file(
-                &partially_funded_payer,
-                &partially_funded_payer_keypair_file,
-            )
+        // Payer funded enough for distribution only
+        let partially_funded_payer = Keypair::new();
+        let partially_funded_payer_keypair_file =
+            tmp_file_path("keypair_file", &partially_funded_payer.pubkey());
+        write_keypair_file(
+            &partially_funded_payer,
+            &partially_funded_payer_keypair_file,
+        )
+        .unwrap();
+        let transaction = transfer(
+            &client,
+            sol_to_lamports(allocation_amount),
+            &alice,
+            &partially_funded_payer.pubkey(),
+        )
+        .unwrap();
+        client
+            .send_and_confirm_transaction_with_spinner(&transaction)
             .unwrap();
-            let transaction = transfer(
-                &mut banks_client,
-                sol_to_lamports(allocation_amount),
-                &sender_keypair,
-                &partially_funded_payer.pubkey(),
-            )
-            .await
-            .unwrap();
-            banks_client
-                .process_transaction_with_commitment(transaction, CommitmentLevel::Recent)
-                .await
-                .unwrap();
 
-            args.sender_keypair = read_keypair_file(&partially_funded_payer_keypair_file)
-                .unwrap()
-                .into();
-            args.fee_payer = read_keypair_file(&partially_funded_payer_keypair_file)
-                .unwrap()
-                .into();
-            let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
-                .await
-                .unwrap_err();
-            if let Error::InsufficientFunds(sources, amount) = err_result {
-                assert_eq!(
-                    sources,
-                    vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
-                );
-                assert!((amount - (allocation_amount + fees_in_sol)).abs() < f64::EPSILON);
-            } else {
-                panic!("check_payer_balances should have errored");
-            }
-        });
+        args.sender_keypair = read_keypair_file(&partially_funded_payer_keypair_file)
+            .unwrap()
+            .into();
+        args.fee_payer = read_keypair_file(&partially_funded_payer_keypair_file)
+            .unwrap()
+            .into();
+        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
+        if let Error::InsufficientFunds(sources, amount) = err_result {
+            assert_eq!(
+                sources,
+                vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
+            );
+            assert!((amount - (allocation_amount + fees_in_sol)).abs() < f64::EPSILON);
+        } else {
+            panic!("check_payer_balances should have errored");
+        }
+
+        // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
+        server.close().unwrap();
+        remove_dir_all(ledger_path).unwrap();
     }
 
     #[test]
     fn test_check_payer_balances_distribute_tokens_separate_payers() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
-        let (mut genesis_config, sender_keypair) =
-            create_genesis_config(sol_to_lamports(9_000_000.0));
-        genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
-        Runtime::new().unwrap().block_on(async {
-            let transport = start_local_server(&bank_forks).await;
-            let mut banks_client = start_client(transport).await.unwrap();
+        let TestValidator {
+            server,
+            leader_data,
+            alice,
+            ledger_path,
+            ..
+        } = TestValidator::run_with_fees(fees);
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
 
-            let sender_keypair_file = tmp_file_path("keypair_file", &sender_keypair.pubkey());
-            write_keypair_file(&sender_keypair, &sender_keypair_file).unwrap();
+        test_validator_block_0_fee_workaround(&client);
 
-            let allocation_amount = 1000.0;
+        let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
+        write_keypair_file(&alice, &sender_keypair_file).unwrap();
 
-            let funded_payer = Keypair::new();
-            let funded_payer_keypair_file = tmp_file_path("keypair_file", &funded_payer.pubkey());
-            write_keypair_file(&funded_payer, &funded_payer_keypair_file).unwrap();
-            let transaction = transfer(
-                &mut banks_client,
-                sol_to_lamports(allocation_amount),
-                &sender_keypair,
-                &funded_payer.pubkey(),
-            )
-            .await
+        let allocation_amount = 1000.0;
+
+        let funded_payer = Keypair::new();
+        let funded_payer_keypair_file = tmp_file_path("keypair_file", &funded_payer.pubkey());
+        write_keypair_file(&funded_payer, &funded_payer_keypair_file).unwrap();
+        let transaction = transfer(
+            &client,
+            sol_to_lamports(allocation_amount),
+            &alice,
+            &funded_payer.pubkey(),
+        )
+        .unwrap();
+        client
+            .send_and_confirm_transaction_with_spinner(&transaction)
             .unwrap();
-            banks_client
-                .process_transaction_with_commitment(transaction, CommitmentLevel::Recent)
-                .await
-                .unwrap();
 
-            // Fully funded payers
-            let (allocations, mut args) = initialize_check_payer_balances_inputs(
-                sol_to_lamports(allocation_amount),
-                &funded_payer_keypair_file,
-                &sender_keypair_file,
-                None,
-            );
-            check_payer_balances(1, &allocations, &mut banks_client, &args)
-                .await
-                .unwrap();
+        // Fully funded payers
+        let (allocations, mut args) = initialize_check_payer_balances_inputs(
+            sol_to_lamports(allocation_amount),
+            &funded_payer_keypair_file,
+            &sender_keypair_file,
+            None,
+        );
+        check_payer_balances(1, &allocations, &client, &args).unwrap();
 
-            // Unfunded sender
-            let unfunded_payer = Keypair::new();
-            let unfunded_payer_keypair_file =
-                tmp_file_path("keypair_file", &unfunded_payer.pubkey());
-            write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
-            args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
-                .unwrap()
-                .into();
-            args.fee_payer = read_keypair_file(&sender_keypair_file).unwrap().into();
+        // Unfunded sender
+        let unfunded_payer = Keypair::new();
+        let unfunded_payer_keypair_file = tmp_file_path("keypair_file", &unfunded_payer.pubkey());
+        write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
+        args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
+            .unwrap()
+            .into();
+        args.fee_payer = read_keypair_file(&sender_keypair_file).unwrap().into();
 
-            let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
-                .await
-                .unwrap_err();
-            if let Error::InsufficientFunds(sources, amount) = err_result {
-                assert_eq!(sources, vec![FundingSource::SystemAccount].into());
-                assert!((amount - allocation_amount).abs() < f64::EPSILON);
-            } else {
-                panic!("check_payer_balances should have errored");
-            }
+        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
+        if let Error::InsufficientFunds(sources, amount) = err_result {
+            assert_eq!(sources, vec![FundingSource::SystemAccount].into());
+            assert!((amount - allocation_amount).abs() < f64::EPSILON);
+        } else {
+            panic!("check_payer_balances should have errored");
+        }
 
-            // Unfunded fee payer
-            args.sender_keypair = read_keypair_file(&sender_keypair_file).unwrap().into();
-            args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
-                .unwrap()
-                .into();
+        // Unfunded fee payer
+        args.sender_keypair = read_keypair_file(&sender_keypair_file).unwrap().into();
+        args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
+            .unwrap()
+            .into();
 
-            let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
-                .await
-                .unwrap_err();
-            if let Error::InsufficientFunds(sources, amount) = err_result {
-                assert_eq!(sources, vec![FundingSource::FeePayer].into());
-                assert!((amount - fees_in_sol).abs() < f64::EPSILON);
-            } else {
-                panic!("check_payer_balances should have errored");
-            }
-        });
+        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
+        if let Error::InsufficientFunds(sources, amount) = err_result {
+            assert_eq!(sources, vec![FundingSource::FeePayer].into());
+            assert!((amount - fees_in_sol).abs() < f64::EPSILON);
+        } else {
+            panic!("check_payer_balances should have errored");
+        }
+
+        // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
+        server.close().unwrap();
+        remove_dir_all(ledger_path).unwrap();
     }
 
-    async fn initialize_stake_account(
+    fn initialize_stake_account(
         stake_account_amount: u64,
         unlocked_sol: u64,
         sender_keypair: &Keypair,
-        banks_client: &mut BanksClient,
+        client: &RpcClient,
     ) -> StakeArgs {
         let stake_account_keypair = Keypair::new();
         let stake_account_address = stake_account_keypair.pubkey();
@@ -1504,11 +1516,10 @@ pub(crate) mod tests {
         );
         let message = Message::new(&instructions, Some(&sender_keypair.pubkey()));
         let signers = [sender_keypair, &stake_account_keypair];
-        let blockhash = banks_client.get_recent_blockhash().await.unwrap();
+        let (blockhash, _fees) = client.get_recent_blockhash().unwrap();
         let transaction = Transaction::new(&signers, message, blockhash);
-        banks_client
-            .process_transaction_with_commitment(transaction, CommitmentLevel::Recent)
-            .await
+        client
+            .send_and_confirm_transaction_with_spinner(&transaction)
             .unwrap();
 
         StakeArgs {
@@ -1524,213 +1535,203 @@ pub(crate) mod tests {
     fn test_check_payer_balances_distribute_stakes_single_payer() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
-        let (mut genesis_config, sender_keypair) =
-            create_genesis_config(sol_to_lamports(9_000_000.0));
-        genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
-        Runtime::new().unwrap().block_on(async {
-            let transport = start_local_server(&bank_forks).await;
-            let mut banks_client = start_client(transport).await.unwrap();
+        let TestValidator {
+            server,
+            leader_data,
+            alice,
+            ledger_path,
+            ..
+        } = TestValidator::run_with_fees(fees);
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
 
-            let sender_keypair_file = tmp_file_path("keypair_file", &sender_keypair.pubkey());
-            write_keypair_file(&sender_keypair, &sender_keypair_file).unwrap();
+        test_validator_block_0_fee_workaround(&client);
 
-            let allocation_amount = 1000.0;
-            let unlocked_sol = 1.0;
-            let stake_args = initialize_stake_account(
-                sol_to_lamports(allocation_amount),
-                sol_to_lamports(unlocked_sol),
-                &sender_keypair,
-                &mut banks_client,
-            )
-            .await;
+        let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
+        write_keypair_file(&alice, &sender_keypair_file).unwrap();
 
-            // Fully funded payer & stake account
-            let (allocations, mut args) = initialize_check_payer_balances_inputs(
-                sol_to_lamports(allocation_amount),
-                &sender_keypair_file,
-                &sender_keypair_file,
-                Some(stake_args),
+        let allocation_amount = 1000.0;
+        let unlocked_sol = 1.0;
+        let stake_args = initialize_stake_account(
+            sol_to_lamports(allocation_amount),
+            sol_to_lamports(unlocked_sol),
+            &alice,
+            &client,
+        );
+
+        // Fully funded payer & stake account
+        let (allocations, mut args) = initialize_check_payer_balances_inputs(
+            sol_to_lamports(allocation_amount),
+            &sender_keypair_file,
+            &sender_keypair_file,
+            Some(stake_args),
+        );
+        check_payer_balances(1, &allocations, &client, &args).unwrap();
+
+        // Underfunded stake-account
+        let expensive_allocation_amount = 5000.0;
+        let expensive_allocations = vec![Allocation {
+            recipient: solana_sdk::pubkey::new_rand().to_string(),
+            amount: sol_to_lamports(expensive_allocation_amount),
+            lockup_date: "".to_string(),
+        }];
+        let err_result =
+            check_payer_balances(1, &expensive_allocations, &client, &args).unwrap_err();
+        if let Error::InsufficientFunds(sources, amount) = err_result {
+            assert_eq!(sources, vec![FundingSource::StakeAccount].into());
+            assert!((amount - (expensive_allocation_amount - unlocked_sol)).abs() < f64::EPSILON);
+        } else {
+            panic!("check_payer_balances should have errored");
+        }
+
+        // Unfunded payer
+        let unfunded_payer = Keypair::new();
+        let unfunded_payer_keypair_file = tmp_file_path("keypair_file", &unfunded_payer.pubkey());
+        write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
+        args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
+            .unwrap()
+            .into();
+        args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
+            .unwrap()
+            .into();
+
+        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
+        if let Error::InsufficientFunds(sources, amount) = err_result {
+            assert_eq!(
+                sources,
+                vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
             );
-            check_payer_balances(1, &allocations, &mut banks_client, &args)
-                .await
-                .unwrap();
+            assert!((amount - (unlocked_sol + fees_in_sol)).abs() < f64::EPSILON);
+        } else {
+            panic!("check_payer_balances should have errored");
+        }
 
-            // Underfunded stake-account
-            let expensive_allocation_amount = 5000.0;
-            let expensive_allocations = vec![Allocation {
-                recipient: solana_sdk::pubkey::new_rand().to_string(),
-                amount: sol_to_lamports(expensive_allocation_amount),
-                lockup_date: "".to_string(),
-            }];
-            let err_result =
-                check_payer_balances(1, &expensive_allocations, &mut banks_client, &args)
-                    .await
-                    .unwrap_err();
-            if let Error::InsufficientFunds(sources, amount) = err_result {
-                assert_eq!(sources, vec![FundingSource::StakeAccount].into());
-                assert!(
-                    (amount - (expensive_allocation_amount - unlocked_sol)).abs() < f64::EPSILON
-                );
-            } else {
-                panic!("check_payer_balances should have errored");
-            }
-
-            // Unfunded payer
-            let unfunded_payer = Keypair::new();
-            let unfunded_payer_keypair_file =
-                tmp_file_path("keypair_file", &unfunded_payer.pubkey());
-            write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
-            args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
-                .unwrap()
-                .into();
-            args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
-                .unwrap()
-                .into();
-
-            let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
-                .await
-                .unwrap_err();
-            if let Error::InsufficientFunds(sources, amount) = err_result {
-                assert_eq!(
-                    sources,
-                    vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
-                );
-                assert!((amount - (unlocked_sol + fees_in_sol)).abs() < f64::EPSILON);
-            } else {
-                panic!("check_payer_balances should have errored");
-            }
-
-            // Payer funded enough for distribution only
-            let partially_funded_payer = Keypair::new();
-            let partially_funded_payer_keypair_file =
-                tmp_file_path("keypair_file", &partially_funded_payer.pubkey());
-            write_keypair_file(
-                &partially_funded_payer,
-                &partially_funded_payer_keypair_file,
-            )
+        // Payer funded enough for distribution only
+        let partially_funded_payer = Keypair::new();
+        let partially_funded_payer_keypair_file =
+            tmp_file_path("keypair_file", &partially_funded_payer.pubkey());
+        write_keypair_file(
+            &partially_funded_payer,
+            &partially_funded_payer_keypair_file,
+        )
+        .unwrap();
+        let transaction = transfer(
+            &client,
+            sol_to_lamports(unlocked_sol),
+            &alice,
+            &partially_funded_payer.pubkey(),
+        )
+        .unwrap();
+        client
+            .send_and_confirm_transaction_with_spinner(&transaction)
             .unwrap();
-            let transaction = transfer(
-                &mut banks_client,
-                sol_to_lamports(unlocked_sol),
-                &sender_keypair,
-                &partially_funded_payer.pubkey(),
-            )
-            .await
-            .unwrap();
-            banks_client
-                .process_transaction_with_commitment(transaction, CommitmentLevel::Recent)
-                .await
-                .unwrap();
 
-            args.sender_keypair = read_keypair_file(&partially_funded_payer_keypair_file)
-                .unwrap()
-                .into();
-            args.fee_payer = read_keypair_file(&partially_funded_payer_keypair_file)
-                .unwrap()
-                .into();
-            let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
-                .await
-                .unwrap_err();
-            if let Error::InsufficientFunds(sources, amount) = err_result {
-                assert_eq!(
-                    sources,
-                    vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
-                );
-                assert!((amount - (unlocked_sol + fees_in_sol)).abs() < f64::EPSILON);
-            } else {
-                panic!("check_payer_balances should have errored");
-            }
-        });
+        args.sender_keypair = read_keypair_file(&partially_funded_payer_keypair_file)
+            .unwrap()
+            .into();
+        args.fee_payer = read_keypair_file(&partially_funded_payer_keypair_file)
+            .unwrap()
+            .into();
+        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
+        if let Error::InsufficientFunds(sources, amount) = err_result {
+            assert_eq!(
+                sources,
+                vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
+            );
+            assert!((amount - (unlocked_sol + fees_in_sol)).abs() < f64::EPSILON);
+        } else {
+            panic!("check_payer_balances should have errored");
+        }
+
+        // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
+        server.close().unwrap();
+        remove_dir_all(ledger_path).unwrap();
     }
 
     #[test]
     fn test_check_payer_balances_distribute_stakes_separate_payers() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
-        let (mut genesis_config, sender_keypair) =
-            create_genesis_config(sol_to_lamports(9_000_000.0));
-        genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
-        Runtime::new().unwrap().block_on(async {
-            let transport = start_local_server(&bank_forks).await;
-            let mut banks_client = start_client(transport).await.unwrap();
+        let TestValidator {
+            server,
+            leader_data,
+            alice,
+            ledger_path,
+            ..
+        } = TestValidator::run_with_fees(fees);
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
 
-            let sender_keypair_file = tmp_file_path("keypair_file", &sender_keypair.pubkey());
-            write_keypair_file(&sender_keypair, &sender_keypair_file).unwrap();
+        let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
+        write_keypair_file(&alice, &sender_keypair_file).unwrap();
 
-            let allocation_amount = 1000.0;
-            let unlocked_sol = 1.0;
-            let stake_args = initialize_stake_account(
-                sol_to_lamports(allocation_amount),
-                sol_to_lamports(unlocked_sol),
-                &sender_keypair,
-                &mut banks_client,
-            )
-            .await;
+        test_validator_block_0_fee_workaround(&client);
 
-            let funded_payer = Keypair::new();
-            let funded_payer_keypair_file = tmp_file_path("keypair_file", &funded_payer.pubkey());
-            write_keypair_file(&funded_payer, &funded_payer_keypair_file).unwrap();
-            let transaction = transfer(
-                &mut banks_client,
-                sol_to_lamports(unlocked_sol),
-                &sender_keypair,
-                &funded_payer.pubkey(),
-            )
-            .await
+        let allocation_amount = 1000.0;
+        let unlocked_sol = 1.0;
+        let stake_args = initialize_stake_account(
+            sol_to_lamports(allocation_amount),
+            sol_to_lamports(unlocked_sol),
+            &alice,
+            &client,
+        );
+
+        let funded_payer = Keypair::new();
+        let funded_payer_keypair_file = tmp_file_path("keypair_file", &funded_payer.pubkey());
+        write_keypair_file(&funded_payer, &funded_payer_keypair_file).unwrap();
+        let transaction = transfer(
+            &client,
+            sol_to_lamports(unlocked_sol),
+            &alice,
+            &funded_payer.pubkey(),
+        )
+        .unwrap();
+        client
+            .send_and_confirm_transaction_with_spinner(&transaction)
             .unwrap();
-            banks_client
-                .process_transaction_with_commitment(transaction, CommitmentLevel::Recent)
-                .await
-                .unwrap();
 
-            // Fully funded payers
-            let (allocations, mut args) = initialize_check_payer_balances_inputs(
-                sol_to_lamports(allocation_amount),
-                &funded_payer_keypair_file,
-                &sender_keypair_file,
-                Some(stake_args),
-            );
-            check_payer_balances(1, &allocations, &mut banks_client, &args)
-                .await
-                .unwrap();
+        // Fully funded payers
+        let (allocations, mut args) = initialize_check_payer_balances_inputs(
+            sol_to_lamports(allocation_amount),
+            &funded_payer_keypair_file,
+            &sender_keypair_file,
+            Some(stake_args),
+        );
+        check_payer_balances(1, &allocations, &client, &args).unwrap();
 
-            // Unfunded sender
-            let unfunded_payer = Keypair::new();
-            let unfunded_payer_keypair_file =
-                tmp_file_path("keypair_file", &unfunded_payer.pubkey());
-            write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
-            args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
-                .unwrap()
-                .into();
-            args.fee_payer = read_keypair_file(&sender_keypair_file).unwrap().into();
+        // Unfunded sender
+        let unfunded_payer = Keypair::new();
+        let unfunded_payer_keypair_file = tmp_file_path("keypair_file", &unfunded_payer.pubkey());
+        write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
+        args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
+            .unwrap()
+            .into();
+        args.fee_payer = read_keypair_file(&sender_keypair_file).unwrap().into();
 
-            let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
-                .await
-                .unwrap_err();
-            if let Error::InsufficientFunds(sources, amount) = err_result {
-                assert_eq!(sources, vec![FundingSource::SystemAccount].into());
-                assert!((amount - unlocked_sol).abs() < f64::EPSILON);
-            } else {
-                panic!("check_payer_balances should have errored");
-            }
+        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
+        if let Error::InsufficientFunds(sources, amount) = err_result {
+            assert_eq!(sources, vec![FundingSource::SystemAccount].into());
+            assert!((amount - unlocked_sol).abs() < f64::EPSILON);
+        } else {
+            panic!("check_payer_balances should have errored");
+        }
 
-            // Unfunded fee payer
-            args.sender_keypair = read_keypair_file(&sender_keypair_file).unwrap().into();
-            args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
-                .unwrap()
-                .into();
+        // Unfunded fee payer
+        args.sender_keypair = read_keypair_file(&sender_keypair_file).unwrap().into();
+        args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
+            .unwrap()
+            .into();
 
-            let err_result = check_payer_balances(1, &allocations, &mut banks_client, &args)
-                .await
-                .unwrap_err();
-            if let Error::InsufficientFunds(sources, amount) = err_result {
-                assert_eq!(sources, vec![FundingSource::FeePayer].into());
-                assert!((amount - fees_in_sol).abs() < f64::EPSILON);
-            } else {
-                panic!("check_payer_balances should have errored");
-            }
-        });
+        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
+        if let Error::InsufficientFunds(sources, amount) = err_result {
+            assert_eq!(sources, vec![FundingSource::FeePayer].into());
+            assert!((amount - fees_in_sol).abs() < f64::EPSILON);
+        } else {
+            panic!("check_payer_balances should have errored");
+        }
+
+        // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
+        server.close().unwrap();
+        remove_dir_all(ledger_path).unwrap();
     }
 }
