@@ -4297,9 +4297,8 @@ pub(crate) mod tests {
     use crate::{
         accounts_index::{AccountMap, Ancestors, ITER_BATCH_SIZE},
         genesis_utils::{
-            activate_all_features, create_genesis_config_with_leader,
+            activate_all_features, bootstrap_validator_lamports, create_genesis_config_with_leader,
             create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
-            BOOTSTRAP_VALIDATOR_LAMPORTS,
         },
         native_loader::NativeLoaderError,
         status_cache::MAX_CACHE_ENTRIES,
@@ -4367,7 +4366,7 @@ pub(crate) mod tests {
     #[allow(clippy::float_cmp)]
     fn test_bank_new() {
         let dummy_leader_pubkey = solana_sdk::pubkey::new_rand();
-        let dummy_leader_lamports = BOOTSTRAP_VALIDATOR_LAMPORTS;
+        let dummy_leader_lamports = bootstrap_validator_lamports();
         let mint_lamports = 10_000;
         let GenesisConfigInfo {
             mut genesis_config,

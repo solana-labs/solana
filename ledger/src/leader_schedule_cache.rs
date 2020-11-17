@@ -260,8 +260,8 @@ mod tests {
     use crate::{
         blockstore::make_slot_entries,
         genesis_utils::{
-            create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
-            BOOTSTRAP_VALIDATOR_LAMPORTS,
+            bootstrap_validator_lamports, create_genesis_config, create_genesis_config_with_leader,
+            GenesisConfigInfo,
         },
         get_tmp_ledger_path,
         staking_utils::tests::setup_vote_and_stake_accounts,
@@ -380,9 +380,9 @@ mod tests {
     fn test_next_leader_slot() {
         let pubkey = solana_sdk::pubkey::new_rand();
         let mut genesis_config = create_genesis_config_with_leader(
-            BOOTSTRAP_VALIDATOR_LAMPORTS,
+            bootstrap_validator_lamports(),
             &pubkey,
-            BOOTSTRAP_VALIDATOR_LAMPORTS,
+            bootstrap_validator_lamports(),
         )
         .genesis_config;
         genesis_config.epoch_schedule = EpochSchedule::custom(
@@ -433,9 +433,9 @@ mod tests {
     fn test_next_leader_slot_blockstore() {
         let pubkey = solana_sdk::pubkey::new_rand();
         let mut genesis_config = create_genesis_config_with_leader(
-            BOOTSTRAP_VALIDATOR_LAMPORTS,
+            bootstrap_validator_lamports(),
             &pubkey,
-            BOOTSTRAP_VALIDATOR_LAMPORTS,
+            bootstrap_validator_lamports(),
         )
         .genesis_config;
         genesis_config.epoch_schedule.warmup = false;
@@ -519,7 +519,7 @@ mod tests {
             mut genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_config(10_000);
+        } = create_genesis_config(10_000 * bootstrap_validator_lamports());
         genesis_config.epoch_schedule.warmup = false;
 
         let bank = Bank::new(&genesis_config);
@@ -533,7 +533,7 @@ mod tests {
             &mint_keypair,
             &vote_account,
             &validator_identity,
-            BOOTSTRAP_VALIDATOR_LAMPORTS,
+            bootstrap_validator_lamports(),
         );
         let node_pubkey = validator_identity.pubkey();
 

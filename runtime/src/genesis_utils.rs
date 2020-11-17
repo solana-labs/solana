@@ -1,3 +1,4 @@
+use log::*;
 use solana_sdk::{
     account::Account,
     feature::{self, Feature},
@@ -10,11 +11,15 @@ use solana_sdk::{
     system_program,
 };
 use solana_stake_program::stake_state;
+use solana_stake_program::stake_state::StakeState;
 use solana_vote_program::vote_state;
 use std::borrow::Borrow;
 
 // The default stake placed with the bootstrap validator
-pub const BOOTSTRAP_VALIDATOR_LAMPORTS: u64 = 42;
+// fun fact: we're very close to make this const fn.
+pub fn bootstrap_validator_lamports() -> u64 {
+    StakeState::get_rent_exempt_reserve(&Rent::default())
+}
 
 pub struct ValidatorVoteKeypairs {
     pub node_keypair: Keypair,
@@ -78,7 +83,7 @@ pub fn create_genesis_config_with_vote_accounts_and_cluster_type(
         &voting_keypairs[0].borrow().vote_keypair,
         &voting_keypairs[0].borrow().stake_keypair.pubkey(),
         stakes[0],
-        BOOTSTRAP_VALIDATOR_LAMPORTS,
+        bootstrap_validator_lamports(),
         cluster_type,
     );
 
@@ -88,7 +93,7 @@ pub fn create_genesis_config_with_vote_accounts_and_cluster_type(
         let stake_pubkey = validator_voting_keypairs.borrow().stake_keypair.pubkey();
 
         // Create accounts
-        let node_account = Account::new(BOOTSTRAP_VALIDATOR_LAMPORTS, 0, &system_program::id());
+        let node_account = Account::new(bootstrap_validator_lamports(), 0, &system_program::id());
         let vote_account = vote_state::create_account(&vote_pubkey, &node_pubkey, 0, *stake);
         let stake_account = stake_state::create_account(
             &stake_pubkey,
@@ -114,13 +119,18 @@ pub fn create_genesis_config_with_leader(
     bootstrap_validator_pubkey: &Pubkey,
     bootstrap_validator_stake_lamports: u64,
 ) -> GenesisConfigInfo {
+    //mint_lamports > bootstrap_validator_stake_lamports,
+    warn!(
+        "mint {} is too small {}",
+        mint_lamports, bootstrap_validator_stake_lamports
+    );
     create_genesis_config_with_leader_ex(
         mint_lamports,
         bootstrap_validator_pubkey,
         &Keypair::new(),
         &solana_sdk::pubkey::new_rand(),
         bootstrap_validator_stake_lamports,
-        BOOTSTRAP_VALIDATOR_LAMPORTS,
+        bootstrap_validator_lamports(),
         ClusterType::Development,
     )
 }
