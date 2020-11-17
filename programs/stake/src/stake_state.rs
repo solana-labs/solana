@@ -910,7 +910,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                     // verify full withdrawal can cover rent in new split account
                         || (lamports < split_rent_exempt_reserve && lamports == self.lamports()?)
                     // verify enough lamports left in previous stake and not full withdrawal
-                            || (lamports > self.lamports()? - meta.rent_exempt_reserve
+                            || (lamports + meta.rent_exempt_reserve > self.lamports()?
                             && lamports != self.lamports()?)
                     {
                         return Err(InstructionError::InsufficientFunds);
@@ -929,7 +929,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                         // account, this prevents any magic activation of stake by prefunding the
                         // split account.
                         (
-                            lamports - meta.rent_exempt_reserve,
+                            lamports.saturating_sub(meta.rent_exempt_reserve),
                             lamports - split_rent_exempt_reserve,
                         )
                     } else {
