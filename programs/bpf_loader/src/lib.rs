@@ -282,6 +282,12 @@ impl Executor for BPFExecutor {
                     }
                 }
                 Err(error) => {
+                    log!(
+                        logger,
+                        "Program {} BPF VM error: {}",
+                        program.unsigned_key(),
+                        error
+                    );
                     let error = match error {
                         EbpfError::UserError(BPFError::SyscallError(
                             SyscallError::InstructionError(error),
