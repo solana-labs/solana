@@ -624,16 +624,10 @@ pub fn test_process_distribute_tokens_with_client(
     )
     .unwrap();
     client
-        .send_and_confirm_transaction_with_spinner_and_commitment(
-            &transaction,
-            CommitmentConfig::recent(),
-        )
+        .send_and_confirm_transaction_with_spinner(&transaction)
         .unwrap();
     assert_eq!(
-        client
-            .get_balance_with_commitment(&fee_payer.pubkey(), CommitmentConfig::recent())
-            .unwrap()
-            .value,
+        client.get_balance(&fee_payer.pubkey()).unwrap(),
         sol_to_lamports(1.0),
     );
 
@@ -718,10 +712,7 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
     )
     .unwrap();
     client
-        .send_and_confirm_transaction_with_spinner_and_commitment(
-            &transaction,
-            CommitmentConfig::recent(),
-        )
+        .send_and_confirm_transaction_with_spinner(&transaction)
         .unwrap();
 
     let stake_account_keypair = Keypair::new();
@@ -746,10 +737,7 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
     let (blockhash, _fees) = client.get_recent_blockhash().unwrap();
     let transaction = Transaction::new(&signers, message, blockhash);
     client
-        .send_and_confirm_transaction_with_spinner_and_commitment(
-            &transaction,
-            CommitmentConfig::default(), // TODO: get this working with recent()
-        )
+        .send_and_confirm_transaction_with_spinner(&transaction)
         .unwrap();
 
     let alice_pubkey = solana_sdk::pubkey::new_rand();
@@ -845,7 +833,7 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
 mod tests {
     use super::*;
     use solana_client::rpc_client::get_rpc_request_str;
-    use solana_core::test_validator::{TestValidator, TestValidatorOptions};
+    use solana_core::test_validator::TestValidator;
     use solana_sdk::{
         clock::DEFAULT_MS_PER_SLOT,
         signature::{read_keypair_file, write_keypair_file},
@@ -861,11 +849,9 @@ mod tests {
             alice,
             ledger_path,
             ..
-        } = TestValidator::run_with_options(TestValidatorOptions {
-            mint_lamports: sol_to_lamports(9_000_000.0),
-            ..TestValidatorOptions::default()
-        });
-        let client = RpcClient::new_socket(leader_data.rpc);
+        } = TestValidator::run();
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
         test_process_distribute_tokens_with_client(&client, alice, None);
 
         // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
@@ -881,11 +867,9 @@ mod tests {
             alice,
             ledger_path,
             ..
-        } = TestValidator::run_with_options(TestValidatorOptions {
-            mint_lamports: sol_to_lamports(9_000_000.0),
-            ..TestValidatorOptions::default()
-        });
-        let client = RpcClient::new_socket(leader_data.rpc);
+        } = TestValidator::run();
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
         test_process_distribute_tokens_with_client(&client, alice, Some(1.5));
 
         // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
@@ -901,11 +885,9 @@ mod tests {
             alice,
             ledger_path,
             ..
-        } = TestValidator::run_with_options(TestValidatorOptions {
-            mint_lamports: sol_to_lamports(9_000_000.0),
-            ..TestValidatorOptions::default()
-        });
-        let client = RpcClient::new_socket(leader_data.rpc);
+        } = TestValidator::run();
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
         test_process_distribute_stake_with_client(&client, alice);
 
         // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
@@ -1207,10 +1189,7 @@ mod tests {
         )
         .unwrap();
         client
-            .send_and_confirm_transaction_with_spinner_and_commitment(
-                &transaction,
-                CommitmentConfig::recent(),
-            )
+            .send_and_confirm_transaction_with_spinner(&transaction)
             .unwrap();
 
         args.sender_keypair = read_keypair_file(&partially_funded_payer_keypair_file)
@@ -1352,10 +1331,7 @@ mod tests {
         let (blockhash, _fees) = client.get_recent_blockhash().unwrap();
         let transaction = Transaction::new(&signers, message, blockhash);
         client
-            .send_and_confirm_transaction_with_spinner_and_commitment(
-                &transaction,
-                CommitmentConfig::recent(),
-            )
+            .send_and_confirm_transaction_with_spinner(&transaction)
             .unwrap();
 
         StakeArgs {
