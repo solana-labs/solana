@@ -4956,11 +4956,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-stake-program",
-<<<<<<< HEAD
-=======
- "solana-transaction-status",
  "solana-version",
->>>>>>> 78dc334af... Add real --version
  "tempfile",
  "thiserror",
  "tokio 0.3.2",
