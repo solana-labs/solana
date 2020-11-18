@@ -361,3 +361,8 @@ EOF
 sudo cp logrotate.sol /etc/logrotate.d/sol
 systemctl restart logrotate.service
 ```
+
+### Disable port checks to speed up restarts
+Once your validator is operating normally, you can reduce the time it takes to
+restart your validator by adding the `--no-port-check` flag to your
+`solana-validator` command-line.
