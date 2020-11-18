@@ -83,7 +83,7 @@ pub mod pull_request_ping_pong_check {
 }
 
 pub mod timestamp_bounding {
-    solana_sdk::declare_id!("2cGj3HJYPhBrtQizd7YbBxEsifFs5qhzabyFjUAp6dBa");
+    solana_sdk::declare_id!("8FyEA6ABYiMxX7Az6AopQN3mavLD8Rz3N4bvKnbbBFFq");
 }
 
 pub mod stake_program_v2 {
