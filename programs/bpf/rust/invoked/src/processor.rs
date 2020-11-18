@@ -107,6 +107,14 @@ fn process_instruction(
         }
         TEST_RETURN_ERROR => {
             info!("return error");
+            const ARGUMENT_INDEX: usize = 0;
+
+            // modify lamports that should be dropped
+            assert_eq!(10, **accounts[ARGUMENT_INDEX].try_borrow_lamports()?);
+            **accounts[ARGUMENT_INDEX].try_borrow_mut_lamports()? += 1;
+            // modify data that should be dropped
+            assert_eq!(0, accounts[ARGUMENT_INDEX].try_borrow_mut_data()?[0]);
+            accounts[ARGUMENT_INDEX].try_borrow_mut_data()?[0] = 1;
             return Err(ProgramError::Custom(42));
         }
         TEST_DERIVED_SIGNERS => {

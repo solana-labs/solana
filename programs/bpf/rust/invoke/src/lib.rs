@@ -133,15 +133,25 @@ fn process_instruction(
 
             info!("Test return error");
             {
+                assert_eq!(
+                    10,
+                    **accounts[INVOKED_ARGUMENT_INDEX].try_borrow_lamports()?
+                );
+                assert_eq!(0, accounts[INVOKED_ARGUMENT_INDEX].try_borrow_data()?[0]);
                 let instruction = create_instruction(
                     *accounts[INVOKED_PROGRAM_INDEX].key,
-                    &[(accounts[ARGUMENT_INDEX].key, true, true)],
+                    &[(accounts[INVOKED_ARGUMENT_INDEX].key, false, true)],
                     vec![TEST_RETURN_ERROR],
                 );
                 assert_eq!(
                     invoke(&instruction, accounts),
                     Err(ProgramError::Custom(42))
                 );
+                assert_eq!(
+                    10,
+                    **accounts[INVOKED_ARGUMENT_INDEX].try_borrow_lamports()?
+                );
+                assert_eq!(0, accounts[INVOKED_ARGUMENT_INDEX].try_borrow_data()?[0]);
             }
 
             info!("Test refcell usage");
