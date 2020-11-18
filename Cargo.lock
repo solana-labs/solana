@@ -4968,6 +4968,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-transaction-status",
+ "solana-version",
  "tempfile",
  "thiserror",
 ]
