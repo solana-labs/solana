@@ -1,4 +1,3 @@
-use log::*;
 use solana_sdk::{
     account::Account,
     feature::{self, Feature},
