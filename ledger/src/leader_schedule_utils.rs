@@ -55,14 +55,15 @@ fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
 mod tests {
     use super::*;
     use solana_runtime::genesis_utils::{
-        bootstrap_validator_lamports, create_genesis_config_with_leader,
+        bootstrap_validator_stake_lamports, create_genesis_config_with_leader,
+        BOOTSTRAP_VALIDATOR_LAMPORTS,
     };
 
     #[test]
     fn test_leader_schedule_via_bank() {
         let pubkey = solana_sdk::pubkey::new_rand();
         let genesis_config =
-            create_genesis_config_with_leader(0, &pubkey, bootstrap_validator_lamports())
+            create_genesis_config_with_leader(0, &pubkey, bootstrap_validator_stake_lamports())
                 .genesis_config;
         let bank = Bank::new(&genesis_config);
 
@@ -84,9 +85,9 @@ mod tests {
     fn test_leader_scheduler1_basic() {
         let pubkey = solana_sdk::pubkey::new_rand();
         let genesis_config = create_genesis_config_with_leader(
-            bootstrap_validator_lamports(),
+            BOOTSTRAP_VALIDATOR_LAMPORTS + bootstrap_validator_stake_lamports(),
             &pubkey,
-            bootstrap_validator_lamports(),
+            bootstrap_validator_stake_lamports(),
         )
         .genesis_config;
         let bank = Bank::new(&genesis_config);

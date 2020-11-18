@@ -1,5 +1,5 @@
 pub use solana_runtime::genesis_utils::{
-    bootstrap_validator_lamports, create_genesis_config_with_leader,
+    bootstrap_validator_stake_lamports, create_genesis_config_with_leader,
     create_genesis_config_with_leader_ex, GenesisConfigInfo,
 };
 
@@ -9,6 +9,6 @@ pub fn create_genesis_config(mint_lamports: u64) -> GenesisConfigInfo {
     create_genesis_config_with_leader(
         mint_lamports,
         &solana_sdk::pubkey::new_rand(),
-        bootstrap_validator_lamports(),
+        bootstrap_validator_stake_lamports(),
     )
 }

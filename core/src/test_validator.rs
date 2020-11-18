@@ -31,10 +31,10 @@ pub struct TestValidatorOptions {
 
 impl Default for TestValidatorOptions {
     fn default() -> Self {
-        use solana_ledger::genesis_utils::bootstrap_validator_lamports;
+        use solana_runtime::genesis_utils::BOOTSTRAP_VALIDATOR_LAMPORTS;
         TestValidatorOptions {
             fees: 0,
-            bootstrap_validator_lamports: bootstrap_validator_lamports(),
+            bootstrap_validator_lamports: BOOTSTRAP_VALIDATOR_LAMPORTS,
             mint_lamports: sol_to_lamports(1_000_000.0),
         }
     }
@@ -94,7 +94,7 @@ impl TestValidator {
             &contact_info.id,
             &Keypair::new(),
             &solana_sdk::pubkey::new_rand(),
-            42 + bootstrap_validator_lamports,
+            solana_runtime::genesis_utils::bootstrap_validator_stake_lamports(),
             bootstrap_validator_lamports,
             solana_sdk::genesis_config::ClusterType::Development,
         );
