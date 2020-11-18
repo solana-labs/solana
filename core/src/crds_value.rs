@@ -112,9 +112,9 @@ impl Sanitize for CrdsData {
 }
 
 /// Random timestamp for tests and benchmarks.
-fn new_rand_timestamp<R: Rng>(rng: &mut R) -> u64 {
-    let delay = 10 * 60 * 1000; // 10 minutes
-    timestamp() - delay + rng.gen_range(0, 2 * delay)
+pub(crate) fn new_rand_timestamp<R: Rng>(rng: &mut R) -> u64 {
+    const DELAY: u64 = 10 * 60 * 1000; // 10 minutes
+    timestamp() - DELAY + rng.gen_range(0, 2 * DELAY)
 }
 
 impl CrdsData {
