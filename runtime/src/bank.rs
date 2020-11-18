@@ -1327,7 +1327,7 @@ impl Bank {
 
     fn rewrite_stakes(&self) -> (usize, usize) {
         let mut examined_count = 0;
-        let mut rewriteen_count = 0;
+        let mut rewritten_count = 0;
         self.cloned_stake_delegations()
             .into_iter()
             .for_each(|(stake_pubkey, _delegation)| {
@@ -1340,7 +1340,7 @@ impl Bank {
                         let message = format!("rewrote stake: {}, {:?}", stake_pubkey, result);
                         info!("{}", message);
                         datapoint_info!("stake_info", ("info", message, String));
-                        rewriteen_count += 1;
+                        rewritten_count += 1;
                     }
                 }
             });
@@ -1348,11 +1348,11 @@ impl Bank {
         info!(
             "bank (slot: {}): rewrite_stakes: {} accounts rewritten / {} accounts examined",
             self.slot(),
-            rewriteen_count,
+            rewritten_count,
             examined_count,
         );
 
-        (examined_count, rewriteen_count)
+        (examined_count, rewritten_count)
     }
 
     // update rewards based on the previous epoch
