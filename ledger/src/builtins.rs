@@ -20,6 +20,11 @@ fn genesis_builtins(cluster_type: ClusterType, bpf_jit: bool) -> Vec<Builtin> {
             } else {
                 to_builtin!(solana_bpf_loader_program!())
             },
+            if bpf_jit {
+                to_builtin!(solana_bpf_loader_upgradeable_program_with_jit!())
+            } else {
+                to_builtin!(solana_bpf_loader_upgradeable_program!())
+            },
         ]
     } else {
         // Remove this `else` block and the `cluster_type` argument to this function once
@@ -30,11 +35,18 @@ fn genesis_builtins(cluster_type: ClusterType, bpf_jit: bool) -> Vec<Builtin> {
 
 /// Builtin programs activated dynamically by feature
 fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
-    vec![(
-        to_builtin!(solana_bpf_loader_program!()),
-        feature_set::bpf_loader2_program::id(),
-        ActivationType::NewProgram,
-    )]
+    vec![
+        (
+            to_builtin!(solana_bpf_loader_program!()),
+            feature_set::bpf_loader2_program::id(),
+            ActivationType::NewProgram,
+        ),
+        (
+            to_builtin!(solana_bpf_loader_upgradeable_program!()),
+            feature_set::bpf_loader_upgradeable_program::id(),
+            ActivationType::NewProgram,
+        ),
+    ]
 }
 
 pub(crate) fn get(cluster_type: ClusterType, bpf_jit: bool) -> Builtins {

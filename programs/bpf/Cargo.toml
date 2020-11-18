@@ -68,6 +68,8 @@ members = [
     "rust/spoof1",
     "rust/spoof1_system",
     "rust/sysval",
+    "rust/upgradeable",
+    "rust/upgraded",
 ]
 
 [package.metadata.docs.rs]

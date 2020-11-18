@@ -87,6 +87,8 @@ fn main() {
             "spoof1",
             "spoof1_system",
             "sysval",
+            "upgradeable",
+            "upgraded",
         ];
         for program in rust_programs.iter() {
             println!(

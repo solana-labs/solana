@@ -1,5 +1,6 @@
 use serde::Serialize;
 use solana_sdk::{
+    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     client::Client,
     instruction::{AccountMeta, Instruction},
     loader_instruction,
@@ -51,6 +52,132 @@ pub fn load_program<T: Client>(
         .unwrap();
 
     program_pubkey
+}
+
+pub fn load_buffer_account<T: Client>(
+    bank_client: &T,
+    from_keypair: &Keypair,
+    program: &[u8],
+) -> Pubkey {
+    let buffer_keypair = Keypair::new();
+    let buffer_pubkey = buffer_keypair.pubkey();
+
+    bank_client
+        .send_and_confirm_message(
+            &[from_keypair, &buffer_keypair],
+            Message::new(
+                &bpf_loader_upgradeable::create_buffer(
+                    &from_keypair.pubkey(),
+                    &buffer_pubkey,
+                    1.max(
+                        bank_client
+                            .get_minimum_balance_for_rent_exemption(program.len())
+                            .unwrap(),
+                    ),
+                    program.len(),
+                )
+                .unwrap(),
+                Some(&from_keypair.pubkey()),
+            ),
+        )
+        .unwrap();
+
+    let chunk_size = 256; // Size of chunk just needs to fit into tx
+    let mut offset = 0;
+    for chunk in program.chunks(chunk_size) {
+        let message = Message::new(
+            &[bpf_loader_upgradeable::write(
+                &buffer_pubkey,
+                offset,
+                chunk.to_vec(),
+            )],
+            Some(&from_keypair.pubkey()),
+        );
+        bank_client
+            .send_and_confirm_message(&[from_keypair, &buffer_keypair], message)
+            .unwrap();
+        offset += chunk_size as u32;
+    }
+    buffer_keypair.pubkey()
+}
+
+pub fn load_upgradeable_program<T: Client>(
+    bank_client: &T,
+    from_keypair: &Keypair,
+    program: Vec<u8>,
+) -> (Pubkey, Keypair) {
+    let executable_keypair = Keypair::new();
+    let program_pubkey = executable_keypair.pubkey();
+    let authority_keypair = Keypair::new();
+    let authority_pubkey = authority_keypair.pubkey();
+
+    let buffer_pubkey = load_buffer_account(bank_client, &from_keypair, &program);
+
+    let message = Message::new(
+        &bpf_loader_upgradeable::deploy_with_max_program_len(
+            &from_keypair.pubkey(),
+            &program_pubkey,
+            &buffer_pubkey,
+            Some(&authority_pubkey),
+            1.max(
+                bank_client
+                    .get_minimum_balance_for_rent_exemption(
+                        UpgradeableLoaderState::program_len().unwrap(),
+                    )
+                    .unwrap(),
+            ),
+            program.len() * 2,
+        )
+        .unwrap(),
+        Some(&from_keypair.pubkey()),
+    );
+    bank_client
+        .send_and_confirm_message(&[from_keypair, &executable_keypair], message)
+        .unwrap();
+
+    (executable_keypair.pubkey(), authority_keypair)
+}
+
+pub fn upgrade_program<T: Client>(
+    bank_client: &T,
+    from_keypair: &Keypair,
+    program_pubkey: &Pubkey,
+    buffer_pubkey: &Pubkey,
+    authority_keypair: &Keypair,
+    spill_pubkey: &Pubkey,
+) {
+    let message = Message::new(
+        &[bpf_loader_upgradeable::upgrade(
+            &program_pubkey,
+            &buffer_pubkey,
+            &authority_keypair.pubkey(),
+            &spill_pubkey,
+        )],
+        Some(&from_keypair.pubkey()),
+    );
+    bank_client
+        .send_and_confirm_message(&[from_keypair, &authority_keypair], message)
+        .unwrap();
+}
+
+pub fn set_upgrade_authority<T: Client>(
+    bank_client: &T,
+    from_keypair: &Keypair,
+    program_pubkey: &Pubkey,
+    current_authority_keypair: &Keypair,
+    new_authority_pubkey: Option<&Pubkey>,
+) {
+    let message = Message::new(
+        &[bpf_loader_upgradeable::set_authority(
+            program_pubkey,
+            &current_authority_keypair.pubkey(),
+            new_authority_pubkey,
+        )],
+        Some(&from_keypair.pubkey()),
+    );
+    bank_client
+        .send_and_confirm_message(&[from_keypair, &current_authority_keypair], message)
+        .unwrap();
 }
 
 // Return an Instruction that invokes `program_id` with `data` and required
