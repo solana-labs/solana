@@ -1,7 +1,9 @@
 use crate::args::{
     Args, BalancesArgs, Command, DistributeTokensArgs, StakeArgs, TransactionLogArgs,
 };
-use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
+use clap::{
+    crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand,
+};
 use solana_clap_utils::{
     input_parsers::value_of,
     input_validators::{is_amount, is_valid_pubkey, is_valid_signer},
@@ -19,9 +21,9 @@ where
     T: Into<OsString> + Clone,
 {
     let default_config_file = CONFIG_FILE.as_ref().unwrap();
-    App::new("solana-tokens")
-        .about("about")
-        .version("version")
+    App::new(crate_name!())
+        .about(crate_description!())
+        .version(solana_version::version!())
         .arg(
             Arg::with_name("config_file")
                 .long("config")
