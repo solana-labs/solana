@@ -96,12 +96,12 @@ const MAX_GOSSIP_TRAFFIC: usize = 128_000_000 / PACKET_DATA_SIZE;
 /// message: Protocol::PushMessage(Pubkey::default(), Vec::default())
 const PUSH_MESSAGE_MAX_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - 44;
 /// Maximum number of hashes in SnapshotHashes/AccountsHashes a node publishes
-/// such that the serialized size of the push/pull message stays bellow
+/// such that the serialized size of the push/pull message stays below
 /// PACKET_DATA_SIZE.
 // TODO: Update this to 26 once payload sizes are upgraded across fleet.
 pub const MAX_SNAPSHOT_HASHES: usize = 16;
 /// Maximum number of origin nodes that a PruneData may contain, such that the
-/// serialized size of PruneMessage stays bellow PACKET_DATA_SIZE.
+/// serialized size of the PruneMessage stays below PACKET_DATA_SIZE.
 const MAX_PRUNE_DATA_NODES: usize = 32;
 /// Number of bytes in the randomly generated token sent with ping messages.
 const GOSSIP_PING_TOKEN_SIZE: usize = 32;
