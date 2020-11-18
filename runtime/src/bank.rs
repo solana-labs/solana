@@ -19,15 +19,15 @@ use crate::{
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
+    token_balances::{collect_token_balance_from_account, is_token_program},
     transaction_batch::TransactionBatch,
     transaction_utils::OrderedIterator,
 };
 use byteorder::{ByteOrder, LittleEndian};
 use itertools::Itertools;
 use log::*;
-use solana_account_decoder::parse_token::{
-    spl_token_id_v2_0, spl_token_v2_0_native_mint, token_amount_to_ui_amount, UiTokenAmount,
-};
+
+use solana_account_decoder::parse_token::UiTokenAmount;
 use solana_measure::measure::Measure;
 use solana_metrics::{
     datapoint_debug, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
@@ -74,10 +74,6 @@ use solana_stake_program::stake_state::{
     self, Delegation, InflationPointCalculationEvent, PointValue,
 };
 use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteState};
-use spl_token_v2_0::{
-    solana_sdk::program_pack::Pack,
-    state::{Account as TokenAccount, Mint},
-};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -87,7 +83,6 @@ use std::{
     path::PathBuf,
     ptr,
     rc::Rc,
-    str::FromStr,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
         LockResult, RwLockWriteGuard, {Arc, RwLock, RwLockReadGuard},
@@ -2297,38 +2292,6 @@ impl Bank {
         }
     }
 
-    pub fn get_mint_owner_and_decimals(&self, mint: &Pubkey) -> Option<(Pubkey, u8)> {
-        if mint == &spl_token_v2_0_native_mint() {
-            Some((spl_token_id_v2_0(), spl_token_v2_0::native_mint::DECIMALS))
-        } else {
-            let mint_account = self.get_account(mint)?;
-
-            let decimals = Mint::unpack(&mint_account.data)
-                .map(|mint| mint.decimals)
-                .ok()?;
-
-            Some((mint_account.owner, decimals))
-        }
-    }
-
-    pub fn collect_token_balance_from_account(
-        &self,
-        account_id: &Pubkey,
-    ) -> Option<(String, UiTokenAmount)> {
-        let account = self.get_account(account_id)?;
-
-        let token_account = TokenAccount::unpack(&account.data).ok()?;
-        let mint_string = &token_account.mint.to_string();
-        let mint = &Pubkey::from_str(&mint_string).unwrap_or_default();
-
-        let (_, decimals) = self.get_mint_owner_and_decimals(&mint)?;
-
-        Some((
-            mint_string.to_string(),
-            token_amount_to_ui_amount(token_account.amount, decimals),
-        ))
-    }
-
     pub fn collect_token_balances(&self, batch: &TransactionBatch) -> TransactionTokenBalances {
         let mut balances: TransactionTokenBalances = vec![];
 
@@ -2338,7 +2301,7 @@ impl Bank {
             let mut fetch_account_hash: HashMap<u8, bool> = HashMap::new();
             for instruction in transaction.message.instructions.iter() {
                 if let Some(program_id) = account_keys.get(instruction.program_id_index as usize) {
-                    if program_id == &spl_token_id_v2_0() {
+                    if is_token_program(&program_id) {
                         for account in &instruction.accounts {
                             fetch_account_hash.insert(*account, true);
                         }
@@ -2349,7 +2312,7 @@ impl Bank {
             let mut transaction_balances: Vec<TransactionTokenBalance> = vec![];
             for (index, _fetch) in &fetch_account_hash {
                 if let Some(account_id) = account_keys.get(*index as usize) {
-                    if let Some(results) = self.collect_token_balance_from_account(account_id) {
+                    if let Some(results) = collect_token_balance_from_account(&self, account_id) {
                         let (mint, ui_token_amount) = results;
 
                         transaction_balances.push(TransactionTokenBalance {
@@ -8775,6 +8738,9 @@ pub(crate) mod tests {
 
         assert_eq!(transaction_balances_set.pre_balances.len(), 3);
         assert_eq!(transaction_balances_set.post_balances.len(), 3);
+
+        assert_eq!(transaction_token_balances_set.pre_token_balances.len(), 0);
+        assert_eq!(transaction_token_balances_set.post_token_balances.len(), 0);
 
         assert!(transaction_results.processing_results[0].0.is_ok());
         assert_eq!(transaction_balances_set.pre_balances[0], vec![8, 11, 1]);

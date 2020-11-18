@@ -5906,8 +5906,8 @@ pub mod tests {
                 instructions: vec![CompiledInstruction::new(1, &(), vec![0])],
             }];
             let log_messages_vec = vec![String::from("Test message\n")];
-            let pre_token_balances = vec![];
-            let post_token_balances = vec![];
+            let pre_token_balances_vec = vec![];
+            let post_token_balances_vec = vec![];
 
             // result not found
             assert!(transaction_status_cf
@@ -5928,8 +5928,8 @@ pub mod tests {
                         post_balances: post_balances_vec.clone(),
                         inner_instructions: Some(inner_instructions_vec.clone()),
                         log_messages: Some(log_messages_vec.clone()),
-                        pre_token_balances: Some(pre_token_balances.clone()),
-                        post_token_balances: Some(post_token_balances.clone())
+                        pre_token_balances: Some(pre_token_balances_vec.clone()),
+                        post_token_balances: Some(post_token_balances_vec.clone())
                     },
                 )
                 .is_ok());
@@ -5954,6 +5954,8 @@ pub mod tests {
             assert_eq!(post_balances, post_balances_vec);
             assert_eq!(inner_instructions.unwrap(), inner_instructions_vec);
             assert_eq!(log_messages.unwrap(), log_messages_vec);
+            assert_eq!(pre_token_balances.unwrap(), pre_token_balances_vec);
+            assert_eq!(post_token_balances.unwrap(), post_token_balances_vec);
 
             // insert value
             assert!(transaction_status_cf
@@ -5966,8 +5968,8 @@ pub mod tests {
                         post_balances: post_balances_vec.clone(),
                         inner_instructions: Some(inner_instructions_vec.clone()),
                         log_messages: Some(log_messages_vec.clone()),
-                        pre_token_balances: pre_token_balances.clone(),
-                        post_token_balances: post_token_balances.clone()
+                        pre_token_balances: Some(pre_token_balances_vec.clone()),
+                        post_token_balances: Some(post_token_balances_vec.clone())
                     },
                 )
                 .is_ok());
@@ -5994,6 +5996,8 @@ pub mod tests {
             assert_eq!(post_balances, post_balances_vec);
             assert_eq!(inner_instructions.unwrap(), inner_instructions_vec);
             assert_eq!(log_messages.unwrap(), log_messages_vec);
+            assert_eq!(pre_token_balances.unwrap(), pre_token_balances_vec);
+            assert_eq!(post_token_balances.unwrap(), post_token_balances_vec);
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }

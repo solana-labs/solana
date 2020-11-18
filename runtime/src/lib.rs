@@ -27,6 +27,7 @@ pub mod snapshot_utils;
 pub mod stakes;
 pub mod status_cache;
 mod system_instruction_processor;
+pub mod token_balances;
 pub mod transaction_batch;
 pub mod transaction_utils;
 pub mod vote_sender_types;
