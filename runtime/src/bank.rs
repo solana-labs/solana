@@ -1337,7 +1337,7 @@ impl Bank {
                         stake_state::rewrite_stakes(&mut stake_account, &self.rent_collector.rent)
                     {
                         self.store_account(&stake_pubkey, &stake_account);
-                        let message = format!("rewrote stake: {}, {:?}", stake_pubkey, result,);
+                        let message = format!("rewrote stake: {}, {:?}", stake_pubkey, result);
                         info!("{}", message);
                         datapoint_info!("stake_info", ("info", message, String));
                         rewriteen_count += 1;
@@ -1345,18 +1345,12 @@ impl Bank {
                 }
             });
 
-        let msg = format!(
+        info!(
             "bank (slot: {}): rewrite_stakes: {} accounts rewritten / {} accounts examined",
             self.slot(),
             rewriteen_count,
             examined_count,
         );
-        if self.cluster_type() != ClusterType::Development {
-            info!("{}", msg);
-        } else {
-            // don't spam log; this is called at every slot for testing only on development clusters
-            trace!("{}", msg);
-        }
 
         (examined_count, rewriteen_count)
     }
