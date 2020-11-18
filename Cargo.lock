@@ -4956,6 +4956,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-stake-program",
+ "solana-version",
  "tempfile",
  "thiserror",
  "tokio 0.3.2",
