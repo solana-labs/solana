@@ -1335,6 +1335,12 @@ impl Bank {
         (examined_count, rewritten_count)
     }
 
+    fn get_inflation_start_slot(&self) -> Slot {
+        self.feature_set
+            .activated_slot(&feature_set::full_inflation::id())
+            .unwrap_or(0)
+    }
+
     // update rewards based on the previous epoch
     fn update_rewards(
         &mut self,
@@ -1347,8 +1353,9 @@ impl Bank {
         // if I'm the first Bank in an epoch, count, claim, disburse rewards from Inflation
 
         // calculated as: prev_slot / (slots / year)
-        let slot_in_year =
-            (self.epoch_schedule.get_last_slot_in_epoch(prev_epoch)) as f64 / self.slots_per_year;
+        let num_slots = self.epoch_schedule.get_last_slot_in_epoch(prev_epoch)
+            - self.get_inflation_start_slot();
+        let slot_in_year = num_slots as f64 / self.slots_per_year;
 
         let epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
 
@@ -10704,5 +10711,39 @@ pub(crate) mod tests {
         bank.store_account(&bootstrap_stake_pubkey, &bootstrap_stake_account);
 
         assert_eq!(bank.rewrite_stakes(), (1, 1));
+    }
+
+    #[test]
+    fn test_get_inflation_start_slot() {
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config_with_leader(42, &solana_sdk::pubkey::new_rand(), 42);
+        genesis_config
+            .accounts
+            .remove(&feature_set::full_inflation::id())
+            .unwrap();
+        let bank = Bank::new(&genesis_config);
+
+        // Advance to slot 2
+        let mut bank = new_from_parent(&Arc::new(bank));
+        bank = new_from_parent(&Arc::new(bank));
+        assert_eq!(bank.get_inflation_start_slot(), 0);
+
+        // Request `full_inflation` activation
+        let full_inflation_activation_slot = 2;
+        bank.store_account(
+            &feature_set::full_inflation::id(),
+            &feature::create_account(
+                &Feature {
+                    activated_at: Some(full_inflation_activation_slot),
+                },
+                42,
+            ),
+        );
+        bank.compute_active_feature_set(true);
+        assert_eq!(
+            bank.get_inflation_start_slot(),
+            full_inflation_activation_slot
+        );
     }
 }
