@@ -85,7 +85,7 @@ mod tests {
     fn test_leader_scheduler1_basic() {
         let pubkey = solana_sdk::pubkey::new_rand();
         let genesis_config = create_genesis_config_with_leader(
-            BOOTSTRAP_VALIDATOR_LAMPORTS + bootstrap_validator_stake_lamports(),
+            BOOTSTRAP_VALIDATOR_LAMPORTS,
             &pubkey,
             bootstrap_validator_stake_lamports(),
         )
