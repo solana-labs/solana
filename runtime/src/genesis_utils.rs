@@ -121,13 +121,6 @@ pub fn create_genesis_config_with_leader(
     bootstrap_validator_pubkey: &Pubkey,
     bootstrap_validator_stake_lamports: u64,
 ) -> GenesisConfigInfo {
-    // boostrap_validator_stake_lamports is used both for stake and vote accounts
-    if mint_lamports < BOOTSTRAP_VALIDATOR_LAMPORTS + bootstrap_validator_stake_lamports * 2 {
-        warn!(
-            "mint {} is too small {}",
-            mint_lamports, bootstrap_validator_stake_lamports
-        );
-    }
     create_genesis_config_with_leader_ex(
         mint_lamports,
         bootstrap_validator_pubkey,
