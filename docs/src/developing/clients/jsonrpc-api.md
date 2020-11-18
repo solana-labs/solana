@@ -484,7 +484,7 @@ The result field will be an object with the following fields:
   - `transactions: <array>` - an array of JSON objects containing:
     - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) object, either in JSON format or encoded binary data, depending on encoding parameter
     - `meta: <object>` - transaction status metadata object, containing `null` or:
-      - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+      - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
       - `fee: <u64>` - fee this transaction was charged, as u64 integer
       - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
       - `postBalances: <array>` - array of u64 account balances after the transaction was processed
@@ -639,7 +639,7 @@ Result:
 
 #### Transaction Structure
 
-Transactions are quite different from those on other blockchains. Be sure to review [Anatomy of a Transaction](../transaction.md) to learn about transactions on Solana.
+Transactions are quite different from those on other blockchains. Be sure to review [Anatomy of a Transaction](developing/programming-model/transactions.md) to learn about transactions on Solana.
 
 The JSON structure of a transaction is defined as follows:
 
@@ -797,7 +797,7 @@ from newest to oldest transaction:
 * `<object>`
   * `signature: <string>` - transaction signature as base-58 encoded string
   * `slot: <u64>` - The slot that contains the block with the transaction
-  * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+  * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
   * `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
 
 #### Example:
@@ -851,7 +851,7 @@ N encoding attempts to use program-specific instruction parsers to return more h
   - `slot: <u64>` - the slot this transaction was processed in
   - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) object, either in JSON format or encoded binary data, depending on encoding parameter
   - `meta: <object | null>` - transaction status metadata object:
-    - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+    - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
     - `fee: <u64>` - fee this transaction was charged, as u64 integer
     - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
     - `postBalances: <array>` - array of u64 account balances after the transaction was processed
@@ -1939,7 +1939,7 @@ An array of:
 - `<object>`
   - `slot: <u64>` - The slot the transaction was processed
   - `confirmations: <usize | null>` - Number of blocks since signature confirmation, null if rooted, as well as finalized by a supermajority of the cluster
-  - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+  - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
   - DEPRECATED: `status: <object>` - Transaction status
     - `"Ok": <null>` - Transaction was successful
     - `"Err": <ERR>` - Transaction failed with TransactionError
@@ -2557,6 +2557,7 @@ The result field will be a JSON object with the following fields:
 
 #### Example:
 
+Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   {"jsonrpc":"2.0","id":1, "method":"getVersion"}
@@ -2565,7 +2566,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 Result:
 ```json
-{"jsonrpc":"2.0","result":{"solana-core": "1.4.10"},"id":1}
+{"jsonrpc":"2.0","result":{"solana-core": "1.5.0"},"id":1}
 ```
 
 ### getVoteAccounts
@@ -2748,7 +2749,7 @@ Simulate sending a transaction
 An RpcResponse containing a TransactionStatus object
 The result will be an RpcResponse JSON object with `value` set to a JSON object with the following fields:
 
-- `err: <object | string | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L14)
+- `err: <object | string | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
 - `logs: <array | null>` - Array of log messages the transaction instructions output during execution, null if simulation failed before the transaction was able to execute (for example due to an invalid blockhash or signature verification failure)
 
 #### Example:

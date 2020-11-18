@@ -8,14 +8,14 @@ rocksdb ledger will continue to serve as the primary data source, and then will
 fall back to the external data store.
 
 The affected RPC endpoints are:
-* [getFirstAvailableBlock](https://docs.solana.com/apps/jsonrpc-api#getfirstavailableblock)
-* [getConfirmedBlock](https://docs.solana.com/apps/jsonrpc-api#getconfirmedblock)
-* [getConfirmedBlocks](https://docs.solana.com/apps/jsonrpc-api#getconfirmedblocks)
-* [getConfirmedSignaturesForAddress](https://docs.solana.com/apps/jsonrpc-api#getconfirmedsignaturesforaddress)
-* [getConfirmedTransaction](https://docs.solana.com/apps/jsonrpc-api#getconfirmedtransaction)
-* [getSignatureStatuses](https://docs.solana.com/apps/jsonrpc-api#getsignaturestatuses)
+* [getFirstAvailableBlock](developing/clients/jsonrpc-api.md#getfirstavailableblock)
+* [getConfirmedBlock](developing/clients/jsonrpc-api.md#getconfirmedblock)
+* [getConfirmedBlocks](developing/clients/jsonrpc-api.md#getconfirmedblocks)
+* [getConfirmedSignaturesForAddress](developing/clients/jsonrpc-api.md#getconfirmedsignaturesforaddress)
+* [getConfirmedTransaction](developing/clients/jsonrpc-api.md#getconfirmedtransaction)
+* [getSignatureStatuses](developing/clients/jsonrpc-api.md#getsignaturestatuses)
 
-Note that [getBlockTime](https://docs.solana.com/apps/jsonrpc-api#getblocktime)
+Note that [getBlockTime](developing/clients/jsonrpc-api.md#getblocktime)
 is not supported, as once https://github.com/solana-labs/solana/issues/10089 is
 fixed then `getBlockTime` can be removed.
 

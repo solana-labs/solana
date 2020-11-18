@@ -59,7 +59,7 @@ pubkey: GKvqsuNcnwWqPzzuhLmGi4rzzh55FhJtGizkhHaEJqiV
 ```
 
 You can also create a second (or more) wallet of any type:
-[paper](../paper-wallet/paper-wallet-usage.md#creating-multiple-paper-wallet-addresses),
+[paper](../wallet-guide/paper-wallet#creating-multiple-paper-wallet-addresses),
 [file system](../wallet-guide/file-system-wallet.md#creating-multiple-file-system-wallet-addresses),
 or [hardware](../wallet-guide/hardware-wallets.md#multiple-addresses-on-a-single-hardware-wallet).
 

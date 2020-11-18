@@ -3,7 +3,7 @@ title: Durable Transaction Nonces
 ---
 
 Durable transaction nonces are a mechanism for getting around the typical
-short lifetime of a transaction's [`recent_blockhash`](../transaction.md#recent-blockhash).
+short lifetime of a transaction's [`recent_blockhash`](developing/programming-model/transactions.md#recent-blockhash).
 They are implemented as a Solana Program, the mechanics of which can be read
 about in the [proposal](../implemented-proposals/durable-tx-nonces.md).
 
@@ -48,7 +48,7 @@ solana create-nonce-account nonce-keypair.json 1
 2SymGjGV4ksPdpbaqWFiDoBz8okvtiik4KE9cnMQgRHrRLySSdZ6jrEcpPifW4xUpp4z66XM9d9wM48sA7peG2XL
 ```
 
-> To keep the keypair entirely offline, use the [Paper Wallet](../wallet-guide/paper-wallet.md) keypair generation [instructions](../paper-wallet/paper-wallet-usage.md#seed-phrase-generation.md) instead
+> To keep the keypair entirely offline, use the [Paper Wallet](wallet-guide/paper-wallet.md) keypair generation [instructions](wallet-guide/paper-wallet.md#seed-phrase-generation) instead
 
 > [Full usage documentation](../cli/usage.md#solana-create-nonce-account)
 
