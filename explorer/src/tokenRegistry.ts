@@ -253,4 +253,9 @@ const MAINNET_TOKENS: { [key: string]: TokenDetails } = {
     name: "Bitcoin Tram",
     website: "https://solible.com",
   },
+  "7TRzvCqXN8KSXggbSyeEG2Z9YBBhEFmbtmv6FLbd4mmd": {
+    symbol: "SRM tee-shirt",
+    name: "SRM tee-shirt",
+    website: "https://solible.com",
+  },
 };
