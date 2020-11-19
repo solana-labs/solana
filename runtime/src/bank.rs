@@ -2843,14 +2843,19 @@ impl Bank {
             }
         });
 
+        let enforce_fix = self.no_overflow_rent_distribution_enabled();
+
         let mut rent_distributed_in_initial_round = 0;
         let validator_rent_shares = validator_stakes
             .into_iter()
             .map(|(pubkey, staked)| {
-                let rent_share = (((staked as u128) * (rent_to_be_distributed as u128))
-                    / (total_staked as u128))
-                    .try_into()
-                    .unwrap();
+                let rent_share = if !enforce_fix {
+                    (((staked * rent_to_be_distributed) as f64) / (total_staked as f64)) as u64
+                } else {
+                    (((staked as u128) * (rent_to_be_distributed as u128)) / (total_staked as u128))
+                        .try_into()
+                        .unwrap()
+                };
                 rent_distributed_in_initial_round += rent_share;
                 (pubkey, rent_share)
             })
@@ -2870,7 +2875,7 @@ impl Bank {
                 } else {
                     rent_share
                 };
-                if rent_to_be_paid > 0 {
+                if !enforce_fix || rent_to_be_paid > 0 {
                     let mut account = self.get_account(&pubkey).unwrap_or_default();
                     account.lamports += rent_to_be_paid;
                     self.store_account(&pubkey, &account);
@@ -2885,7 +2890,16 @@ impl Bank {
                 }
             });
         self.rewards.write().unwrap().append(&mut rewards);
-        assert_eq!(leftover_lamports, 0);
+
+        if enforce_fix {
+            assert_eq!(leftover_lamports, 0);
+        } else if leftover_lamports != 0 {
+            warn!(
+                "There was leftover from rent distribution: {}",
+                leftover_lamports
+            );
+            self.capitalization.fetch_sub(leftover_lamports, Relaxed);
+        }
     }
 
     fn distribute_rent(&self) {
@@ -2978,10 +2992,7 @@ impl Bank {
     }
 
     fn collect_rent_in_partition(&self, partition: Partition) {
-        let subrange = Self::pubkey_range_from_partition(
-            partition,
-            self.no_overflow_rent_distribution_enabled(),
-        );
+        let subrange = Self::pubkey_range_from_partition(partition);
 
         let accounts = self
             .rc
@@ -3012,7 +3023,6 @@ impl Bank {
     //   0..=0: the first partition in the new epoch when crossing epochs
     fn pubkey_range_from_partition(
         (start_index, end_index, partition_count): Partition,
-        is_fix_enabled: bool,
     ) -> RangeInclusive<Pubkey> {
         assert!(start_index <= end_index);
         assert!(start_index < partition_count);
@@ -3036,7 +3046,7 @@ impl Bank {
         let partition_width = (PREFIX_MAX - partition_count + 1) / partition_count + 1;
         let mut start_key_prefix = if start_index == 0 && end_index == 0 {
             0
-        } else if start_index + 1 == partition_count && is_fix_enabled {
+        } else if start_index + 1 == partition_count {
             PREFIX_MAX
         } else {
             (start_index + 1) * partition_width
@@ -5007,7 +5017,7 @@ pub(crate) mod tests {
         const VALIDATOR_STAKE: u64 = 374_999_998_287_840;
 
         let validator_pubkey = solana_sdk::pubkey::new_rand();
-        let genesis_config =
+        let mut genesis_config =
             create_genesis_config_with_leader(10, &validator_pubkey, VALIDATOR_STAKE)
                 .genesis_config;
 
@@ -5019,6 +5029,27 @@ pub(crate) mod tests {
             new_validator_lamports,
             old_validator_lamports + RENT_TO_BE_DISTRIBUTED
         );
+
+        genesis_config
+            .accounts
+            .remove(&feature_set::no_overflow_rent_distribution::id())
+            .unwrap();
+        let bank = std::panic::AssertUnwindSafe(Bank::new(&genesis_config));
+        let old_validator_lamports = bank.get_balance(&validator_pubkey);
+        let new_validator_lamports = std::panic::catch_unwind(|| {
+            bank.distribute_rent_to_validators(&bank.vote_accounts(), RENT_TO_BE_DISTRIBUTED);
+            bank.get_balance(&validator_pubkey)
+        });
+
+        if let Ok(new_validator_lamports) = new_validator_lamports {
+            info!("asserting overflowing incorrect rent distribution");
+            assert_ne!(
+                new_validator_lamports,
+                old_validator_lamports + RENT_TO_BE_DISTRIBUTED
+            );
+        } else {
+            info!("NOT-asserting overflowing incorrect rent distribution");
+        }
     }
 
     #[test]
@@ -5554,7 +5585,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_rent_eager_pubkey_range_minimal() {
-        let range = Bank::pubkey_range_from_partition((0, 0, 1), true);
+        let range = Bank::pubkey_range_from_partition((0, 0, 1));
         assert_eq!(
             range,
             Pubkey::new_from_array([0x00; 32])..=Pubkey::new_from_array([0xff; 32])
@@ -5565,7 +5596,7 @@ pub(crate) mod tests {
     fn test_rent_eager_pubkey_range_maximum() {
         let max = !0;
 
-        let range = Bank::pubkey_range_from_partition((0, 0, max), true);
+        let range = Bank::pubkey_range_from_partition((0, 0, max));
         assert_eq!(
             range,
             Pubkey::new_from_array([0x00; 32])
@@ -5575,7 +5606,7 @@ pub(crate) mod tests {
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
                 ])
         );
-        let range = Bank::pubkey_range_from_partition((0, 1, max), true);
+        let range = Bank::pubkey_range_from_partition((0, 1, max));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -5589,7 +5620,7 @@ pub(crate) mod tests {
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
                 ])
         );
-        let range = Bank::pubkey_range_from_partition((max - 3, max - 2, max), true);
+        let range = Bank::pubkey_range_from_partition((max - 3, max - 2, max));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -5603,7 +5634,7 @@ pub(crate) mod tests {
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
                 ])
         );
-        let range = Bank::pubkey_range_from_partition((max - 2, max - 1, max), true);
+        let range = Bank::pubkey_range_from_partition((max - 2, max - 1, max));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -5634,7 +5665,7 @@ pub(crate) mod tests {
         assert!(!should_cause_overflow(max_unexact));
 
         for max in &[max_exact, max_unexact] {
-            let range = Bank::pubkey_range_from_partition((max - 1, max - 1, *max), true);
+            let range = Bank::pubkey_range_from_partition((max - 1, max - 1, *max));
             assert_eq!(
                 range,
                 Pubkey::new_from_array([
@@ -5680,7 +5711,7 @@ pub(crate) mod tests {
     fn test_rent_eager_pubkey_range_noop_range() {
         let test_map = map_to_test_bad_range();
 
-        let range = Bank::pubkey_range_from_partition((0, 0, 3), true);
+        let range = Bank::pubkey_range_from_partition((0, 0, 3));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -5696,7 +5727,7 @@ pub(crate) mod tests {
         );
         test_map.range(range);
 
-        let range = Bank::pubkey_range_from_partition((1, 1, 3), true);
+        let range = Bank::pubkey_range_from_partition((1, 1, 3));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -5712,7 +5743,7 @@ pub(crate) mod tests {
         );
         test_map.range(range);
 
-        let range = Bank::pubkey_range_from_partition((2, 2, 3), true);
+        let range = Bank::pubkey_range_from_partition((2, 2, 3));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -5732,7 +5763,7 @@ pub(crate) mod tests {
     #[test]
     fn test_rent_eager_pubkey_range_dividable() {
         let test_map = map_to_test_bad_range();
-        let range = Bank::pubkey_range_from_partition((0, 0, 2), true);
+        let range = Bank::pubkey_range_from_partition((0, 0, 2));
 
         assert_eq!(
             range,
@@ -5749,7 +5780,7 @@ pub(crate) mod tests {
         );
         test_map.range(range);
 
-        let range = Bank::pubkey_range_from_partition((0, 1, 2), true);
+        let range = Bank::pubkey_range_from_partition((0, 1, 2));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -5771,7 +5802,7 @@ pub(crate) mod tests {
         solana_logger::setup();
 
         let test_map = map_to_test_bad_range();
-        let range = Bank::pubkey_range_from_partition((0, 0, 3), true);
+        let range = Bank::pubkey_range_from_partition((0, 0, 3));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -5787,7 +5818,7 @@ pub(crate) mod tests {
         );
         test_map.range(range);
 
-        let range = Bank::pubkey_range_from_partition((0, 1, 3), true);
+        let range = Bank::pubkey_range_from_partition((0, 1, 3));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -5803,7 +5834,7 @@ pub(crate) mod tests {
         );
         test_map.range(range);
 
-        let range = Bank::pubkey_range_from_partition((1, 2, 3), true);
+        let range = Bank::pubkey_range_from_partition((1, 2, 3));
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -5825,7 +5856,7 @@ pub(crate) mod tests {
         solana_logger::setup();
 
         let test_map = map_to_test_bad_range();
-        let range = Bank::pubkey_range_from_partition((120, 1023, 12345), true);
+        let range = Bank::pubkey_range_from_partition((120, 1023, 12345));
         assert_eq!(
             range,
             Pubkey::new_from_array([

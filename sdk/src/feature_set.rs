@@ -43,7 +43,7 @@ pub mod sha256_syscall_enabled {
 }
 
 pub mod no_overflow_rent_distribution {
-    solana_sdk::declare_id!("9UQYJwv7RXK3mQQzAaxXcYmdVfii3xAGFMkuYnzJUwMX");
+    solana_sdk::declare_id!("4kpdyrcj5jS47CZb2oJGfVxjYbsMm2Kx97gFyZrxxwXz");
 }
 
 pub mod ristretto_mul_syscall_enabled {
