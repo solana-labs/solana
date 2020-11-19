@@ -2934,6 +2934,7 @@ impl Bank {
                     if *code == VoteError::SlotHashMismatch as u32
                         && solana_vote_program::check_id(instruction_key)
                     {
+                        panic!("vote hash mismatch");
                         return 1;
                     }
                 }
