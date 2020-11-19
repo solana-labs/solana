@@ -621,6 +621,11 @@ impl Stake {
             fix_stake_deactivate,
         );
 
+        // Drive credits_observed forward unconditionally when rewards are disabled
+        if point_value.rewards == 0 && fix_stake_deactivate {
+            return Some((0, 0, credits_observed));
+        }
+
         if points == 0 || point_value.points == 0 {
             return None;
         }
@@ -3075,6 +3080,23 @@ mod tests {
             stake.calculate_rewards(
                 &PointValue {
                     rewards: 4,
+                    points: 4
+                },
+                &vote_state,
+                None,
+                &mut null_tracer(),
+                true,
+            )
+        );
+
+        // now one with inflation disabled. no one gets paid, but we still need
+        // to advance the stake state's observed_credits field to prevent back-
+        // paying rewards when inflation is turned on.
+        assert_eq!(
+            Some((0, 0, 4)),
+            stake.calculate_rewards(
+                &PointValue {
+                    rewards: 0,
                     points: 4
                 },
                 &vote_state,
