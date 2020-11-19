@@ -5618,8 +5618,8 @@ pub(crate) mod tests {
                 ])
         );
 
-        fn check_no_remainder(partition_count: u64) -> bool {
-            // Check `result = (u64::max_value() + 1) / partition_count` is exact and
+        fn should_cause_overflow(partition_count: u64) -> bool {
+            // Check `partition_width = (u64::max_value() + 1) / partition_count` is exact and
             // does not have a remainder.
             // This way, `result * partition_count == (u64::max_value() + 1)`,
             // so the test actually tests for overflow
@@ -5627,11 +5627,11 @@ pub(crate) mod tests {
         }
 
         let max_exact = 64;
-        // Make sure `max` divides evenly when calculating `calculate_partition_width`
-        assert!(check_no_remainder(max_exact));
-        // Make sure `max` doesn't divide evenly when calculating `calculate_partition_width`
+        // Make sure `max_exact` divides evenly when calculating `calculate_partition_width`
+        assert!(should_cause_overflow(max_exact));
+        // Make sure `max_unexact` doesn't divide evenly when calculating `calculate_partition_width`
         let max_unexact = 10;
-        assert!(!check_no_remainder(max_unexact));
+        assert!(!should_cause_overflow(max_unexact));
 
         for max in &[max_exact, max_unexact] {
             let range = Bank::pubkey_range_from_partition((max - 1, max - 1, *max), true);
