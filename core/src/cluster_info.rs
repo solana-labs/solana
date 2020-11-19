@@ -996,7 +996,6 @@ impl ClusterInfo {
         let (labels, txs): (Vec<CrdsValueLabel>, Vec<Transaction>) = self
             .time_gossip_read_lock("get_votes", &self.stats.get_votes)
             .crds
-            .table
             .iter()
             .filter(|(_, x)| x.insert_timestamp > since)
             .filter_map(|(label, x)| {
@@ -1013,7 +1012,6 @@ impl ClusterInfo {
     pub fn get_snapshot_hash(&self, slot: Slot) -> Vec<(Pubkey, Hash)> {
         self.time_gossip_read_lock("get_snapshot_hash", &self.stats.get_snapshot_hash)
             .crds
-            .table
             .values()
             .filter_map(|x| x.value.snapshot_hash())
             .filter_map(|x| {
@@ -1033,7 +1031,6 @@ impl ClusterInfo {
     {
         self.time_gossip_read_lock("get_accounts_hash", &self.stats.get_accounts_hash)
             .crds
-            .table
             .get(&CrdsValueLabel::AccountsHashes(*pubkey))
             .map(|x| &x.value.accounts_hash().unwrap().hashes)
             .map(map)
@@ -1047,7 +1044,6 @@ impl ClusterInfo {
             .read()
             .unwrap()
             .crds
-            .table
             .get(&CrdsValueLabel::SnapshotHashes(*pubkey))
             .map(|x| &x.value.snapshot_hash().unwrap().hashes)
             .map(map)
@@ -1066,7 +1062,6 @@ impl ClusterInfo {
             .read()
             .unwrap()
             .crds
-            .table
             .get(&CrdsValueLabel::LowestSlot(*pubkey))
             .filter(|x| {
                 since
@@ -1082,7 +1077,6 @@ impl ClusterInfo {
             .read()
             .unwrap()
             .crds
-            .table
             .values()
             .filter(|x| {
                 since
@@ -1102,7 +1096,6 @@ impl ClusterInfo {
             .read()
             .unwrap()
             .crds
-            .table
             .get(&CrdsValueLabel::Version(*pubkey))
             .map(|x| x.value.version())
             .flatten()
@@ -1113,7 +1106,6 @@ impl ClusterInfo {
                 .read()
                 .unwrap()
                 .crds
-                .table
                 .get(&CrdsValueLabel::LegacyVersion(*pubkey))
                 .map(|x| x.value.legacy_version())
                 .flatten()
@@ -2603,7 +2595,7 @@ impl ClusterInfo {
             let (table_size, purged_values_size, failed_inserts_size) = {
                 let r_gossip = self.gossip.read().unwrap();
                 (
-                    r_gossip.crds.table.len(),
+                    r_gossip.crds.len(),
                     r_gossip.pull.purged_values.len(),
                     r_gossip.pull.failed_inserts.len(),
                 )
@@ -2873,7 +2865,7 @@ impl ClusterInfo {
                         debug!(
                             "{}: run_listen timeout, table size: {}",
                             self.id(),
-                            r_gossip.crds.table.len()
+                            r_gossip.crds.len()
                         );
                     }
                     thread_mem_usage::datapoint("solana-listen");

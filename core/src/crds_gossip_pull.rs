@@ -24,7 +24,6 @@ use std::cmp;
 use std::collections::VecDeque;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
-use std::ops::Index;
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
 // The maximum age of a value received over pull responses
@@ -451,12 +450,11 @@ impl CrdsGossipPull {
         const PAR_MIN_LENGTH: usize = 512;
         let num = cmp::max(
             CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS,
-            crds.table.len() + self.purged_values.len() + self.failed_inserts.len(),
+            crds.len() + self.purged_values.len() + self.failed_inserts.len(),
         );
         let filters = CrdsFilterSet::new(num, bloom_size);
         thread_pool.install(|| {
-            crds.table
-                .par_values()
+            crds.par_values()
                 .with_min_len(PAR_MIN_LENGTH)
                 .map(|v| v.value_hash)
                 .chain(
@@ -499,10 +497,8 @@ impl CrdsGossipPull {
                     return vec![];
                 }
                 let caller_wallclock = caller_wallclock.checked_add(jitter).unwrap_or(0);
-                crds.shards
-                    .find(filter.mask, filter.mask_bits)
-                    .filter_map(|index| {
-                        let item = crds.table.index(index);
+                crds.filter_bitmask(filter.mask, filter.mask_bits)
+                    .filter_map(|item| {
                         debug_assert!(filter.test_mask(&item.value_hash));
                         //skip values that are too new
                         if item.value.wallclock() > caller_wallclock {
@@ -874,7 +870,6 @@ mod test {
         let filters = crds_gossip_pull.build_crds_filters(&thread_pool, &crds, MAX_BLOOM_SIZE);
         assert_eq!(filters.len(), 32);
         let hash_values: Vec<_> = crds
-            .table
             .values()
             .map(|v| v.value_hash)
             .chain(
