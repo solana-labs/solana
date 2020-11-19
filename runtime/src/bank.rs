@@ -875,7 +875,7 @@ impl Bank {
             new.apply_feature_activations(false);
         }
 
-        if new.enable_stake_rewrite(parent_epoch) {
+        if new.enable_stake_rewrite() {
             // Remove me after a while around v1.6
             new.rewrite_stakes();
         }
@@ -900,25 +900,20 @@ impl Bank {
         new
     }
 
-    fn enable_stake_rewrite(&self, parent_epoch: Epoch) -> bool {
+    fn enable_stake_rewrite(&self) -> bool {
         if self.no_stake_rewrite.load(Relaxed) {
             return false;
         }
 
-        let activated_slot = if let Some(epoch) = self.rewrite_stake_slot() {
-            epoch
+        let activated_slot = if let Some(slot) = self.rewrite_stake_slot() {
+            slot
         } else {
             return false;
         };
-        if activated_slot == 0 {
-            return self.slot() == 0;
-        }
-        let (activated_epoch, _) = self.get_epoch_and_slot_index(activated_slot);
-
         // to avoid any potential risk of wrongly rewriting accounts in the future,
         // only do this once, taking small risk of unknown
         // bugs which again creates bad stake accounts..
-        self.epoch() > parent_epoch && self.epoch() == activated_epoch
+        self.slot() == activated_slot
     }
 
     /// Like `new_from_parent` but additionally:
@@ -10674,25 +10669,25 @@ pub(crate) mod tests {
         .genesis_config;
         let no_collector = Pubkey::default();
         let bank0 = Arc::new(Bank::new(&genesis_config));
-        assert_eq!(bank0.enable_stake_rewrite(bank0.epoch()), true);
+        assert_eq!(bank0.enable_stake_rewrite(), true);
         let bank1 = Arc::new(Bank::new_from_parent(
             &bank0,
             &no_collector,
             bank0.slot() + 1,
         ));
-        assert_eq!(bank1.enable_stake_rewrite(bank0.epoch()), false);
+        assert_eq!(bank1.enable_stake_rewrite(), false);
         let bank2 = Arc::new(Bank::new_from_parent(
             &bank1,
             &no_collector,
             bank1.get_slots_in_epoch(0),
         ));
-        assert_eq!(bank2.enable_stake_rewrite(bank1.epoch()), false);
+        assert_eq!(bank2.enable_stake_rewrite(), false);
         let bank3 = Arc::new(Bank::new_from_parent(
             &bank2,
             &no_collector,
             bank2.slot() + 1,
         ));
-        assert_eq!(bank3.enable_stake_rewrite(bank2.epoch()), false);
+        assert_eq!(bank3.enable_stake_rewrite(), false);
     }
 
     #[test]
@@ -10709,13 +10704,13 @@ pub(crate) mod tests {
         let no_collector = Pubkey::default();
 
         let bank0 = Arc::new(Bank::new(&genesis_config));
-        assert_eq!(bank0.enable_stake_rewrite(bank0.epoch()), false);
+        assert_eq!(bank0.enable_stake_rewrite(), false);
         let bank1 = Arc::new(Bank::new_from_parent(
             &bank0,
             &no_collector,
             bank0.slot() + 1,
         ));
-        assert_eq!(bank1.enable_stake_rewrite(bank0.epoch()), false);
+        assert_eq!(bank1.enable_stake_rewrite(), false);
 
         let feature_account_balance =
             std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
@@ -10729,13 +10724,13 @@ pub(crate) mod tests {
             &no_collector,
             bank1.get_slots_in_epoch(0),
         ));
-        assert_eq!(bank2.enable_stake_rewrite(bank1.epoch()), true);
+        assert_eq!(bank2.enable_stake_rewrite(), true);
         let bank3 = Arc::new(Bank::new_from_parent(
             &bank2,
             &no_collector,
             bank2.slot() + 1,
         ));
-        assert_eq!(bank3.enable_stake_rewrite(bank2.epoch()), false);
+        assert_eq!(bank3.enable_stake_rewrite(), false);
     }
 
     #[test]
