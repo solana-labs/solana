@@ -38,7 +38,7 @@ solana-tokens distribute-tokens --from <KEYPAIR> --input-csv <RECIPIENTS_CSV> --
 Example output:
 
 ```text
-Recipient                                     Expected Balance (◎)
+Recipient                                     Expected Balance
 3ihfUy1n9gaqihM5bJCiTAGLgWc5zo3DqVUS6T736NLM  42
 UKUcTXgbeTYh65RaVV5gSf6xBHevqHvAXMo3e8Q6np8k  43
 ```
@@ -77,7 +77,7 @@ recipient,amount,lockup_date
 Example output:
 
 ```text
-Recipient                                     Expected Balance (◎)
+Recipient                                     Expected Balance
 6Vo87BaDhp4v4GHwVDhw5huhxVF8CyxSXYtkUwVHbbPv  10
 7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr  42
 ```
@@ -102,7 +102,7 @@ solana-tokens distribute-tokens --transfer-amount 10 --from <KEYPAIR> --input-cs
 Example output:
 
 ```text
-Recipient                                     Expected Balance (◎)
+Recipient                                     Expected Balance
 6Vo87BaDhp4v4GHwVDhw5huhxVF8CyxSXYtkUwVHbbPv  10
 7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr  10
 CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT  10
@@ -125,3 +125,115 @@ recipient address. That SOL can be used to pay transaction fees on staking
 operations such as delegating stake. The rest of the allocation is put in
 a stake account. The new stake account address is output in the transaction
 log.
+
+## Distribute SPL tokens
+
+Distributing SPL Tokens works very similarly to distributing SOL, but requires
+the `--owner` parameter to sign transactions. Each recipient account must be an
+system account that will own an Associated Token Account for the SPL Token mint.
+The Associated Token Account will be created, and funded by the fee_payer, if it
+does not already exist.
+
+Send SPL tokens to the recipients in `<RECIPIENTS_CSV>`.
+
+Example recipients.csv:
+
+```text
+recipient,amount
+CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT,75.4
+C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s,10
+7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr,42.1
+7qQPmVAQxEQ5djPDCtiEUrxaPf8wKtLG1m6SB1brejJ1,20
+```
+
+You can check the status of the recipients before beginning a distribution. You
+must include the SPL Token mint address:
+
+```bash
+solana-tokens spl-token-balances --mint <ADDRESS> --input-csv <RECIPIENTS_CSV>
+```
+
+Example output:
+
+```text
+Token: JDte736XZ1jGUtfAS32DLpBUWBR7WGSHy1hSZ36VRQ5V
+Recipient                                             Expected Balance            Actual Balance                Difference
+CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT                     75.40                      0.00                    -75.40
+C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s                    10.000  Associated token account not yet created
+7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr                     42.10                      0.00                    -42.10
+7qQPmVAQxEQ5djPDCtiEUrxaPf8wKtLG1m6SB1brejJ1                    20.000  Associated token account not yet created
+```
+
+To run the distribution:
+
+```bash
+solana-tokens distribute-spl-tokens --from <ADDRESS> --owner <KEYPAIR> \
+    --input-csv <RECIPIENTS_CSV> --fee-payer <KEYPAIR>
+```
+
+Example output:
+
+```text
+Total in input_csv: 147.5 tokens
+Distributed: 0 tokens
+Undistributed: 147.5 tokens
+Total: 147.5 tokens
+Recipient                                             Expected Balance
+CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT                    75.400
+C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s                    10.000
+7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr                    42.100
+7qQPmVAQxEQ5djPDCtiEUrxaPf8wKtLG1m6SB1brejJ1                    20.000
+```
+
+### Calculate what tokens should be sent
+
+As with SOL, you can List the differences between a list of expected
+distributions and the record of what transactions have already been sent using
+the `--dry-run` parameter, or `solana-tokens balances`.
+
+Example updated recipients.csv:
+
+```text
+recipient,amount
+CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT,100
+C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s,100
+7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr,100
+7qQPmVAQxEQ5djPDCtiEUrxaPf8wKtLG1m6SB1brejJ1,100
+```
+
+Using dry-run:
+
+```bash
+solana-tokens distribute-tokens --dry-run --input-csv <RECIPIENTS_CSV>
+```
+
+Example output:
+
+```text
+Total in input_csv: 400 tokens
+Distributed: 147.5 tokens
+Undistributed: 252.5 tokens
+Total: 400 tokens
+Recipient                                             Expected Balance
+CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT                    24.600
+C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s                    90.000
+7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr                    57.900
+7qQPmVAQxEQ5djPDCtiEUrxaPf8wKtLG1m6SB1brejJ1                    80.000
+```
+
+Or:
+
+```bash
+solana-tokens balances --mint <ADDRESS> --input-csv <RECIPIENTS_CSV>
+```
+
+Example output:
+
+```text
+Token: JDte736XZ1jGUtfAS32DLpBUWBR7WGSHy1hSZ36VRQ5V
+Recipient                                             Expected Balance            Actual Balance                Difference
+CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT                   100.000                    75.400                   -24.600
+C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s                   100.000                    10.000                   -90.000
+7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr                   100.000                    42.100                   -57.900
+7qQPmVAQxEQ5djPDCtiEUrxaPf8wKtLG1m6SB1brejJ1                   100.000                    20.000                   -80.000
+```

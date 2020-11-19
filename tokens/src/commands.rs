@@ -1,5 +1,9 @@
-use crate::args::{BalancesArgs, DistributeTokensArgs, StakeArgs, TransactionLogArgs};
-use crate::db::{self, TransactionInfo};
+use crate::{
+    args::{BalancesArgs, DistributeTokensArgs, StakeArgs, TransactionLogArgs},
+    db::{self, TransactionInfo},
+    spl_token::*,
+    token_display::Token,
+};
 use chrono::prelude::*;
 use console::style;
 use csv::{ReaderBuilder, Trim};
@@ -7,6 +11,7 @@ use indexmap::IndexMap;
 use indicatif::{ProgressBar, ProgressStyle};
 use pickledb::PickleDb;
 use serde::{Deserialize, Serialize};
+use solana_account_decoder::parse_token::{pubkey_from_spl_token_v2_0, spl_token_v2_0_pubkey};
 use solana_banks_client::{BanksClient, BanksClientExt};
 use solana_sdk::{
     commitment_config::CommitmentLevel,
@@ -22,6 +27,8 @@ use solana_stake_program::{
     stake_instruction::{self, LockupArgs},
     stake_state::{Authorized, Lockup, StakeAuthorize},
 };
+use spl_associated_token_account_v1_0::get_associated_token_address;
+use spl_token_v2_0::solana_program::program_error::ProgramError;
 use std::{
     cmp::{self},
     io,
@@ -30,15 +37,16 @@ use std::{
 use tokio::time::sleep;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-struct Allocation {
-    recipient: String,
-    amount: f64,
-    lockup_date: String,
+pub struct Allocation {
+    pub recipient: String,
+    pub amount: f64,
+    pub lockup_date: String,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum FundingSource {
     FeePayer,
+    SplTokenAccount,
     StakeAccount,
     SystemAccount,
 }
@@ -83,6 +91,8 @@ pub enum Error {
     MissingLockupAuthority,
     #[error("insufficient funds in {0:?}, requires {1} SOL")]
     InsufficientFunds(FundingSources, f64),
+    #[error("Program error")]
+    ProgramError(#[from] ProgramError),
 }
 
 fn merge_allocations(allocations: &[Allocation]) -> Vec<Allocation> {
@@ -125,7 +135,7 @@ fn apply_previous_transactions(
             }
         }
     }
-    allocations.retain(|x| x.amount > 0.5);
+    allocations.retain(|x| x.amount > f64::EPSILON);
 }
 
 async fn transfer<S: Signer>(
@@ -150,13 +160,18 @@ fn distribution_instructions(
     new_stake_account_address: &Pubkey,
     args: &DistributeTokensArgs,
     lockup_date: Option<DateTime<Utc>>,
+    do_create_associated_token_account: bool,
 ) -> Vec<Instruction> {
-    if args.stake_args.is_none() {
+    if args.stake_args.is_none() && args.spl_token_args.is_none() {
         let from = args.sender_keypair.pubkey();
         let to = allocation.recipient.parse().unwrap();
         let lamports = sol_to_lamports(allocation.amount);
         let instruction = system_instruction::transfer(&from, &to, lamports);
         return vec![instruction];
+    }
+
+    if args.spl_token_args.is_some() {
+        return build_spl_token_instructions(allocation, args, do_create_associated_token_account);
     }
 
     let stake_args = args.stake_args.as_ref().unwrap();
@@ -225,34 +240,65 @@ async fn distribute_allocations(
     args: &DistributeTokensArgs,
 ) -> Result<(), Error> {
     type StakeExtras = Vec<(Keypair, Option<DateTime<Utc>>)>;
-    let (messages, stake_extras): (Vec<Message>, StakeExtras) = allocations
-        .iter()
-        .map(|allocation| {
-            let new_stake_account_keypair = Keypair::new();
-            let lockup_date = if allocation.lockup_date == "" {
-                None
-            } else {
-                Some(allocation.lockup_date.parse::<DateTime<Utc>>().unwrap())
-            };
+    let mut messages: Vec<Message> = vec![];
+    let mut stake_extras: StakeExtras = vec![];
+    let mut created_accounts = 0;
+    for allocation in allocations.iter() {
+        let new_stake_account_keypair = Keypair::new();
+        let lockup_date = if allocation.lockup_date == "" {
+            None
+        } else {
+            Some(allocation.lockup_date.parse::<DateTime<Utc>>().unwrap())
+        };
 
-            println!("{:<44}  {:>24.9}", allocation.recipient, allocation.amount);
-            let instructions = distribution_instructions(
-                allocation,
-                &new_stake_account_keypair.pubkey(),
-                args,
-                lockup_date,
-            );
-            let fee_payer_pubkey = args.fee_payer.pubkey();
-            let message = Message::new(&instructions, Some(&fee_payer_pubkey));
-            (message, (new_stake_account_keypair, lockup_date))
-        })
-        .unzip();
+        let (decimals, do_create_associated_token_account) =
+            if let Some(spl_token_args) = &args.spl_token_args {
+                let wallet_address = allocation.recipient.parse().unwrap();
+                let associated_token_address = get_associated_token_address(
+                    &wallet_address,
+                    &spl_token_v2_0_pubkey(&spl_token_args.mint),
+                );
+                let do_create_associated_token_account = client
+                    .get_account(pubkey_from_spl_token_v2_0(&associated_token_address))
+                    .await?
+                    .is_none();
+                if do_create_associated_token_account {
+                    created_accounts += 1;
+                }
+                (
+                    spl_token_args.decimals as usize,
+                    do_create_associated_token_account,
+                )
+            } else {
+                (9, false)
+            };
+        println!(
+            "{:<44}  {:>24.2$}",
+            allocation.recipient, allocation.amount, decimals
+        );
+        let instructions = distribution_instructions(
+            allocation,
+            &new_stake_account_keypair.pubkey(),
+            args,
+            lockup_date,
+            do_create_associated_token_account,
+        );
+        let fee_payer_pubkey = args.fee_payer.pubkey();
+        let message = Message::new(&instructions, Some(&fee_payer_pubkey));
+        messages.push(message);
+        stake_extras.push((new_stake_account_keypair, lockup_date));
+    }
 
     let num_signatures = messages
         .iter()
         .map(|message| message.header.num_required_signatures as usize)
         .sum();
-    check_payer_balances(num_signatures, allocations, client, args).await?;
+    if args.spl_token_args.is_some() {
+        check_spl_token_balances(num_signatures, allocations, client, args, created_accounts)
+            .await?;
+    } else {
+        check_payer_balances(num_signatures, allocations, client, args).await?;
+    }
 
     for ((allocation, message), (new_stake_account_keypair, lockup_date)) in
         allocations.iter().zip(messages).zip(stake_extras)
@@ -304,7 +350,11 @@ async fn distribute_allocations(
     Ok(())
 }
 
-fn read_allocations(input_csv: &str, transfer_amount: Option<f64>) -> io::Result<Vec<Allocation>> {
+fn read_allocations(
+    input_csv: &str,
+    transfer_amount: Option<f64>,
+    require_lockup_heading: bool,
+) -> io::Result<Vec<Allocation>> {
     let mut rdr = ReaderBuilder::new().trim(Trim::All).from_path(input_csv)?;
     let allocations = if let Some(amount) = transfer_amount {
         let recipients: Vec<String> = rdr
@@ -319,8 +369,21 @@ fn read_allocations(input_csv: &str, transfer_amount: Option<f64>) -> io::Result
                 lockup_date: "".to_string(),
             })
             .collect()
-    } else {
+    } else if require_lockup_heading {
         rdr.deserialize().map(|entry| entry.unwrap()).collect()
+    } else {
+        let recipients: Vec<(String, f64)> = rdr
+            .deserialize()
+            .map(|recipient| recipient.unwrap())
+            .collect();
+        recipients
+            .into_iter()
+            .map(|(recipient, amount)| Allocation {
+                recipient,
+                amount,
+                lockup_date: "".to_string(),
+            })
+            .collect()
     };
     Ok(allocations)
 }
@@ -337,11 +400,17 @@ pub async fn process_allocations(
     client: &mut BanksClient,
     args: &DistributeTokensArgs,
 ) -> Result<Option<usize>, Error> {
-    let mut allocations: Vec<Allocation> = read_allocations(&args.input_csv, args.transfer_amount)?;
+    let require_lockup_heading = args.stake_args.is_some();
+    let mut allocations: Vec<Allocation> = read_allocations(
+        &args.input_csv,
+        args.transfer_amount,
+        require_lockup_heading,
+    )?;
+    let is_sol = args.spl_token_args.is_none();
 
-    let starting_total_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
+    let starting_total_tokens = Token::from(allocations.iter().map(|x| x.amount).sum(), is_sol);
     println!(
-        "{} ◎{}",
+        "{} {}",
         style("Total in input_csv:").bold(),
         starting_total_tokens,
     );
@@ -359,27 +428,23 @@ pub async fn process_allocations(
         return Ok(confirmations);
     }
 
-    let distributed_tokens: f64 = transaction_infos.iter().map(|x| x.amount).sum();
-    let undistributed_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
-    println!("{} ◎{}", style("Distributed:").bold(), distributed_tokens,);
+    let distributed_tokens = Token::from(transaction_infos.iter().map(|x| x.amount).sum(), is_sol);
+    let undistributed_tokens = Token::from(allocations.iter().map(|x| x.amount).sum(), is_sol);
+    println!("{} {}", style("Distributed:").bold(), distributed_tokens,);
     println!(
-        "{} ◎{}",
+        "{} {}",
         style("Undistributed:").bold(),
         undistributed_tokens,
     );
     println!(
-        "{} ◎{}",
+        "{} {}",
         style("Total:").bold(),
         distributed_tokens + undistributed_tokens,
     );
 
     println!(
         "{}",
-        style(format!(
-            "{:<44}  {:>24}",
-            "Recipient", "Expected Balance (◎)"
-        ))
-        .bold()
+        style(format!("{:<44}  {:>24}", "Recipient", "Expected Balance",)).bold()
     );
 
     distribute_allocations(client, &mut db, &allocations, args).await?;
@@ -563,33 +628,41 @@ async fn check_payer_balances(
     Ok(())
 }
 
-pub async fn process_balances(
-    client: &mut BanksClient,
-    args: &BalancesArgs,
-) -> Result<(), csv::Error> {
-    let allocations: Vec<Allocation> = read_allocations(&args.input_csv, None)?;
+pub async fn process_balances(client: &mut BanksClient, args: &BalancesArgs) -> Result<(), Error> {
+    let allocations: Vec<Allocation> = read_allocations(&args.input_csv, None, false)?;
     let allocations = merge_allocations(&allocations);
+
+    let token = if let Some(spl_token_args) = &args.spl_token_args {
+        spl_token_args.mint.to_string()
+    } else {
+        "◎".to_string()
+    };
+    println!("{} {}", style("Token:").bold(), token);
 
     println!(
         "{}",
         style(format!(
             "{:<44}  {:>24}  {:>24}  {:>24}",
-            "Recipient", "Expected Balance (◎)", "Actual Balance (◎)", "Difference (◎)"
+            "Recipient", "Expected Balance", "Actual Balance", "Difference"
         ))
         .bold()
     );
 
     for allocation in &allocations {
-        let address = allocation.recipient.parse().unwrap();
-        let expected = lamports_to_sol(sol_to_lamports(allocation.amount));
-        let actual = lamports_to_sol(client.get_balance(address).await.unwrap());
-        println!(
-            "{:<44}  {:>24.9}  {:>24.9}  {:>24.9}",
-            allocation.recipient,
-            expected,
-            actual,
-            actual - expected
-        );
+        if let Some(spl_token_args) = &args.spl_token_args {
+            print_token_balances(client, allocation, spl_token_args).await?;
+        } else {
+            let address: Pubkey = allocation.recipient.parse().unwrap();
+            let expected = lamports_to_sol(sol_to_lamports(allocation.amount));
+            let actual = lamports_to_sol(client.get_balance(address).await.unwrap());
+            println!(
+                "{:<44}  {:>24.9}  {:>24.9}  {:>24.9}",
+                allocation.recipient,
+                expected,
+                actual,
+                actual - expected,
+            );
+        }
     }
 
     Ok(())
@@ -665,6 +738,7 @@ pub async fn test_process_distribute_tokens_with_client(
         transaction_db: transaction_db.clone(),
         output_path: Some(output_path.clone()),
         stake_args: None,
+        spl_token_args: None,
         transfer_amount,
     };
     let confirmations = process_allocations(client, &args).await.unwrap();
@@ -788,6 +862,7 @@ pub async fn test_process_distribute_stake_with_client(
         transaction_db: transaction_db.clone(),
         output_path: Some(output_path.clone()),
         stake_args: Some(stake_args),
+        spl_token_args: None,
         sender_keypair: Box::new(sender_keypair),
         transfer_amount: None,
     };
@@ -841,7 +916,7 @@ pub async fn test_process_distribute_stake_with_client(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use solana_banks_client::start_client;
     use solana_banks_server::banks_server::start_local_server;
@@ -909,8 +984,75 @@ mod tests {
         wtr.flush().unwrap();
 
         assert_eq!(
-            read_allocations(&input_csv, None).unwrap(),
+            read_allocations(&input_csv, None, false).unwrap(),
+            vec![allocation.clone()]
+        );
+        assert_eq!(
+            read_allocations(&input_csv, None, true).unwrap(),
             vec![allocation]
+        );
+    }
+
+    #[test]
+    fn test_read_allocations_no_lockup() {
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let file = NamedTempFile::new().unwrap();
+        let input_csv = file.path().to_str().unwrap().to_string();
+        let mut wtr = csv::WriterBuilder::new().from_writer(file);
+        wtr.serialize(("recipient".to_string(), "amount".to_string()))
+            .unwrap();
+        wtr.serialize((&pubkey0.to_string(), 42.0)).unwrap();
+        wtr.serialize((&pubkey1.to_string(), 43.0)).unwrap();
+        wtr.flush().unwrap();
+
+        let expected_allocations = vec![
+            Allocation {
+                recipient: pubkey0.to_string(),
+                amount: 42.0,
+                lockup_date: "".to_string(),
+            },
+            Allocation {
+                recipient: pubkey1.to_string(),
+                amount: 43.0,
+                lockup_date: "".to_string(),
+            },
+        ];
+        assert_eq!(
+            read_allocations(&input_csv, None, false).unwrap(),
+            expected_allocations
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_read_allocations_malformed() {
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let file = NamedTempFile::new().unwrap();
+        let input_csv = file.path().to_str().unwrap().to_string();
+        let mut wtr = csv::WriterBuilder::new().from_writer(file);
+        wtr.serialize(("recipient".to_string(), "amount".to_string()))
+            .unwrap();
+        wtr.serialize((&pubkey0.to_string(), 42.0)).unwrap();
+        wtr.serialize((&pubkey1.to_string(), 43.0)).unwrap();
+        wtr.flush().unwrap();
+
+        let expected_allocations = vec![
+            Allocation {
+                recipient: pubkey0.to_string(),
+                amount: 42.0,
+                lockup_date: "".to_string(),
+            },
+            Allocation {
+                recipient: pubkey1.to_string(),
+                amount: 43.0,
+                lockup_date: "".to_string(),
+            },
+        ];
+        assert_eq!(
+            read_allocations(&input_csv, None, true).unwrap(),
+            expected_allocations
         );
     }
 
@@ -948,7 +1090,7 @@ mod tests {
             },
         ];
         assert_eq!(
-            read_allocations(&input_csv, Some(amount)).unwrap(),
+            read_allocations(&input_csv, Some(amount), false).unwrap(),
             expected_allocations
         );
     }
@@ -1058,6 +1200,7 @@ mod tests {
             transaction_db: "".to_string(),
             output_path: None,
             stake_args: Some(stake_args),
+            spl_token_args: None,
             sender_keypair: Box::new(Keypair::new()),
             transfer_amount: None,
         };
@@ -1067,6 +1210,7 @@ mod tests {
             &new_stake_account_address,
             &args,
             Some(lockup_date),
+            false,
         );
         let lockup_instruction =
             bincode::deserialize(&instructions[SET_LOCKUP_INDEX].data).unwrap();
@@ -1079,7 +1223,7 @@ mod tests {
         }
     }
 
-    fn tmp_file_path(name: &str, pubkey: &Pubkey) -> String {
+    pub fn tmp_file_path(name: &str, pubkey: &Pubkey) -> String {
         use std::env;
         let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
 
@@ -1106,6 +1250,7 @@ mod tests {
             transaction_db: "".to_string(),
             output_path: None,
             stake_args,
+            spl_token_args: None,
             transfer_amount: None,
         };
         (allocations, args)
