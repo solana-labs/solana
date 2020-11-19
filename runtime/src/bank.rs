@@ -5652,7 +5652,7 @@ pub(crate) mod tests {
         fn should_cause_overflow(partition_count: u64) -> bool {
             // Check `partition_width = (u64::max_value() + 1) / partition_count` is exact and
             // does not have a remainder.
-            // This way, `result * partition_count == (u64::max_value() + 1)`,
+            // This way, `partition_width * partition_count == (u64::max_value() + 1)`,
             // so the test actually tests for overflow
             (u64::max_value() - partition_count + 1) % partition_count == 0
         }
