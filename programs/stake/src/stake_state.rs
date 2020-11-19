@@ -1046,12 +1046,12 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
 
     fn merge(
         &self,
-        source_stake: &KeyedAccount,
+        source_account: &KeyedAccount,
         clock: &Clock,
         stake_history: &StakeHistory,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError> {
-        if source_stake.owner()? != id() {
+        if source_account.owner()? != id() {
             return Err(InstructionError::IncorrectProgramId);
         }
 
@@ -1060,7 +1060,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         // Authorized staker is allowed to split/merge accounts
         meta.authorized.check(signers, StakeAuthorize::Staker)?;
 
-        let source_meta = get_info_if_mergable(source_stake, clock, stake_history)?;
+        let source_meta = get_info_if_mergable(source_account, clock, stake_history)?;
 
         // Meta must match for both accounts
         if meta != source_meta {
@@ -1068,8 +1068,8 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         }
 
         // Drain the source stake account
-        let lamports = source_stake.lamports()?;
-        source_stake.try_account_ref_mut()?.lamports -= lamports;
+        let lamports = source_account.lamports()?;
+        source_account.try_account_ref_mut()?.lamports -= lamports;
         self.try_account_ref_mut()?.lamports += lamports;
         Ok(())
     }
