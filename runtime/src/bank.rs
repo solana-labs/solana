@@ -1335,10 +1335,19 @@ impl Bank {
         (examined_count, rewritten_count)
     }
 
+    // Calculates the starting-slot for inflation from the activation slot.
+    // This method assumes that `pico_inflation` will be enabled before `full_inflation`, giving
+    // precedence to the latter. However, since `pico_inflation` is fixed-rate Inflation, should
+    // `pico_inflation` be enabled 2nd, the incorrect start slot provided here should have no
+    // effect on the inflation calculation.
     fn get_inflation_start_slot(&self) -> Slot {
         self.feature_set
             .activated_slot(&feature_set::full_inflation::id())
-            .unwrap_or(0)
+            .unwrap_or_else(|| {
+                self.feature_set
+                    .activated_slot(&feature_set::pico_inflation::id())
+                    .unwrap_or(0)
+            })
     }
 
     // update rewards based on the previous epoch
@@ -10720,16 +10729,40 @@ pub(crate) mod tests {
         } = create_genesis_config_with_leader(42, &solana_sdk::pubkey::new_rand(), 42);
         genesis_config
             .accounts
+            .remove(&feature_set::pico_inflation::id())
+            .unwrap();
+        genesis_config
+            .accounts
             .remove(&feature_set::full_inflation::id())
             .unwrap();
         let bank = Bank::new(&genesis_config);
 
-        // Advance to slot 2
+        // Advance to slot 1
         let mut bank = new_from_parent(&Arc::new(bank));
         bank = new_from_parent(&Arc::new(bank));
         assert_eq!(bank.get_inflation_start_slot(), 0);
 
         // Request `full_inflation` activation
+        let pico_inflation_activation_slot = 1;
+        bank.store_account(
+            &feature_set::pico_inflation::id(),
+            &feature::create_account(
+                &Feature {
+                    activated_at: Some(pico_inflation_activation_slot),
+                },
+                42,
+            ),
+        );
+        bank.compute_active_feature_set(true);
+        assert_eq!(
+            bank.get_inflation_start_slot(),
+            pico_inflation_activation_slot
+        );
+
+        // Advance to slot 2
+        bank = new_from_parent(&Arc::new(bank));
+
+        // Request `full_inflation` activation, which takes priority over pico_inflation
         let full_inflation_activation_slot = 2;
         bank.store_account(
             &feature_set::full_inflation::id(),
