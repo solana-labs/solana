@@ -171,7 +171,7 @@ impl JsonRpcRequestProcessor {
         };
 
         r_bank_forks.get(slot).cloned().unwrap_or_else(|| {
-            // We log an error instead of returning an error, because all known error cases
+            // We log a warning instead of returning an error, because all known error cases
             // are due to known bugs that should be fixed instead.
             //
             // The slot may not be found as a result of a known bug in snapshot creation, where
@@ -182,7 +182,7 @@ impl JsonRpcRequestProcessor {
             // a slot.
             //
             // For more information, see https://github.com/solana-labs/solana/issues/11078
-            error!(
+            warn!(
                 "Bank with {:?} not found at slot: {:?}",
                 commitment_level, slot
             );
