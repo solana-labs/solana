@@ -4971,17 +4971,21 @@ dependencies = [
  "indicatif",
  "pickledb",
  "serde",
+ "solana-account-decoder",
  "solana-clap-utils",
  "solana-cli-config",
  "solana-client",
  "solana-core",
  "solana-logger 1.5.0",
+ "solana-program-test",
  "solana-remote-wallet",
  "solana-runtime",
  "solana-sdk",
  "solana-stake-program",
  "solana-transaction-status",
  "solana-version",
+ "spl-associated-token-account",
+ "spl-token",
  "tempfile",
  "thiserror",
 ]
@@ -5153,6 +5157,16 @@ name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
+
+[[package]]
+name = "spl-associated-token-account"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41a25d15fe67b755f95c575ce074e6e39c809fea86b2edb1bf2ae8b0473d5a1d"
+dependencies = [
+ "solana-program 1.4.4",
+ "spl-token",
+]
 
 [[package]]
 name = "spl-memo"

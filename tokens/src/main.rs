@@ -1,6 +1,6 @@
 use solana_cli_config::{Config, CONFIG_FILE};
 use solana_client::rpc_client::RpcClient;
-use solana_tokens::{arg_parser::parse_args, args::Command, commands};
+use solana_tokens::{arg_parser::parse_args, args::Command, commands, spl_token};
 use std::{env, error::Error, path::Path, process};
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -19,10 +19,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let client = RpcClient::new(json_rpc_url);
 
     match command_args.command {
-        Command::DistributeTokens(args) => {
+        Command::DistributeTokens(mut args) => {
+            spl_token::update_token_args(&client, &mut args.spl_token_args)?;
             commands::process_allocations(&client, &args)?;
         }
-        Command::Balances(args) => {
+        Command::Balances(mut args) => {
+            spl_token::update_decimals(&client, &mut args.spl_token_args)?;
             commands::process_balances(&client, &args)?;
         }
         Command::TransactionLog(args) => {
