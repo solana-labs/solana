@@ -3,6 +3,7 @@ use bv::BitVec;
 use fnv::FnvHasher;
 use rand::{self, Rng};
 use serde::{Deserialize, Serialize};
+use solana_sdk::sanitize::{Sanitize, SanitizeError};
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::{cmp, hash::Hasher, marker::PhantomData};
@@ -45,7 +46,16 @@ impl<T: BloomHashIndex> fmt::Debug for Bloom<T> {
     }
 }
 
-impl<T: BloomHashIndex> solana_sdk::sanitize::Sanitize for Bloom<T> {}
+impl<T: BloomHashIndex> Sanitize for Bloom<T> {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        // Avoid division by zero in self.pos(...).
+        if self.bits.is_empty() {
+            Err(SanitizeError::InvalidValue)
+        } else {
+            Ok(())
+        }
+    }
+}
 
 impl<T: BloomHashIndex> Bloom<T> {
     pub fn new(num_bits: usize, keys: Vec<u64>) -> Self {

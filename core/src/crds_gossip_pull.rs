@@ -79,7 +79,7 @@ impl CrdsFilter {
         let seed: u64 = seed.checked_shl(64 - mask_bits).unwrap_or(0x0);
         seed | (!0u64).checked_shr(mask_bits).unwrap_or(!0x0) as u64
     }
-    pub fn max_items(max_bits: f64, false_rate: f64, num_keys: f64) -> f64 {
+    fn max_items(max_bits: f64, false_rate: f64, num_keys: f64) -> f64 {
         let m = max_bits;
         let p = false_rate;
         let k = num_keys;
@@ -93,28 +93,26 @@ impl CrdsFilter {
         let buf = item.as_ref()[..8].try_into().unwrap();
         u64::from_le_bytes(buf)
     }
-    pub fn test_mask_u64(&self, item: u64, ones: u64) -> bool {
-        let bits = item | ones;
-        bits == self.mask
-    }
-    pub fn test_mask(&self, item: &Hash) -> bool {
+    fn test_mask(&self, item: &Hash) -> bool {
         // only consider the highest mask_bits bits from the hash and set the rest to 1.
         let ones = (!0u64).checked_shr(self.mask_bits).unwrap_or(!0u64);
         let bits = Self::hash_as_u64(item) | ones;
         bits == self.mask
     }
-    pub fn add(&mut self, item: &Hash) {
+    #[cfg(test)]
+    fn add(&mut self, item: &Hash) {
         if self.test_mask(item) {
             self.filter.add(item);
         }
     }
-    pub fn contains(&self, item: &Hash) -> bool {
+    #[cfg(test)]
+    fn contains(&self, item: &Hash) -> bool {
         if !self.test_mask(item) {
             return true;
         }
         self.filter.contains(item)
     }
-    pub fn filter_contains(&self, item: &Hash) -> bool {
+    fn filter_contains(&self, item: &Hash) -> bool {
         self.filter.contains(item)
     }
 }
