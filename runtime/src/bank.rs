@@ -1326,6 +1326,11 @@ impl Bank {
             rewritten_count,
             examined_count,
         );
+        datapoint_info!(
+            "rewrite-stakes",
+            ("examined_count", examined_count, i64),
+            ("rewritten_count", rewritten_count, i64)
+        );
 
         (examined_count, rewritten_count)
     }
