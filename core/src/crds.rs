@@ -28,7 +28,7 @@ use crate::contact_info::ContactInfo;
 use crate::crds_shards::CrdsShards;
 use crate::crds_value::{CrdsData, CrdsValue, CrdsValueLabel};
 use bincode::serialize;
-use indexmap::map::{Entry, IndexMap};
+use indexmap::map::{rayon::ParValues, Entry, IndexMap, Iter, Values};
 use indexmap::set::IndexSet;
 use rayon::{prelude::*, ThreadPool};
 use solana_sdk::hash::{hash, Hash};
@@ -44,9 +44,9 @@ const CRDS_SHARDS_BITS: u32 = 8;
 #[derive(Clone)]
 pub struct Crds {
     /// Stores the map of labels and values
-    pub table: IndexMap<CrdsValueLabel, VersionedCrdsValue>,
-    pub num_inserts: usize,
-    pub shards: CrdsShards,
+    table: IndexMap<CrdsValueLabel, VersionedCrdsValue>,
+    pub num_inserts: usize, // Only used in tests.
+    shards: CrdsShards,
     // Indices of all crds values which are node ContactInfo.
     nodes: IndexSet<usize>,
 }
@@ -137,9 +137,9 @@ impl Crds {
         match self.table.entry(label) {
             Entry::Vacant(entry) => {
                 let entry_index = entry.index();
-                assert!(self.shards.insert(entry_index, &new_value));
+                self.shards.insert(entry_index, &new_value);
                 if let CrdsData::ContactInfo(_) = new_value.value.data {
-                    assert!(self.nodes.insert(entry_index));
+                    self.nodes.insert(entry_index);
                 }
                 entry.insert(new_value);
                 self.num_inserts += 1;
@@ -147,8 +147,8 @@ impl Crds {
             }
             Entry::Occupied(mut entry) if *entry.get() < new_value => {
                 let index = entry.index();
-                assert!(self.shards.remove(index, entry.get()));
-                assert!(self.shards.insert(index, &new_value));
+                self.shards.remove(index, entry.get());
+                self.shards.insert(index, &new_value);
                 self.num_inserts += 1;
                 Ok(Some(entry.insert(new_value)))
             }
@@ -178,6 +178,10 @@ impl Crds {
         self.table.get(label)
     }
 
+    pub fn get(&self, label: &CrdsValueLabel) -> Option<&VersionedCrdsValue> {
+        self.table.get(label)
+    }
+
     pub fn get_contact_info(&self, pubkey: &Pubkey) -> Option<&ContactInfo> {
         let label = CrdsValueLabel::ContactInfo(*pubkey);
         self.table.get(&label)?.value.contact_info()
@@ -194,6 +198,38 @@ impl Crds {
             CrdsData::ContactInfo(info) => info,
             _ => panic!("this should not happen!"),
         })
+    }
+
+    pub fn len(&self) -> usize {
+        self.table.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.table.is_empty()
+    }
+
+    pub fn iter(&self) -> Iter<'_, CrdsValueLabel, VersionedCrdsValue> {
+        self.table.iter()
+    }
+
+    pub fn values(&self) -> Values<'_, CrdsValueLabel, VersionedCrdsValue> {
+        self.table.values()
+    }
+
+    pub fn par_values(&self) -> ParValues<'_, CrdsValueLabel, VersionedCrdsValue> {
+        self.table.par_values()
+    }
+
+    /// Returns all crds values which the first 'mask_bits'
+    /// of their hash value is equal to 'mask'.
+    pub fn filter_bitmask(
+        &self,
+        mask: u64,
+        mask_bits: u32,
+    ) -> impl Iterator<Item = &VersionedCrdsValue> {
+        self.shards
+            .find(mask, mask_bits)
+            .map(move |i| self.table.index(i))
     }
 
     fn update_label_timestamp(&mut self, id: &CrdsValueLabel, now: u64) {
@@ -238,9 +274,9 @@ impl Crds {
 
     pub fn remove(&mut self, key: &CrdsValueLabel) -> Option<VersionedCrdsValue> {
         let (index, _, value) = self.table.swap_remove_full(key)?;
-        assert!(self.shards.remove(index, &value));
+        self.shards.remove(index, &value);
         if let CrdsData::ContactInfo(_) = value.value.data {
-            assert!(self.nodes.swap_remove(&index));
+            self.nodes.swap_remove(&index);
         }
         // If index == self.table.len(), then the removed entry was the last
         // entry in the table, in which case no other keys were modified.
@@ -250,11 +286,11 @@ impl Crds {
         let size = self.table.len();
         if index < size {
             let value = self.table.index(index);
-            assert!(self.shards.remove(size, value));
-            assert!(self.shards.insert(index, value));
+            self.shards.remove(size, value);
+            self.shards.insert(index, value);
             if let CrdsData::ContactInfo(_) = value.value.data {
-                assert!(self.nodes.swap_remove(&size));
-                assert!(self.nodes.insert(index));
+                self.nodes.swap_remove(&size);
+                self.nodes.insert(index);
             }
         }
         Some(value)
