@@ -875,10 +875,6 @@ impl Bank {
             new.apply_feature_activations(false);
         }
 
-        if new.enable_stake_rewrite() {
-            // Remove me after a while around v1.6
-            new.rewrite_stakes();
-        }
         let cloned = new
             .stakes
             .read()
@@ -898,22 +894,6 @@ impl Bank {
         }
 
         new
-    }
-
-    fn enable_stake_rewrite(&self) -> bool {
-        if self.no_stake_rewrite.load(Relaxed) {
-            return false;
-        }
-
-        let activated_slot = if let Some(slot) = self.rewrite_stake_slot() {
-            slot
-        } else {
-            return false;
-        };
-        // to avoid any potential risk of wrongly rewriting accounts in the future,
-        // only do this once, taking small risk of unknown
-        // bugs which again creates bad stake accounts..
-        self.slot() == activated_slot
     }
 
     /// Like `new_from_parent` but additionally:
@@ -4144,11 +4124,6 @@ impl Bank {
             .is_active(&feature_set::stake_program_v2::id())
     }
 
-    pub fn rewrite_stake_slot(&self) -> Option<Slot> {
-        self.feature_set
-            .activated_slot(&feature_set::rewrite_stake::id())
-    }
-
     // This is called from snapshot restore AND for each epoch boundary
     // The entire code path herein must be idempotent
     fn apply_feature_activations(&mut self, init_finish_or_warp: bool) {
@@ -4168,6 +4143,16 @@ impl Bank {
 
         if new_feature_activations.contains(&feature_set::spl_token_v2_multisig_fix::id()) {
             self.apply_spl_token_v2_multisig_fix();
+        }
+        // Remove me after a while around v1.6
+        if !self.no_stake_rewrite.load(Relaxed)
+            && new_feature_activations.contains(&feature_set::rewrite_stake::id())
+        {
+            // to avoid any potential risk of wrongly rewriting accounts in the future,
+            // only do this once, taking small risk of unknown
+            // bugs which again creates bad stake accounts..
+
+            self.rewrite_stakes();
         }
 
         self.ensure_feature_builtins(init_finish_or_warp, &new_feature_activations);
@@ -10657,80 +10642,6 @@ pub(crate) mod tests {
                 }
             },
         );
-    }
-
-    #[test]
-    fn test_enable_stake_rewrite_genesis() {
-        let genesis_config = create_genesis_config_with_leader(
-            10,
-            &solana_sdk::pubkey::new_rand(),
-            374_999_998_287_840,
-        )
-        .genesis_config;
-        let no_collector = Pubkey::default();
-        let bank0 = Arc::new(Bank::new(&genesis_config));
-        assert_eq!(bank0.enable_stake_rewrite(), true);
-        let bank1 = Arc::new(Bank::new_from_parent(
-            &bank0,
-            &no_collector,
-            bank0.slot() + 1,
-        ));
-        assert_eq!(bank1.enable_stake_rewrite(), false);
-        let bank2 = Arc::new(Bank::new_from_parent(
-            &bank1,
-            &no_collector,
-            bank1.get_slots_in_epoch(0),
-        ));
-        assert_eq!(bank2.enable_stake_rewrite(), false);
-        let bank3 = Arc::new(Bank::new_from_parent(
-            &bank2,
-            &no_collector,
-            bank2.slot() + 1,
-        ));
-        assert_eq!(bank3.enable_stake_rewrite(), false);
-    }
-
-    #[test]
-    fn test_enable_stake_rewrite_after_genesis() {
-        let mut genesis_config = create_genesis_config_with_leader(
-            10,
-            &solana_sdk::pubkey::new_rand(),
-            374_999_998_287_840,
-        )
-        .genesis_config;
-        genesis_config
-            .accounts
-            .remove(&feature_set::rewrite_stake::id());
-        let no_collector = Pubkey::default();
-
-        let bank0 = Arc::new(Bank::new(&genesis_config));
-        assert_eq!(bank0.enable_stake_rewrite(), false);
-        let bank1 = Arc::new(Bank::new_from_parent(
-            &bank0,
-            &no_collector,
-            bank0.slot() + 1,
-        ));
-        assert_eq!(bank1.enable_stake_rewrite(), false);
-
-        let feature_account_balance =
-            std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
-        bank1.store_account(
-            &feature_set::rewrite_stake::id(),
-            &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
-        );
-
-        let bank2 = Arc::new(Bank::new_from_parent(
-            &bank1,
-            &no_collector,
-            bank1.get_slots_in_epoch(0),
-        ));
-        assert_eq!(bank2.enable_stake_rewrite(), true);
-        let bank3 = Arc::new(Bank::new_from_parent(
-            &bank2,
-            &no_collector,
-            bank2.slot() + 1,
-        ));
-        assert_eq!(bank3.enable_stake_rewrite(), false);
     }
 
     #[test]
