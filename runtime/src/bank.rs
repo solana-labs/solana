@@ -8739,8 +8739,8 @@ pub(crate) mod tests {
         assert_eq!(transaction_balances_set.pre_balances.len(), 3);
         assert_eq!(transaction_balances_set.post_balances.len(), 3);
 
-        assert_eq!(transaction_token_balances_set.pre_token_balances.len(), 0);
-        assert_eq!(transaction_token_balances_set.post_token_balances.len(), 0);
+        assert_eq!(transaction_token_balances_set.pre_token_balances.len(), 3);
+        assert_eq!(transaction_token_balances_set.post_token_balances.len(), 3);
 
         assert!(transaction_results.processing_results[0].0.is_ok());
         assert_eq!(transaction_balances_set.pre_balances[0], vec![8, 11, 1]);

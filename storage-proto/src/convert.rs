@@ -279,12 +279,12 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
         let pre_token_balances = pre_token_balances
             .unwrap_or_default()
             .into_iter()
-            .map(|bal| bal.into())
+            .map(|balance| balance.into())
             .collect();
         let post_token_balances = post_token_balances
             .unwrap_or_default()
             .into_iter()
-            .map(|bal| bal.into())
+            .map(|balance| balance.into())
             .collect();
 
         Self {
@@ -328,13 +328,13 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
         let pre_token_balances = Some(
             pre_token_balances
                 .into_iter()
-                .map(|bal| bal.into())
+                .map(|balance| balance.into())
                 .collect(),
         );
         let post_token_balances = Some(
             post_token_balances
                 .into_iter()
-                .map(|bal| bal.into())
+                .map(|balance| balance.into())
                 .collect(),
         );
         Ok(Self {
