@@ -113,19 +113,10 @@ for file in "${TARBALL_BASENAME}"-$TARGET.tar.bz2 "${TARBALL_BASENAME}"-$TARGET.
 
   if [[ -n $BUILDKITE ]]; then
     echo --- AWS S3 Store: "$file"
-    (
-      set -x
-      $DRYRUN docker run \
-        --rm \
-        --env AWS_ACCESS_KEY_ID \
-        --env AWS_SECRET_ACCESS_KEY \
-        --volume "$PWD:/solana" \
-        eremite/aws-cli:2018.12.18 \
-        /usr/bin/s3cmd --acl-public put /solana/"$file" s3://release.solana.com/"$CHANNEL_OR_TAG"/"$file"
+    upload-s3-artifact "/solana/$file" s3://release.solana.com/"$CHANNEL_OR_TAG"/"$file"
 
-      echo Published to:
-      $DRYRUN ci/format-url.sh https://release.solana.com/"$CHANNEL_OR_TAG"/"$file"
-    )
+    echo Published to:
+    $DRYRUN ci/format-url.sh https://release.solana.com/"$CHANNEL_OR_TAG"/"$file"
 
     if [[ -n $TAG ]]; then
       ci/upload-github-release-asset.sh "$file"
@@ -149,7 +140,9 @@ done
 
 
 # Create install wrapper for release.solana.com
-if [[ -n $BUILDKITE ]]; then
+if [[ -n $DO_NOT_PUBLISH_TAR ]]; then
+  echo "Skipping publishing install wrapper"
+elif [[ -n $BUILDKITE ]]; then
   cat > release.solana.com-install <<EOF
 SOLANA_RELEASE=$CHANNEL_OR_TAG
 SOLANA_INSTALL_INIT_ARGS=$CHANNEL_OR_TAG
@@ -158,19 +151,9 @@ EOF
   cat install/solana-install-init.sh >> release.solana.com-install
 
   echo --- AWS S3 Store: "install"
-  (
-    set -x
-    $DRYRUN docker run \
-      --rm \
-      --env AWS_ACCESS_KEY_ID \
-      --env AWS_SECRET_ACCESS_KEY \
-      --volume "$PWD:/solana" \
-      eremite/aws-cli:2018.12.18 \
-      /usr/bin/s3cmd --acl-public put /solana/release.solana.com-install s3://release.solana.com/"$CHANNEL_OR_TAG"/install
-
-    echo Published to:
-    $DRYRUN ci/format-url.sh https://release.solana.com/"$CHANNEL_OR_TAG"/install
-  )
+  $DRYRUN upload-s3-artifact "/solana/release.solana.com-install" "s3://release.solana.com/$CHANNEL_OR_TAG/install"
+  echo Published to:
+  $DRYRUN ci/format-url.sh https://release.solana.com/"$CHANNEL_OR_TAG"/install
 fi
 
 echo --- ok
