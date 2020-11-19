@@ -3046,6 +3046,8 @@ impl Bank {
         let partition_width = (PREFIX_MAX - partition_count + 1) / partition_count + 1;
         let mut start_key_prefix = if start_index == 0 && end_index == 0 {
             0
+        } else if start_index + 1 == partition_count {
+            PREFIX_MAX
         } else {
             (start_index + 1) * partition_width
         };
@@ -5646,6 +5648,38 @@ pub(crate) mod tests {
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
                 ])
         );
+
+        fn should_cause_overflow(partition_count: u64) -> bool {
+            // Check `partition_width = (u64::max_value() + 1) / partition_count` is exact and
+            // does not have a remainder.
+            // This way, `partition_width * partition_count == (u64::max_value() + 1)`,
+            // so the test actually tests for overflow
+            (u64::max_value() - partition_count + 1) % partition_count == 0
+        }
+
+        let max_exact = 64;
+        // Make sure `max_exact` divides evenly when calculating `calculate_partition_width`
+        assert!(should_cause_overflow(max_exact));
+        // Make sure `max_unexact` doesn't divide evenly when calculating `calculate_partition_width`
+        let max_unexact = 10;
+        assert!(!should_cause_overflow(max_unexact));
+
+        for max in &[max_exact, max_unexact] {
+            let range = Bank::pubkey_range_from_partition((max - 1, max - 1, *max));
+            assert_eq!(
+                range,
+                Pubkey::new_from_array([
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+                ])
+                    ..=Pubkey::new_from_array([
+                        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+                    ])
+            );
+        }
     }
 
     fn map_to_test_bad_range() -> AccountMap<Pubkey, i8> {
