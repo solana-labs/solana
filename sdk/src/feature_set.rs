@@ -86,6 +86,10 @@ pub mod stake_program_v2 {
     solana_sdk::declare_id!("Gvd9gGJZDHGMNf1b3jkxrfBQSR5etrfTQSBNKCvLSFJN");
 }
 
+pub mod rewrite_stake {
+    solana_sdk::declare_id!("6ap2eGy7wx5JmsWUmQ5sHwEWrFSDUxSti2k5Hbfv5BZG");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -109,6 +113,7 @@ lazy_static! {
         (pull_request_ping_pong_check::id(), "ping-pong packet check #12794"),
         (timestamp_bounding::id(), "add timestamp-correction bounding #13120"),
         (stake_program_v2::id(), "solana_stake_program v2"),
+        (rewrite_stake::id(), "rewrite stake"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
