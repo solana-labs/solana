@@ -1055,31 +1055,12 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             return Err(InstructionError::IncorrectProgramId);
         }
 
-        let meta = match self.state()? {
-            StakeState::Stake(meta, stake) => {
-                // stake must be fully de-activated
-                if stake.stake(clock.epoch, Some(stake_history), true) != 0 {
-                    return Err(StakeError::MergeActivatedStake.into());
-                }
-                meta
-            }
-            StakeState::Initialized(meta) => meta,
-            _ => return Err(InstructionError::InvalidAccountData),
-        };
+        let meta = get_info_if_mergable(self, clock, stake_history)?;
+
         // Authorized staker is allowed to split/merge accounts
         meta.authorized.check(signers, StakeAuthorize::Staker)?;
 
-        let source_meta = match source_stake.state()? {
-            StakeState::Stake(meta, stake) => {
-                // stake must be fully de-activated
-                if stake.stake(clock.epoch, Some(stake_history), true) != 0 {
-                    return Err(StakeError::MergeActivatedStake.into());
-                }
-                meta
-            }
-            StakeState::Initialized(meta) => meta,
-            _ => return Err(InstructionError::InvalidAccountData),
-        };
+        let source_meta = get_info_if_mergable(source_stake, clock, stake_history)?;
 
         // Meta must match for both accounts
         if meta != source_meta {
@@ -1168,6 +1149,23 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     }
 }
 
+fn get_info_if_mergable(
+    stake_keyed_account: &KeyedAccount,
+    clock: &Clock,
+    stake_history: &StakeHistory,
+) -> Result<Meta, InstructionError> {
+    match stake_keyed_account.state()? {
+        StakeState::Stake(meta, stake) => {
+            // stake must be fully de-activated
+            if stake.stake(clock.epoch, Some(stake_history), true) != 0 {
+                return Err(StakeError::MergeActivatedStake.into());
+            }
+            Ok(meta)
+        }
+        StakeState::Initialized(meta) => Ok(meta),
+        _ => Err(InstructionError::InvalidAccountData),
+    }
+}
 // utility function, used by runtime
 // returns a tuple of (stakers_reward,voters_reward)
 pub fn redeem_rewards(
