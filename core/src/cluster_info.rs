@@ -3403,6 +3403,13 @@ mod tests {
             let socket = new_rand_socket_addr(&mut rng);
             assert!(Packet::from_data(&socket, prune_message).is_ok());
         }
+        // Assert that MAX_PRUNE_DATA_NODES is highest possible.
+        let self_keypair = Keypair::new();
+        let prune_data =
+            PruneData::new_rand(&mut rng, &self_keypair, Some(MAX_PRUNE_DATA_NODES + 1));
+        let prune_message = Protocol::PruneMessage(self_keypair.pubkey(), prune_data);
+        let socket = new_rand_socket_addr(&mut rng);
+        assert!(Packet::from_data(&socket, prune_message).is_err());
     }
 
     #[test]
