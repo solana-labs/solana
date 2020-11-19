@@ -2052,7 +2052,15 @@ fn main() {
                                     feature_account_balance,
                                 ),
                             );
+                            base_bank.store_account(
+                                &feature_set::rewrite_stake::id(),
+                                &feature::create_account(
+                                    &Feature { activated_at: None },
+                                    feature_account_balance,
+                                ),
+                            );
 
+                            let mut store_failed_count = 0;
                             if base_bank
                                 .get_account(&feature_set::secp256k1_program_enabled::id())
                                 .is_some()
@@ -2064,6 +2072,21 @@ fn main() {
                                     &Account::default(),
                                 );
                             } else {
+                                store_failed_count += 1;
+                            }
+
+                            if base_bank
+                                .get_account(&feature_set::instructions_sysvar_enabled::id())
+                                .is_some()
+                            {
+                                base_bank.store_account(
+                                    &feature_set::instructions_sysvar_enabled::id(),
+                                    &Account::default(),
+                                );
+                            } else {
+                                store_failed_count += 1;
+                            }
+                            if store_failed_count >= 1 {
                                 // we have no choice; maybe locally created blank cluster with
                                 // not-Development cluster type.
                                 let old_cap = base_bank.set_capitalization();
@@ -2073,7 +2096,10 @@ fn main() {
                                      requested: increasing {} from {} to {}",
                                     feature_account_balance, old_cap, new_cap,
                                 );
-                                assert_eq!(old_cap + feature_account_balance, new_cap);
+                                assert_eq!(
+                                    old_cap + feature_account_balance * store_failed_count,
+                                    new_cap
+                                );
                             }
                         }
 
