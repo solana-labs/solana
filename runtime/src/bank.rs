@@ -1350,6 +1350,17 @@ impl Bank {
             })
     }
 
+    fn get_inflation_num_slots(&self) -> u64 {
+        let inflation_activation_slot = self.get_inflation_start_slot();
+        // Normalize inflation_start to align with the start of rewards accrual.
+        let inflation_start_slot = self.epoch_schedule.get_first_slot_in_epoch(
+            self.epoch_schedule
+                .get_epoch(inflation_activation_slot)
+                .saturating_sub(1),
+        );
+        self.epoch_schedule.get_first_slot_in_epoch(self.epoch()) - inflation_start_slot
+    }
+
     // update rewards based on the previous epoch
     fn update_rewards(
         &mut self,
@@ -1361,9 +1372,8 @@ impl Bank {
         }
         // if I'm the first Bank in an epoch, count, claim, disburse rewards from Inflation
 
-        // calculated as: prev_slot / (slots / year)
-        let num_slots = self.epoch_schedule.get_last_slot_in_epoch(prev_epoch)
-            - self.get_inflation_start_slot();
+        // calculated as: num_slots / (slots / year)
+        let num_slots = self.get_inflation_num_slots();
         let slot_in_year = num_slots as f64 / self.slots_per_year;
 
         let epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
@@ -10775,5 +10785,83 @@ pub(crate) mod tests {
             bank.get_inflation_start_slot(),
             full_inflation_activation_slot
         );
+    }
+
+    #[test]
+    fn test_get_inflation_num_slots_with_activations() {
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config_with_leader(42, &solana_sdk::pubkey::new_rand(), 42);
+        let slots_per_epoch = 32;
+        genesis_config.epoch_schedule = EpochSchedule::new(slots_per_epoch);
+        genesis_config
+            .accounts
+            .remove(&feature_set::pico_inflation::id())
+            .unwrap();
+        genesis_config
+            .accounts
+            .remove(&feature_set::full_inflation::id())
+            .unwrap();
+        let mut bank = Bank::new(&genesis_config);
+        assert_eq!(bank.get_inflation_num_slots(), 0);
+        for _ in 0..2 * slots_per_epoch {
+            bank = new_from_parent(&Arc::new(bank));
+        }
+        assert_eq!(bank.get_inflation_num_slots(), 2 * slots_per_epoch);
+
+        // Activate pico_inflation
+        let pico_inflation_activation_slot = bank.slot();
+        bank.store_account(
+            &feature_set::pico_inflation::id(),
+            &feature::create_account(
+                &Feature {
+                    activated_at: Some(pico_inflation_activation_slot),
+                },
+                42,
+            ),
+        );
+        bank.compute_active_feature_set(true);
+        assert_eq!(bank.get_inflation_num_slots(), slots_per_epoch);
+        for _ in 0..slots_per_epoch {
+            bank = new_from_parent(&Arc::new(bank));
+        }
+        assert_eq!(bank.get_inflation_num_slots(), 2 * slots_per_epoch);
+
+        // Activate full_inflation
+        let full_inflation_activation_slot = bank.slot();
+        bank.store_account(
+            &feature_set::full_inflation::id(),
+            &feature::create_account(
+                &Feature {
+                    activated_at: Some(full_inflation_activation_slot),
+                },
+                42,
+            ),
+        );
+        bank.compute_active_feature_set(true);
+        assert_eq!(bank.get_inflation_num_slots(), slots_per_epoch);
+        for _ in 0..slots_per_epoch {
+            bank = new_from_parent(&Arc::new(bank));
+        }
+        assert_eq!(bank.get_inflation_num_slots(), 2 * slots_per_epoch);
+    }
+
+    #[test]
+    fn test_get_inflation_num_slots_already_activated() {
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config_with_leader(42, &solana_sdk::pubkey::new_rand(), 42);
+        let slots_per_epoch = 32;
+        genesis_config.epoch_schedule = EpochSchedule::new(slots_per_epoch);
+        let mut bank = Bank::new(&genesis_config);
+        assert_eq!(bank.get_inflation_num_slots(), 0);
+        for _ in 0..slots_per_epoch {
+            bank = new_from_parent(&Arc::new(bank));
+        }
+        assert_eq!(bank.get_inflation_num_slots(), slots_per_epoch);
+        for _ in 0..slots_per_epoch {
+            bank = new_from_parent(&Arc::new(bank));
+        }
+        assert_eq!(bank.get_inflation_num_slots(), 2 * slots_per_epoch);
     }
 }
