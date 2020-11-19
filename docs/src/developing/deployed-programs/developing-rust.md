@@ -210,7 +210,7 @@ Rust programs implement the heap directly by defining a custom
 [`global_allocator`](https://github.com/solana-labs/solana/blob/8330123861a719cd7a79af0544617896e7f00ce3/sdk/program/src/entrypoint.rs#L50)
 
 Programs may implement their own `global_allocator` based on its specific needs.
-Refer to the [custom heap example](#custom-heap) for more information.
+Refer to the [custom heap example](#examples) for more information.
 
 ## Restrictions
 
@@ -297,7 +297,7 @@ info!(&format!("Some varialbe: {:?}", variable));
 ```
 
 The [debugging](debugging.md#logging) section has more information about working
-with program logs.
+with program logs the [Rust examples](#examples) contains a logging example.
 
 ## Panicking
 
