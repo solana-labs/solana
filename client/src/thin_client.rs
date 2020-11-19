@@ -3,7 +3,7 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
-use crate::{rpc_client::RpcClient, rpc_response::Response};
+use crate::{rpc_client::RpcClient, rpc_config::RpcProgramAccountsConfig, rpc_response::Response};
 use bincode::{serialize_into, serialized_size};
 use log::*;
 use solana_sdk::{
@@ -276,9 +276,13 @@ impl ThinClient {
         )
     }
 
-    pub fn get_program_accounts(&self, pubkey: &Pubkey) -> TransportResult<Vec<(Pubkey, Account)>> {
+    pub fn get_program_accounts_with_config(
+        &self,
+        pubkey: &Pubkey,
+        config: RpcProgramAccountsConfig,
+    ) -> TransportResult<Vec<(Pubkey, Account)>> {
         self.rpc_client()
-            .get_program_accounts(pubkey)
+            .get_program_accounts_with_config(pubkey, config)
             .map_err(|e| e.into())
     }
 

@@ -3636,13 +3636,13 @@ impl Bank {
             .map(|(acc, _slot)| acc)
     }
 
-    pub fn get_program_accounts(self: &Arc<Self>, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
+    pub fn get_program_accounts(&self, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
         self.rc
             .accounts
             .load_by_program(&self.ancestors, program_id)
     }
 
-    pub fn get_all_accounts_with_modified_slots(self: &Arc<Self>) -> Vec<(Pubkey, Account, Slot)> {
+    pub fn get_all_accounts_with_modified_slots(&self) -> Vec<(Pubkey, Account, Slot)> {
         self.rc.accounts.load_all(&self.ancestors)
     }
 

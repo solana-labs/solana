@@ -70,7 +70,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
                 continue;
             }
             let client = create_client(validator.client_facing_addr(), VALIDATOR_PORT_RANGE);
-            client.poll_for_signature_confirmation(&sig, confs).unwrap();
+            client.poll_for_signature(&sig).unwrap();
         }
     }
 }
