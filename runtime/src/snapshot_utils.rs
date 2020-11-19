@@ -653,16 +653,17 @@ pub fn get_snapshot_archive_path<P: AsRef<Path>>(
 
 fn compression_type_from_str(compress: &str) -> Option<CompressionType> {
     match compress {
-        "bz2" => Some(CompressionType::Bzip2),
-        "gz" => Some(CompressionType::Gzip),
-        "zst" => Some(CompressionType::Zstd),
+        "tar.bz2" => Some(CompressionType::Bzip2),
+        "tar.gz" => Some(CompressionType::Gzip),
+        "tar.zst" => Some(CompressionType::Zstd),
+        "tar" => Some(CompressionType::NoCompression),
         _ => None,
     }
 }
 
 fn snapshot_hash_of(archive_filename: &str) -> Option<(Slot, Hash, CompressionType)> {
     let snapshot_filename_regex =
-        Regex::new(r"snapshot-(\d+)-([[:alnum:]]+)\.tar\.(bz2|zst|gz)$").unwrap();
+        Regex::new(r"snapshot-(\d+)-([[:alnum:]]+)\.(tar|tar\.bz2|tar\.zst|tar\.gz)$").unwrap();
 
     if let Some(captures) = snapshot_filename_regex.captures(archive_filename) {
         let slot_str = captures.get(1).unwrap().as_str();
@@ -1023,6 +1024,10 @@ mod tests {
         assert_eq!(
             snapshot_hash_of(&format!("snapshot-43-{}.tar.zst", Hash::default())),
             Some((43, Hash::default(), CompressionType::Zstd))
+        );
+        assert_eq!(
+            snapshot_hash_of(&format!("snapshot-42-{}.tar", Hash::default())),
+            Some((42, Hash::default(), CompressionType::NoCompression))
         );
 
         assert!(snapshot_hash_of("invalid").is_none());
