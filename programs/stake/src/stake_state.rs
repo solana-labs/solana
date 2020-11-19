@@ -242,6 +242,7 @@ impl Delegation {
             .0
     }
 
+    // returned tuple is (effective, activating, deactivating) stake
     #[allow(clippy::comparison_chain)]
     pub fn stake_activating_and_deactivating(
         &self,
@@ -325,6 +326,7 @@ impl Delegation {
         }
     }
 
+    // returned tuple is (effective, activating) stake
     fn stake_and_activating(
         &self,
         target_epoch: Epoch,
@@ -1055,16 +1057,16 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             return Err(InstructionError::IncorrectProgramId);
         }
 
-        let meta = get_info_if_mergable(self, clock, stake_history)?;
+        let stake_merge_kind = MergeKind::get_if_mergeable(self, clock, stake_history)?;
+        let meta = stake_merge_kind.meta();
 
         // Authorized staker is allowed to split/merge accounts
         meta.authorized.check(signers, StakeAuthorize::Staker)?;
 
-        let source_meta = get_info_if_mergable(source_account, clock, stake_history)?;
+        let source_merge_kind = MergeKind::get_if_mergeable(source_account, clock, stake_history)?;
 
-        // Meta must match for both accounts
-        if meta != source_meta {
-            return Err(StakeError::MergeMismatch.into());
+        if let Some(merged_state) = stake_merge_kind.merge(source_merge_kind)? {
+            self.set_state(&merged_state)?;
         }
 
         // Drain the source stake account
@@ -1149,23 +1151,137 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     }
 }
 
-fn get_info_if_mergable(
-    stake_keyed_account: &KeyedAccount,
-    clock: &Clock,
-    stake_history: &StakeHistory,
-) -> Result<Meta, InstructionError> {
-    match stake_keyed_account.state()? {
-        StakeState::Stake(meta, stake) => {
-            // stake must be fully de-activated
-            if stake.stake(clock.epoch, Some(stake_history), true) != 0 {
-                return Err(StakeError::MergeActivatedStake.into());
-            }
-            Ok(meta)
+#[derive(Clone, Debug, PartialEq)]
+enum MergeKind {
+    Inactive(Meta, u64),
+    ActivationEpoch(Meta, Stake),
+    FullyActive(Meta, Stake),
+}
+
+impl MergeKind {
+    fn meta(&self) -> &Meta {
+        match self {
+            Self::Inactive(meta, _) => meta,
+            Self::ActivationEpoch(meta, _) => meta,
+            Self::FullyActive(meta, _) => meta,
         }
-        StakeState::Initialized(meta) => Ok(meta),
-        _ => Err(InstructionError::InvalidAccountData),
+    }
+
+    fn active_stake(&self) -> Option<&Stake> {
+        match self {
+            Self::Inactive(_, _) => None,
+            Self::ActivationEpoch(_, stake) => Some(stake),
+            Self::FullyActive(_, stake) => Some(stake),
+        }
+    }
+
+    fn get_if_mergeable(
+        stake_keyed_account: &KeyedAccount,
+        clock: &Clock,
+        stake_history: &StakeHistory,
+    ) -> Result<Self, InstructionError> {
+        match stake_keyed_account.state()? {
+            StakeState::Stake(meta, stake) => {
+                // stake must not be in a transient state. Transient here meaning
+                // activating or deactivating with non-zero effective stake.
+                match stake.delegation.stake_activating_and_deactivating(
+                    clock.epoch,
+                    Some(stake_history),
+                    true,
+                ) {
+                    /*
+                    (e, a, d): e - effective, a - activating, d - deactivating */
+                    (0, 0, 0) => Ok(Self::Inactive(meta, stake_keyed_account.lamports()?)),
+                    (0, _, _) => Ok(Self::ActivationEpoch(meta, stake)),
+                    (_, 0, 0) => Ok(Self::FullyActive(meta, stake)),
+                    _ => Err(StakeError::MergeTransientStake.into()),
+                }
+            }
+            StakeState::Initialized(meta) => {
+                Ok(Self::Inactive(meta, stake_keyed_account.lamports()?))
+            }
+            _ => Err(InstructionError::InvalidAccountData),
+        }
+    }
+
+    fn metas_can_merge(stake: &Meta, source: &Meta) -> Result<(), InstructionError> {
+        // `rent_exempt_reserve` has no bearing on the mergeability of accounts,
+        // as the source account will be culled by runtime once the operation
+        // succeeds. Considering it here would needlessly prevent merging stake
+        // accounts with differing data lengths, which already exist in the wild
+        // due to an SDK bug
+        if stake.authorized == source.authorized && stake.lockup == source.lockup {
+            Ok(())
+        } else {
+            Err(StakeError::MergeMismatch.into())
+        }
+    }
+
+    fn active_delegations_can_merge(
+        stake: &Delegation,
+        source: &Delegation,
+    ) -> Result<(), InstructionError> {
+        if stake.voter_pubkey == source.voter_pubkey
+            && (stake.warmup_cooldown_rate - source.warmup_cooldown_rate).abs() < f64::EPSILON
+            && stake.deactivation_epoch == Epoch::MAX
+            && source.deactivation_epoch == Epoch::MAX
+        {
+            Ok(())
+        } else {
+            Err(StakeError::MergeMismatch.into())
+        }
+    }
+
+    fn active_stakes_can_merge(stake: &Stake, source: &Stake) -> Result<(), InstructionError> {
+        Self::active_delegations_can_merge(&stake.delegation, &source.delegation)?;
+        // `credits_observed` MUST match to prevent earning multiple rewards
+        // from a stake account by merging it into another stake account that
+        // is small enough to not be paid out every epoch. This would effectively
+        // reset the larger stake accounts `credits_observed` to that of the
+        // smaller account.
+        if stake.credits_observed == source.credits_observed {
+            Ok(())
+        } else {
+            Err(StakeError::MergeMismatch.into())
+        }
+    }
+
+    fn merge(self, source: Self) -> Result<Option<StakeState>, InstructionError> {
+        Self::metas_can_merge(self.meta(), source.meta())?;
+        self.active_stake()
+            .zip(source.active_stake())
+            .map(|(stake, source)| Self::active_stakes_can_merge(stake, source))
+            .unwrap_or(Ok(()))?;
+        let merged_state = match (self, source) {
+            (Self::Inactive(_, _), Self::Inactive(_, _)) => None,
+            (Self::Inactive(_, _), Self::ActivationEpoch(_, _)) => None,
+            (Self::ActivationEpoch(meta, mut stake), Self::Inactive(_, source_lamports)) => {
+                stake.delegation.stake += source_lamports;
+                Some(StakeState::Stake(meta, stake))
+            }
+            (
+                Self::ActivationEpoch(meta, mut stake),
+                Self::ActivationEpoch(source_meta, source_stake),
+            ) => {
+                let source_lamports =
+                    source_meta.rent_exempt_reserve + source_stake.delegation.stake;
+                stake.delegation.stake += source_lamports;
+                Some(StakeState::Stake(meta, stake))
+            }
+            (Self::FullyActive(meta, mut stake), Self::FullyActive(_, source_stake)) => {
+                // Don't stake the source account's `rent_exempt_reserve` to
+                // protect against the magic activation loophole. It will
+                // instead be moved into the destination account as extra,
+                // withdrawable `lamports`
+                stake.delegation.stake += source_stake.delegation.stake;
+                Some(StakeState::Stake(meta, stake))
+            }
+            _ => return Err(StakeError::MergeMismatch.into()),
+        };
+        Ok(merged_state)
     }
 }
+
 // utility function, used by runtime
 // returns a tuple of (stakers_reward,voters_reward)
 pub fn redeem_rewards(
@@ -4689,55 +4805,247 @@ mod tests {
 
     #[test]
     fn test_merge_active_stake() {
-        let stake_pubkey = solana_sdk::pubkey::new_rand();
-        let source_stake_pubkey = solana_sdk::pubkey::new_rand();
-        let authorized_pubkey = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
+        let base_lamports = 4242424242;
+        let stake_address = Pubkey::new_unique();
+        let source_address = Pubkey::new_unique();
+        let authority_pubkey = Pubkey::new_unique();
+        let signers = HashSet::from_iter(vec![authority_pubkey]);
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let stake_amount = base_lamports;
+        let stake_lamports = rent_exempt_reserve + stake_amount;
+        let source_amount = base_lamports;
+        let source_lamports = rent_exempt_reserve + source_amount;
 
-        let signers = vec![authorized_pubkey].into_iter().collect();
+        let meta = Meta {
+            rent_exempt_reserve,
+            ..Meta::auto(&authority_pubkey)
+        };
+        let mut stake = Stake {
+            delegation: Delegation {
+                stake: stake_amount,
+                activation_epoch: 0,
+                ..Delegation::default()
+            },
+            ..Stake::default()
+        };
+        let stake_account = Account::new_ref_data_with_space(
+            stake_lamports,
+            &StakeState::Stake(meta, stake),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
+        let stake_keyed_account = KeyedAccount::new(&stake_address, true, &stake_account);
 
-        for state in &[
-            StakeState::Initialized(Meta::auto(&authorized_pubkey)),
-            StakeState::Stake(
-                Meta::auto(&authorized_pubkey),
-                Stake::just_bootstrap_stake(stake_lamports),
-            ),
-        ] {
-            for source_state in &[StakeState::Stake(
-                Meta::auto(&authorized_pubkey),
-                Stake::just_bootstrap_stake(stake_lamports),
-            )] {
-                let stake_account = Account::new_ref_data_with_space(
-                    stake_lamports,
-                    state,
-                    std::mem::size_of::<StakeState>(),
-                    &id(),
-                )
-                .expect("stake_account");
-                let stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &stake_account);
+        let source_activation_epoch = 2;
+        let mut source_stake = Stake {
+            delegation: Delegation {
+                stake: source_amount,
+                activation_epoch: source_activation_epoch,
+                ..stake.delegation
+            },
+            ..stake
+        };
+        let source_account = Account::new_ref_data_with_space(
+            source_lamports,
+            &StakeState::Stake(meta, source_stake),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("source_account");
+        let source_keyed_account = KeyedAccount::new(&source_address, true, &source_account);
 
-                let source_stake_account = Account::new_ref_data_with_space(
-                    stake_lamports,
-                    source_state,
-                    std::mem::size_of::<StakeState>(),
-                    &id(),
-                )
-                .expect("source_stake_account");
-                let source_stake_keyed_account =
-                    KeyedAccount::new(&source_stake_pubkey, true, &source_stake_account);
+        let mut clock = Clock::default();
+        let mut stake_history = StakeHistory::default();
 
-                // Authorized staker signature required...
-                assert_eq!(
-                    stake_keyed_account.merge(
-                        &source_stake_keyed_account,
-                        &Clock::default(),
-                        &StakeHistory::default(),
-                        &signers,
-                    ),
-                    Err(StakeError::MergeActivatedStake.into())
-                );
-            }
+        clock.epoch = 0;
+        let mut effective = base_lamports;
+        let mut activating = stake_amount;
+        let mut deactivating = 0;
+        stake_history.add(
+            clock.epoch,
+            StakeHistoryEntry {
+                effective,
+                activating,
+                deactivating,
+            },
+        );
+
+        fn try_merge(
+            stake_account: &KeyedAccount,
+            source_account: &KeyedAccount,
+            clock: &Clock,
+            stake_history: &StakeHistory,
+            signers: &HashSet<Pubkey>,
+        ) -> Result<(), InstructionError> {
+            let test_stake_account = stake_account.account.clone();
+            let test_stake_keyed =
+                KeyedAccount::new(stake_account.unsigned_key(), true, &test_stake_account);
+            let test_source_account = source_account.account.clone();
+            let test_source_keyed =
+                KeyedAccount::new(source_account.unsigned_key(), true, &test_source_account);
+
+            test_stake_keyed.merge(&test_source_keyed, clock, stake_history, signers)
         }
+
+        // stake activation epoch, source initialized succeeds
+        assert!(try_merge(
+            &stake_keyed_account,
+            &source_keyed_account,
+            &clock,
+            &stake_history,
+            &signers
+        )
+        .is_ok(),);
+        assert!(try_merge(
+            &source_keyed_account,
+            &stake_keyed_account,
+            &clock,
+            &stake_history,
+            &signers
+        )
+        .is_ok(),);
+
+        // both activating fails
+        loop {
+            clock.epoch += 1;
+            if clock.epoch == source_activation_epoch {
+                activating += source_amount;
+            }
+            let delta =
+                activating.min((effective as f64 * stake.delegation.warmup_cooldown_rate) as u64);
+            effective += delta;
+            activating -= delta;
+            stake_history.add(
+                clock.epoch,
+                StakeHistoryEntry {
+                    effective,
+                    activating,
+                    deactivating,
+                },
+            );
+            if stake_amount == stake.stake(clock.epoch, Some(&stake_history), true)
+                && source_amount == source_stake.stake(clock.epoch, Some(&stake_history), true)
+            {
+                break;
+            }
+            assert_eq!(
+                try_merge(
+                    &stake_keyed_account,
+                    &source_keyed_account,
+                    &clock,
+                    &stake_history,
+                    &signers
+                )
+                .unwrap_err(),
+                InstructionError::from(StakeError::MergeTransientStake),
+            );
+            assert_eq!(
+                try_merge(
+                    &source_keyed_account,
+                    &stake_keyed_account,
+                    &clock,
+                    &stake_history,
+                    &signers
+                )
+                .unwrap_err(),
+                InstructionError::from(StakeError::MergeTransientStake),
+            );
+        }
+        // Both fully activated works
+        assert!(try_merge(
+            &stake_keyed_account,
+            &source_keyed_account,
+            &clock,
+            &stake_history,
+            &signers
+        )
+        .is_ok(),);
+
+        // deactivate setup for deactivation
+        let source_deactivation_epoch = clock.epoch + 1;
+        let stake_deactivation_epoch = clock.epoch + 2;
+
+        // active/deactivating and deactivating/inactive mismatches fail
+        loop {
+            clock.epoch += 1;
+            let delta =
+                deactivating.min((effective as f64 * stake.delegation.warmup_cooldown_rate) as u64);
+            effective -= delta;
+            deactivating -= delta;
+            if clock.epoch == stake_deactivation_epoch {
+                deactivating += stake_amount;
+                stake = Stake {
+                    delegation: Delegation {
+                        deactivation_epoch: stake_deactivation_epoch,
+                        ..stake.delegation
+                    },
+                    ..stake
+                };
+                stake_keyed_account
+                    .set_state(&StakeState::Stake(meta, stake))
+                    .unwrap();
+            }
+            if clock.epoch == source_deactivation_epoch {
+                deactivating += source_amount;
+                source_stake = Stake {
+                    delegation: Delegation {
+                        deactivation_epoch: source_deactivation_epoch,
+                        ..source_stake.delegation
+                    },
+                    ..source_stake
+                };
+                source_keyed_account
+                    .set_state(&StakeState::Stake(meta, source_stake))
+                    .unwrap();
+            }
+            stake_history.add(
+                clock.epoch,
+                StakeHistoryEntry {
+                    effective,
+                    activating,
+                    deactivating,
+                },
+            );
+            if 0 == stake.stake(clock.epoch, Some(&stake_history), true)
+                && 0 == source_stake.stake(clock.epoch, Some(&stake_history), true)
+            {
+                break;
+            }
+            assert_eq!(
+                try_merge(
+                    &stake_keyed_account,
+                    &source_keyed_account,
+                    &clock,
+                    &stake_history,
+                    &signers
+                )
+                .unwrap_err(),
+                InstructionError::from(StakeError::MergeTransientStake),
+            );
+            assert_eq!(
+                try_merge(
+                    &source_keyed_account,
+                    &stake_keyed_account,
+                    &clock,
+                    &stake_history,
+                    &signers
+                )
+                .unwrap_err(),
+                InstructionError::from(StakeError::MergeTransientStake),
+            );
+        }
+
+        // Both fully deactivated works
+        assert!(try_merge(
+            &stake_keyed_account,
+            &source_keyed_account,
+            &clock,
+            &stake_history,
+            &signers
+        )
+        .is_ok(),);
     }
 
     #[test]
@@ -5184,5 +5492,364 @@ mod tests {
             ),
             rent_exempt_reserve
         );
+    }
+
+    #[test]
+    fn test_things_can_merge() {
+        let good_stake = Stake {
+            credits_observed: 4242,
+            delegation: Delegation {
+                voter_pubkey: Pubkey::new_unique(),
+                stake: 424242424242,
+                activation_epoch: 42,
+                ..Delegation::default()
+            },
+        };
+
+        let identical = good_stake;
+        assert!(MergeKind::active_stakes_can_merge(&good_stake, &identical).is_ok());
+
+        let bad_credits_observed = Stake {
+            credits_observed: good_stake.credits_observed + 1,
+            ..good_stake
+        };
+        assert!(MergeKind::active_stakes_can_merge(&good_stake, &bad_credits_observed).is_err());
+
+        let good_delegation = good_stake.delegation;
+        let different_stake_ok = Delegation {
+            stake: good_delegation.stake + 1,
+            ..good_delegation
+        };
+        assert!(
+            MergeKind::active_delegations_can_merge(&good_delegation, &different_stake_ok).is_ok()
+        );
+
+        let different_activation_epoch_ok = Delegation {
+            activation_epoch: good_delegation.activation_epoch + 1,
+            ..good_delegation
+        };
+        assert!(MergeKind::active_delegations_can_merge(
+            &good_delegation,
+            &different_activation_epoch_ok
+        )
+        .is_ok());
+
+        let bad_voter = Delegation {
+            voter_pubkey: Pubkey::new_unique(),
+            ..good_delegation
+        };
+        assert!(MergeKind::active_delegations_can_merge(&good_delegation, &bad_voter).is_err());
+
+        let bad_warmup_cooldown_rate = Delegation {
+            warmup_cooldown_rate: good_delegation.warmup_cooldown_rate + f64::EPSILON,
+            ..good_delegation
+        };
+        assert!(MergeKind::active_delegations_can_merge(
+            &good_delegation,
+            &bad_warmup_cooldown_rate
+        )
+        .is_err());
+        assert!(MergeKind::active_delegations_can_merge(
+            &bad_warmup_cooldown_rate,
+            &good_delegation
+        )
+        .is_err());
+
+        let bad_deactivation_epoch = Delegation {
+            deactivation_epoch: 43,
+            ..good_delegation
+        };
+        assert!(
+            MergeKind::active_delegations_can_merge(&good_delegation, &bad_deactivation_epoch)
+                .is_err()
+        );
+        assert!(
+            MergeKind::active_delegations_can_merge(&bad_deactivation_epoch, &good_delegation)
+                .is_err()
+        );
+
+        // Identical Metas can merge
+        assert!(MergeKind::metas_can_merge(&Meta::default(), &Meta::default()).is_ok());
+
+        let mismatched_rent_exempt_reserve_ok = Meta {
+            rent_exempt_reserve: 42,
+            ..Meta::default()
+        };
+        assert_ne!(
+            mismatched_rent_exempt_reserve_ok.rent_exempt_reserve,
+            Meta::default().rent_exempt_reserve
+        );
+        assert!(
+            MergeKind::metas_can_merge(&Meta::default(), &mismatched_rent_exempt_reserve_ok)
+                .is_ok()
+        );
+        assert!(
+            MergeKind::metas_can_merge(&mismatched_rent_exempt_reserve_ok, &Meta::default())
+                .is_ok()
+        );
+
+        let mismatched_authorized_fails = Meta {
+            authorized: Authorized {
+                staker: Pubkey::new_unique(),
+                withdrawer: Pubkey::new_unique(),
+            },
+            ..Meta::default()
+        };
+        assert_ne!(
+            mismatched_authorized_fails.authorized,
+            Meta::default().authorized
+        );
+        assert!(
+            MergeKind::metas_can_merge(&Meta::default(), &mismatched_authorized_fails).is_err()
+        );
+        assert!(
+            MergeKind::metas_can_merge(&mismatched_authorized_fails, &Meta::default()).is_err()
+        );
+
+        let mismatched_lockup_fails = Meta {
+            lockup: Lockup {
+                unix_timestamp: 424242424,
+                epoch: 42,
+                custodian: Pubkey::new_unique(),
+            },
+            ..Meta::default()
+        };
+        assert_ne!(mismatched_lockup_fails.lockup, Meta::default().lockup);
+        assert!(MergeKind::metas_can_merge(&Meta::default(), &mismatched_lockup_fails).is_err());
+        assert!(MergeKind::metas_can_merge(&mismatched_lockup_fails, &Meta::default()).is_err());
+    }
+
+    #[test]
+    fn test_merge_kind_get_if_mergeable() {
+        let authority_pubkey = Pubkey::new_unique();
+        let initial_lamports = 4242424242;
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let stake_lamports = rent_exempt_reserve + initial_lamports;
+
+        let meta = Meta {
+            rent_exempt_reserve,
+            ..Meta::auto(&authority_pubkey)
+        };
+        let stake_account = Account::new_ref_data_with_space(
+            stake_lamports,
+            &StakeState::Uninitialized,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
+        let stake_keyed_account = KeyedAccount::new(&authority_pubkey, true, &stake_account);
+
+        let mut clock = Clock::default();
+        let mut stake_history = StakeHistory::default();
+
+        // Uninitialized state fails
+        assert_eq!(
+            MergeKind::get_if_mergeable(&stake_keyed_account, &clock, &stake_history).unwrap_err(),
+            InstructionError::InvalidAccountData
+        );
+
+        // RewardsPool state fails
+        stake_keyed_account
+            .set_state(&StakeState::RewardsPool)
+            .unwrap();
+        assert_eq!(
+            MergeKind::get_if_mergeable(&stake_keyed_account, &clock, &stake_history).unwrap_err(),
+            InstructionError::InvalidAccountData
+        );
+
+        // Initialized state succeeds
+        stake_keyed_account
+            .set_state(&StakeState::Initialized(meta))
+            .unwrap();
+        assert_eq!(
+            MergeKind::get_if_mergeable(&stake_keyed_account, &clock, &stake_history).unwrap(),
+            MergeKind::Inactive(meta, stake_lamports)
+        );
+
+        clock.epoch = 0;
+        let mut effective = 2 * initial_lamports;
+        let mut activating = 0;
+        let mut deactivating = 0;
+        stake_history.add(
+            clock.epoch,
+            StakeHistoryEntry {
+                effective,
+                activating,
+                deactivating,
+            },
+        );
+
+        clock.epoch += 1;
+        activating = initial_lamports;
+        stake_history.add(
+            clock.epoch,
+            StakeHistoryEntry {
+                effective,
+                activating,
+                deactivating,
+            },
+        );
+
+        let stake = Stake {
+            delegation: Delegation {
+                stake: initial_lamports,
+                activation_epoch: 1,
+                deactivation_epoch: 5,
+                ..Delegation::default()
+            },
+            ..Stake::default()
+        };
+        stake_keyed_account
+            .set_state(&StakeState::Stake(meta, stake))
+            .unwrap();
+        // activation_epoch succeeds
+        assert_eq!(
+            MergeKind::get_if_mergeable(&stake_keyed_account, &clock, &stake_history).unwrap(),
+            MergeKind::ActivationEpoch(meta, stake),
+        );
+
+        // all paritially activated, transient epochs fail
+        loop {
+            clock.epoch += 1;
+            let delta =
+                activating.min((effective as f64 * stake.delegation.warmup_cooldown_rate) as u64);
+            effective += delta;
+            activating -= delta;
+            stake_history.add(
+                clock.epoch,
+                StakeHistoryEntry {
+                    effective,
+                    activating,
+                    deactivating,
+                },
+            );
+            if activating == 0 {
+                break;
+            }
+            assert_eq!(
+                MergeKind::get_if_mergeable(&stake_keyed_account, &clock, &stake_history)
+                    .unwrap_err(),
+                InstructionError::from(StakeError::MergeTransientStake),
+            );
+        }
+
+        // all epochs for which we're fully active succeed
+        while clock.epoch < stake.delegation.deactivation_epoch - 1 {
+            clock.epoch += 1;
+            stake_history.add(
+                clock.epoch,
+                StakeHistoryEntry {
+                    effective,
+                    activating,
+                    deactivating,
+                },
+            );
+            assert_eq!(
+                MergeKind::get_if_mergeable(&stake_keyed_account, &clock, &stake_history).unwrap(),
+                MergeKind::FullyActive(meta, stake),
+            );
+        }
+
+        clock.epoch += 1;
+        deactivating = stake.delegation.stake;
+        stake_history.add(
+            clock.epoch,
+            StakeHistoryEntry {
+                effective,
+                activating,
+                deactivating,
+            },
+        );
+        // deactivation epoch fails, fully transient/deactivating
+        assert_eq!(
+            MergeKind::get_if_mergeable(&stake_keyed_account, &clock, &stake_history).unwrap_err(),
+            InstructionError::from(StakeError::MergeTransientStake),
+        );
+
+        // all transient, deactivating epochs fail
+        loop {
+            clock.epoch += 1;
+            let delta =
+                deactivating.min((effective as f64 * stake.delegation.warmup_cooldown_rate) as u64);
+            effective -= delta;
+            deactivating -= delta;
+            stake_history.add(
+                clock.epoch,
+                StakeHistoryEntry {
+                    effective,
+                    activating,
+                    deactivating,
+                },
+            );
+            if deactivating == 0 {
+                break;
+            }
+            assert_eq!(
+                MergeKind::get_if_mergeable(&stake_keyed_account, &clock, &stake_history)
+                    .unwrap_err(),
+                InstructionError::from(StakeError::MergeTransientStake),
+            );
+        }
+
+        // first fully-deactivated epoch succeeds
+        assert_eq!(
+            MergeKind::get_if_mergeable(&stake_keyed_account, &clock, &stake_history).unwrap(),
+            MergeKind::Inactive(meta, stake_lamports),
+        );
+    }
+
+    #[test]
+    fn test_merge_kind_merge() {
+        let lamports = 424242;
+        let meta = Meta {
+            rent_exempt_reserve: 42,
+            ..Meta::default()
+        };
+        let stake = Stake {
+            delegation: Delegation {
+                stake: 4242,
+                ..Delegation::default()
+            },
+            ..Stake::default()
+        };
+        let inactive = MergeKind::Inactive(Meta::default(), lamports);
+        let activation_epoch = MergeKind::ActivationEpoch(meta, stake);
+        let fully_active = MergeKind::FullyActive(meta, stake);
+
+        assert_eq!(inactive.clone().merge(inactive.clone()).unwrap(), None);
+        assert_eq!(
+            inactive.clone().merge(activation_epoch.clone()).unwrap(),
+            None
+        );
+        assert!(inactive.clone().merge(fully_active.clone()).is_err());
+        assert!(activation_epoch
+            .clone()
+            .merge(fully_active.clone())
+            .is_err());
+        assert!(fully_active.clone().merge(inactive.clone()).is_err());
+        assert!(fully_active
+            .clone()
+            .merge(activation_epoch.clone())
+            .is_err());
+
+        let new_state = activation_epoch.clone().merge(inactive).unwrap().unwrap();
+        let delegation = new_state.delegation().unwrap();
+        assert_eq!(delegation.stake, stake.delegation.stake + lamports);
+
+        let new_state = activation_epoch
+            .clone()
+            .merge(activation_epoch)
+            .unwrap()
+            .unwrap();
+        let delegation = new_state.delegation().unwrap();
+        assert_eq!(
+            delegation.stake,
+            2 * stake.delegation.stake + meta.rent_exempt_reserve
+        );
+
+        let new_state = fully_active.clone().merge(fully_active).unwrap().unwrap();
+        let delegation = new_state.delegation().unwrap();
+        assert_eq!(delegation.stake, 2 * stake.delegation.stake);
     }
 }
