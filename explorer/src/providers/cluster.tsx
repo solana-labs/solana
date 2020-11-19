@@ -134,22 +134,34 @@ export function ClusterProvider({ children }: ClusterProviderProps) {
   const [showModal, setShowModal] = React.useState(false);
   const query = useQuery();
   const cluster = parseQuery(query);
+  const enableCustomUrl = localStorage.getItem("enableCustomUrl") !== null;
+  const customUrl = enableCustomUrl
+    ? query.get("customUrl") || ""
+    : state.customUrl;
   const history = useHistory();
   const location = useLocation();
+
+  // Remove customUrl param if dev setting is disabled
+  React.useEffect(() => {
+    if (!enableCustomUrl) {
+      query.delete("customUrl");
+      history.push({ ...location, search: query.toString() });
+    }
+  }, [enableCustomUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reconnect to cluster when params change
   React.useEffect(() => {
     if (cluster === Cluster.Custom) {
       // Remove cluster param if custom url has not been set
-      if (state.customUrl.length === 0) {
+      if (customUrl.length === 0) {
         query.delete("cluster");
         history.push({ ...location, search: query.toString() });
         return;
       }
     }
 
-    updateCluster(dispatch, cluster, state.customUrl);
-  }, [cluster, state.customUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+    updateCluster(dispatch, cluster, customUrl);
+  }, [cluster, customUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <StateContext.Provider value={state}>
