@@ -642,6 +642,8 @@ impl RpcClient {
         }
     }
 
+    /// Note that `get_account` returns `Err(..)` if the account does not exist whereas
+    /// `get_account_with_commitment` returns `Ok(None)` if the account does not exist.
     pub fn get_account(&self, pubkey: &Pubkey) -> ClientResult<Account> {
         self.get_account_with_commitment(pubkey, self.commitment_config)?
             .value
