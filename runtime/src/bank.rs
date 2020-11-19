@@ -4159,10 +4159,7 @@ impl Bank {
         }
 
         if new_feature_activations.contains(&feature_set::full_inflation::id()) {
-            let mut full_inflation = Inflation::default();
-            full_inflation.foundation = 0.0;
-            full_inflation.foundation_term = 0.0;
-            *self.inflation.write().unwrap() = full_inflation;
+            *self.inflation.write().unwrap() = Inflation::full();
             self.fee_rate_governor.burn_percent = 50; // 50% fee burn
             self.rent_collector.rent.burn_percent = 50; // 50% rent burn
         }
