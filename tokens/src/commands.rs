@@ -138,7 +138,7 @@ fn apply_previous_transactions(
             }
         }
     }
-    allocations.retain(|x| x.amount > 0.5);
+    allocations.retain(|x| x.amount > f64::EPSILON);
 }
 
 fn transfer<S: Signer>(
