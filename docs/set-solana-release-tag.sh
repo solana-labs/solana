@@ -14,6 +14,7 @@ VERSION_FOR_DOCS_RS="${LATEST_SOLANA_RELEASE_VERSION:1}"
 
 set -x
 if [[ -n $CI ]]; then
+  sed --version || { echo "Error: Incompatible version of sed, use gnu sed"; exit 1; }
   find src/ -name \*.md -exec sed -i "s/LATEST_SOLANA_RELEASE_VERSION/$LATEST_SOLANA_RELEASE_VERSION/g" {} \;
   find src/ -name \*.md -exec sed -i "s/VERSION_FOR_DOCS_RS/$VERSION_FOR_DOCS_RS/g" {} \;
 fi
