@@ -4352,6 +4352,7 @@ name = "solana-local-cluster"
 version = "1.5.0"
 dependencies = [
  "assert_matches",
+ "crossbeam-channel",
  "fs_extra",
  "gag",
  "itertools 0.9.0",

@@ -3043,7 +3043,7 @@ pub mod tests {
         assert_eq!(&db.load_slow(&ancestors, &key).unwrap().0, &account1);
 
         let accounts: Vec<Account> =
-            db.scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
+            db.unchecked_scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
                 if let Some(data) = option {
                     accounts.push(data.1);
                 }
@@ -4368,7 +4368,7 @@ pub mod tests {
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         let accounts: Vec<Account> =
-            db.scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
+            db.unchecked_scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
                 if let Some(data) = option {
                     accounts.push(data.1);
                 }
@@ -4377,7 +4377,7 @@ pub mod tests {
 
         let ancestors = vec![(1, 1), (0, 0)].into_iter().collect();
         let accounts: Vec<Account> =
-            db.scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
+            db.unchecked_scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
                 if let Some(data) = option {
                     accounts.push(data.1);
                 }
