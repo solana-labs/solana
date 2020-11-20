@@ -189,6 +189,7 @@ pub fn commitment_of(matches: &ArgMatches<'_>, name: &str) -> Option<CommitmentC
         "recent" => CommitmentConfig::recent(),
         "root" => CommitmentConfig::root(),
         "single" => CommitmentConfig::single(),
+        "singleGossip" => CommitmentConfig::single_gossip(),
         _ => CommitmentConfig::default(),
     })
 }

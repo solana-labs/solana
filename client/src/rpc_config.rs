@@ -73,6 +73,20 @@ pub struct RpcProgramAccountsConfig {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub enum RpcTransactionLogsFilter {
+    All,
+    AllWithVotes,
+    Mentions(Vec<String>), // base58-encoded list of addresses
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcTransactionLogsConfig {
+    pub commitment: Option<CommitmentConfig>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum RpcTokenAccountsFilter {
     Mint(String),
     ProgramId(String),
