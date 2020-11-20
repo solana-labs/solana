@@ -39,7 +39,7 @@ fn test_exchange_local_cluster() {
     } = config;
     let accounts_in_groups = batch_size * account_groups;
 
-    let cluster = LocalCluster::new(&ClusterConfig {
+    let cluster = LocalCluster::new(&mut ClusterConfig {
         node_stakes: vec![100_000; NUM_NODES],
         cluster_lamports: 100_000_000_000_000,
         validator_configs: vec![ValidatorConfig::default(); NUM_NODES],
