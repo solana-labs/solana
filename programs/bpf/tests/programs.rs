@@ -87,8 +87,10 @@ fn run_program(
     let mut instruction_meter = ThisInstructionMeter { compute_meter };
 
     let config = Config {
+        max_call_depth: 20,
+        stack_frame_size: 4096,
+        enable_instruction_meter: true,
         enable_instruction_tracing: true,
-        ..Default::default()
     };
     let mut executable = Executable::from_elf(&data, None, config).unwrap();
     executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
