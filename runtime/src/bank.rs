@@ -26,9 +26,7 @@ use byteorder::{ByteOrder, LittleEndian};
 use itertools::Itertools;
 use log::*;
 use solana_measure::measure::Measure;
-use solana_metrics::{
-    datapoint_debug, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
-};
+use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_info};
 use solana_sdk::{
     account::{create_account, from_account, Account},
     clock::{
@@ -2351,73 +2349,73 @@ impl Bank {
     #[allow(clippy::cognitive_complexity)]
     fn update_error_counters(error_counters: &ErrorCounters) {
         if 0 != error_counters.total {
-            inc_new_counter_error!(
+            inc_new_counter_info!(
                 "bank-process_transactions-error_count",
                 error_counters.total
             );
         }
         if 0 != error_counters.account_not_found {
-            inc_new_counter_error!(
+            inc_new_counter_info!(
                 "bank-process_transactions-account_not_found",
                 error_counters.account_not_found
             );
         }
         if 0 != error_counters.account_in_use {
-            inc_new_counter_error!(
+            inc_new_counter_info!(
                 "bank-process_transactions-account_in_use",
                 error_counters.account_in_use
             );
         }
         if 0 != error_counters.account_loaded_twice {
-            inc_new_counter_error!(
+            inc_new_counter_info!(
                 "bank-process_transactions-account_loaded_twice",
                 error_counters.account_loaded_twice
             );
         }
         if 0 != error_counters.blockhash_not_found {
-            inc_new_counter_error!(
+            inc_new_counter_info!(
                 "bank-process_transactions-error-blockhash_not_found",
                 error_counters.blockhash_not_found
             );
         }
         if 0 != error_counters.blockhash_too_old {
-            inc_new_counter_error!(
+            inc_new_counter_info!(
                 "bank-process_transactions-error-blockhash_too_old",
                 error_counters.blockhash_too_old
             );
         }
         if 0 != error_counters.invalid_account_index {
-            inc_new_counter_error!(
+            inc_new_counter_info!(
                 "bank-process_transactions-error-invalid_account_index",
                 error_counters.invalid_account_index
             );
         }
         if 0 != error_counters.invalid_account_for_fee {
-            inc_new_counter_error!(
+            inc_new_counter_info!(
                 "bank-process_transactions-error-invalid_account_for_fee",
                 error_counters.invalid_account_for_fee
             );
         }
         if 0 != error_counters.insufficient_funds {
-            inc_new_counter_error!(
+            inc_new_counter_info!(
                 "bank-process_transactions-error-insufficient_funds",
                 error_counters.insufficient_funds
             );
         }
         if 0 != error_counters.instruction_error {
-            inc_new_counter_error!(
+            inc_new_counter_info!(
                 "bank-process_transactions-error-instruction_error",
                 error_counters.instruction_error
             );
         }
         if 0 != error_counters.duplicate_signature {
-            inc_new_counter_error!(
+            inc_new_counter_info!(
                 "bank-process_transactions-error-duplicate_signature",
                 error_counters.duplicate_signature
             );
         }
         if 0 != error_counters.not_allowed_during_cluster_maintenance {
-            inc_new_counter_error!(
+            inc_new_counter_info!(
                 "bank-process_transactions-error-cluster-maintenance",
                 error_counters.not_allowed_during_cluster_maintenance
             );
