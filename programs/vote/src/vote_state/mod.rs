@@ -315,7 +315,7 @@ impl VoteState {
             return Err(VoteError::VoteTooOld);
         }
         if i != vote.slots.len() {
-            warn!(
+            info!(
                 "{} dropped vote {:?} failed to match slot:  {:?}",
                 self.node_pubkey, vote, slot_hashes,
             );
