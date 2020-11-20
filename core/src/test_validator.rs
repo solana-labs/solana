@@ -5,6 +5,9 @@ use crate::{
     validator::{Validator, ValidatorConfig},
 };
 use solana_ledger::create_new_tmp_ledger;
+use solana_runtime::genesis_utils::{
+    bootstrap_validator_stake_lamports, BOOTSTRAP_VALIDATOR_LAMPORTS,
+};
 use solana_sdk::{
     clock::DEFAULT_DEV_SLOTS_PER_EPOCH,
     hash::Hash,
@@ -31,7 +34,6 @@ pub struct TestValidatorOptions {
 
 impl Default for TestValidatorOptions {
     fn default() -> Self {
-        use solana_ledger::genesis_utils::BOOTSTRAP_VALIDATOR_LAMPORTS;
         TestValidatorOptions {
             fees: 0,
             bootstrap_validator_lamports: BOOTSTRAP_VALIDATOR_LAMPORTS,
@@ -94,7 +96,7 @@ impl TestValidator {
             &contact_info.id,
             &Keypair::new(),
             &solana_sdk::pubkey::new_rand(),
-            42,
+            bootstrap_validator_stake_lamports(),
             bootstrap_validator_lamports,
             solana_sdk::genesis_config::ClusterType::Development,
         );

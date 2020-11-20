@@ -4357,9 +4357,9 @@ pub(crate) mod tests {
     use crate::{
         accounts_index::{AccountMap, Ancestors, ITER_BATCH_SIZE},
         genesis_utils::{
-            activate_all_features, create_genesis_config_with_leader,
-            create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
-            BOOTSTRAP_VALIDATOR_LAMPORTS,
+            activate_all_features, bootstrap_validator_stake_lamports,
+            create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
+            GenesisConfigInfo, ValidatorVoteKeypairs,
         },
         native_loader::NativeLoaderError,
         status_cache::MAX_CACHE_ENTRIES,
@@ -4427,7 +4427,7 @@ pub(crate) mod tests {
     #[allow(clippy::float_cmp)]
     fn test_bank_new() {
         let dummy_leader_pubkey = solana_sdk::pubkey::new_rand();
-        let dummy_leader_lamports = BOOTSTRAP_VALIDATOR_LAMPORTS;
+        let dummy_leader_stake_lamports = bootstrap_validator_stake_lamports();
         let mint_lamports = 10_000;
         let GenesisConfigInfo {
             mut genesis_config,
@@ -4437,7 +4437,7 @@ pub(crate) mod tests {
         } = create_genesis_config_with_leader(
             mint_lamports,
             &dummy_leader_pubkey,
-            dummy_leader_lamports,
+            dummy_leader_stake_lamports,
         );
 
         genesis_config.rent = Rent {
@@ -4450,7 +4450,7 @@ pub(crate) mod tests {
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), mint_lamports);
         assert_eq!(
             bank.get_balance(&voting_keypair.pubkey()),
-            dummy_leader_lamports /* 1 token goes to the vote account associated with dummy_leader_lamports */
+            dummy_leader_stake_lamports /* 1 token goes to the vote account associated with dummy_leader_lamports */
         );
 
         let rent_account = bank.get_account(&sysvar::rent::id()).unwrap();

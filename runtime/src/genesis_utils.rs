@@ -10,11 +10,17 @@ use solana_sdk::{
     system_program,
 };
 use solana_stake_program::stake_state;
+use solana_stake_program::stake_state::StakeState;
 use solana_vote_program::vote_state;
 use std::borrow::Borrow;
 
 // The default stake placed with the bootstrap validator
 pub const BOOTSTRAP_VALIDATOR_LAMPORTS: u64 = 42;
+
+// fun fact: rustc is very close to make this const fn.
+pub fn bootstrap_validator_stake_lamports() -> u64 {
+    StakeState::get_rent_exempt_reserve(&Rent::default())
+}
 
 pub struct ValidatorVoteKeypairs {
     pub node_keypair: Keypair,
