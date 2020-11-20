@@ -108,6 +108,8 @@ const GOSSIP_PING_TOKEN_SIZE: usize = 32;
 const GOSSIP_PING_CACHE_CAPACITY: usize = 16384;
 const GOSSIP_PING_CACHE_TTL: Duration = Duration::from_secs(640);
 pub const DEFAULT_CONTACT_DEBUG_INTERVAL: u64 = 10_000;
+/// Limit number of crds values returned when responding to pull-requests.
+const PULL_REQUESTS_OUTPUT_SIZE_LIMIT: usize = 131_072;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -1967,7 +1969,13 @@ impl ClusterInfo {
             self.stats
                 .pull_requests_count
                 .add_relaxed(requests.len() as u64);
-            let response = self.handle_pull_requests(recycler, requests, stakes, feature_set);
+            let response = self.handle_pull_requests(
+                recycler,
+                requests,
+                stakes,
+                PULL_REQUESTS_OUTPUT_SIZE_LIMIT,
+                feature_set,
+            );
             if !response.is_empty() {
                 let _ = response_sender.send(response);
             }
@@ -2040,6 +2048,7 @@ impl ClusterInfo {
         recycler: &PacketsRecycler,
         requests: Vec<PullData>,
         stakes: &HashMap<Pubkey, u64>,
+        output_size_limit: usize, // Limit number of crds values returned.
         feature_set: Option<&FeatureSet>,
     ) -> Packets {
         let mut time = Measure::start("handle_pull_requests");
@@ -2066,7 +2075,7 @@ impl ClusterInfo {
                 "generate_pull_responses",
                 &self.stats.generate_pull_responses,
             )
-            .generate_pull_responses(&caller_and_filters, now);
+            .generate_pull_responses(&caller_and_filters, output_size_limit, now);
 
         let pull_responses: Vec<_> = pull_responses
             .into_iter()

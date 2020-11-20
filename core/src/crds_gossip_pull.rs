@@ -304,9 +304,10 @@ impl CrdsGossipPull {
         &self,
         crds: &Crds,
         requests: &[(CrdsValue, CrdsFilter)],
+        output_size_limit: usize, // Limit number of crds values returned.
         now: u64,
     ) -> Vec<Vec<CrdsValue>> {
-        self.filter_crds_values(crds, requests, now)
+        self.filter_crds_values(crds, requests, output_size_limit, now)
     }
 
     // Checks if responses should be inserted and
@@ -474,6 +475,7 @@ impl CrdsGossipPull {
         &self,
         crds: &Crds,
         filters: &[(CrdsValue, CrdsFilter)],
+        mut output_size_limit: usize, // Limit number of crds values returned.
         now: u64,
     ) -> Vec<Vec<CrdsValue>> {
         let msg_timeout = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
@@ -492,7 +494,8 @@ impl CrdsGossipPull {
                     return vec![];
                 }
                 let caller_wallclock = caller_wallclock.checked_add(jitter).unwrap_or(0);
-                crds.filter_bitmask(filter.mask, filter.mask_bits)
+                let out: Vec<_> = crds
+                    .filter_bitmask(filter.mask, filter.mask_bits)
                     .filter_map(|item| {
                         debug_assert!(filter.test_mask(&item.value_hash));
                         //skip values that are too new
@@ -505,7 +508,10 @@ impl CrdsGossipPull {
                             Some(item.value.clone())
                         }
                     })
-                    .collect()
+                    .take(output_size_limit)
+                    .collect();
+                output_size_limit -= out.len();
+                out
             })
             .collect();
         inc_new_counter_info!(
@@ -1029,7 +1035,12 @@ mod test {
         let dest = CrdsGossipPull::default();
         let (_, filters, caller) = req.unwrap();
         let mut filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
-        let rsp = dest.generate_pull_responses(&dest_crds, &filters, 0);
+        let rsp = dest.generate_pull_responses(
+            &dest_crds,
+            &filters,
+            /*output_size_limit=*/ usize::MAX,
+            0,
+        );
 
         assert_eq!(rsp[0].len(), 0);
 
@@ -1042,8 +1053,12 @@ mod test {
             .unwrap();
 
         //should skip new value since caller is to old
-        let rsp =
-            dest.generate_pull_responses(&dest_crds, &filters, CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS);
+        let rsp = dest.generate_pull_responses(
+            &dest_crds,
+            &filters,
+            /*output_size_limit=*/ usize::MAX,
+            CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
+        );
         assert_eq!(rsp[0].len(), 0);
 
         assert_eq!(filters.len(), 1);
@@ -1054,8 +1069,12 @@ mod test {
             CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS + 1,
         )));
 
-        let rsp =
-            dest.generate_pull_responses(&dest_crds, &filters, CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS);
+        let rsp = dest.generate_pull_responses(
+            &dest_crds,
+            &filters,
+            /*output_size_limit=*/ usize::MAX,
+            CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
+        );
         assert_eq!(rsp.len(), 2);
         assert_eq!(rsp[0].len(), 0);
         assert_eq!(rsp[1].len(), 1); // Orders are also preserved.
@@ -1092,7 +1111,12 @@ mod test {
         let mut dest = CrdsGossipPull::default();
         let (_, filters, caller) = req.unwrap();
         let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
-        let rsp = dest.generate_pull_responses(&dest_crds, &filters, 0);
+        let rsp = dest.generate_pull_responses(
+            &dest_crds,
+            &filters,
+            /*output_size_limit=*/ usize::MAX,
+            0,
+        );
         dest.process_pull_requests(
             &mut dest_crds,
             filters.into_iter().map(|(caller, _)| caller),
@@ -1170,7 +1194,12 @@ mod test {
             );
             let (_, filters, caller) = req.unwrap();
             let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
-            let mut rsp = dest.generate_pull_responses(&dest_crds, &filters, 0);
+            let mut rsp = dest.generate_pull_responses(
+                &dest_crds,
+                &filters,
+                /*output_size_limit=*/ usize::MAX,
+                0,
+            );
             dest.process_pull_requests(
                 &mut dest_crds,
                 filters.into_iter().map(|(caller, _)| caller),
