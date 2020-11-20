@@ -379,7 +379,7 @@ mod test {
         let mut accounts_info = AccountsInfo::default();
 
         let one_sol = sol_to_lamports(1.0);
-        let cluster = LocalCluster::new(&ClusterConfig {
+        let cluster = LocalCluster::new(&mut ClusterConfig {
             cluster_type: ClusterType::MainnetBeta,
             node_stakes: vec![10; 1],
             cluster_lamports: sol_to_lamports(1_000_000_000.0),
