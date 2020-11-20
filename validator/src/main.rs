@@ -1100,6 +1100,14 @@ pub fn main() {
                       0 to disable snapshots"),
         )
         .arg(
+            Arg::with_name("contact_debug_interval")
+                .long("contact-debug-interval")
+                .value_name("CONTACT_DEBUG_INTERVAL")
+                .takes_value(true)
+                .default_value("10000")
+                .help("Milliseconds between printing contact debug from gossip."),
+        )
+        .arg(
             Arg::with_name("accounts_hash_interval_slots")
                 .long("accounts-hash-slots")
                 .value_name("ACCOUNTS_HASH_INTERVAL_SLOTS")
@@ -1435,6 +1443,8 @@ pub fn main() {
         bind_address
     };
 
+    let contact_debug_interval = value_t_or_exit!(matches, "contact_debug_interval", u64);
+
     let restricted_repair_only_mode = matches.is_present("restricted_repair_only_mode");
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
@@ -1499,6 +1509,7 @@ pub fn main() {
         wal_recovery_mode,
         poh_verify: !matches.is_present("skip_poh_verify"),
         debug_keys,
+        contact_debug_interval,
         ..ValidatorConfig::default()
     };
 

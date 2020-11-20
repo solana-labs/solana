@@ -3,7 +3,7 @@
 use crate::{
     broadcast_stage::BroadcastStageType,
     cache_block_time_service::{CacheBlockTimeSender, CacheBlockTimeService},
-    cluster_info::{ClusterInfo, Node},
+    cluster_info::{ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL},
     cluster_info_vote_listener::VoteTracker,
     completed_data_sets_service::CompletedDataSetsService,
     consensus::{reconcile_blockstore_roots_with_tower, Tower},
@@ -105,6 +105,7 @@ pub struct ValidatorConfig {
     pub cuda: bool,
     pub require_tower: bool,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
+    pub contact_debug_interval: u64,
 }
 
 impl Default for ValidatorConfig {
@@ -140,6 +141,7 @@ impl Default for ValidatorConfig {
             cuda: false,
             require_tower: false,
             debug_keys: None,
+            contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL,
         }
     }
 }
@@ -333,10 +335,9 @@ impl Validator {
             }
         }
 
-        let cluster_info = Arc::new(ClusterInfo::new(
-            node.info.clone(),
-            identity_keypair.clone(),
-        ));
+        let mut cluster_info = ClusterInfo::new(node.info.clone(), identity_keypair.clone());
+        cluster_info.set_contact_debug_interval(config.contact_debug_interval);
+        let cluster_info = Arc::new(cluster_info);
         let mut block_commitment_cache = BlockCommitmentCache::default();
         block_commitment_cache.initialize_slots(bank.slot());
         let block_commitment_cache = Arc::new(RwLock::new(block_commitment_cache));
