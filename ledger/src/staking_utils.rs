@@ -101,7 +101,7 @@ where
 pub(crate) mod tests {
     use super::*;
     use crate::genesis_utils::{
-        create_genesis_config, GenesisConfigInfo, BOOTSTRAP_VALIDATOR_LAMPORTS,
+        bootstrap_validator_stake_lamports, create_genesis_config, GenesisConfigInfo,
     };
     use solana_sdk::{
         account::from_account,
@@ -178,10 +178,10 @@ pub(crate) mod tests {
     #[test]
     fn test_epoch_stakes_and_lockouts() {
         solana_logger::setup();
-        let stake = BOOTSTRAP_VALIDATOR_LAMPORTS * 100;
+        let stake = bootstrap_validator_stake_lamports();
         let leader_stake = Stake {
             delegation: Delegation {
-                stake: BOOTSTRAP_VALIDATOR_LAMPORTS,
+                stake: bootstrap_validator_stake_lamports(),
                 activation_epoch: std::u64::MAX, // mark as bootstrap
                 ..Delegation::default()
             },
@@ -194,7 +194,7 @@ pub(crate) mod tests {
             genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_config(10_000);
+        } = create_genesis_config(10_000 * bootstrap_validator_stake_lamports());
 
         let bank = Bank::new(&genesis_config);
         let vote_account = Keypair::new();
