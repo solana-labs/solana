@@ -9,7 +9,7 @@ use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
 use solana_account_decoder::{UiAccount, UiAccountEncoding};
-use solana_bpf_loader_program::{bpf_verifier, BPFError};
+use solana_bpf_loader_program::{bpf_verifier, BPFError, ThisInstructionMeter};
 use solana_clap_utils::{
     self,
     commitment::commitment_arg_with_default,
@@ -39,7 +39,7 @@ use solana_client::{
 use solana_faucet::faucet::request_airdrop_transaction;
 #[cfg(test)]
 use solana_faucet::faucet_mock::request_airdrop_transaction;
-use solana_rbpf::vm::Executable;
+use solana_rbpf::vm::{Config, Executable};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
@@ -1227,8 +1227,12 @@ fn do_process_deploy(
         CliError::DynamicProgramError(format!("Unable to read program file: {}", err))
     })?;
 
-    Executable::<BPFError>::from_elf(&program_data, Some(|x| bpf_verifier::check(x, false)))
-        .map_err(|err| CliError::DynamicProgramError(format!("ELF error: {}", err)))?;
+    Executable::<BPFError, ThisInstructionMeter>::from_elf(
+        &program_data,
+        Some(|x| bpf_verifier::check(x, false)),
+        Config::default(),
+    )
+    .map_err(|err| CliError::DynamicProgramError(format!("ELF error: {}", err)))?;
 
     let loader_id = if use_deprecated_loader {
         bpf_loader_deprecated::id()
