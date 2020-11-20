@@ -107,6 +107,7 @@ const MAX_PRUNE_DATA_NODES: usize = 32;
 const GOSSIP_PING_TOKEN_SIZE: usize = 32;
 const GOSSIP_PING_CACHE_CAPACITY: usize = 16384;
 const GOSSIP_PING_CACHE_TTL: Duration = Duration::from_secs(640);
+pub const DEFAULT_CONTACT_DEBUG_INTERVAL: u64 = 10_000;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -298,6 +299,7 @@ pub struct ClusterInfo {
     stats: GossipStats,
     socket: UdpSocket,
     local_message_pending_push_queue: RwLock<Vec<(CrdsValue, u64)>>,
+    contact_debug_interval: u64,
 }
 
 impl Default for ClusterInfo {
@@ -553,6 +555,7 @@ impl ClusterInfo {
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
             local_message_pending_push_queue: RwLock::new(vec![]),
+            contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL,
         };
         {
             let mut gossip = me.gossip.write().unwrap();
@@ -586,7 +589,12 @@ impl ClusterInfo {
                     .unwrap()
                     .clone(),
             ),
+            contact_debug_interval: self.contact_debug_interval,
         }
+    }
+
+    pub fn set_contact_debug_interval(&mut self, new: u64) {
+        self.contact_debug_interval = new;
     }
 
     pub fn update_contact_info<F>(&self, modify: F)
@@ -1792,7 +1800,9 @@ impl ClusterInfo {
                 loop {
                     let start = timestamp();
                     thread_mem_usage::datapoint("solana-gossip");
-                    if start - last_contact_info_trace > 10000 {
+                    if self.contact_debug_interval != 0
+                        && start - last_contact_info_trace > self.contact_debug_interval
+                    {
                         // Log contact info every 10 seconds
                         info!(
                             "\n{}\n\n{}",
