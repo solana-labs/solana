@@ -22,8 +22,16 @@ pub mod pico_inflation {
     solana_sdk::declare_id!("4RWNif6C2WCNiKVW7otP4G7dkmkHGyKQWRpuZ1pxKU5m");
 }
 
+pub mod pico_inflation_rewards {
+    solana_sdk::declare_id!("PicoRewards11111111111111111111111111111111");
+}
+
 pub mod full_inflation {
     solana_sdk::declare_id!("DT4n6ABDqs6w4bnfwrXT9rsprcPf6cdDga1egctaPkLC");
+}
+
+pub mod full_inflation_rewards {
+    solana_sdk::declare_id!("Fu11Rewards11111111111111111111111111111111");
 }
 
 pub mod spl_token_v2_multisig_fix {
@@ -97,7 +105,9 @@ lazy_static! {
         (secp256k1_program_enabled::id(), "secp256k1 program"),
         (consistent_recent_blockhashes_sysvar::id(), "consistent recentblockhashes sysvar"),
         (pico_inflation::id(), "pico-inflation"),
+        (pico_inflation_rewards::id(), "pico-inflation first rewards payout (chained to pico-inflation)"),
         (full_inflation::id(), "full-inflation"),
+        (full_inflation_rewards::id(), "full-inflation first rewards payout (chained to full-inflation)"),
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
         (bpf_loader2_program::id(), "bpf_loader2 program"),
         (bpf_compute_budget_balancing::id(), "compute budget balancing"),
