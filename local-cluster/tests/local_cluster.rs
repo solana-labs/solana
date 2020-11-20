@@ -56,7 +56,7 @@ use std::{
     iter,
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
-    sync::{Arc, Mutex},
+    sync::Arc,
     thread::{sleep, Builder, JoinHandle},
     time::Duration,
 };
@@ -2159,13 +2159,16 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
     let (update_client_sender, update_client_receiver) = unbounded();
     let (scan_client_sender, scan_client_receiver) = unbounded();
     let exit = Arc::new(AtomicBool::new(false));
-    let exit_ = exit.clone();
-    let t_update_option = Mutex::new(None);
-    let t_scan_option = Mutex::new(None);
+
+    let (t_update, t_scan, additional_accounts) = setup_transfer_scan_threads(
+        1000,
+        exit.clone(),
+        scan_commitment,
+        update_client_receiver,
+        scan_client_receiver,
+    );
 
     let on_partition_start = |cluster: &mut LocalCluster| {
-        let funding_keypair = Keypair::from_bytes(&cluster.funding_keypair.to_bytes()).unwrap();
-        let other_keypair = Keypair::new();
         let update_client = cluster
             .get_validator_client(&cluster.entry_point_info.id)
             .unwrap();
@@ -2173,42 +2176,14 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
         let scan_client = cluster
             .get_validator_client(&cluster.entry_point_info.id)
             .unwrap();
-        let expected_total_balance = scan_client
-            .get_balance(&cluster.funding_keypair.pubkey())
-            .unwrap();
         scan_client_sender.send(scan_client).unwrap();
-
-        let (t_update, t_scan) = setup_transfer_scan_threads(
-            funding_keypair,
-            other_keypair,
-            exit_,
-            scan_commitment,
-            expected_total_balance,
-            update_client_receiver,
-            scan_client_receiver,
-        );
-
-        *t_update_option.lock().unwrap() = Some(t_update);
-        *t_scan_option.lock().unwrap() = Some(t_scan);
     };
 
     let on_partition_resolved = |cluster: &mut LocalCluster| {
         cluster.check_for_new_roots(20, &"run_test_load_program_accounts_partition");
         exit.store(true, Ordering::Relaxed);
-        t_update_option
-            .lock()
-            .unwrap()
-            .take()
-            .unwrap()
-            .join()
-            .unwrap();
-        t_scan_option
-            .lock()
-            .unwrap()
-            .take()
-            .unwrap()
-            .join()
-            .unwrap();
+        t_update.join().unwrap();
+        t_scan.join().unwrap();
     };
 
     run_cluster_partition(
@@ -2216,23 +2191,35 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
         Some((leader_schedule, validator_keys)),
         on_partition_start,
         on_partition_resolved,
+        additional_accounts,
     );
 }
 
 fn setup_transfer_scan_threads(
-    keypair1: Keypair,
-    keypair2: Keypair,
+    num_starting_accounts: usize,
     exit: Arc<AtomicBool>,
     scan_commitment: CommitmentConfig,
-    expected_total_balance: u64,
     update_client_receiver: Receiver<ThinClient>,
     scan_client_receiver: Receiver<ThinClient>,
-) -> (JoinHandle<()>, JoinHandle<()>) {
-    let pubkey1 = keypair1.pubkey();
-    let pubkey2 = keypair2.pubkey();
-    info!("funding key: {}, other key: {}", pubkey1, pubkey2);
-
+) -> (JoinHandle<()>, JoinHandle<()>, Vec<(Pubkey, Account)>) {
     let exit_ = exit.clone();
+    let starting_keypairs: Arc<Vec<Keypair>> = Arc::new(
+        iter::repeat_with(Keypair::new)
+            .take(num_starting_accounts)
+            .collect(),
+    );
+    let target_keypairs: Arc<Vec<Keypair>> = Arc::new(
+        iter::repeat_with(Keypair::new)
+            .take(num_starting_accounts)
+            .collect(),
+    );
+    let starting_accounts: Vec<(Pubkey, Account)> = starting_keypairs
+        .iter()
+        .map(|k| (k.pubkey(), Account::new(1, 0, &system_program::id())))
+        .collect();
+
+    let starting_keypairs_ = starting_keypairs.clone();
+    let target_keypairs_ = target_keypairs.clone();
     let t_update = Builder::new()
         .name("update".to_string())
         .spawn(move || {
@@ -2244,17 +2231,25 @@ fn setup_transfer_scan_threads(
                 let (blockhash, _fee_calculator, _last_valid_slot) = client
                     .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
                     .unwrap();
-                for i in 0..100 {
+                for i in 0..starting_keypairs_.len() {
                     client
-                        .async_transfer(i, &keypair1, &keypair2.pubkey(), blockhash)
+                        .async_transfer(
+                            1,
+                            &starting_keypairs_[i],
+                            &target_keypairs_[i].pubkey(),
+                            blockhash,
+                        )
                         .unwrap();
-                    sleep(Duration::from_millis(5));
                 }
-                for i in 0..100 {
+                for i in 0..starting_keypairs_.len() {
                     client
-                        .async_transfer(i, &keypair2, &keypair1.pubkey(), blockhash)
+                        .async_transfer(
+                            1,
+                            &target_keypairs_[i],
+                            &starting_keypairs_[i].pubkey(),
+                            blockhash,
+                        )
                         .unwrap();
-                    sleep(Duration::from_millis(5));
                 }
             }
         })
@@ -2263,6 +2258,12 @@ fn setup_transfer_scan_threads(
     // Scan, the total funds should add up to the original
     let mut scan_commitment_config = RpcProgramAccountsConfig::default();
     scan_commitment_config.account_config.commitment = Some(scan_commitment);
+    let tracked_pubkeys: HashSet<Pubkey> = starting_keypairs
+        .iter()
+        .chain(target_keypairs.iter())
+        .map(|k| k.pubkey())
+        .collect();
+    let expected_total_balance = num_starting_accounts as u64;
     let t_scan = Builder::new()
         .name("scan".to_string())
         .spawn(move || {
@@ -2281,7 +2282,7 @@ fn setup_transfer_scan_threads(
                         result
                             .into_iter()
                             .map(|(key, account)| {
-                                if key == pubkey1 || key == pubkey2 {
+                                if tracked_pubkeys.contains(&key) {
                                     account.lamports
                                 } else {
                                     0
@@ -2296,7 +2297,7 @@ fn setup_transfer_scan_threads(
         })
         .unwrap();
 
-    (t_update, t_scan)
+    (t_update, t_scan, starting_accounts)
 }
 
 fn run_test_load_program_accounts(scan_commitment: CommitmentConfig) {
@@ -2312,7 +2313,22 @@ fn run_test_load_program_accounts(scan_commitment: CommitmentConfig) {
     .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
     .take(node_stakes.len())
     .collect();
-    let config = ClusterConfig {
+
+    let num_starting_accounts = 1000;
+    let exit = Arc::new(AtomicBool::new(false));
+    let (update_client_sender, update_client_receiver) = unbounded();
+    let (scan_client_sender, scan_client_receiver) = unbounded();
+
+    // Setup the update/scan threads
+    let (t_update, t_scan, starting_accounts) = setup_transfer_scan_threads(
+        num_starting_accounts,
+        exit.clone(),
+        scan_commitment,
+        update_client_receiver,
+        scan_client_receiver,
+    );
+
+    let mut config = ClusterConfig {
         cluster_lamports: 100_000,
         node_stakes: node_stakes.clone(),
         validator_configs: vec![ValidatorConfig::default(); node_stakes.len()],
@@ -2320,41 +2336,20 @@ fn run_test_load_program_accounts(scan_commitment: CommitmentConfig) {
         slots_per_epoch,
         stakers_slot_offset: slots_per_epoch,
         skip_warmup_slots: true,
+        additional_accounts: starting_accounts,
         ..ClusterConfig::default()
     };
-    let cluster = LocalCluster::new(&config);
+    let cluster = LocalCluster::new(&mut config);
 
-    // Find the starting `expected_total_balance`
+    // Give the threads a client to use for querying the cluster
     let all_pubkeys = cluster.get_node_pubkeys();
     let other_validator_id = all_pubkeys
         .into_iter()
         .find(|x| *x != cluster.entry_point_info.id)
         .unwrap();
-    let funding_keypair = Keypair::from_bytes(&cluster.funding_keypair.to_bytes()).unwrap();
-    let other_keypair = Keypair::new();
     let client = cluster
         .get_validator_client(&cluster.entry_point_info.id)
         .unwrap();
-    let expected_total_balance = client
-        .get_balance(&cluster.funding_keypair.pubkey())
-        .unwrap();
-    let exit = Arc::new(AtomicBool::new(false));
-
-    let (update_client_sender, update_client_receiver) = unbounded();
-    let (scan_client_sender, scan_client_receiver) = unbounded();
-
-    // Set up the update/scan threads
-    let (t_update, t_scan) = setup_transfer_scan_threads(
-        funding_keypair,
-        other_keypair,
-        exit.clone(),
-        scan_commitment,
-        expected_total_balance,
-        update_client_receiver,
-        scan_client_receiver,
-    );
-
-    // Give the threads a client to use for querying the cluster
     update_client_sender.send(client).unwrap();
     let scan_client = cluster.get_validator_client(&other_validator_id).unwrap();
     scan_client_sender.send(scan_client).unwrap();
