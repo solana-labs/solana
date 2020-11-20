@@ -263,8 +263,8 @@ the validator will automatically log to a file.
 > Note: You can use a
 > [paper wallet seed phrase](../wallet-guide/paper-wallet.md)
 > for your `--identity` and/or
-> `--vote-account` keypairs. To use these, pass the respective argument as
-> `solana-validator --identity ASK ... --vote-account ASK ...` and you will be
+> `--authorized-voter` keypairs. To use these, pass the respective argument as
+> `solana-validator --identity ASK ... --authorized-voter ASK ...` and you will be
 > prompted to enter your seed phrases and optional passphrase.
 
 Confirm your validator connected to the network by opening a new terminal and
