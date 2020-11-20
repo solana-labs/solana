@@ -63,6 +63,8 @@ gives a convenient interface for the RPC methods.
 - [Subscription Websocket](jsonrpc-api.md#subscription-websocket)
   - [accountSubscribe](jsonrpc-api.md#accountsubscribe)
   - [accountUnsubscribe](jsonrpc-api.md#accountunsubscribe)
+  - [logsSubscribe](jsonrpc-api.md#logssubscribe)
+  - [logsUnsubscribe](jsonrpc-api.md#logsunsubscribe)
   - [programSubscribe](jsonrpc-api.md#programsubscribe)
   - [programUnsubscribe](jsonrpc-api.md#programunsubscribe)
   - [signatureSubscribe](jsonrpc-api.md#signaturesubscribe)
@@ -2876,7 +2878,7 @@ Request:
     "CM78CPUeXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNH12",
     {
       "encoding": "base64",
-      "commitment": "single"
+      "commitment": "root"
     }
   ]
 }
@@ -2983,6 +2985,103 @@ Result:
 {"jsonrpc": "2.0","result": true,"id": 1}
 ```
 
+### logsSubscribe
+
+Subscribe to transaction logging.  **UNSTABLE**
+
+#### Parameters:
+
+- `filter: <string>|<object>` - filter criteria for the logs to receive results by account type; currently supported:
+  - "all" - subscribe to all transactions except for simple vote transactions
+  - "allWithVotes" - subscribe to all transactions including simple vote transactions
+  - `{ "mentions": [ <string> ] }` - subscribe to all transactions that mention the provided Pubkey (as base-58 encoded string)
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+- `<integer>` - Subscription id \(needed to unsubscribe\)
+
+#### Example:
+
+Request:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "logsSubscribe",
+  "params": [
+    {
+      "mentions": [ "11111111111111111111111111111111" ]
+    }
+    {
+      "commitment": "max"
+    }
+  ]
+}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "logsSubscribe",
+  "params": [ "all" ]
+}
+```
+
+Result:
+```json
+{"jsonrpc": "2.0","result": 24040,"id": 1}
+```
+
+#### Notification Format:
+
+Base58 encoding:
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "logsNotification",
+  "params": {
+    "result": {
+      "context": {
+        "slot": 5208469
+      },
+      "value": {
+        "signature": "5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv",
+        "err": null,
+        "logs": [
+          "BPF program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri success"
+        ]
+      }
+    },
+    "subscription": 24040
+  }
+}
+```
+
+### logsUnsubscribe
+
+Unsubscribe from transaction logging
+
+#### Parameters:
+
+- `<integer>` - id of subscription to cancel
+
+#### Results:
+
+- `<bool>` - unsubscribe success message
+
+#### Example:
+
+Request:
+```json
+{"jsonrpc":"2.0", "id":1, "method":"logsUnsubscribe", "params":[0]}
+
+```
+
+Result:
+```json
+{"jsonrpc": "2.0","result": true,"id": 1}
+```
+
 ### programSubscribe
 
 Subscribe to a program to receive notifications when the lamports or data for a given account owned by the program changes
@@ -3012,7 +3111,7 @@ Request:
     "11111111111111111111111111111111",
     {
       "encoding": "base64",
-      "commitment": "single"
+      "commitment": "max"
     }
   ]
 }
