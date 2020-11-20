@@ -143,7 +143,7 @@ export function ClusterProvider({ children }: ClusterProviderProps) {
 
   // Remove customUrl param if dev setting is disabled
   React.useEffect(() => {
-    if (!enableCustomUrl) {
+    if (!enableCustomUrl && query.has("customUrl")) {
       query.delete("customUrl");
       history.push({ ...location, search: query.toString() });
     }
