@@ -38,6 +38,7 @@ pub enum InflationPointCalculationEvent {
     RentExemptReserve(u64),
     Delegation(Delegation, Pubkey),
     Commission(u8),
+    CreditsObserved(u64),
 }
 
 fn null_tracer() -> Option<impl FnMut(&InflationPointCalculationEvent)> {
@@ -519,6 +520,11 @@ impl Stake {
         )
         .map(|(stakers_reward, voters_reward, credits_observed)| {
             self.credits_observed = credits_observed;
+            if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
+                inflation_point_calc_tracer(&InflationPointCalculationEvent::CreditsObserved(
+                    credits_observed,
+                ));
+            }
             self.delegation.stake += stakers_reward;
             (stakers_reward, voters_reward)
         })
