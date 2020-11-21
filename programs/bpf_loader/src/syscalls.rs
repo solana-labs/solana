@@ -266,21 +266,12 @@ macro_rules! translate_slice_mut {
         } else if $len == 0 {
             Ok(unsafe { from_raw_parts_mut(0x1 as *mut $t, $len as usize) })
         } else {
-<<<<<<< HEAD
             match translate_addr::<BPFError>(
                 $vm_addr as u64,
-                $len as usize * size_of::<$t>(),
+                ($len as usize).saturating_mul(size_of::<$t>()),
                 file!(),
                 line!() as usize - ELF_INSN_DUMP_OFFSET + 1,
                 $regions,
-=======
-            match translate!(
-                $memory_mapping,
-                $access_type,
-                $vm_addr,
-                ($len as usize).saturating_mul(size_of::<$t>()),
-                $loader_id
->>>>>>> 8c922a019... fix arithmetic overflow in slice translation (#13624)
             ) {
                 Ok(value) => Ok(unsafe { from_raw_parts_mut(value as *mut $t, $len as usize) }),
                 Err(e) => Err(e),
@@ -1361,23 +1352,9 @@ mod tests {
             addr_host: addr,
             addr_vm: 100,
             len: good_data.len() as u64,
-<<<<<<< HEAD
         }];
         let translated_data =
-            translate_slice!(u8, data.as_ptr(), data.len(), &regions, &bpf_loader::id()).unwrap();
-=======
-            is_writable: false,
-        }]);
-        let translated_data = translate_slice!(
-            memory_mapping,
-            AccessType::Load,
-            data.as_ptr(),
-            u8,
-            0,
-            &bpf_loader::id()
-        )
-        .unwrap();
->>>>>>> 8c922a019... fix arithmetic overflow in slice translation (#13624)
+            translate_slice!(u8, data.as_ptr(), 0, &regions, &bpf_loader::id()).unwrap();
         assert_eq!(data, translated_data);
         assert_eq!(0, translated_data.len());
 
@@ -1394,25 +1371,11 @@ mod tests {
         assert_eq!(data, translated_data);
         data[0] = 10;
         assert_eq!(data, translated_data);
-        assert!(translate_slice!(
-            memory_mapping,
-            AccessType::Load,
-            data.as_ptr(),
-            u8,
-            u64::MAX,
-            &bpf_loader::id()
-        )
-        .is_err());
+        assert!(
+            translate_slice!(u8, data.as_ptr(), u64::MAX, &regions, &bpf_loader::id()).is_err()
+        );
 
-        assert!(translate_slice!(
-            memory_mapping,
-            AccessType::Load,
-            100 - 1,
-            u8,
-            data.len(),
-            &bpf_loader::id()
-        )
-        .is_err());
+        assert!(translate_slice!(u8, 100 - 1, data.len(), &regions, &bpf_loader::id()).is_err());
 
         // Pubkeys
         let mut data = vec![solana_sdk::pubkey::new_rand(); 5];
