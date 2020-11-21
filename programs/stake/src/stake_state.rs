@@ -3614,16 +3614,6 @@ mod tests {
                 ..Stake::default()
             }
         }
-        fn just_bootstrap_stake(stake: u64) -> Self {
-            Self {
-                delegation: Delegation {
-                    stake,
-                    activation_epoch: std::u64::MAX,
-                    ..Delegation::default()
-                },
-                ..Stake::default()
-            }
-        }
     }
 
     #[test]
