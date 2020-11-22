@@ -19,7 +19,8 @@ if [[ -f solana/netem.cfg ]]; then
   rm -f solana/netem.cfg
 fi
 solana/scripts/net-shaper.sh cleanup
-for pattern in validator.sh boostrap-leader.sh solana- remote- iftop validator client node; do
+for pattern in validator.sh boostrap-leader.sh solana- remote- iftop validator client node nvidia-smi system-stats.sh; do
   echo "killing $pattern"
   pkill -f $pattern
+  echo "status: $?"
 done
