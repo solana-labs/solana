@@ -23,21 +23,18 @@ $(eval echo "$@")"
   fi
 
   (
-    set +e
     execution_step "Collecting Logfiles from Nodes"
     collect_logs
-  )
+  ) || echo "Error from collecting logs"
 
   (
-    set +e
     execution_step "Stop Network Software"
     "${REPO_ROOT}"/net/net.sh stop
-  )
+  ) || echo "Error from stopping nodes"
 
   (
-    set +e
     analyze_packet_loss
-  )
+  ) || echo "Error from packet loss analysis"
 
   execution_step "Deleting Testnet"
   "${REPO_ROOT}"/net/"${CLOUD_PROVIDER}".sh delete -p "${TESTNET_TAG}"
