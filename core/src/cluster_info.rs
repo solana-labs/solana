@@ -2023,8 +2023,9 @@ impl ClusterInfo {
         feature_set: Option<&FeatureSet>,
     ) -> Packets {
         let mut time = Measure::start("handle_pull_requests");
+        let callers = crds_value::filter_current(requests.iter().map(|r| &r.caller));
         self.time_gossip_write_lock("process_pull_reqs", &self.stats.process_pull_requests)
-            .process_pull_requests(requests.iter().map(|r| r.caller.clone()), timestamp());
+            .process_pull_requests(callers.cloned(), timestamp());
         self.update_data_budget(stakes.len());
         let mut packets = Packets::new_with_recycler(recycler.clone(), 64, "handle_pull_requests");
         let (caller_and_filters, addrs): (Vec<_>, Vec<_>) = {
