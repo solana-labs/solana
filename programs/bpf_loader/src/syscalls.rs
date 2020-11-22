@@ -268,7 +268,7 @@ macro_rules! translate_slice_mut {
         } else {
             match translate_addr::<BPFError>(
                 $vm_addr as u64,
-                $len as usize * size_of::<$t>(),
+                ($len as usize).saturating_mul(size_of::<$t>()),
                 file!(),
                 line!() as usize - ELF_INSN_DUMP_OFFSET + 1,
                 $regions,
@@ -1354,7 +1354,7 @@ mod tests {
             len: good_data.len() as u64,
         }];
         let translated_data =
-            translate_slice!(u8, data.as_ptr(), data.len(), &regions, &bpf_loader::id()).unwrap();
+            translate_slice!(u8, data.as_ptr(), 0, &regions, &bpf_loader::id()).unwrap();
         assert_eq!(data, translated_data);
         assert_eq!(0, translated_data.len());
 
@@ -1371,6 +1371,11 @@ mod tests {
         assert_eq!(data, translated_data);
         data[0] = 10;
         assert_eq!(data, translated_data);
+        assert!(
+            translate_slice!(u8, data.as_ptr(), u64::MAX, &regions, &bpf_loader::id()).is_err()
+        );
+
+        assert!(translate_slice!(u8, 100 - 1, data.len(), &regions, &bpf_loader::id()).is_err());
 
         // Pubkeys
         let mut data = vec![solana_sdk::pubkey::new_rand(); 5];
