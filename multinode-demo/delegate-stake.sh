@@ -29,6 +29,8 @@ OPTIONS:
   --no-airdrop              - Do not attempt to airdrop the stake
   --keypair FILE            - Keypair to fund the stake from
   --force                   - Override delegate-stake sanity checks
+  --vote-account            - Path to vote-account keypair file
+  --stake-account           - Path to stake-account keypair file
 
 EOF
   exit 1
@@ -55,6 +57,12 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --url || $1 = -u ]]; then
       url=$2
       shift 2
+    elif [[ $1 = --vote-account ]]; then
+      vote_account=$2
+      shift 2
+    elif [[ $1 = --stake-account ]]; then
+      stake_account=$2
+      shift 2
     elif [[ $1 = --no-airdrop ]]; then
       airdrops_enabled=0
       shift
@@ -80,9 +88,9 @@ if [[ -n ${positional_args[0]} ]]; then
   stake_sol=${positional_args[0]}
 fi
 
-config_dir="$SOLANA_CONFIG_DIR/validator$label"
-vote_account="$config_dir"/vote-account.json
-stake_account="$config_dir"/stake-account.json
+VALIDATOR_KEYS_DIR=$SOLANA_CONFIG_DIR/validator$label
+vote_account="${vote_account:-$VALIDATOR_KEYS_DIR/vote-account.json}"
+stake_account="${stake_account:-$VALIDATOR_KEYS_DIR/stake-account.json}"
 
 if [[ ! -f $vote_account ]]; then
   echo "Error: $vote_account not found"
