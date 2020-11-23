@@ -36,10 +36,10 @@ pub enum StakeError {
     #[error("split amount is more than is staked")]
     InsufficientStake,
 
-    #[error("stake account with activated stake cannot be merged")]
-    MergeActivatedStake,
+    #[error("stake account with transient stake cannot be merged")]
+    MergeTransientStake,
 
-    #[error("stake account merge failed due to different authority or lockups")]
+    #[error("stake account merge failed due to different authority, lockups or state")]
     MergeMismatch,
 }
 
