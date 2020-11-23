@@ -71,7 +71,7 @@ function wait_for_bootstrap_validator_stake_drop {
 
   # shellcheck disable=SC2154
   # shellcheck disable=SC2029
-  ssh "${sshOptions[@]}" "${validatorIpList[0]}" "\$HOME/.cargo/bin/solana wait-for-max-stake $max_stake --url http://127.0.0.1:8899"
+  ssh "${sshOptions[@]}" "${validatorIpList[0]}" "RUST_LOG=info \$HOME/.cargo/bin/solana wait-for-max-stake $max_stake --url http://127.0.0.1:8899"
 }
 
 function get_slot {
