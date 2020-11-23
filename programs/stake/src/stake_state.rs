@@ -805,6 +805,9 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         lockup: &Lockup,
         rent: &Rent,
     ) -> Result<(), InstructionError> {
+        if self.data_len()? != std::mem::size_of::<StakeState>() {
+            return Err(InstructionError::InvalidAccountData);
+        }
         if let StakeState::Uninitialized = self.state()? {
             let rent_exempt_reserve = rent.minimum_balance(self.data_len()?);
 
@@ -2163,6 +2166,43 @@ mod tests {
                 &Authorized::default(),
                 &Lockup::default(),
                 &Rent::free()
+            ),
+            Err(InstructionError::InvalidAccountData)
+        );
+    }
+
+    #[test]
+    fn test_initialize_incorrect_account_sizes() {
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
+        let stake_lamports = 42;
+        let stake_account =
+            Account::new_ref(stake_lamports, std::mem::size_of::<StakeState>() + 1, &id());
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &stake_account);
+
+        assert_eq!(
+            stake_keyed_account.initialize(
+                &Authorized::default(),
+                &Lockup::default(),
+                &Rent {
+                    lamports_per_byte_year: 42,
+                    ..Rent::free()
+                },
+            ),
+            Err(InstructionError::InvalidAccountData)
+        );
+
+        let stake_account =
+            Account::new_ref(stake_lamports, std::mem::size_of::<StakeState>() - 1, &id());
+        let stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &stake_account);
+
+        assert_eq!(
+            stake_keyed_account.initialize(
+                &Authorized::default(),
+                &Lockup::default(),
+                &Rent {
+                    lamports_per_byte_year: 42,
+                    ..Rent::free()
+                },
             ),
             Err(InstructionError::InvalidAccountData)
         );
