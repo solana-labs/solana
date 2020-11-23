@@ -6,7 +6,7 @@ use serial_test_derive::serial;
 use solana_client::{
     pubsub_client::PubsubClient,
     rpc_client::RpcClient,
-    rpc_config::RpcProgramAccountsConfig,
+    rpc_config::{RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
     rpc_response::RpcSignatureResult,
     thin_client::{create_client, ThinClient},
 };
@@ -179,6 +179,10 @@ fn test_local_cluster_signature_subscribe() {
     let (mut sig_subscribe_client, receiver) = PubsubClient::signature_subscribe(
         &format!("ws://{}", &non_bootstrap_info.rpc_pubsub.to_string()),
         &transaction.signatures[0],
+        Some(RpcSignatureSubscribeConfig {
+            commitment: Some(CommitmentConfig::recent()),
+            enable_received_notification: Some(true),
+        }),
     )
     .unwrap();
 

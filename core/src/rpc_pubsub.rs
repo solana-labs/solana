@@ -442,7 +442,15 @@ mod tests {
 
         let session = create_session();
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("signatureNotification");
-        rpc.signature_subscribe(session, subscriber, tx.signatures[0].to_string(), None);
+        rpc.signature_subscribe(
+            session,
+            subscriber,
+            tx.signatures[0].to_string(),
+            Some(RpcSignatureSubscribeConfig {
+                commitment: Some(CommitmentConfig::single()),
+                ..RpcSignatureSubscribeConfig::default()
+            }),
+        );
 
         process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions, 0).unwrap();
 
@@ -472,7 +480,7 @@ mod tests {
             subscriber,
             tx.signatures[0].to_string(),
             Some(RpcSignatureSubscribeConfig {
-                commitment: None,
+                commitment: Some(CommitmentConfig::single()),
                 enable_received_notification: Some(true),
             }),
         );
