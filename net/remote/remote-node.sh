@@ -225,6 +225,7 @@ EOF
       if [[ -f net/keypairs/bootstrap-validator-identity.json ]]; then
         export BOOTSTRAP_VALIDATOR_IDENTITY_KEYPAIR=net/keypairs/bootstrap-validator-identity.json
       fi
+      echo "remote-node.sh: Primordial stakes: $extraPrimordialStakes"
       if [[ "$extraPrimordialStakes" -gt 0 ]]; then
         if [[ "$extraPrimordialStakes" -gt "$numNodes" ]]; then
           echo "warning: extraPrimordialStakes($extraPrimordialStakes) clamped to numNodes($numNodes)"
@@ -419,8 +420,11 @@ EOF
         args+=(--keypair config/validator-identity.json)
       fi
 
-      if [[ ${#extraPrimordialStakes} -eq 0 ]]; then
+      if [[ ${extraPrimordialStakes} -eq 0 ]]; then
+        echo "0 Primordial stakes, staking with $internalNodesStakeLamports"
         multinode-demo/delegate-stake.sh "${args[@]}" "$internalNodesStakeLamports"
+      else
+        echo "Skipping staking with extra stakes: ${extraPrimordialStakes}"
       fi
     fi
     ;;
