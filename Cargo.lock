@@ -5385,9 +5385,9 @@ dependencies = [
 
 [[package]]
 name = "tarpc"
-version = "0.23.0"
+version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9fc49715ecefc8e56b6d8bdc6fe4fd41664b437b2a285e0f36a28bc9252310f"
+checksum = "1035e0e1b7064c1080702a8a5b3d044a3dea10a1096766be6f5c22580096fa75"
 dependencies = [
  "anyhow",
  "fnv",
