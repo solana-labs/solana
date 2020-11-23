@@ -1005,6 +1005,7 @@ if [[ -n "$maybeWaitForSupermajority" && -n "$maybeWarpSlot" ]]; then
   fi
 fi
 
+echo "net.sh: Primordial stakes: $extraPrimordialStakes"
 if [[ $extraPrimordialStakes -gt 0 ]]; then
   # Extra primoridial stakes require that all of the validators start at
   # the same time. Force async init and wait for supermajority here.
