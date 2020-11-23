@@ -8,7 +8,7 @@
     "@sentry/react": "^5.27.4",
     "@solana/web3.js": "^0.87.1",
     "@testing-library/jest-dom": "^5.11.6",
-    "@testing-library/react": "^11.2.0",
+    "@testing-library/react": "^11.2.2",
     "@testing-library/user-event": "^12.2.2",
     "@types/bn.js": "^4.11.6",
     "@types/bs58": "^4.0.1",
