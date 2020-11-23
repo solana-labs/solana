@@ -978,13 +978,20 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                         // split account. Since split accounts retain the state of their source
                         // account, this prevents any magic activation of stake by prefunding the
                         // split account.
-                        (
-                            lamports.saturating_sub(meta.rent_exempt_reserve),
+                        // The new split stake also needs to ignore any positive delta between the
+                        // original rent_exempt_reserve and the split_rent_exempt_reserve, in order
+                        // to prevent magic activation of stake by splitting between accounts of
+                        // different sizes.
+                        let remaining_stake_delta =
+                            lamports.saturating_sub(meta.rent_exempt_reserve);
+                        let split_stake_amount = std::cmp::min(
                             lamports - split_rent_exempt_reserve,
-                        )
+                            remaining_stake_delta,
+                        );
+                        (remaining_stake_delta, split_stake_amount)
                     } else {
                         // Otherwise, the new split stake should reflect the entire split
-                        // requested, less any lamports needed to cover the rent-exempt reserve
+                        // requested, less any lamports needed to cover the split_rent_exempt_reserve
                         (
                             lamports,
                             lamports - split_rent_exempt_reserve.saturating_sub(split.lamports()?),
@@ -4365,7 +4372,9 @@ mod tests {
                     assert_eq!(Ok(*state), stake_keyed_account.state());
                 }
                 StakeState::Stake(meta, stake) => {
-                    let expected_stake = stake_lamports - expected_rent_exempt_reserve;
+                    // Expected stake should reflect original stake amount so that extra lamports
+                    // from the rent_exempt_reserve inequality do not magically activate
+                    let expected_stake = stake_lamports - rent_exempt_reserve;
 
                     assert_eq!(
                         Ok(StakeState::Stake(
@@ -4382,7 +4391,9 @@ mod tests {
                     );
                     assert_eq!(
                         split_stake_keyed_account.account.borrow().lamports,
-                        expected_stake + expected_rent_exempt_reserve
+                        expected_stake
+                            + expected_rent_exempt_reserve
+                            + (rent_exempt_reserve - expected_rent_exempt_reserve)
                     );
                     assert_eq!(
                         Ok(StakeState::Stake(
