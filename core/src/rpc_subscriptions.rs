@@ -122,7 +122,7 @@ type RpcRootSubscriptions = RwLock<HashMap<SubscriptionId, Sink<Slot>>>;
 fn add_subscription<K, S, T>(
     subscriptions: &mut HashMap<K, HashMap<SubscriptionId, SubscriptionData<S, T>>>,
     hashmap_key: K,
-    commitment: Option<CommitmentConfig>,
+    commitment: CommitmentConfig,
     sub_id: SubscriptionId,
     subscriber: Subscriber<S>,
     last_notified_slot: Slot,
@@ -132,7 +132,6 @@ fn add_subscription<K, S, T>(
     S: Clone,
 {
     let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-    let commitment = commitment.unwrap_or_else(CommitmentConfig::single);
     let subscription_data = SubscriptionData {
         sink,
         commitment,
@@ -528,11 +527,11 @@ impl RpcSubscriptions {
         subscriber: Subscriber<Response<UiAccount>>,
     ) {
         let config = config.unwrap_or_default();
-        let commitment_level = config
+        let commitment = config
             .commitment
-            .unwrap_or_else(CommitmentConfig::single)
-            .commitment;
-        let slot = match commitment_level {
+            .unwrap_or_else(CommitmentConfig::single_gossip);
+
+        let slot = match commitment.commitment {
             CommitmentLevel::Max => self
                 .block_commitment_cache
                 .read()
@@ -564,7 +563,7 @@ impl RpcSubscriptions {
             0
         };
 
-        let mut subscriptions = if commitment_level == CommitmentLevel::SingleGossip {
+        let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip {
             self.subscriptions
                 .gossip_account_subscriptions
                 .write()
@@ -572,10 +571,11 @@ impl RpcSubscriptions {
         } else {
             self.subscriptions.account_subscriptions.write().unwrap()
         };
+
         add_subscription(
             &mut subscriptions,
             pubkey,
-            config.commitment,
+            commitment,
             sub_id,
             subscriber,
             last_notified_slot,
@@ -605,12 +605,12 @@ impl RpcSubscriptions {
         subscriber: Subscriber<Response<RpcKeyedAccount>>,
     ) {
         let config = config.unwrap_or_default();
-        let commitment_level = config
+        let commitment = config
             .account_config
             .commitment
-            .unwrap_or_else(CommitmentConfig::recent)
-            .commitment;
-        let mut subscriptions = if commitment_level == CommitmentLevel::SingleGossip {
+            .unwrap_or_else(CommitmentConfig::single_gossip);
+
+        let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip {
             self.subscriptions
                 .gossip_program_subscriptions
                 .write()
@@ -618,10 +618,11 @@ impl RpcSubscriptions {
         } else {
             self.subscriptions.program_subscriptions.write().unwrap()
         };
+
         add_subscription(
             &mut subscriptions,
             program_id,
-            config.account_config.commitment,
+            commitment,
             sub_id,
             subscriber,
             0, // last_notified_slot is not utilized for program subscriptions
@@ -657,11 +658,9 @@ impl RpcSubscriptions {
             .map(|config| (config.commitment, config.enable_received_notification))
             .unwrap_or_default();
 
-        let commitment_level = commitment
-            .unwrap_or_else(CommitmentConfig::recent)
-            .commitment;
+        let commitment = commitment.unwrap_or_else(CommitmentConfig::single_gossip);
 
-        let mut subscriptions = if commitment_level == CommitmentLevel::SingleGossip {
+        let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip {
             self.subscriptions
                 .gossip_signature_subscriptions
                 .write()
@@ -669,6 +668,7 @@ impl RpcSubscriptions {
         } else {
             self.subscriptions.signature_subscriptions.write().unwrap()
         };
+
         add_subscription(
             &mut subscriptions,
             signature,
@@ -1286,7 +1286,13 @@ pub(crate) mod tests {
         );
         subscriptions.add_program_subscription(
             solana_stake_program::id(),
-            None,
+            Some(RpcProgramAccountsConfig {
+                account_config: RpcAccountInfoConfig {
+                    commitment: Some(CommitmentConfig::recent()),
+                    ..RpcAccountInfoConfig::default()
+                },
+                ..RpcProgramAccountsConfig::default()
+            }),
             sub_id.clone(),
             subscriber,
         );
@@ -1645,13 +1651,22 @@ pub(crate) mod tests {
     fn test_add_and_remove_subscription() {
         let mut subscriptions: HashMap<u64, HashMap<SubscriptionId, SubscriptionData<(), ()>>> =
             HashMap::new();
+        let commitment = CommitmentConfig::single_gossip();
 
         let num_keys = 5;
         for key in 0..num_keys {
             let (subscriber, _id_receiver, _transport_receiver) =
                 Subscriber::new_test("notification");
             let sub_id = SubscriptionId::Number(key);
-            add_subscription(&mut subscriptions, key, None, sub_id, subscriber, 0, None);
+            add_subscription(
+                &mut subscriptions,
+                key,
+                commitment,
+                sub_id,
+                subscriber,
+                0,
+                None,
+            );
         }
 
         // Add another subscription to the "0" key
@@ -1660,7 +1675,7 @@ pub(crate) mod tests {
         add_subscription(
             &mut subscriptions,
             0,
-            None,
+            commitment,
             extra_sub_id.clone(),
             subscriber,
             0,

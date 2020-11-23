@@ -1,4 +1,7 @@
-use crate::rpc_response::{Response as RpcResponse, RpcSignatureResult, SlotInfo};
+use crate::{
+    rpc_config::RpcSignatureSubscribeConfig,
+    rpc_response::{Response as RpcResponse, RpcSignatureResult, SlotInfo},
+};
 use log::*;
 use serde::de::DeserializeOwned;
 use serde_json::{
@@ -205,6 +208,7 @@ impl PubsubClient {
     pub fn signature_subscribe(
         url: &str,
         signature: &Signature,
+        config: Option<RpcSignatureSubscribeConfig>,
     ) -> Result<
         (
             PubsubSignatureResponse,
@@ -226,7 +230,7 @@ impl PubsubClient {
             "method":format!("{}Subscribe", SIGNATURE_OPERATION),
             "params":[
                 signature.to_string(),
-                {"enableReceivedNotification": true }
+                config
             ]
         })
         .to_string();
