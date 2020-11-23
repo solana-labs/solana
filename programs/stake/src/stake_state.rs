@@ -1053,8 +1053,13 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         stake_history: &StakeHistory,
         signers: &HashSet<Pubkey>,
     ) -> Result<(), InstructionError> {
+        // Ensure source isn't spoofed
         if source_account.owner()? != id() {
             return Err(InstructionError::IncorrectProgramId);
+        }
+        // Close the self-reference loophole
+        if source_account.unsigned_key() == self.unsigned_key() {
+            return Err(InstructionError::InvalidArgument);
         }
 
         let stake_merge_kind = MergeKind::get_if_mergeable(self, clock, stake_history)?;
@@ -4629,6 +4634,48 @@ mod tests {
                 assert_eq!(source_stake_keyed_account.account.borrow().lamports, 0);
             }
         }
+    }
+
+    #[test]
+    fn test_merge_self_fails() {
+        let stake_address = Pubkey::new_unique();
+        let authority_pubkey = Pubkey::new_unique();
+        let signers = HashSet::from_iter(vec![authority_pubkey]);
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let stake_amount = 4242424242;
+        let stake_lamports = rent_exempt_reserve + stake_amount;
+
+        let meta = Meta {
+            rent_exempt_reserve,
+            ..Meta::auto(&authority_pubkey)
+        };
+        let stake = Stake {
+            delegation: Delegation {
+                stake: stake_amount,
+                activation_epoch: 0,
+                ..Delegation::default()
+            },
+            ..Stake::default()
+        };
+        let stake_account = Account::new_ref_data_with_space(
+            stake_lamports,
+            &StakeState::Stake(meta, stake),
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .expect("stake_account");
+        let stake_keyed_account = KeyedAccount::new(&stake_address, true, &stake_account);
+
+        assert_eq!(
+            stake_keyed_account.merge(
+                &stake_keyed_account,
+                &Clock::default(),
+                &StakeHistory::default(),
+                &signers,
+            ),
+            Err(InstructionError::InvalidArgument),
+        );
     }
 
     #[test]
