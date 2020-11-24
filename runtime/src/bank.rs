@@ -1398,7 +1398,7 @@ impl Bank {
 
         if !self
             .feature_set
-            .is_active(&feature_set::pico_inflation::id())
+            .is_active(&feature_set::deprecate_rewards_sysvar::id())
         {
             // this sysvar can be retired once `pico_inflation` is enabled on all clusters
             self.update_sysvar_account(&sysvar::rewards::id(), |account| {
