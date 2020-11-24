@@ -3,7 +3,6 @@ import {
   PublicKey,
   ConfirmedSignatureInfo,
   ParsedInstruction,
-  ParsedInnerInstruction,
   PartiallyDecodedInstruction,
 } from "@solana/web3.js";
 import { CacheEntry, FetchStatus } from "providers/cache";
@@ -408,7 +407,7 @@ const TokenTransactionRow = React.memo(
               </td>
 
               <td>
-                <InstructionType instructionType={instructionType} tx={tx} />
+                <InstructionDetails instructionType={instructionType} tx={tx} />
               </td>
 
               <td className="forced-truncate">
@@ -422,7 +421,7 @@ const TokenTransactionRow = React.memo(
   }
 );
 
-function InstructionType({
+function InstructionDetails({
   instructionType,
   tx,
 }: {
@@ -436,6 +435,7 @@ function InstructionType({
       if ("parsed" in ix && ix.program === "spl-token") {
         return instructionTypeName(ix, tx);
       }
+      return undefined;
     })
     .filter((type) => type !== undefined);
 
@@ -443,19 +443,16 @@ function InstructionType({
     <>
       <p className="tree">
         {instructionTypes.length > 0 && (
-          <a
-            href="#"
+          <span
+
             onClick={(e) => {
               e.preventDefault();
               setExpanded(!expanded);
             }}
-          >
-            <span
-              className={`fe mr-2 ${
-                expanded ? "fe-minus-square" : "fe-plus-square"
-              }`}
-            ></span>
-          </a>
+            className={`c-pointer fe mr-2 ${
+              expanded ? "fe-minus-square" : "fe-plus-square"
+            }`}
+          ></span>
         )}
         {instructionType.name}
       </p>

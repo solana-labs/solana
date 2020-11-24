@@ -225,6 +225,10 @@ ul.tree ul {
   padding: 0;
 }
 
+p.tree span.c-pointer {
+  color: $primary-dark;
+}
+
 ul.tree ul {
   margin-left: 1.0em;
 }
