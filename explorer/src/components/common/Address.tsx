@@ -12,9 +12,17 @@ type Props = {
   link?: boolean;
   raw?: boolean;
   truncate?: boolean;
+  truncateUnknown?: boolean;
 };
 
-export function Address({ pubkey, alignRight, link, raw, truncate }: Props) {
+export function Address({
+  pubkey,
+  alignRight,
+  link,
+  raw,
+  truncate,
+  truncateUnknown,
+}: Props) {
   const [state, setState] = useState<CopyState>("copy");
   const address = pubkey.toBase58();
   const { cluster } = useCluster();
@@ -32,6 +40,10 @@ export function Address({ pubkey, alignRight, link, raw, truncate }: Props) {
     ) : (
       <span className="fe fe-check-circle"></span>
     );
+
+  if (truncateUnknown && address === displayAddress(address, cluster)) {
+    truncate = true;
+  }
 
   const content = (
     <>
