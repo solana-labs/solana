@@ -1,8 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   PublicKey,
   ConfirmedSignatureInfo,
   ParsedInstruction,
+  ParsedInnerInstruction,
+  PartiallyDecodedInstruction,
 } from "@solana/web3.js";
 import { CacheEntry, FetchStatus } from "providers/cache";
 import {
@@ -40,6 +42,11 @@ import {
   isSerumInstruction,
   parseSerumInstructionTitle,
 } from "components/instruction/serum/types";
+
+type InstructionType = {
+  name: string;
+  innerInstructions: (ParsedInstruction | PartiallyDecodedInstruction)[];
+};
 
 export function TokenHistoryCard({ pubkey }: { pubkey: PublicKey }) {
   const address = pubkey.toBase58();
@@ -310,7 +317,24 @@ const TokenTransactionRow = React.memo(
       );
 
     const tokenInstructionNames = instructions
-      .map((ix, index): string | undefined => {
+      .map((ix, index): InstructionType | undefined => {
+        let name = "Unknown";
+
+        let innerInstructions: (
+          | ParsedInstruction
+          | PartiallyDecodedInstruction
+        )[] = [];
+
+        if (details?.data?.transaction?.meta?.innerInstructions) {
+          details.data.transaction.meta.innerInstructions.forEach((ix) => {
+            if (ix.index === index) {
+              ix.instructions.forEach((inner) => {
+                innerInstructions.push(inner);
+              });
+            }
+          });
+        }
+
         let transactionInstruction;
         if (details?.data?.transaction?.transaction) {
           transactionInstruction = intoTransactionInstruction(
@@ -321,7 +345,7 @@ const TokenTransactionRow = React.memo(
 
         if ("parsed" in ix) {
           if (ix.program === "spl-token") {
-            return instructionTypeName(ix, tx);
+            name = instructionTypeName(ix, tx);
           } else {
             return undefined;
           }
@@ -330,7 +354,7 @@ const TokenTransactionRow = React.memo(
           isSerumInstruction(transactionInstruction)
         ) {
           try {
-            return parseSerumInstructionTitle(transactionInstruction);
+            name = parseSerumInstructionTitle(transactionInstruction);
           } catch (error) {
             reportError(error, { signature: tx.signature });
             return undefined;
@@ -340,7 +364,7 @@ const TokenTransactionRow = React.memo(
           isTokenSwapInstruction(transactionInstruction)
         ) {
           try {
-            return parseTokenSwapInstructionTitle(transactionInstruction);
+            name = parseTokenSwapInstructionTitle(transactionInstruction);
           } catch (error) {
             reportError(error, { signature: tx.signature });
             return undefined;
@@ -351,16 +375,22 @@ const TokenTransactionRow = React.memo(
               account.equals(TOKEN_PROGRAM_ID)
             ) >= 0
           ) {
-            return "Unknown (Inner)";
+            name = "Unknown (Inner)";
+          } else {
+            return undefined;
           }
-          return undefined;
         }
+
+        return {
+          name: name,
+          innerInstructions: innerInstructions,
+        };
       })
-      .filter((name) => name !== undefined) as string[];
+      .filter((name) => name !== undefined) as InstructionType[];
 
     return (
       <>
-        {tokenInstructionNames.map((typeName, index) => {
+        {tokenInstructionNames.map((instructionType, index) => {
           return (
             <tr key={index}>
               <td className="w-1">
@@ -373,14 +403,16 @@ const TokenTransactionRow = React.memo(
                 </span>
               </td>
 
-              <td>
-                <Address pubkey={mint} link truncate />
+              <td className="forced-truncate">
+                <Address pubkey={mint} link truncateUnknown />
               </td>
 
-              <td>{typeName}</td>
-
               <td>
-                <Signature signature={tx.signature} link />
+                <InstructionType instructionType={instructionType} tx={tx} />
+              </td>
+
+              <td className="forced-truncate">
+                <Signature signature={tx.signature} link truncate />
               </td>
             </tr>
           );
@@ -389,3 +421,51 @@ const TokenTransactionRow = React.memo(
     );
   }
 );
+
+function InstructionType({
+  instructionType,
+  tx,
+}: {
+  instructionType: InstructionType;
+  tx: ConfirmedSignatureInfo;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  let instructionTypes = instructionType.innerInstructions
+    .map((ix) => {
+      if ("parsed" in ix && ix.program === "spl-token") {
+        return instructionTypeName(ix, tx);
+      }
+    })
+    .filter((type) => type !== undefined);
+
+  return (
+    <>
+      <p className="tree">
+        {instructionTypes.length > 0 && (
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              setExpanded(!expanded);
+            }}
+          >
+            <span
+              className={`fe mr-2 ${
+                expanded ? "fe-minus-square" : "fe-plus-square"
+              }`}
+            ></span>
+          </a>
+        )}
+        {instructionType.name}
+      </p>
+      {expanded && (
+        <ul className="tree">
+          {instructionTypes.map((type, index) => {
+            return <li key={index}>{type}</li>;
+          })}
+        </ul>
+      )}
+    </>
+  );
+}
