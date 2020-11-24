@@ -6,9 +6,10 @@ extern crate solana_bpf_loader_program;
 use solana_bpf_loader_program::{
     create_vm,
     serialization::{deserialize_parameters, serialize_parameters},
+    syscalls::register_syscalls,
     ThisInstructionMeter,
 };
-use solana_rbpf::vm::Executable;
+use solana_rbpf::vm::{Config, Executable, Tracer};
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
@@ -85,23 +86,62 @@ fn run_program(
     let compute_meter = invoke_context.get_compute_meter();
     let mut instruction_meter = ThisInstructionMeter { compute_meter };
 
-    let executable = Executable::from_elf(&data, None).unwrap();
-    let mut vm = create_vm(
-        &loader_id,
-        executable.as_ref(),
-        &parameter_bytes,
-        parameter_accounts,
-        &mut invoke_context,
-    )
-    .unwrap();
+    let config = Config {
+        max_call_depth: 20,
+        stack_frame_size: 4096,
+        enable_instruction_meter: true,
+        enable_instruction_tracing: true,
+    };
+    let mut executable = Executable::from_elf(&data, None, config).unwrap();
+    executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
+    executable.jit_compile().unwrap();
 
-    assert_eq!(
-        SUCCESS,
-        vm.execute_program_interpreted(&mut instruction_meter)
-            .unwrap()
-    );
-    deserialize_parameters(&bpf_loader::id(), parameter_accounts, &parameter_bytes).unwrap();
-    Ok(vm.get_total_instruction_count())
+    let mut instruction_count = 0;
+    let mut tracer = None;
+    for i in 0..2 {
+        let mut parameter_bytes = parameter_bytes.clone();
+        let mut vm = create_vm(
+            &loader_id,
+            executable.as_ref(),
+            &mut parameter_bytes,
+            parameter_accounts,
+            &mut invoke_context,
+        )
+        .unwrap();
+        let result = if i == 0 {
+            vm.execute_program_interpreted(&mut instruction_meter)
+        } else {
+            vm.execute_program_jit(&mut instruction_meter)
+        };
+        assert_eq!(SUCCESS, result.unwrap());
+        deserialize_parameters(&bpf_loader::id(), parameter_accounts, &parameter_bytes).unwrap();
+        if i == 1 {
+            assert_eq!(instruction_count, vm.get_total_instruction_count());
+        }
+        instruction_count = vm.get_total_instruction_count();
+        if config.enable_instruction_tracing {
+            if i == 1 {
+                if !Tracer::compare(tracer.as_ref().unwrap(), vm.get_tracer()) {
+                    let mut tracer_display = String::new();
+                    tracer
+                        .as_ref()
+                        .unwrap()
+                        .write(&mut tracer_display, vm.get_program())
+                        .unwrap();
+                    println!("TRACE (interpreted): {}", tracer_display);
+                    let mut tracer_display = String::new();
+                    vm.get_tracer()
+                        .write(&mut tracer_display, vm.get_program())
+                        .unwrap();
+                    println!("TRACE (jit): {}", tracer_display);
+                    assert!(false);
+                }
+            }
+            tracer = Some(vm.get_tracer().clone());
+        }
+    }
+
+    Ok(instruction_count)
 }
 
 fn process_transaction_and_record_inner(

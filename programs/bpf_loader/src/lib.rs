@@ -45,6 +45,8 @@ pub enum BPFLoaderError {
     VirtualMachineCreationFailed = 0x0b9f_0001,
     #[error("virtual machine failed to run the program to completion")]
     VirtualMachineFailedToRunProgram = 0x0b9f_0002,
+    #[error("failed to compile program")]
+    JustInTimeCompilationFailed = 0x0b9f_0003,
 }
 impl<E> DecodeError<E> for BPFLoaderError {
     fn type_of() -> &'static str {
@@ -89,12 +91,24 @@ fn map_ebpf_error(
     InstructionError::InvalidAccountData
 }
 
+const IS_JIT_ENABLED: bool = false;
+
 pub fn create_and_cache_executor(
     program: &KeyedAccount,
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<Arc<BPFExecutor>, InstructionError> {
-    let executable = Executable::from_elf(&program.try_account_ref()?.data, None)
-        .map_err(|e| map_ebpf_error(invoke_context, e))?;
+    let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
+    let mut executable = Executable::<BPFError, ThisInstructionMeter>::from_elf(
+        &program.try_account_ref()?.data,
+        None,
+        Config {
+            max_call_depth: bpf_compute_budget.max_call_depth,
+            stack_frame_size: bpf_compute_budget.stack_frame_size,
+            enable_instruction_meter: true,
+            enable_instruction_tracing: false,
+        },
+    )
+    .map_err(|e| map_ebpf_error(invoke_context, e))?;
     let (_, elf_bytes) = executable
         .get_text_bytes()
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
@@ -103,6 +117,12 @@ pub fn create_and_cache_executor(
         !invoke_context.is_feature_active(&bpf_compute_budget_balancing::id()),
     )
     .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e)))?;
+    let syscall_registry = syscalls::register_syscalls(invoke_context)
+        .map_err(|e| map_ebpf_error(invoke_context, e))?;
+    executable.set_syscall_registry(syscall_registry);
+    if IS_JIT_ENABLED && executable.jit_compile().is_err() {
+        return Err(BPFLoaderError::JustInTimeCompilationFailed.into());
+    }
     let executor = Arc::new(BPFExecutor { executable });
     invoke_context.add_executor(program.unsigned_key(), executor.clone());
     Ok(executor)
@@ -115,24 +135,21 @@ const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
 /// Create the BPF virtual machine
 pub fn create_vm<'a>(
     loader_id: &'a Pubkey,
-    executable: &'a dyn Executable<BPFError>,
-    parameter_bytes: &[u8],
+    executable: &'a dyn Executable<BPFError, ThisInstructionMeter>,
+    parameter_bytes: &mut [u8],
     parameter_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<EbpfVm<'a, BPFError, ThisInstructionMeter>, EbpfError<BPFError>> {
     let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
-    let heap_region = MemoryRegion::new_from_slice(&heap, MM_HEAP_START, true);
-    let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
-    let mut vm = EbpfVm::new(
-        executable,
-        Config {
-            max_call_depth: bpf_compute_budget.max_call_depth,
-            stack_frame_size: bpf_compute_budget.stack_frame_size,
-        },
-        parameter_bytes,
-        &[heap_region],
+    let heap_region = MemoryRegion::new_from_slice(&heap, MM_HEAP_START, 0, true);
+    let mut vm = EbpfVm::new(executable, parameter_bytes, &[heap_region])?;
+    syscalls::bind_syscall_context_objects(
+        loader_id,
+        &mut vm,
+        parameter_accounts,
+        invoke_context,
+        heap,
     )?;
-    syscalls::register_syscalls(loader_id, &mut vm, parameter_accounts, invoke_context, heap)?;
     Ok(vm)
 }
 
@@ -219,7 +236,7 @@ impl InstructionMeter for ThisInstructionMeter {
 
 /// BPF Loader's Executor implementation
 pub struct BPFExecutor {
-    executable: Box<dyn Executable<BPFError>>,
+    executable: Box<dyn Executable<BPFError, ThisInstructionMeter>>,
 }
 
 // Well, implement Debug for solana_rbpf::vm::Executable in solana-rbpf...
@@ -244,7 +261,7 @@ impl Executor for BPFExecutor {
         let program = next_keyed_account(&mut keyed_accounts_iter)?;
 
         let parameter_accounts = keyed_accounts_iter.as_slice();
-        let parameter_bytes = serialize_parameters(
+        let mut parameter_bytes = serialize_parameters(
             program_id,
             program.unsigned_key(),
             parameter_accounts,
@@ -255,7 +272,7 @@ impl Executor for BPFExecutor {
             let mut vm = match create_vm(
                 program_id,
                 self.executable.as_ref(),
-                parameter_bytes.as_slice(),
+                &mut parameter_bytes,
                 &parameter_accounts,
                 invoke_context,
             ) {
@@ -269,12 +286,8 @@ impl Executor for BPFExecutor {
             stable_log::program_invoke(&logger, program.unsigned_key(), invoke_depth);
             let mut instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
             let before = compute_meter.borrow().get_remaining();
-            const IS_JIT_ENABLED: bool = false;
             let result = if IS_JIT_ENABLED {
-                if vm.jit_compile().is_err() {
-                    return Err(BPFLoaderError::VirtualMachineCreationFailed.into());
-                }
-                unsafe { vm.execute_program_jit(&mut instruction_meter) }
+                vm.execute_program_jit(&mut instruction_meter)
             } else {
                 vm.execute_program_interpreted(&mut instruction_meter)
             };
@@ -357,14 +370,14 @@ mod tests {
         ];
         let input = &mut [0x00];
 
-        let executable = Executable::<BPFError>::from_text_bytes(program, None).unwrap();
-        let mut vm = EbpfVm::<BPFError, TestInstructionMeter>::new(
-            executable.as_ref(),
+        let executable = Executable::<BPFError, TestInstructionMeter>::from_text_bytes(
+            program,
+            None,
             Config::default(),
-            input,
-            &[],
         )
         .unwrap();
+        let mut vm =
+            EbpfVm::<BPFError, TestInstructionMeter>::new(executable.as_ref(), input, &[]).unwrap();
         let mut instruction_meter = TestInstructionMeter { remaining: 10 };
         vm.execute_program_interpreted(&mut instruction_meter)
             .unwrap();
