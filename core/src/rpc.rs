@@ -599,7 +599,7 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    fn check_slot_cleaned_up<T>(
+    fn check_slot_blockstore_status<T>(
         &self,
         result: &std::result::Result<T, BlockstoreError>,
         slot: Slot,
@@ -617,6 +617,9 @@ impl JsonRpcRequestProcessor {
                         .unwrap_or_default(),
                 }
                 .into());
+            }
+            if let BlockstoreError::SlotNotRooted = result.as_ref().unwrap_err() {
+                return Err(RpcCustomError::BlockNotAvailable { slot }.into());
             }
         }
         Ok(())
@@ -646,7 +649,7 @@ impl JsonRpcRequestProcessor {
                         .map(|confirmed_block| confirmed_block.encode(encoding)));
                 }
             }
-            self.check_slot_cleaned_up(&result, slot)?;
+            self.check_slot_blockstore_status(&result, slot)?;
             Ok(result
                 .ok()
                 .map(|confirmed_block| confirmed_block.encode(encoding)))
@@ -751,7 +754,7 @@ impl JsonRpcRequestProcessor {
                         .and_then(|confirmed_block| confirmed_block.block_time));
                 }
             }
-            self.check_slot_cleaned_up(&result, slot)?;
+            self.check_slot_blockstore_status(&result, slot)?;
             Ok(result.ok().unwrap_or(None))
         } else {
             Err(RpcCustomError::BlockNotAvailable { slot }.into())
