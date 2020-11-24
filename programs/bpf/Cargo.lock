@@ -1837,7 +1837,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-loader-program"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "bincode",
  "byteorder 1.3.4",
@@ -1852,7 +1852,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-programs"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "bincode",
  "byteorder 1.3.4",
@@ -1868,7 +1868,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-128bit"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-bpf-rust-128bit-dep",
  "solana-program",
@@ -1876,35 +1876,35 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-128bit-dep"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-bpf-rust-alloc"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-bpf-rust-call-depth"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-bpf-rust-custom-heap"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-bpf-rust-dep-crate"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "byteorder 1.3.4",
  "solana-program",
@@ -1912,21 +1912,21 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-deprecated_loader"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-bpf-rust-dup-accounts"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-bpf-rust-error-handling"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "num-derive 0.2.5",
  "num-traits",
@@ -1936,21 +1936,21 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-external-spend"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-bpf-rust-instruction-introspection"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-bpf-rust-invoke"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-bpf-rust-invoked",
  "solana-program",
@@ -1958,21 +1958,21 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-invoked"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-bpf-rust-iter"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-bpf-rust-many-args"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-bpf-rust-many-args-dep",
  "solana-program",
@@ -1980,35 +1980,35 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-many-args-dep"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-bpf-rust-mem"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-bpf-rust-noop"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-bpf-rust-panic"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-bpf-rust-param-passing"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-bpf-rust-param-passing-dep",
  "solana-program",
@@ -2016,14 +2016,14 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-param-passing-dep"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-bpf-rust-rand"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "getrandom",
  "rand",
@@ -2032,7 +2032,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-ristretto"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "curve25519-dalek 3.0.0",
  "getrandom",
@@ -2041,28 +2041,28 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-sanity"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-bpf-rust-sha256"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-bpf-rust-sysval"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
 name = "solana-config-program"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "bincode",
  "chrono",
@@ -2074,7 +2074,7 @@ dependencies = [
 
 [[package]]
 name = "solana-crate-features"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "backtrace",
  "bytes 0.4.12",
@@ -2096,7 +2096,7 @@ dependencies = [
 
 [[package]]
 name = "solana-frozen-abi"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "bs58",
  "bv",
@@ -2114,7 +2114,7 @@ dependencies = [
 
 [[package]]
 name = "solana-frozen-abi-macro"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "lazy_static",
  "proc-macro2 1.0.24",
@@ -2125,7 +2125,7 @@ dependencies = [
 
 [[package]]
 name = "solana-logger"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "env_logger",
  "lazy_static",
@@ -2134,7 +2134,7 @@ dependencies = [
 
 [[package]]
 name = "solana-measure"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "jemalloc-ctl",
  "jemallocator",
@@ -2145,7 +2145,7 @@ dependencies = [
 
 [[package]]
 name = "solana-metrics"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "env_logger",
  "gethostname",
@@ -2157,7 +2157,7 @@ dependencies = [
 
 [[package]]
 name = "solana-program"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "bincode",
  "bs58",
@@ -2185,7 +2185,7 @@ dependencies = [
 
 [[package]]
 name = "solana-rayon-threadlimit"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "lazy_static",
  "num_cpus",
@@ -2193,7 +2193,7 @@ dependencies = [
 
 [[package]]
 name = "solana-runtime"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "bincode",
  "blake3",
@@ -2242,7 +2242,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "assert_matches",
  "bincode",
@@ -2284,7 +2284,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk-macro"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "bs58",
  "proc-macro2 1.0.24",
@@ -2295,7 +2295,7 @@ dependencies = [
 
 [[package]]
 name = "solana-secp256k1-program"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "bincode",
  "digest 0.9.0",
@@ -2308,7 +2308,7 @@ dependencies = [
 
 [[package]]
 name = "solana-stake-program"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "bincode",
  "log",
@@ -2328,7 +2328,7 @@ dependencies = [
 
 [[package]]
 name = "solana-vote-program"
-version = "1.4.11"
+version = "1.4.12"
 dependencies = [
  "bincode",
  "log",
