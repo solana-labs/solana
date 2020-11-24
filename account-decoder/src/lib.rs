@@ -12,9 +12,14 @@ pub mod parse_token;
 pub mod parse_vote;
 pub mod validator_info;
 
-use crate::parse_account_data::{parse_account_data, AccountAdditionalData, ParsedAccount};
-use solana_sdk::{account::Account, clock::Epoch, fee_calculator::FeeCalculator, pubkey::Pubkey};
-use std::str::FromStr;
+use {
+    crate::parse_account_data::{parse_account_data, AccountAdditionalData, ParsedAccount},
+    solana_sdk::{account::Account, clock::Epoch, fee_calculator::FeeCalculator, pubkey::Pubkey},
+    std::{
+        io::{Read, Write},
+        str::FromStr,
+    },
+};
 
 pub type StringAmount = String;
 
@@ -44,6 +49,8 @@ pub enum UiAccountEncoding {
     Base58,
     Base64,
     JsonParsed,
+    #[serde(rename = "base64+zstd")]
+    Base64Zstd,
 }
 
 impl UiAccount {
@@ -66,6 +73,19 @@ impl UiAccount {
                 base64::encode(slice_data(&account.data, data_slice_config)),
                 encoding,
             ),
+            UiAccountEncoding::Base64Zstd => {
+                let mut encoder = zstd::stream::write::Encoder::new(Vec::new(), 0).unwrap();
+                match encoder
+                    .write_all(slice_data(&account.data, data_slice_config))
+                    .and_then(|()| encoder.finish())
+                {
+                    Ok(zstd_data) => UiAccountData::Binary(base64::encode(zstd_data), encoding),
+                    Err(_) => UiAccountData::Binary(
+                        base64::encode(slice_data(&account.data, data_slice_config)),
+                        UiAccountEncoding::Base64,
+                    ),
+                }
+            }
             UiAccountEncoding::JsonParsed => {
                 if let Ok(parsed_data) =
                     parse_account_data(pubkey, &account.owner, &account.data, additional_data)
@@ -92,6 +112,16 @@ impl UiAccount {
             UiAccountData::Binary(blob, encoding) => match encoding {
                 UiAccountEncoding::Base58 => bs58::decode(blob).into_vec().ok(),
                 UiAccountEncoding::Base64 => base64::decode(blob).ok(),
+                UiAccountEncoding::Base64Zstd => base64::decode(blob)
+                    .ok()
+                    .map(|zstd_data| {
+                        let mut data = vec![];
+                        zstd::stream::read::Decoder::new(zstd_data.as_slice())
+                            .and_then(|mut reader| reader.read_to_end(&mut data))
+                            .map(|_| data)
+                            .ok()
+                    })
+                    .flatten(),
                 UiAccountEncoding::Binary | UiAccountEncoding::JsonParsed => None,
             },
         }?;
@@ -178,5 +208,26 @@ mod test {
             length: 2,
         });
         assert_eq!(slice_data(&data, slice_config), &[] as &[u8]);
+    }
+
+    #[test]
+    fn test_base64_zstd() {
+        let encoded_account = UiAccount::encode(
+            &Pubkey::default(),
+            Account {
+                data: vec![0; 1024],
+                ..Account::default()
+            },
+            UiAccountEncoding::Base64Zstd,
+            None,
+            None,
+        );
+        assert!(matches!(
+            encoded_account.data,
+            UiAccountData::Binary(_, UiAccountEncoding::Base64Zstd)
+        ));
+
+        let decoded_account = encoded_account.decode().unwrap();
+        assert_eq!(decoded_account.data, vec![0; 1024]);
     }
 }

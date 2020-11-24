@@ -3601,6 +3601,7 @@ dependencies = [
  "solana-vote-program",
  "spl-token",
  "thiserror",
+ "zstd",
 ]
 
 [[package]]
