@@ -18,6 +18,10 @@ pub mod consistent_recent_blockhashes_sysvar {
     solana_sdk::declare_id!("3h1BQWPDS5veRsq6mDBWruEpgPxRJkfwGexg5iiQ9mYg");
 }
 
+pub mod deprecate_rewards_sysvar {
+    solana_sdk::declare_id!("GaBtBJvmS4Arjj5W1NmFcyvPjsHN38UGYDq2MDwbs9Qu");
+}
+
 pub mod pico_inflation {
     solana_sdk::declare_id!("4RWNif6C2WCNiKVW7otP4G7dkmkHGyKQWRpuZ1pxKU5m");
 }
@@ -96,6 +100,7 @@ lazy_static! {
         (instructions_sysvar_enabled::id(), "instructions sysvar"),
         (secp256k1_program_enabled::id(), "secp256k1 program"),
         (consistent_recent_blockhashes_sysvar::id(), "consistent recentblockhashes sysvar"),
+        (deprecate_rewards_sysvar::id(), "deprecate unused rewards sysvar"),
         (pico_inflation::id(), "pico-inflation"),
         (full_inflation::id(), "full-inflation"),
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
