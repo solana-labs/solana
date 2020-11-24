@@ -840,7 +840,7 @@ impl Accounts {
                 .zip(acc.0.iter_mut())
                 .filter(|((i, key), _account)| Self::is_non_loader_key(message, key, *i))
             {
-                prepare_if_nonce_account(
+                let is_nonce_account = prepare_if_nonce_account(
                     account,
                     key,
                     res,
@@ -848,7 +848,24 @@ impl Accounts {
                     last_blockhash_with_fee_calculator,
                     fix_recent_blockhashes_sysvar_delay,
                 );
-                if message.is_writable(i) {
+                let is_fee_payer = i == 0;
+                if message.is_writable(i)
+                    && (res.is_ok()
+                        || (maybe_nonce.is_some() && (is_nonce_account || is_fee_payer)))
+                {
+                    if res.is_err() {
+                        match (is_nonce_account, is_fee_payer, maybe_nonce) {
+                            // nonce is fee-payer, state updated in `prepare_if_nonce_account()`
+                            (true, true, Some((_, _, None))) => (),
+                            // nonce not fee-payer, state updated in `prepare_if_nonce_account()`
+                            (true, false, Some((_, _, Some(_)))) => (),
+                            // not nonce, but fee-payer. rollback to cached state
+                            (false, true, Some((_, _, Some(fee_payer_account)))) => {
+                                *account = fee_payer_account.clone();
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
                     if account.rent_epoch == 0 {
                         acc.2 += rent_collector.collect_from_created_account(
                             &key,
@@ -871,7 +888,7 @@ pub fn prepare_if_nonce_account(
     maybe_nonce: Option<(&Pubkey, &Account, &Option<Account>)>,
     last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
     fix_recent_blockhashes_sysvar_delay: bool,
-) {
+) -> bool {
     if let Some((nonce_key, nonce_acc, _maybe_fee_account)) = maybe_nonce {
         if account_pubkey == nonce_key {
             let overwrite = if tx_result.is_err() {
@@ -900,8 +917,10 @@ pub fn prepare_if_nonce_account(
                     account.set_state(&new_data).unwrap();
                 }
             }
+            return true;
         }
     }
+    false
 }
 
 pub fn create_test_accounts(
