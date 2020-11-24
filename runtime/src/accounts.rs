@@ -22,7 +22,7 @@ use solana_sdk::{
     genesis_config::ClusterType,
     hash::Hash,
     message::Message,
-    native_loader, nonce, nonce_account,
+    native_loader, nonce,
     pubkey::Pubkey,
     transaction::Result,
     transaction::{Transaction, TransactionError},
@@ -316,14 +316,14 @@ impl Accounts {
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
                 ((_, tx), (Ok(()), hash_age_kind)) => {
-                    let fee_calculator = match hash_age_kind.as_ref() {
-                        Some(HashAgeKind::DurableNonce(_, account)) => {
-                            nonce_account::fee_calculator_of(account)
-                        }
-                        _ => hash_queue
-                            .get_fee_calculator(&tx.message().recent_blockhash)
-                            .cloned(),
-                    };
+                    let fee_calculator = hash_age_kind
+                        .as_ref()
+                        .and_then(|hash_age_kind| hash_age_kind.fee_calculator())
+                        .unwrap_or_else(|| {
+                            hash_queue
+                                .get_fee_calculator(&tx.message().recent_blockhash)
+                                .cloned()
+                        });
                     let fee = if let Some(fee_calculator) = fee_calculator {
                         fee_calculator.calculate_fee_with_config(tx.message(), &fee_config)
                     } else {

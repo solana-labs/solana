@@ -1,11 +1,7 @@
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 use itertools::izip;
 use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusBatch};
-use solana_runtime::{
-    bank::{Bank, HashAgeKind},
-    transaction_utils::OrderedIterator,
-};
-use solana_sdk::nonce_account;
+use solana_runtime::{bank::Bank, transaction_utils::OrderedIterator};
 use solana_transaction_status::{InnerInstructions, TransactionStatusMeta};
 use std::{
     sync::{
@@ -76,13 +72,12 @@ impl TransactionStatusService {
             transaction_logs
         ) {
             if Bank::can_commit(&status) && !transaction.signatures.is_empty() {
-                let fee_calculator = match hash_age_kind {
-                    Some(HashAgeKind::DurableNonce(_, account)) => {
-                        nonce_account::fee_calculator_of(&account)
-                    }
-                    _ => bank.get_fee_calculator(&transaction.message().recent_blockhash),
-                }
-                .expect("FeeCalculator must exist");
+                let fee_calculator = hash_age_kind
+                    .and_then(|hash_age_kind| hash_age_kind.fee_calculator())
+                    .unwrap_or_else(|| {
+                        bank.get_fee_calculator(&transaction.message().recent_blockhash)
+                    })
+                    .expect("FeeCalculator must exist");
                 let fee = fee_calculator.calculate_fee(transaction.message());
                 let (writable_keys, readonly_keys) =
                     transaction.message.get_account_keys_by_lock_type();
