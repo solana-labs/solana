@@ -93,6 +93,8 @@ if [[ -n $CI_BASE_BRANCH ]]; then
   BRANCH="$CI_BASE_BRANCH"
 elif [[ -n $CI_BRANCH ]]; then
   BRANCH="$CI_BRANCH"
+else
+  BRANCH=$(git branch --show-current)
 fi
 
 if [[ -z "$CHANNEL" ]]; then

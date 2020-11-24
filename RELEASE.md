@@ -3,16 +3,16 @@
 ## Branches and Tags
 
 ```
-========================= master branch (edge channel) =======================>
-         \                      \                     \
-          \___v0.7.0 tag         \                     \
-           \                      \         v0.9.0 tag__\
-            \          v0.8.0 tag__\                     \
- v0.7.1 tag__\                      \                 v0.9 branch (beta channel)
-              \___v0.7.2 tag         \___v0.8.1 tag
-               \                      \
-                \                      \
-           v0.7 branch         v0.8 branch (stable channel)
+================= master branch (v0.10.0-pre0) (edge channel) =======================>
+         \                      \                          \
+          \___v0.7.0 tag         \                          \
+           \                      \         v0.9.0-pre0 tag__\
+            \          v0.8.0 tag__\                          \
+ v0.7.1 tag__\                      \                          \__ v0.9.0-pre1 tag
+              \___v0.7.2 tag         \___v0.8.1 tag             \
+               \                      \                          \
+                \                      \                          \
+     v0.7 branch (obsolete)     v0.8 branch (stable channel)     v0.9 branch (beta channel)
 
 ```
 
@@ -29,8 +29,8 @@ release blocker in a branch causes you to forget to propagate back to
 `master`!)"
 
 Once the bug fix lands on `master` it is cherry-picked into the `vX.Y` branch
-and potentially the `vX.Y-1` branch.  The exception to this rule is when a bug
-fix for `vX.Y` doesn't apply to `master` or `vX.Y-1`.
+and potentially the `vX.Y-1` branch as appropriate.  The exception to this rule
+is when a bug fix for `vX.Y` doesn't apply to `master` or `vX.Y-1`.
 
 Immediately after a new stabilization branch is forged, the `Cargo.toml` minor
 version (*Y*) in the `master` branch is incremented by the release engineer.
@@ -82,7 +82,7 @@ Alternatively use the Github UI.
 
 1. After the new branch has been created and pushed, update the Cargo.toml files on **master** to the next semantic version (e.g. 0.9.0 -> 0.10.0) with:
      ```
-     $ scripts/increment-cargo-version.sh minor
+     $ scripts/increment-cargo-version.sh
      $ ./scripts/cargo-for-all-lock-files.sh update
      ```
 1. Push all the changed Cargo.toml and Cargo.lock files to the `master` branch with something like:
@@ -122,7 +122,7 @@ Alternatively use the Github UI.
 
 1. After the new release has been tagged, update the Cargo.toml files on **release branch** to the next semantic version (e.g. 0.9.0 -> 0.9.1) with:
      ```
-     $ scripts/increment-cargo-version.sh patch
+     $ scripts/increment-cargo-version.sh
      $ ./scripts/cargo-for-all-lock-files.sh tree
      ```
 1. Push all the changed Cargo.toml and Cargo.lock files to the **release branch** with something like:

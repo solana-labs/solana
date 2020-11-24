@@ -5,10 +5,8 @@ usage() {
   cat <<EOF
 usage: $0 [major|minor|patch|-preXYZ]
 
-Increments the Cargo.toml version.
+Increments the Cargo.toml version
 
-Default:
-* Removes the prerelease tag if present, otherwise the minor version is incremented.
 EOF
   exit 0
 }
@@ -30,8 +28,11 @@ for ignore in "${ignores[@]}"; do
   not_paths+=(-not -path "*/$ignore/*")
 done
 
+echo "Finding toml files"
 # shellcheck disable=2207,SC2068 # Don't want a positional arg if `not-paths` is empty
 Cargo_tomls=($(find . -mindepth 2 -name Cargo.toml ${not_paths[@]}))
+
+echo "Finding markdown files"
 # shellcheck disable=2207
 markdownFiles=($(find . -name "*.md"))
 
@@ -51,32 +52,77 @@ semverParseInto "$(readCargoVariable version "${Cargo_tomls[0]}")" MAJOR MINOR P
 [[ -n $MAJOR ]] || usage
 
 currentVersion="$MAJOR\.$MINOR\.$PATCH$SPECIAL"
+currentVersionDisplay="$MAJOR.$MINOR.$PATCH$SPECIAL"
 
 bump=$1
 if [[ -z $bump ]]; then
-  if [[ -n $SPECIAL ]]; then
-    bump=dropspecial # Remove prerelease tag
-  else
+  echo "Figuring current channel"
+  eval "$(ci/channel-info.sh)"
+  if [[ -z $CHANNEL ]]; then
+    echo "Error: Unable to figure current channel"
+    usage
+  fi
+  echo "CHANNEL=$CHANNEL"
+  if [[ $CHANNEL = stable ]]; then
+    bump="patch"
+  elif [[ $CHANNEL = beta ]]; then
+    bump=pre
+  elif [[ $CHANNEL = edge ]]; then
     bump=minor
+  else
+    echo "Error: Unknown CHANNEL"
+    exit 1
   fi
 fi
-SPECIAL=""
 
 # Figure out what to increment
 case $bump in
 patch)
-  PATCH=$((PATCH + 1))
+  echo "Bumping patch version"
+
+  if [[ -z $SPECIAL ]]; then
+    PATCH=$((PATCH + 1))
+  fi
+
+  # Assume patch version bumps only occur on a stable channel.  Clear the
+  # pre-release tag, if any
+  #
+  SPECIAL=""
   ;;
 major)
-  MAJOR=$((MAJOR+ 1))
+  echo "Bumping major version"
+  MAJOR=$((MAJOR + 1))
   MINOR=0
   PATCH=0
+
+  # Assume major version bumps only occur on the master branch.  Reset back to
+  # the first pre-release
+  SPECIAL=".pre.0"
   ;;
 minor)
-  MINOR=$((MINOR+ 1))
+  echo "Bumping minor version"
+  MINOR=$((MINOR + 1))
   PATCH=0
+
+  # Assume minor version bumps only occur on the master branch.  Reset back to
+  # the first pre-release
+  SPECIAL=".pre.0"
+  ;;
+pre)
+  echo "Bumping pre-release version"
+
+  # Pre version bumps happen on the edge and beta channels
+  if [[ $SPECIAL =~ -pre.([0-9]*) ]]; then
+    PRERELEASE=${BASH_REMATCH[1]}
+    PRERELEASE=$((PRERELEASE + 1))
+    SPECIAL="-pre-$PRERELEASE"
+  else
+    echo "Unsupported pre-release identifier: $SPECIAL"
+    exit 1
+  fi
   ;;
 dropspecial)
+  SPECIAL=""
   ;;
 check)
   badTomls=()
@@ -92,7 +138,7 @@ check)
   exit 0
   ;;
 -*)
-  if [[ $1 =~ ^-[A-Za-z0-9]*$ ]]; then
+  if [[ $1 =~ ^-[.A-Za-z0-9]*$ ]]; then
     SPECIAL="$1"
   else
     echo "Error: Unsupported characters found in $1"
@@ -106,6 +152,11 @@ check)
 esac
 
 newVersion="$MAJOR.$MINOR.$PATCH$SPECIAL"
+
+if [[ "$currentVersionDisplay" = "$newVersion" ]]; then
+   echo "Nothing to do.  Current version is $currentVersionDisplay"
+fi
+echo "Bumping version to $newVersion"
 
 # Update all the Cargo.toml files
 for Cargo_toml in "${Cargo_tomls[@]}"; do
@@ -135,6 +186,6 @@ for file in "${markdownFiles[@]}"; do
   )
 done
 
-echo "$currentVersion -> $newVersion"
+echo "$currentVersionDisplay -> $newVersion"
 
 exit 0

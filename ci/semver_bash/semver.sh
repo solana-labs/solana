@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 
 function semverParseInto() {
-    local RE='[^0-9]*\([0-9]*\)[.]\([0-9]*\)[.]\([0-9]*\)\([0-9A-Za-z-]*\)'
+    local RE='[^0-9]*\([0-9]*\)[.]\([0-9]*\)[.]\([0-9]*\)\([.0-9A-Za-z-]*\)'
     #MAJOR
     eval $2=`echo $1 | sed -e "s#$RE#\1#"`
     #MINOR
@@ -68,7 +68,7 @@ function semverLT() {
     if [[ $MAJOR_A -le $MAJOR_B  && $MINOR_A -lt $MINOR_B ]]; then
         return 0
     fi
-    
+
     if [[ $MAJOR_A -le $MAJOR_B  && $MINOR_A -le $MINOR_B && $PATCH_A -lt $PATCH_B ]]; then
         return 0
     fi
