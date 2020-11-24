@@ -2561,7 +2561,7 @@ fn main() {
                         println!("Ledger is empty");
                     } else {
                         let first = slots.first().unwrap();
-                        let last = slots.last().unwrap_or_else(|| first);
+                        let last = slots.last().unwrap_or(first);
                         if first != last {
                             println!("Ledger has data for slots {:?} to {:?}", first, last);
                             if all {

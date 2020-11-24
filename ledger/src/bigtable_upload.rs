@@ -107,6 +107,7 @@ pub async fn upload_confirmed_blocks(
             .difference(&bigtable_slots)
             .cloned()
             .collect::<Vec<_>>();
+        #[allow(clippy::stable_sort_primitive)]
         blocks_to_upload.sort();
         blocks_to_upload
     };

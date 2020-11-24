@@ -683,6 +683,7 @@ pub struct Bank {
     bpf_compute_budget: Option<BpfComputeBudget>,
 
     /// Builtin programs activated dynamically by feature
+    #[allow(clippy::rc_buffer)]
     feature_builtins: Arc<Vec<(Builtin, Pubkey, ActivationType)>>,
 
     /// Last time when the cluster info vote listener has synced with this bank
@@ -1081,6 +1082,7 @@ impl Bank {
         }
 
         let mut ancestors: Vec<_> = roots.into_iter().collect();
+        #[allow(clippy::stable_sort_primitive)]
         ancestors.sort();
         ancestors
     }

@@ -1601,6 +1601,7 @@ impl Blockstore {
             .map(|(iter_slot, _)| iter_slot)
             .take(timestamp_sample_range)
             .collect();
+        #[allow(clippy::stable_sort_primitive)]
         timestamp_slots.sort();
         get_slots.stop();
         datapoint_info!(

@@ -712,7 +712,7 @@ pub fn process_vote<S: std::hash::BuildHasher>(
         vote.slots
             .iter()
             .max()
-            .ok_or_else(|| VoteError::EmptySlots)
+            .ok_or(VoteError::EmptySlots)
             .and_then(|slot| vote_state.process_timestamp(*slot, timestamp))?;
     }
     vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))

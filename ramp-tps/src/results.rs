@@ -37,8 +37,7 @@ impl Results {
     ) -> Self {
         let mut results: BTreeMap<Round, Vec<String>> = BTreeMap::new();
         previous_results.drain().for_each(|(key, value)| {
-            if key.starts_with(ROUND_KEY_PREFIX) {
-                let round_str = &key[ROUND_KEY_PREFIX.len()..];
+            if let Some(round_str) = key.strip_prefix(ROUND_KEY_PREFIX) {
                 dbg!(round_str);
                 if let Ok(round) = u32::from_str(round_str) {
                     if round < start_round {

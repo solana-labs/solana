@@ -2843,6 +2843,7 @@ impl AccountsDB {
 
     pub fn generate_index(&self) {
         let mut slots = self.storage.all_slots();
+        #[allow(clippy::stable_sort_primitive)]
         slots.sort();
 
         let mut last_log_update = Instant::now();
@@ -2950,6 +2951,7 @@ impl AccountsDB {
 
     fn print_index(&self, label: &str) {
         let mut roots: Vec<_> = self.accounts_index.all_roots();
+        #[allow(clippy::stable_sort_primitive)]
         roots.sort();
         info!("{}: accounts_index roots: {:?}", label, roots,);
         for (pubkey, account_entry) in self.accounts_index.account_maps.read().unwrap().iter() {
@@ -2963,12 +2965,14 @@ impl AccountsDB {
 
     fn print_count_and_status(&self, label: &str) {
         let mut slots: Vec<_> = self.storage.all_slots();
+        #[allow(clippy::stable_sort_primitive)]
         slots.sort();
         info!("{}: count_and status for {} slots:", label, slots.len());
         for slot in &slots {
             let slot_stores = self.storage.get_slot_stores(*slot).unwrap();
             let r_slot_stores = slot_stores.read().unwrap();
             let mut ids: Vec<_> = r_slot_stores.keys().cloned().collect();
+            #[allow(clippy::stable_sort_primitive)]
             ids.sort();
             for id in &ids {
                 let entry = r_slot_stores.get(id).unwrap();

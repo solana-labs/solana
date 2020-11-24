@@ -1,4 +1,5 @@
 //! The `retransmit_stage` retransmits shreds between validators
+#![allow(clippy::rc_buffer)]
 
 use crate::{
     cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},

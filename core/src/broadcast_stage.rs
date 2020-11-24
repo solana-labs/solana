@@ -1,4 +1,6 @@
 //! A stage to broadcast data from a leader node to validators
+#![allow(clippy::rc_buffer)]
+
 use self::{
     broadcast_fake_shreds_run::BroadcastFakeShredsRun, broadcast_metrics::*,
     fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,

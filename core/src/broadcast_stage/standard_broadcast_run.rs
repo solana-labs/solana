@@ -1,3 +1,5 @@
+#![allow(clippy::rc_buffer)]
+
 use super::{
     broadcast_utils::{self, ReceiveResults},
     *,
