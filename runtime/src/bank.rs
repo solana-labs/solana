@@ -407,18 +407,28 @@ pub type TransactionLogMessages = Vec<String>;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum HashAgeKind {
     Extant,
-    DurableNonce(Pubkey, Account),
+    DurableNoncePartial(Pubkey, Account),
+    DurableNonceFull(Pubkey, Account, Option<Account>),
 }
 
 impl HashAgeKind {
     pub fn is_durable_nonce(&self) -> bool {
-        matches!(self, HashAgeKind::DurableNonce(_, _))
+        match self {
+            Self::Extant => false,
+            Self::DurableNoncePartial(_, _) => true,
+            Self::DurableNonceFull(_, _, _) => true,
+        }
     }
 
     pub fn fee_calculator(&self) -> Option<Option<FeeCalculator>> {
         match self {
             Self::Extant => None,
-            Self::DurableNonce(_, account) => Some(nonce_account::fee_calculator_of(account)),
+            Self::DurableNoncePartial(_, account) => {
+                Some(nonce_account::fee_calculator_of(account))
+            }
+            Self::DurableNonceFull(_, account, _) => {
+                Some(nonce_account::fee_calculator_of(account))
+            }
         }
     }
 }
@@ -2190,7 +2200,7 @@ impl Bank {
                     if hash_age == Some(true) {
                         (Ok(()), Some(HashAgeKind::Extant))
                     } else if let Some((pubkey, acc)) = self.check_tx_durable_nonce(&tx) {
-                        (Ok(()), Some(HashAgeKind::DurableNonce(pubkey, acc)))
+                        (Ok(()), Some(HashAgeKind::DurableNoncePartial(pubkey, acc)))
                     } else if hash_age == Some(false) {
                         error_counters.blockhash_too_old += 1;
                         (Err(TransactionError::BlockhashNotFound), None)
@@ -4414,8 +4424,19 @@ pub(crate) mod tests {
     #[test]
     fn test_hash_age_kind_is_durable_nonce() {
         assert!(
-            HashAgeKind::DurableNonce(Pubkey::default(), Account::default()).is_durable_nonce()
+            HashAgeKind::DurableNoncePartial(Pubkey::default(), Account::default())
+                .is_durable_nonce()
         );
+        assert!(
+            HashAgeKind::DurableNonceFull(Pubkey::default(), Account::default(), None)
+                .is_durable_nonce()
+        );
+        assert!(HashAgeKind::DurableNonceFull(
+            Pubkey::default(),
+            Account::default(),
+            Some(Account::default())
+        )
+        .is_durable_nonce());
         assert!(!HashAgeKind::Extant.is_durable_nonce());
     }
 

@@ -357,6 +357,23 @@ impl Accounts {
                         Err(e) => return (Err(e), hash_age_kind),
                     };
 
+                    // Update hash_age_kind with fee-subtracted accounts
+                    let hash_age_kind = hash_age_kind.map(|hash_age_kind| match hash_age_kind {
+                        HashAgeKind::Extant => HashAgeKind::Extant,
+                        HashAgeKind::DurableNoncePartial(pubkey, account) => {
+                            let maybe_fee_account = tx
+                                .message()
+                                .account_keys
+                                .get(0)
+                                .filter(|fee_pubkey| **fee_pubkey != pubkey)
+                                .map(|_| accounts[0].clone());
+                            HashAgeKind::DurableNonceFull(pubkey, account, maybe_fee_account)
+                        }
+                        HashAgeKind::DurableNonceFull(_, _, _) => {
+                            panic!("update: unexpected HashAgeKind variant")
+                        }
+                    });
+
                     (Ok((accounts, loaders, rents)), hash_age_kind)
                 }
                 (_, (Err(e), hash_age_kind)) => (Err(e), hash_age_kind),
@@ -800,11 +817,16 @@ impl Accounts {
             }
             let (res, hash_age_kind) = &res[i];
             let maybe_nonce = match (res, hash_age_kind) {
-                (Ok(_), Some(HashAgeKind::DurableNonce(pubkey, acc))) => Some((pubkey, acc)),
+                (Ok(_), Some(HashAgeKind::DurableNonceFull(pubkey, acc, maybe_fee_account))) => {
+                    Some((pubkey, acc, maybe_fee_account))
+                }
                 (
                     Err(TransactionError::InstructionError(_, _)),
-                    Some(HashAgeKind::DurableNonce(pubkey, acc)),
-                ) => Some((pubkey, acc)),
+                    Some(HashAgeKind::DurableNonceFull(pubkey, acc, maybe_fee_account)),
+                ) => Some((pubkey, acc, maybe_fee_account)),
+                (_, Some(HashAgeKind::DurableNoncePartial(_, _))) => {
+                    panic!("collect: unexpected HashAgeKind variant")
+                }
                 (Ok(_), _hash_age_kind) => None,
                 (Err(_), _hash_age_kind) => continue,
             };
@@ -846,11 +868,11 @@ pub fn prepare_if_nonce_account(
     account: &mut Account,
     account_pubkey: &Pubkey,
     tx_result: &Result<()>,
-    maybe_nonce: Option<(&Pubkey, &Account)>,
+    maybe_nonce: Option<(&Pubkey, &Account, &Option<Account>)>,
     last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
     fix_recent_blockhashes_sysvar_delay: bool,
 ) {
-    if let Some((nonce_key, nonce_acc)) = maybe_nonce {
+    if let Some((nonce_key, nonce_acc, _maybe_fee_account)) = maybe_nonce {
         if account_pubkey == nonce_key {
             let overwrite = if tx_result.is_err() {
                 // Nonce TX failed with an InstructionError. Roll back
@@ -1919,8 +1941,14 @@ mod tests {
         assert!(loaded_accounts[0].0.is_err());
     }
 
-    fn create_accounts_prepare_if_nonce_account() -> (Pubkey, Account, Account, Hash, FeeCalculator)
-    {
+    fn create_accounts_prepare_if_nonce_account() -> (
+        Pubkey,
+        Account,
+        Account,
+        Hash,
+        FeeCalculator,
+        Option<Account>,
+    ) {
         let data = nonce::state::Versions::new_current(nonce::State::Initialized(
             nonce::state::Data::default(),
         ));
@@ -1937,6 +1965,7 @@ mod tests {
             FeeCalculator {
                 lamports_per_signature: 1234,
             },
+            None,
         )
     }
 
@@ -1944,18 +1973,20 @@ mod tests {
         account: &mut Account,
         account_pubkey: &Pubkey,
         tx_result: &Result<()>,
-        maybe_nonce: Option<(&Pubkey, &Account)>,
+        maybe_nonce: Option<(&Pubkey, &Account, &Option<Account>)>,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         expect_account: &Account,
     ) -> bool {
         // Verify expect_account's relationship
         match maybe_nonce {
-            Some((nonce_pubkey, _nonce_account))
+            Some((nonce_pubkey, _nonce_account, _maybe_fee_account))
                 if nonce_pubkey == account_pubkey && tx_result.is_ok() =>
             {
                 assert_eq!(expect_account, account) // Account update occurs in system_instruction_processor
             }
-            Some((nonce_pubkey, nonce_account)) if nonce_pubkey == account_pubkey => {
+            Some((nonce_pubkey, nonce_account, _maybe_fee_account))
+                if nonce_pubkey == account_pubkey =>
+            {
                 assert_ne!(expect_account, nonce_account)
             }
             _ => assert_eq!(expect_account, account),
@@ -1980,6 +2011,7 @@ mod tests {
             mut post_account,
             last_blockhash,
             last_fee_calculator,
+            maybe_fee_account,
         ) = create_accounts_prepare_if_nonce_account();
         let post_account_pubkey = pre_account_pubkey;
 
@@ -1993,7 +2025,7 @@ mod tests {
             &mut post_account,
             &post_account_pubkey,
             &Ok(()),
-            Some((&pre_account_pubkey, &pre_account)),
+            Some((&pre_account_pubkey, &pre_account, &maybe_fee_account)),
             &(last_blockhash, last_fee_calculator),
             &expect_account,
         ));
@@ -2001,8 +2033,14 @@ mod tests {
 
     #[test]
     fn test_prepare_if_nonce_account_not_nonce_tx() {
-        let (pre_account_pubkey, _pre_account, _post_account, last_blockhash, last_fee_calculator) =
-            create_accounts_prepare_if_nonce_account();
+        let (
+            pre_account_pubkey,
+            _pre_account,
+            _post_account,
+            last_blockhash,
+            last_fee_calculator,
+            _maybe_fee_account,
+        ) = create_accounts_prepare_if_nonce_account();
         let post_account_pubkey = pre_account_pubkey;
 
         let mut post_account = Account::default();
@@ -2025,6 +2063,7 @@ mod tests {
             mut post_account,
             last_blockhash,
             last_fee_calculator,
+            maybe_fee_account,
         ) = create_accounts_prepare_if_nonce_account();
 
         let expect_account = post_account.clone();
@@ -2033,7 +2072,7 @@ mod tests {
             &mut post_account,
             &Pubkey::new(&[1u8; 32]),
             &Ok(()),
-            Some((&pre_account_pubkey, &pre_account)),
+            Some((&pre_account_pubkey, &pre_account, &maybe_fee_account)),
             &(last_blockhash, last_fee_calculator),
             &expect_account,
         ));
@@ -2047,6 +2086,7 @@ mod tests {
             mut post_account,
             last_blockhash,
             last_fee_calculator,
+            maybe_fee_account,
         ) = create_accounts_prepare_if_nonce_account();
         let post_account_pubkey = pre_account_pubkey;
 
@@ -2068,7 +2108,7 @@ mod tests {
                 0,
                 InstructionError::InvalidArgument,
             )),
-            Some((&pre_account_pubkey, &pre_account)),
+            Some((&pre_account_pubkey, &pre_account, &maybe_fee_account)),
             &(last_blockhash, last_fee_calculator),
             &expect_account,
         ));
