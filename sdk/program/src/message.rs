@@ -160,7 +160,7 @@ pub struct MessageHeader {
     pub num_readonly_unsigned_accounts: u8,
 }
 
-#[frozen_abi(digest = "6zcKiPfKoqYChcZfYcxqcmpJetXk8P51ihc4kiujPgdr")]
+#[frozen_abi(digest = "BPBJZxpRQ4JS7LGJtsgoyctg4BXyBbbY4uc7FjowtxLV")]
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
