@@ -1507,7 +1507,7 @@ Returns the leader schedule for an epoch
 - `<null>` - if requested epoch is not found
 - `<object>` - otherwise, the result field will be a dictionary of leader public keys
   \(as base-58 encoded strings\) and their corresponding leader slot indices as values
-  (indices are to the first slot in the requested epoch)
+  (indices are relative to the first slot in the requested epoch)
 
 #### Example:
 
