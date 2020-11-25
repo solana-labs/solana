@@ -4441,6 +4441,46 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_hash_age_kind_fee_calculator() {
+        let state =
+            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
+                authority: Pubkey::default(),
+                blockhash: Hash::new_unique(),
+                fee_calculator: FeeCalculator::default(),
+            }));
+        let account = Account::new_data(42, &state, &system_program::id()).unwrap();
+
+        assert_eq!(HashAgeKind::Extant.fee_calculator(), None);
+        assert_eq!(
+            HashAgeKind::DurableNoncePartial(Pubkey::default(), account.clone()).fee_calculator(),
+            Some(Some(FeeCalculator::default()))
+        );
+        assert_eq!(
+            HashAgeKind::DurableNoncePartial(Pubkey::default(), Account::default())
+                .fee_calculator(),
+            Some(None)
+        );
+        assert_eq!(
+            HashAgeKind::DurableNonceFull(
+                Pubkey::default(),
+                account.clone(),
+                Some(Account::default())
+            )
+            .fee_calculator(),
+            Some(Some(FeeCalculator::default()))
+        );
+        assert_eq!(
+            HashAgeKind::DurableNonceFull(
+                Pubkey::default(),
+                Account::default(),
+                Some(Account::default())
+            )
+            .fee_calculator(),
+            Some(None)
+        );
+    }
+
+    #[test]
     fn test_bank_unix_timestamp_from_genesis() {
         let (genesis_config, _mint_keypair) = create_genesis_config(1);
         let mut bank = Arc::new(Bank::new(&genesis_config));
