@@ -607,7 +607,25 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    fn check_slot_blockstore_status<T>(
+    fn check_blockstore_max_root<T>(
+        &self,
+        result: &std::result::Result<T, BlockstoreError>,
+        slot: Slot,
+    ) -> Result<()>
+    where
+        T: std::fmt::Debug,
+    {
+        if result.is_err() {
+            if let BlockstoreError::SlotNotRooted = result.as_ref().unwrap_err() {
+                if slot > self.blockstore.max_root() {
+                    return Err(RpcCustomError::BlockNotAvailable { slot }.into());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn check_slot_cleaned_up<T>(
         &self,
         result: &std::result::Result<T, BlockstoreError>,
         slot: Slot,
@@ -625,9 +643,6 @@ impl JsonRpcRequestProcessor {
                         .unwrap_or_default(),
                 }
                 .into());
-            }
-            if let BlockstoreError::SlotNotRooted = result.as_ref().unwrap_err() {
-                return Err(RpcCustomError::BlockNotAvailable { slot }.into());
             }
         }
         Ok(())
@@ -648,6 +663,7 @@ impl JsonRpcRequestProcessor {
                     .highest_confirmed_root()
         {
             let result = self.blockstore.get_confirmed_block(slot);
+            self.check_blockstore_max_root(&result, slot)?;
             if result.is_err() {
                 if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                     return Ok(self
@@ -657,7 +673,7 @@ impl JsonRpcRequestProcessor {
                         .map(|confirmed_block| confirmed_block.encode(encoding)));
                 }
             }
-            self.check_slot_blockstore_status(&result, slot)?;
+            self.check_slot_cleaned_up(&result, slot)?;
             Ok(result
                 .ok()
                 .map(|confirmed_block| confirmed_block.encode(encoding)))
@@ -753,6 +769,7 @@ impl JsonRpcRequestProcessor {
                 .highest_confirmed_root()
         {
             let result = self.blockstore.get_block_time(slot);
+            self.check_blockstore_max_root(&result, slot)?;
             if result.is_err() {
                 if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                     return Ok(self
@@ -762,7 +779,7 @@ impl JsonRpcRequestProcessor {
                         .and_then(|confirmed_block| confirmed_block.block_time));
                 }
             }
-            self.check_slot_blockstore_status(&result, slot)?;
+            self.check_slot_cleaned_up(&result, slot)?;
             Ok(result.ok().unwrap_or(None))
         } else {
             Err(RpcCustomError::BlockNotAvailable { slot }.into())
