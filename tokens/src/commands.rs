@@ -932,6 +932,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_process_token_allocations() {
+<<<<<<< HEAD
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
         Runtime::new().unwrap().block_on(async {
@@ -940,10 +941,27 @@ pub(crate) mod tests {
             test_process_distribute_tokens_with_client(&mut banks_client, sender_keypair, None)
                 .await;
         });
+=======
+        let TestValidator {
+            server,
+            leader_data,
+            alice,
+            ledger_path,
+            ..
+        } = TestValidator::with_no_fee();
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+        test_process_distribute_tokens_with_client(&client, alice, None);
+
+        // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
+        server.close().unwrap();
+        remove_dir_all(ledger_path).unwrap();
+>>>>>>> b5f7e39be... TestValidator public interface cleanup
     }
 
     #[test]
     fn test_process_transfer_amount_allocations() {
+<<<<<<< HEAD
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
         Runtime::new().unwrap().block_on(async {
@@ -956,10 +974,27 @@ pub(crate) mod tests {
             )
             .await;
         });
+=======
+        let TestValidator {
+            server,
+            leader_data,
+            alice,
+            ledger_path,
+            ..
+        } = TestValidator::with_no_fee();
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+        test_process_distribute_tokens_with_client(&client, alice, Some(sol_to_lamports(1.5)));
+
+        // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
+        server.close().unwrap();
+        remove_dir_all(ledger_path).unwrap();
+>>>>>>> b5f7e39be... TestValidator public interface cleanup
     }
 
     #[test]
     fn test_process_stake_allocations() {
+<<<<<<< HEAD
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
         Runtime::new().unwrap().block_on(async {
@@ -967,6 +1002,22 @@ pub(crate) mod tests {
             let mut banks_client = start_client(transport).await.unwrap();
             test_process_distribute_stake_with_client(&mut banks_client, sender_keypair).await;
         });
+=======
+        let TestValidator {
+            server,
+            leader_data,
+            alice,
+            ledger_path,
+            ..
+        } = TestValidator::with_no_fee();
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+        test_process_distribute_stake_with_client(&client, alice);
+
+        // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
+        server.close().unwrap();
+        remove_dir_all(ledger_path).unwrap();
+>>>>>>> b5f7e39be... TestValidator public interface cleanup
     }
 
     #[test]
@@ -1260,6 +1311,7 @@ pub(crate) mod tests {
     fn test_check_payer_balances_distribute_tokens_single_payer() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
+<<<<<<< HEAD
         let (mut genesis_config, sender_keypair) =
             create_genesis_config(sol_to_lamports(9_000_000.0));
         genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
@@ -1279,6 +1331,58 @@ pub(crate) mod tests {
                 &sender_keypair_file,
                 &sender_keypair_file,
                 None,
+=======
+        let TestValidator {
+            server,
+            leader_data,
+            alice,
+            ledger_path,
+            ..
+        } = TestValidator::with_custom_fee(fees);
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+        let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
+        write_keypair_file(&alice, &sender_keypair_file).unwrap();
+
+        // This is a quick hack until TestValidator can be initialized with fees from block 0
+        while client
+            .get_recent_blockhash()
+            .unwrap()
+            .1
+            .lamports_per_signature
+            == 0
+        {
+            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+        }
+
+        let allocation_amount = 1000.0;
+
+        // Fully funded payer
+        let (allocations, mut args) = initialize_check_payer_balances_inputs(
+            sol_to_lamports(allocation_amount),
+            &sender_keypair_file,
+            &sender_keypair_file,
+            None,
+        );
+        check_payer_balances(1, &allocations, &client, &args).unwrap();
+
+        // Unfunded payer
+        let unfunded_payer = Keypair::new();
+        let unfunded_payer_keypair_file = tmp_file_path("keypair_file", &unfunded_payer.pubkey());
+        write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
+        args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
+            .unwrap()
+            .into();
+        args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
+            .unwrap()
+            .into();
+
+        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
+        if let Error::InsufficientFunds(sources, amount) = err_result {
+            assert_eq!(
+                sources,
+                vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
+>>>>>>> b5f7e39be... TestValidator public interface cleanup
             );
             check_payer_balances(1, &allocations, &mut banks_client, &args)
                 .await
@@ -1356,6 +1460,7 @@ pub(crate) mod tests {
     fn test_check_payer_balances_distribute_tokens_separate_payers() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
+<<<<<<< HEAD
         let (mut genesis_config, sender_keypair) =
             create_genesis_config(sol_to_lamports(9_000_000.0));
         genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
@@ -1379,6 +1484,46 @@ pub(crate) mod tests {
                 &funded_payer.pubkey(),
             )
             .await
+=======
+        let TestValidator {
+            server,
+            leader_data,
+            alice,
+            ledger_path,
+            ..
+        } = TestValidator::with_custom_fee(fees);
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+
+        let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
+        write_keypair_file(&alice, &sender_keypair_file).unwrap();
+
+        // This is a quick hack until TestValidator can be initialized with fees from block 0
+        while client
+            .get_recent_blockhash()
+            .unwrap()
+            .1
+            .lamports_per_signature
+            == 0
+        {
+            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+        }
+
+        let allocation_amount = 1000.0;
+
+        let funded_payer = Keypair::new();
+        let funded_payer_keypair_file = tmp_file_path("keypair_file", &funded_payer.pubkey());
+        write_keypair_file(&funded_payer, &funded_payer_keypair_file).unwrap();
+        let transaction = transfer(
+            &client,
+            sol_to_lamports(allocation_amount),
+            &alice,
+            &funded_payer.pubkey(),
+        )
+        .unwrap();
+        client
+            .send_and_confirm_transaction_with_spinner(&transaction)
+>>>>>>> b5f7e39be... TestValidator public interface cleanup
             .unwrap();
             banks_client
                 .process_transaction_with_commitment(transaction, CommitmentLevel::Recent)
@@ -1479,6 +1624,7 @@ pub(crate) mod tests {
     fn test_check_payer_balances_distribute_stakes_single_payer() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
+<<<<<<< HEAD
         let (mut genesis_config, sender_keypair) =
             create_genesis_config(sol_to_lamports(9_000_000.0));
         genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
@@ -1506,6 +1652,82 @@ pub(crate) mod tests {
                 &sender_keypair_file,
                 &sender_keypair_file,
                 Some(stake_args),
+=======
+        let TestValidator {
+            server,
+            leader_data,
+            alice,
+            ledger_path,
+            ..
+        } = TestValidator::with_custom_fee(fees);
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+
+        let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
+        write_keypair_file(&alice, &sender_keypair_file).unwrap();
+
+        // This is a quick hack until TestValidator can be initialized with fees from block 0
+        while client
+            .get_recent_blockhash()
+            .unwrap()
+            .1
+            .lamports_per_signature
+            == 0
+        {
+            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+        }
+
+        let allocation_amount = 1000.0;
+        let unlocked_sol = 1.0;
+        let stake_args = initialize_stake_account(
+            sol_to_lamports(allocation_amount),
+            sol_to_lamports(unlocked_sol),
+            &alice,
+            &client,
+        );
+
+        // Fully funded payer & stake account
+        let (allocations, mut args) = initialize_check_payer_balances_inputs(
+            sol_to_lamports(allocation_amount),
+            &sender_keypair_file,
+            &sender_keypair_file,
+            Some(stake_args),
+        );
+        check_payer_balances(1, &allocations, &client, &args).unwrap();
+
+        // Underfunded stake-account
+        let expensive_allocation_amount = 5000.0;
+        let expensive_allocations = vec![Allocation {
+            recipient: solana_sdk::pubkey::new_rand().to_string(),
+            amount: sol_to_lamports(expensive_allocation_amount),
+            lockup_date: "".to_string(),
+        }];
+        let err_result =
+            check_payer_balances(1, &expensive_allocations, &client, &args).unwrap_err();
+        if let Error::InsufficientFunds(sources, amount) = err_result {
+            assert_eq!(sources, vec![FundingSource::StakeAccount].into());
+            assert!((amount - (expensive_allocation_amount - unlocked_sol)).abs() < f64::EPSILON);
+        } else {
+            panic!("check_payer_balances should have errored");
+        }
+
+        // Unfunded payer
+        let unfunded_payer = Keypair::new();
+        let unfunded_payer_keypair_file = tmp_file_path("keypair_file", &unfunded_payer.pubkey());
+        write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
+        args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
+            .unwrap()
+            .into();
+        args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
+            .unwrap()
+            .into();
+
+        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
+        if let Error::InsufficientFunds(sources, amount) = err_result {
+            assert_eq!(
+                sources,
+                vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
+>>>>>>> b5f7e39be... TestValidator public interface cleanup
             );
             check_payer_balances(1, &allocations, &mut banks_client, &args)
                 .await
@@ -1603,6 +1825,7 @@ pub(crate) mod tests {
     fn test_check_payer_balances_distribute_stakes_separate_payers() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
+<<<<<<< HEAD
         let (mut genesis_config, sender_keypair) =
             create_genesis_config(sol_to_lamports(9_000_000.0));
         genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
@@ -1634,6 +1857,53 @@ pub(crate) mod tests {
                 &funded_payer.pubkey(),
             )
             .await
+=======
+        let TestValidator {
+            server,
+            leader_data,
+            alice,
+            ledger_path,
+            ..
+        } = TestValidator::with_custom_fee(fees);
+        let url = get_rpc_request_str(leader_data.rpc, false);
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+
+        let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
+        write_keypair_file(&alice, &sender_keypair_file).unwrap();
+
+        // This is a quick hack until TestValidator can be initialized with fees from block 0
+        while client
+            .get_recent_blockhash()
+            .unwrap()
+            .1
+            .lamports_per_signature
+            == 0
+        {
+            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+        }
+
+        let allocation_amount = 1000.0;
+        let unlocked_sol = 1.0;
+        let stake_args = initialize_stake_account(
+            sol_to_lamports(allocation_amount),
+            sol_to_lamports(unlocked_sol),
+            &alice,
+            &client,
+        );
+
+        let funded_payer = Keypair::new();
+        let funded_payer_keypair_file = tmp_file_path("keypair_file", &funded_payer.pubkey());
+        write_keypair_file(&funded_payer, &funded_payer_keypair_file).unwrap();
+        let transaction = transfer(
+            &client,
+            sol_to_lamports(unlocked_sol),
+            &alice,
+            &funded_payer.pubkey(),
+        )
+        .unwrap();
+        client
+            .send_and_confirm_transaction_with_spinner(&transaction)
+>>>>>>> b5f7e39be... TestValidator public interface cleanup
             .unwrap();
             banks_client
                 .process_transaction_with_commitment(transaction, CommitmentLevel::Recent)

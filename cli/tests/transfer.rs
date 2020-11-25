@@ -28,7 +28,7 @@ fn test_transfer() {
         alice: mint_keypair,
         ledger_path,
         ..
-    } = TestValidator::run_with_fees(1);
+    } = TestValidator::with_custom_fee(1);
 
     let (sender, receiver) = channel();
     run_local_faucet(mint_keypair, sender, None);
@@ -256,7 +256,7 @@ fn test_transfer_multisession_signing() {
         alice: mint_keypair,
         ledger_path,
         ..
-    } = TestValidator::run_with_fees(1);
+    } = TestValidator::with_custom_fee(1);
 
     let (sender, receiver) = channel();
     run_local_faucet(mint_keypair, sender, None);
@@ -383,7 +383,7 @@ fn test_transfer_all() {
         alice: mint_keypair,
         ledger_path,
         ..
-    } = TestValidator::run_with_fees(1);
+    } = TestValidator::with_custom_fee(1);
 
     let (sender, receiver) = channel();
     run_local_faucet(mint_keypair, sender, None);

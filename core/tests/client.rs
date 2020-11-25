@@ -37,7 +37,7 @@ fn test_rpc_client() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run();
+    } = TestValidator::with_no_fee();
     let bob_pubkey = solana_sdk::pubkey::new_rand();
 
     let client = RpcClient::new_socket(leader_data.rpc);
@@ -51,10 +51,7 @@ fn test_rpc_client() {
 
     assert_eq!(client.get_balance(&bob_pubkey).unwrap(), 0);
 
-    assert_eq!(
-        client.get_balance(&alice.pubkey()).unwrap(),
-        sol_to_lamports(1_000_000.0)
-    );
+    let original_alice_balance = client.get_balance(&alice.pubkey()).unwrap();
 
     let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
 
@@ -85,7 +82,7 @@ fn test_rpc_client() {
     );
     assert_eq!(
         client.get_balance(&alice.pubkey()).unwrap(),
-        sol_to_lamports(999_980.0)
+        original_alice_balance - sol_to_lamports(20.0)
     );
 
     server.close().unwrap();

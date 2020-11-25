@@ -30,7 +30,7 @@ fn test_nonce() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run();
+    } = TestValidator::with_no_fee();
 
     full_battery_tests(leader_data, alice, None, false);
 
@@ -46,7 +46,7 @@ fn test_nonce_with_seed() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run();
+    } = TestValidator::with_no_fee();
 
     full_battery_tests(leader_data, alice, Some(String::from("seed")), false);
 
@@ -62,7 +62,7 @@ fn test_nonce_with_authority() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run();
+    } = TestValidator::with_no_fee();
 
     full_battery_tests(leader_data, alice, None, true);
 
@@ -238,7 +238,7 @@ fn test_create_account_with_seed() {
         alice: mint_keypair,
         ledger_path,
         ..
-    } = TestValidator::run_with_fees(1);
+    } = TestValidator::with_custom_fee(1);
 
     let (sender, receiver) = channel();
     run_local_faucet(mint_keypair, sender, None);

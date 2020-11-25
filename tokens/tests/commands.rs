@@ -13,7 +13,7 @@ fn test_process_distribute_with_rpc_client() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run();
+    } = TestValidator::with_no_fee();
 
     Runtime::new().unwrap().block_on(async {
         let mut banks_client = start_tcp_client(leader_data.rpc_banks).await.unwrap();

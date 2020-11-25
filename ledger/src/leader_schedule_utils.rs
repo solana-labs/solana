@@ -56,7 +56,6 @@ mod tests {
     use super::*;
     use solana_runtime::genesis_utils::{
         bootstrap_validator_stake_lamports, create_genesis_config_with_leader,
-        BOOTSTRAP_VALIDATOR_LAMPORTS,
     };
 
     #[test]
@@ -84,12 +83,9 @@ mod tests {
     #[test]
     fn test_leader_scheduler1_basic() {
         let pubkey = solana_sdk::pubkey::new_rand();
-        let genesis_config = create_genesis_config_with_leader(
-            BOOTSTRAP_VALIDATOR_LAMPORTS,
-            &pubkey,
-            bootstrap_validator_stake_lamports(),
-        )
-        .genesis_config;
+        let genesis_config =
+            create_genesis_config_with_leader(42, &pubkey, bootstrap_validator_stake_lamports())
+                .genesis_config;
         let bank = Bank::new(&genesis_config);
         assert_eq!(slot_leader_at(bank.slot(), &bank).unwrap(), pubkey);
     }

@@ -267,7 +267,6 @@ mod tests {
         staking_utils::tests::setup_vote_and_stake_accounts,
     };
     use solana_runtime::bank::Bank;
-    use solana_runtime::genesis_utils::BOOTSTRAP_VALIDATOR_LAMPORTS;
     use solana_sdk::clock::NUM_CONSECUTIVE_LEADER_SLOTS;
     use solana_sdk::epoch_schedule::{
         EpochSchedule, DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET, DEFAULT_SLOTS_PER_EPOCH,
@@ -380,12 +379,9 @@ mod tests {
     #[test]
     fn test_next_leader_slot() {
         let pubkey = solana_sdk::pubkey::new_rand();
-        let mut genesis_config = create_genesis_config_with_leader(
-            BOOTSTRAP_VALIDATOR_LAMPORTS,
-            &pubkey,
-            bootstrap_validator_stake_lamports(),
-        )
-        .genesis_config;
+        let mut genesis_config =
+            create_genesis_config_with_leader(42, &pubkey, bootstrap_validator_stake_lamports())
+                .genesis_config;
         genesis_config.epoch_schedule = EpochSchedule::custom(
             DEFAULT_SLOTS_PER_EPOCH,
             DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET,
@@ -433,12 +429,9 @@ mod tests {
     #[test]
     fn test_next_leader_slot_blockstore() {
         let pubkey = solana_sdk::pubkey::new_rand();
-        let mut genesis_config = create_genesis_config_with_leader(
-            BOOTSTRAP_VALIDATOR_LAMPORTS,
-            &pubkey,
-            bootstrap_validator_stake_lamports(),
-        )
-        .genesis_config;
+        let mut genesis_config =
+            create_genesis_config_with_leader(42, &pubkey, bootstrap_validator_stake_lamports())
+                .genesis_config;
         genesis_config.epoch_schedule.warmup = false;
 
         let bank = Bank::new(&genesis_config);
