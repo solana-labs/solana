@@ -826,6 +826,7 @@ impl Accounts {
 
             let message = &tx.message();
             let acc = raccs.as_mut().unwrap();
+            let mut fee_payer_index = None;
             for ((i, key), account) in message
                 .account_keys
                 .iter()
@@ -841,7 +842,10 @@ impl Accounts {
                     last_blockhash_with_fee_calculator,
                     fix_recent_blockhashes_sysvar_delay,
                 );
-                let is_fee_payer = i == 0;
+                if fee_payer_index.is_none() {
+                    fee_payer_index = Some(i);
+                }
+                let is_fee_payer = Some(i) == fee_payer_index;
                 if message.is_writable(i)
                     && (res.is_ok()
                         || (maybe_nonce.is_some() && (is_nonce_account || is_fee_payer)))
