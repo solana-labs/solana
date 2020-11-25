@@ -367,19 +367,26 @@ impl Accounts {
                                     .account_keys
                                     .iter()
                                     .enumerate()
-                                    .skip_while(|(i, k)| !Self::is_non_loader_key(tx.message(), k, *i))
-                                    .nth(0)
+                                    .find(|(i, k)| Self::is_non_loader_key(tx.message(), k, *i))
                                     .map(|(i, k)| (*k, accounts[i].clone()));
                                 if let Some((fee_pubkey, fee_account)) = fee_payer {
                                     if fee_pubkey == pubkey {
-                                        Some(HashAgeKind::DurableNonceFull(pubkey, fee_account, None))
+                                        Some(HashAgeKind::DurableNonceFull(
+                                            pubkey,
+                                            fee_account,
+                                            None,
+                                        ))
                                     } else {
-                                        Some(HashAgeKind::DurableNonceFull(pubkey, account, Some(fee_account)))
+                                        Some(HashAgeKind::DurableNonceFull(
+                                            pubkey,
+                                            account,
+                                            Some(fee_account),
+                                        ))
                                     }
                                 } else {
                                     return (
                                         Err(TransactionError::AccountNotFound),
-                                        Some(HashAgeKind::DurableNoncePartial(pubkey, account))
+                                        Some(HashAgeKind::DurableNoncePartial(pubkey, account)),
                                     );
                                 }
                             }
