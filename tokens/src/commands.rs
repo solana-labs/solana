@@ -854,11 +854,6 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
 
     let expected_amount = sol_to_lamports(1000.0);
     let alice_pubkey = solana_sdk::pubkey::new_rand();
-    // let allocation = Allocation {
-    //     recipient: alice_pubkey.to_string(),
-    //     amount: sol_to_lamports(1000.0),
-    //     lockup_date: "".to_string(),
-    // };
     let file = NamedTempFile::new().unwrap();
     let input_csv = file.path().to_str().unwrap().to_string();
     let mut wtr = csv::WriterBuilder::new().from_writer(file);
@@ -870,7 +865,6 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
         "".to_string(),
     ])
     .unwrap();
-    // wtr.serialize(&allocation).unwrap();
     wtr.flush().unwrap();
 
     let dir = tempdir().unwrap();

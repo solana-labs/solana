@@ -361,7 +361,7 @@ fn parse_distribute_tokens_args(
         fee_payer,
         stake_args: None,
         spl_token_args: None,
-        transfer_amount: value_of(matches, "transfer_amount").map(|sol| sol_to_lamports(sol)),
+        transfer_amount: value_of(matches, "transfer_amount").map(sol_to_lamports),
     })
 }
 
