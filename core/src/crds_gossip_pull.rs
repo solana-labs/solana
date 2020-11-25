@@ -14,6 +14,7 @@ use crate::crds::{Crds, VersionedCrdsValue};
 use crate::crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_DEFAULT_BLOOM_ITEMS};
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
+use itertools::Itertools;
 use rand::distributions::{Distribution, WeightedIndex};
 use rand::Rng;
 use rayon::{prelude::*, ThreadPool};
@@ -485,13 +486,16 @@ impl CrdsGossipPull {
         let past = now.saturating_sub(msg_timeout);
         let mut dropped_requests = 0;
         let mut total_skipped = 0;
-        let ret = filters
+        let ret: Vec<_> = filters
             .iter()
             .map(|(caller, filter)| {
+                if output_size_limit == 0 {
+                    return None;
+                }
                 let caller_wallclock = caller.wallclock();
                 if caller_wallclock >= future || caller_wallclock < past {
                     dropped_requests += 1;
-                    return vec![];
+                    return Some(vec![]);
                 }
                 let caller_wallclock = caller_wallclock.checked_add(jitter).unwrap_or(0);
                 let out: Vec<_> = crds
@@ -511,12 +515,13 @@ impl CrdsGossipPull {
                     .take(output_size_limit)
                     .collect();
                 output_size_limit -= out.len();
-                out
+                Some(out)
             })
+            .while_some()
             .collect();
         inc_new_counter_info!(
             "gossip_filter_crds_values-dropped_requests",
-            dropped_requests
+            dropped_requests + filters.len() - ret.len()
         );
         inc_new_counter_info!("gossip_filter_crds_values-dropped_values", total_skipped);
         ret
