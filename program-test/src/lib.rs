@@ -1,42 +1,44 @@
 //! The solana-program-test provides a BanksClient-based test framework BPF programs
 
-use async_trait::async_trait;
-use chrono_humanize::{Accuracy, HumanTime, Tense};
-use log::*;
-use solana_banks_client::start_client;
-use solana_banks_server::banks_server::start_local_server;
-use solana_program::{
-    account_info::AccountInfo, entrypoint::ProgramResult, fee_calculator::FeeCalculator,
-    hash::Hash, instruction::Instruction, instruction::InstructionError, message::Message,
-    native_token::sol_to_lamports, program_error::ProgramError, program_stubs, pubkey::Pubkey,
-    rent::Rent,
-};
-use solana_runtime::{
-    bank::{Bank, Builtin},
-    bank_forks::BankForks,
-    genesis_utils::create_genesis_config_with_leader,
-};
-use solana_sdk::{
-    account::Account,
-    keyed_account::KeyedAccount,
-    process_instruction::BpfComputeBudget,
-    process_instruction::{InvokeContext, MockInvokeContext, ProcessInstructionWithContext},
-    signature::{Keypair, Signer},
-};
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    convert::TryFrom,
-    fs::File,
-    io::{self, Read},
-    path::{Path, PathBuf},
-    rc::Rc,
-    sync::{Arc, RwLock},
-    time::{Duration, Instant},
+use {
+    async_trait::async_trait,
+    chrono_humanize::{Accuracy, HumanTime, Tense},
+    log::*,
+    solana_banks_client::start_client,
+    solana_banks_server::banks_server::start_local_server,
+    solana_program::{
+        account_info::AccountInfo, entrypoint::ProgramResult, fee_calculator::FeeCalculator,
+        hash::Hash, instruction::Instruction, instruction::InstructionError, message::Message,
+        native_token::sol_to_lamports, program_error::ProgramError, program_stubs, pubkey::Pubkey,
+        rent::Rent,
+    },
+    solana_runtime::{
+        bank::{Bank, Builtin},
+        bank_forks::BankForks,
+        genesis_utils::create_genesis_config_with_leader,
+    },
+    solana_sdk::{
+        account::Account,
+        keyed_account::KeyedAccount,
+        process_instruction::BpfComputeBudget,
+        process_instruction::{InvokeContext, MockInvokeContext, ProcessInstructionWithContext},
+        signature::{Keypair, Signer},
+    },
+    std::{
+        cell::RefCell,
+        collections::HashMap,
+        convert::TryFrom,
+        fs::File,
+        io::{self, Read},
+        path::{Path, PathBuf},
+        rc::Rc,
+        sync::{Arc, RwLock},
+        time::{Duration, Instant},
+    },
 };
 
 // Export types so test clients can limit their solana crate dependencies
-pub use solana_banks_client::{BanksClient, BanksClientExt};
+pub use solana_banks_client::BanksClient;
 
 #[macro_use]
 extern crate solana_bpf_loader_program;
@@ -356,6 +358,24 @@ fn read_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
     file_data
 }
 
+mod spl_token {
+    solana_sdk::declare_id!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+}
+mod spl_memo {
+    solana_sdk::declare_id!("Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo");
+}
+mod spl_associated_token_account {
+    solana_sdk::declare_id!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+}
+static SPL_PROGRAMS: &[(Pubkey, &[u8])] = &[
+    (spl_token::ID, include_bytes!("programs/spl_token-2.0.6.so")),
+    (spl_memo::ID, include_bytes!("programs/spl_memo-1.0.0.so")),
+    (
+        spl_associated_token_account::ID,
+        include_bytes!("programs/spl_associated-token-account-1.0.1.so"),
+    ),
+];
+
 pub struct ProgramTest {
     accounts: Vec<(Pubkey, Account)>,
     builtins: Vec<Builtin>,
@@ -593,9 +613,23 @@ impl ProgramTest {
             bank.add_builtin(&loader.0, loader.1, loader.2);
         }
 
+        // Add commonly-used SPL programs as a convenience to the user
+        for (program_id, elf) in SPL_PROGRAMS.iter() {
+            bank.store_account(
+                program_id,
+                &Account {
+                    lamports: Rent::default().minimum_balance(elf.len()).min(1),
+                    data: elf.to_vec(),
+                    owner: solana_program::bpf_loader::id(),
+                    executable: true,
+                    rent_epoch: 0,
+                },
+            )
+        }
+
         // User-supplied additional builtins
         for builtin in self.builtins {
-            bank.add_builtin(
+            bank.replace_builtin(
                 &builtin.name,
                 builtin.id,
                 builtin.process_instruction_with_context,
@@ -604,7 +638,7 @@ impl ProgramTest {
 
         for (address, account) in self.accounts {
             if bank.get_account(&address).is_some() {
-                panic!("An account at {} already exists", address);
+                info!("Overriding account at {}", address);
             }
             bank.store_account(&address, &account);
         }
