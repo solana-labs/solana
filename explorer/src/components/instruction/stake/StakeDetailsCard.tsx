@@ -29,6 +29,8 @@ type DetailsProps = {
   ix: ParsedInstruction;
   result: SignatureResult;
   index: number;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
 };
 
 export function StakeDetailsCard(props: DetailsProps) {

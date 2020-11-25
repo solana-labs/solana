@@ -12,6 +12,8 @@ import {
   ParsedTransaction,
   TransactionInstruction,
   Transaction,
+  PartiallyDecodedInstruction,
+  ParsedInstruction,
 } from "@solana/web3.js";
 import { TokenRegistry } from "tokenRegistry";
 import { Cluster } from "providers/cluster";
@@ -79,10 +81,9 @@ export function displayAddress(address: string, cluster: Cluster): string {
 
 export function intoTransactionInstruction(
   tx: ParsedTransaction,
-  index: number
+  instruction: ParsedInstruction | PartiallyDecodedInstruction
 ): TransactionInstruction | undefined {
   const message = tx.message;
-  const instruction = message.instructions[index];
   if ("parsed" in instruction) return;
 
   const keys = [];

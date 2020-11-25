@@ -29,8 +29,10 @@ export function SerumDetailsCard(props: {
   index: number;
   result: SignatureResult;
   signature: string;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
 }) {
-  const { ix, index, result, signature } = props;
+  const { ix, index, result, signature, innerCards, childIndex } = props;
 
   const { url } = useCluster();
 
@@ -91,6 +93,8 @@ export function SerumDetailsCard(props: {
       index={index}
       result={result}
       title={`Serum: ${title || "Unknown"}`}
+      innerCards={innerCards}
+      childIndex={childIndex}
       defaultRaw
     />
   );

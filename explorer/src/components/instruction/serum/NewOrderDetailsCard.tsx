@@ -9,8 +9,10 @@ export function NewOrderDetailsCard(props: {
   index: number;
   result: SignatureResult;
   info: NewOrder;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
 }) {
-  const { ix, index, result, info } = props;
+  const { ix, index, result, info, innerCards, childIndex } = props;
 
   return (
     <InstructionCard
@@ -18,6 +20,8 @@ export function NewOrderDetailsCard(props: {
       index={index}
       result={result}
       title="Serum: New Order"
+      innerCards={innerCards}
+      childIndex={childIndex}
     >
       <tr>
         <td>Program</td>

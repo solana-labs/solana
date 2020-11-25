@@ -338,7 +338,7 @@ const TokenTransactionRow = React.memo(
         if (details?.data?.transaction?.transaction) {
           transactionInstruction = intoTransactionInstruction(
             details.data.transaction.transaction,
-            index
+            ix
           );
         }
 
@@ -444,7 +444,6 @@ function InstructionDetails({
       <p className="tree">
         {instructionTypes.length > 0 && (
           <span
-
             onClick={(e) => {
               e.preventDefault();
               setExpanded(!expanded);

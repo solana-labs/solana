@@ -10,10 +10,14 @@ export function UnknownDetailsCard({
   ix,
   index,
   result,
+  innerCards,
+  childIndex,
 }: {
   ix: TransactionInstruction | ParsedInstruction;
   index: number;
   result: SignatureResult;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
 }) {
   return (
     <InstructionCard
@@ -21,6 +25,8 @@ export function UnknownDetailsCard({
       index={index}
       result={result}
       title="Unknown"
+      innerCards={innerCards}
+      childIndex={childIndex}
       defaultRaw
     />
   );

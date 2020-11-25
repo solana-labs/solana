@@ -7,14 +7,25 @@ export function MemoDetailsCard({
   ix,
   index,
   result,
+  innerCards,
+  childIndex,
 }: {
   ix: ParsedInstruction;
   index: number;
   result: SignatureResult;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
 }) {
   const data = wrap(ix.parsed, 50);
   return (
-    <InstructionCard ix={ix} index={index} result={result} title="Memo">
+    <InstructionCard
+      ix={ix}
+      index={index}
+      result={result}
+      title="Memo"
+      innerCards={innerCards}
+      childIndex={childIndex}
+    >
       <tr>
         <td>Data (UTF-8)</td>
         <td className="text-lg-right">
