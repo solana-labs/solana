@@ -1125,33 +1125,37 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
     let my_id = cluster_info.id();
 
     for (activated_stake, vote_account) in bank.vote_accounts().values() {
-        let vote_state = VoteState::from(&vote_account).unwrap_or_default();
         total_activated_stake += activated_stake;
 
         if *activated_stake == 0 {
             continue;
         }
+        let vote_state_node_pubkey = vote_account
+            .vote_state()
+            .as_ref()
+            .map(|vote_state| vote_state.node_pubkey)
+            .unwrap_or_default();
 
         if let Some(peer) = all_tvu_peers
             .iter()
-            .find(|peer| peer.id == vote_state.node_pubkey)
+            .find(|peer| peer.id == vote_state_node_pubkey)
         {
             if peer.shred_version == my_shred_version {
                 trace!(
                     "observed {} in gossip, (activated_stake={})",
-                    vote_state.node_pubkey,
+                    vote_state_node_pubkey,
                     activated_stake
                 );
                 online_stake += activated_stake;
             } else {
                 wrong_shred_stake += activated_stake;
-                wrong_shred_nodes.push((*activated_stake, vote_state.node_pubkey));
+                wrong_shred_nodes.push((*activated_stake, vote_state_node_pubkey));
             }
-        } else if vote_state.node_pubkey == my_id {
+        } else if vote_state_node_pubkey == my_id {
             online_stake += activated_stake; // This node is online
         } else {
             offline_stake += activated_stake;
-            offline_nodes.push((*activated_stake, vote_state.node_pubkey));
+            offline_nodes.push((*activated_stake, vote_state_node_pubkey));
         }
     }
 

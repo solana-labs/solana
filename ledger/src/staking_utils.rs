@@ -1,6 +1,5 @@
-use solana_runtime::bank::Bank;
+use solana_runtime::{bank::Bank, vote_account::ArcVoteAccount};
 use solana_sdk::{
-    account::Account,
     clock::{Epoch, Slot},
     pubkey::Pubkey,
 };
@@ -39,14 +38,20 @@ pub fn staked_nodes_at_epoch(bank: &Bank, epoch: Epoch) -> Option<HashMap<Pubkey
 }
 
 // input (vote_pubkey, (stake, vote_account)) => (stake, vote_state)
-fn to_vote_states(
-    node_staked_accounts: impl Iterator<Item = (impl Borrow<Pubkey>, impl Borrow<(u64, Account)>)>,
-) -> impl Iterator<Item = (u64, VoteState)> {
-    node_staked_accounts.filter_map(|(_, stake_account)| {
-        VoteState::deserialize(&stake_account.borrow().1.data)
-            .ok()
-            .map(|vote_state| (stake_account.borrow().0, vote_state))
-    })
+fn to_vote_states<I, K, V>(
+    node_staked_accounts: I,
+) -> impl Iterator<Item = (u64 /*stake*/, VoteState)>
+where
+    I: IntoIterator<Item = (K /*vote_pubkey*/, V)>,
+    V: Borrow<(u64 /*stake*/, ArcVoteAccount)>,
+{
+    node_staked_accounts
+        .into_iter()
+        .filter_map(|(_, stake_vote_account)| {
+            let (stake, vote_account) = stake_vote_account.borrow();
+            let vote_state = vote_account.vote_state().as_ref().ok()?.clone();
+            Some((*stake, vote_state))
+        })
 }
 
 // (stake, vote_state) => (node, stake)

@@ -21,6 +21,7 @@ use crate::{
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
     transaction_batch::TransactionBatch,
     transaction_utils::OrderedIterator,
+    vote_account::ArcVoteAccount,
 };
 use byteorder::{ByteOrder, LittleEndian};
 use itertools::Itertools;
@@ -68,7 +69,7 @@ use solana_sdk::{
 use solana_stake_program::stake_state::{
     self, Delegation, InflationPointCalculationEvent, PointValue,
 };
-use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteState};
+use solana_vote_program::vote_instruction::VoteInstruction;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -379,7 +380,7 @@ pub struct TransactionBalancesSet {
     pub post_balances: TransactionBalances,
 }
 pub struct OverwrittenVoteAccount {
-    pub account: Account,
+    pub account: ArcVoteAccount,
     pub transaction_index: usize,
     pub transaction_result_index: usize,
 }
@@ -1700,7 +1701,7 @@ impl Bank {
             .vote_accounts()
             .into_iter()
             .filter_map(|(pubkey, (_, account))| {
-                VoteState::from(&account).and_then(|state| {
+                account.vote_state().as_ref().ok().and_then(|state| {
                     let timestamp_slot = state.last_timestamp.slot;
                     if (self
                         .feature_set
@@ -2955,7 +2956,7 @@ impl Bank {
     #[allow(clippy::needless_collect)]
     fn distribute_rent_to_validators(
         &self,
-        vote_account_hashmap: &HashMap<Pubkey, (u64, Account)>,
+        vote_account_hashmap: &HashMap<Pubkey, (u64, ArcVoteAccount)>,
         rent_to_be_distributed: u64,
     ) {
         let mut total_staked = 0;
@@ -2970,9 +2971,8 @@ impl Bank {
                     None
                 } else {
                     total_staked += *staked;
-                    VoteState::deserialize(&account.data)
-                        .ok()
-                        .map(|vote_state| (vote_state.node_pubkey, *staked))
+                    let node_pubkey = account.vote_state().as_ref().ok()?.node_pubkey;
+                    Some((node_pubkey, *staked))
                 }
             })
             .collect::<Vec<(Pubkey, u64)>>();
@@ -4098,8 +4098,23 @@ impl Bank {
 
     /// current vote accounts for this bank along with the stake
     ///   attributed to each account
-    pub fn vote_accounts(&self) -> HashMap<Pubkey, (u64, Account)> {
+    /// Note: This clones the entire vote-accounts hashmap. For a single
+    /// account lookup use get_vote_account instead.
+    pub fn vote_accounts(&self) -> HashMap<Pubkey, (u64 /*stake*/, ArcVoteAccount)> {
         self.stakes.read().unwrap().vote_accounts().clone()
+    }
+
+    /// Vote account for the given vote account pubkey along with the stake.
+    pub fn get_vote_account(
+        &self,
+        vote_account: &Pubkey,
+    ) -> Option<(u64 /*stake*/, ArcVoteAccount)> {
+        self.stakes
+            .read()
+            .unwrap()
+            .vote_accounts()
+            .get(vote_account)
+            .cloned()
     }
 
     /// Get the EpochStakes for a given epoch
@@ -4113,7 +4128,10 @@ impl Bank {
 
     /// vote accounts for the specific epoch along with the stake
     ///   attributed to each account
-    pub fn epoch_vote_accounts(&self, epoch: Epoch) -> Option<&HashMap<Pubkey, (u64, Account)>> {
+    pub fn epoch_vote_accounts(
+        &self,
+        epoch: Epoch,
+    ) -> Option<&HashMap<Pubkey, (u64, ArcVoteAccount)>> {
         self.epoch_stakes
             .get(&epoch)
             .map(|epoch_stakes| Stakes::vote_accounts(epoch_stakes.stakes()))
@@ -7741,7 +7759,7 @@ pub(crate) mod tests {
                 accounts
                     .iter()
                     .filter_map(|(pubkey, (stake, account))| {
-                        if let Ok(vote_state) = VoteState::deserialize(&account.data) {
+                        if let Ok(vote_state) = account.vote_state().as_ref() {
                             if vote_state.node_pubkey == leader_pubkey {
                                 Some((*pubkey, *stake))
                             } else {

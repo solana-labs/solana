@@ -176,19 +176,15 @@ impl AggregateCommitmentService {
             if lamports == 0 {
                 continue;
             }
-            let vote_state = VoteState::from(&account);
-            if vote_state.is_none() {
-                continue;
+            if let Ok(vote_state) = account.vote_state().as_ref() {
+                Self::aggregate_commitment_for_vote_account(
+                    &mut commitment,
+                    &mut rooted_stake,
+                    vote_state,
+                    ancestors,
+                    lamports,
+                );
             }
-
-            let vote_state = vote_state.unwrap();
-            Self::aggregate_commitment_for_vote_account(
-                &mut commitment,
-                &mut rooted_stake,
-                &vote_state,
-                ancestors,
-                lamports,
-            );
         }
 
         (commitment, rooted_stake)
@@ -482,9 +478,14 @@ mod tests {
     #[test]
     fn test_highest_confirmed_root_advance() {
         fn get_vote_account_root_slot(vote_pubkey: Pubkey, bank: &Arc<Bank>) -> Slot {
-            let account = &bank.vote_accounts()[&vote_pubkey].1;
-            let vote_state = VoteState::from(account).unwrap();
-            vote_state.root_slot.unwrap()
+            let (_stake, vote_account) = bank.get_vote_account(&vote_pubkey).unwrap();
+            let slot = vote_account
+                .vote_state()
+                .as_ref()
+                .unwrap()
+                .root_slot
+                .unwrap();
+            slot
         }
 
         let block_commitment_cache = RwLock::new(BlockCommitmentCache::new_for_tests());
