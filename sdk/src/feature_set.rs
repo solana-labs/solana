@@ -94,6 +94,10 @@ pub mod rewrite_stake {
     solana_sdk::declare_id!("6ap2eGy7wx5JmsWUmQ5sHwEWrFSDUxSti2k5Hbfv5BZG");
 }
 
+pub mod bpf_just_in_time_compilation {
+    solana_sdk::declare_id!("3bZhti6PMmsdkPxqPT8TPNzB3n9NYbKtnwqEpUDnFuPi");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [

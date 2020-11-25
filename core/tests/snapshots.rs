@@ -93,6 +93,7 @@ mod tests {
                 &[],
                 None,
                 None,
+                false,
             );
             bank0.freeze();
             let mut bank_forks = BankForks::new(bank0);
@@ -148,6 +149,7 @@ mod tests {
             old_genesis_config,
             None,
             None,
+            false,
         )
         .unwrap();
 

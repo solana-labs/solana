@@ -311,6 +311,7 @@ pub type ProcessCallback = Arc<dyn Fn(&Bank) + Sync + Send>;
 
 #[derive(Default, Clone)]
 pub struct ProcessOptions {
+    pub bpf_jit_compilation: bool,
     pub poh_verify: bool,
     pub full_leader_cache: bool,
     pub dev_halt_at_slot: Option<Slot>,
@@ -343,6 +344,7 @@ pub fn process_blockstore(
         &opts.frozen_accounts,
         opts.debug_keys.clone(),
         Some(&crate::builtins::get(genesis_config.cluster_type)),
+        opts.bpf_jit_compilation,
     );
     let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");
@@ -2830,7 +2832,7 @@ pub mod tests {
         genesis_config: &GenesisConfig,
         account_paths: Vec<PathBuf>,
     ) -> EpochSchedule {
-        let bank = Bank::new_with_paths(&genesis_config, account_paths, &[], None, None);
+        let bank = Bank::new_with_paths(&genesis_config, account_paths, &[], None, None, false);
         *bank.epoch_schedule()
     }
 

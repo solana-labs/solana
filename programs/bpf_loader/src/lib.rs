@@ -21,7 +21,7 @@ use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
     decode_error::DecodeError,
     entrypoint::SUCCESS,
-    feature_set::bpf_compute_budget_balancing,
+    feature_set::{bpf_compute_budget_balancing, bpf_just_in_time_compilation},
     instruction::InstructionError,
     keyed_account::{is_executable, next_keyed_account, KeyedAccount},
     loader_instruction::LoaderInstruction,
@@ -91,8 +91,6 @@ fn map_ebpf_error(
     InstructionError::InvalidAccountData
 }
 
-const IS_JIT_ENABLED: bool = false;
-
 pub fn create_and_cache_executor(
     program: &KeyedAccount,
     invoke_context: &mut dyn InvokeContext,
@@ -120,7 +118,10 @@ pub fn create_and_cache_executor(
     let syscall_registry = syscalls::register_syscalls(invoke_context)
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
     executable.set_syscall_registry(syscall_registry);
-    if IS_JIT_ENABLED && executable.jit_compile().is_err() {
+
+    if invoke_context.is_feature_active(&bpf_just_in_time_compilation::id())
+        && executable.jit_compile().is_err()
+    {
         return Err(BPFLoaderError::JustInTimeCompilationFailed.into());
     }
     let executor = Arc::new(BPFExecutor { executable });
@@ -268,6 +269,8 @@ impl Executor for BPFExecutor {
             &instruction_data,
         )?;
         {
+            let is_jit_enabled =
+                invoke_context.is_feature_active(&bpf_just_in_time_compilation::id());
             let compute_meter = invoke_context.get_compute_meter();
             let mut vm = match create_vm(
                 program_id,
@@ -286,7 +289,7 @@ impl Executor for BPFExecutor {
             stable_log::program_invoke(&logger, program.unsigned_key(), invoke_depth);
             let mut instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
             let before = compute_meter.borrow().get_remaining();
-            let result = if IS_JIT_ENABLED {
+            let result = if is_jit_enabled {
                 vm.execute_program_jit(&mut instruction_meter)
             } else {
                 vm.execute_program_interpreted(&mut instruction_meter)

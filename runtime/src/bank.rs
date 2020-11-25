@@ -861,7 +861,7 @@ impl Default for BlockhashQueue {
 
 impl Bank {
     pub fn new(genesis_config: &GenesisConfig) -> Self {
-        Self::new_with_paths(&genesis_config, Vec::new(), &[], None, None)
+        Self::new_with_paths(&genesis_config, Vec::new(), &[], None, None, false)
     }
 
     pub fn new_with_paths(
@@ -870,6 +870,7 @@ impl Bank {
         frozen_account_pubkeys: &[Pubkey],
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
+        bpf_jit_compilation: bool,
     ) -> Self {
         let mut bank = Self::default();
         bank.transaction_debug_keys = debug_keys;
@@ -878,7 +879,7 @@ impl Bank {
 
         bank.rc.accounts = Arc::new(Accounts::new(paths, &genesis_config.cluster_type));
         bank.process_genesis_config(genesis_config);
-        bank.finish_init(genesis_config, additional_builtins);
+        bank.finish_init(genesis_config, additional_builtins, bpf_jit_compilation);
 
         // Freeze accounts after process_genesis_config creates the initial append vecs
         Arc::get_mut(&mut Arc::get_mut(&mut bank.rc.accounts).unwrap().accounts_db)
@@ -1013,7 +1014,7 @@ impl Bank {
         // Following code may touch AccountsDB, requiring proper ancestors
         let parent_epoch = parent.epoch();
         if parent_epoch < new.epoch() {
-            new.apply_feature_activations(false);
+            new.apply_feature_activations(false, false);
         }
 
         let cloned = new
@@ -1044,7 +1045,7 @@ impl Bank {
     /// * Freezes the new bank, assuming that the user will `Bank::new_from_parent` from this bank
     pub fn warp_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
         let mut new = Bank::new_from_parent(parent, collector_id, slot);
-        new.apply_feature_activations(true);
+        new.apply_feature_activations(true, false);
         new.update_epoch_stakes(new.epoch_schedule().get_epoch(slot));
         new.tick_height.store(new.max_tick_height(), Relaxed);
         new.freeze();
@@ -1059,6 +1060,7 @@ impl Bank {
         fields: BankFieldsToDeserialize,
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
+        bpf_jit_compilation: bool,
     ) -> Self {
         fn new<T: Default>() -> T {
             T::default()
@@ -1116,7 +1118,7 @@ impl Bank {
             transaction_log_collector: new(),
             feature_set: new(),
         };
-        bank.finish_init(genesis_config, additional_builtins);
+        bank.finish_init(genesis_config, additional_builtins, bpf_jit_compilation);
 
         // Sanity assertions between bank snapshot and genesis config
         // Consider removing from serializable bank state
@@ -3765,6 +3767,7 @@ impl Bank {
         &mut self,
         genesis_config: &GenesisConfig,
         additional_builtins: Option<&Builtins>,
+        bpf_jit_compilation: bool,
     ) {
         self.rewards_pool_pubkeys =
             Arc::new(genesis_config.rewards_pools.keys().cloned().collect());
@@ -3787,7 +3790,7 @@ impl Bank {
         }
         self.feature_builtins = Arc::new(builtins.feature_builtins);
 
-        self.apply_feature_activations(true);
+        self.apply_feature_activations(true, bpf_jit_compilation);
     }
 
     pub fn set_inflation(&self, inflation: Inflation) {
@@ -4370,8 +4373,9 @@ impl Bank {
 
     // This is called from snapshot restore AND for each epoch boundary
     // The entire code path herein must be idempotent
-    fn apply_feature_activations(&mut self, init_finish_or_warp: bool) {
-        let new_feature_activations = self.compute_active_feature_set(!init_finish_or_warp);
+    fn apply_feature_activations(&mut self, init_finish_or_warp: bool, bpf_jit_compilation: bool) {
+        let new_feature_activations =
+            self.compute_active_feature_set(!init_finish_or_warp, bpf_jit_compilation);
 
         if new_feature_activations.contains(&feature_set::pico_inflation::id()) {
             *self.inflation.write().unwrap() = Inflation::pico();
@@ -4405,7 +4409,11 @@ impl Bank {
     }
 
     // Compute the active feature set based on the current bank state, and return the set of newly activated features
-    fn compute_active_feature_set(&mut self, allow_new_activations: bool) -> HashSet<Pubkey> {
+    fn compute_active_feature_set(
+        &mut self,
+        allow_new_activations: bool,
+        bpf_jit_compilation: bool,
+    ) -> HashSet<Pubkey> {
         let mut active = self.feature_set.active.clone();
         let mut inactive = HashSet::new();
         let mut newly_activated = HashSet::new();
@@ -4442,6 +4450,12 @@ impl Bank {
             } else {
                 inactive.insert(*feature_id);
             }
+        }
+
+        if bpf_jit_compilation {
+            active.insert(feature_set::bpf_just_in_time_compilation::id(), 0);
+        } else {
+            inactive.insert(feature_set::bpf_just_in_time_compilation::id());
         }
 
         self.feature_set = Arc::new(FeatureSet { active, inactive });
@@ -10262,13 +10276,13 @@ pub(crate) mod tests {
         feature_set.inactive.insert(test_feature);
         bank.feature_set = Arc::new(feature_set.clone());
 
-        let new_activations = bank.compute_active_feature_set(true);
+        let new_activations = bank.compute_active_feature_set(true, false);
         assert!(new_activations.is_empty());
         assert!(!bank.feature_set.is_active(&test_feature));
 
         // Depositing into the `test_feature` account should do nothing
         bank.deposit(&test_feature, 42);
-        let new_activations = bank.compute_active_feature_set(true);
+        let new_activations = bank.compute_active_feature_set(true, false);
         assert!(new_activations.is_empty());
         assert!(!bank.feature_set.is_active(&test_feature));
 
@@ -10278,7 +10292,7 @@ pub(crate) mod tests {
         bank.store_account(&test_feature, &feature::create_account(&feature, 42));
 
         // Run `compute_active_feature_set` disallowing new activations
-        let new_activations = bank.compute_active_feature_set(false);
+        let new_activations = bank.compute_active_feature_set(false, false);
         assert!(new_activations.is_empty());
         assert!(!bank.feature_set.is_active(&test_feature));
         let feature = feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
@@ -10286,7 +10300,7 @@ pub(crate) mod tests {
         assert_eq!(feature.activated_at, None);
 
         // Run `compute_active_feature_set` allowing new activations
-        let new_activations = bank.compute_active_feature_set(true);
+        let new_activations = bank.compute_active_feature_set(true, false);
         assert_eq!(new_activations.len(), 1);
         assert!(bank.feature_set.is_active(&test_feature));
         let feature = feature::from_account(&bank.get_account(&test_feature).expect("get_account"))
@@ -10299,7 +10313,7 @@ pub(crate) mod tests {
 
         // Running `compute_active_feature_set` will not cause new activations, but
         // `test_feature` is now be active
-        let new_activations = bank.compute_active_feature_set(true);
+        let new_activations = bank.compute_active_feature_set(true, false);
         assert!(new_activations.is_empty());
         assert!(bank.feature_set.is_active(&test_feature));
     }
@@ -10451,7 +10465,7 @@ pub(crate) mod tests {
                 42,
             ),
         );
-        bank.compute_active_feature_set(true);
+        bank.compute_active_feature_set(true, false);
 
         // Now Bank::new_from_parent should adjust timestamp
         let bank = Arc::new(new_from_parent(&Arc::new(bank)));
@@ -10838,7 +10852,7 @@ pub(crate) mod tests {
     fn test_debug_bank() {
         let (genesis_config, _mint_keypair) = create_genesis_config(50000);
         let mut bank = Bank::new(&genesis_config);
-        bank.finish_init(&genesis_config, None);
+        bank.finish_init(&genesis_config, None, false);
         let debug = format!("{:#?}", bank);
         assert!(!debug.is_empty());
     }
@@ -11118,7 +11132,7 @@ pub(crate) mod tests {
                 42,
             ),
         );
-        bank.compute_active_feature_set(true);
+        bank.compute_active_feature_set(true, false);
         assert_eq!(
             bank.get_inflation_start_slot(),
             pico_inflation_activation_slot
@@ -11138,7 +11152,7 @@ pub(crate) mod tests {
                 42,
             ),
         );
-        bank.compute_active_feature_set(true);
+        bank.compute_active_feature_set(true, false);
         assert_eq!(
             bank.get_inflation_start_slot(),
             full_inflation_activation_slot
@@ -11178,7 +11192,7 @@ pub(crate) mod tests {
                 42,
             ),
         );
-        bank.compute_active_feature_set(true);
+        bank.compute_active_feature_set(true, false);
         assert_eq!(bank.get_inflation_num_slots(), slots_per_epoch);
         for _ in 0..slots_per_epoch {
             bank = new_from_parent(&Arc::new(bank));
@@ -11196,7 +11210,7 @@ pub(crate) mod tests {
                 42,
             ),
         );
-        bank.compute_active_feature_set(true);
+        bank.compute_active_feature_set(true, false);
         assert_eq!(bank.get_inflation_num_slots(), slots_per_epoch);
         for _ in 0..slots_per_epoch {
             bank = new_from_parent(&Arc::new(bank));

@@ -604,6 +604,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     genesis_config: &GenesisConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
+    bpf_jit_compilation: bool,
 ) -> Result<Bank> {
     // Untar the snapshot into a temporary directory
     let unpack_dir = tempfile::Builder::new()
@@ -628,6 +629,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         genesis_config,
         debug_keys,
         additional_builtins,
+        bpf_jit_compilation,
     )?;
 
     if !bank.verify_snapshot_bank() {
@@ -789,6 +791,7 @@ fn rebuild_bank_from_snapshots<P>(
     genesis_config: &GenesisConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
+    bpf_jit_compilation: bool,
 ) -> Result<Bank>
 where
     P: AsRef<Path>,
@@ -822,6 +825,7 @@ where
                 frozen_account_pubkeys,
                 debug_keys,
                 additional_builtins,
+                bpf_jit_compilation,
             ),
         }?)
     })?;
