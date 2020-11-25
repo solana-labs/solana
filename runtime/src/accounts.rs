@@ -2223,7 +2223,7 @@ mod tests {
         let transaction_rent = 0;
         let loaded = (
             Ok((transaction_accounts, transaction_loaders, transaction_rent)),
-            hash_age_kind.clone(),
+            hash_age_kind,
         );
 
         let mut loaded = vec![loaded];
@@ -2328,7 +2328,7 @@ mod tests {
         let transaction_rent = 0;
         let loaded = (
             Ok((transaction_accounts, transaction_loaders, transaction_rent)),
-            hash_age_kind.clone(),
+            hash_age_kind,
         );
 
         let mut loaded = vec![loaded];

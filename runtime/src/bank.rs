@@ -4461,12 +4461,8 @@ pub(crate) mod tests {
             Some(None)
         );
         assert_eq!(
-            HashAgeKind::DurableNonceFull(
-                Pubkey::default(),
-                account.clone(),
-                Some(Account::default())
-            )
-            .fee_calculator(),
+            HashAgeKind::DurableNonceFull(Pubkey::default(), account, Some(Account::default()))
+                .fee_calculator(),
             Some(Some(FeeCalculator::default()))
         );
         assert_eq!(
