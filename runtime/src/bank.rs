@@ -8628,6 +8628,50 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_nonce_payer() {
+        solana_logger::setup();
+        let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) =
+            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None).unwrap();
+        let alice_keypair = Keypair::new();
+        let alice_pubkey = alice_keypair.pubkey();
+        let custodian_pubkey = custodian_keypair.pubkey();
+        let nonce_pubkey = nonce_keypair.pubkey();
+
+        warn!("alice: {}", alice_pubkey);
+        warn!("custodian: {}", custodian_pubkey);
+        warn!("nonce: {}", nonce_pubkey);
+        warn!("nonce account: {:?}", bank.get_account(&nonce_pubkey));
+        warn!("cust: {:?}", bank.get_account(&custodian_pubkey));
+        let nonce_hash = get_nonce_account(&bank, &nonce_pubkey).unwrap();
+
+        for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
+            goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+            bank = Arc::new(new_from_parent(&bank));
+        }
+
+        let durable_tx = Transaction::new_signed_with_payer(
+            &[
+                system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
+                system_instruction::transfer(&custodian_pubkey, &alice_pubkey, 100_000_000),
+            ],
+            Some(&nonce_pubkey),
+            &[&custodian_keypair, &nonce_keypair],
+            nonce_hash,
+        );
+        warn!("{:?}", durable_tx);
+        assert_eq!(
+            bank.process_transaction(&durable_tx),
+            Err(TransactionError::InstructionError(
+                1,
+                system_instruction::SystemError::ResultWithNegativeLamports.into(),
+            ))
+        );
+        /* Check fee charged and nonce has advanced */
+        assert_eq!(bank.get_balance(&nonce_pubkey), 240_000);
+        assert_ne!(nonce_hash, get_nonce_account(&bank, &nonce_pubkey).unwrap());
+    }
+
+    #[test]
     fn test_nonce_fee_calculator_updates() {
         let (mut genesis_config, mint_keypair) = create_genesis_config(1_000_000);
         genesis_config.rent.lamports_per_byte_year = 0;
