@@ -25,7 +25,7 @@ fn test_vote_authorize_and_withdraw() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run();
+    } = TestValidator::with_no_fee();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();

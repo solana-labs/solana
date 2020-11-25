@@ -927,7 +927,7 @@ mod tests {
             alice,
             ledger_path,
             ..
-        } = TestValidator::run();
+        } = TestValidator::with_no_fee();
         let url = get_rpc_request_str(leader_data.rpc, false);
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
         test_process_distribute_tokens_with_client(&client, alice, None);
@@ -945,7 +945,7 @@ mod tests {
             alice,
             ledger_path,
             ..
-        } = TestValidator::run();
+        } = TestValidator::with_no_fee();
         let url = get_rpc_request_str(leader_data.rpc, false);
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
         test_process_distribute_tokens_with_client(&client, alice, Some(1.5));
@@ -963,7 +963,7 @@ mod tests {
             alice,
             ledger_path,
             ..
-        } = TestValidator::run();
+        } = TestValidator::with_no_fee();
         let url = get_rpc_request_str(leader_data.rpc, false);
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
         test_process_distribute_stake_with_client(&client, alice);
@@ -1270,7 +1270,7 @@ mod tests {
             alice,
             ledger_path,
             ..
-        } = TestValidator::run_with_fees(fees);
+        } = TestValidator::with_custom_fee(fees);
         let url = get_rpc_request_str(leader_data.rpc, false);
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
@@ -1372,7 +1372,7 @@ mod tests {
             alice,
             ledger_path,
             ..
-        } = TestValidator::run_with_fees(fees);
+        } = TestValidator::with_custom_fee(fees);
         let url = get_rpc_request_str(leader_data.rpc, false);
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
 
@@ -1501,7 +1501,7 @@ mod tests {
             alice,
             ledger_path,
             ..
-        } = TestValidator::run_with_fees(fees);
+        } = TestValidator::with_custom_fee(fees);
         let url = get_rpc_request_str(leader_data.rpc, false);
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
 
@@ -1622,7 +1622,7 @@ mod tests {
             alice,
             ledger_path,
             ..
-        } = TestValidator::run_with_fees(fees);
+        } = TestValidator::with_custom_fee(fees);
         let url = get_rpc_request_str(leader_data.rpc, false);
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
 

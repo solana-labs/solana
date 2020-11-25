@@ -62,7 +62,7 @@ fn test_rpc_send_tx() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run();
+    } = TestValidator::with_no_fee();
     let bob_pubkey = solana_sdk::pubkey::new_rand();
 
     let req = json_req!("getRecentBlockhash", json!([]));
@@ -127,7 +127,7 @@ fn test_rpc_invalid_requests() {
         leader_data,
         ledger_path,
         ..
-    } = TestValidator::run();
+    } = TestValidator::with_no_fee();
     let bob_pubkey = solana_sdk::pubkey::new_rand();
 
     // test invalid get_balance request
@@ -166,7 +166,7 @@ fn test_rpc_subscriptions() {
         ledger_path,
         genesis_hash,
         ..
-    } = TestValidator::run();
+    } = TestValidator::with_no_fee();
 
     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     transactions_socket.connect(leader_data.tpu).unwrap();
