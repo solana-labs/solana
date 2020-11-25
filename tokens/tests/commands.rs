@@ -12,7 +12,7 @@ fn test_process_distribute_with_rpc_client() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run();
+    } = TestValidator::with_no_fee();
 
     let client = RpcClient::new_socket(leader_data.rpc);
     test_process_distribute_tokens_with_client(&client, alice, None);

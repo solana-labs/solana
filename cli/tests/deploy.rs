@@ -33,7 +33,7 @@ fn test_cli_deploy_program() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run();
+    } = TestValidator::with_no_fee();
 
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);

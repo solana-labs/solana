@@ -32,7 +32,7 @@ fn test_stake_delegation_force() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run();
+    } = TestValidator::with_no_fee();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -129,7 +129,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         ledger_path,
         vote_pubkey,
         ..
-    } = TestValidator::run();
+    } = TestValidator::with_no_fee();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -218,7 +218,7 @@ fn test_stake_delegation_and_deactivation() {
         ledger_path,
         vote_pubkey,
         ..
-    } = TestValidator::run();
+    } = TestValidator::with_no_fee();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -303,7 +303,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         ledger_path,
         vote_pubkey,
         ..
-    } = TestValidator::run();
+    } = TestValidator::with_no_fee();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -446,7 +446,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         ledger_path,
         vote_pubkey,
         ..
-    } = TestValidator::run();
+    } = TestValidator::with_no_fee();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -568,7 +568,7 @@ fn test_stake_authorize() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run();
+    } = TestValidator::with_no_fee();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -848,7 +848,7 @@ fn test_stake_authorize_with_fee_payer() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run_with_fees(SIG_FEE);
+    } = TestValidator::with_custom_fee(SIG_FEE);
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -981,7 +981,7 @@ fn test_stake_split() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run_with_fees(1);
+    } = TestValidator::with_custom_fee(1);
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -1132,7 +1132,7 @@ fn test_stake_set_lockup() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run_with_fees(1);
+    } = TestValidator::with_custom_fee(1);
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
@@ -1401,7 +1401,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         alice,
         ledger_path,
         ..
-    } = TestValidator::run();
+    } = TestValidator::with_no_fee();
     let (sender, receiver) = channel();
     run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
