@@ -358,21 +358,38 @@ impl Accounts {
                     };
 
                     // Update hash_age_kind with fee-subtracted accounts
-                    let hash_age_kind = hash_age_kind.map(|hash_age_kind| match hash_age_kind {
-                        HashAgeKind::Extant => HashAgeKind::Extant,
-                        HashAgeKind::DurableNoncePartial(pubkey, account) => {
-                            let maybe_fee_account = tx
-                                .message()
-                                .account_keys
-                                .get(0)
-                                .filter(|fee_pubkey| **fee_pubkey != pubkey)
-                                .map(|_| accounts[0].clone());
-                            HashAgeKind::DurableNonceFull(pubkey, account, maybe_fee_account)
+                    let hash_age_kind = if let Some(hash_age_kind) = hash_age_kind {
+                        match hash_age_kind {
+                            HashAgeKind::Extant => Some(HashAgeKind::Extant),
+                            HashAgeKind::DurableNoncePartial(pubkey, account) => {
+                                let fee_payer = tx
+                                    .message()
+                                    .account_keys
+                                    .iter()
+                                    .enumerate()
+                                    .skip_while(|(i, k)| !Self::is_non_loader_key(tx.message(), k, *i))
+                                    .nth(0)
+                                    .map(|(i, k)| (*k, accounts[i].clone()));
+                                if let Some((fee_pubkey, fee_account)) = fee_payer {
+                                    if fee_pubkey == pubkey {
+                                        Some(HashAgeKind::DurableNonceFull(pubkey, fee_account, None))
+                                    } else {
+                                        Some(HashAgeKind::DurableNonceFull(pubkey, account, Some(fee_account)))
+                                    }
+                                } else {
+                                    return (
+                                        Err(TransactionError::AccountNotFound),
+                                        Some(HashAgeKind::DurableNoncePartial(pubkey, account))
+                                    );
+                                }
+                            }
+                            HashAgeKind::DurableNonceFull(_, _, _) => {
+                                panic!("update: unexpected HashAgeKind variant")
+                            }
                         }
-                        HashAgeKind::DurableNonceFull(_, _, _) => {
-                            panic!("update: unexpected HashAgeKind variant")
-                        }
-                    });
+                    } else {
+                        None
+                    };
 
                     (Ok((accounts, loaders, rents)), hash_age_kind)
                 }
