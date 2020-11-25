@@ -1335,7 +1335,10 @@ fn check_slice_and_encoding(encoding: &UiAccountEncoding, data_slice_is_some: bo
                 Ok(())
             }
         }
-        UiAccountEncoding::Binary | UiAccountEncoding::Base58 | UiAccountEncoding::Base64 => Ok(()),
+        UiAccountEncoding::Binary
+        | UiAccountEncoding::Base58
+        | UiAccountEncoding::Base64
+        | UiAccountEncoding::Base64Zstd => Ok(()),
     }
 }
 
