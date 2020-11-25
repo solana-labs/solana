@@ -359,40 +359,9 @@ impl Accounts {
 
                     // Update hash_age_kind with fee-subtracted accounts
                     let hash_age_kind = if let Some(hash_age_kind) = hash_age_kind {
-                        match hash_age_kind {
-                            HashAgeKind::Extant => Some(HashAgeKind::Extant),
-                            HashAgeKind::DurableNoncePartial(pubkey, account) => {
-                                let fee_payer = tx
-                                    .message()
-                                    .account_keys
-                                    .iter()
-                                    .enumerate()
-                                    .find(|(i, k)| Self::is_non_loader_key(tx.message(), k, *i))
-                                    .map(|(i, k)| (*k, accounts[i].clone()));
-                                if let Some((fee_pubkey, fee_account)) = fee_payer {
-                                    if fee_pubkey == pubkey {
-                                        Some(HashAgeKind::DurableNonceFull(
-                                            pubkey,
-                                            fee_account,
-                                            None,
-                                        ))
-                                    } else {
-                                        Some(HashAgeKind::DurableNonceFull(
-                                            pubkey,
-                                            account,
-                                            Some(fee_account),
-                                        ))
-                                    }
-                                } else {
-                                    return (
-                                        Err(TransactionError::AccountNotFound),
-                                        Some(HashAgeKind::DurableNoncePartial(pubkey, account)),
-                                    );
-                                }
-                            }
-                            HashAgeKind::DurableNonceFull(_, _, _) => {
-                                panic!("update: unexpected HashAgeKind variant")
-                            }
+                        match hash_age_kind.finish_partial(tx.message(), &accounts) {
+                            Ok(hash_age_kind) => Some(hash_age_kind),
+                            Err(e) => return (Err(e), Some(hash_age_kind)),
                         }
                     } else {
                         None
@@ -815,7 +784,7 @@ impl Accounts {
         self.accounts_db.add_root(slot)
     }
 
-    fn is_non_loader_key(message: &Message, key: &Pubkey, key_index: usize) -> bool {
+    pub fn is_non_loader_key(message: &Message, key: &Pubkey, key_index: usize) -> bool {
         !message.program_ids().contains(&key) || message.is_key_passed_to_program(key_index)
     }
 
