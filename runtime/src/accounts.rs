@@ -22,7 +22,7 @@ use solana_sdk::{
     genesis_config::ClusterType,
     hash::Hash,
     message::Message,
-    native_loader, nonce, nonce_account,
+    native_loader, nonce,
     pubkey::Pubkey,
     transaction::Result,
     transaction::{Transaction, TransactionError},
@@ -316,14 +316,14 @@ impl Accounts {
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
                 ((_, tx), (Ok(()), hash_age_kind)) => {
-                    let fee_calculator = match hash_age_kind.as_ref() {
-                        Some(HashAgeKind::DurableNonce(_, account)) => {
-                            nonce_account::fee_calculator_of(account)
-                        }
-                        _ => hash_queue
-                            .get_fee_calculator(&tx.message().recent_blockhash)
-                            .cloned(),
-                    };
+                    let fee_calculator = hash_age_kind
+                        .as_ref()
+                        .and_then(|hash_age_kind| hash_age_kind.fee_calculator())
+                        .unwrap_or_else(|| {
+                            hash_queue
+                                .get_fee_calculator(&tx.message().recent_blockhash)
+                                .cloned()
+                        });
                     let fee = if let Some(fee_calculator) = fee_calculator {
                         fee_calculator.calculate_fee_with_config(tx.message(), &fee_config)
                     } else {
@@ -355,6 +355,47 @@ impl Accounts {
                     let loaders = match load_res {
                         Ok(loaders) => loaders,
                         Err(e) => return (Err(e), hash_age_kind),
+                    };
+
+                    // Update hash_age_kind with fee-subtracted accounts
+                    let hash_age_kind = if let Some(hash_age_kind) = hash_age_kind {
+                        match hash_age_kind {
+                            HashAgeKind::Extant => Some(HashAgeKind::Extant),
+                            HashAgeKind::DurableNoncePartial(pubkey, account) => {
+                                let fee_payer = tx
+                                    .message()
+                                    .account_keys
+                                    .iter()
+                                    .enumerate()
+                                    .find(|(i, k)| Self::is_non_loader_key(tx.message(), k, *i))
+                                    .map(|(i, k)| (*k, accounts[i].clone()));
+                                if let Some((fee_pubkey, fee_account)) = fee_payer {
+                                    if fee_pubkey == pubkey {
+                                        Some(HashAgeKind::DurableNonceFull(
+                                            pubkey,
+                                            fee_account,
+                                            None,
+                                        ))
+                                    } else {
+                                        Some(HashAgeKind::DurableNonceFull(
+                                            pubkey,
+                                            account,
+                                            Some(fee_account),
+                                        ))
+                                    }
+                                } else {
+                                    return (
+                                        Err(TransactionError::AccountNotFound),
+                                        Some(HashAgeKind::DurableNoncePartial(pubkey, account)),
+                                    );
+                                }
+                            }
+                            HashAgeKind::DurableNonceFull(_, _, _) => {
+                                panic!("update: unexpected HashAgeKind variant")
+                            }
+                        }
+                    } else {
+                        None
                     };
 
                     (Ok((accounts, loaders, rents)), hash_age_kind)
@@ -800,11 +841,16 @@ impl Accounts {
             }
             let (res, hash_age_kind) = &res[i];
             let maybe_nonce = match (res, hash_age_kind) {
-                (Ok(_), Some(HashAgeKind::DurableNonce(pubkey, acc))) => Some((pubkey, acc)),
+                (Ok(_), Some(HashAgeKind::DurableNonceFull(pubkey, acc, maybe_fee_account))) => {
+                    Some((pubkey, acc, maybe_fee_account))
+                }
                 (
                     Err(TransactionError::InstructionError(_, _)),
-                    Some(HashAgeKind::DurableNonce(pubkey, acc)),
-                ) => Some((pubkey, acc)),
+                    Some(HashAgeKind::DurableNonceFull(pubkey, acc, maybe_fee_account)),
+                ) => Some((pubkey, acc, maybe_fee_account)),
+                (_, Some(HashAgeKind::DurableNoncePartial(_, _))) => {
+                    panic!("collect: unexpected HashAgeKind variant")
+                }
                 (Ok(_), _hash_age_kind) => None,
                 (Err(_), _hash_age_kind) => continue,
             };
@@ -818,7 +864,7 @@ impl Accounts {
                 .zip(acc.0.iter_mut())
                 .filter(|((i, key), _account)| Self::is_non_loader_key(message, key, *i))
             {
-                prepare_if_nonce_account(
+                let is_nonce_account = prepare_if_nonce_account(
                     account,
                     key,
                     res,
@@ -826,7 +872,24 @@ impl Accounts {
                     last_blockhash_with_fee_calculator,
                     fix_recent_blockhashes_sysvar_delay,
                 );
-                if message.is_writable(i) {
+                let is_fee_payer = i == 0;
+                if message.is_writable(i)
+                    && (res.is_ok()
+                        || (maybe_nonce.is_some() && (is_nonce_account || is_fee_payer)))
+                {
+                    if res.is_err() {
+                        match (is_nonce_account, is_fee_payer, maybe_nonce) {
+                            // nonce is fee-payer, state updated in `prepare_if_nonce_account()`
+                            (true, true, Some((_, _, None))) => (),
+                            // nonce not fee-payer, state updated in `prepare_if_nonce_account()`
+                            (true, false, Some((_, _, Some(_)))) => (),
+                            // not nonce, but fee-payer. rollback to cached state
+                            (false, true, Some((_, _, Some(fee_payer_account)))) => {
+                                *account = fee_payer_account.clone();
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
                     if account.rent_epoch == 0 {
                         acc.2 += rent_collector.collect_from_created_account(
                             &key,
@@ -846,11 +909,11 @@ pub fn prepare_if_nonce_account(
     account: &mut Account,
     account_pubkey: &Pubkey,
     tx_result: &Result<()>,
-    maybe_nonce: Option<(&Pubkey, &Account)>,
+    maybe_nonce: Option<(&Pubkey, &Account, &Option<Account>)>,
     last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
     fix_recent_blockhashes_sysvar_delay: bool,
-) {
-    if let Some((nonce_key, nonce_acc)) = maybe_nonce {
+) -> bool {
+    if let Some((nonce_key, nonce_acc, _maybe_fee_account)) = maybe_nonce {
         if account_pubkey == nonce_key {
             let overwrite = if tx_result.is_err() {
                 // Nonce TX failed with an InstructionError. Roll back
@@ -878,8 +941,10 @@ pub fn prepare_if_nonce_account(
                     account.set_state(&new_data).unwrap();
                 }
             }
+            return true;
         }
     }
+    false
 }
 
 pub fn create_test_accounts(
@@ -918,10 +983,10 @@ mod tests {
         hash::Hash,
         instruction::{CompiledInstruction, InstructionError},
         message::Message,
-        nonce,
+        nonce, nonce_account,
         rent::Rent,
-        signature::{Keypair, Signer},
-        system_program,
+        signature::{keypair_from_seed, Keypair, Signer},
+        system_instruction, system_program,
     };
     use std::{
         sync::atomic::{AtomicBool, AtomicU64, Ordering},
@@ -1919,8 +1984,14 @@ mod tests {
         assert!(loaded_accounts[0].0.is_err());
     }
 
-    fn create_accounts_prepare_if_nonce_account() -> (Pubkey, Account, Account, Hash, FeeCalculator)
-    {
+    fn create_accounts_prepare_if_nonce_account() -> (
+        Pubkey,
+        Account,
+        Account,
+        Hash,
+        FeeCalculator,
+        Option<Account>,
+    ) {
         let data = nonce::state::Versions::new_current(nonce::State::Initialized(
             nonce::state::Data::default(),
         ));
@@ -1937,6 +2008,7 @@ mod tests {
             FeeCalculator {
                 lamports_per_signature: 1234,
             },
+            None,
         )
     }
 
@@ -1944,18 +2016,20 @@ mod tests {
         account: &mut Account,
         account_pubkey: &Pubkey,
         tx_result: &Result<()>,
-        maybe_nonce: Option<(&Pubkey, &Account)>,
+        maybe_nonce: Option<(&Pubkey, &Account, &Option<Account>)>,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         expect_account: &Account,
     ) -> bool {
         // Verify expect_account's relationship
         match maybe_nonce {
-            Some((nonce_pubkey, _nonce_account))
+            Some((nonce_pubkey, _nonce_account, _maybe_fee_account))
                 if nonce_pubkey == account_pubkey && tx_result.is_ok() =>
             {
                 assert_eq!(expect_account, account) // Account update occurs in system_instruction_processor
             }
-            Some((nonce_pubkey, nonce_account)) if nonce_pubkey == account_pubkey => {
+            Some((nonce_pubkey, nonce_account, _maybe_fee_account))
+                if nonce_pubkey == account_pubkey =>
+            {
                 assert_ne!(expect_account, nonce_account)
             }
             _ => assert_eq!(expect_account, account),
@@ -1980,6 +2054,7 @@ mod tests {
             mut post_account,
             last_blockhash,
             last_fee_calculator,
+            maybe_fee_account,
         ) = create_accounts_prepare_if_nonce_account();
         let post_account_pubkey = pre_account_pubkey;
 
@@ -1993,7 +2068,7 @@ mod tests {
             &mut post_account,
             &post_account_pubkey,
             &Ok(()),
-            Some((&pre_account_pubkey, &pre_account)),
+            Some((&pre_account_pubkey, &pre_account, &maybe_fee_account)),
             &(last_blockhash, last_fee_calculator),
             &expect_account,
         ));
@@ -2001,8 +2076,14 @@ mod tests {
 
     #[test]
     fn test_prepare_if_nonce_account_not_nonce_tx() {
-        let (pre_account_pubkey, _pre_account, _post_account, last_blockhash, last_fee_calculator) =
-            create_accounts_prepare_if_nonce_account();
+        let (
+            pre_account_pubkey,
+            _pre_account,
+            _post_account,
+            last_blockhash,
+            last_fee_calculator,
+            _maybe_fee_account,
+        ) = create_accounts_prepare_if_nonce_account();
         let post_account_pubkey = pre_account_pubkey;
 
         let mut post_account = Account::default();
@@ -2025,6 +2106,7 @@ mod tests {
             mut post_account,
             last_blockhash,
             last_fee_calculator,
+            maybe_fee_account,
         ) = create_accounts_prepare_if_nonce_account();
 
         let expect_account = post_account.clone();
@@ -2033,7 +2115,7 @@ mod tests {
             &mut post_account,
             &Pubkey::new(&[1u8; 32]),
             &Ok(()),
-            Some((&pre_account_pubkey, &pre_account)),
+            Some((&pre_account_pubkey, &pre_account, &maybe_fee_account)),
             &(last_blockhash, last_fee_calculator),
             &expect_account,
         ));
@@ -2047,6 +2129,7 @@ mod tests {
             mut post_account,
             last_blockhash,
             last_fee_calculator,
+            maybe_fee_account,
         ) = create_accounts_prepare_if_nonce_account();
         let post_account_pubkey = pre_account_pubkey;
 
@@ -2068,9 +2151,211 @@ mod tests {
                 0,
                 InstructionError::InvalidArgument,
             )),
-            Some((&pre_account_pubkey, &pre_account)),
+            Some((&pre_account_pubkey, &pre_account, &maybe_fee_account)),
             &(last_blockhash, last_fee_calculator),
             &expect_account,
+        ));
+    }
+
+    #[test]
+    fn test_nonced_failure_accounts_rollback_from_pays() {
+        let rent_collector = RentCollector::default();
+
+        let nonce_address = Pubkey::new_unique();
+        let nonce_authority = keypair_from_seed(&[0; 32]).unwrap();
+        let from = keypair_from_seed(&[1; 32]).unwrap();
+        let from_address = from.pubkey();
+        let to_address = Pubkey::new_unique();
+        let instructions = vec![
+            system_instruction::advance_nonce_account(&nonce_address, &nonce_authority.pubkey()),
+            system_instruction::transfer(&from_address, &to_address, 42),
+        ];
+        let message = Message::new(&instructions, Some(&from_address));
+        let blockhash = Hash::new_unique();
+        let tx = Transaction::new(&[&nonce_authority, &from], message, blockhash);
+
+        let txs = vec![tx];
+
+        let nonce_state =
+            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
+                authority: nonce_authority.pubkey(),
+                blockhash,
+                fee_calculator: FeeCalculator::default(),
+            }));
+        let nonce_account_pre = Account::new_data(42, &nonce_state, &system_program::id()).unwrap();
+        let from_account_pre = Account::new(4242, 0, &Pubkey::default());
+
+        let hash_age_kind = Some(HashAgeKind::DurableNonceFull(
+            nonce_address,
+            nonce_account_pre.clone(),
+            Some(from_account_pre.clone()),
+        ));
+        let loaders = vec![(
+            Err(TransactionError::InstructionError(
+                1,
+                InstructionError::InvalidArgument,
+            )),
+            hash_age_kind.clone(),
+        )];
+
+        let nonce_state =
+            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
+                authority: nonce_authority.pubkey(),
+                blockhash: Hash::new_unique(),
+                fee_calculator: FeeCalculator::default(),
+            }));
+        let nonce_account_post =
+            Account::new_data(43, &nonce_state, &system_program::id()).unwrap();
+
+        let from_account_post = Account::new(4199, 0, &Pubkey::default());
+        let to_account = Account::new(2, 0, &Pubkey::default());
+        let nonce_authority_account = Account::new(3, 0, &Pubkey::default());
+        let recent_blockhashes_sysvar_account = Account::new(4, 0, &Pubkey::default());
+
+        let transaction_accounts = vec![
+            from_account_post,
+            nonce_authority_account,
+            nonce_account_post,
+            to_account,
+            recent_blockhashes_sysvar_account,
+        ];
+        let transaction_loaders = vec![];
+        let transaction_rent = 0;
+        let loaded = (
+            Ok((transaction_accounts, transaction_loaders, transaction_rent)),
+            hash_age_kind,
+        );
+
+        let mut loaded = vec![loaded];
+
+        let next_blockhash = Hash::new_unique();
+        let accounts = Accounts::new(Vec::new(), &ClusterType::Development);
+        let collected_accounts = accounts.collect_accounts_to_store(
+            &txs,
+            None,
+            &loaders,
+            &mut loaded,
+            &rent_collector,
+            &(next_blockhash, FeeCalculator::default()),
+            true,
+            true,
+        );
+        assert_eq!(collected_accounts.len(), 2);
+        assert_eq!(
+            collected_accounts
+                .iter()
+                .find(|(pubkey, _account)| *pubkey == &from_address)
+                .map(|(_pubkey, account)| *account)
+                .cloned()
+                .unwrap(),
+            from_account_pre,
+        );
+        let collected_nonce_account = collected_accounts
+            .iter()
+            .find(|(pubkey, _account)| *pubkey == &nonce_address)
+            .map(|(_pubkey, account)| *account)
+            .cloned()
+            .unwrap();
+        assert_eq!(collected_nonce_account.lamports, nonce_account_pre.lamports,);
+        assert!(nonce_account::verify_nonce_account(
+            &collected_nonce_account,
+            &next_blockhash
+        ));
+    }
+
+    #[test]
+    fn test_nonced_failure_accounts_rollback_nonce_pays() {
+        let rent_collector = RentCollector::default();
+
+        let nonce_authority = keypair_from_seed(&[0; 32]).unwrap();
+        let nonce_address = nonce_authority.pubkey();
+        let from = keypair_from_seed(&[1; 32]).unwrap();
+        let from_address = from.pubkey();
+        let to_address = Pubkey::new_unique();
+        let instructions = vec![
+            system_instruction::advance_nonce_account(&nonce_address, &nonce_authority.pubkey()),
+            system_instruction::transfer(&from_address, &to_address, 42),
+        ];
+        let message = Message::new(&instructions, Some(&nonce_address));
+        let blockhash = Hash::new_unique();
+        let tx = Transaction::new(&[&nonce_authority, &from], message, blockhash);
+
+        let txs = vec![tx];
+
+        let nonce_state =
+            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
+                authority: nonce_authority.pubkey(),
+                blockhash,
+                fee_calculator: FeeCalculator::default(),
+            }));
+        let nonce_account_pre = Account::new_data(42, &nonce_state, &system_program::id()).unwrap();
+
+        let hash_age_kind = Some(HashAgeKind::DurableNonceFull(
+            nonce_address,
+            nonce_account_pre.clone(),
+            None,
+        ));
+        let loaders = vec![(
+            Err(TransactionError::InstructionError(
+                1,
+                InstructionError::InvalidArgument,
+            )),
+            hash_age_kind.clone(),
+        )];
+
+        let nonce_state =
+            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
+                authority: nonce_authority.pubkey(),
+                blockhash: Hash::new_unique(),
+                fee_calculator: FeeCalculator::default(),
+            }));
+        let nonce_account_post =
+            Account::new_data(43, &nonce_state, &system_program::id()).unwrap();
+
+        let from_account_post = Account::new(4200, 0, &Pubkey::default());
+        let to_account = Account::new(2, 0, &Pubkey::default());
+        let nonce_authority_account = Account::new(3, 0, &Pubkey::default());
+        let recent_blockhashes_sysvar_account = Account::new(4, 0, &Pubkey::default());
+
+        let transaction_accounts = vec![
+            from_account_post,
+            nonce_authority_account,
+            nonce_account_post,
+            to_account,
+            recent_blockhashes_sysvar_account,
+        ];
+        let transaction_loaders = vec![];
+        let transaction_rent = 0;
+        let loaded = (
+            Ok((transaction_accounts, transaction_loaders, transaction_rent)),
+            hash_age_kind,
+        );
+
+        let mut loaded = vec![loaded];
+
+        let next_blockhash = Hash::new_unique();
+        let accounts = Accounts::new(Vec::new(), &ClusterType::Development);
+        let collected_accounts = accounts.collect_accounts_to_store(
+            &txs,
+            None,
+            &loaders,
+            &mut loaded,
+            &rent_collector,
+            &(next_blockhash, FeeCalculator::default()),
+            true,
+            true,
+        );
+        assert_eq!(collected_accounts.len(), 1);
+        let collected_nonce_account = collected_accounts
+            .iter()
+            .find(|(pubkey, _account)| *pubkey == &nonce_address)
+            .map(|(_pubkey, account)| *account)
+            .cloned()
+            .unwrap();
+        assert_eq!(collected_nonce_account.lamports, nonce_account_pre.lamports);
+        assert!(nonce_account::verify_nonce_account(
+            &collected_nonce_account,
+            &next_blockhash
         ));
     }
 }

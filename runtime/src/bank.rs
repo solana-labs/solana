@@ -407,12 +407,29 @@ pub type TransactionLogMessages = Vec<String>;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum HashAgeKind {
     Extant,
-    DurableNonce(Pubkey, Account),
+    DurableNoncePartial(Pubkey, Account),
+    DurableNonceFull(Pubkey, Account, Option<Account>),
 }
 
 impl HashAgeKind {
     pub fn is_durable_nonce(&self) -> bool {
-        matches!(self, HashAgeKind::DurableNonce(_, _))
+        match self {
+            Self::Extant => false,
+            Self::DurableNoncePartial(_, _) => true,
+            Self::DurableNonceFull(_, _, _) => true,
+        }
+    }
+
+    pub fn fee_calculator(&self) -> Option<Option<FeeCalculator>> {
+        match self {
+            Self::Extant => None,
+            Self::DurableNoncePartial(_, account) => {
+                Some(nonce_account::fee_calculator_of(account))
+            }
+            Self::DurableNonceFull(_, account, _) => {
+                Some(nonce_account::fee_calculator_of(account))
+            }
+        }
     }
 }
 
@@ -2183,7 +2200,7 @@ impl Bank {
                     if hash_age == Some(true) {
                         (Ok(()), Some(HashAgeKind::Extant))
                     } else if let Some((pubkey, acc)) = self.check_tx_durable_nonce(&tx) {
-                        (Ok(()), Some(HashAgeKind::DurableNonce(pubkey, acc)))
+                        (Ok(()), Some(HashAgeKind::DurableNoncePartial(pubkey, acc)))
                     } else if hash_age == Some(false) {
                         error_counters.blockhash_too_old += 1;
                         (Err(TransactionError::BlockhashNotFound), None)
@@ -2722,17 +2739,18 @@ impl Bank {
         let results = OrderedIterator::new(txs, iteration_order)
             .zip(executed.iter())
             .map(|((_, tx), (res, hash_age_kind))| {
-                let (fee_calculator, is_durable_nonce) = match hash_age_kind {
-                    Some(HashAgeKind::DurableNonce(_, account)) => {
-                        (nonce_account::fee_calculator_of(account), true)
-                    }
-                    _ => (
-                        hash_queue
-                            .get_fee_calculator(&tx.message().recent_blockhash)
-                            .cloned(),
-                        false,
-                    ),
-                };
+                let (fee_calculator, is_durable_nonce) = hash_age_kind
+                    .as_ref()
+                    .and_then(|hash_age_kind| hash_age_kind.fee_calculator())
+                    .map(|maybe_fee_calculator| (maybe_fee_calculator, true))
+                    .unwrap_or_else(|| {
+                        (
+                            hash_queue
+                                .get_fee_calculator(&tx.message().recent_blockhash)
+                                .cloned(),
+                            false,
+                        )
+                    });
                 let fee_calculator = fee_calculator.ok_or(TransactionError::BlockhashNotFound)?;
 
                 let fee = fee_calculator.calculate_fee_with_config(tx.message(), &fee_config);
@@ -4406,9 +4424,56 @@ pub(crate) mod tests {
     #[test]
     fn test_hash_age_kind_is_durable_nonce() {
         assert!(
-            HashAgeKind::DurableNonce(Pubkey::default(), Account::default()).is_durable_nonce()
+            HashAgeKind::DurableNoncePartial(Pubkey::default(), Account::default())
+                .is_durable_nonce()
         );
+        assert!(
+            HashAgeKind::DurableNonceFull(Pubkey::default(), Account::default(), None)
+                .is_durable_nonce()
+        );
+        assert!(HashAgeKind::DurableNonceFull(
+            Pubkey::default(),
+            Account::default(),
+            Some(Account::default())
+        )
+        .is_durable_nonce());
         assert!(!HashAgeKind::Extant.is_durable_nonce());
+    }
+
+    #[test]
+    fn test_hash_age_kind_fee_calculator() {
+        let state =
+            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
+                authority: Pubkey::default(),
+                blockhash: Hash::new_unique(),
+                fee_calculator: FeeCalculator::default(),
+            }));
+        let account = Account::new_data(42, &state, &system_program::id()).unwrap();
+
+        assert_eq!(HashAgeKind::Extant.fee_calculator(), None);
+        assert_eq!(
+            HashAgeKind::DurableNoncePartial(Pubkey::default(), account.clone()).fee_calculator(),
+            Some(Some(FeeCalculator::default()))
+        );
+        assert_eq!(
+            HashAgeKind::DurableNoncePartial(Pubkey::default(), Account::default())
+                .fee_calculator(),
+            Some(None)
+        );
+        assert_eq!(
+            HashAgeKind::DurableNonceFull(Pubkey::default(), account, Some(Account::default()))
+                .fee_calculator(),
+            Some(Some(FeeCalculator::default()))
+        );
+        assert_eq!(
+            HashAgeKind::DurableNonceFull(
+                Pubkey::default(),
+                Account::default(),
+                Some(Account::default())
+            )
+            .fee_calculator(),
+            Some(None)
+        );
     }
 
     #[test]
@@ -8596,6 +8661,50 @@ pub(crate) mod tests {
             bank.process_transaction(&durable_tx),
             Err(TransactionError::BlockhashNotFound),
         );
+    }
+
+    #[test]
+    fn test_nonce_payer() {
+        solana_logger::setup();
+        let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) =
+            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None).unwrap();
+        let alice_keypair = Keypair::new();
+        let alice_pubkey = alice_keypair.pubkey();
+        let custodian_pubkey = custodian_keypair.pubkey();
+        let nonce_pubkey = nonce_keypair.pubkey();
+
+        warn!("alice: {}", alice_pubkey);
+        warn!("custodian: {}", custodian_pubkey);
+        warn!("nonce: {}", nonce_pubkey);
+        warn!("nonce account: {:?}", bank.get_account(&nonce_pubkey));
+        warn!("cust: {:?}", bank.get_account(&custodian_pubkey));
+        let nonce_hash = get_nonce_account(&bank, &nonce_pubkey).unwrap();
+
+        for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
+            goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+            bank = Arc::new(new_from_parent(&bank));
+        }
+
+        let durable_tx = Transaction::new_signed_with_payer(
+            &[
+                system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
+                system_instruction::transfer(&custodian_pubkey, &alice_pubkey, 100_000_000),
+            ],
+            Some(&nonce_pubkey),
+            &[&custodian_keypair, &nonce_keypair],
+            nonce_hash,
+        );
+        warn!("{:?}", durable_tx);
+        assert_eq!(
+            bank.process_transaction(&durable_tx),
+            Err(TransactionError::InstructionError(
+                1,
+                system_instruction::SystemError::ResultWithNegativeLamports.into(),
+            ))
+        );
+        /* Check fee charged and nonce has advanced */
+        assert_eq!(bank.get_balance(&nonce_pubkey), 240_000);
+        assert_ne!(nonce_hash, get_nonce_account(&bank, &nonce_pubkey).unwrap());
     }
 
     #[test]
