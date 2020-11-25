@@ -8,7 +8,7 @@ use std::{cmp::Ordering, fs, io, path::Path};
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct TransactionInfo {
     pub recipient: Pubkey,
-    pub amount: f64,
+    pub amount: u64,
     pub new_stake_account_address: Option<Pubkey>,
     pub finalized_date: Option<DateTime<Utc>>,
     pub transaction: Transaction,
@@ -19,7 +19,7 @@ pub struct TransactionInfo {
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 struct SignedTransactionInfo {
     recipient: String,
-    amount: f64,
+    amount: u64,
     #[serde(skip_serializing_if = "String::is_empty", default)]
     new_stake_account_address: String,
     finalized_date: Option<DateTime<Utc>>,
@@ -34,7 +34,7 @@ impl Default for TransactionInfo {
         };
         Self {
             recipient: Pubkey::default(),
-            amount: 0.0,
+            amount: 0,
             new_stake_account_address: None,
             finalized_date: None,
             transaction,
@@ -104,7 +104,7 @@ pub fn read_transaction_infos(db: &PickleDb) -> Vec<TransactionInfo> {
 pub fn set_transaction_info(
     db: &mut PickleDb,
     recipient: &Pubkey,
-    amount: f64,
+    amount: u64,
     transaction: &Transaction,
     new_stake_account_address: Option<&Pubkey>,
     finalized: bool,
