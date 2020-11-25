@@ -109,7 +109,7 @@ const GOSSIP_PING_CACHE_CAPACITY: usize = 16384;
 const GOSSIP_PING_CACHE_TTL: Duration = Duration::from_secs(640);
 pub const DEFAULT_CONTACT_DEBUG_INTERVAL: u64 = 10_000;
 /// Limit number of crds values returned when responding to pull-requests.
-const PULL_REQUESTS_OUTPUT_SIZE_LIMIT: usize = 131_072;
+const PULL_REQUESTS_OUTPUT_SIZE_LIMIT: usize = 65_536;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
