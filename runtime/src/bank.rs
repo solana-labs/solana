@@ -471,6 +471,36 @@ impl HashAgeKind {
             }
         }
     }
+
+    pub fn finish_partial(&self, message: &Message, accounts: &[Account]) -> Result<Self> {
+        match self {
+            HashAgeKind::Extant => Ok(HashAgeKind::Extant),
+            HashAgeKind::DurableNoncePartial(pubkey, account) => {
+                let fee_payer = message
+                    .account_keys
+                    .iter()
+                    .enumerate()
+                    .find(|(i, k)| Accounts::is_non_loader_key(message, k, *i))
+                    .and_then(|(i, k)| accounts.get(i).cloned().map(|a| (*k, a)));
+                if let Some((fee_pubkey, fee_account)) = fee_payer {
+                    if fee_pubkey == *pubkey {
+                        Ok(HashAgeKind::DurableNonceFull(*pubkey, fee_account, None))
+                    } else {
+                        Ok(HashAgeKind::DurableNonceFull(
+                            *pubkey,
+                            account.clone(),
+                            Some(fee_account),
+                        ))
+                    }
+                } else {
+                    Err(TransactionError::AccountNotFound)
+                }
+            }
+            HashAgeKind::DurableNonceFull(_, _, _) => {
+                panic!("update: unexpected HashAgeKind variant")
+            }
+        }
+    }
 }
 
 // Bank's common fields shared by all supported snapshot versions for deserialization.
@@ -4548,7 +4578,7 @@ pub(crate) mod tests {
         poh_config::PohConfig,
         process_instruction::InvokeContext,
         rent::Rent,
-        signature::{Keypair, Signer},
+        signature::{keypair_from_seed, Keypair, Signer},
         system_instruction::{self, SystemError},
         system_program,
         sysvar::{fees::Fees, rewards::Rewards},
@@ -4617,6 +4647,77 @@ pub(crate) mod tests {
             )
             .fee_calculator(),
             Some(None)
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "update: unexpected HashAgeKind variant")]
+    fn test_hash_age_kind_finish_partial_full_panics() {
+        drop(
+            HashAgeKind::DurableNonceFull(Pubkey::default(), Account::default(), None)
+                .finish_partial(&Message::default(), &[]),
+        );
+    }
+
+    #[test]
+    fn test_hash_age_kind_finish_partial() {
+        let nonce_authority = keypair_from_seed(&[0; 32]).unwrap();
+        let nonce_address = nonce_authority.pubkey();
+        let from = keypair_from_seed(&[1; 32]).unwrap();
+        let from_address = from.pubkey();
+        let to_address = Pubkey::new_unique();
+        let instructions = vec![
+            system_instruction::advance_nonce_account(&nonce_address, &nonce_authority.pubkey()),
+            system_instruction::transfer(&from_address, &to_address, 42),
+        ];
+        let message = Message::new(&instructions, Some(&from_address));
+
+        let from_account = Account::new(1, 0, &Pubkey::default());
+        let nonce_account = Account::new(2, 0, &Pubkey::default());
+        let to_account = Account::new(3, 0, &Pubkey::default());
+        let recent_blockhashes_sysvar_account = Account::new(4, 0, &Pubkey::default());
+        let accounts = [
+            from_account.clone(),
+            nonce_account.clone(),
+            to_account.clone(),
+            recent_blockhashes_sysvar_account.clone(),
+        ];
+
+        assert_eq!(
+            HashAgeKind::Extant.finish_partial(&message, &accounts),
+            Ok(HashAgeKind::Extant)
+        );
+
+        let hash_age_kind = HashAgeKind::DurableNoncePartial(nonce_address, nonce_account.clone());
+        assert_eq!(
+            hash_age_kind.finish_partial(&message, &accounts),
+            Ok(HashAgeKind::DurableNonceFull(
+                nonce_address,
+                nonce_account.clone(),
+                Some(from_account.clone())
+            )),
+        );
+
+        assert_eq!(
+            hash_age_kind.finish_partial(&message, &[]),
+            Err(TransactionError::AccountNotFound),
+        );
+
+        let message = Message::new(&instructions, Some(&nonce_address));
+        let accounts = [
+            nonce_account.clone(),
+            from_account,
+            to_account,
+            recent_blockhashes_sysvar_account,
+        ];
+
+        assert_eq!(
+            hash_age_kind.finish_partial(&message, &accounts),
+            Ok(HashAgeKind::DurableNonceFull(
+                nonce_address,
+                nonce_account,
+                None
+            )),
         );
     }
 
