@@ -406,11 +406,11 @@ impl Delegation {
 
             (
                 current_effective_stake,
-                self.stake - current_effective_stake,
+                delegated_stake - current_effective_stake,
             )
         } else {
             // no history or I've dropped out of history, so assume fully effective
-            (self.stake, 0)
+            (delegated_stake, 0)
         }
     }
 
@@ -2055,6 +2055,159 @@ mod tests {
                 ],
             );
         }
+    }
+
+    #[test]
+    fn test_inflation_and_slashing_with_activating_and_deactivating_stake() {
+        // some really boring delegation and stake_history setup
+        let (delegated_stake, mut stake, stake_history) = {
+            let cluster_stake = 1_000;
+            let delegated_stake = 700;
+
+            let stake = Delegation {
+                stake: delegated_stake,
+                activation_epoch: 0,
+                deactivation_epoch: 4,
+                ..Delegation::default()
+            };
+
+            let mut stake_history = StakeHistory::default();
+            stake_history.add(
+                0,
+                StakeHistoryEntry {
+                    effective: cluster_stake,
+                    activating: delegated_stake,
+                    ..StakeHistoryEntry::default()
+                },
+            );
+            let newly_effective_at_epoch1 = (cluster_stake as f64 * 0.25) as u64;
+            assert_eq!(newly_effective_at_epoch1, 250);
+            stake_history.add(
+                1,
+                StakeHistoryEntry {
+                    effective: cluster_stake + newly_effective_at_epoch1,
+                    activating: delegated_stake - newly_effective_at_epoch1,
+                    ..StakeHistoryEntry::default()
+                },
+            );
+            let newly_effective_at_epoch2 =
+                ((cluster_stake + newly_effective_at_epoch1) as f64 * 0.25) as u64;
+            assert_eq!(newly_effective_at_epoch2, 312);
+            stake_history.add(
+                2,
+                StakeHistoryEntry {
+                    effective: cluster_stake
+                        + newly_effective_at_epoch1
+                        + newly_effective_at_epoch2,
+                    activating: delegated_stake
+                        - newly_effective_at_epoch1
+                        - newly_effective_at_epoch2,
+                    ..StakeHistoryEntry::default()
+                },
+            );
+            stake_history.add(
+                3,
+                StakeHistoryEntry {
+                    effective: cluster_stake + delegated_stake,
+                    ..StakeHistoryEntry::default()
+                },
+            );
+            stake_history.add(
+                4,
+                StakeHistoryEntry {
+                    effective: cluster_stake + delegated_stake,
+                    deactivating: delegated_stake,
+                    ..StakeHistoryEntry::default()
+                },
+            );
+            let newly_not_effective_stake_at_epoch5 =
+                ((cluster_stake + delegated_stake) as f64 * 0.25) as u64;
+            assert_eq!(newly_not_effective_stake_at_epoch5, 425);
+            stake_history.add(
+                5,
+                StakeHistoryEntry {
+                    effective: cluster_stake + delegated_stake
+                        - newly_not_effective_stake_at_epoch5,
+                    deactivating: delegated_stake - newly_not_effective_stake_at_epoch5,
+                    ..StakeHistoryEntry::default()
+                },
+            );
+
+            (delegated_stake, stake, stake_history)
+        };
+
+        // helper closures
+        let calculate_each_staking_status = |stake: &Delegation, epoch_count: usize| -> Vec<_> {
+            (0..epoch_count)
+                .map(|epoch| {
+                    stake.stake_activating_and_deactivating(
+                        epoch as u64,
+                        Some(&stake_history),
+                        true,
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let adjust_staking_status = |rate: f64, status: &Vec<_>| {
+            status
+                .clone()
+                .into_iter()
+                .map(|(a, b, c)| {
+                    (
+                        (a as f64 * rate) as u64,
+                        (b as f64 * rate) as u64,
+                        (c as f64 * rate) as u64,
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let expected_staking_status_transition = vec![
+            (0, 700, 0),
+            (250, 450, 0),
+            (562, 138, 0),
+            (700, 0, 0),
+            (700, 0, 700),
+            (275, 0, 275),
+            (0, 0, 0),
+        ];
+        let expected_staking_status_transition_base = vec![
+            (0, 700, 0),
+            (250, 450, 0),
+            (562, 138 + 1, 0), // +1 is needed for rounding
+            (700, 0, 0),
+            (700, 0, 700),
+            (275 + 1, 0, 275 + 1), // +1 is needed for rounding
+            (0, 0, 0),
+        ];
+
+        // normal stake activating and deactivating transition test, just in case
+        assert_eq!(
+            expected_staking_status_transition,
+            calculate_each_staking_status(&stake, expected_staking_status_transition.len())
+        );
+
+        // 10% inflation rewards assuming some sizable epochs passed!
+        let rate = 1.10;
+        stake.stake = (delegated_stake as f64 * rate) as u64;
+        let expected_staking_status_transition =
+            adjust_staking_status(rate, &expected_staking_status_transition_base);
+
+        assert_eq!(
+            expected_staking_status_transition,
+            calculate_each_staking_status(&stake, expected_staking_status_transition_base.len()),
+        );
+
+        // 50% slashing!!!
+        let rate = 0.5;
+        stake.stake = (delegated_stake as f64 * rate) as u64;
+        let expected_staking_status_transition =
+            adjust_staking_status(rate, &expected_staking_status_transition_base);
+
+        assert_eq!(
+            expected_staking_status_transition,
+            calculate_each_staking_status(&stake, expected_staking_status_transition_base.len()),
+        );
     }
 
     #[test]
