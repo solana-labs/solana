@@ -779,7 +779,8 @@ impl AccountsDB {
                         if account_info.lamports == 0 {
                             purges.insert(
                                 *pubkey,
-                                self.accounts_index.roots_and_ref_count(&locked_entry),
+                                self.accounts_index
+                                    .roots_and_ref_count(&locked_entry, max_clean_root),
                             );
                         }
 
@@ -5380,11 +5381,11 @@ pub mod tests {
         accounts_index.add_root(3);
         let mut purges = HashMap::new();
         let (key0_entry, _) = accounts_index.get(&key0, None, None).unwrap();
-        purges.insert(key0, accounts_index.roots_and_ref_count(&key0_entry));
+        purges.insert(key0, accounts_index.roots_and_ref_count(&key0_entry, None));
         let (key1_entry, _) = accounts_index.get(&key1, None, None).unwrap();
-        purges.insert(key1, accounts_index.roots_and_ref_count(&key1_entry));
+        purges.insert(key1, accounts_index.roots_and_ref_count(&key1_entry, None));
         let (key2_entry, _) = accounts_index.get(&key2, None, None).unwrap();
-        purges.insert(key2, accounts_index.roots_and_ref_count(&key2_entry));
+        purges.insert(key2, accounts_index.roots_and_ref_count(&key2_entry, None));
         for (key, (list, ref_count)) in &purges {
             info!(" purge {} ref_count {} =>", key, ref_count);
             for x in list {
@@ -5609,5 +5610,27 @@ pub mod tests {
         for (key, account_ref) in keys[..num_to_store].iter().zip(account_refs) {
             assert_eq!(accounts.load_slow(&ancestors, key).unwrap().0, account_ref);
         }
+    }
+
+    #[test]
+    fn test_zero_lamport_new_root_not_cleaned() {
+        let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
+        let account_key = Pubkey::new_unique();
+        let zero_lamport_account = Account::new(0, 0, &Account::default().owner);
+
+        // Store zero lamport account into slots 0 and 1, root both slots
+        db.store(0, &[(&account_key, &zero_lamport_account)]);
+        db.store(1, &[(&account_key, &zero_lamport_account)]);
+        db.add_root(0);
+        db.add_root(1);
+
+        // Only clean zero lamport accounts up to slot 0
+        db.clean_accounts(Some(0));
+
+        // Should still be able to find zero lamport account in slot 1
+        assert_eq!(
+            db.load_slow(&HashMap::new(), &account_key),
+            Some((zero_lamport_account, 1))
+        );
     }
 }
