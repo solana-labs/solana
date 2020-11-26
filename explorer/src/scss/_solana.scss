@@ -258,6 +258,14 @@ ul.tree li:last-child:before {
 
 div.inner-cards {
   margin: 1.5rem;
+
+  .card {
+    background-color: $gray-700-dark;
+  }
+
+  .table td {
+    border-top: 1px solid $gray-800-dark;
+  }
 }
 
 // work around for https://github.com/JedWatson/react-select/issues/3857

@@ -97,12 +97,17 @@ export function InstructionCard({
             ) : (
               children
             )}
+            {innerCards && innerCards.length > 0 && (
+              <tr>
+                <td colSpan={2}>
+                  Inner Instructions
+                  <div className="inner-cards">{innerCards}</div>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
-      {innerCards && innerCards.length > 0 && (
-        <div className="inner-cards">{innerCards}</div>
-      )}
     </div>
   );
 }
