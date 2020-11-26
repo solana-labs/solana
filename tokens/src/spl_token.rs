@@ -75,7 +75,7 @@ pub fn build_spl_token_instructions(
         &associated_token_address,
         &spl_token_v2_0_pubkey(&args.sender_keypair.pubkey()),
         &[],
-        spl_token_amount(allocation.amount, spl_token_args.decimals),
+        allocation.amount,
         spl_token_args.decimals,
     )
     .unwrap();
@@ -94,8 +94,7 @@ pub fn check_spl_token_balances(
         .spl_token_args
         .as_ref()
         .expect("spl_token_args must be some");
-    let undistributed_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
-    let allocation_amount = spl_token_amount(undistributed_tokens, spl_token_args.decimals);
+    let allocation_amount: u64 = allocations.iter().map(|x| x.amount).sum();
 
     let fee_calculator = client.get_recent_blockhash()?.1;
     let fees = fee_calculator
@@ -140,30 +139,37 @@ pub fn print_token_balances(
     let recipient_account = client
         .get_account(&pubkey_from_spl_token_v2_0(&associated_token_address))
         .unwrap_or_default();
-    let (actual, difference) =
-        if let Ok(recipient_token) = SplTokenAccount::unpack(&recipient_account.data) {
-            let actual = token_amount_to_ui_amount(recipient_token.amount, spl_token_args.decimals)
-                .ui_amount;
-            (
-                style(format!(
-                    "{:>24.1$}",
-                    actual, spl_token_args.decimals as usize
-                )),
-                format!(
-                    "{:>24.1$}",
-                    actual - expected,
-                    spl_token_args.decimals as usize
-                ),
-            )
-        } else {
-            (
-                style("Associated token account not yet created".to_string()).yellow(),
-                "".to_string(),
-            )
-        };
+    let (actual, difference) = if let Ok(recipient_token) =
+        SplTokenAccount::unpack(&recipient_account.data)
+    {
+        let actual_ui_amount =
+            token_amount_to_ui_amount(recipient_token.amount, spl_token_args.decimals).ui_amount;
+        let expected_ui_amount =
+            token_amount_to_ui_amount(expected, spl_token_args.decimals).ui_amount;
+        (
+            style(format!(
+                "{:>24.1$}",
+                actual_ui_amount, spl_token_args.decimals as usize
+            )),
+            format!(
+                "{:>24.1$}",
+                actual_ui_amount - expected_ui_amount,
+                spl_token_args.decimals as usize
+            ),
+        )
+    } else {
+        (
+            style("Associated token account not yet created".to_string()).yellow(),
+            "".to_string(),
+        )
+    };
     println!(
         "{:<44}  {:>24.4$}  {:>24}  {:>24}",
-        allocation.recipient, expected, actual, difference, spl_token_args.decimals as usize
+        allocation.recipient,
+        token_amount_to_ui_amount(expected, spl_token_args.decimals).ui_amount,
+        actual,
+        difference,
+        spl_token_args.decimals as usize
     );
     Ok(())
 }

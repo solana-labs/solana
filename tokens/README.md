@@ -135,15 +135,16 @@ The Associated Token Account will be created, and funded by the fee_payer, if it
 does not already exist.
 
 Send SPL tokens to the recipients in `<RECIPIENTS_CSV>`.
+*NOTE:* the CSV expects SPL-token amounts in raw format (no decimals)
 
 Example recipients.csv:
 
 ```text
 recipient,amount
-CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT,75.4
-C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s,10
-7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr,42.1
-7qQPmVAQxEQ5djPDCtiEUrxaPf8wKtLG1m6SB1brejJ1,20
+CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT,75400
+C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s,10000
+7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr,42100
+7qQPmVAQxEQ5djPDCtiEUrxaPf8wKtLG1m6SB1brejJ1,20000
 ```
 
 You can check the status of the recipients before beginning a distribution. You
@@ -158,9 +159,9 @@ Example output:
 ```text
 Token: JDte736XZ1jGUtfAS32DLpBUWBR7WGSHy1hSZ36VRQ5V
 Recipient                                             Expected Balance            Actual Balance                Difference
-CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT                     75.40                      0.00                    -75.40
+CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT                    75.400                      0.000                   -75.400
 C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s                    10.000  Associated token account not yet created
-7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr                     42.10                      0.00                    -42.10
+7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr                    42.100                      0.000                   -42.100
 7qQPmVAQxEQ5djPDCtiEUrxaPf8wKtLG1m6SB1brejJ1                    20.000  Associated token account not yet created
 ```
 
@@ -195,10 +196,10 @@ Example updated recipients.csv:
 
 ```text
 recipient,amount
-CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT,100
-C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s,100
-7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr,100
-7qQPmVAQxEQ5djPDCtiEUrxaPf8wKtLG1m6SB1brejJ1,100
+CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT,100000
+C56nwrDVFpPrqwGYsTgQxv1ZraTh81H14PV4RHvZe36s,100000
+7aHDubg5FBYj1SgmyBgU3ZJdtfuqYCQsJQK2pTR5JUqr,100000
+7qQPmVAQxEQ5djPDCtiEUrxaPf8wKtLG1m6SB1brejJ1,100000
 ```
 
 Using dry-run:
