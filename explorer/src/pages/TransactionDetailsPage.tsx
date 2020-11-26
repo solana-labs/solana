@@ -455,7 +455,7 @@ function InstructionsSection({ signature }: SignatureProps) {
             ix.programId = new PublicKey(ix.programId);
           }
 
-          let res = RenderInstruction({
+          let res = renderInstructionCard({
             index,
             ix,
             result,
@@ -468,7 +468,7 @@ function InstructionsSection({ signature }: SignatureProps) {
         });
       }
 
-      return RenderInstruction({
+      return renderInstructionCard({
         index,
         ix: instruction,
         result,
@@ -521,7 +521,7 @@ function ProgramLogSection({ signature }: SignatureProps) {
   );
 }
 
-function RenderInstruction({
+function renderInstructionCard({
   ix,
   tx,
   result,
