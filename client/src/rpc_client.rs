@@ -1437,7 +1437,7 @@ fn new_spinner_progress_bar() -> ProgressBar {
     progress_bar
 }
 
-pub fn get_rpc_request_str(rpc_addr: SocketAddr, tls: bool) -> String {
+fn get_rpc_request_str(rpc_addr: SocketAddr, tls: bool) -> String {
     if tls {
         format!("https://{}", rpc_addr)
     } else {

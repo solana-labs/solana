@@ -15,26 +15,20 @@ use solana_sdk::{
     signature::{Keypair, Signer},
 };
 use solana_vote_program::vote_state::{VoteAuthorize, VoteState, VoteStateVersions};
-use std::{fs::remove_dir_all, sync::mpsc::channel};
+use std::sync::mpsc::channel;
 
 #[test]
 fn test_vote_authorize_and_withdraw() {
-    let TestValidator {
-        server,
-        leader_data,
-        alice,
-        ledger_path,
-        ..
-    } = TestValidator::with_no_fee();
+    let test_validator = TestValidator::with_no_fees();
     let (sender, receiver) = channel();
-    run_local_faucet(alice, sender, None);
+    run_local_faucet(test_validator.mint_keypair(), sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
     let default_signer = Keypair::new();
 
     let mut config = CliConfig::recent_for_tests();
-    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&default_signer];
 
     request_and_confirm_airdrop(
@@ -131,6 +125,5 @@ fn test_vote_authorize_and_withdraw() {
     };
     process_command(&config).unwrap();
 
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }

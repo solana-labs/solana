@@ -16,7 +16,6 @@ use solana_sdk::{
     signature::Signer, system_transaction,
 };
 use std::{
-    fs::remove_dir_all,
     net::{IpAddr, SocketAddr},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -31,16 +30,12 @@ use systemstat::Ipv4Addr;
 fn test_rpc_client() {
     solana_logger::setup();
 
-    let TestValidator {
-        server,
-        leader_data,
-        alice,
-        ledger_path,
-        ..
-    } = TestValidator::with_no_fee();
+    let test_validator = TestValidator::with_no_fees();
+    let alice = test_validator.mint_keypair();
+
     let bob_pubkey = solana_sdk::pubkey::new_rand();
 
-    let client = RpcClient::new_socket(leader_data.rpc);
+    let client = RpcClient::new(test_validator.rpc_url());
 
     assert_eq!(
         client.get_version().unwrap().solana_core,
@@ -84,9 +79,7 @@ fn test_rpc_client() {
         client.get_balance(&alice.pubkey()).unwrap(),
         original_alice_balance - sol_to_lamports(20.0)
     );
-
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }
 
 #[test]

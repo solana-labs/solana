@@ -17,30 +17,24 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, NullSigner, Signer},
 };
-use std::{fs::remove_dir_all, sync::mpsc::channel};
+use std::sync::mpsc::channel;
 
 #[test]
 fn test_transfer() {
     solana_logger::setup();
-    let TestValidator {
-        server,
-        leader_data,
-        alice: mint_keypair,
-        ledger_path,
-        ..
-    } = TestValidator::with_custom_fee(1);
+    let test_validator = TestValidator::with_custom_fees(1);
 
     let (sender, receiver) = channel();
-    run_local_faucet(mint_keypair, sender, None);
+    run_local_faucet(test_validator.mint_keypair(), sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
 
     let default_signer = Keypair::new();
     let default_offline_signer = Keypair::new();
 
     let mut config = CliConfig::recent_for_tests();
-    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&default_signer];
 
     let sender_pubkey = config.signers[0].pubkey();
@@ -243,23 +237,16 @@ fn test_transfer() {
     check_recent_balance(28, &rpc_client, &offline_pubkey);
     check_recent_balance(40, &rpc_client, &recipient_pubkey);
 
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }
 
 #[test]
 fn test_transfer_multisession_signing() {
     solana_logger::setup();
-    let TestValidator {
-        server,
-        leader_data,
-        alice: mint_keypair,
-        ledger_path,
-        ..
-    } = TestValidator::with_custom_fee(1);
+    let test_validator = TestValidator::with_custom_fees(1);
 
     let (sender, receiver) = channel();
-    run_local_faucet(mint_keypair, sender, None);
+    run_local_faucet(test_validator.mint_keypair(), sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
     let to_pubkey = Pubkey::new(&[1u8; 32]);
@@ -269,7 +256,7 @@ fn test_transfer_multisession_signing() {
     let config = CliConfig::recent_for_tests();
 
     // Setup accounts
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
     request_and_confirm_airdrop(
         &rpc_client,
         &faucet_addr,
@@ -351,7 +338,7 @@ fn test_transfer_multisession_signing() {
 
     // Finally submit to the cluster
     let mut config = CliConfig::recent_for_tests();
-    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&fee_payer_presigner, &from_presigner];
     config.command = CliCommand::Transfer {
         amount: SpendAmount::Some(42),
@@ -370,31 +357,24 @@ fn test_transfer_multisession_signing() {
     check_recent_balance(1, &rpc_client, &offline_fee_payer_signer.pubkey());
     check_recent_balance(42, &rpc_client, &to_pubkey);
 
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }
 
 #[test]
 fn test_transfer_all() {
     solana_logger::setup();
-    let TestValidator {
-        server,
-        leader_data,
-        alice: mint_keypair,
-        ledger_path,
-        ..
-    } = TestValidator::with_custom_fee(1);
+    let test_validator = TestValidator::with_custom_fees(1);
 
     let (sender, receiver) = channel();
-    run_local_faucet(mint_keypair, sender, None);
+    run_local_faucet(test_validator.mint_keypair(), sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
 
     let default_signer = Keypair::new();
 
     let mut config = CliConfig::recent_for_tests();
-    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&default_signer];
 
     let sender_pubkey = config.signers[0].pubkey();
@@ -423,6 +403,5 @@ fn test_transfer_all() {
     check_recent_balance(0, &rpc_client, &sender_pubkey);
     check_recent_balance(49_999, &rpc_client, &recipient_pubkey);
 
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }

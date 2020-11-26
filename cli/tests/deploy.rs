@@ -9,13 +9,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use std::{
-    fs::{remove_dir_all, File},
-    io::Read,
-    path::PathBuf,
-    str::FromStr,
-    sync::mpsc::channel,
-};
+use std::{fs::File, io::Read, path::PathBuf, str::FromStr, sync::mpsc::channel};
 
 #[test]
 fn test_cli_deploy_program() {
@@ -27,19 +21,13 @@ fn test_cli_deploy_program() {
     pathbuf.push("noop");
     pathbuf.set_extension("so");
 
-    let TestValidator {
-        server,
-        leader_data,
-        alice,
-        ledger_path,
-        ..
-    } = TestValidator::with_no_fee();
+    let test_validator = TestValidator::with_no_fees();
 
     let (sender, receiver) = channel();
-    run_local_faucet(alice, sender, None);
+    run_local_faucet(test_validator.mint_keypair(), sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
 
     let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();
@@ -50,7 +38,7 @@ fn test_cli_deploy_program() {
 
     let mut config = CliConfig::recent_for_tests();
     let keypair = Keypair::new();
-    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config.json_rpc_url = test_validator.rpc_url();
     config.command = CliCommand::Airdrop {
         faucet_host: None,
         faucet_port: faucet_addr.port(),
@@ -153,6 +141,5 @@ fn test_cli_deploy_program() {
     assert_eq!(account2.executable, true);
     assert_eq!(account0.data, account2.data);
 
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }

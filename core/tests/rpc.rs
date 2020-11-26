@@ -9,10 +9,9 @@ use reqwest::{self, header::CONTENT_TYPE};
 use serde_json::{json, Value};
 use solana_account_decoder::UiAccount;
 use solana_client::{
-    rpc_client::{get_rpc_request_str, RpcClient},
+    rpc_client::RpcClient,
     rpc_response::{Response, RpcSignatureResult},
 };
-use solana_core::contact_info::ContactInfo;
 use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, test_validator::TestValidator};
 use solana_sdk::{
     commitment_config::CommitmentConfig, hash::Hash, signature::Signer, system_transaction,
@@ -20,7 +19,6 @@ use solana_sdk::{
 };
 use std::{
     collections::HashSet,
-    fs::remove_dir_all,
     net::UdpSocket,
     sync::mpsc::channel,
     thread::sleep,
@@ -39,12 +37,10 @@ macro_rules! json_req {
     }}
 }
 
-fn post_rpc(request: Value, data: &ContactInfo) -> Value {
+fn post_rpc(request: Value, rpc_url: &str) -> Value {
     let client = reqwest::blocking::Client::new();
-    let rpc_addr = data.rpc;
-    let rpc_string = get_rpc_request_str(rpc_addr, false);
     let response = client
-        .post(&rpc_string)
+        .post(rpc_url)
         .header(CONTENT_TYPE, "application/json")
         .body(request.to_string())
         .send()
@@ -56,17 +52,14 @@ fn post_rpc(request: Value, data: &ContactInfo) -> Value {
 fn test_rpc_send_tx() {
     solana_logger::setup();
 
-    let TestValidator {
-        server,
-        leader_data,
-        alice,
-        ledger_path,
-        ..
-    } = TestValidator::with_no_fee();
+    let test_validator = TestValidator::with_no_fees();
+    let alice = test_validator.mint_keypair();
+    let rpc_url = test_validator.rpc_url();
+
     let bob_pubkey = solana_sdk::pubkey::new_rand();
 
     let req = json_req!("getRecentBlockhash", json!([]));
-    let json = post_rpc(req, &leader_data);
+    let json = post_rpc(req, &rpc_url);
 
     let blockhash: Hash = json["result"]["value"]["blockhash"]
         .as_str()
@@ -79,7 +72,7 @@ fn test_rpc_send_tx() {
     let serialized_encoded_tx = bs58::encode(serialize(&tx).unwrap()).into_string();
 
     let req = json_req!("sendTransaction", json!([serialized_encoded_tx]));
-    let json: Value = post_rpc(req, &leader_data);
+    let json: Value = post_rpc(req, &rpc_url);
 
     let signature = &json["result"];
 
@@ -88,7 +81,7 @@ fn test_rpc_send_tx() {
     let request = json_req!("confirmTransaction", [signature]);
 
     for _ in 0..solana_sdk::clock::DEFAULT_TICKS_PER_SLOT {
-        let json = post_rpc(request.clone(), &leader_data);
+        let json = post_rpc(request.clone(), &rpc_url);
 
         if true == json["result"]["value"] {
             confirmed_tx = true;
@@ -111,70 +104,62 @@ fn test_rpc_send_tx() {
         "getAccountInfo",
         json!([bs58::encode(bob_pubkey).into_string(), config])
     );
-    let json: Value = post_rpc(req, &leader_data);
+    let json: Value = post_rpc(req, &rpc_url);
     info!("{:?}", json["result"]["value"]);
-
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }
 
 #[test]
 fn test_rpc_invalid_requests() {
     solana_logger::setup();
 
-    let TestValidator {
-        server,
-        leader_data,
-        ledger_path,
-        ..
-    } = TestValidator::with_no_fee();
+    let test_validator = TestValidator::with_no_fees();
+    let rpc_url = test_validator.rpc_url();
+
     let bob_pubkey = solana_sdk::pubkey::new_rand();
 
     // test invalid get_balance request
     let req = json_req!("getBalance", json!(["invalid9999"]));
-    let json = post_rpc(req, &leader_data);
+    let json = post_rpc(req, &rpc_url);
 
     let the_error = json["error"]["message"].as_str().unwrap();
     assert_eq!(the_error, "Invalid param: Invalid");
 
     // test invalid get_account_info request
     let req = json_req!("getAccountInfo", json!(["invalid9999"]));
-    let json = post_rpc(req, &leader_data);
+    let json = post_rpc(req, &rpc_url);
 
     let the_error = json["error"]["message"].as_str().unwrap();
     assert_eq!(the_error, "Invalid param: Invalid");
 
     // test invalid get_account_info request
     let req = json_req!("getAccountInfo", json!([bob_pubkey.to_string()]));
-    let json = post_rpc(req, &leader_data);
+    let json = post_rpc(req, &rpc_url);
 
     let the_value = &json["result"]["value"];
     assert!(the_value.is_null());
-
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }
 
 #[test]
 fn test_rpc_subscriptions() {
     solana_logger::setup();
 
-    let TestValidator {
-        server,
-        leader_data,
-        alice,
-        ledger_path,
-        genesis_hash,
-        ..
-    } = TestValidator::with_no_fee();
+    let test_validator = TestValidator::with_no_fees();
+    let alice = test_validator.mint_keypair();
 
     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    transactions_socket.connect(leader_data.tpu).unwrap();
+    transactions_socket.connect(test_validator.tpu()).unwrap();
 
     // Create transaction signatures to subscribe to
     let transactions: Vec<Transaction> = (0..1000)
         .map(|_| {
-            system_transaction::transfer(&alice, &solana_sdk::pubkey::new_rand(), 1, genesis_hash)
+            system_transaction::transfer(
+                &alice,
+                &solana_sdk::pubkey::new_rand(),
+                1,
+                test_validator.genesis_hash(),
+            )
         })
         .collect();
     let mut signature_set: HashSet<String> = transactions
@@ -195,11 +180,10 @@ fn test_rpc_subscriptions() {
 
     // Create the pub sub runtime
     let mut rt = Runtime::new().unwrap();
-    let rpc_pubsub_url = format!("ws://{}/", leader_data.rpc_pubsub);
 
     // Subscribe to all signatures
     rt.spawn({
-        let connect = ws::try_connect::<PubsubClient>(&rpc_pubsub_url).unwrap();
+        let connect = ws::try_connect::<PubsubClient>(&test_validator.rpc_pubsub_url()).unwrap();
         let signature_set = signature_set.clone();
         connect
             .and_then(move |client| {
@@ -256,7 +240,7 @@ fn test_rpc_subscriptions() {
     // Wait for signature subscriptions
     ready_receiver.recv_timeout(Duration::from_secs(2)).unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
     let mut mint_balance = rpc_client
         .get_balance_with_commitment(&alice.pubkey(), CommitmentConfig::recent())
         .unwrap()
@@ -326,6 +310,5 @@ fn test_rpc_subscriptions() {
     }
 
     rt.shutdown_now().wait().unwrap();
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }
