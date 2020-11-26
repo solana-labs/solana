@@ -11,6 +11,7 @@ use solana_clap_utils::{
 };
 use solana_cli_config::CONFIG_FILE;
 use solana_remote_wallet::remote_wallet::maybe_wallet_manager;
+use solana_sdk::native_token::sol_to_lamports;
 use std::error::Error;
 use std::ffi::OsString;
 use std::process::exit;
@@ -360,7 +361,7 @@ fn parse_distribute_tokens_args(
         fee_payer,
         stake_args: None,
         spl_token_args: None,
-        transfer_amount: value_of(matches, "transfer_amount"),
+        transfer_amount: value_of(matches, "transfer_amount").map(sol_to_lamports),
     })
 }
 
@@ -423,7 +424,7 @@ fn parse_distribute_stake_args(
 
     let stake_args = StakeArgs {
         stake_account_address,
-        unlocked_sol: value_t_or_exit!(matches, "unlocked_sol", f64),
+        unlocked_sol: sol_to_lamports(value_t_or_exit!(matches, "unlocked_sol", f64)),
         stake_authority,
         withdraw_authority,
         lockup_authority,

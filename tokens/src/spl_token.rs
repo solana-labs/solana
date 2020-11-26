@@ -85,7 +85,7 @@ pub fn build_spl_token_instructions(
         &associated_token_address,
         &spl_token_v2_0_pubkey(&args.sender_keypair.pubkey()),
         &[],
-        spl_token_amount(allocation.amount, spl_token_args.decimals),
+        allocation.amount,
         spl_token_args.decimals,
     )
     .unwrap();
@@ -104,8 +104,7 @@ pub async fn check_spl_token_balances(
         .spl_token_args
         .as_ref()
         .expect("spl_token_args must be some");
-    let undistributed_tokens: f64 = allocations.iter().map(|x| x.amount).sum();
-    let allocation_amount = spl_token_amount(undistributed_tokens, spl_token_args.decimals);
+    let allocation_amount: u64 = allocations.iter().map(|x| x.amount).sum();
 
     let (fee_calculator, _blockhash, _last_valid_slot) = client.get_fees().await?;
     let fees = fee_calculator
@@ -152,30 +151,37 @@ pub async fn print_token_balances(
         .get_account(pubkey_from_spl_token_v2_0(&associated_token_address))
         .await?
         .unwrap_or_default();
-    let (actual, difference) =
-        if let Ok(recipient_token) = SplTokenAccount::unpack(&recipient_account.data) {
-            let actual = token_amount_to_ui_amount(recipient_token.amount, spl_token_args.decimals)
-                .ui_amount;
-            (
-                style(format!(
-                    "{:>24.1$}",
-                    actual, spl_token_args.decimals as usize
-                )),
-                format!(
-                    "{:>24.1$}",
-                    actual - expected,
-                    spl_token_args.decimals as usize
-                ),
-            )
-        } else {
-            (
-                style("Associated token account not yet created".to_string()).yellow(),
-                "".to_string(),
-            )
-        };
+    let (actual, difference) = if let Ok(recipient_token) =
+        SplTokenAccount::unpack(&recipient_account.data)
+    {
+        let actual_ui_amount =
+            token_amount_to_ui_amount(recipient_token.amount, spl_token_args.decimals).ui_amount;
+        let expected_ui_amount =
+            token_amount_to_ui_amount(expected, spl_token_args.decimals).ui_amount;
+        (
+            style(format!(
+                "{:>24.1$}",
+                actual_ui_amount, spl_token_args.decimals as usize
+            )),
+            format!(
+                "{:>24.1$}",
+                actual_ui_amount - expected_ui_amount,
+                spl_token_args.decimals as usize
+            ),
+        )
+    } else {
+        (
+            style("Associated token account not yet created".to_string()).yellow(),
+            "".to_string(),
+        )
+    };
     println!(
         "{:<44}  {:>24.4$}  {:>24}  {:>24}",
-        allocation.recipient, expected, actual, difference, spl_token_args.decimals as usize
+        allocation.recipient,
+        token_amount_to_ui_amount(expected, spl_token_args.decimals).ui_amount,
+        actual,
+        difference,
+        spl_token_args.decimals as usize
     );
     Ok(())
 }
@@ -186,7 +192,6 @@ mod tests {
     use crate::{
         commands::{process_allocations, tests::tmp_file_path, Allocation},
         db::{self, check_output_file},
-        spl_token::spl_token_amount,
     };
     use solana_account_decoder::parse_token::{spl_token_id_v2_0, spl_token_v2_0_pubkey};
     use solana_program_test::*;
@@ -310,7 +315,7 @@ mod tests {
     async fn test_process_distribute_spl_tokens_with_client(
         banks_client: &mut BanksClient,
         fee_payer: Keypair,
-        transfer_amount: Option<f64>,
+        transfer_amount: Option<u64>,
         recent_blockhash: Hash,
     ) {
         // Initialize Token Mint
@@ -357,23 +362,16 @@ mod tests {
         let allocation_amount = if let Some(amount) = transfer_amount {
             amount
         } else {
-            1000.0
+            100_000
         };
         let allocations_file = NamedTempFile::new().unwrap();
         let input_csv = allocations_file.path().to_str().unwrap().to_string();
         let mut wtr = csv::WriterBuilder::new().from_writer(allocations_file);
-        let allocation = Allocation {
-            recipient: wallet_address_0.to_string(),
-            amount: allocation_amount,
-            lockup_date: "".to_string(),
-        };
-        wtr.serialize(&allocation).unwrap();
-        let allocation = Allocation {
-            recipient: wallet_address_1.to_string(),
-            amount: allocation_amount,
-            lockup_date: "".to_string(),
-        };
-        wtr.serialize(&allocation).unwrap();
+        wtr.write_record(&["recipient", "amount"]).unwrap();
+        wtr.write_record(&[wallet_address_0.to_string(), allocation_amount.to_string()])
+            .unwrap();
+        wtr.write_record(&[wallet_address_1.to_string(), allocation_amount.to_string()])
+            .unwrap();
         wtr.flush().unwrap();
 
         let dir = tempdir().unwrap();
@@ -421,15 +419,8 @@ mod tests {
         assert!(transaction_infos
             .iter()
             .any(|info| info.recipient == pubkey_from_spl_token_v2_0(&wallet_address_1)));
-        let expected_amount = spl_token_amount(allocation.amount, decimals);
-        assert_eq!(
-            spl_token_amount(transaction_infos[0].amount, decimals),
-            expected_amount
-        );
-        assert_eq!(
-            spl_token_amount(transaction_infos[1].amount, decimals),
-            expected_amount
-        );
+        assert_eq!(transaction_infos[0].amount, allocation_amount);
+        assert_eq!(transaction_infos[1].amount, allocation_amount);
 
         let recipient_account_0 = banks_client
             .get_account(pubkey_from_spl_token_v2_0(&associated_token_address_0))
@@ -440,7 +431,7 @@ mod tests {
             SplTokenAccount::unpack(&recipient_account_0.data)
                 .unwrap()
                 .amount,
-            expected_amount,
+            allocation_amount,
         );
         let recipient_account_1 = banks_client
             .get_account(pubkey_from_spl_token_v2_0(&associated_token_address_1))
@@ -451,7 +442,7 @@ mod tests {
             SplTokenAccount::unpack(&recipient_account_1.data)
                 .unwrap()
                 .amount,
-            expected_amount,
+            allocation_amount,
         );
 
         check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
@@ -467,15 +458,8 @@ mod tests {
         assert!(transaction_infos
             .iter()
             .any(|info| info.recipient == pubkey_from_spl_token_v2_0(&wallet_address_1)));
-        let expected_amount = spl_token_amount(allocation.amount, decimals);
-        assert_eq!(
-            spl_token_amount(transaction_infos[0].amount, decimals),
-            expected_amount
-        );
-        assert_eq!(
-            spl_token_amount(transaction_infos[1].amount, decimals),
-            expected_amount
-        );
+        assert_eq!(transaction_infos[0].amount, allocation_amount);
+        assert_eq!(transaction_infos[1].amount, allocation_amount);
 
         let recipient_account_0 = banks_client
             .get_account(pubkey_from_spl_token_v2_0(&associated_token_address_0))
@@ -486,7 +470,7 @@ mod tests {
             SplTokenAccount::unpack(&recipient_account_0.data)
                 .unwrap()
                 .amount,
-            expected_amount,
+            allocation_amount,
         );
         let recipient_account_1 = banks_client
             .get_account(pubkey_from_spl_token_v2_0(&associated_token_address_1))
@@ -497,7 +481,7 @@ mod tests {
             SplTokenAccount::unpack(&recipient_account_1.data)
                 .unwrap()
                 .amount,
-            expected_amount,
+            allocation_amount,
         );
 
         check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
@@ -521,7 +505,7 @@ mod tests {
         test_process_distribute_spl_tokens_with_client(
             &mut banks_client,
             payer,
-            Some(105.5),
+            Some(10550),
             recent_blockhash,
         )
         .await;
@@ -563,7 +547,7 @@ mod tests {
 
         let unfunded_fee_payer = Keypair::new();
 
-        let allocation_amount = 42.0;
+        let allocation_amount = 4200;
         let allocations = vec![Allocation {
             recipient: Pubkey::new_unique().to_string(),
             amount: allocation_amount,
@@ -628,7 +612,10 @@ mod tests {
         .unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::SplTokenAccount].into());
-            assert!((amount - allocation_amount).abs() < f64::EPSILON);
+            assert!(
+                (amount - token_amount_to_ui_amount(allocation_amount, decimals).ui_amount).abs()
+                    < f64::EPSILON
+            );
         } else {
             panic!("check_spl_token_balances should have errored");
         }
