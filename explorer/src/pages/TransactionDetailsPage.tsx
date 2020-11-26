@@ -42,6 +42,7 @@ import { MemoDetailsCard } from "components/instruction/MemoDetailsCard";
 
 const AUTO_REFRESH_INTERVAL = 2000;
 const ZERO_CONFIRMATION_BAILOUT = 5;
+const INNER_INSTRUCTIONS_SLOT = 46915769;
 
 type SignatureProps = {
   signature: TransactionSignature;
@@ -426,7 +427,10 @@ function InstructionsSection({ signature }: SignatureProps) {
     [index: number]: (ParsedInstruction | PartiallyDecodedInstruction)[];
   } = {};
 
-  if (meta?.innerInstructions) {
+  if (
+    details.data.transaction.slot >= INNER_INSTRUCTIONS_SLOT &&
+    meta?.innerInstructions
+  ) {
     meta.innerInstructions.forEach((parsed: ParsedInnerInstruction) => {
       if (!innerInstructions[parsed.index]) {
         innerInstructions[parsed.index] = [];
