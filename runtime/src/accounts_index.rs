@@ -464,10 +464,10 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         self.do_unchecked_scan_accounts(ancestors, func, Some(range));
     }
 
-    pub fn get_rooted_entries(&self, slice: SlotSlice<T>) -> SlotList<T> {
+    pub fn get_rooted_entries(&self, slice: SlotSlice<T>, max: Option<Slot>) -> SlotList<T> {
         slice
             .iter()
-            .filter(|(slot, _)| self.is_root(*slot))
+            .filter(|(slot, _)| self.is_root(*slot) && max.map_or(true, |max| *slot <= max))
             .cloned()
             .collect()
     }
@@ -476,9 +476,10 @@ impl<T: 'static + Clone> AccountsIndex<T> {
     pub fn roots_and_ref_count(
         &self,
         locked_account_entry: &ReadAccountMapEntry<T>,
+        max: Option<Slot>,
     ) -> (SlotList<T>, RefCount) {
         (
-            self.get_rooted_entries(&locked_account_entry.slot_list()),
+            self.get_rooted_entries(&locked_account_entry.slot_list(), max),
             locked_account_entry.ref_count().load(Ordering::Relaxed),
         )
     }
@@ -488,7 +489,7 @@ impl<T: 'static + Clone> AccountsIndex<T> {
     pub fn purge(&self, pubkey: &Pubkey) -> (SlotList<T>, bool) {
         let mut write_account_map_entry = self.get_account_write_entry(pubkey).unwrap();
         write_account_map_entry.slot_list_mut(|slot_list| {
-            let reclaims = self.get_rooted_entries(slot_list);
+            let reclaims = self.get_rooted_entries(slot_list, None);
             slot_list.retain(|(slot, _)| !self.is_root(*slot));
             (reclaims, slot_list.is_empty())
         })
