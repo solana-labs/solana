@@ -11,19 +11,10 @@ use indexmap::IndexMap;
 use indicatif::{ProgressBar, ProgressStyle};
 use pickledb::PickleDb;
 use serde::{Deserialize, Serialize};
-<<<<<<< HEAD
-use solana_account_decoder::parse_token::{pubkey_from_spl_token_v2_0, spl_token_v2_0_pubkey};
-use solana_banks_client::{BanksClient, BanksClientExt};
-=======
 use solana_account_decoder::parse_token::{
     pubkey_from_spl_token_v2_0, spl_token_v2_0_pubkey, token_amount_to_ui_amount,
 };
-use solana_client::{
-    client_error::{ClientError, Result as ClientResult},
-    rpc_client::RpcClient,
-    rpc_config::RpcSendTransactionConfig,
-};
->>>>>>> 5e2d38227... Use u64 behind the scenes for solana-tokens (#13815)
+use solana_banks_client::{BanksClient, BanksClientExt};
 use solana_sdk::{
     commitment_config::CommitmentLevel,
     instruction::Instruction,
@@ -262,46 +253,27 @@ async fn distribute_allocations(
             Some(allocation.lockup_date.parse::<DateTime<Utc>>().unwrap())
         };
 
-<<<<<<< HEAD
-        let (decimals, do_create_associated_token_account) =
-=======
         let (display_amount, decimals, do_create_associated_token_account) =
->>>>>>> 5e2d38227... Use u64 behind the scenes for solana-tokens (#13815)
             if let Some(spl_token_args) = &args.spl_token_args {
                 let wallet_address = allocation.recipient.parse().unwrap();
                 let associated_token_address = get_associated_token_address(
                     &wallet_address,
                     &spl_token_v2_0_pubkey(&spl_token_args.mint),
                 );
-<<<<<<< HEAD
                 let do_create_associated_token_account = client
                     .get_account(pubkey_from_spl_token_v2_0(&associated_token_address))
                     .await?
                     .is_none();
-=======
-                let do_create_associated_token_account =
-                    client.get_multiple_accounts(&[pubkey_from_spl_token_v2_0(
-                        &associated_token_address,
-                    )])?[0]
-                        .is_none();
->>>>>>> 5e2d38227... Use u64 behind the scenes for solana-tokens (#13815)
                 if do_create_associated_token_account {
                     created_accounts += 1;
                 }
                 (
-<<<<<<< HEAD
-=======
                     token_amount_to_ui_amount(allocation.amount, spl_token_args.decimals).ui_amount,
->>>>>>> 5e2d38227... Use u64 behind the scenes for solana-tokens (#13815)
                     spl_token_args.decimals as usize,
                     do_create_associated_token_account,
                 )
             } else {
-<<<<<<< HEAD
-                (9, false)
-=======
                 (lamports_to_sol(allocation.amount), 9, false)
->>>>>>> 5e2d38227... Use u64 behind the scenes for solana-tokens (#13815)
             };
         println!(
             "{:<44}  {:>24.2$}",
@@ -639,13 +611,8 @@ async fn check_payer_balances(
     };
 
     if let Some((unlocked_sol_source, total_unlocked_sol)) = unlocked_sol_source {
-<<<<<<< HEAD
         let staker_balance = client.get_balance(distribution_source).await?;
-        if staker_balance < allocation_lamports {
-=======
-        let staker_balance = client.get_balance(&distribution_source)?;
         if staker_balance < undistributed_tokens {
->>>>>>> 5e2d38227... Use u64 behind the scenes for solana-tokens (#13815)
             return Err(Error::InsufficientFunds(
                 vec![FundingSource::StakeAccount].into(),
                 lamports_to_sol(undistributed_tokens),
@@ -676,13 +643,8 @@ async fn check_payer_balances(
             }
         }
     } else if args.fee_payer.pubkey() == distribution_source {
-<<<<<<< HEAD
         let balance = client.get_balance(args.fee_payer.pubkey()).await?;
-        if balance < fees + allocation_lamports {
-=======
-        let balance = client.get_balance(&args.fee_payer.pubkey())?;
         if balance < fees + undistributed_tokens {
->>>>>>> 5e2d38227... Use u64 behind the scenes for solana-tokens (#13815)
             return Err(Error::InsufficientFunds(
                 vec![FundingSource::SystemAccount, FundingSource::FeePayer].into(),
                 lamports_to_sol(fees + undistributed_tokens),
@@ -696,13 +658,8 @@ async fn check_payer_balances(
                 lamports_to_sol(fees),
             ));
         }
-<<<<<<< HEAD
         let sender_balance = client.get_balance(distribution_source).await?;
-        if sender_balance < allocation_lamports {
-=======
-        let sender_balance = client.get_balance(&distribution_source)?;
         if sender_balance < undistributed_tokens {
->>>>>>> 5e2d38227... Use u64 behind the scenes for solana-tokens (#13815)
             return Err(Error::InsufficientFunds(
                 vec![FundingSource::SystemAccount].into(),
                 lamports_to_sol(undistributed_tokens),
@@ -712,14 +669,9 @@ async fn check_payer_balances(
     Ok(())
 }
 
-<<<<<<< HEAD
 pub async fn process_balances(client: &mut BanksClient, args: &BalancesArgs) -> Result<(), Error> {
-    let allocations: Vec<Allocation> = read_allocations(&args.input_csv, None, false)?;
-=======
-pub fn process_balances(client: &RpcClient, args: &BalancesArgs) -> Result<(), Error> {
     let allocations: Vec<Allocation> =
         read_allocations(&args.input_csv, None, false, args.spl_token_args.is_some())?;
->>>>>>> 5e2d38227... Use u64 behind the scenes for solana-tokens (#13815)
     let allocations = merge_allocations(&allocations);
 
     let token = if let Some(spl_token_args) = &args.spl_token_args {
@@ -743,13 +695,8 @@ pub fn process_balances(client: &RpcClient, args: &BalancesArgs) -> Result<(), E
             print_token_balances(client, allocation, spl_token_args).await?;
         } else {
             let address: Pubkey = allocation.recipient.parse().unwrap();
-<<<<<<< HEAD
-            let expected = lamports_to_sol(sol_to_lamports(allocation.amount));
-            let actual = lamports_to_sol(client.get_balance(address).await.unwrap());
-=======
             let expected = lamports_to_sol(allocation.amount);
-            let actual = lamports_to_sol(client.get_balance(&address).unwrap());
->>>>>>> 5e2d38227... Use u64 behind the scenes for solana-tokens (#13815)
+            let actual = lamports_to_sol(client.get_balance(address).await.unwrap());
             println!(
                 "{:<44}  {:>24.9}  {:>24.9}  {:>24.9}",
                 allocation.recipient,
@@ -846,14 +793,10 @@ pub async fn test_process_distribute_tokens_with_client(
     assert_eq!(transaction_infos[0].recipient, alice_pubkey);
     assert_eq!(transaction_infos[0].amount, expected_amount);
 
-<<<<<<< HEAD
     assert_eq!(
         client.get_balance(alice_pubkey).await.unwrap(),
         expected_amount,
     );
-=======
-    assert_eq!(client.get_balance(&alice_pubkey).unwrap(), expected_amount);
->>>>>>> 5e2d38227... Use u64 behind the scenes for solana-tokens (#13815)
 
     check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
 
@@ -865,14 +808,10 @@ pub async fn test_process_distribute_tokens_with_client(
     assert_eq!(transaction_infos[0].recipient, alice_pubkey);
     assert_eq!(transaction_infos[0].amount, expected_amount);
 
-<<<<<<< HEAD
     assert_eq!(
         client.get_balance(alice_pubkey).await.unwrap(),
         expected_amount,
     );
-=======
-    assert_eq!(client.get_balance(&alice_pubkey).unwrap(), expected_amount);
->>>>>>> 5e2d38227... Use u64 behind the scenes for solana-tokens (#13815)
 
     check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
 }
@@ -1035,7 +974,6 @@ pub(crate) mod tests {
 
     #[test]
     fn test_process_transfer_amount_allocations() {
-<<<<<<< HEAD
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
         Runtime::new().unwrap().block_on(async {
@@ -1044,26 +982,10 @@ pub(crate) mod tests {
             test_process_distribute_tokens_with_client(
                 &mut banks_client,
                 sender_keypair,
-                Some(1.5),
+                Some(sol_to_lamports(1.5)),
             )
             .await;
         });
-=======
-        let TestValidator {
-            server,
-            leader_data,
-            alice,
-            ledger_path,
-            ..
-        } = TestValidator::run();
-        let url = get_rpc_request_str(leader_data.rpc, false);
-        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
-        test_process_distribute_tokens_with_client(&client, alice, Some(sol_to_lamports(1.5)));
-
-        // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
-        server.close().unwrap();
-        remove_dir_all(ledger_path).unwrap();
->>>>>>> 5e2d38227... Use u64 behind the scenes for solana-tokens (#13815)
     }
 
     #[test]
@@ -1383,7 +1305,6 @@ pub(crate) mod tests {
     fn test_check_payer_balances_distribute_tokens_single_payer() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
-<<<<<<< HEAD
         let (mut genesis_config, sender_keypair) =
             create_genesis_config(sol_to_lamports(9_000_000.0));
         genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
@@ -1399,62 +1320,10 @@ pub(crate) mod tests {
 
             // Fully funded payer
             let (allocations, mut args) = initialize_check_payer_balances_inputs(
-                allocation_amount,
+                sol_to_lamports(allocation_amount),
                 &sender_keypair_file,
                 &sender_keypair_file,
                 None,
-=======
-        let TestValidator {
-            server,
-            leader_data,
-            alice,
-            ledger_path,
-            ..
-        } = TestValidator::run_with_fees(fees);
-        let url = get_rpc_request_str(leader_data.rpc, false);
-        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
-        let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
-        write_keypair_file(&alice, &sender_keypair_file).unwrap();
-
-        // This is a quick hack until TestValidator can be initialized with fees from block 0
-        while client
-            .get_recent_blockhash()
-            .unwrap()
-            .1
-            .lamports_per_signature
-            == 0
-        {
-            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
-        }
-
-        let allocation_amount = 1000.0;
-
-        // Fully funded payer
-        let (allocations, mut args) = initialize_check_payer_balances_inputs(
-            sol_to_lamports(allocation_amount),
-            &sender_keypair_file,
-            &sender_keypair_file,
-            None,
-        );
-        check_payer_balances(1, &allocations, &client, &args).unwrap();
-
-        // Unfunded payer
-        let unfunded_payer = Keypair::new();
-        let unfunded_payer_keypair_file = tmp_file_path("keypair_file", &unfunded_payer.pubkey());
-        write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
-        args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
-            .unwrap()
-            .into();
-        args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
-            .unwrap()
-            .into();
-
-        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
-        if let Error::InsufficientFunds(sources, amount) = err_result {
-            assert_eq!(
-                sources,
-                vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
->>>>>>> 5e2d38227... Use u64 behind the scenes for solana-tokens (#13815)
             );
             check_payer_balances(1, &allocations, &mut banks_client, &args)
                 .await
@@ -1563,7 +1432,7 @@ pub(crate) mod tests {
 
             // Fully funded payers
             let (allocations, mut args) = initialize_check_payer_balances_inputs(
-                allocation_amount,
+                sol_to_lamports(allocation_amount),
                 &funded_payer_keypair_file,
                 &sender_keypair_file,
                 None,
@@ -1592,7 +1461,6 @@ pub(crate) mod tests {
                 panic!("check_payer_balances should have errored");
             }
 
-<<<<<<< HEAD
             // Unfunded fee payer
             args.sender_keypair = read_keypair_file(&sender_keypair_file).unwrap().into();
             args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
@@ -1612,58 +1480,8 @@ pub(crate) mod tests {
     }
 
     async fn initialize_stake_account(
-        stake_account_amount: f64,
-        unlocked_sol: f64,
-=======
-        // Fully funded payers
-        let (allocations, mut args) = initialize_check_payer_balances_inputs(
-            sol_to_lamports(allocation_amount),
-            &funded_payer_keypair_file,
-            &sender_keypair_file,
-            None,
-        );
-        check_payer_balances(1, &allocations, &client, &args).unwrap();
-
-        // Unfunded sender
-        let unfunded_payer = Keypair::new();
-        let unfunded_payer_keypair_file = tmp_file_path("keypair_file", &unfunded_payer.pubkey());
-        write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
-        args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
-            .unwrap()
-            .into();
-        args.fee_payer = read_keypair_file(&sender_keypair_file).unwrap().into();
-
-        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
-        if let Error::InsufficientFunds(sources, amount) = err_result {
-            assert_eq!(sources, vec![FundingSource::SystemAccount].into());
-            assert!((amount - allocation_amount).abs() < f64::EPSILON);
-        } else {
-            panic!("check_payer_balances should have errored");
-        }
-
-        // Unfunded fee payer
-        args.sender_keypair = read_keypair_file(&sender_keypair_file).unwrap().into();
-        args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
-            .unwrap()
-            .into();
-
-        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
-        if let Error::InsufficientFunds(sources, amount) = err_result {
-            assert_eq!(sources, vec![FundingSource::FeePayer].into());
-            assert!((amount - fees_in_sol).abs() < f64::EPSILON);
-        } else {
-            panic!("check_payer_balances should have errored");
-        }
-
-        // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
-        server.close().unwrap();
-        remove_dir_all(ledger_path).unwrap();
-    }
-
-    fn initialize_stake_account(
         stake_account_amount: u64,
         unlocked_sol: u64,
->>>>>>> 5e2d38227... Use u64 behind the scenes for solana-tokens (#13815)
         sender_keypair: &Keypair,
         banks_client: &mut BanksClient,
     ) -> StakeArgs {
@@ -1706,7 +1524,6 @@ pub(crate) mod tests {
     fn test_check_payer_balances_distribute_stakes_single_payer() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
-<<<<<<< HEAD
         let (mut genesis_config, sender_keypair) =
             create_genesis_config(sol_to_lamports(9_000_000.0));
         genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
@@ -1721,8 +1538,8 @@ pub(crate) mod tests {
             let allocation_amount = 1000.0;
             let unlocked_sol = 1.0;
             let stake_args = initialize_stake_account(
-                allocation_amount,
-                unlocked_sol,
+                sol_to_lamports(allocation_amount),
+                sol_to_lamports(unlocked_sol),
                 &sender_keypair,
                 &mut banks_client,
             )
@@ -1730,86 +1547,10 @@ pub(crate) mod tests {
 
             // Fully funded payer & stake account
             let (allocations, mut args) = initialize_check_payer_balances_inputs(
-                allocation_amount,
+                sol_to_lamports(allocation_amount),
                 &sender_keypair_file,
                 &sender_keypair_file,
                 Some(stake_args),
-=======
-        let TestValidator {
-            server,
-            leader_data,
-            alice,
-            ledger_path,
-            ..
-        } = TestValidator::run_with_fees(fees);
-        let url = get_rpc_request_str(leader_data.rpc, false);
-        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
-
-        let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
-        write_keypair_file(&alice, &sender_keypair_file).unwrap();
-
-        // This is a quick hack until TestValidator can be initialized with fees from block 0
-        while client
-            .get_recent_blockhash()
-            .unwrap()
-            .1
-            .lamports_per_signature
-            == 0
-        {
-            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
-        }
-
-        let allocation_amount = 1000.0;
-        let unlocked_sol = 1.0;
-        let stake_args = initialize_stake_account(
-            sol_to_lamports(allocation_amount),
-            sol_to_lamports(unlocked_sol),
-            &alice,
-            &client,
-        );
-
-        // Fully funded payer & stake account
-        let (allocations, mut args) = initialize_check_payer_balances_inputs(
-            sol_to_lamports(allocation_amount),
-            &sender_keypair_file,
-            &sender_keypair_file,
-            Some(stake_args),
-        );
-        check_payer_balances(1, &allocations, &client, &args).unwrap();
-
-        // Underfunded stake-account
-        let expensive_allocation_amount = 5000.0;
-        let expensive_allocations = vec![Allocation {
-            recipient: solana_sdk::pubkey::new_rand().to_string(),
-            amount: sol_to_lamports(expensive_allocation_amount),
-            lockup_date: "".to_string(),
-        }];
-        let err_result =
-            check_payer_balances(1, &expensive_allocations, &client, &args).unwrap_err();
-        if let Error::InsufficientFunds(sources, amount) = err_result {
-            assert_eq!(sources, vec![FundingSource::StakeAccount].into());
-            assert!((amount - (expensive_allocation_amount - unlocked_sol)).abs() < f64::EPSILON);
-        } else {
-            panic!("check_payer_balances should have errored");
-        }
-
-        // Unfunded payer
-        let unfunded_payer = Keypair::new();
-        let unfunded_payer_keypair_file = tmp_file_path("keypair_file", &unfunded_payer.pubkey());
-        write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
-        args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
-            .unwrap()
-            .into();
-        args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
-            .unwrap()
-            .into();
-
-        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
-        if let Error::InsufficientFunds(sources, amount) = err_result {
-            assert_eq!(
-                sources,
-                vec![FundingSource::SystemAccount, FundingSource::FeePayer].into()
->>>>>>> 5e2d38227... Use u64 behind the scenes for solana-tokens (#13815)
             );
             check_payer_balances(1, &allocations, &mut banks_client, &args)
                 .await
@@ -1819,7 +1560,7 @@ pub(crate) mod tests {
             let expensive_allocation_amount = 5000.0;
             let expensive_allocations = vec![Allocation {
                 recipient: solana_sdk::pubkey::new_rand().to_string(),
-                amount: expensive_allocation_amount,
+                amount: sol_to_lamports(expensive_allocation_amount),
                 lockup_date: "".to_string(),
             }];
             let err_result =
@@ -1907,7 +1648,6 @@ pub(crate) mod tests {
     fn test_check_payer_balances_distribute_stakes_separate_payers() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
-<<<<<<< HEAD
         let (mut genesis_config, sender_keypair) =
             create_genesis_config(sol_to_lamports(9_000_000.0));
         genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
@@ -1922,8 +1662,8 @@ pub(crate) mod tests {
             let allocation_amount = 1000.0;
             let unlocked_sol = 1.0;
             let stake_args = initialize_stake_account(
-                allocation_amount,
-                unlocked_sol,
+                sol_to_lamports(allocation_amount),
+                sol_to_lamports(unlocked_sol),
                 &sender_keypair,
                 &mut banks_client,
             )
@@ -1939,53 +1679,6 @@ pub(crate) mod tests {
                 &funded_payer.pubkey(),
             )
             .await
-=======
-        let TestValidator {
-            server,
-            leader_data,
-            alice,
-            ledger_path,
-            ..
-        } = TestValidator::run_with_fees(fees);
-        let url = get_rpc_request_str(leader_data.rpc, false);
-        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
-
-        let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
-        write_keypair_file(&alice, &sender_keypair_file).unwrap();
-
-        // This is a quick hack until TestValidator can be initialized with fees from block 0
-        while client
-            .get_recent_blockhash()
-            .unwrap()
-            .1
-            .lamports_per_signature
-            == 0
-        {
-            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
-        }
-
-        let allocation_amount = 1000.0;
-        let unlocked_sol = 1.0;
-        let stake_args = initialize_stake_account(
-            sol_to_lamports(allocation_amount),
-            sol_to_lamports(unlocked_sol),
-            &alice,
-            &client,
-        );
-
-        let funded_payer = Keypair::new();
-        let funded_payer_keypair_file = tmp_file_path("keypair_file", &funded_payer.pubkey());
-        write_keypair_file(&funded_payer, &funded_payer_keypair_file).unwrap();
-        let transaction = transfer(
-            &client,
-            sol_to_lamports(unlocked_sol),
-            &alice,
-            &funded_payer.pubkey(),
-        )
-        .unwrap();
-        client
-            .send_and_confirm_transaction_with_spinner(&transaction)
->>>>>>> 5e2d38227... Use u64 behind the scenes for solana-tokens (#13815)
             .unwrap();
             banks_client
                 .process_transaction_with_commitment(transaction, CommitmentLevel::Recent)
@@ -1994,7 +1687,7 @@ pub(crate) mod tests {
 
             // Fully funded payers
             let (allocations, mut args) = initialize_check_payer_balances_inputs(
-                allocation_amount,
+                sol_to_lamports(allocation_amount),
                 &funded_payer_keypair_file,
                 &sender_keypair_file,
                 Some(stake_args),
@@ -2023,7 +1716,6 @@ pub(crate) mod tests {
                 panic!("check_payer_balances should have errored");
             }
 
-<<<<<<< HEAD
             // Unfunded fee payer
             args.sender_keypair = read_keypair_file(&sender_keypair_file).unwrap().into();
             args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
@@ -2040,50 +1732,5 @@ pub(crate) mod tests {
                 panic!("check_payer_balances should have errored");
             }
         });
-=======
-        // Fully funded payers
-        let (allocations, mut args) = initialize_check_payer_balances_inputs(
-            sol_to_lamports(allocation_amount),
-            &funded_payer_keypair_file,
-            &sender_keypair_file,
-            Some(stake_args),
-        );
-        check_payer_balances(1, &allocations, &client, &args).unwrap();
-
-        // Unfunded sender
-        let unfunded_payer = Keypair::new();
-        let unfunded_payer_keypair_file = tmp_file_path("keypair_file", &unfunded_payer.pubkey());
-        write_keypair_file(&unfunded_payer, &unfunded_payer_keypair_file).unwrap();
-        args.sender_keypair = read_keypair_file(&unfunded_payer_keypair_file)
-            .unwrap()
-            .into();
-        args.fee_payer = read_keypair_file(&sender_keypair_file).unwrap().into();
-
-        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
-        if let Error::InsufficientFunds(sources, amount) = err_result {
-            assert_eq!(sources, vec![FundingSource::SystemAccount].into());
-            assert!((amount - unlocked_sol).abs() < f64::EPSILON);
-        } else {
-            panic!("check_payer_balances should have errored");
-        }
-
-        // Unfunded fee payer
-        args.sender_keypair = read_keypair_file(&sender_keypair_file).unwrap().into();
-        args.fee_payer = read_keypair_file(&unfunded_payer_keypair_file)
-            .unwrap()
-            .into();
-
-        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
-        if let Error::InsufficientFunds(sources, amount) = err_result {
-            assert_eq!(sources, vec![FundingSource::FeePayer].into());
-            assert!((amount - fees_in_sol).abs() < f64::EPSILON);
-        } else {
-            panic!("check_payer_balances should have errored");
-        }
-
-        // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
-        server.close().unwrap();
-        remove_dir_all(ledger_path).unwrap();
->>>>>>> 5e2d38227... Use u64 behind the scenes for solana-tokens (#13815)
     }
 }
