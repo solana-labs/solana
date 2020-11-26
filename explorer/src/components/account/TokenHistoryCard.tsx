@@ -42,6 +42,7 @@ import {
   parseSerumInstructionTitle,
 } from "components/instruction/serum/types";
 import { INNER_INSTRUCTIONS_SLOT } from "pages/TransactionDetailsPage";
+import { useCluster, Cluster } from "providers/cluster";
 
 type InstructionType = {
   name: string;
@@ -270,6 +271,7 @@ const TokenTransactionRow = React.memo(
     details: CacheEntry<Details> | undefined;
   }) => {
     const fetchDetails = useFetchTransactionDetails();
+    const { cluster } = useCluster();
 
     // Fetch details on load
     React.useEffect(() => {
@@ -331,8 +333,9 @@ const TokenTransactionRow = React.memo(
           )[] = [];
 
           if (
-            transaction.slot >= INNER_INSTRUCTIONS_SLOT &&
-            transaction.meta?.innerInstructions
+            transaction.meta?.innerInstructions &&
+            (cluster !== Cluster.MainnetBeta ||
+              transaction.slot >= INNER_INSTRUCTIONS_SLOT)
           ) {
             transaction.meta.innerInstructions.forEach((ix) => {
               if (ix.index === index) {

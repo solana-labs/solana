@@ -6,7 +6,7 @@ import {
   useTransactionDetails,
 } from "providers/transactions";
 import { useFetchTransactionDetails } from "providers/transactions/details";
-import { useCluster, ClusterStatus } from "providers/cluster";
+import { useCluster, ClusterStatus, Cluster } from "providers/cluster";
 import {
   TransactionSignature,
   SystemProgram,
@@ -409,6 +409,7 @@ function AccountsCard({
 function InstructionsSection({ signature }: SignatureProps) {
   const status = useTransactionStatus(signature);
   const details = useTransactionDetails(signature);
+  const { cluster } = useCluster();
   const fetchDetails = useFetchTransactionDetails();
   const refreshDetails = () => fetchDetails(signature);
 
@@ -428,8 +429,9 @@ function InstructionsSection({ signature }: SignatureProps) {
   } = {};
 
   if (
-    details.data.transaction.slot >= INNER_INSTRUCTIONS_SLOT &&
-    meta?.innerInstructions
+    meta?.innerInstructions &&
+    (cluster !== Cluster.MainnetBeta ||
+      details.data.transaction.slot >= INNER_INSTRUCTIONS_SLOT)
   ) {
     meta.innerInstructions.forEach((parsed: ParsedInnerInstruction) => {
       if (!innerInstructions[parsed.index]) {
