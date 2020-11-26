@@ -14,8 +14,8 @@ use solana_stake_program::stake_state::StakeState;
 use solana_vote_program::vote_state;
 use std::borrow::Borrow;
 
-// Default amount received by the bootstrap validator
-const BOOTSTRAP_VALIDATOR_LAMPORTS: u64 = 42;
+// Default amount received by the validator
+const VALIDATOR_LAMPORTS: u64 = 42;
 
 // fun fact: rustc is very close to make this const fn.
 pub fn bootstrap_validator_stake_lamports() -> u64 {
@@ -84,7 +84,7 @@ pub fn create_genesis_config_with_vote_accounts_and_cluster_type(
         &voting_keypairs[0].borrow().vote_keypair,
         &voting_keypairs[0].borrow().stake_keypair.pubkey(),
         stakes[0],
-        BOOTSTRAP_VALIDATOR_LAMPORTS,
+        VALIDATOR_LAMPORTS,
         cluster_type,
     );
 
@@ -94,7 +94,7 @@ pub fn create_genesis_config_with_vote_accounts_and_cluster_type(
         let stake_pubkey = validator_voting_keypairs.borrow().stake_keypair.pubkey();
 
         // Create accounts
-        let node_account = Account::new(BOOTSTRAP_VALIDATOR_LAMPORTS, 0, &system_program::id());
+        let node_account = Account::new(VALIDATOR_LAMPORTS, 0, &system_program::id());
         let vote_account = vote_state::create_account(&vote_pubkey, &node_pubkey, 0, *stake);
         let stake_account = stake_state::create_account(
             &stake_pubkey,
@@ -117,16 +117,16 @@ pub fn create_genesis_config_with_vote_accounts_and_cluster_type(
 
 pub fn create_genesis_config_with_leader(
     mint_lamports: u64,
-    bootstrap_validator_pubkey: &Pubkey,
-    bootstrap_validator_stake_lamports: u64,
+    validator_pubkey: &Pubkey,
+    validator_stake_lamports: u64,
 ) -> GenesisConfigInfo {
     create_genesis_config_with_leader_ex(
         mint_lamports,
-        bootstrap_validator_pubkey,
+        validator_pubkey,
         &Keypair::new(),
         &solana_sdk::pubkey::new_rand(),
-        bootstrap_validator_stake_lamports,
-        BOOTSTRAP_VALIDATOR_LAMPORTS,
+        validator_stake_lamports,
+        VALIDATOR_LAMPORTS,
         ClusterType::Development,
     )
 }
@@ -148,29 +148,30 @@ pub fn activate_all_features(genesis_config: &mut GenesisConfig) {
 
 pub fn create_genesis_config_with_leader_ex(
     mint_lamports: u64,
-    bootstrap_validator_pubkey: &Pubkey,
-    bootstrap_validator_voting_keypair: &Keypair,
-    bootstrap_validator_staking_pubkey: &Pubkey,
-    bootstrap_validator_stake_lamports: u64,
-    bootstrap_validator_lamports: u64,
+    validator_pubkey: &Pubkey,
+    validator_vote_account_keypair: &Keypair,
+    validator_stake_account_pubkey: &Pubkey,
+    validator_stake_lamports: u64,
+    validator_lamports: u64,
     cluster_type: ClusterType,
 ) -> GenesisConfigInfo {
     let mint_keypair = Keypair::new();
-    let bootstrap_validator_vote_account = vote_state::create_account(
-        &bootstrap_validator_voting_keypair.pubkey(),
-        &bootstrap_validator_pubkey,
+    let validator_vote_account = vote_state::create_account(
+        &validator_vote_account_keypair.pubkey(),
+        &validator_pubkey,
         0,
-        bootstrap_validator_stake_lamports,
+        validator_stake_lamports,
     );
 
-    let rent = Rent::free();
+    let fee_rate_governor = FeeRateGovernor::new(0, 0); // most tests can't handle transaction fees
+    let rent = Rent::free(); // most tests don't expect rent
 
-    let bootstrap_validator_stake_account = stake_state::create_account(
-        bootstrap_validator_staking_pubkey,
-        &bootstrap_validator_voting_keypair.pubkey(),
-        &bootstrap_validator_vote_account,
+    let validator_stake_account = stake_state::create_account(
+        validator_stake_account_pubkey,
+        &validator_vote_account_keypair.pubkey(),
+        &validator_vote_account,
         &rent,
-        bootstrap_validator_stake_lamports,
+        validator_stake_lamports,
     );
 
     let accounts = [
@@ -179,23 +180,19 @@ pub fn create_genesis_config_with_leader_ex(
             Account::new(mint_lamports, 0, &system_program::id()),
         ),
         (
-            *bootstrap_validator_pubkey,
-            Account::new(bootstrap_validator_lamports, 0, &system_program::id()),
+            *validator_pubkey,
+            Account::new(validator_lamports, 0, &system_program::id()),
         ),
         (
-            bootstrap_validator_voting_keypair.pubkey(),
-            bootstrap_validator_vote_account,
+            validator_vote_account_keypair.pubkey(),
+            validator_vote_account,
         ),
-        (
-            *bootstrap_validator_staking_pubkey,
-            bootstrap_validator_stake_account,
-        ),
+        (*validator_stake_account_pubkey, validator_stake_account),
     ]
     .iter()
     .cloned()
     .collect();
 
-    let fee_rate_governor = FeeRateGovernor::new(0, 0); // most tests can't handle transaction fees
     let mut genesis_config = GenesisConfig {
         accounts,
         fee_rate_governor,
@@ -212,7 +209,6 @@ pub fn create_genesis_config_with_leader_ex(
     GenesisConfigInfo {
         genesis_config,
         mint_keypair,
-        voting_keypair: Keypair::from_bytes(&bootstrap_validator_voting_keypair.to_bytes())
-            .unwrap(),
+        voting_keypair: Keypair::from_bytes(&validator_vote_account_keypair.to_bytes()).unwrap(),
     }
 }

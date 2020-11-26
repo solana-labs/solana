@@ -22,26 +22,20 @@ use solana_stake_program::{
     stake_instruction::LockupArgs,
     stake_state::{Lockup, StakeAuthorize, StakeState},
 };
-use std::{fs::remove_dir_all, sync::mpsc::channel};
+use std::sync::mpsc::channel;
 
 #[test]
 fn test_stake_delegation_force() {
-    let TestValidator {
-        server,
-        leader_data,
-        alice,
-        ledger_path,
-        ..
-    } = TestValidator::with_no_fee();
+    let test_validator = TestValidator::with_no_fees();
     let (sender, receiver) = channel();
-    run_local_faucet(alice, sender, None);
+    run_local_faucet(test_validator.mint_keypair(), sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
     let default_signer = Keypair::new();
 
     let mut config = CliConfig::recent_for_tests();
-    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&default_signer];
 
     request_and_confirm_airdrop(
@@ -114,32 +108,23 @@ fn test_stake_delegation_force() {
     };
     process_command(&config).unwrap();
 
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }
 
 #[test]
 fn test_seed_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
-    let TestValidator {
-        server,
-        leader_data,
-        alice,
-        ledger_path,
-        vote_pubkey,
-        ..
-    } = TestValidator::with_no_fee();
+    let test_validator = TestValidator::with_no_fees();
     let (sender, receiver) = channel();
-    run_local_faucet(alice, sender, None);
+    run_local_faucet(test_validator.mint_keypair(), sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
 
     let validator_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let mut config_validator = CliConfig::recent_for_tests();
-    config_validator.json_rpc_url =
-        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config_validator.json_rpc_url = test_validator.rpc_url();
     config_validator.signers = vec![&validator_keypair];
 
     request_and_confirm_airdrop(
@@ -180,7 +165,7 @@ fn test_seed_stake_delegation_and_deactivation() {
     // Delegate stake
     config_validator.command = CliCommand::DelegateStake {
         stake_account_pubkey: stake_address,
-        vote_account_pubkey: vote_pubkey,
+        vote_account_pubkey: test_validator.vote_account_address(),
         stake_authority: 0,
         force: true,
         sign_only: false,
@@ -203,32 +188,23 @@ fn test_seed_stake_delegation_and_deactivation() {
     };
     process_command(&config_validator).unwrap();
 
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }
 
 #[test]
 fn test_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
-    let TestValidator {
-        server,
-        leader_data,
-        alice,
-        ledger_path,
-        vote_pubkey,
-        ..
-    } = TestValidator::with_no_fee();
+    let test_validator = TestValidator::with_no_fees();
     let (sender, receiver) = channel();
-    run_local_faucet(alice, sender, None);
+    run_local_faucet(test_validator.mint_keypair(), sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
     let validator_keypair = Keypair::new();
 
     let mut config_validator = CliConfig::recent_for_tests();
-    config_validator.json_rpc_url =
-        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config_validator.json_rpc_url = test_validator.rpc_url();
     config_validator.signers = vec![&validator_keypair];
 
     let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
@@ -265,7 +241,7 @@ fn test_stake_delegation_and_deactivation() {
     config_validator.signers.pop();
     config_validator.command = CliCommand::DelegateStake {
         stake_account_pubkey: stake_keypair.pubkey(),
-        vote_account_pubkey: vote_pubkey,
+        vote_account_pubkey: test_validator.vote_account_address(),
         stake_authority: 0,
         force: true,
         sign_only: false,
@@ -288,37 +264,27 @@ fn test_stake_delegation_and_deactivation() {
     };
     process_command(&config_validator).unwrap();
 
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }
 
 #[test]
 fn test_offline_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
-    let TestValidator {
-        server,
-        leader_data,
-        alice,
-        ledger_path,
-        vote_pubkey,
-        ..
-    } = TestValidator::with_no_fee();
+    let test_validator = TestValidator::with_no_fees();
     let (sender, receiver) = channel();
-    run_local_faucet(alice, sender, None);
+    run_local_faucet(test_validator.mint_keypair(), sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
 
     let mut config_validator = CliConfig::recent_for_tests();
-    config_validator.json_rpc_url =
-        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config_validator.json_rpc_url = test_validator.rpc_url();
     let validator_keypair = Keypair::new();
     config_validator.signers = vec![&validator_keypair];
 
     let mut config_payer = CliConfig::recent_for_tests();
-    config_payer.json_rpc_url =
-        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config_payer.json_rpc_url = test_validator.rpc_url();
 
     let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
 
@@ -372,7 +338,7 @@ fn test_offline_stake_delegation_and_deactivation() {
     let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     config_offline.command = CliCommand::DelegateStake {
         stake_account_pubkey: stake_keypair.pubkey(),
-        vote_account_pubkey: vote_pubkey,
+        vote_account_pubkey: test_validator.vote_account_address(),
         stake_authority: 0,
         force: true,
         sign_only: true,
@@ -391,7 +357,7 @@ fn test_offline_stake_delegation_and_deactivation() {
     config_payer.signers = vec![&offline_presigner];
     config_payer.command = CliCommand::DelegateStake {
         stake_account_pubkey: stake_keypair.pubkey(),
-        vote_account_pubkey: vote_pubkey,
+        vote_account_pubkey: test_validator.vote_account_address(),
         stake_authority: 0,
         force: true,
         sign_only: false,
@@ -431,32 +397,24 @@ fn test_offline_stake_delegation_and_deactivation() {
     };
     process_command(&config_payer).unwrap();
 
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }
 
 #[test]
 fn test_nonced_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
-    let TestValidator {
-        server,
-        leader_data,
-        alice,
-        ledger_path,
-        vote_pubkey,
-        ..
-    } = TestValidator::with_no_fee();
+    let test_validator = TestValidator::with_no_fees();
     let (sender, receiver) = channel();
-    run_local_faucet(alice, sender, None);
+    run_local_faucet(test_validator.mint_keypair(), sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
 
     let config_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let mut config = CliConfig::recent_for_tests();
     config.signers = vec![&config_keypair];
-    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config.json_rpc_url = test_validator.rpc_url();
 
     let minimum_nonce_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(NonceState::size())
@@ -515,7 +473,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     config.signers = vec![&config_keypair];
     config.command = CliCommand::DelegateStake {
         stake_account_pubkey: stake_keypair.pubkey(),
-        vote_account_pubkey: vote_pubkey,
+        vote_account_pubkey: test_validator.vote_account_address(),
         stake_authority: 0,
         force: true,
         sign_only: false,
@@ -554,30 +512,23 @@ fn test_nonced_stake_delegation_and_deactivation() {
     };
     process_command(&config).unwrap();
 
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }
 
 #[test]
 fn test_stake_authorize() {
     solana_logger::setup();
 
-    let TestValidator {
-        server,
-        leader_data,
-        alice,
-        ledger_path,
-        ..
-    } = TestValidator::with_no_fee();
+    let test_validator = TestValidator::with_no_fees();
     let (sender, receiver) = channel();
-    run_local_faucet(alice, sender, None);
+    run_local_faucet(test_validator.mint_keypair(), sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
     let default_signer = Keypair::new();
 
     let mut config = CliConfig::recent_for_tests();
-    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&default_signer];
 
     request_and_confirm_airdrop(
@@ -833,8 +784,7 @@ fn test_stake_authorize() {
     .blockhash;
     assert_ne!(nonce_hash, new_nonce_hash);
 
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }
 
 #[test]
@@ -842,30 +792,23 @@ fn test_stake_authorize_with_fee_payer() {
     solana_logger::setup();
     const SIG_FEE: u64 = 42;
 
-    let TestValidator {
-        server,
-        leader_data,
-        alice,
-        ledger_path,
-        ..
-    } = TestValidator::with_custom_fee(SIG_FEE);
+    let test_validator = TestValidator::with_custom_fees(SIG_FEE);
     let (sender, receiver) = channel();
-    run_local_faucet(alice, sender, None);
+    run_local_faucet(test_validator.mint_keypair(), sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
     let default_signer = Keypair::new();
     let default_pubkey = default_signer.pubkey();
 
     let mut config = CliConfig::recent_for_tests();
-    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&default_signer];
 
     let payer_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let mut config_payer = CliConfig::recent_for_tests();
     config_payer.signers = vec![&payer_keypair];
-    config_payer.json_rpc_url =
-        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config_payer.json_rpc_url = test_validator.rpc_url();
     let payer_pubkey = config_payer.signers[0].pubkey();
 
     let mut config_offline = CliConfig::recent_for_tests();
@@ -967,31 +910,24 @@ fn test_stake_authorize_with_fee_payer() {
     // and fee payer
     check_recent_balance(100_000 - SIG_FEE, &rpc_client, &offline_pubkey);
 
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }
 
 #[test]
 fn test_stake_split() {
     solana_logger::setup();
 
-    let TestValidator {
-        server,
-        leader_data,
-        alice,
-        ledger_path,
-        ..
-    } = TestValidator::with_custom_fee(1);
+    let test_validator = TestValidator::with_custom_fees(1);
     let (sender, receiver) = channel();
-    run_local_faucet(alice, sender, None);
+    run_local_faucet(test_validator.mint_keypair(), sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
     let default_signer = Keypair::new();
     let offline_signer = Keypair::new();
 
     let mut config = CliConfig::recent_for_tests();
-    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&default_signer];
 
     let mut config_offline = CliConfig::recent_for_tests();
@@ -1118,31 +1054,24 @@ fn test_stake_split() {
         &split_account.pubkey(),
     );
 
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }
 
 #[test]
 fn test_stake_set_lockup() {
     solana_logger::setup();
 
-    let TestValidator {
-        server,
-        leader_data,
-        alice,
-        ledger_path,
-        ..
-    } = TestValidator::with_custom_fee(1);
+    let test_validator = TestValidator::with_custom_fees(1);
     let (sender, receiver) = channel();
-    run_local_faucet(alice, sender, None);
+    run_local_faucet(test_validator.mint_keypair(), sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
     let default_signer = Keypair::new();
     let offline_signer = Keypair::new();
 
     let mut config = CliConfig::recent_for_tests();
-    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&default_signer];
 
     let mut config_offline = CliConfig::recent_for_tests();
@@ -1387,31 +1316,23 @@ fn test_stake_set_lockup() {
     assert_eq!(current_lockup.epoch, lockup.epoch.unwrap());
     assert_eq!(current_lockup.custodian, offline_pubkey);
 
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }
 
 #[test]
 fn test_offline_nonced_create_stake_account_and_withdraw() {
     solana_logger::setup();
 
-    let TestValidator {
-        server,
-        leader_data,
-        alice,
-        ledger_path,
-        ..
-    } = TestValidator::with_no_fee();
+    let test_validator = TestValidator::with_no_fees();
     let (sender, receiver) = channel();
-    run_local_faucet(alice, sender, None);
+    run_local_faucet(test_validator.mint_keypair(), sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
-
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
     let mut config = CliConfig::recent_for_tests();
     let default_signer = keypair_from_seed(&[1u8; 32]).unwrap();
     config.signers = vec![&default_signer];
-    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
+    config.json_rpc_url = test_validator.rpc_url();
 
     let mut config_offline = CliConfig::recent_for_tests();
     let offline_signer = keypair_from_seed(&[2u8; 32]).unwrap();
@@ -1608,6 +1529,5 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         Pubkey::create_with_seed(&stake_pubkey, seed, &solana_stake_program::id()).unwrap();
     check_recent_balance(50_000, &rpc_client, &seed_address);
 
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    test_validator.close();
 }
