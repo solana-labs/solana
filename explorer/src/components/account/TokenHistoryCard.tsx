@@ -41,6 +41,7 @@ import {
   isSerumInstruction,
   parseSerumInstructionTitle,
 } from "components/instruction/serum/types";
+import { INNER_INSTRUCTIONS_SLOT } from "pages/TransactionDetailsPage";
 
 type InstructionType = {
   name: string;
@@ -315,77 +316,86 @@ const TokenTransactionRow = React.memo(
         </tr>
       );
 
-    const tokenInstructionNames = instructions
-      .map((ix, index): InstructionType | undefined => {
-        let name = "Unknown";
+    let tokenInstructionNames: InstructionType[] = [];
 
-        let innerInstructions: (
-          | ParsedInstruction
-          | PartiallyDecodedInstruction
-        )[] = [];
+    if (details?.data?.transaction) {
+      const transaction = details.data.transaction;
 
-        if (details?.data?.transaction?.meta?.innerInstructions) {
-          details.data.transaction.meta.innerInstructions.forEach((ix) => {
-            if (ix.index === index) {
-              ix.instructions.forEach((inner) => {
-                innerInstructions.push(inner);
-              });
-            }
-          });
-        }
+      tokenInstructionNames = instructions
+        .map((ix, index): InstructionType | undefined => {
+          let name = "Unknown";
 
-        let transactionInstruction;
-        if (details?.data?.transaction?.transaction) {
-          transactionInstruction = intoTransactionInstruction(
-            details.data.transaction.transaction,
-            ix
-          );
-        }
+          let innerInstructions: (
+            | ParsedInstruction
+            | PartiallyDecodedInstruction
+          )[] = [];
 
-        if ("parsed" in ix) {
-          if (ix.program === "spl-token") {
-            name = instructionTypeName(ix, tx);
-          } else {
-            return undefined;
-          }
-        } else if (
-          transactionInstruction &&
-          isSerumInstruction(transactionInstruction)
-        ) {
-          try {
-            name = parseSerumInstructionTitle(transactionInstruction);
-          } catch (error) {
-            reportError(error, { signature: tx.signature });
-            return undefined;
-          }
-        } else if (
-          transactionInstruction &&
-          isTokenSwapInstruction(transactionInstruction)
-        ) {
-          try {
-            name = parseTokenSwapInstructionTitle(transactionInstruction);
-          } catch (error) {
-            reportError(error, { signature: tx.signature });
-            return undefined;
-          }
-        } else {
           if (
-            ix.accounts.findIndex((account) =>
-              account.equals(TOKEN_PROGRAM_ID)
-            ) >= 0
+            transaction.slot >= INNER_INSTRUCTIONS_SLOT &&
+            transaction.meta?.innerInstructions
           ) {
-            name = "Unknown (Inner)";
-          } else {
-            return undefined;
+            transaction.meta.innerInstructions.forEach((ix) => {
+              if (ix.index === index) {
+                ix.instructions.forEach((inner) => {
+                  innerInstructions.push(inner);
+                });
+              }
+            });
           }
-        }
 
-        return {
-          name: name,
-          innerInstructions: innerInstructions,
-        };
-      })
-      .filter((name) => name !== undefined) as InstructionType[];
+          let transactionInstruction;
+          if (transaction?.transaction) {
+            transactionInstruction = intoTransactionInstruction(
+              transaction.transaction,
+              ix
+            );
+          }
+
+          if ("parsed" in ix) {
+            if (ix.program === "spl-token") {
+              name = instructionTypeName(ix, tx);
+            } else {
+              return undefined;
+            }
+          } else if (
+            transactionInstruction &&
+            isSerumInstruction(transactionInstruction)
+          ) {
+            try {
+              name = parseSerumInstructionTitle(transactionInstruction);
+            } catch (error) {
+              reportError(error, { signature: tx.signature });
+              return undefined;
+            }
+          } else if (
+            transactionInstruction &&
+            isTokenSwapInstruction(transactionInstruction)
+          ) {
+            try {
+              name = parseTokenSwapInstructionTitle(transactionInstruction);
+            } catch (error) {
+              reportError(error, { signature: tx.signature });
+              return undefined;
+            }
+          } else {
+            if (
+              ix.accounts.findIndex((account) =>
+                account.equals(TOKEN_PROGRAM_ID)
+              ) >= 0
+            ) {
+              name = "Unknown (Inner)";
+            } else {
+              return undefined;
+            }
+          }
+
+          return {
+            name: name,
+            innerInstructions: innerInstructions,
+          };
+        })
+        .filter((name) => name !== undefined) as InstructionType[];
+    }
 
     return (
       <>

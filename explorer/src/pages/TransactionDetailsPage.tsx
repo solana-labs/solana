@@ -42,7 +42,7 @@ import { MemoDetailsCard } from "components/instruction/MemoDetailsCard";
 
 const AUTO_REFRESH_INTERVAL = 2000;
 const ZERO_CONFIRMATION_BAILOUT = 5;
-const INNER_INSTRUCTIONS_SLOT = 46915769;
+export const INNER_INSTRUCTIONS_SLOT = 46915769;
 
 type SignatureProps = {
   signature: TransactionSignature;
