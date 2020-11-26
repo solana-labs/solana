@@ -1399,8 +1399,8 @@ pub fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("bpf_jit_compilation")
-                .long("enable-jit")
+            Arg::with_name("bpf_jit")
+                .long("bpf-jit")
                 .takes_value(false)
                 .help("Use the just-in-time compiler instead of the interpreter for BPF."),
         )
@@ -1546,7 +1546,7 @@ pub fn main() {
         poh_verify: !matches.is_present("skip_poh_verify"),
         debug_keys,
         contact_debug_interval,
-        bpf_jit_compilation: matches.is_present("bpf_jit_compilation"),
+        bpf_jit: matches.is_present("bpf_jit"),
         ..ValidatorConfig::default()
     };
 

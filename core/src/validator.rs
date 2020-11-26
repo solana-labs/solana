@@ -105,7 +105,7 @@ pub struct ValidatorConfig {
     pub require_tower: bool,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub contact_debug_interval: u64,
-    pub bpf_jit_compilation: bool,
+    pub bpf_jit: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -142,7 +142,7 @@ impl Default for ValidatorConfig {
             require_tower: false,
             debug_keys: None,
             contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL,
-            bpf_jit_compilation: false,
+            bpf_jit: false,
         }
     }
 }
@@ -859,7 +859,7 @@ fn new_banks_from_ledger(
     }
 
     let process_options = blockstore_processor::ProcessOptions {
-        bpf_jit_compilation: config.bpf_jit_compilation,
+        bpf_jit: config.bpf_jit,
         poh_verify,
         dev_halt_at_slot: config.dev_halt_at_slot,
         new_hard_forks: config.new_hard_forks.clone(),

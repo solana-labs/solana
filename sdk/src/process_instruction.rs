@@ -61,6 +61,8 @@ pub trait InvokeContext {
     fn record_instruction(&self, instruction: &Instruction);
     /// Get the bank's active feature set
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool;
+    /// Get whether to use the JIT compiler or the interpreter
+    fn use_bpf_jit(&self) -> bool;
 }
 
 #[derive(Clone, Copy, Debug, AbiExample)]
@@ -337,6 +339,9 @@ impl InvokeContext for MockInvokeContext {
     }
     fn record_instruction(&self, _instruction: &Instruction) {}
     fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
+        true
+    }
+    fn use_bpf_jit(&self) -> bool {
         true
     }
 }

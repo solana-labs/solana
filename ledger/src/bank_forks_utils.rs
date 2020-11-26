@@ -67,7 +67,7 @@ pub fn load(
                     genesis_config,
                     process_options.debug_keys.clone(),
                     Some(&crate::builtins::get(genesis_config.cluster_type)),
-                    process_options.bpf_jit_compilation,
+                    process_options.bpf_jit,
                 )
                 .expect("Load from snapshot failed");
 
