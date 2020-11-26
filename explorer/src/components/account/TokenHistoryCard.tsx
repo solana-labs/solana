@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   PublicKey,
   ConfirmedSignatureInfo,
@@ -41,7 +41,7 @@ import {
   isSerumInstruction,
   parseSerumInstructionTitle,
 } from "components/instruction/serum/types";
-import { INNER_INSTRUCTIONS_SLOT } from "pages/TransactionDetailsPage";
+import { INNER_INSTRUCTIONS_START_SLOT } from "pages/TransactionDetailsPage";
 import { useCluster, Cluster } from "providers/cluster";
 
 type InstructionType = {
@@ -327,7 +327,7 @@ const TokenTransactionRow = React.memo(
         .map((ix, index): InstructionType | undefined => {
           let name = "Unknown";
 
-          let innerInstructions: (
+          const innerInstructions: (
             | ParsedInstruction
             | PartiallyDecodedInstruction
           )[] = [];
@@ -335,7 +335,7 @@ const TokenTransactionRow = React.memo(
           if (
             transaction.meta?.innerInstructions &&
             (cluster !== Cluster.MainnetBeta ||
-              transaction.slot >= INNER_INSTRUCTIONS_SLOT)
+              transaction.slot >= INNER_INSTRUCTIONS_START_SLOT)
           ) {
             transaction.meta.innerInstructions.forEach((ix) => {
               if (ix.index === index) {
@@ -441,7 +441,7 @@ function InstructionDetails({
   instructionType: InstructionType;
   tx: ConfirmedSignatureInfo;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = React.useState(false);
 
   let instructionTypes = instructionType.innerInstructions
     .map((ix) => {

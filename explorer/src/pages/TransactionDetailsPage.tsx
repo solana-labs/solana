@@ -42,7 +42,7 @@ import { MemoDetailsCard } from "components/instruction/MemoDetailsCard";
 
 const AUTO_REFRESH_INTERVAL = 2000;
 const ZERO_CONFIRMATION_BAILOUT = 5;
-export const INNER_INSTRUCTIONS_SLOT = 46915769;
+export const INNER_INSTRUCTIONS_START_SLOT = 46915769;
 
 type SignatureProps = {
   signature: TransactionSignature;
@@ -424,14 +424,14 @@ function InstructionsSection({ signature }: SignatureProps) {
     return <ErrorCard retry={refreshDetails} text="No instructions found" />;
   }
 
-  let innerInstructions: {
+  const innerInstructions: {
     [index: number]: (ParsedInstruction | PartiallyDecodedInstruction)[];
   } = {};
 
   if (
     meta?.innerInstructions &&
     (cluster !== Cluster.MainnetBeta ||
-      details.data.transaction.slot >= INNER_INSTRUCTIONS_SLOT)
+      details.data.transaction.slot >= INNER_INSTRUCTIONS_START_SLOT)
   ) {
     meta.innerInstructions.forEach((parsed: ParsedInnerInstruction) => {
       if (!innerInstructions[parsed.index]) {
