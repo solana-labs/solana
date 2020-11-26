@@ -553,7 +553,7 @@ impl Stake {
     /// for a given stake and vote_state, calculate how many
     ///   points were earned (credits * stake) and new value
     ///   for credits_observed were the points paid
-    pub fn calculate_points_and_credits(
+    fn calculate_points_and_credits(
         &self,
         new_vote_state: &VoteState,
         stake_history: Option<&StakeHistory>,
@@ -562,7 +562,11 @@ impl Stake {
     ) -> (u128, u64) {
         // if there is no newer credits since observed, return no point
         if new_vote_state.credits() <= self.credits_observed {
-            return (0, 0);
+            if fix_stake_deactivate {
+                return (0, self.credits_observed);
+            } else {
+                return (0, 0);
+            }
         }
 
         let mut points = 0;
