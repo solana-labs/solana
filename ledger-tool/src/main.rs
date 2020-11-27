@@ -2072,7 +2072,7 @@ fn main() {
                             }
 
                             let mut store_failed_count = 0;
-                            if force_enabled_count > 0 {
+                            if force_enabled_count >= 1 {
                                 if base_bank
                                     .get_account(&feature_set::secp256k1_program_enabled::id())
                                     .is_some()
@@ -2089,11 +2089,13 @@ fn main() {
                                 }
                             }
 
-                            if force_enabled_count > 0 {
+                            if force_enabled_count >= 1 {
                                 if base_bank
                                     .get_account(&feature_set::instructions_sysvar_enabled::id())
                                     .is_some()
                                 {
+                                    // steal some lamports from the pretty old feature not to affect
+                                    // capitalizaion, which doesn't affect inflation behavior!
                                     base_bank.store_account(
                                         &feature_set::instructions_sysvar_enabled::id(),
                                         &Account::default(),
@@ -2103,7 +2105,7 @@ fn main() {
                                     store_failed_count += 1;
                                 }
                             }
-                            assert_eq!(force_enabled_count, 0);
+                            assert_eq!(force_enabled_count, store_failed_count);
                             if store_failed_count >= 1 {
                                 // we have no choice; maybe locally created blank cluster with
                                 // not-Development cluster type.
