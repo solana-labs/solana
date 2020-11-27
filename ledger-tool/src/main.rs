@@ -2038,54 +2038,74 @@ fn main() {
                             .lazy_rent_collection
                             .store(true, std::sync::atomic::Ordering::Relaxed);
 
-                        if arg_matches.is_present("enable_stake_program_v2")
-                            && !base_bank.stake_program_v2_enabled()
-                        {
+                        if arg_matches.is_present("enable_stake_program_v2") {
                             let feature_account_balance = std::cmp::max(
                                 genesis_config.rent.minimum_balance(Feature::size_of()),
                                 1,
                             );
-                            base_bank.store_account(
-                                &feature_set::stake_program_v2::id(),
-                                &feature::create_account(
-                                    &Feature { activated_at: None },
-                                    feature_account_balance,
-                                ),
-                            );
-                            base_bank.store_account(
-                                &feature_set::rewrite_stake::id(),
-                                &feature::create_account(
-                                    &Feature { activated_at: None },
-                                    feature_account_balance,
-                                ),
-                            );
+                            let mut force_enabled_count = 0;
+                            if base_bank
+                                .get_account(&feature_set::stake_program_v2::id())
+                                .is_none()
+                            {
+                                base_bank.store_account(
+                                    &feature_set::stake_program_v2::id(),
+                                    &feature::create_account(
+                                        &Feature { activated_at: None },
+                                        feature_account_balance,
+                                    ),
+                                );
+                                force_enabled_count += 1;
+                            }
+                            if base_bank
+                                .get_account(&feature_set::rewrite_stake::id())
+                                .is_none()
+                            {
+                                base_bank.store_account(
+                                    &feature_set::rewrite_stake::id(),
+                                    &feature::create_account(
+                                        &Feature { activated_at: None },
+                                        feature_account_balance,
+                                    ),
+                                );
+                                force_enabled_count += 1;
+                            }
 
                             let mut store_failed_count = 0;
-                            if base_bank
-                                .get_account(&feature_set::secp256k1_program_enabled::id())
-                                .is_some()
-                            {
-                                // steal some lamports from the pretty old feature not to affect
-                                // capitalizaion, which doesn't affect inflation behavior!
-                                base_bank.store_account(
-                                    &feature_set::secp256k1_program_enabled::id(),
-                                    &Account::default(),
-                                );
-                            } else {
-                                store_failed_count += 1;
+                            if force_enabled_count >= 1 {
+                                if base_bank
+                                    .get_account(&feature_set::secp256k1_program_enabled::id())
+                                    .is_some()
+                                {
+                                    // steal some lamports from the pretty old feature not to affect
+                                    // capitalizaion, which doesn't affect inflation behavior!
+                                    base_bank.store_account(
+                                        &feature_set::secp256k1_program_enabled::id(),
+                                        &Account::default(),
+                                    );
+                                    force_enabled_count -= 1;
+                                } else {
+                                    store_failed_count += 1;
+                                }
                             }
 
-                            if base_bank
-                                .get_account(&feature_set::instructions_sysvar_enabled::id())
-                                .is_some()
-                            {
-                                base_bank.store_account(
-                                    &feature_set::instructions_sysvar_enabled::id(),
-                                    &Account::default(),
-                                );
-                            } else {
-                                store_failed_count += 1;
+                            if force_enabled_count >= 1 {
+                                if base_bank
+                                    .get_account(&feature_set::instructions_sysvar_enabled::id())
+                                    .is_some()
+                                {
+                                    // steal some lamports from the pretty old feature not to affect
+                                    // capitalizaion, which doesn't affect inflation behavior!
+                                    base_bank.store_account(
+                                        &feature_set::instructions_sysvar_enabled::id(),
+                                        &Account::default(),
+                                    );
+                                    force_enabled_count -= 1;
+                                } else {
+                                    store_failed_count += 1;
+                                }
                             }
+                            assert_eq!(force_enabled_count, store_failed_count);
                             if store_failed_count >= 1 {
                                 // we have no choice; maybe locally created blank cluster with
                                 // not-Development cluster type.
@@ -2104,15 +2124,22 @@ fn main() {
                         }
 
                         #[derive(Default, Debug)]
+                        struct PointDetail {
+                            epoch: Epoch,
+                            points: u128,
+                            stake: u128,
+                            credits: u128,
+                        }
+
+                        #[derive(Default, Debug)]
                         struct CalculationDetail {
                             epochs: usize,
                             voter: Pubkey,
                             voter_owner: Pubkey,
-                            point: u128,
-                            stake: u128,
+                            current_effective_stake: u64,
                             total_stake: u64,
                             rent_exempt_reserve: u64,
-                            credits: u128,
+                            points: Vec<PointDetail>,
                             base_rewards: u64,
                             commission: u8,
                             vote_rewards: u64,
@@ -2120,7 +2147,8 @@ fn main() {
                             activation_epoch: Epoch,
                             deactivation_epoch: Option<Epoch>,
                             point_value: Option<PointValue>,
-                            credits_observed: Option<u64>,
+                            old_credits_observed: Option<u64>,
+                            new_credits_observed: Option<u64>,
                         }
                         use solana_stake_program::stake_state::InflationPointCalculationEvent;
                         let mut stake_calcuration_details: HashMap<Pubkey, CalculationDetail> =
@@ -2134,16 +2162,14 @@ fn main() {
                                 let detail = stake_calcuration_details.entry(**pubkey).or_default();
                                 match event {
                                     InflationPointCalculationEvent::CalculatedPoints(
-                                        point,
+                                        epoch,
                                         stake,
                                         credits,
+                                        points,
                                     ) => {
-                                        // Don't sum for epochs where no credits are earned
-                                        if *credits > 0 {
+                                        if *points > 0 {
                                             detail.epochs += 1;
-                                            detail.point += *point;
-                                            detail.stake += *stake;
-                                            detail.credits += *credits;
+                                            detail.points.push(PointDetail {epoch: *epoch, points: *points, stake: *stake, credits: *credits});
                                         }
                                     }
                                     InflationPointCalculationEvent::SplitRewards(
@@ -2166,6 +2192,9 @@ fn main() {
                                             last_point_value = point_value;
                                         }
                                     }
+                                    InflationPointCalculationEvent::EffectiveStakeAtRewardedEpoch(stake) => {
+                                        detail.current_effective_stake = *stake;
+                                    }
                                     InflationPointCalculationEvent::Commission(commission) => {
                                         detail.commission = *commission;
                                     }
@@ -2173,9 +2202,11 @@ fn main() {
                                         detail.rent_exempt_reserve = *reserve;
                                     }
                                     InflationPointCalculationEvent::CreditsObserved(
-                                        credits_observed,
+                                        old_credits_observed,
+                                        new_credits_observed,
                                     ) => {
-                                        detail.credits_observed = Some(*credits_observed);
+                                        detail.old_credits_observed = Some(*old_credits_observed);
+                                        detail.new_credits_observed = Some(*new_credits_observed);
                                     }
                                     InflationPointCalculationEvent::Delegation(
                                         delegation,
@@ -2316,8 +2347,12 @@ fn main() {
                                         activation_epoch: String,
                                         deactivation_epoch: String,
                                         earned_epochs: String,
-                                        earned_credits: String,
-                                        credits_observed: String,
+                                        epoch: String,
+                                        epoch_credits: String,
+                                        epoch_points: String,
+                                        epoch_stake: String,
+                                        old_credits_observed: String,
+                                        new_credits_observed: String,
                                         base_rewards: String,
                                         stake_rewards: String,
                                         vote_rewards: String,
@@ -2331,53 +2366,82 @@ fn main() {
                                         data.map(|data| format!("{}", data))
                                             .unwrap_or_else(|| "N/A".to_owned())
                                     };
-                                    let record = InflationRecord {
-                                        account: format!("{}", pubkey),
-                                        owner: format!("{}", base_account.owner),
-                                        old_balance: base_account.lamports,
-                                        new_balance: warped_account.lamports,
-                                        data_size: base_account.data.len(),
-                                        delegation: format_or_na(detail.map(|d| d.voter)),
-                                        delegation_owner: format_or_na(
-                                            detail.map(|d| d.voter_owner),
-                                        ),
-                                        effective_stake: format_or_na(detail.map(|d| d.stake)),
-                                        delegated_stake: format_or_na(
-                                            detail.map(|d| d.total_stake),
-                                        ),
-                                        rent_exempt_reserve: format_or_na(
-                                            detail.map(|d| d.rent_exempt_reserve),
-                                        ),
-                                        activation_epoch: format_or_na(detail.map(|d| {
-                                            if d.activation_epoch < Epoch::max_value() {
-                                                d.activation_epoch
-                                            } else {
-                                                // bootstraped
-                                                0
-                                            }
-                                        })),
-                                        deactivation_epoch: format_or_na(
-                                            detail.and_then(|d| d.deactivation_epoch),
-                                        ),
-                                        earned_epochs: format_or_na(detail.map(|d| d.epochs)),
-                                        earned_credits: format_or_na(detail.map(|d| d.credits)),
-                                        credits_observed: format_or_na(
-                                            detail.and_then(|d| d.credits_observed),
-                                        ),
-                                        base_rewards: format_or_na(detail.map(|d| d.base_rewards)),
-                                        stake_rewards: format_or_na(
-                                            detail.map(|d| d.stake_rewards),
-                                        ),
-                                        vote_rewards: format_or_na(detail.map(|d| d.vote_rewards)),
-                                        commission: format_or_na(detail.map(|d| d.commission)),
-                                        cluster_rewards: format_or_na(
-                                            last_point_value.as_ref().map(|pv| pv.rewards),
-                                        ),
-                                        cluster_points: format_or_na(
-                                            last_point_value.as_ref().map(|pv| pv.points),
-                                        ),
-                                    };
-                                    csv_writer.serialize(&record).unwrap();
+                                    let mut point_details = detail
+                                        .map(|d| d.points.iter().map(Some).collect::<Vec<_>>())
+                                        .unwrap_or_default();
+
+                                    // ensure to print even if there is no calculation/point detail
+                                    if point_details.is_empty() {
+                                        point_details.push(None);
+                                    }
+
+                                    for point_detail in point_details {
+                                        let record = InflationRecord {
+                                            account: format!("{}", pubkey),
+                                            owner: format!("{}", base_account.owner),
+                                            old_balance: base_account.lamports,
+                                            new_balance: warped_account.lamports,
+                                            data_size: base_account.data.len(),
+                                            delegation: format_or_na(detail.map(|d| d.voter)),
+                                            delegation_owner: format_or_na(
+                                                detail.map(|d| d.voter_owner),
+                                            ),
+                                            effective_stake: format_or_na(
+                                                detail.map(|d| d.current_effective_stake),
+                                            ),
+                                            delegated_stake: format_or_na(
+                                                detail.map(|d| d.total_stake),
+                                            ),
+                                            rent_exempt_reserve: format_or_na(
+                                                detail.map(|d| d.rent_exempt_reserve),
+                                            ),
+                                            activation_epoch: format_or_na(detail.map(|d| {
+                                                if d.activation_epoch < Epoch::max_value() {
+                                                    d.activation_epoch
+                                                } else {
+                                                    // bootstraped
+                                                    0
+                                                }
+                                            })),
+                                            deactivation_epoch: format_or_na(
+                                                detail.and_then(|d| d.deactivation_epoch),
+                                            ),
+                                            earned_epochs: format_or_na(detail.map(|d| d.epochs)),
+                                            epoch: format_or_na(point_detail.map(|d| d.epoch)),
+                                            epoch_credits: format_or_na(
+                                                point_detail.map(|d| d.credits),
+                                            ),
+                                            epoch_points: format_or_na(
+                                                point_detail.map(|d| d.points),
+                                            ),
+                                            epoch_stake: format_or_na(
+                                                point_detail.map(|d| d.stake),
+                                            ),
+                                            old_credits_observed: format_or_na(
+                                                detail.and_then(|d| d.old_credits_observed),
+                                            ),
+                                            new_credits_observed: format_or_na(
+                                                detail.and_then(|d| d.new_credits_observed),
+                                            ),
+                                            base_rewards: format_or_na(
+                                                detail.map(|d| d.base_rewards),
+                                            ),
+                                            stake_rewards: format_or_na(
+                                                detail.map(|d| d.stake_rewards),
+                                            ),
+                                            vote_rewards: format_or_na(
+                                                detail.map(|d| d.vote_rewards),
+                                            ),
+                                            commission: format_or_na(detail.map(|d| d.commission)),
+                                            cluster_rewards: format_or_na(
+                                                last_point_value.as_ref().map(|pv| pv.rewards),
+                                            ),
+                                            cluster_points: format_or_na(
+                                                last_point_value.as_ref().map(|pv| pv.points),
+                                            ),
+                                        };
+                                        csv_writer.serialize(&record).unwrap();
+                                    }
                                 }
                                 overall_delta += delta;
                             } else {
