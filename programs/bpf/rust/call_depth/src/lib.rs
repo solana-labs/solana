@@ -25,3 +25,9 @@ pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
     recurse(&mut data);
     SUCCESS
 }
+
+#[no_mangle]
+fn custom_panic(info: &core::panic::PanicInfo<'_>) {
+    // Full panic reporting
+    info!(&format!("{}", info));
+}

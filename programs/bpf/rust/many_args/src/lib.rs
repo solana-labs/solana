@@ -26,6 +26,12 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     SUCCESS
 }
 
+#[no_mangle]
+fn custom_panic(info: &core::panic::PanicInfo<'_>) {
+    // Full panic reporting
+    info!(&format!("{}", info));
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

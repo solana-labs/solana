@@ -1,7 +1,7 @@
 //! @brief Example Rust-based BPF program tests loop iteration
 
 extern crate solana_program;
-use solana_program::entrypoint::SUCCESS;
+use solana_program::{entrypoint::SUCCESS, info};
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
@@ -48,6 +48,12 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     assert_eq!(x, 0x0001_ffff_ffff_ffff_fffe);
 
     SUCCESS
+}
+
+#[no_mangle]
+fn custom_panic(info: &core::panic::PanicInfo<'_>) {
+    // Full panic reporting
+    info!(&format!("{}", info));
 }
 
 #[cfg(test)]
