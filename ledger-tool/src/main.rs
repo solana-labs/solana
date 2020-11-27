@@ -2366,9 +2366,15 @@ fn main() {
                                         data.map(|data| format!("{}", data))
                                             .unwrap_or_else(|| "N/A".to_owned())
                                     };
-                                    let point_details = detail
+                                    let mut point_details = detail
                                         .map(|d| d.points.iter().map(Some).collect::<Vec<_>>())
-                                        .unwrap_or_else(|| vec![None]);
+                                        .unwrap_or_default();
+
+                                    // ensure to print even if there is no calculation/point detail
+                                    if point_details.is_empty() {
+                                        point_details.push(None);
+                                    }
+
                                     for point_detail in point_details {
                                         let record = InflationRecord {
                                             account: format!("{}", pubkey),
