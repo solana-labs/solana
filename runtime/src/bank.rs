@@ -1456,6 +1456,7 @@ impl Bank {
         let old_vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
 
         let validator_point_value = self.pay_validator_rewards(
+            prev_epoch,
             validator_rewards,
             reward_calc_tracer,
             self.stake_program_v2_enabled(),
@@ -1574,6 +1575,7 @@ impl Bank {
     ///   successfully load and parse, return the lamport value of one point
     fn pay_validator_rewards(
         &mut self,
+        rewarded_epoch: Epoch,
         rewards: u64,
         reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
         fix_stake_deactivate: bool,
@@ -1622,6 +1624,7 @@ impl Bank {
                     }
                 });
                 let redeemed = stake_state::redeem_rewards(
+                    rewarded_epoch,
                     stake_account,
                     vote_account,
                     &point_value,

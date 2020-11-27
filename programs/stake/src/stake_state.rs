@@ -33,12 +33,13 @@ pub enum StakeState {
 
 #[derive(Debug)]
 pub enum InflationPointCalculationEvent {
-    CalculatedPoints(u128, u128, u128),
+    CalculatedPoints(u64, u128, u128, u128),
     SplitRewards(u64, u64, u64, PointValue),
+    EffectiveStakeAtRewardedEpoch(u64),
     RentExemptReserve(u64),
     Delegation(Delegation, Pubkey),
     Commission(u8),
-    CreditsObserved(u64),
+    CreditsObserved(u64, u64),
 }
 
 fn null_tracer() -> Option<impl FnMut(&InflationPointCalculationEvent)> {
@@ -521,12 +522,13 @@ impl Stake {
             fix_stake_deactivate,
         )
         .map(|(stakers_reward, voters_reward, credits_observed)| {
-            self.credits_observed = credits_observed;
             if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
                 inflation_point_calc_tracer(&InflationPointCalculationEvent::CreditsObserved(
+                    self.credits_observed,
                     credits_observed,
                 ));
             }
+            self.credits_observed = credits_observed;
             self.delegation.stake += stakers_reward;
             (stakers_reward, voters_reward)
         })
@@ -594,13 +596,15 @@ impl Stake {
             new_credits_observed = new_credits_observed.max(final_epoch_credits);
 
             // finally calculate points for this epoch
-            points += stake * earned_credits;
+            let earned_points = stake * earned_credits;
+            points += earned_points;
 
             if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
                 inflation_point_calc_tracer(&InflationPointCalculationEvent::CalculatedPoints(
-                    points,
+                    epoch,
                     stake,
                     earned_credits,
+                    earned_points,
                 ));
             }
         }
@@ -1298,6 +1302,7 @@ impl MergeKind {
 // utility function, used by runtime
 // returns a tuple of (stakers_reward,voters_reward)
 pub fn redeem_rewards(
+    rewarded_epoch: Epoch,
     stake_account: &mut Account,
     vote_account: &mut Account,
     point_value: &PointValue,
@@ -1309,6 +1314,13 @@ pub fn redeem_rewards(
         let vote_state: VoteState =
             StateMut::<VoteStateVersions>::state(vote_account)?.convert_to_current();
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
+            inflation_point_calc_tracer(
+                &InflationPointCalculationEvent::EffectiveStakeAtRewardedEpoch(stake.stake(
+                    rewarded_epoch,
+                    stake_history,
+                    fix_stake_deactivate,
+                )),
+            );
             inflation_point_calc_tracer(&InflationPointCalculationEvent::RentExemptReserve(
                 meta.rent_exempt_reserve,
             ));
