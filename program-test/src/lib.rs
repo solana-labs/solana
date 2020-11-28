@@ -211,7 +211,6 @@ impl program_stubs::SyscallStubs for SyscallStubs {
         INVOKE_CONTEXT.with(|invoke_context| {
             let invoke_context = invoke_context.borrow_mut();
             caller = *invoke_context.get_caller().expect("get_caller");
-            invoke_context.record_instruction(&instruction);
 
             mock_invoke_context.programs = invoke_context.get_programs().to_vec();
             // TODO: Populate MockInvokeContext more, or rework to avoid MockInvokeContext entirely.

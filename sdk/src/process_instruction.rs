@@ -4,7 +4,7 @@ use solana_sdk::{
         bpf_compute_budget_balancing, max_invoke_depth_4, max_program_call_depth_64,
         pubkey_log_syscall_enabled, FeatureSet,
     },
-    instruction::{CompiledInstruction, Instruction, InstructionError},
+    instruction::{CompiledInstruction, InstructionError},
     keyed_account::KeyedAccount,
     message::Message,
     pubkey::Pubkey,
@@ -58,7 +58,7 @@ pub trait InvokeContext {
     /// Get the completed loader work that can be re-used across executions
     fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>>;
     /// Record invoked instruction
-    fn record_instruction(&self, instruction: &Instruction);
+    fn record_instruction(&self, instruction: &CompiledInstruction);
     /// Get the bank's active feature set
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool;
 }
@@ -335,7 +335,7 @@ impl InvokeContext for MockInvokeContext {
     fn get_executor(&self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         None
     }
-    fn record_instruction(&self, _instruction: &Instruction) {}
+    fn record_instruction(&self, _instruction: &CompiledInstruction) {}
     fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
         true
     }

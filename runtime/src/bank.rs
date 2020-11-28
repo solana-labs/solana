@@ -2523,15 +2523,14 @@ impl Bank {
             });
     }
 
-    fn compile_recorded_instructions(
+    fn collect_recorded_instructions(
         inner_instructions: &mut Vec<Option<InnerInstructionsList>>,
         instruction_recorders: Option<Vec<InstructionRecorder>>,
-        message: &Message,
     ) {
         inner_instructions.push(instruction_recorders.map(|instruction_recorders| {
             instruction_recorders
                 .into_iter()
-                .map(|r| r.compile_instructions(message))
+                .map(|r| r.into_inner())
                 .collect()
         }));
     }
@@ -2696,10 +2695,9 @@ impl Bank {
                         transaction_log_messages.push(log_messages);
                     }
 
-                    Self::compile_recorded_instructions(
+                    Self::collect_recorded_instructions(
                         &mut inner_instructions,
                         instruction_recorders,
-                        &tx.message,
                     );
 
                     Self::refcells_to_accounts(

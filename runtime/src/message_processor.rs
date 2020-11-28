@@ -8,7 +8,7 @@ use solana_sdk::{
     account::Account,
     clock::Epoch,
     feature_set::{instructions_sysvar_enabled, FeatureSet},
-    instruction::{CompiledInstruction, Instruction, InstructionError},
+    instruction::{CompiledInstruction, InstructionError},
     keyed_account::{create_keyed_readonly_accounts, KeyedAccount},
     message::Message,
     native_loader,
@@ -300,7 +300,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         self.executors.borrow().get(&pubkey)
     }
-    fn record_instruction(&self, instruction: &Instruction) {
+    fn record_instruction(&self, instruction: &CompiledInstruction) {
         if let Some(recorder) = &self.instruction_recorder {
             recorder.record_instruction(instruction.clone());
         }
@@ -499,6 +499,8 @@ impl MessageProcessor {
         if let Some(instruction) = message.instructions.get(0) {
             // Verify the calling program hasn't misbehaved
             invoke_context.verify_and_update(message, instruction, accounts)?;
+
+            invoke_context.record_instruction(&instruction);
 
             // Construct keyed accounts
             let keyed_accounts =
