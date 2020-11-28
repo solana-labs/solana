@@ -3454,6 +3454,33 @@ mod tests {
                 true,
             )
         );
+
+        // credis_observed isn't reset for stale vote accounts while no rewards
+        // given if the inflation is disabled
+        stake.credits_observed = 4;
+        assert_eq!(
+            Some((0, 0, 4)),
+            stake.calculate_rewards(
+                &PointValue {
+                    rewards: 0,
+                    points: 4
+                },
+                &vote_state,
+                None,
+                &mut null_tracer(),
+                true,
+            )
+        );
+
+        // assert the previous behavior is preserved where fix_stake_deactivate=false
+        assert_eq!(
+            (0, 0),
+            stake.calculate_points_and_credits(&vote_state, None, &mut null_tracer(), false)
+        );
+        assert_eq!(
+            (0, 4),
+            stake.calculate_points_and_credits(&vote_state, None, &mut null_tracer(), true)
+        );
     }
 
     #[test]
