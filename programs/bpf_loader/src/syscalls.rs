@@ -1367,8 +1367,7 @@ fn call<'a>(
         memory_mapping,
     )?;
     verify_instruction(syscall, &instruction, &signers)?;
-    invoke_context.record_instruction(&instruction);
-    let message = Message::new(&[instruction], None);
+    let message = Message::new(&[instruction.clone()], None);
     let callee_program_id_index = message.instructions[0].program_id_index as usize;
     let callee_program_id = message.account_keys[callee_program_id_index];
     let (accounts, account_refs) = syscall.translate_accounts(
@@ -1377,6 +1376,8 @@ fn call<'a>(
         account_infos_len,
         memory_mapping,
     )?;
+
+    invoke_context.record_instruction(&instruction);
 
     // Process instruction
 
