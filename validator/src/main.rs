@@ -640,6 +640,7 @@ fn rpc_bootstrap(
     bootstrap_config: RpcBootstrapConfig,
     no_port_check: bool,
     use_progress_bar: bool,
+    maximum_local_snapshot_age: Slot,
 ) {
     if !no_port_check {
         verify_reachable_ports(&node, cluster_entrypoint, &validator_config);
@@ -723,23 +724,40 @@ fn rpc_bootstrap(
             }
 
             if let Some(snapshot_hash) = snapshot_hash {
-                rpc_client
-                    .get_slot_with_commitment(CommitmentConfig::root())
-                    .map_err(|err| format!("Failed to get RPC node slot: {}", err))
-                    .and_then(|slot| {
-                        info!("RPC node root slot: {}", slot);
-                        let (_cluster_info, gossip_exit_flag, gossip_service) =
-                            gossip.take().unwrap();
-                        gossip_exit_flag.store(true, Ordering::Relaxed);
-                        let ret = download_snapshot(
-                            &rpc_contact_info.rpc,
-                            &ledger_path,
-                            snapshot_hash,
-                            use_progress_bar,
-                        );
-                        gossip_service.join().unwrap();
-                        ret
-                    })
+                let mut use_local_snapshot = false;
+
+                if let Some(highest_local_snapshot_slot) =
+                    get_highest_snapshot_archive_path(ledger_path)
+                        .map(|(_path, (slot, _hash, _compression))| slot)
+                {
+                    if highest_local_snapshot_slot > snapshot_hash.0.saturating_sub(maximum_local_snapshot_age) {
+                        info!("Reusing local snapshot at slot {} instead of downloading a newer snapshot for slot {}",
+                              highest_local_snapshot_slot, snapshot_hash.0);
+                        use_local_snapshot = true;
+                    }
+                }
+
+                if use_local_snapshot {
+                    Ok(())
+                } else {
+                    rpc_client
+                        .get_slot_with_commitment(CommitmentConfig::root())
+                        .map_err(|err| format!("Failed to get RPC node slot: {}", err))
+                        .and_then(|slot| {
+                            info!("RPC node root slot: {}", slot);
+                            let (_cluster_info, gossip_exit_flag, gossip_service) =
+                                gossip.take().unwrap();
+                            gossip_exit_flag.store(true, Ordering::Relaxed);
+                            let ret = download_snapshot(
+                                &rpc_contact_info.rpc,
+                                &ledger_path,
+                                snapshot_hash,
+                                use_progress_bar,
+                            );
+                            gossip_service.join().unwrap();
+                            ret
+                        })
+                }
             } else {
                 Ok(())
             }
@@ -803,6 +821,7 @@ fn create_validator(
     rpc_bootstrap_config: RpcBootstrapConfig,
     no_port_check: bool,
     use_progress_bar: bool,
+    maximum_local_snapshot_age: Slot,
 ) -> Validator {
     if validator_config.cuda {
         solana_perf::perf_libs::init_cuda();
@@ -822,6 +841,7 @@ fn create_validator(
             rpc_bootstrap_config,
             no_port_check,
             use_progress_bar,
+            maximum_local_snapshot_age,
         );
     }
 
@@ -1089,6 +1109,16 @@ pub fn main() {
                 .default_value(default_dynamic_port_range)
                 .validator(port_range_validator)
                 .help("Range to use for dynamically assigned ports"),
+        )
+        .arg(
+            Arg::with_name("maximum_local_snapshot_age")
+                .long("maximum-local-snapshot-age")
+                .value_name("NUMBER_OF_SLOTS")
+                .takes_value(true)
+                .default_value("500")
+                .help("Reuse a local snapshot if it's less than this many \
+                       slots behind the highest snapshot available for \
+                       download from other validators"),
         )
         .arg(
             Arg::with_name("snapshot_interval_slots")
@@ -1549,6 +1579,7 @@ pub fn main() {
         .collect();
 
     let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", u64);
+    let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
     let snapshot_path = ledger_path.join("snapshot");
     fs::create_dir_all(&snapshot_path).unwrap_or_else(|err| {
         eprintln!(
@@ -1755,6 +1786,7 @@ pub fn main() {
         rpc_bootstrap_config,
         no_port_check,
         use_progress_bar,
+        maximum_local_snapshot_age,
     );
 
     if let Some(filename) = init_complete_file {
