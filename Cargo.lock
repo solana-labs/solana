@@ -5109,9 +5109,7 @@ dependencies = [
  "solana-metrics",
  "solana-notifier",
  "solana-sdk",
- "solana-transaction-status",
  "solana-version",
- "solana-vote-program",
 ]
 
 [[package]]
