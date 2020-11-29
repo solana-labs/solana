@@ -108,8 +108,8 @@ const GOSSIP_PING_TOKEN_SIZE: usize = 32;
 const GOSSIP_PING_CACHE_CAPACITY: usize = 16384;
 const GOSSIP_PING_CACHE_TTL: Duration = Duration::from_secs(640);
 pub const DEFAULT_CONTACT_DEBUG_INTERVAL: u64 = 10_000;
-/// Limit number of crds values returned when responding to pull-requests.
-const PULL_REQUESTS_OUTPUT_SIZE_LIMIT: usize = 65_536;
+/// Minimum serialized size of a Protocol::PullResponse packet.
+const PULL_RESPONSE_MIN_SERIALIZED_SIZE: usize = 167;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -1969,20 +1969,14 @@ impl ClusterInfo {
             self.stats
                 .pull_requests_count
                 .add_relaxed(requests.len() as u64);
-            let response = self.handle_pull_requests(
-                recycler,
-                requests,
-                stakes,
-                PULL_REQUESTS_OUTPUT_SIZE_LIMIT,
-                feature_set,
-            );
+            let response = self.handle_pull_requests(recycler, requests, stakes, feature_set);
             if !response.is_empty() {
                 let _ = response_sender.send(response);
             }
         }
     }
 
-    fn update_data_budget(&self, num_staked: usize) {
+    fn update_data_budget(&self, num_staked: usize) -> usize {
         const INTERVAL_MS: u64 = 100;
         // allow 50kBps per staked validator, epoch slots + votes ~= 1.5kB/slot ~= 4kB/s
         const BYTES_PER_INTERVAL: usize = 5000;
@@ -1993,7 +1987,7 @@ impl ClusterInfo {
                 bytes + num_staked * BYTES_PER_INTERVAL,
                 MAX_BUDGET_MULTIPLE * num_staked * BYTES_PER_INTERVAL,
             )
-        });
+        })
     }
 
     // Returns a predicate checking if the pull request is from a valid
@@ -2048,14 +2042,14 @@ impl ClusterInfo {
         recycler: &PacketsRecycler,
         requests: Vec<PullData>,
         stakes: &HashMap<Pubkey, u64>,
-        output_size_limit: usize, // Limit number of crds values returned.
         feature_set: Option<&FeatureSet>,
     ) -> Packets {
         let mut time = Measure::start("handle_pull_requests");
         let callers = crds_value::filter_current(requests.iter().map(|r| &r.caller));
         self.time_gossip_write_lock("process_pull_reqs", &self.stats.process_pull_requests)
             .process_pull_requests(callers.cloned(), timestamp());
-        self.update_data_budget(stakes.len());
+        let output_size_limit =
+            self.update_data_budget(stakes.len()) / PULL_RESPONSE_MIN_SERIALIZED_SIZE;
         let mut packets = Packets::new_with_recycler(recycler.clone(), 64, "handle_pull_requests");
         let (caller_and_filters, addrs): (Vec<_>, Vec<_>) = {
             let mut rng = rand::thread_rng();
@@ -3474,6 +3468,17 @@ mod tests {
             PUSH_MESSAGE_MAX_PAYLOAD_SIZE,
             PACKET_DATA_SIZE - serialized_size(&header).unwrap() as usize
         );
+    }
+
+    #[test]
+    fn test_pull_response_min_serialized_size() {
+        let mut rng = rand::thread_rng();
+        for _ in 0..100 {
+            let crds_values = vec![CrdsValue::new_rand(&mut rng, None)];
+            let pull_response = Protocol::PullResponse(Pubkey::new_unique(), crds_values);
+            let size = serialized_size(&pull_response).unwrap();
+            assert!(PULL_RESPONSE_MIN_SERIALIZED_SIZE as u64 <= size);
+        }
     }
 
     #[test]
