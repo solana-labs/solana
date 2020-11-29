@@ -1,7 +1,10 @@
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 use itertools::izip;
 use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusBatch};
-use solana_runtime::{bank::Bank, transaction_utils::OrderedIterator};
+use solana_runtime::{
+    bank::{Bank, NonceRollbackInfo},
+    transaction_utils::OrderedIterator,
+};
 use solana_transaction_status::{InnerInstructions, TransactionStatusMeta};
 use std::{
     sync::{
@@ -58,7 +61,7 @@ impl TransactionStatusService {
         let slot = bank.slot();
         for (
             (_, transaction),
-            (status, hash_age_kind),
+            (status, nonce_rollback),
             pre_balances,
             post_balances,
             inner_instructions,
@@ -72,8 +75,8 @@ impl TransactionStatusService {
             transaction_logs
         ) {
             if Bank::can_commit(&status) && !transaction.signatures.is_empty() {
-                let fee_calculator = hash_age_kind
-                    .and_then(|hash_age_kind| hash_age_kind.fee_calculator())
+                let fee_calculator = nonce_rollback
+                    .map(|nonce_rollback| nonce_rollback.fee_calculator())
                     .unwrap_or_else(|| {
                         bank.get_fee_calculator(&transaction.message().recent_blockhash)
                     })
