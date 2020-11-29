@@ -14,11 +14,14 @@ use {
     },
     solana_metrics::{datapoint_error, datapoint_info},
     solana_notifier::Notifier,
-    solana_sdk::{hash::Hash, native_token::lamports_to_sol, pubkey::Pubkey},
+    solana_sdk::{
+        hash::Hash,
+        native_token::{sol_to_lamports, Sol},
+        pubkey::Pubkey,
+    },
     std::{
         collections::HashMap,
         error,
-        str::FromStr,
         thread::sleep,
         time::{Duration, Instant},
     },
@@ -27,7 +30,7 @@ use {
 struct Config {
     interval: Duration,
     json_rpc_url: String,
-    validator_identity_pubkeys: Vec<String>,
+    validator_identity_pubkeys: Vec<Pubkey>,
     no_duplicate_notifications: bool,
     monitor_active_stake: bool,
     address_labels: HashMap<String, String>,
@@ -119,7 +122,6 @@ fn get_config() -> Config {
     let validator_identity_pubkeys: Vec<_> = pubkeys_of(&matches, "validator_identities")
         .unwrap_or_else(Vec::new)
         .into_iter()
-        .map(|i| i.to_string())
         .collect();
 
     let no_duplicate_notifications = matches.is_present("no_duplicate_notifications");
@@ -142,11 +144,28 @@ fn get_config() -> Config {
     config
 }
 
-fn get_cluster_info(rpc_client: &RpcClient) -> ClientResult<(u64, Hash, RpcVoteAccountStatus)> {
+fn get_cluster_info(
+    config: &Config,
+    rpc_client: &RpcClient,
+) -> ClientResult<(u64, Hash, RpcVoteAccountStatus, HashMap<Pubkey, u64>)> {
     let transaction_count = rpc_client.get_transaction_count()?;
     let recent_blockhash = rpc_client.get_recent_blockhash()?.0;
     let vote_accounts = rpc_client.get_vote_accounts()?;
-    Ok((transaction_count, recent_blockhash, vote_accounts))
+
+    let mut validator_balances = HashMap::new();
+    for validator_identity in &config.validator_identity_pubkeys {
+        validator_balances.insert(
+            *validator_identity,
+            rpc_client.get_balance(&validator_identity)?,
+        );
+    }
+
+    Ok((
+        transaction_count,
+        recent_blockhash,
+        vote_accounts,
+        validator_balances,
+    ))
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -163,8 +182,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut last_success = Instant::now();
 
     loop {
-        let failure = match get_cluster_info(&rpc_client) {
-            Ok((transaction_count, recent_blockhash, vote_accounts)) => {
+        let failure = match get_cluster_info(&config, &rpc_client) {
+            Ok((transaction_count, recent_blockhash, vote_accounts, validator_balances)) => {
                 info!("Current transaction count: {}", transaction_count);
                 info!("Recent blockhash: {}", recent_blockhash);
                 info!("Current validator count: {}", vote_accounts.current.len());
@@ -189,11 +208,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 let total_stake = total_current_stake + total_delinquent_stake;
                 let current_stake_percent = total_current_stake * 100 / total_stake;
                 info!(
-                    "Current stake: {}% | Total stake: {} SOL, current stake: {} SOL, delinquent: {} SOL",
+                    "Current stake: {}% | Total stake: {}, current stake: {}, delinquent: {}",
                     current_stake_percent,
-                    lamports_to_sol(total_stake),
-                    lamports_to_sol(total_current_stake),
-                    lamports_to_sol(total_delinquent_stake)
+                    Sol(total_stake),
+                    Sol(total_current_stake),
+                    Sol(total_delinquent_stake)
                 );
 
                 if transaction_count > last_transaction_count {
@@ -226,41 +245,34 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
                 let mut errors = vec![];
                 for validator_identity in config.validator_identity_pubkeys.iter() {
-                    let formatted_validator_identity =
-                        format_labeled_address(&validator_identity, &config.address_labels);
+                    let formatted_validator_identity = format_labeled_address(
+                        &validator_identity.to_string(),
+                        &config.address_labels,
+                    );
                     if vote_accounts
                         .delinquent
                         .iter()
-                        .any(|vai| vai.node_pubkey == *validator_identity)
+                        .any(|vai| vai.node_pubkey == *validator_identity.to_string())
                     {
                         errors.push(format!("{} delinquent", formatted_validator_identity));
                     } else if !vote_accounts
                         .current
                         .iter()
-                        .any(|vai| vai.node_pubkey == *validator_identity)
+                        .any(|vai| vai.node_pubkey == *validator_identity.to_string())
                     {
                         errors.push(format!("{} missing", formatted_validator_identity));
                     }
 
-                    rpc_client
-                        .get_balance(&Pubkey::from_str(&validator_identity).unwrap_or_default())
-                        .map(lamports_to_sol)
-                        .map(|balance| {
-                            if balance < 10.0 {
-                                // At 1 SOL/day for validator voting fees, this gives over a week to
-                                // find some more SOL
-                                failures.push((
-                                    "balance",
-                                    format!("{} has {} SOL", formatted_validator_identity, balance),
-                                ));
-                            }
-                        })
-                        .unwrap_or_else(|err| {
-                            warn!(
-                                "Failed to get balance of {}: {:?}",
-                                formatted_validator_identity, err
-                            );
-                        });
+                    if let Some(balance) = validator_balances.get(&validator_identity) {
+                        if *balance < sol_to_lamports(10.) {
+                            // At 1 SOL/day for validator voting fees, this gives over a week to
+                            // find some more SOL
+                            failures.push((
+                                "balance",
+                                format!("{} has {}", formatted_validator_identity, Sol(*balance)),
+                            ));
+                        }
+                    }
                 }
 
                 if !errors.is_empty() {
