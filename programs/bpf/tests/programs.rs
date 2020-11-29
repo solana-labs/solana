@@ -745,6 +745,57 @@ fn test_program_bpf_invoke() {
             assert_eq!(i as u8, account.data[i]);
         }
     }
+
+    // Check for program id spoofing
+    {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(50);
+        let mut bank = Bank::new(&genesis_config);
+        let (name, id, entrypoint) = solana_bpf_loader_program!();
+        bank.add_builtin(&name, id, entrypoint);
+        let bank = Arc::new(bank);
+        let bank_client = BankClient::new_shared(&bank);
+
+        let malicious_swap_pubkey = load_bpf_program(
+            &bank_client,
+            &bpf_loader::id(),
+            &mint_keypair,
+            "solana_bpf_rust_spoof1",
+        );
+        let malicious_system_pubkey = load_bpf_program(
+            &bank_client,
+            &bpf_loader::id(),
+            &mint_keypair,
+            "solana_bpf_rust_spoof1_system",
+        );
+
+        let from_pubkey = Pubkey::new_unique();
+        let account = Account::new(10, 0, &solana_sdk::system_program::id());
+        bank.store_account(&from_pubkey, &account);
+
+        let to_pubkey = Pubkey::new_unique();
+        let account = Account::new(0, 0, &solana_sdk::system_program::id());
+        bank.store_account(&to_pubkey, &account);
+
+        let account_metas = vec![
+            AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
+            AccountMeta::new_readonly(malicious_system_pubkey, false),
+            AccountMeta::new(from_pubkey, false),
+            AccountMeta::new(to_pubkey, false),
+        ];
+
+        let instruction = Instruction::new(malicious_swap_pubkey, &(), account_metas.clone());
+        let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            TransactionError::InstructionError(0, InstructionError::ModifiedProgramId)
+        );
+        assert_eq!(10, bank.get_balance(&from_pubkey));
+        assert_eq!(0, bank.get_balance(&to_pubkey));
+    }
 }
 
 #[cfg(feature = "bpf_rust")]

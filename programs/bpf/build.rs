@@ -80,7 +80,8 @@ fn main() {
             "ristretto",
             "sanity",
             "sha256",
-            "call_depth",
+            "spoof1",
+            "spoof1_system",
             "sysval",
         ];
         for program in rust_programs.iter() {
