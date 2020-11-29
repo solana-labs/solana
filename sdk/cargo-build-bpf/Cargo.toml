@@ -1,6 +1,6 @@
 [package]
 name = "solana-cargo-build-bpf"
-version = "1.4.13"
+version = "1.4.14"
 description = "Compile a local package and all of its dependencies using the Solana BPF SDK"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
