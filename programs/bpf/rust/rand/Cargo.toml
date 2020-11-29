@@ -14,7 +14,6 @@ rand = "0.7"
 solana-program = { path = "../../../../sdk/program", version = "1.5.0" }
 
 [lib]
-name = "solana_bpf_rust_rand"
 crate-type = ["cdylib"]
 
 [package.metadata.docs.rs]
