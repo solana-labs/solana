@@ -612,28 +612,31 @@ impl MessageProcessor {
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
         let mut work = |_unique_index: usize, account_index: usize| {
-            let key = &message.account_keys[account_index];
-            let account = &accounts[account_index];
-            // Find the matching PreAccount
-            for pre_account in pre_accounts.iter_mut() {
-                if *key == pre_account.key() {
-                    // Verify account has no outstanding references and take one
-                    let account = account
-                        .try_borrow_mut()
-                        .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
+            if account_index < message.account_keys.len() && account_index < accounts.len() {
+                let key = &message.account_keys[account_index];
+                let account = &accounts[account_index];
+                // Find the matching PreAccount
+                for pre_account in pre_accounts.iter_mut() {
+                    if *key == pre_account.key() {
+                        // Verify account has no outstanding references and take one
+                        let account = account
+                            .try_borrow_mut()
+                            .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
 
-                    pre_account.verify(&program_id, &rent, &account)?;
-                    pre_sum += u128::from(pre_account.lamports());
-                    post_sum += u128::from(account.lamports);
+                        pre_account.verify(&program_id, &rent, &account)?;
+                        pre_sum += u128::from(pre_account.lamports());
+                        post_sum += u128::from(account.lamports);
 
-                    pre_account.update(&account);
+                        pre_account.update(&account);
 
-                    return Ok(());
+                        return Ok(());
+                    }
                 }
             }
             Err(InstructionError::MissingAccount)
         };
         instruction.visit_each_account(&mut work)?;
+        work(0, instruction.program_id_index as usize)?;
 
         // Verify that the total sum of all the lamports did not change
         if pre_sum != post_sum {
@@ -749,6 +752,7 @@ mod tests {
         message::Message,
         native_loader::create_loadable_account,
     };
+    use std::iter::FromIterator;
 
     #[test]
     fn test_invoke_context() {
@@ -772,6 +776,11 @@ mod tests {
                 true,
             ))
         }
+        let account = Account::new(1, 1, &solana_sdk::pubkey::Pubkey::default());
+        for program_id in program_ids.iter() {
+            pre_accounts.push(PreAccount::new(program_id, &account.clone(), false, true));
+        }
+
         let mut invoke_context = ThisInvokeContext::new(
             &program_ids[0],
             Rent::default(),
@@ -809,12 +818,15 @@ mod tests {
 
             // modify account owned by the program
             accounts[owned_index].borrow_mut().data[0] = (MAX_DEPTH + owned_index) as u8;
+            let mut these_accounts =
+                Vec::from_iter(accounts[not_owned_index..owned_index + 1].iter().cloned());
+            these_accounts.push(Rc::new(RefCell::new(Account::new(
+                1,
+                1,
+                &solana_sdk::pubkey::Pubkey::default(),
+            ))));
             invoke_context
-                .verify_and_update(
-                    &message,
-                    &message.instructions[0],
-                    &accounts[not_owned_index..owned_index + 1],
-                )
+                .verify_and_update(&message, &message.instructions[0], &these_accounts)
                 .unwrap();
             assert_eq!(
                 invoke_context.pre_accounts[owned_index].data[0],
@@ -1592,7 +1604,9 @@ mod tests {
 
         let mut program_account = Account::new(1, 0, &native_loader::id());
         program_account.executable = true;
-        let executable_accounts = vec![(callee_program_id, RefCell::new(program_account))];
+        let executable_preaccount =
+            PreAccount::new(&callee_program_id, &program_account, false, true);
+        let executable_accounts = vec![(callee_program_id, RefCell::new(program_account.clone()))];
 
         let owned_key = solana_sdk::pubkey::new_rand();
         let owned_account = Account::new(42, 1, &callee_program_id);
@@ -1606,13 +1620,18 @@ mod tests {
         let mut accounts = vec![
             Rc::new(RefCell::new(owned_account)),
             Rc::new(RefCell::new(not_owned_account)),
+            Rc::new(RefCell::new(program_account)),
         ];
         let programs: Vec<(_, ProcessInstructionWithContext)> =
             vec![(callee_program_id, mock_process_instruction)];
         let mut invoke_context = ThisInvokeContext::new(
             &caller_program_id,
             Rent::default(),
-            vec![owned_preaccount, not_owned_preaccount],
+            vec![
+                owned_preaccount,
+                not_owned_preaccount,
+                executable_preaccount,
+            ],
             programs.as_slice(),
             None,
             BpfComputeBudget::default(),
