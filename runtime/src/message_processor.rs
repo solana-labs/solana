@@ -1622,17 +1622,12 @@ mod tests {
         let mut invoke_context = ThisInvokeContext::new(
             &caller_program_id,
             Rent::default(),
-<<<<<<< HEAD
-            vec![owned_preaccount, not_owned_preaccount],
-            vec![],
-=======
             vec![
                 owned_preaccount,
                 not_owned_preaccount,
                 executable_preaccount,
             ],
-            programs.as_slice(),
->>>>>>> ce4304cc9... Add extra checks to verify_and_update (#13848)
+            vec![],
             None,
             ComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
