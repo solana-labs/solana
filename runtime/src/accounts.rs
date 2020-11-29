@@ -4,7 +4,9 @@ use crate::{
     },
     accounts_index::{AccountsIndex, Ancestors},
     append_vec::StoredAccount,
-    bank::{HashAgeKind, TransactionProcessResult},
+    bank::{
+        NonceRollbackFull, NonceRollbackInfo, TransactionCheckResult, TransactionExecutionResult,
+    },
     blockhash_queue::BlockhashQueue,
     rent_collector::RentCollector,
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
@@ -63,7 +65,10 @@ pub type TransactionAccounts = Vec<Account>;
 pub type TransactionRent = u64;
 pub type TransactionLoaders = Vec<Vec<(Pubkey, Account)>>;
 
-pub type TransactionLoadResult = (TransactionAccounts, TransactionLoaders, TransactionRent);
+pub type TransactionLoadResult = (
+    Result<(TransactionAccounts, TransactionLoaders, TransactionRent)>,
+    Option<NonceRollbackFull>,
+);
 
 pub enum AccountAddressFilter {
     Exclude, // exclude all addresses matching the filter
@@ -300,12 +305,12 @@ impl Accounts {
         ancestors: &Ancestors,
         txs: &[Transaction],
         txs_iteration_order: Option<&[usize]>,
-        lock_results: Vec<TransactionProcessResult>,
+        lock_results: Vec<TransactionCheckResult>,
         hash_queue: &BlockhashQueue,
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
-    ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
+    ) -> Vec<TransactionLoadResult> {
         let accounts_index = &self.accounts_db.accounts_index;
 
         let fee_config = FeeConfig {
@@ -315,10 +320,10 @@ impl Accounts {
         OrderedIterator::new(txs, txs_iteration_order)
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
-                ((_, tx), (Ok(()), hash_age_kind)) => {
-                    let fee_calculator = hash_age_kind
+                ((_, tx), (Ok(()), nonce_rollback)) => {
+                    let fee_calculator = nonce_rollback
                         .as_ref()
-                        .and_then(|hash_age_kind| hash_age_kind.fee_calculator())
+                        .map(|nonce_rollback| nonce_rollback.fee_calculator())
                         .unwrap_or_else(|| {
                             hash_queue
                                 .get_fee_calculator(&tx.message().recent_blockhash)
@@ -327,7 +332,7 @@ impl Accounts {
                     let fee = if let Some(fee_calculator) = fee_calculator {
                         fee_calculator.calculate_fee_with_config(tx.message(), &fee_config)
                     } else {
-                        return (Err(TransactionError::BlockhashNotFound), hash_age_kind);
+                        return (Err(TransactionError::BlockhashNotFound), None);
                     };
 
                     let load_res = self.load_tx_accounts(
@@ -342,7 +347,7 @@ impl Accounts {
                     );
                     let (accounts, rents) = match load_res {
                         Ok((a, r)) => (a, r),
-                        Err(e) => return (Err(e), hash_age_kind),
+                        Err(e) => return (Err(e), None),
                     };
 
                     let load_res = Self::load_loaders(
@@ -354,22 +359,26 @@ impl Accounts {
                     );
                     let loaders = match load_res {
                         Ok(loaders) => loaders,
-                        Err(e) => return (Err(e), hash_age_kind),
+                        Err(e) => return (Err(e), None),
                     };
 
-                    // Update hash_age_kind with fee-subtracted accounts
-                    let hash_age_kind = if let Some(hash_age_kind) = hash_age_kind {
-                        match hash_age_kind.finish_partial(tx.message(), &accounts) {
-                            Ok(hash_age_kind) => Some(hash_age_kind),
-                            Err(e) => return (Err(e), Some(hash_age_kind)),
+                    // Update nonce_rollback with fee-subtracted accounts
+                    let nonce_rollback = if let Some(nonce_rollback) = nonce_rollback {
+                        match NonceRollbackFull::from_partial(
+                            nonce_rollback,
+                            tx.message(),
+                            &accounts,
+                        ) {
+                            Ok(nonce_rollback) => Some(nonce_rollback),
+                            Err(e) => return (Err(e), None),
                         }
                     } else {
                         None
                     };
 
-                    (Ok((accounts, loaders, rents)), hash_age_kind)
+                    (Ok((accounts, loaders, rents)), nonce_rollback)
                 }
-                (_, (Err(e), hash_age_kind)) => (Err(e), hash_age_kind),
+                (_, (Err(e), _nonce_rollback)) => (Err(e), None),
             })
             .collect()
     }
@@ -754,8 +763,8 @@ impl Accounts {
         slot: Slot,
         txs: &[Transaction],
         txs_iteration_order: Option<&[usize]>,
-        res: &[TransactionProcessResult],
-        loaded: &mut [(Result<TransactionLoadResult>, Option<HashAgeKind>)],
+        res: &[TransactionExecutionResult],
+        loaded: &mut [TransactionLoadResult],
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
@@ -792,15 +801,15 @@ impl Accounts {
         &self,
         txs: &'a [Transaction],
         txs_iteration_order: Option<&'a [usize]>,
-        res: &'a [TransactionProcessResult],
-        loaded: &'a mut [(Result<TransactionLoadResult>, Option<HashAgeKind>)],
+        res: &'a [TransactionExecutionResult],
+        loaded: &'a mut [TransactionLoadResult],
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
         rent_fix_enabled: bool,
     ) -> Vec<(&'a Pubkey, &'a Account)> {
         let mut accounts = Vec::with_capacity(loaded.len());
-        for (i, ((raccs, _hash_age_kind), (_, tx))) in loaded
+        for (i, ((raccs, _nonce_rollback), (_, tx))) in loaded
             .iter_mut()
             .zip(OrderedIterator::new(txs, txs_iteration_order))
             .enumerate()
@@ -808,20 +817,22 @@ impl Accounts {
             if raccs.is_err() {
                 continue;
             }
-            let (res, hash_age_kind) = &res[i];
-            let maybe_nonce = match (res, hash_age_kind) {
-                (Ok(_), Some(HashAgeKind::DurableNonceFull(pubkey, acc, maybe_fee_account))) => {
+            let (res, nonce_rollback) = &res[i];
+            let maybe_nonce_rollback = match (res, nonce_rollback) {
+                (Ok(_), Some(nonce_rollback)) => {
+                    let pubkey = nonce_rollback.nonce_address();
+                    let acc = nonce_rollback.nonce_account();
+                    let maybe_fee_account = nonce_rollback.fee_account();
                     Some((pubkey, acc, maybe_fee_account))
                 }
-                (
-                    Err(TransactionError::InstructionError(_, _)),
-                    Some(HashAgeKind::DurableNonceFull(pubkey, acc, maybe_fee_account)),
-                ) => Some((pubkey, acc, maybe_fee_account)),
-                (_, Some(HashAgeKind::DurableNoncePartial(_, _))) => {
-                    panic!("collect: unexpected HashAgeKind variant")
+                (Err(TransactionError::InstructionError(_, _)), Some(nonce_rollback)) => {
+                    let pubkey = nonce_rollback.nonce_address();
+                    let acc = nonce_rollback.nonce_account();
+                    let maybe_fee_account = nonce_rollback.fee_account();
+                    Some((pubkey, acc, maybe_fee_account))
                 }
-                (Ok(_), _hash_age_kind) => None,
-                (Err(_), _hash_age_kind) => continue,
+                (Ok(_), _nonce_rollback) => None,
+                (Err(_), _nonce_rollback) => continue,
             };
 
             let message = &tx.message();
@@ -838,7 +849,7 @@ impl Accounts {
                     account,
                     key,
                     res,
-                    maybe_nonce,
+                    maybe_nonce_rollback,
                     last_blockhash_with_fee_calculator,
                     fix_recent_blockhashes_sysvar_delay,
                 );
@@ -848,10 +859,10 @@ impl Accounts {
                 let is_fee_payer = Some(i) == fee_payer_index;
                 if message.is_writable(i)
                     && (res.is_ok()
-                        || (maybe_nonce.is_some() && (is_nonce_account || is_fee_payer)))
+                        || (maybe_nonce_rollback.is_some() && (is_nonce_account || is_fee_payer)))
                 {
                     if res.is_err() {
-                        match (is_nonce_account, is_fee_payer, maybe_nonce) {
+                        match (is_nonce_account, is_fee_payer, maybe_nonce_rollback) {
                             // nonce is fee-payer, state updated in `prepare_if_nonce_account()`
                             (true, true, Some((_, _, None))) => (),
                             // nonce not fee-payer, state updated in `prepare_if_nonce_account()`
@@ -882,11 +893,11 @@ pub fn prepare_if_nonce_account(
     account: &mut Account,
     account_pubkey: &Pubkey,
     tx_result: &Result<()>,
-    maybe_nonce: Option<(&Pubkey, &Account, &Option<Account>)>,
+    maybe_nonce_rollback: Option<(&Pubkey, &Account, Option<&Account>)>,
     last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
     fix_recent_blockhashes_sysvar_delay: bool,
 ) -> bool {
-    if let Some((nonce_key, nonce_acc, _maybe_fee_account)) = maybe_nonce {
+    if let Some((nonce_key, nonce_acc, _maybe_fee_account)) = maybe_nonce_rollback {
         if account_pubkey == nonce_key {
             let overwrite = if tx_result.is_err() {
                 // Nonce TX failed with an InstructionError. Roll back
@@ -947,7 +958,7 @@ mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
 
     use super::*;
-    use crate::{bank::HashAgeKind, rent_collector::RentCollector};
+    use crate::rent_collector::RentCollector;
     use solana_sdk::{
         account::Account,
         epoch_schedule::EpochSchedule,
@@ -972,7 +983,7 @@ mod tests {
         fee_calculator: &FeeCalculator,
         rent_collector: &RentCollector,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
+    ) -> Vec<TransactionLoadResult> {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, &fee_calculator);
         let accounts = Accounts::new(Vec::new(), &ClusterType::Development);
@@ -985,7 +996,7 @@ mod tests {
             &ancestors,
             &[tx],
             None,
-            vec![(Ok(()), Some(HashAgeKind::Extant))],
+            vec![(Ok(()), None)],
             &hash_queue,
             error_counters,
             rent_collector,
@@ -998,7 +1009,7 @@ mod tests {
         ka: &[(Pubkey, Account)],
         fee_calculator: &FeeCalculator,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
+    ) -> Vec<TransactionLoadResult> {
         let rent_collector = RentCollector::default();
         load_accounts_with_fee_and_rent(tx, ka, fee_calculator, &rent_collector, error_counters)
     }
@@ -1007,7 +1018,7 @@ mod tests {
         tx: Transaction,
         ka: &[(Pubkey, Account)],
         error_counters: &mut ErrorCounters,
-    ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
+    ) -> Vec<TransactionLoadResult> {
         let fee_calculator = FeeCalculator::default();
         load_accounts_with_fee(tx, ka, &fee_calculator, error_counters)
     }
@@ -1032,10 +1043,7 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0],
-            (
-                Err(TransactionError::AccountNotFound),
-                Some(HashAgeKind::Extant)
-            )
+            (Err(TransactionError::AccountNotFound), None,)
         );
     }
 
@@ -1061,10 +1069,7 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0],
-            (
-                Err(TransactionError::AccountNotFound),
-                Some(HashAgeKind::Extant)
-            ),
+            (Err(TransactionError::AccountNotFound), None,),
         );
     }
 
@@ -1098,10 +1103,7 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0],
-            (
-                Err(TransactionError::ProgramAccountNotFound),
-                Some(HashAgeKind::Extant)
-            )
+            (Err(TransactionError::ProgramAccountNotFound), None,)
         );
     }
 
@@ -1135,10 +1137,7 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0].clone(),
-            (
-                Err(TransactionError::InsufficientFundsForFee),
-                Some(HashAgeKind::Extant)
-            ),
+            (Err(TransactionError::InsufficientFundsForFee), None,),
         );
     }
 
@@ -1168,10 +1167,7 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0],
-            (
-                Err(TransactionError::InvalidAccountForFee),
-                Some(HashAgeKind::Extant)
-            ),
+            (Err(TransactionError::InvalidAccountForFee), None,),
         );
     }
 
@@ -1219,7 +1215,7 @@ mod tests {
             &mut error_counters,
         );
         assert_eq!(loaded_accounts.len(), 1);
-        let (load_res, _hash_age_kind) = &loaded_accounts[0];
+        let (load_res, _nonce_rollback) = &loaded_accounts[0];
         let (tx_accounts, _loaders, _rents) = load_res.as_ref().unwrap();
         assert_eq!(tx_accounts[0].lamports, min_balance);
 
@@ -1233,7 +1229,7 @@ mod tests {
             &mut error_counters,
         );
         assert_eq!(loaded_accounts.len(), 1);
-        let (load_res, _hash_age_kind) = &loaded_accounts[0];
+        let (load_res, _nonce_rollback) = &loaded_accounts[0];
         assert_eq!(*load_res, Err(TransactionError::InsufficientFundsForFee));
 
         // Fee leaves non-zero, but sub-min_balance balance fails
@@ -1246,7 +1242,7 @@ mod tests {
             &mut error_counters,
         );
         assert_eq!(loaded_accounts.len(), 1);
-        let (load_res, _hash_age_kind) = &loaded_accounts[0];
+        let (load_res, _nonce_rollback) = &loaded_accounts[0];
         assert_eq!(*load_res, Err(TransactionError::InsufficientFundsForFee));
     }
 
@@ -1283,14 +1279,14 @@ mod tests {
         match &loaded_accounts[0] {
             (
                 Ok((transaction_accounts, transaction_loaders, _transaction_rents)),
-                _hash_age_kind,
+                _nonce_rollback,
             ) => {
                 assert_eq!(transaction_accounts.len(), 3);
                 assert_eq!(transaction_accounts[0], accounts[0].1);
                 assert_eq!(transaction_loaders.len(), 1);
                 assert_eq!(transaction_loaders[0].len(), 0);
             }
-            (Err(e), _hash_age_kind) => Err(e).unwrap(),
+            (Err(e), _nonce_rollback) => Err(e).unwrap(),
         }
     }
 
@@ -1356,10 +1352,7 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0],
-            (
-                Err(TransactionError::CallChainTooDeep),
-                Some(HashAgeKind::Extant)
-            )
+            (Err(TransactionError::CallChainTooDeep), None,)
         );
     }
 
@@ -1394,10 +1387,7 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0],
-            (
-                Err(TransactionError::InvalidProgramForExecution),
-                Some(HashAgeKind::Extant)
-            )
+            (Err(TransactionError::InvalidProgramForExecution), None,)
         );
     }
 
@@ -1432,10 +1422,7 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0],
-            (
-                Err(TransactionError::ProgramAccountNotFound),
-                Some(HashAgeKind::Extant)
-            )
+            (Err(TransactionError::ProgramAccountNotFound), None,)
         );
     }
 
@@ -1469,10 +1456,7 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0],
-            (
-                Err(TransactionError::InvalidProgramForExecution),
-                Some(HashAgeKind::Extant)
-            )
+            (Err(TransactionError::InvalidProgramForExecution), None,)
         );
     }
 
@@ -1521,7 +1505,7 @@ mod tests {
         match &loaded_accounts[0] {
             (
                 Ok((transaction_accounts, transaction_loaders, _transaction_rents)),
-                _hash_age_kind,
+                _nonce_rollback,
             ) => {
                 assert_eq!(transaction_accounts.len(), 3);
                 assert_eq!(transaction_accounts[0], accounts[0].1);
@@ -1535,7 +1519,7 @@ mod tests {
                     }
                 }
             }
-            (Err(e), _hash_age_kind) => Err(e).unwrap(),
+            (Err(e), _nonce_rollback) => Err(e).unwrap(),
         }
     }
 
@@ -1807,10 +1791,7 @@ mod tests {
         let tx1 = Transaction::new(&[&keypair1], message, Hash::default());
         let txs = vec![tx0, tx1];
 
-        let loaders = vec![
-            (Ok(()), Some(HashAgeKind::Extant)),
-            (Ok(()), Some(HashAgeKind::Extant)),
-        ];
+        let loaders = vec![(Ok(()), None), (Ok(()), None)];
 
         let account0 = Account::new(1, 0, &Pubkey::default());
         let account1 = Account::new(2, 0, &Pubkey::default());
@@ -1825,7 +1806,7 @@ mod tests {
                 transaction_loaders0,
                 transaction_rent0,
             )),
-            Some(HashAgeKind::Extant),
+            None,
         );
 
         let transaction_accounts1 = vec![account1, account2];
@@ -1837,7 +1818,7 @@ mod tests {
                 transaction_loaders1,
                 transaction_rent1,
             )),
-            Some(HashAgeKind::Extant),
+            None,
         );
 
         let mut loaded = vec![loaded0, loaded1];
@@ -1913,10 +1894,7 @@ mod tests {
         accounts.accounts_db.clean_accounts(None);
     }
 
-    fn load_accounts_no_store(
-        accounts: &Accounts,
-        tx: Transaction,
-    ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
+    fn load_accounts_no_store(accounts: &Accounts, tx: Transaction) -> Vec<TransactionLoadResult> {
         let rent_collector = RentCollector::default();
         let fee_calculator = FeeCalculator::new(10);
         let mut hash_queue = BlockhashQueue::new(100);
@@ -1928,7 +1906,7 @@ mod tests {
             &ancestors,
             &[tx],
             None,
-            vec![(Ok(()), Some(HashAgeKind::Extant))],
+            vec![(Ok(()), None)],
             &hash_queue,
             &mut error_counters,
             &rent_collector,
@@ -1989,12 +1967,12 @@ mod tests {
         account: &mut Account,
         account_pubkey: &Pubkey,
         tx_result: &Result<()>,
-        maybe_nonce: Option<(&Pubkey, &Account, &Option<Account>)>,
+        maybe_nonce_rollback: Option<(&Pubkey, &Account, Option<&Account>)>,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         expect_account: &Account,
     ) -> bool {
         // Verify expect_account's relationship
-        match maybe_nonce {
+        match maybe_nonce_rollback {
             Some((nonce_pubkey, _nonce_account, _maybe_fee_account))
                 if nonce_pubkey == account_pubkey && tx_result.is_ok() =>
             {
@@ -2012,7 +1990,7 @@ mod tests {
             account,
             account_pubkey,
             tx_result,
-            maybe_nonce,
+            maybe_nonce_rollback,
             last_blockhash_with_fee_calculator,
             true,
         );
@@ -2041,7 +2019,11 @@ mod tests {
             &mut post_account,
             &post_account_pubkey,
             &Ok(()),
-            Some((&pre_account_pubkey, &pre_account, &maybe_fee_account)),
+            Some((
+                &pre_account_pubkey,
+                &pre_account,
+                maybe_fee_account.as_ref()
+            )),
             &(last_blockhash, last_fee_calculator),
             &expect_account,
         ));
@@ -2088,7 +2070,11 @@ mod tests {
             &mut post_account,
             &Pubkey::new(&[1u8; 32]),
             &Ok(()),
-            Some((&pre_account_pubkey, &pre_account, &maybe_fee_account)),
+            Some((
+                &pre_account_pubkey,
+                &pre_account,
+                maybe_fee_account.as_ref()
+            )),
             &(last_blockhash, last_fee_calculator),
             &expect_account,
         ));
@@ -2124,7 +2110,11 @@ mod tests {
                 0,
                 InstructionError::InvalidArgument,
             )),
-            Some((&pre_account_pubkey, &pre_account, &maybe_fee_account)),
+            Some((
+                &pre_account_pubkey,
+                &pre_account,
+                maybe_fee_account.as_ref()
+            )),
             &(last_blockhash, last_fee_calculator),
             &expect_account,
         ));
@@ -2158,7 +2148,7 @@ mod tests {
         let nonce_account_pre = Account::new_data(42, &nonce_state, &system_program::id()).unwrap();
         let from_account_pre = Account::new(4242, 0, &Pubkey::default());
 
-        let hash_age_kind = Some(HashAgeKind::DurableNonceFull(
+        let nonce_rollback = Some(NonceRollbackFull::new(
             nonce_address,
             nonce_account_pre.clone(),
             Some(from_account_pre.clone()),
@@ -2168,7 +2158,7 @@ mod tests {
                 1,
                 InstructionError::InvalidArgument,
             )),
-            hash_age_kind.clone(),
+            nonce_rollback.clone(),
         )];
 
         let nonce_state =
@@ -2196,7 +2186,7 @@ mod tests {
         let transaction_rent = 0;
         let loaded = (
             Ok((transaction_accounts, transaction_loaders, transaction_rent)),
-            hash_age_kind,
+            nonce_rollback,
         );
 
         let mut loaded = vec![loaded];
@@ -2263,7 +2253,7 @@ mod tests {
             }));
         let nonce_account_pre = Account::new_data(42, &nonce_state, &system_program::id()).unwrap();
 
-        let hash_age_kind = Some(HashAgeKind::DurableNonceFull(
+        let nonce_rollback = Some(NonceRollbackFull::new(
             nonce_address,
             nonce_account_pre.clone(),
             None,
@@ -2273,7 +2263,7 @@ mod tests {
                 1,
                 InstructionError::InvalidArgument,
             )),
-            hash_age_kind.clone(),
+            nonce_rollback.clone(),
         )];
 
         let nonce_state =
@@ -2301,7 +2291,7 @@ mod tests {
         let transaction_rent = 0;
         let loaded = (
             Ok((transaction_accounts, transaction_loaders, transaction_rent)),
-            hash_age_kind,
+            nonce_rollback,
         );
 
         let mut loaded = vec![loaded];

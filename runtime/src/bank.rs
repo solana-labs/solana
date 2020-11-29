@@ -369,10 +369,11 @@ impl StatusCacheRc {
     }
 }
 
-pub type TransactionProcessResult = (Result<()>, Option<HashAgeKind>);
+pub type TransactionCheckResult = (Result<()>, Option<NonceRollbackPartial>);
+pub type TransactionExecutionResult = (Result<()>, Option<NonceRollbackFull>);
 pub struct TransactionResults {
     pub fee_collection_results: Vec<Result<()>>,
-    pub processing_results: Vec<TransactionProcessResult>,
+    pub execution_results: Vec<TransactionExecutionResult>,
     pub overwritten_vote_accounts: Vec<OverwrittenVoteAccount>,
 }
 pub struct TransactionBalancesSet {
@@ -444,62 +445,110 @@ pub struct TransactionLogCollector {
     pub mentioned_address_map: HashMap<Pubkey, Vec<usize>>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum HashAgeKind {
-    Extant,
-    DurableNoncePartial(Pubkey, Account),
-    DurableNonceFull(Pubkey, Account, Option<Account>),
+pub trait NonceRollbackInfo {
+    fn nonce_address(&self) -> &Pubkey;
+    fn nonce_account(&self) -> &Account;
+    fn fee_calculator(&self) -> Option<FeeCalculator>;
+    fn fee_account(&self) -> Option<&Account>;
 }
 
-impl HashAgeKind {
-    pub fn is_durable_nonce(&self) -> bool {
-        match self {
-            Self::Extant => false,
-            Self::DurableNoncePartial(_, _) => true,
-            Self::DurableNonceFull(_, _, _) => true,
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct NonceRollbackPartial {
+    nonce_address: Pubkey,
+    nonce_account: Account,
+}
+
+impl NonceRollbackPartial {
+    pub fn new(nonce_address: Pubkey, nonce_account: Account) -> Self {
+        Self {
+            nonce_address,
+            nonce_account,
         }
     }
+}
 
-    pub fn fee_calculator(&self) -> Option<Option<FeeCalculator>> {
-        match self {
-            Self::Extant => None,
-            Self::DurableNoncePartial(_, account) => {
-                Some(nonce_account::fee_calculator_of(account))
-            }
-            Self::DurableNonceFull(_, account, _) => {
-                Some(nonce_account::fee_calculator_of(account))
-            }
+impl NonceRollbackInfo for NonceRollbackPartial {
+    fn nonce_address(&self) -> &Pubkey {
+        &self.nonce_address
+    }
+    fn nonce_account(&self) -> &Account {
+        &self.nonce_account
+    }
+    fn fee_calculator(&self) -> Option<FeeCalculator> {
+        nonce_account::fee_calculator_of(&self.nonce_account)
+    }
+    fn fee_account(&self) -> Option<&Account> {
+        None
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct NonceRollbackFull {
+    nonce_address: Pubkey,
+    nonce_account: Account,
+    fee_account: Option<Account>,
+}
+
+impl NonceRollbackFull {
+    #[cfg(test)]
+    pub fn new(
+        nonce_address: Pubkey,
+        nonce_account: Account,
+        fee_account: Option<Account>,
+    ) -> Self {
+        Self {
+            nonce_address,
+            nonce_account,
+            fee_account,
         }
     }
-
-    pub fn finish_partial(&self, message: &Message, accounts: &[Account]) -> Result<Self> {
-        match self {
-            HashAgeKind::Extant => Ok(HashAgeKind::Extant),
-            HashAgeKind::DurableNoncePartial(pubkey, account) => {
-                let fee_payer = message
-                    .account_keys
-                    .iter()
-                    .enumerate()
-                    .find(|(i, k)| Accounts::is_non_loader_key(message, k, *i))
-                    .and_then(|(i, k)| accounts.get(i).cloned().map(|a| (*k, a)));
-                if let Some((fee_pubkey, fee_account)) = fee_payer {
-                    if fee_pubkey == *pubkey {
-                        Ok(HashAgeKind::DurableNonceFull(*pubkey, fee_account, None))
-                    } else {
-                        Ok(HashAgeKind::DurableNonceFull(
-                            *pubkey,
-                            account.clone(),
-                            Some(fee_account),
-                        ))
-                    }
-                } else {
-                    Err(TransactionError::AccountNotFound)
-                }
+    pub fn from_partial(
+        partial: NonceRollbackPartial,
+        message: &Message,
+        accounts: &[Account],
+    ) -> Result<Self> {
+        let NonceRollbackPartial {
+            nonce_address,
+            nonce_account,
+        } = partial;
+        let fee_payer = message
+            .account_keys
+            .iter()
+            .enumerate()
+            .find(|(i, k)| Accounts::is_non_loader_key(message, k, *i))
+            .and_then(|(i, k)| accounts.get(i).cloned().map(|a| (*k, a)));
+        if let Some((fee_pubkey, fee_account)) = fee_payer {
+            if fee_pubkey == nonce_address {
+                Ok(Self {
+                    nonce_address,
+                    nonce_account: fee_account,
+                    fee_account: None,
+                })
+            } else {
+                Ok(Self {
+                    nonce_address,
+                    nonce_account,
+                    fee_account: Some(fee_account),
+                })
             }
-            HashAgeKind::DurableNonceFull(_, _, _) => {
-                panic!("update: unexpected HashAgeKind variant")
-            }
+        } else {
+            Err(TransactionError::AccountNotFound)
         }
+    }
+}
+
+impl NonceRollbackInfo for NonceRollbackFull {
+    fn nonce_address(&self) -> &Pubkey {
+        &self.nonce_address
+    }
+    fn nonce_account(&self) -> &Account {
+        &self.nonce_account
+    }
+    fn fee_calculator(&self) -> Option<FeeCalculator> {
+        nonce_account::fee_calculator_of(&self.nonce_account)
+    }
+    fn fee_account(&self) -> Option<&Account> {
+        self.fee_account.as_ref()
     }
 }
 
@@ -2117,11 +2166,11 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        res: &[TransactionProcessResult],
+        res: &[TransactionExecutionResult],
     ) {
         let mut status_cache = self.src.status_cache.write().unwrap();
         for (i, (_, tx)) in OrderedIterator::new(txs, iteration_order).enumerate() {
-            let (res, _hash_age_kind) = &res[i];
+            let (res, _nonce_rollback) = &res[i];
             if Self::can_commit(res) && !tx.signatures.is_empty() {
                 status_cache.insert(
                     &tx.message().recent_blockhash,
@@ -2255,9 +2304,9 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        results: Vec<TransactionProcessResult>,
+        results: Vec<TransactionCheckResult>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)> {
+    ) -> Vec<TransactionLoadResult> {
         self.rc.accounts.load_accounts(
             &self.ancestors,
             txs,
@@ -2277,7 +2326,7 @@ impl Bank {
         lock_results: Vec<Result<()>>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionProcessResult> {
+    ) -> Vec<TransactionCheckResult> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         OrderedIterator::new(txs, iteration_order)
             .zip(lock_results.into_iter())
@@ -2286,9 +2335,9 @@ impl Bank {
                     let message = tx.message();
                     let hash_age = hash_queue.check_hash_age(&message.recent_blockhash, max_age);
                     if hash_age == Some(true) {
-                        (Ok(()), Some(HashAgeKind::Extant))
+                        (Ok(()), None)
                     } else if let Some((pubkey, acc)) = self.check_tx_durable_nonce(&tx) {
-                        (Ok(()), Some(HashAgeKind::DurableNoncePartial(pubkey, acc)))
+                        (Ok(()), Some(NonceRollbackPartial::new(pubkey, acc)))
                     } else if hash_age == Some(false) {
                         error_counters.blockhash_too_old += 1;
                         (Err(TransactionError::BlockhashNotFound), None)
@@ -2306,9 +2355,9 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        lock_results: Vec<TransactionProcessResult>,
+        lock_results: Vec<TransactionCheckResult>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionProcessResult> {
+    ) -> Vec<TransactionCheckResult> {
         let rcache = self.src.status_cache.read().unwrap();
         OrderedIterator::new(txs, iteration_order)
             .zip(lock_results.into_iter())
@@ -2317,7 +2366,7 @@ impl Bank {
                     return lock_res;
                 }
                 {
-                    let (lock_res, hash_age_kind) = &lock_res;
+                    let (lock_res, _nonce_rollback) = &lock_res;
                     if lock_res.is_ok()
                         && rcache
                             .get_signature_status(
@@ -2328,10 +2377,7 @@ impl Bank {
                             .is_some()
                     {
                         error_counters.duplicate_signature += 1;
-                        return (
-                            Err(TransactionError::DuplicateSignature),
-                            hash_age_kind.clone(),
-                        );
+                        return (Err(TransactionError::DuplicateSignature), None);
                     }
                 }
                 lock_res
@@ -2343,9 +2389,9 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        lock_results: Vec<TransactionProcessResult>,
+        lock_results: Vec<TransactionCheckResult>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionProcessResult> {
+    ) -> Vec<TransactionCheckResult> {
         OrderedIterator::new(txs, iteration_order)
             .zip(lock_results.into_iter())
             .map(|((_, tx), lock_res)| {
@@ -2401,7 +2447,7 @@ impl Bank {
         lock_results: &[Result<()>],
         max_age: usize,
         mut error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionProcessResult> {
+    ) -> Vec<TransactionCheckResult> {
         let age_results = self.check_age(
             txs,
             iteration_order,
@@ -2627,8 +2673,8 @@ impl Bank {
         enable_cpi_recording: bool,
         enable_log_recording: bool,
     ) -> (
-        Vec<(Result<TransactionLoadResult>, Option<HashAgeKind>)>,
-        Vec<TransactionProcessResult>,
+        Vec<TransactionLoadResult>,
+        Vec<TransactionExecutionResult>,
         Vec<Option<InnerInstructionsList>>,
         Vec<TransactionLogMessages>,
         Vec<usize>,
@@ -2678,12 +2724,12 @@ impl Bank {
             .bpf_compute_budget
             .unwrap_or_else(|| BpfComputeBudget::new(&self.feature_set));
 
-        let executed: Vec<TransactionProcessResult> = loaded_accounts
+        let executed: Vec<TransactionExecutionResult> = loaded_accounts
             .iter_mut()
             .zip(OrderedIterator::new(txs, batch.iteration_order()))
             .map(|(accs, (_, tx))| match accs {
-                (Err(e), hash_age_kind) => (Err(e.clone()), hash_age_kind.clone()),
-                (Ok((accounts, loaders, _rents)), hash_age_kind) => {
+                (Err(e), _nonce_rollback) => (Err(e.clone()), None),
+                (Ok((accounts, loaders, _rents)), nonce_rollback) => {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
 
                     let executors = self.get_executors(&tx.message, &loaders);
@@ -2742,10 +2788,16 @@ impl Bank {
 
                     self.update_executors(executors);
 
-                    if let Err(TransactionError::InstructionError(_, _)) = &process_result {
-                        error_counters.instruction_error += 1;
-                    }
-                    (process_result, hash_age_kind.clone())
+                    let nonce_rollback =
+                        if let Err(TransactionError::InstructionError(_, _)) = &process_result {
+                            error_counters.instruction_error += 1;
+                            nonce_rollback.clone()
+                        } else if process_result.is_err() {
+                            None
+                        } else {
+                            nonce_rollback.clone()
+                        };
+                    (process_result, nonce_rollback)
                 }
             })
             .collect();
@@ -2764,7 +2816,7 @@ impl Bank {
         let transaction_log_collector_config =
             self.transaction_log_collector_config.read().unwrap();
 
-        for (i, ((r, _hash_age_kind), tx)) in executed.iter().zip(txs.iter()).enumerate() {
+        for (i, ((r, _nonce_rollback), tx)) in executed.iter().zip(txs.iter()).enumerate() {
             if let Some(debug_keys) = &self.transaction_debug_keys {
                 for key in &tx.message.account_keys {
                     if debug_keys.contains(key) {
@@ -2849,7 +2901,7 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        executed: &[TransactionProcessResult],
+        executed: &[TransactionExecutionResult],
     ) -> Vec<Result<()>> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         let mut fees = 0;
@@ -2860,10 +2912,10 @@ impl Bank {
 
         let results = OrderedIterator::new(txs, iteration_order)
             .zip(executed.iter())
-            .map(|((_, tx), (res, hash_age_kind))| {
-                let (fee_calculator, is_durable_nonce) = hash_age_kind
+            .map(|((_, tx), (res, nonce_rollback))| {
+                let (fee_calculator, is_durable_nonce) = nonce_rollback
                     .as_ref()
-                    .and_then(|hash_age_kind| hash_age_kind.fee_calculator())
+                    .map(|nonce_rollback| nonce_rollback.fee_calculator())
                     .map(|maybe_fee_calculator| (maybe_fee_calculator, true))
                     .unwrap_or_else(|| {
                         (
@@ -2909,8 +2961,8 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        loaded_accounts: &mut [(Result<TransactionLoadResult>, Option<HashAgeKind>)],
-        executed: &[TransactionProcessResult],
+        loaded_accounts: &mut [TransactionLoadResult],
+        executed: &[TransactionExecutionResult],
         tx_count: u64,
         signature_count: u64,
     ) -> TransactionResults {
@@ -2927,7 +2979,7 @@ impl Bank {
 
         if executed
             .iter()
-            .any(|(res, _hash_age_kind)| Self::can_commit(res))
+            .any(|(res, _nonce_rollback)| Self::can_commit(res))
         {
             self.is_delta.store(true, Relaxed);
         }
@@ -2958,7 +3010,7 @@ impl Bank {
 
         TransactionResults {
             fee_collection_results,
-            processing_results: executed.to_vec(),
+            execution_results: executed.to_vec(),
             overwritten_vote_accounts,
         }
     }
@@ -3107,12 +3159,12 @@ impl Bank {
 
     fn collect_rent(
         &self,
-        res: &[TransactionProcessResult],
-        loaded_accounts: &[(Result<TransactionLoadResult>, Option<HashAgeKind>)],
+        res: &[TransactionExecutionResult],
+        loaded_accounts: &[TransactionLoadResult],
     ) {
         let mut collected_rent: u64 = 0;
-        for (i, (raccs, _hash_age_kind)) in loaded_accounts.iter().enumerate() {
-            let (res, _hash_age_kind) = &res[i];
+        for (i, (raccs, _nonce_rollback)) in loaded_accounts.iter().enumerate() {
+            let (res, _nonce_rollback) = &res[i];
             if res.is_err() || raccs.is_err() {
                 continue;
             }
@@ -4079,16 +4131,16 @@ impl Bank {
         &self,
         txs: &[Transaction],
         iteration_order: Option<&[usize]>,
-        res: &[TransactionProcessResult],
-        loaded: &[(Result<TransactionLoadResult>, Option<HashAgeKind>)],
+        res: &[TransactionExecutionResult],
+        loaded: &[TransactionLoadResult],
     ) -> Vec<OverwrittenVoteAccount> {
         let mut overwritten_vote_accounts = vec![];
-        for (i, ((raccs, _load_hash_age_kind), (transaction_index, tx))) in loaded
+        for (i, ((raccs, _load_nonce_rollback), (transaction_index, tx))) in loaded
             .iter()
             .zip(OrderedIterator::new(txs, iteration_order))
             .enumerate()
         {
-            let (res, _res_hash_age_kind) = &res[i];
+            let (res, _res_nonce_rollback) = &res[i];
             if res.is_err() || raccs.is_err() {
                 continue;
             }
@@ -4596,73 +4648,25 @@ pub(crate) mod tests {
     use std::{result, thread::Builder, time::Duration};
 
     #[test]
-    fn test_hash_age_kind_is_durable_nonce() {
-        assert!(
-            HashAgeKind::DurableNoncePartial(Pubkey::default(), Account::default())
-                .is_durable_nonce()
-        );
-        assert!(
-            HashAgeKind::DurableNonceFull(Pubkey::default(), Account::default(), None)
-                .is_durable_nonce()
-        );
-        assert!(HashAgeKind::DurableNonceFull(
-            Pubkey::default(),
-            Account::default(),
-            Some(Account::default())
-        )
-        .is_durable_nonce());
-        assert!(!HashAgeKind::Extant.is_durable_nonce());
-    }
-
-    #[test]
-    fn test_hash_age_kind_fee_calculator() {
+    fn test_nonce_rollback_info() {
+        let nonce_authority = keypair_from_seed(&[0; 32]).unwrap();
+        let nonce_address = nonce_authority.pubkey();
+        let fee_calculator = FeeCalculator::new(42);
         let state =
             nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
                 authority: Pubkey::default(),
                 blockhash: Hash::new_unique(),
-                fee_calculator: FeeCalculator::default(),
+                fee_calculator: fee_calculator.clone(),
             }));
-        let account = Account::new_data(42, &state, &system_program::id()).unwrap();
+        let nonce_account = Account::new_data(43, &state, &system_program::id()).unwrap();
 
-        assert_eq!(HashAgeKind::Extant.fee_calculator(), None);
-        assert_eq!(
-            HashAgeKind::DurableNoncePartial(Pubkey::default(), account.clone()).fee_calculator(),
-            Some(Some(FeeCalculator::default()))
-        );
-        assert_eq!(
-            HashAgeKind::DurableNoncePartial(Pubkey::default(), Account::default())
-                .fee_calculator(),
-            Some(None)
-        );
-        assert_eq!(
-            HashAgeKind::DurableNonceFull(Pubkey::default(), account, Some(Account::default()))
-                .fee_calculator(),
-            Some(Some(FeeCalculator::default()))
-        );
-        assert_eq!(
-            HashAgeKind::DurableNonceFull(
-                Pubkey::default(),
-                Account::default(),
-                Some(Account::default())
-            )
-            .fee_calculator(),
-            Some(None)
-        );
-    }
+        // NonceRollbackPartial create + NonceRollbackInfo impl
+        let partial = NonceRollbackPartial::new(nonce_address, nonce_account.clone());
+        assert_eq!(*partial.nonce_address(), nonce_address);
+        assert_eq!(*partial.nonce_account(), nonce_account);
+        assert_eq!(partial.fee_calculator(), Some(fee_calculator.clone()));
+        assert_eq!(partial.fee_account(), None);
 
-    #[test]
-    #[should_panic(expected = "update: unexpected HashAgeKind variant")]
-    fn test_hash_age_kind_finish_partial_full_panics() {
-        drop(
-            HashAgeKind::DurableNonceFull(Pubkey::default(), Account::default(), None)
-                .finish_partial(&Message::default(), &[]),
-        );
-    }
-
-    #[test]
-    fn test_hash_age_kind_finish_partial() {
-        let nonce_authority = keypair_from_seed(&[0; 32]).unwrap();
-        let nonce_address = nonce_authority.pubkey();
         let from = keypair_from_seed(&[1; 32]).unwrap();
         let from_address = from.pubkey();
         let to_address = Pubkey::new_unique();
@@ -4672,9 +4676,8 @@ pub(crate) mod tests {
         ];
         let message = Message::new(&instructions, Some(&from_address));
 
-        let from_account = Account::new(1, 0, &Pubkey::default());
-        let nonce_account = Account::new(2, 0, &Pubkey::default());
-        let to_account = Account::new(3, 0, &Pubkey::default());
+        let from_account = Account::new(44, 0, &Pubkey::default());
+        let to_account = Account::new(45, 0, &Pubkey::default());
         let recent_blockhashes_sysvar_account = Account::new(4, 0, &Pubkey::default());
         let accounts = [
             from_account.clone(),
@@ -4683,41 +4686,29 @@ pub(crate) mod tests {
             recent_blockhashes_sysvar_account.clone(),
         ];
 
-        assert_eq!(
-            HashAgeKind::Extant.finish_partial(&message, &accounts),
-            Ok(HashAgeKind::Extant)
-        );
-
-        let hash_age_kind = HashAgeKind::DurableNoncePartial(nonce_address, nonce_account.clone());
-        assert_eq!(
-            hash_age_kind.finish_partial(&message, &accounts),
-            Ok(HashAgeKind::DurableNonceFull(
-                nonce_address,
-                nonce_account.clone(),
-                Some(from_account.clone())
-            )),
-        );
-
-        assert_eq!(
-            hash_age_kind.finish_partial(&message, &[]),
-            Err(TransactionError::AccountNotFound),
-        );
+        // NonceRollbackFull create + NonceRollbackInfo impl
+        let full = NonceRollbackFull::from_partial(partial.clone(), &message, &accounts).unwrap();
+        assert_eq!(*full.nonce_address(), nonce_address);
+        assert_eq!(*full.nonce_account(), nonce_account);
+        assert_eq!(full.fee_calculator(), Some(fee_calculator));
+        assert_eq!(full.fee_account(), Some(&from_account));
 
         let message = Message::new(&instructions, Some(&nonce_address));
         let accounts = [
-            nonce_account.clone(),
+            nonce_account,
             from_account,
             to_account,
             recent_blockhashes_sysvar_account,
         ];
 
+        // Nonce account is fee-payer
+        let full = NonceRollbackFull::from_partial(partial.clone(), &message, &accounts).unwrap();
+        assert_eq!(full.fee_account(), None);
+
+        // NonceRollbackFull create, fee-payer not in account_keys fails
         assert_eq!(
-            hash_age_kind.finish_partial(&message, &accounts),
-            Ok(HashAgeKind::DurableNonceFull(
-                nonce_address,
-                nonce_account,
-                None
-            )),
+            NonceRollbackFull::from_partial(partial, &message, &[]).unwrap_err(),
+            TransactionError::AccountNotFound,
         );
     }
 
@@ -7117,13 +7108,13 @@ pub(crate) mod tests {
             system_transaction::transfer(&mint_keypair, &key.pubkey(), 5, genesis_config.hash());
 
         let results = vec![
-            (Ok(()), Some(HashAgeKind::Extant)),
+            (Ok(()), None),
             (
                 Err(TransactionError::InstructionError(
                     1,
                     SystemError::ResultWithNegativeLamports.into(),
                 )),
-                Some(HashAgeKind::Extant),
+                None,
             ),
         ];
         let initial_balance = bank.get_balance(&leader);
@@ -9112,19 +9103,19 @@ pub(crate) mod tests {
         assert_eq!(transaction_balances_set.pre_balances.len(), 3);
         assert_eq!(transaction_balances_set.post_balances.len(), 3);
 
-        assert!(transaction_results.processing_results[0].0.is_ok());
+        assert!(transaction_results.execution_results[0].0.is_ok());
         assert_eq!(transaction_balances_set.pre_balances[0], vec![8, 11, 1]);
         assert_eq!(transaction_balances_set.post_balances[0], vec![5, 13, 1]);
 
         // Failed transactions still produce balance sets
         // This is a TransactionError - not possible to charge fees
-        assert!(transaction_results.processing_results[1].0.is_err());
+        assert!(transaction_results.execution_results[1].0.is_err());
         assert_eq!(transaction_balances_set.pre_balances[1], vec![0, 0, 1]);
         assert_eq!(transaction_balances_set.post_balances[1], vec![0, 0, 1]);
 
         // Failed transactions still produce balance sets
         // This is an InstructionError - fees charged
-        assert!(transaction_results.processing_results[2].0.is_err());
+        assert!(transaction_results.execution_results[2].0.is_err());
         assert_eq!(transaction_balances_set.pre_balances[2], vec![9, 0, 1]);
         assert_eq!(transaction_balances_set.post_balances[2], vec![8, 0, 1]);
     }
