@@ -91,7 +91,7 @@ fn get_config() -> Config {
                 .takes_value(true)
                 .validator(is_pubkey_or_keypair)
                 .multiple(true)
-                .help("Monitor a specific validator only instead of the entire cluster"),
+                .help("Validator identities to monitor for delinquency")
         )
         .arg(
             Arg::with_name("no_duplicate_notifications")
@@ -135,12 +135,10 @@ fn get_config() -> Config {
     };
 
     info!("RPC URL: {}", config.json_rpc_url);
-    if !config.validator_identity_pubkeys.is_empty() {
-        info!(
-            "Monitored validators: {:?}",
-            config.validator_identity_pubkeys
-        );
-    }
+    info!(
+        "Monitored validators: {:?}",
+        config.validator_identity_pubkeys
+    );
     config
 }
 
@@ -152,10 +150,10 @@ fn get_cluster_info(rpc_client: &RpcClient) -> ClientResult<(u64, Hash, RpcVoteA
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    let config = get_config();
-
     solana_logger::setup_with_default("solana=info");
     solana_metrics::set_panic_hook("watchtower");
+
+    let config = get_config();
 
     let rpc_client = RpcClient::new(config.json_rpc_url.clone());
     let notifier = Notifier::default();
@@ -226,59 +224,47 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     ));
                 }
 
-                if config.validator_identity_pubkeys.is_empty() {
-                    if !vote_accounts.delinquent.is_empty() {
-                        failures.push((
-                            "delinquent",
-                            format!("{} delinquent validators", vote_accounts.delinquent.len()),
-                        ));
-                    }
-                } else {
-                    let mut errors = vec![];
-                    for validator_identity in config.validator_identity_pubkeys.iter() {
-                        let formatted_validator_identity =
-                            format_labeled_address(&validator_identity, &config.address_labels);
-                        if vote_accounts
-                            .delinquent
-                            .iter()
-                            .any(|vai| vai.node_pubkey == *validator_identity)
-                        {
-                            errors.push(format!("{} delinquent", formatted_validator_identity));
-                        } else if !vote_accounts
-                            .current
-                            .iter()
-                            .any(|vai| vai.node_pubkey == *validator_identity)
-                        {
-                            errors.push(format!("{} missing", formatted_validator_identity));
-                        }
-
-                        rpc_client
-                            .get_balance(&Pubkey::from_str(&validator_identity).unwrap_or_default())
-                            .map(lamports_to_sol)
-                            .map(|balance| {
-                                if balance < 10.0 {
-                                    // At 1 SOL/day for validator voting fees, this gives over a week to
-                                    // find some more SOL
-                                    failures.push((
-                                        "balance",
-                                        format!(
-                                            "{} has {} SOL",
-                                            formatted_validator_identity, balance
-                                        ),
-                                    ));
-                                }
-                            })
-                            .unwrap_or_else(|err| {
-                                warn!(
-                                    "Failed to get balance of {}: {:?}",
-                                    formatted_validator_identity, err
-                                );
-                            });
+                let mut errors = vec![];
+                for validator_identity in config.validator_identity_pubkeys.iter() {
+                    let formatted_validator_identity =
+                        format_labeled_address(&validator_identity, &config.address_labels);
+                    if vote_accounts
+                        .delinquent
+                        .iter()
+                        .any(|vai| vai.node_pubkey == *validator_identity)
+                    {
+                        errors.push(format!("{} delinquent", formatted_validator_identity));
+                    } else if !vote_accounts
+                        .current
+                        .iter()
+                        .any(|vai| vai.node_pubkey == *validator_identity)
+                    {
+                        errors.push(format!("{} missing", formatted_validator_identity));
                     }
 
-                    if !errors.is_empty() {
-                        failures.push(("delinquent", errors.join(",")));
-                    }
+                    rpc_client
+                        .get_balance(&Pubkey::from_str(&validator_identity).unwrap_or_default())
+                        .map(lamports_to_sol)
+                        .map(|balance| {
+                            if balance < 10.0 {
+                                // At 1 SOL/day for validator voting fees, this gives over a week to
+                                // find some more SOL
+                                failures.push((
+                                    "balance",
+                                    format!("{} has {} SOL", formatted_validator_identity, balance),
+                                ));
+                            }
+                        })
+                        .unwrap_or_else(|err| {
+                            warn!(
+                                "Failed to get balance of {}: {:?}",
+                                formatted_validator_identity, err
+                            );
+                        });
+                }
+
+                if !errors.is_empty() {
+                    failures.push(("delinquent", errors.join(",")));
                 }
 
                 for failure in failures.iter() {
