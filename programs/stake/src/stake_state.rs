@@ -553,7 +553,7 @@ impl Stake {
     /// for a given stake and vote_state, calculate how many
     ///   points were earned (credits * stake) and new value
     ///   for credits_observed were the points paid
-    pub fn calculate_points_and_credits(
+    fn calculate_points_and_credits(
         &self,
         new_vote_state: &VoteState,
         stake_history: Option<&StakeHistory>,
@@ -562,7 +562,11 @@ impl Stake {
     ) -> (u128, u64) {
         // if there is no newer credits since observed, return no point
         if new_vote_state.credits() <= self.credits_observed {
-            return (0, 0);
+            if fix_stake_deactivate {
+                return (0, self.credits_observed);
+            } else {
+                return (0, 0);
+            }
         }
 
         let mut points = 0;
@@ -3435,7 +3439,7 @@ mod tests {
         );
 
         // now one with inflation disabled. no one gets paid, but we still need
-        // to advance the stake state's observed_credits field to prevent back-
+        // to advance the stake state's credits_observed field to prevent back-
         // paying rewards when inflation is turned on.
         assert_eq!(
             Some((0, 0, 4)),
@@ -3449,6 +3453,33 @@ mod tests {
                 &mut null_tracer(),
                 true,
             )
+        );
+
+        // credits_observed remains at previous level when vote_state credits are
+        // not advancing and inflation is disabled
+        stake.credits_observed = 4;
+        assert_eq!(
+            Some((0, 0, 4)),
+            stake.calculate_rewards(
+                &PointValue {
+                    rewards: 0,
+                    points: 4
+                },
+                &vote_state,
+                None,
+                &mut null_tracer(),
+                true,
+            )
+        );
+
+        // assert the previous behavior is preserved where fix_stake_deactivate=false
+        assert_eq!(
+            (0, 0),
+            stake.calculate_points_and_credits(&vote_state, None, &mut null_tracer(), false)
+        );
+        assert_eq!(
+            (0, 4),
+            stake.calculate_points_and_credits(&vote_state, None, &mut null_tracer(), true)
         );
     }
 
