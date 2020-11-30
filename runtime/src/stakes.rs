@@ -1,16 +1,16 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
+use crate::vote_account::ArcVoteAccount;
 use solana_sdk::{
     account::Account, clock::Epoch, pubkey::Pubkey, sysvar::stake_history::StakeHistory,
 };
 use solana_stake_program::stake_state::{new_stake_history_entry, Delegation, StakeState};
-use solana_vote_program::vote_state::VoteState;
 use std::collections::HashMap;
 
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
 pub struct Stakes {
     /// vote accounts
-    vote_accounts: HashMap<Pubkey, (u64, Account)>,
+    vote_accounts: HashMap<Pubkey, (u64, ArcVoteAccount)>,
 
     /// stake_delegations
     stake_delegations: HashMap<Pubkey, Delegation>,
@@ -106,7 +106,7 @@ impl Stakes {
             + self
                 .vote_accounts
                 .iter()
-                .map(|(_pubkey, (_staked, vote_account))| vote_account.lamports)
+                .map(|(_pubkey, (_staked, vote_account))| vote_account.lamports())
                 .sum::<u64>()
     }
 
@@ -121,7 +121,7 @@ impl Stakes {
         pubkey: &Pubkey,
         account: &Account,
         fix_stake_deactivate: bool,
-    ) -> Option<Account> {
+    ) -> Option<ArcVoteAccount> {
         if solana_vote_program::check_id(&account.owner) {
             let old = self.vote_accounts.remove(pubkey);
             if account.lamports != 0 {
@@ -137,7 +137,8 @@ impl Stakes {
                     |v| v.0,
                 );
 
-                self.vote_accounts.insert(*pubkey, (stake, account.clone()));
+                self.vote_accounts
+                    .insert(*pubkey, (stake, ArcVoteAccount::from(account.clone())));
             }
             old.map(|(_, account)| account)
         } else if solana_stake_program::check_id(&account.owner) {
@@ -191,7 +192,7 @@ impl Stakes {
         }
     }
 
-    pub fn vote_accounts(&self) -> &HashMap<Pubkey, (u64, Account)> {
+    pub fn vote_accounts(&self) -> &HashMap<Pubkey, (u64, ArcVoteAccount)> {
         &self.vote_accounts
     }
 
@@ -200,11 +201,12 @@ impl Stakes {
     }
 
     pub fn highest_staked_node(&self) -> Option<Pubkey> {
-        self.vote_accounts
+        let (_pubkey, (_stake, vote_account)) = self
+            .vote_accounts
             .iter()
-            .max_by(|(_ak, av), (_bk, bv)| av.0.cmp(&bv.0))
-            .and_then(|(_k, (_stake, account))| VoteState::from(account))
-            .map(|vote_state| vote_state.node_pubkey)
+            .max_by(|(_ak, av), (_bk, bv)| av.0.cmp(&bv.0))?;
+        let node_pubkey = vote_account.vote_state().as_ref().ok()?.node_pubkey;
+        Some(node_pubkey)
     }
 }
 
@@ -523,7 +525,7 @@ pub mod tests {
             pub fn vote_balance_and_warmed_staked(&self) -> u64 {
                 self.vote_accounts
                     .iter()
-                    .map(|(_pubkey, (staked, account))| staked + account.lamports)
+                    .map(|(_pubkey, (staked, account))| staked + account.lamports())
                     .sum()
             }
         }

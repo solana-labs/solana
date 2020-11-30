@@ -42,10 +42,7 @@ use solana_sdk::{
     timing::timestamp,
     transaction::Transaction,
 };
-use solana_vote_program::{
-    vote_instruction,
-    vote_state::{Vote, VoteState},
-};
+use solana_vote_program::{vote_instruction, vote_state::Vote};
 use std::{
     collections::{HashMap, HashSet},
     ops::Deref,
@@ -1132,26 +1129,27 @@ impl ReplayStage {
         if authorized_voter_keypairs.is_empty() {
             return;
         }
-
-        let vote_state =
-            if let Some((_, vote_account)) = bank.vote_accounts().get(vote_account_pubkey) {
-                if let Some(vote_state) = VoteState::from(&vote_account) {
-                    vote_state
-                } else {
-                    warn!(
-                        "Vote account {} is unreadable.  Unable to vote",
-                        vote_account_pubkey,
-                    );
-                    return;
-                }
-            } else {
+        let vote_account = match bank.get_vote_account(vote_account_pubkey) {
+            None => {
                 warn!(
                     "Vote account {} does not exist.  Unable to vote",
                     vote_account_pubkey,
                 );
                 return;
-            };
-
+            }
+            Some((_stake, vote_account)) => vote_account,
+        };
+        let vote_state = vote_account.vote_state();
+        let vote_state = match vote_state.as_ref() {
+            Err(_) => {
+                warn!(
+                    "Vote account {} is unreadable.  Unable to vote",
+                    vote_account_pubkey,
+                );
+                return;
+            }
+            Ok(vote_state) => vote_state,
+        };
         let authorized_voter_pubkey =
             if let Some(authorized_voter_pubkey) = vote_state.get_authorized_voter(bank.epoch()) {
                 authorized_voter_pubkey

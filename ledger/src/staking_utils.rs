@@ -1,10 +1,8 @@
-use solana_runtime::bank::Bank;
+use solana_runtime::{bank::Bank, vote_account::ArcVoteAccount};
 use solana_sdk::{
-    account::Account,
     clock::{Epoch, Slot},
     pubkey::Pubkey,
 };
-use solana_vote_program::vote_state::VoteState;
 use std::{borrow::Borrow, collections::HashMap};
 
 /// Looks through vote accounts, and finds the latest slot that has achieved
@@ -28,48 +26,42 @@ pub fn vote_account_stakes(bank: &Bank) -> HashMap<Pubkey, u64> {
 
 /// Collect the staked nodes, as named by staked vote accounts from the given bank
 pub fn staked_nodes(bank: &Bank) -> HashMap<Pubkey, u64> {
-    to_staked_nodes(to_vote_states(bank.vote_accounts().into_iter()))
+    to_staked_nodes(bank.vote_accounts())
 }
 
 /// At the specified epoch, collect the delegate account balance and vote states for delegates
 /// that have non-zero balance in any of their managed staking accounts
 pub fn staked_nodes_at_epoch(bank: &Bank, epoch: Epoch) -> Option<HashMap<Pubkey, u64>> {
-    bank.epoch_vote_accounts(epoch)
-        .map(|vote_accounts| to_staked_nodes(to_vote_states(vote_accounts.iter())))
+    bank.epoch_vote_accounts(epoch).map(to_staked_nodes)
 }
 
-// input (vote_pubkey, (stake, vote_account)) => (stake, vote_state)
-fn to_vote_states(
-    node_staked_accounts: impl Iterator<Item = (impl Borrow<Pubkey>, impl Borrow<(u64, Account)>)>,
-) -> impl Iterator<Item = (u64, VoteState)> {
-    node_staked_accounts.filter_map(|(_, stake_account)| {
-        VoteState::deserialize(&stake_account.borrow().1.data)
-            .ok()
-            .map(|vote_state| (stake_account.borrow().0, vote_state))
-    })
-}
-
-// (stake, vote_state) => (node, stake)
-fn to_staked_nodes(
-    node_staked_accounts: impl Iterator<Item = (u64, VoteState)>,
-) -> HashMap<Pubkey, u64> {
-    let mut map: HashMap<Pubkey, u64> = HashMap::new();
-    node_staked_accounts.for_each(|(stake, state)| {
-        map.entry(state.node_pubkey)
-            .and_modify(|s| *s += stake)
-            .or_insert(stake);
-    });
-    map
+fn to_staked_nodes<I, K, V>(
+    vote_accounts: I,
+) -> HashMap<Pubkey /*VoteState.node_pubkey*/, u64 /*stake*/>
+where
+    I: IntoIterator<Item = (K /*vote pubkey*/, V)>,
+    V: Borrow<(u64 /*stake*/, ArcVoteAccount)>,
+{
+    let mut out: HashMap<Pubkey, u64> = HashMap::new();
+    for (_ /*vote pubkey*/, stake_vote_account) in vote_accounts {
+        let (stake, vote_account) = stake_vote_account.borrow();
+        if let Ok(vote_state) = vote_account.vote_state().as_ref() {
+            out.entry(vote_state.node_pubkey)
+                .and_modify(|s| *s += *stake)
+                .or_insert(*stake);
+        }
+    }
+    out
 }
 
 fn epoch_stakes_and_lockouts(bank: &Bank, epoch: Epoch) -> Vec<(u64, Option<u64>)> {
-    let node_staked_accounts = bank
-        .epoch_vote_accounts(epoch)
+    bank.epoch_vote_accounts(epoch)
         .expect("Bank state for epoch is missing")
-        .iter();
-
-    to_vote_states(node_staked_accounts)
-        .map(|(stake, states)| (stake, states.root_slot))
+        .iter()
+        .filter_map(|(_ /*vote pubkey*/, (stake, vote_account))| {
+            let root_slot = vote_account.vote_state().as_ref().ok()?.root_slot;
+            Some((*stake, root_slot))
+        })
         .collect()
 }
 
@@ -103,8 +95,9 @@ pub(crate) mod tests {
     use crate::genesis_utils::{
         bootstrap_validator_stake_lamports, create_genesis_config, GenesisConfigInfo,
     };
+    use rand::Rng;
     use solana_sdk::{
-        account::from_account,
+        account::{from_account, Account},
         clock::Clock,
         instruction::Instruction,
         pubkey::Pubkey,
@@ -117,7 +110,10 @@ pub(crate) mod tests {
         stake_instruction,
         stake_state::{Authorized, Delegation, Lockup, Stake},
     };
-    use solana_vote_program::{vote_instruction, vote_state::VoteInit};
+    use solana_vote_program::{
+        vote_instruction,
+        vote_state::{VoteInit, VoteState, VoteStateVersions},
+    };
     use std::sync::Arc;
 
     fn new_from_parent(parent: &Arc<Bank>, slot: Slot) -> Bank {
@@ -340,8 +336,18 @@ pub(crate) mod tests {
                 &Clock::default(),
             ),
         ));
-
-        let result = to_staked_nodes(stakes.into_iter());
+        let mut rng = rand::thread_rng();
+        let vote_accounts = stakes.into_iter().map(|(stake, vote_state)| {
+            let account = Account::new_data(
+                rng.gen(), // lamports
+                &VoteStateVersions::Current(Box::new(vote_state)),
+                &Pubkey::new_unique(), // owner
+            )
+            .unwrap();
+            let vote_pubkey = Pubkey::new_unique();
+            (vote_pubkey, (stake, ArcVoteAccount::from(account)))
+        });
+        let result = to_staked_nodes(vote_accounts);
         assert_eq!(result.len(), 2);
         assert_eq!(result[&node1], 3);
         assert_eq!(result[&node2], 5);

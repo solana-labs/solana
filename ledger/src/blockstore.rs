@@ -24,9 +24,11 @@ use rocksdb::DBRawIterator;
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
 use solana_rayon_threadlimit::get_thread_count;
-use solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE};
+use solana_runtime::{
+    hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+    vote_account::ArcVoteAccount,
+};
 use solana_sdk::{
-    account::Account,
     clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
     genesis_config::GenesisConfig,
     hash::Hash,
@@ -1623,7 +1625,7 @@ impl Blockstore {
         &self,
         slot: Slot,
         slot_duration: Duration,
-        stakes: &HashMap<Pubkey, (u64, Account)>,
+        stakes: &HashMap<Pubkey, (u64, ArcVoteAccount)>,
     ) -> Result<()> {
         if !self.is_root(slot) {
             return Err(BlockstoreError::SlotNotRooted);
@@ -5817,7 +5819,7 @@ pub mod tests {
 
         // Build epoch vote_accounts HashMap to test stake-weighted block time
         for (i, keypair) in vote_keypairs.iter().enumerate() {
-            stakes.insert(keypair.pubkey(), (1 + i as u64, Account::default()));
+            stakes.insert(keypair.pubkey(), (1 + i as u64, ArcVoteAccount::default()));
         }
         for slot in &[1, 2, 3, 8] {
             blockstore
@@ -5876,7 +5878,7 @@ pub mod tests {
         // Build epoch vote_accounts HashMap to test stake-weighted block time
         let mut stakes = HashMap::new();
         for (i, keypair) in vote_keypairs.iter().enumerate() {
-            stakes.insert(keypair.pubkey(), (1 + i as u64, Account::default()));
+            stakes.insert(keypair.pubkey(), (1 + i as u64, ArcVoteAccount::default()));
         }
         let slot_duration = Duration::from_millis(400);
         for slot in &[1, 2, 3, 8] {
