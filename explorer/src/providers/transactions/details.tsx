@@ -3,6 +3,7 @@ import {
   Connection,
   TransactionSignature,
   ParsedConfirmedTransaction,
+  ConfirmedTransaction,
 } from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
 import * as Cache from "providers/cache";
@@ -11,6 +12,7 @@ import { reportError } from "utils/sentry";
 
 export interface Details {
   transaction?: ParsedConfirmedTransaction | null;
+  raw?: ConfirmedTransaction | null;
 }
 
 type State = Cache.State<Details>;
@@ -118,4 +120,57 @@ export function useTransactionDetailsCache(): TransactionDetailsCache {
   }
 
   return context.entries;
+}
+
+async function fetchRawTransaction(
+  dispatch: Dispatch,
+  signature: TransactionSignature,
+  cluster: Cluster,
+  url: string
+) {
+  dispatch({
+    type: ActionType.Update,
+    status: FetchStatus.Fetching,
+    key: signature,
+    url,
+  });
+
+  let fetchStatus;
+  let transaction;
+  try {
+    transaction = await new Connection(url).getConfirmedTransaction(signature);
+    fetchStatus = FetchStatus.Fetched;
+  } catch (error) {
+    if (cluster !== Cluster.Custom) {
+      reportError(error, { url });
+    }
+    fetchStatus = FetchStatus.FetchFailed;
+  }
+
+  dispatch({
+    type: ActionType.Update,
+    status: fetchStatus,
+    key: signature,
+    data: {
+      raw: transaction,
+    },
+    url,
+  });
+}
+
+export function useFetchRawTransaction() {
+  const dispatch = React.useContext(DispatchContext);
+  if (!dispatch) {
+    throw new Error(
+      `useFetchRawTransaaction must be used within a TransactionsProvider`
+    );
+  }
+
+  const { cluster, url } = useCluster();
+  return React.useCallback(
+    (signature: TransactionSignature) => {
+      url && fetchRawTransaction(dispatch, signature, cluster, url);
+    },
+    [dispatch, cluster, url]
+  );
 }
