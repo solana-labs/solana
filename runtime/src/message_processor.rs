@@ -89,6 +89,13 @@ impl PreAccount {
             return Err(InstructionError::ModifiedProgramId);
         }
 
+        if self.owner != post.owner
+            && (solana_sdk::native_loader::check_id(&post.owner)
+                || solana_sdk::sysvar::check_id(&post.owner))
+        {
+            return Err(InstructionError::ModifiedProgramId);
+        }
+
         // An account not assigned to the program cannot have its balance decrease.
         if *program_id != self.owner // line coverage used to get branch coverage
          && self.lamports > post.lamports
