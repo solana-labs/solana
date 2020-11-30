@@ -186,5 +186,5 @@ mod tests {
     // async fn test_process_spl_token_transfer_amount_allocations()
     // async fn test_check_spl_token_balances()
     //
-    // TODO: link to v1.4 tests
+    // https://github.com/solana-labs/solana/blob/5511d52c6284013a24ced10966d11d8f4585799e/tokens/src/spl_token.rs#L490-L685
 }
