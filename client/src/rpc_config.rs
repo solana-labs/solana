@@ -82,6 +82,7 @@ pub enum RpcTransactionLogsFilter {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcTransactionLogsConfig {
+    #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
 }
 
