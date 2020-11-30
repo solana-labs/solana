@@ -3439,7 +3439,7 @@ mod tests {
         );
 
         // now one with inflation disabled. no one gets paid, but we still need
-        // to advance the stake state's observed_credits field to prevent back-
+        // to advance the stake state's credits_observed field to prevent back-
         // paying rewards when inflation is turned on.
         assert_eq!(
             Some((0, 0, 4)),
@@ -3455,8 +3455,8 @@ mod tests {
             )
         );
 
-        // credis_observed isn't reset for stale vote accounts while no rewards
-        // given if the inflation is disabled
+        // credits_observed remains at previous level when vote_state credits are
+        // not advancing and inflation is disabled
         stake.credits_observed = 4;
         assert_eq!(
             Some((0, 0, 4)),
