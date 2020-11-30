@@ -360,6 +360,7 @@ fn distribute_allocations(
             }
         };
     }
+    db.dump()?;
     Ok(())
 }
 
@@ -600,6 +601,7 @@ fn update_finalized_transactions(
             }
         }
     }
+    db.dump()?;
     Ok(confirmations)
 }
 

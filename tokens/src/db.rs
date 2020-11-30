@@ -48,7 +48,7 @@ pub fn open_db(path: &str, dry_run: bool) -> Result<PickleDb, Error> {
     let policy = if dry_run {
         PickleDbDumpPolicy::NeverDump
     } else {
-        PickleDbDumpPolicy::AutoDump
+        PickleDbDumpPolicy::DumpUponRequest
     };
     let path = Path::new(path);
     let db = if path.exists() {
