@@ -79,6 +79,7 @@ fn main() {
             "param_passing",
             "rand",
             "ristretto",
+            "ro_modify",
             "sanity",
             "sha256",
             "spoof1",

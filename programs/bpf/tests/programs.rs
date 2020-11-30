@@ -837,6 +837,65 @@ fn test_program_bpf_invoke() {
 
 #[cfg(feature = "bpf_rust")]
 #[test]
+fn test_program_bpf_ro_modify() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, id, entrypoint);
+    let bank = Arc::new(bank);
+    let bank_client = BankClient::new_shared(&bank);
+
+    let program_pubkey = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_ro_modify",
+    );
+
+    let test_keypair = Keypair::new();
+    let account = Account::new(10, 0, &solana_sdk::system_program::id());
+    bank.store_account(&test_keypair.pubkey(), &account);
+
+    let account_metas = vec![
+        AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
+        AccountMeta::new(test_keypair.pubkey(), true),
+    ];
+
+    let instruction = Instruction::new(program_pubkey, &[1_u8], account_metas.clone());
+    let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
+    let result = bank_client.send_and_confirm_message(&[&mint_keypair, &test_keypair], message);
+    println!("result {:?}", result);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::InstructionError(0, InstructionError::Custom(0xb9f0002))
+    );
+
+    let instruction = Instruction::new(program_pubkey, &[3_u8], account_metas.clone());
+    let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
+    let result = bank_client.send_and_confirm_message(&[&mint_keypair, &test_keypair], message);
+    println!("result {:?}", result);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::InstructionError(0, InstructionError::Custom(0xb9f0002))
+    );
+
+    let instruction = Instruction::new(program_pubkey, &[4_u8], account_metas.clone());
+    let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
+    let result = bank_client.send_and_confirm_message(&[&mint_keypair, &test_keypair], message);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::InstructionError(0, InstructionError::Custom(0xb9f0002))
+    );
+}
+
+#[cfg(feature = "bpf_rust")]
+#[test]
 fn test_program_bpf_call_depth() {
     solana_logger::setup();
 
