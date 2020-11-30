@@ -6,8 +6,8 @@ use crate::{
     {consensus::Stake, consensus::VotedStakes},
 };
 use solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming};
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::{account::Account, clock::Slot, hash::Hash, pubkey::Pubkey};
+use solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::ArcVoteAccount};
+use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     rc::Rc,
@@ -262,7 +262,7 @@ impl PropagatedStats {
         node_pubkey: &Pubkey,
         all_pubkeys: &mut PubkeyReferences,
         vote_account_pubkeys: &[Pubkey],
-        epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
+        epoch_vote_accounts: &HashMap<Pubkey, (u64, ArcVoteAccount)>,
     ) {
         let cached_pubkey = all_pubkeys.get_or_insert(node_pubkey);
         self.propagated_node_ids.insert(cached_pubkey);
@@ -440,7 +440,7 @@ mod test {
         let epoch_vote_accounts: HashMap<_, _> = vote_account_pubkeys
             .iter()
             .skip(num_vote_accounts - staked_vote_accounts)
-            .map(|pubkey| (*pubkey, (1, Account::default())))
+            .map(|pubkey| (*pubkey, (1, ArcVoteAccount::default())))
             .collect();
 
         let mut stats = PropagatedStats::default();
@@ -507,7 +507,7 @@ mod test {
         let epoch_vote_accounts: HashMap<_, _> = vote_account_pubkeys
             .iter()
             .skip(num_vote_accounts - staked_vote_accounts)
-            .map(|pubkey| (*pubkey, (1, Account::default())))
+            .map(|pubkey| (*pubkey, (1, ArcVoteAccount::default())))
             .collect();
         stats.add_node_pubkey_internal(
             &node_pubkey,
