@@ -4948,14 +4948,11 @@ dependencies = [
  "pickledb",
  "serde",
  "solana-account-decoder",
- "solana-banks-client",
- "solana-banks-server",
  "solana-clap-utils",
  "solana-cli-config",
  "solana-client",
  "solana-core",
  "solana-logger 1.4.14",
- "solana-program-test",
  "solana-remote-wallet",
  "solana-runtime",
  "solana-sdk",
@@ -4966,8 +4963,6 @@ dependencies = [
  "spl-token",
  "tempfile",
  "thiserror",
- "tokio 0.3.2",
- "url 2.1.1",
 ]
 
 [[package]]
