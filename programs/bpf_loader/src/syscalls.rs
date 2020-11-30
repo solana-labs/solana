@@ -313,7 +313,7 @@ fn translate_slice_mut<'a, T>(
             memory_mapping,
             access_type,
             vm_addr,
-            len * size_of::<T>() as u64,
+            len.saturating_mul(size_of::<T>() as u64),
             loader_id,
         ) {
             Ok(value) => Ok(unsafe { from_raw_parts_mut(value as *mut T, len as usize) }),
