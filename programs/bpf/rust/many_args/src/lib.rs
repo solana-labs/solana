@@ -2,7 +2,7 @@
 
 mod helper;
 extern crate solana_program;
-use solana_program::{entrypoint::SUCCESS, info};
+use solana_program::{custom_feature_fallback, entrypoint::SUCCESS, info};
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
@@ -26,11 +26,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     SUCCESS
 }
 
-#[no_mangle]
-fn custom_panic(info: &core::panic::PanicInfo<'_>) {
-    // Full panic reporting
-    info!(&format!("{}", info));
-}
+custom_feature_fallback!();
 
 #[cfg(test)]
 mod test {

@@ -1,6 +1,6 @@
 //! @brief Example Rust-based BPF program that tests call depth and stack usage
 
-use solana_program::{entrypoint::SUCCESS, info};
+use solana_program::{custom_feature_fallback, entrypoint::SUCCESS, info};
 
 #[inline(never)]
 pub fn recurse(data: &mut [u8]) {
@@ -26,8 +26,4 @@ pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
     SUCCESS
 }
 
-#[no_mangle]
-fn custom_panic(info: &core::panic::PanicInfo<'_>) {
-    // Full panic reporting
-    info!(&format!("{}", info));
-}
+custom_feature_fallback!();

@@ -2,6 +2,7 @@
 
 extern crate solana_program;
 use solana_program::{
+    custom_feature_fallback,
     hash::{hashv, Hasher},
     info,
 };
@@ -22,11 +23,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     0
 }
 
-#[no_mangle]
-fn custom_panic(info: &core::panic::PanicInfo<'_>) {
-    // Full panic reporting
-    info!(&format!("{}", info));
-}
+custom_feature_fallback!();
 
 #[cfg(test)]
 mod test {
