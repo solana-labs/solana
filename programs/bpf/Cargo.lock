@@ -1932,7 +1932,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-bpf-rust-deprecated_loader"
+name = "solana-bpf-rust-deprecated-loader"
 version = "1.5.0"
 dependencies = [
  "solana-program",
