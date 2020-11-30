@@ -313,7 +313,7 @@ fn translate_slice_mut<'a, T>(
             memory_mapping,
             access_type,
             vm_addr,
-            len * size_of::<T>() as u64,
+            len.saturating_mul(size_of::<T>() as u64),
             loader_id,
         ) {
             Ok(value) => Ok(unsafe { from_raw_parts_mut(value as *mut T, len as usize) }),
@@ -1611,6 +1611,36 @@ mod tests {
             100 - 1,
             data.len() as u64,
             &bpf_loader::id()
+        )
+        .is_err());
+
+        // u64
+        let mut data = vec![1u64, 2, 3, 4, 5];
+        let addr = data.as_ptr() as *const _ as u64;
+        let memory_mapping = MemoryMapping::new_from_regions(vec![MemoryRegion {
+            host_addr: addr,
+            vm_addr: 96,
+            len: (data.len() * size_of::<u64>()) as u64,
+            vm_gap_shift: 63,
+            is_writable: false,
+        }]);
+        let translated_data = translate_slice::<u64>(
+            &memory_mapping,
+            AccessType::Load,
+            96,
+            data.len() as u64,
+            &bpf_loader::id(),
+        )
+        .unwrap();
+        assert_eq!(data, translated_data);
+        data[0] = 10;
+        assert_eq!(data, translated_data);
+        assert!(translate_slice::<u64>(
+            &memory_mapping,
+            AccessType::Load,
+            96,
+            u64::MAX,
+            &bpf_loader::id(),
         )
         .is_err());
 
