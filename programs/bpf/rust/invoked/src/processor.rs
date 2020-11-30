@@ -7,7 +7,7 @@ use solana_program::{
     account_info::AccountInfo,
     bpf_loader, entrypoint,
     entrypoint::ProgramResult,
-    info,
+    msg,
     program::{invoke, invoke_signed},
     program_error::ProgramError,
     pubkey::Pubkey,
@@ -20,7 +20,7 @@ fn process_instruction(
     accounts: &[AccountInfo],
     instruction_data: &[u8],
 ) -> ProgramResult {
-    info!("Invoked program");
+    msg!("Invoked program");
 
     if instruction_data.is_empty() {
         return Ok(());
@@ -28,7 +28,7 @@ fn process_instruction(
 
     match instruction_data[0] {
         TEST_VERIFY_TRANSLATIONS => {
-            info!("verify data translations");
+            msg!("verify data translations");
 
             const ARGUMENT_INDEX: usize = 0;
             const INVOKED_ARGUMENT_INDEX: usize = 1;
@@ -102,11 +102,11 @@ fn process_instruction(
                 assert!(accounts[INVOKED_PROGRAM_DUP_INDEX]
                     .try_borrow_mut_data()
                     .is_err());
-                info!(data[0], 0, 0, 0, 0);
+                msg!(data[0], 0, 0, 0, 0);
             }
         }
         TEST_RETURN_ERROR => {
-            info!("return error");
+            msg!("return error");
             const ARGUMENT_INDEX: usize = 0;
 
             // modify lamports that should be dropped
@@ -118,7 +118,7 @@ fn process_instruction(
             return Err(ProgramError::Custom(42));
         }
         TEST_DERIVED_SIGNERS => {
-            info!("verify derived signers");
+            msg!("verify derived signers");
             const INVOKED_PROGRAM_INDEX: usize = 0;
             const DERIVED_KEY1_INDEX: usize = 1;
             const DERIVED_KEY2_INDEX: usize = 2;
@@ -149,7 +149,7 @@ fn process_instruction(
             )?;
         }
         TEST_VERIFY_NESTED_SIGNERS => {
-            info!("verify nested derived signers");
+            msg!("verify nested derived signers");
             const DERIVED_KEY1_INDEX: usize = 0;
             const DERIVED_KEY2_INDEX: usize = 1;
             const DERIVED_KEY3_INDEX: usize = 2;
@@ -159,16 +159,16 @@ fn process_instruction(
             assert!(accounts[DERIVED_KEY3_INDEX].is_signer);
         }
         TEST_VERIFY_WRITER => {
-            info!("verify writable");
+            msg!("verify writable");
             const ARGUMENT_INDEX: usize = 0;
 
             assert!(!accounts[ARGUMENT_INDEX].is_writable);
         }
         TEST_VERIFY_PRIVILEGE_ESCALATION => {
-            info!("Success");
+            msg!("Success");
         }
         TEST_NESTED_INVOKE => {
-            info!("nested invoke");
+            msg!("nested invoke");
 
             const ARGUMENT_INDEX: usize = 0;
             const INVOKED_ARGUMENT_INDEX: usize = 1;
@@ -179,7 +179,7 @@ fn process_instruction(
             **accounts[INVOKED_ARGUMENT_INDEX].lamports.borrow_mut() -= 1;
             **accounts[ARGUMENT_INDEX].lamports.borrow_mut() += 1;
             if accounts.len() > 2 {
-                info!("Invoke again");
+                msg!("Invoke again");
                 let invoked_instruction = create_instruction(
                     *accounts[INVOKED_PROGRAM_INDEX].key,
                     &[
@@ -190,7 +190,7 @@ fn process_instruction(
                 );
                 invoke(&invoked_instruction, accounts)?;
             } else {
-                info!("Last invoked");
+                msg!("Last invoked");
                 {
                     let mut data = accounts[INVOKED_ARGUMENT_INDEX].try_borrow_mut_data()?;
                     for i in 0..10 {

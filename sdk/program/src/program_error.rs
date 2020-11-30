@@ -1,5 +1,4 @@
-use crate::info;
-use crate::{decode_error::DecodeError, instruction::InstructionError, pubkey::PubkeyError};
+use crate::{decode_error::DecodeError, instruction::InstructionError, msg, pubkey::PubkeyError};
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::convert::TryFrom;
 use thiserror::Error;
@@ -56,22 +55,22 @@ impl PrintProgramError for ProgramError {
                 if let Some(custom_error) = E::decode_custom_error_to_enum(*error) {
                     custom_error.print::<E>();
                 } else {
-                    info!("Error: Unknown");
+                    msg!("Error: Unknown");
                 }
             }
-            Self::InvalidArgument => info!("Error: InvalidArgument"),
-            Self::InvalidInstructionData => info!("Error: InvalidInstructionData"),
-            Self::InvalidAccountData => info!("Error: InvalidAccountData"),
-            Self::AccountDataTooSmall => info!("Error: AccountDataTooSmall"),
-            Self::InsufficientFunds => info!("Error: InsufficientFunds"),
-            Self::IncorrectProgramId => info!("Error: IncorrectProgramId"),
-            Self::MissingRequiredSignature => info!("Error: MissingRequiredSignature"),
-            Self::AccountAlreadyInitialized => info!("Error: AccountAlreadyInitialized"),
-            Self::UninitializedAccount => info!("Error: UninitializedAccount"),
-            Self::NotEnoughAccountKeys => info!("Error: NotEnoughAccountKeys"),
-            Self::AccountBorrowFailed => info!("Error: AccountBorrowFailed"),
-            Self::MaxSeedLengthExceeded => info!("Error: MaxSeedLengthExceeded"),
-            Self::InvalidSeeds => info!("Error: InvalidSeeds"),
+            Self::InvalidArgument => msg!("Error: InvalidArgument"),
+            Self::InvalidInstructionData => msg!("Error: InvalidInstructionData"),
+            Self::InvalidAccountData => msg!("Error: InvalidAccountData"),
+            Self::AccountDataTooSmall => msg!("Error: AccountDataTooSmall"),
+            Self::InsufficientFunds => msg!("Error: InsufficientFunds"),
+            Self::IncorrectProgramId => msg!("Error: IncorrectProgramId"),
+            Self::MissingRequiredSignature => msg!("Error: MissingRequiredSignature"),
+            Self::AccountAlreadyInitialized => msg!("Error: AccountAlreadyInitialized"),
+            Self::UninitializedAccount => msg!("Error: UninitializedAccount"),
+            Self::NotEnoughAccountKeys => msg!("Error: NotEnoughAccountKeys"),
+            Self::AccountBorrowFailed => msg!("Error: AccountBorrowFailed"),
+            Self::MaxSeedLengthExceeded => msg!("Error: MaxSeedLengthExceeded"),
+            Self::InvalidSeeds => msg!("Error: InvalidSeeds"),
         }
     }
 }

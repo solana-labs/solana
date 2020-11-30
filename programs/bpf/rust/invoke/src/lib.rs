@@ -9,7 +9,7 @@ use solana_program::{
     account_info::AccountInfo,
     entrypoint,
     entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
-    info,
+    msg,
     program::{invoke, invoke_signed},
     program_error::ProgramError,
     pubkey::{Pubkey, PubkeyError},
@@ -39,7 +39,7 @@ fn process_instruction(
     accounts: &[AccountInfo],
     instruction_data: &[u8],
 ) -> ProgramResult {
-    info!("invoke Rust program");
+    msg!("invoke Rust program");
 
     let bump_seed1 = instruction_data[1];
     let bump_seed2 = instruction_data[2];
@@ -47,7 +47,7 @@ fn process_instruction(
 
     match instruction_data[0] {
         TEST_SUCCESS => {
-            info!("Call system program create account");
+            msg!("Call system program create account");
             {
                 let from_lamports = accounts[FROM_INDEX].lamports();
                 let to_lamports = accounts[DERIVED_KEY1_INDEX].lamports();
@@ -85,7 +85,7 @@ fn process_instruction(
                 }
             }
 
-            info!("Call system program transfer");
+            msg!("Call system program transfer");
             {
                 let from_lamports = accounts[FROM_INDEX].lamports();
                 let to_lamports = accounts[DERIVED_KEY1_INDEX].lamports();
@@ -99,7 +99,7 @@ fn process_instruction(
                 assert_eq!(accounts[DERIVED_KEY1_INDEX].lamports(), to_lamports + 1);
             }
 
-            info!("Test data translation");
+            msg!("Test data translation");
             {
                 {
                     let mut data = accounts[ARGUMENT_INDEX].try_borrow_mut_data()?;
@@ -121,7 +121,7 @@ fn process_instruction(
                 invoke(&instruction, accounts)?;
             }
 
-            info!("Test no instruction data");
+            msg!("Test no instruction data");
             {
                 let instruction = create_instruction(
                     *accounts[INVOKED_PROGRAM_INDEX].key,
@@ -131,7 +131,7 @@ fn process_instruction(
                 invoke(&instruction, accounts)?;
             }
 
-            info!("Test return error");
+            msg!("Test return error");
             {
                 assert_eq!(
                     10,
@@ -154,7 +154,7 @@ fn process_instruction(
                 assert_eq!(0, accounts[INVOKED_ARGUMENT_INDEX].try_borrow_data()?[0]);
             }
 
-            info!("Test refcell usage");
+            msg!("Test refcell usage");
             {
                 let writable = INVOKED_ARGUMENT_INDEX;
                 let readable = INVOKED_PROGRAM_INDEX;
@@ -240,7 +240,7 @@ fn process_instruction(
                 }
             }
 
-            info!("Test create_program_address");
+            msg!("Test create_program_address");
             {
                 assert_eq!(
                     &Pubkey::create_program_address(
@@ -256,7 +256,7 @@ fn process_instruction(
                 );
             }
 
-            info!("Test derived signers");
+            msg!("Test derived signers");
             {
                 assert!(!accounts[DERIVED_KEY1_INDEX].is_signer);
                 assert!(!accounts[DERIVED_KEY2_INDEX].is_signer);
@@ -279,7 +279,7 @@ fn process_instruction(
                 )?;
             }
 
-            info!("Test readonly with writable account");
+            msg!("Test readonly with writable account");
             {
                 let invoked_instruction = create_instruction(
                     *accounts[INVOKED_PROGRAM_INDEX].key,
@@ -289,14 +289,14 @@ fn process_instruction(
                 invoke(&invoked_instruction, accounts)?;
             }
 
-            info!("Test nested invoke");
+            msg!("Test nested invoke");
             {
                 assert!(accounts[ARGUMENT_INDEX].is_signer);
 
                 **accounts[ARGUMENT_INDEX].lamports.borrow_mut() -= 5;
                 **accounts[INVOKED_ARGUMENT_INDEX].lamports.borrow_mut() += 5;
 
-                info!("First invoke");
+                msg!("First invoke");
                 let instruction = create_instruction(
                     *accounts[INVOKED_PROGRAM_INDEX].key,
                     &[
@@ -308,7 +308,7 @@ fn process_instruction(
                     vec![TEST_NESTED_INVOKE],
                 );
                 invoke(&instruction, accounts)?;
-                info!("2nd invoke from first program");
+                msg!("2nd invoke from first program");
                 invoke(&instruction, accounts)?;
 
                 assert_eq!(accounts[ARGUMENT_INDEX].lamports(), 42 - 5 + 1 + 1 + 1 + 1);
@@ -318,7 +318,7 @@ fn process_instruction(
                 );
             }
 
-            info!("Verify data values are retained and updated");
+            msg!("Verify data values are retained and updated");
             {
                 let data = accounts[ARGUMENT_INDEX].try_borrow_data()?;
                 for i in 0..100 {
@@ -331,7 +331,7 @@ fn process_instruction(
             }
         }
         TEST_PRIVILEGE_ESCALATION_SIGNER => {
-            info!("Test privilege escalation signer");
+            msg!("Test privilege escalation signer");
             let mut invoked_instruction = create_instruction(
                 *accounts[INVOKED_PROGRAM_INDEX].key,
                 &[(accounts[DERIVED_KEY3_INDEX].key, false, false)],
@@ -344,7 +344,7 @@ fn process_instruction(
             invoke(&invoked_instruction, accounts)?;
         }
         TEST_PRIVILEGE_ESCALATION_WRITABLE => {
-            info!("Test privilege escalation writable");
+            msg!("Test privilege escalation writable");
             let mut invoked_instruction = create_instruction(
                 *accounts[INVOKED_PROGRAM_INDEX].key,
                 &[(accounts[DERIVED_KEY3_INDEX].key, false, false)],
@@ -358,7 +358,7 @@ fn process_instruction(
             invoke(&invoked_instruction, accounts)?;
         }
         TEST_PPROGRAM_NOT_EXECUTABLE => {
-            info!("Test program not executable");
+            msg!("Test program not executable");
             let instruction = create_instruction(
                 *accounts[ARGUMENT_INDEX].key,
                 &[(accounts[ARGUMENT_INDEX].key, true, true)],

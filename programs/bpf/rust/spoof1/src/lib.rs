@@ -2,8 +2,8 @@ use solana_program::{
     account_info::AccountInfo,
     entrypoint,
     entrypoint::ProgramResult,
-    info,
     instruction::{AccountMeta, Instruction},
+    msg,
     program::invoke,
     pubkey::Pubkey,
     system_instruction::SystemInstruction,
@@ -42,7 +42,7 @@ fn process_instruction(
         account_metas,
     );
 
-    info!("swapped owner and data");
+    msg!("swapped owner and data");
     invoke(&ix, &[target.clone(), me.clone(), new_system])?;
 
     let owner_addr = accounts[0].owner as *const Pubkey;
