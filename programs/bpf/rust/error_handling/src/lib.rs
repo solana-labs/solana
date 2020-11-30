@@ -8,7 +8,7 @@ use solana_program::{
     decode_error::DecodeError,
     entrypoint,
     entrypoint::ProgramResult,
-    info,
+    msg,
     program_error::{PrintProgramError, ProgramError},
     pubkey::{Pubkey, PubkeyError},
 };
@@ -38,8 +38,8 @@ impl PrintProgramError for MyError {
         E: 'static + std::error::Error + DecodeError<E> + PrintProgramError + FromPrimitive,
     {
         match self {
-            MyError::DefaultEnumStart => info!("Error: Default enum start"),
-            MyError::TheAnswer => info!("Error: The Answer"),
+            MyError::DefaultEnumStart => msg!("Error: Default enum start"),
+            MyError::TheAnswer => msg!("Error: The Answer"),
         }
     }
 }
@@ -52,19 +52,19 @@ fn process_instruction(
 ) -> ProgramResult {
     match instruction_data[0] {
         1 => {
-            info!("return success");
+            msg!("return success");
             Ok(())
         }
         2 => {
-            info!("return a builtin");
+            msg!("return a builtin");
             Err(ProgramError::InvalidAccountData)
         }
         3 => {
-            info!("return default enum start value");
+            msg!("return default enum start value");
             Err(MyError::DefaultEnumStart.into())
         }
         4 => {
-            info!("return custom error");
+            msg!("return custom error");
             Err(MyError::TheAnswer.into())
         }
         7 => {
@@ -74,11 +74,11 @@ fn process_instruction(
             Ok(())
         }
         9 => {
-            info!("return pubkey error");
+            msg!("return pubkey error");
             Err(PubkeyError::MaxSeedLengthExceeded.into())
         }
         _ => {
-            info!("Unsupported");
+            msg!("Unsupported");
             Err(ProgramError::InvalidInstructionData)
         }
     }
