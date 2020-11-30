@@ -55,6 +55,9 @@ solana-keygen pubkey usb://ledger?key=1
 solana-keygen pubkey usb://ledger?key=2
 ```
 
+* NOTE: keypair url parameters are ignored in **zsh**
+&nbsp;[see troubleshooting for more info](#troubleshooting)
+
 You can use other values for the number after `key=` as well.
 Any of the addresses displayed by these commands are valid Solana wallet
 addresses. The private portion associated with each address is stored securely
