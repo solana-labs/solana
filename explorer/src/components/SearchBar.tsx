@@ -68,6 +68,7 @@ const SEARCHABLE_PROGRAMS: ProgramName[] = [
   "System Program",
   "Vote Program",
   "SPL Token Program",
+  "Memo Program",
 ];
 
 function buildProgramOptions(search: string) {
