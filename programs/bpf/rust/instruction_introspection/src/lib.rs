@@ -3,7 +3,7 @@
 extern crate solana_program;
 use solana_program::{
     account_info::next_account_info, account_info::AccountInfo, entrypoint,
-    entrypoint::ProgramResult, info, program_error::ProgramError, pubkey::Pubkey,
+    entrypoint::ProgramResult, msg, program_error::ProgramError, pubkey::Pubkey,
     sysvar::instructions,
 };
 
@@ -37,9 +37,9 @@ fn process_instruction(
     let my_index = instruction_data[1] as u16;
     assert_eq!(current_instruction, my_index);
 
-    info!(&format!("id: {}", instruction.program_id));
+    msg!(&format!("id: {}", instruction.program_id));
 
-    info!(&format!("data[0]: {}", instruction.data[0]));
-    info!(&format!("index: {}", current_instruction));
+    msg!(&format!("data[0]: {}", instruction.data[0]));
+    msg!(&format!("index: {}", current_instruction));
     Ok(())
 }
