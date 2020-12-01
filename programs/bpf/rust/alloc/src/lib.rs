@@ -2,7 +2,7 @@
 
 #[macro_use]
 extern crate alloc;
-use solana_program::{entrypoint::SUCCESS, msg};
+use solana_program::{custom_panic_default, entrypoint::SUCCESS, msg};
 use std::{alloc::Layout, mem};
 
 #[no_mangle]
@@ -80,6 +80,8 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
 
     SUCCESS
 }
+
+custom_panic_default!();
 
 #[cfg(test)]
 mod test {
