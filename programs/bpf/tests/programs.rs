@@ -796,6 +796,43 @@ fn test_program_bpf_invoke() {
         assert_eq!(10, bank.get_balance(&from_pubkey));
         assert_eq!(0, bank.get_balance(&to_pubkey));
     }
+
+    // Check the caller has access to cpi program
+    {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(50);
+        let mut bank = Bank::new(&genesis_config);
+        let (name, id, entrypoint) = solana_bpf_loader_program!();
+        bank.add_builtin(&name, id, entrypoint);
+        let bank = Arc::new(bank);
+        let bank_client = BankClient::new_shared(&bank);
+
+        let caller_pubkey = load_bpf_program(
+            &bank_client,
+            &bpf_loader::id(),
+            &mint_keypair,
+            "solana_bpf_rust_caller_access",
+        );
+        let caller2_pubkey = load_bpf_program(
+            &bank_client,
+            &bpf_loader::id(),
+            &mint_keypair,
+            "solana_bpf_rust_caller_access",
+        );
+        let account_metas = vec![
+            AccountMeta::new_readonly(caller_pubkey, false),
+            AccountMeta::new_readonly(caller2_pubkey, false),
+        ];
+        let instruction = Instruction::new(caller_pubkey, &[1_u8], account_metas.clone());
+        let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            TransactionError::InstructionError(0, InstructionError::MissingAccount)
+        );
+    }
 }
 
 #[cfg(feature = "bpf_rust")]

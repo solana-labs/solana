@@ -61,6 +61,7 @@ fn main() {
             "128bit",
             "alloc",
             "call_depth",
+            "caller_access",
             "custom_heap",
             "dep_crate",
             "deprecated_loader",

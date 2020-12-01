@@ -1336,6 +1336,20 @@ fn verify_instruction<'a>(
         }
     }
 
+    // validate the caller has access to the program account
+    let _ = callers_keyed_accounts
+        .iter()
+        .find_map(|keyed_account| {
+            if &instruction.program_id == keyed_account.unsigned_key() {
+                Some(keyed_account)
+            } else {
+                None
+            }
+        })
+        .ok_or(SyscallError::InstructionError(
+            InstructionError::MissingAccount,
+        ))?;
+
     Ok(())
 }
 
