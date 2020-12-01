@@ -35,9 +35,11 @@ use solana_stake_program::{
 };
 use spl_associated_token_account_v1_0::get_associated_token_address;
 use spl_token_v2_0::solana_program::program_error::ProgramError;
+#[cfg(not(test))]
+use std::process;
 use std::{
     cmp::{self},
-    io, process,
+    io,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -257,6 +259,7 @@ fn distribute_allocations(
     for allocation in allocations.iter() {
         if exit.load(Ordering::SeqCst) {
             db.dump()?;
+            #[cfg(not(test))]
             process::exit(0);
         }
         let new_stake_account_keypair = Keypair::new();
@@ -321,6 +324,7 @@ fn distribute_allocations(
     {
         if exit.load(Ordering::SeqCst) {
             db.dump()?;
+            #[cfg(not(test))]
             process::exit(0);
         }
         let new_stake_account_address = new_stake_account_keypair.pubkey();
@@ -618,6 +622,7 @@ fn update_finalized_transactions(
         }
         if exit.load(Ordering::SeqCst) {
             db.dump()?;
+            #[cfg(not(test))]
             process::exit(0);
         }
     }
