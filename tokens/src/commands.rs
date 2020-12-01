@@ -312,38 +312,15 @@ fn build_messages(
     Ok(())
 }
 
-fn distribute_allocations(
+fn send_messages(
     client: &RpcClient,
     db: &mut PickleDb,
     allocations: &[Allocation],
     args: &DistributeTokensArgs,
     exit: Arc<AtomicBool>,
+    messages: Vec<Message>,
+    stake_extras: StakeExtras,
 ) -> Result<(), Error> {
-    let mut messages: Vec<Message> = vec![];
-    let mut stake_extras: StakeExtras = vec![];
-    let mut created_accounts = 0;
-
-    build_messages(
-        client,
-        db,
-        allocations,
-        args,
-        exit.clone(),
-        &mut messages,
-        &mut stake_extras,
-        &mut created_accounts,
-    )?;
-
-    let num_signatures = messages
-        .iter()
-        .map(|message| message.header.num_required_signatures as usize)
-        .sum();
-    if args.spl_token_args.is_some() {
-        check_spl_token_balances(num_signatures, allocations, client, args, created_accounts)?;
-    } else {
-        check_payer_balances(num_signatures, allocations, client, args)?;
-    }
-
     for ((allocation, message), (new_stake_account_keypair, lockup_date)) in
         allocations.iter().zip(messages).zip(stake_extras)
     {
@@ -402,6 +379,43 @@ fn distribute_allocations(
             }
         };
     }
+    Ok(())
+}
+
+fn distribute_allocations(
+    client: &RpcClient,
+    db: &mut PickleDb,
+    allocations: &[Allocation],
+    args: &DistributeTokensArgs,
+    exit: Arc<AtomicBool>,
+) -> Result<(), Error> {
+    let mut messages: Vec<Message> = vec![];
+    let mut stake_extras: StakeExtras = vec![];
+    let mut created_accounts = 0;
+
+    build_messages(
+        client,
+        db,
+        allocations,
+        args,
+        exit.clone(),
+        &mut messages,
+        &mut stake_extras,
+        &mut created_accounts,
+    )?;
+
+    let num_signatures = messages
+        .iter()
+        .map(|message| message.header.num_required_signatures as usize)
+        .sum();
+    if args.spl_token_args.is_some() {
+        check_spl_token_balances(num_signatures, allocations, client, args, created_accounts)?;
+    } else {
+        check_payer_balances(num_signatures, allocations, client, args)?;
+    }
+
+    send_messages(client, db, allocations, args, exit, messages, stake_extras)?;
+
     db.dump()?;
     Ok(())
 }
@@ -1871,5 +1885,129 @@ mod tests {
             }
         );
         assert_eq!(messages.len(), 1);
+    }
+
+    #[test]
+    fn test_send_messages_dump_db() {
+        let client = RpcClient::new_mock("mock_client".to_string());
+        let dir = tempdir().unwrap();
+        let db_file = dir
+            .path()
+            .join("send_messages.db")
+            .to_str()
+            .unwrap()
+            .to_string();
+        let mut db = db::open_db(&db_file, false).unwrap();
+
+        let sender = Keypair::new();
+        let recipient = Pubkey::new_unique();
+        let amount = sol_to_lamports(1.0);
+        let last_valid_slot = 222;
+        let transaction = transfer(&client, amount, &sender, &recipient).unwrap();
+
+        // Queue db data
+        db::set_transaction_info(
+            &mut db,
+            &recipient,
+            amount,
+            &transaction,
+            None,
+            false,
+            last_valid_slot,
+            None,
+        )
+        .unwrap();
+
+        // Check that data has not been dumped
+        let read_db = db::open_db(&db_file, true).unwrap();
+        assert!(db::read_transaction_infos(&read_db).is_empty());
+
+        // This is just dummy data; Args will not affect messages
+        let args = DistributeTokensArgs {
+            sender_keypair: Box::new(Keypair::new()),
+            fee_payer: Box::new(Keypair::new()),
+            dry_run: true,
+            input_csv: "".to_string(),
+            transaction_db: "".to_string(),
+            output_path: None,
+            stake_args: None,
+            spl_token_args: None,
+            transfer_amount: None,
+        };
+        let allocation = Allocation {
+            recipient: recipient.to_string(),
+            amount: sol_to_lamports(1.0),
+            lockup_date: "".to_string(),
+        };
+        let message = transaction.message.clone();
+
+        // Exit false will not dump data
+        send_messages(
+            &client,
+            &mut db,
+            &[allocation.clone()],
+            &args,
+            Arc::new(AtomicBool::new(false)),
+            vec![message.clone()],
+            vec![(Keypair::new(), None)],
+        )
+        .unwrap();
+        let read_db = db::open_db(&db_file, true).unwrap();
+        assert!(db::read_transaction_infos(&read_db).is_empty());
+        // The method above will, however, write a record to the in-memory db
+        // Grab that expected value to test successful dump
+        let num_records = db::read_transaction_infos(&db).len();
+
+        // Empty messages/allocations will not dump data
+        let exit = Arc::new(AtomicBool::new(true));
+        send_messages(&client, &mut db, &[], &args, exit.clone(), vec![], vec![]).unwrap();
+        let read_db = db::open_db(&db_file, true).unwrap();
+        assert!(db::read_transaction_infos(&read_db).is_empty());
+
+        // Message/allocation should prompt data dump at start of loop
+        send_messages(
+            &client,
+            &mut db,
+            &[allocation],
+            &args,
+            exit,
+            vec![message.clone()],
+            vec![(Keypair::new(), None)],
+        )
+        .unwrap();
+        let read_db = db::open_db(&db_file, true).unwrap();
+        let transaction_info = db::read_transaction_infos(&read_db);
+        assert_eq!(transaction_info.len(), num_records);
+        assert_eq!(
+            transaction_info[0],
+            TransactionInfo {
+                recipient,
+                amount,
+                new_stake_account_address: None,
+                finalized_date: None,
+                transaction,
+                last_valid_slot,
+                lockup_date: None,
+            }
+        );
+        assert_eq!(
+            transaction_info[1],
+            TransactionInfo {
+                recipient,
+                amount,
+                new_stake_account_address: None,
+                finalized_date: None,
+                transaction: Transaction::new_unsigned(message),
+                last_valid_slot: std::u64::MAX,
+                lockup_date: None,
+            }
+        );
+
+        // Next dump should write record written in last send_messages call
+        let num_records = db::read_transaction_infos(&db).len();
+        db.dump().unwrap();
+        let read_db = db::open_db(&db_file, true).unwrap();
+        let transaction_info = db::read_transaction_infos(&read_db);
+        assert_eq!(transaction_info.len(), num_records);
     }
 }
