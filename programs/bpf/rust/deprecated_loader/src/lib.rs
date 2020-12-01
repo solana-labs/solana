@@ -23,7 +23,7 @@ fn return_sstruct() -> SStruct {
 #[no_mangle]
 fn custom_panic(info: &core::panic::PanicInfo<'_>) {
     // Full panic reporting
-    info!(&format!("{}", info));
+    msg!(&format!("{}", info));
 }
 
 entrypoint_deprecated!(process_instruction);
