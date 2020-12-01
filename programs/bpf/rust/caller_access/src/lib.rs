@@ -2,8 +2,8 @@ use solana_sdk::{
     account_info::AccountInfo,
     entrypoint,
     entrypoint::ProgramResult,
-    instruction::{AccountMeta, Instruction},
     info,
+    instruction::{AccountMeta, Instruction},
     program::invoke,
     pubkey::Pubkey,
 };
