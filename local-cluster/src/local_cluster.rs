@@ -194,11 +194,7 @@ impl LocalCluster {
         let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let leader_contact_info = leader_node.info.clone();
         let mut leader_config = config.validator_configs[0].clone();
-        leader_config.rpc_addrs = Some((
-            leader_node.info.rpc,
-            leader_node.info.rpc_pubsub,
-            leader_node.info.rpc_banks,
-        ));
+        leader_config.rpc_addrs = Some((leader_node.info.rpc, leader_node.info.rpc_pubsub));
         leader_config.account_paths = vec![leader_ledger_path.join("accounts")];
         let leader_keypair = Arc::new(Keypair::from_bytes(&leader_keypair.to_bytes()).unwrap());
         let leader_vote_keypair =
@@ -343,11 +339,7 @@ impl LocalCluster {
         }
 
         let mut config = validator_config.clone();
-        config.rpc_addrs = Some((
-            validator_node.info.rpc,
-            validator_node.info.rpc_pubsub,
-            validator_node.info.rpc_banks,
-        ));
+        config.rpc_addrs = Some((validator_node.info.rpc, validator_node.info.rpc_pubsub));
         config.account_paths = vec![ledger_path.join("accounts")];
         let voting_keypair = voting_keypair.unwrap();
         let validator_server = Validator::new(
@@ -629,8 +621,7 @@ impl Cluster for LocalCluster {
         // Update the stored ContactInfo for this node
         let node = Node::new_localhost_with_pubkey(&pubkey);
         cluster_validator_info.info.contact_info = node.info.clone();
-        cluster_validator_info.config.rpc_addrs =
-            Some((node.info.rpc, node.info.rpc_pubsub, node.info.rpc_banks));
+        cluster_validator_info.config.rpc_addrs = Some((node.info.rpc, node.info.rpc_pubsub));
 
         let entry_point_info = {
             if *pubkey == self.entry_point_info.id {

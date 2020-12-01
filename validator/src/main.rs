@@ -573,11 +573,10 @@ fn verify_reachable_ports(
     }
 
     let mut tcp_listeners = vec![];
-    if let Some((rpc_addr, rpc_pubsub_addr, rpc_banks_addr)) = validator_config.rpc_addrs {
+    if let Some((rpc_addr, rpc_pubsub_addr)) = validator_config.rpc_addrs {
         for (purpose, bind_addr, public_addr) in &[
             ("RPC", rpc_addr, &node.info.rpc),
             ("RPC pubsub", rpc_pubsub_addr, &node.info.rpc_pubsub),
-            ("RPC banks", rpc_banks_addr, &node.info.rpc_banks),
         ] {
             if ContactInfo::is_valid_address(&public_addr) {
                 tcp_listeners.push((
@@ -1510,9 +1509,9 @@ pub fn main() {
             (
                 SocketAddr::new(rpc_bind_address, rpc_port),
                 SocketAddr::new(rpc_bind_address, rpc_port + 1),
-                // +2 is skipped to avoid a conflict with the websocket port (which is +2) in web3.js
-                // This odd port shifting is tracked at https://github.com/solana-labs/solana/issues/12250
-                SocketAddr::new(rpc_bind_address, rpc_port + 3),
+                // If additional ports are added, +2 needs to be skipped to avoid a conflict with
+                // the websocket port (which is +2) in web3.js This odd port shifting is tracked at
+                // https://github.com/solana-labs/solana/issues/12250
             )
         }),
         pubsub_config: PubSubConfig {
@@ -1761,12 +1760,9 @@ pub fn main() {
         if let Some(public_rpc_addr) = public_rpc_addr {
             node.info.rpc = public_rpc_addr;
             node.info.rpc_pubsub = public_rpc_addr;
-            node.info.rpc_banks = public_rpc_addr;
-        } else if let Some((rpc_addr, rpc_pubsub_addr, rpc_banks_addr)) = validator_config.rpc_addrs
-        {
+        } else if let Some((rpc_addr, rpc_pubsub_addr)) = validator_config.rpc_addrs {
             node.info.rpc = SocketAddr::new(node.info.gossip.ip(), rpc_addr.port());
             node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), rpc_pubsub_addr.port());
-            node.info.rpc_banks = SocketAddr::new(node.info.gossip.ip(), rpc_banks_addr.port());
         }
     }
 

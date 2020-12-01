@@ -120,7 +120,7 @@ impl TestValidator {
         let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
 
         let config = ValidatorConfig {
-            rpc_addrs: Some((node.info.rpc, node.info.rpc_pubsub, node.info.rpc_banks)),
+            rpc_addrs: Some((node.info.rpc, node.info.rpc_pubsub)),
             ..ValidatorConfig::default()
         };
 

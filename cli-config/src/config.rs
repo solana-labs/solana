@@ -76,17 +76,6 @@ impl Config {
         ws_url.to_string()
     }
 
-    pub fn compute_rpc_banks_url(json_rpc_url: &str) -> String {
-        let json_rpc_url: Option<Url> = json_rpc_url.parse().ok();
-        if json_rpc_url.is_none() {
-            return "".to_string();
-        }
-        let mut url = json_rpc_url.unwrap();
-        let port = url.port().unwrap_or(8899);
-        url.set_port(Some(port + 3)).expect("unable to set port");
-        url.to_string()
-    }
-
     pub fn import_address_labels<P>(&mut self, filename: P) -> Result<(), io::Error>
     where
         P: AsRef<Path>,
@@ -132,29 +121,5 @@ mod test {
         );
 
         assert_eq!(Config::compute_websocket_url(&"garbage"), String::new());
-    }
-
-    #[test]
-    fn compute_rpc_banks_url() {
-        assert_eq!(
-            Config::compute_rpc_banks_url(&"http://devnet.solana.com"),
-            "http://devnet.solana.com:8902/".to_string()
-        );
-
-        assert_eq!(
-            Config::compute_rpc_banks_url(&"https://devnet.solana.com"),
-            "https://devnet.solana.com:8902/".to_string()
-        );
-
-        assert_eq!(
-            Config::compute_rpc_banks_url(&"http://example.com:8899"),
-            "http://example.com:8902/".to_string()
-        );
-        assert_eq!(
-            Config::compute_rpc_banks_url(&"https://example.com:1234"),
-            "https://example.com:1237/".to_string()
-        );
-
-        assert_eq!(Config::compute_rpc_banks_url(&"garbage"), String::new());
     }
 }
