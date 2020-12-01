@@ -37,8 +37,6 @@ use solana_stake_program::{
 use solana_transaction_status::TransactionStatus;
 use spl_associated_token_account_v1_0::get_associated_token_address;
 use spl_token_v2_0::solana_program::program_error::ProgramError;
-#[cfg(not(test))]
-use std::process;
 use std::{
     cmp::{self},
     io,
@@ -109,6 +107,8 @@ pub enum Error {
     InsufficientFunds(FundingSources, f64),
     #[error("Program error")]
     ProgramError(#[from] ProgramError),
+    #[error("Exit signal received")]
+    ExitSignal,
 }
 
 fn merge_allocations(allocations: &[Allocation]) -> Vec<Allocation> {
@@ -262,8 +262,7 @@ fn build_messages(
     for allocation in allocations.iter() {
         if exit.load(Ordering::SeqCst) {
             db.dump()?;
-            #[cfg(not(test))]
-            process::exit(0);
+            return Err(Error::ExitSignal);
         }
         let new_stake_account_keypair = Keypair::new();
         let lockup_date = if allocation.lockup_date == "" {
@@ -328,8 +327,7 @@ fn send_messages(
     {
         if exit.load(Ordering::SeqCst) {
             db.dump()?;
-            #[cfg(not(test))]
-            process::exit(0);
+            return Err(Error::ExitSignal);
         }
         let new_stake_account_address = new_stake_account_keypair.pubkey();
 
@@ -683,8 +681,7 @@ fn log_transaction_confirmations(
         }
         if exit.load(Ordering::SeqCst) {
             db.dump()?;
-            #[cfg(not(test))]
-            process::exit(0);
+            return Err(Error::ExitSignal);
         }
     }
     Ok(())
@@ -1889,7 +1886,7 @@ mod tests {
             &mut stake_extras,
             &mut created_accounts,
         )
-        .unwrap();
+        .unwrap_err();
         let read_db = db::open_db(&db_file, true).unwrap();
         let transaction_info = db::read_transaction_infos(&read_db);
         assert_eq!(transaction_info.len(), 1);
@@ -1905,7 +1902,7 @@ mod tests {
                 lockup_date: None,
             }
         );
-        assert_eq!(messages.len(), 1);
+        assert_eq!(messages.len(), 0);
     }
 
     #[test]
@@ -1995,7 +1992,7 @@ mod tests {
             vec![message.clone()],
             vec![(Keypair::new(), None)],
         )
-        .unwrap();
+        .unwrap_err();
         let read_db = db::open_db(&db_file, true).unwrap();
         let transaction_info = db::read_transaction_infos(&read_db);
         assert_eq!(transaction_info.len(), num_records);
@@ -2165,7 +2162,7 @@ mod tests {
             })],
             &mut confirmations,
         )
-        .unwrap();
+        .unwrap_err();
         let read_db = db::open_db(&db_file, true).unwrap();
         let transaction_info = db::read_transaction_infos(&read_db);
         assert_eq!(transaction_info.len(), 1);
