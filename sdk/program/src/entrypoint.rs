@@ -55,6 +55,24 @@ macro_rules! entrypoint {
             len: $crate::entrypoint::HEAP_LENGTH,
         };
 
+<<<<<<< HEAD
+=======
+        /// A program can provide their own custom panic implementation by
+        /// adding a `custom-panic` feature to `Cargo.toml` and implementing
+        /// their own `custom_panic`.
+        ///
+        /// A good way to reduce the final size of the program is to provide a
+        /// `custom_panic` implementation that does nothing.  Doing so will cut
+        /// ~25kb from a noop program.  That number goes down the more the
+        /// programs pulls in Rust's libstd for other purposes.
+        #[cfg(all(not(feature = "custom-panic"), target_arch = "bpf"))]
+        #[no_mangle]
+        fn custom_panic(info: &core::panic::PanicInfo<'_>) {
+            // Full panic reporting
+            $crate::msg!("{}", info);
+        }
+
+>>>>>>> 57dd60f67... Use msg! in program entrypoint (#13889)
         /// # Safety
         #[no_mangle]
         pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
