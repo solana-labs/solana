@@ -1338,9 +1338,9 @@ dependencies = [
 
 [[package]]
 name = "goblin"
-version = "0.2.3"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d20fd25aa456527ce4f544271ae4fea65d2eda4a6561ea56f39fb3ee4f7e3884"
+checksum = "c69552f48b18aa6102ce0c82dd9bc9d3f8af5fc0a5797069b1b466b90570e39c"
 dependencies = [
  "log 0.4.8",
  "plain",
@@ -5109,9 +5109,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.1.33"
+version = "0.1.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14a45ec96d6902676708f52d180229ea3933df93eadb3e96e356377d467831b6"
+checksum = "6b54ad0656df5f2c8acdd030ce769aaf49ee32995e569225bfb5121688863a09"
 dependencies = [
  "byteorder",
  "combine",
