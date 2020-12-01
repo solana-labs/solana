@@ -27,7 +27,7 @@ solana-logger = { path = "../../logger", version = "1.4.14" }
 solana-measure = { path = "../../measure", version = "1.4.14" }
 solana-runtime = { path = "../../runtime", version = "1.4.14" }
 solana-sdk = { path = "../../sdk", version = "1.4.14" }
-solana_rbpf = "=0.1.33"
+solana_rbpf = "=0.1.34"
 
 [[bench]]
 name = "bpf_loader"
