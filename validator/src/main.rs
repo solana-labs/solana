@@ -828,6 +828,7 @@ fn create_validator(
         enable_recycler_warming();
     }
     solana_ledger::entry::init_poh();
+    solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(ledger_path);
 
     if let Some(ref cluster_entrypoint) = cluster_entrypoint {
         rpc_bootstrap(
