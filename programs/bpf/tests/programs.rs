@@ -523,11 +523,7 @@ fn test_program_bpf_invoke() {
             &[TEST_SUCCESS, bump_seed1, bump_seed2, bump_seed3],
             account_metas.clone(),
         );
-        let noop_instruction = Instruction::new(
-            noop_program_id,
-            &(),
-            vec![]
-        );
+        let noop_instruction = Instruction::new(noop_program_id, &(), vec![]);
         let message = Message::new(&[instruction, noop_instruction], Some(&mint_pubkey));
         let tx = Transaction::new(
             &[
@@ -698,6 +694,43 @@ fn test_program_bpf_invoke() {
         for i in 0..20 {
             assert_eq!(i as u8, account.data[i]);
         }
+    }
+
+    // Check the caller has access to cpi program
+    {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(50);
+        let mut bank = Bank::new(&genesis_config);
+        let (name, id, entrypoint) = solana_bpf_loader_program!();
+        bank.add_builtin_loader(&name, id, entrypoint);
+        let bank = Arc::new(bank);
+        let bank_client = BankClient::new_shared(&bank);
+
+        let caller_pubkey = load_bpf_program(
+            &bank_client,
+            &bpf_loader::id(),
+            &mint_keypair,
+            "solana_bpf_rust_caller_access",
+        );
+        let caller2_pubkey = load_bpf_program(
+            &bank_client,
+            &bpf_loader::id(),
+            &mint_keypair,
+            "solana_bpf_rust_caller_access",
+        );
+        let account_metas = vec![
+            AccountMeta::new_readonly(caller_pubkey, false),
+            AccountMeta::new_readonly(caller2_pubkey, false),
+        ];
+        let instruction = Instruction::new(caller_pubkey, &[1_u8], account_metas.clone());
+        let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            TransactionError::InstructionError(0, InstructionError::MissingAccount)
+        );
     }
 }
 
