@@ -661,7 +661,7 @@ impl Validator {
     }
 
     pub fn join(self) -> Result<()> {
-        self.poh_service.join()?;
+        self.poh_service.join().expect("poh_service");
         drop(self.poh_recorder);
         if let Some(RpcServices {
             json_rpc_service,
@@ -670,36 +670,50 @@ impl Validator {
             optimistically_confirmed_bank_tracker,
         }) = self.rpc_service
         {
-            json_rpc_service.join()?;
-            pubsub_service.join()?;
-            rpc_banks_service.join()?;
-            optimistically_confirmed_bank_tracker.join()?;
+            json_rpc_service.join().expect("rpc_service");
+            pubsub_service.join().expect("pubsub_service");
+            rpc_banks_service.join().expect("rpc_banks_service");
+            optimistically_confirmed_bank_tracker
+                .join()
+                .expect("optimistically_confirmed_bank_tracker");
         }
         if let Some(transaction_status_service) = self.transaction_status_service {
-            transaction_status_service.join()?;
+            transaction_status_service
+                .join()
+                .expect("transaction_status_service");
         }
 
         if let Some(rewards_recorder_service) = self.rewards_recorder_service {
-            rewards_recorder_service.join()?;
+            rewards_recorder_service
+                .join()
+                .expect("rewards_recorder_service");
         }
 
         if let Some(cache_block_time_service) = self.cache_block_time_service {
-            cache_block_time_service.join()?;
+            cache_block_time_service
+                .join()
+                .expect("cache_block_time_service");
         }
 
         if let Some(sample_performance_service) = self.sample_performance_service {
-            sample_performance_service.join()?;
+            sample_performance_service
+                .join()
+                .expect("sample_performance_service");
         }
 
         if let Some(s) = self.snapshot_packager_service {
-            s.join()?;
+            s.join().expect("snapshot_packager_service");
         }
 
-        self.gossip_service.join()?;
-        self.serve_repair_service.join()?;
-        self.tpu.join()?;
-        self.tvu.join()?;
-        self.completed_data_sets_service.join()?;
+        self.gossip_service.join().expect("gossip_service");
+        self.serve_repair_service
+            .join()
+            .expect("serve_repair_service");
+        self.tpu.join().expect("tpu");
+        self.tvu.join().expect("tvu");
+        self.completed_data_sets_service
+            .join()
+            .expect("completed_data_sets_service");
         self.ip_echo_server.shutdown_now();
 
         Ok(())
