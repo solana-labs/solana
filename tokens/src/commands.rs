@@ -1978,30 +1978,24 @@ mod tests {
         let read_db = db::open_db(&db_file, true).unwrap();
         let transaction_info = db::read_transaction_infos(&read_db);
         assert_eq!(transaction_info.len(), num_records);
-        assert_eq!(
-            transaction_info[0],
-            TransactionInfo {
-                recipient,
-                amount,
-                new_stake_account_address: None,
-                finalized_date: None,
-                transaction,
-                last_valid_slot,
-                lockup_date: None,
-            }
-        );
-        assert_eq!(
-            transaction_info[1],
-            TransactionInfo {
-                recipient,
-                amount,
-                new_stake_account_address: None,
-                finalized_date: None,
-                transaction: Transaction::new_unsigned(message),
-                last_valid_slot: std::u64::MAX,
-                lockup_date: None,
-            }
-        );
+        assert!(transaction_info.contains(&TransactionInfo {
+            recipient,
+            amount,
+            new_stake_account_address: None,
+            finalized_date: None,
+            transaction,
+            last_valid_slot,
+            lockup_date: None,
+        }));
+        assert!(transaction_info.contains(&TransactionInfo {
+            recipient,
+            amount,
+            new_stake_account_address: None,
+            finalized_date: None,
+            transaction: Transaction::new_unsigned(message),
+            last_valid_slot: std::u64::MAX,
+            lockup_date: None,
+        }));
 
         // Next dump should write record written in last send_messages call
         let num_records = db::read_transaction_infos(&db).len();
@@ -2009,5 +2003,60 @@ mod tests {
         let read_db = db::open_db(&db_file, true).unwrap();
         let transaction_info = db::read_transaction_infos(&read_db);
         assert_eq!(transaction_info.len(), num_records);
+    }
+
+    #[test]
+    fn test_distribute_allocations_dump_db() {
+        let test_validator = TestValidator::with_no_fees();
+        let sender_keypair = test_validator.mint_keypair();
+        let url = test_validator.rpc_url();
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+
+        let fee_payer = Keypair::new();
+        let transaction = transfer(
+            &client,
+            sol_to_lamports(1.0),
+            &sender_keypair,
+            &fee_payer.pubkey(),
+        )
+        .unwrap();
+        client
+            .send_and_confirm_transaction_with_spinner(&transaction)
+            .unwrap();
+
+        let dir = tempdir().unwrap();
+        let db_file = dir
+            .path()
+            .join("dist_allocations.db")
+            .to_str()
+            .unwrap()
+            .to_string();
+        let mut db = db::open_db(&db_file, false).unwrap();
+        let recipient = Pubkey::new_unique();
+        let allocation = Allocation {
+            recipient: recipient.to_string(),
+            amount: sol_to_lamports(1.0),
+            lockup_date: "".to_string(),
+        };
+        // This is just dummy data; Args will not affect messages
+        let args = DistributeTokensArgs {
+            sender_keypair: Box::new(sender_keypair),
+            fee_payer: Box::new(fee_payer),
+            dry_run: true,
+            input_csv: "".to_string(),
+            transaction_db: "".to_string(),
+            output_path: None,
+            stake_args: None,
+            spl_token_args: None,
+            transfer_amount: None,
+        };
+
+        let exit = Arc::new(AtomicBool::new(false));
+
+        // Ensure data is always dumped after distribute_allocations
+        distribute_allocations(&client, &mut db, &[allocation], &args, exit).unwrap();
+        let read_db = db::open_db(&db_file, true).unwrap();
+        let transaction_info = db::read_transaction_infos(&read_db);
+        assert_eq!(transaction_info.len(), 1);
     }
 }
