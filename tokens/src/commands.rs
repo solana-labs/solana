@@ -89,6 +89,8 @@ impl From<Vec<FundingSource>> for FundingSources {
     }
 }
 
+type StakeExtras = Vec<(Keypair, Option<DateTime<Utc>>)>;
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("I/O error")]
@@ -245,17 +247,16 @@ fn distribution_instructions(
     instructions
 }
 
-fn distribute_allocations(
+fn build_messages(
     client: &RpcClient,
     db: &mut PickleDb,
     allocations: &[Allocation],
     args: &DistributeTokensArgs,
     exit: Arc<AtomicBool>,
+    messages: &mut Vec<Message>,
+    stake_extras: &mut StakeExtras,
+    created_accounts: &mut u64,
 ) -> Result<(), Error> {
-    type StakeExtras = Vec<(Keypair, Option<DateTime<Utc>>)>;
-    let mut messages: Vec<Message> = vec![];
-    let mut stake_extras: StakeExtras = vec![];
-    let mut created_accounts = 0;
     for allocation in allocations.iter() {
         if exit.load(Ordering::SeqCst) {
             db.dump()?;
@@ -282,7 +283,7 @@ fn distribute_allocations(
                     )])?[0]
                         .is_none();
                 if do_create_associated_token_account {
-                    created_accounts += 1;
+                    *created_accounts += 1;
                 }
                 (
                     token_amount_to_ui_amount(allocation.amount, spl_token_args.decimals).ui_amount,
@@ -308,6 +309,30 @@ fn distribute_allocations(
         messages.push(message);
         stake_extras.push((new_stake_account_keypair, lockup_date));
     }
+    Ok(())
+}
+
+fn distribute_allocations(
+    client: &RpcClient,
+    db: &mut PickleDb,
+    allocations: &[Allocation],
+    args: &DistributeTokensArgs,
+    exit: Arc<AtomicBool>,
+) -> Result<(), Error> {
+    let mut messages: Vec<Message> = vec![];
+    let mut stake_extras: StakeExtras = vec![];
+    let mut created_accounts = 0;
+
+    build_messages(
+        client,
+        db,
+        allocations,
+        args,
+        exit.clone(),
+        &mut messages,
+        &mut stake_extras,
+        &mut created_accounts,
+    )?;
 
     let num_signatures = messages
         .iter()
@@ -1724,5 +1749,127 @@ mod tests {
         }
 
         test_validator.close();
+    }
+
+    #[test]
+    fn test_build_messages_dump_db() {
+        let client = RpcClient::new_mock("mock_client".to_string());
+        let dir = tempdir().unwrap();
+        let db_file = dir
+            .path()
+            .join("build_messages.db")
+            .to_str()
+            .unwrap()
+            .to_string();
+        let mut db = db::open_db(&db_file, false).unwrap();
+
+        let sender = Keypair::new();
+        let recipient = Pubkey::new_unique();
+        let amount = sol_to_lamports(1.0);
+        let last_valid_slot = 222;
+        let transaction = transfer(&client, amount, &sender, &recipient).unwrap();
+
+        // Queue db data
+        db::set_transaction_info(
+            &mut db,
+            &recipient,
+            amount,
+            &transaction,
+            None,
+            false,
+            last_valid_slot,
+            None,
+        )
+        .unwrap();
+
+        // Check that data has not been dumped
+        let read_db = db::open_db(&db_file, true).unwrap();
+        assert!(db::read_transaction_infos(&read_db).is_empty());
+
+        // This is just dummy data; Args will not affect messages built
+        let args = DistributeTokensArgs {
+            sender_keypair: Box::new(Keypair::new()),
+            fee_payer: Box::new(Keypair::new()),
+            dry_run: true,
+            input_csv: "".to_string(),
+            transaction_db: "".to_string(),
+            output_path: None,
+            stake_args: None,
+            spl_token_args: None,
+            transfer_amount: None,
+        };
+        let allocation = Allocation {
+            recipient: recipient.to_string(),
+            amount: sol_to_lamports(1.0),
+            lockup_date: "".to_string(),
+        };
+
+        let mut messages: Vec<Message> = vec![];
+        let mut stake_extras: StakeExtras = vec![];
+        let mut created_accounts = 0;
+
+        // Exit false will not dump data
+        build_messages(
+            &client,
+            &mut db,
+            &[allocation.clone()],
+            &args,
+            Arc::new(AtomicBool::new(false)),
+            &mut messages,
+            &mut stake_extras,
+            &mut created_accounts,
+        )
+        .unwrap();
+        let read_db = db::open_db(&db_file, true).unwrap();
+        assert!(db::read_transaction_infos(&read_db).is_empty());
+        assert_eq!(messages.len(), 1);
+
+        // Empty allocations will not dump data
+        let mut messages: Vec<Message> = vec![];
+        let exit = Arc::new(AtomicBool::new(true));
+        build_messages(
+            &client,
+            &mut db,
+            &[],
+            &args,
+            exit.clone(),
+            &mut messages,
+            &mut stake_extras,
+            &mut created_accounts,
+        )
+        .unwrap();
+        let read_db = db::open_db(&db_file, true).unwrap();
+        assert!(db::read_transaction_infos(&read_db).is_empty());
+        assert!(messages.is_empty());
+
+        // Any allocation should prompt data dump
+        let mut messages: Vec<Message> = vec![];
+        build_messages(
+            &client,
+            &mut db,
+            &[allocation],
+            &args,
+            exit,
+            &mut messages,
+            &mut stake_extras,
+            &mut created_accounts,
+        )
+        .unwrap();
+        let read_db = db::open_db(&db_file, true).unwrap();
+        let transaction_info = db::read_transaction_infos(&read_db);
+        assert_eq!(transaction_info.len(), 1);
+        assert_eq!(
+            transaction_info[0],
+            TransactionInfo {
+                recipient,
+                amount,
+                new_stake_account_address: None,
+                finalized_date: None,
+                transaction,
+                last_valid_slot,
+                lockup_date: None,
+            }
+        );
+        assert_eq!(messages.len(), 1);
     }
 }
