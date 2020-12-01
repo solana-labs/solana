@@ -5,7 +5,7 @@ pub mod ristretto;
 use crate::ristretto::ristretto_mul;
 use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, scalar::Scalar};
 use solana_program::{
-    account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, info, pubkey::Pubkey,
+    account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, msg, pubkey::Pubkey,
 };
 
 fn test_ristretto_mul() -> ProgramResult {
@@ -28,7 +28,7 @@ fn process_instruction(
     _accounts: &[AccountInfo],
     _instruction_data: &[u8],
 ) -> ProgramResult {
-    info!("Ristretto multiply");
+    msg!("Ristretto multiply");
 
     test_ristretto_mul()?;
 

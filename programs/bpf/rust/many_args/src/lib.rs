@@ -2,14 +2,14 @@
 
 mod helper;
 extern crate solana_program;
-use solana_program::{entrypoint::SUCCESS, info};
+use solana_program::{entrypoint::SUCCESS, msg};
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
-    info!("Call same package");
+    msg!("Call same package");
     assert_eq!(crate::helper::many_args(1, 2, 3, 4, 5, 6, 7, 8, 9), 45);
 
-    info!("Call another package");
+    msg!("Call another package");
     assert_eq!(
         solana_bpf_rust_many_args_dep::many_args(1, 2, 3, 4, 5, 6, 7, 8, 9),
         45

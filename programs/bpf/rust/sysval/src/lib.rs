@@ -6,7 +6,7 @@ use solana_program::{
     clock::DEFAULT_SLOTS_PER_EPOCH,
     entrypoint,
     entrypoint::ProgramResult,
-    info,
+    msg,
     pubkey::Pubkey,
     rent,
     sysvar::{
@@ -22,26 +22,26 @@ fn process_instruction(
     _instruction_data: &[u8],
 ) -> ProgramResult {
     // Clock
-    info!("Clock identifier:");
+    msg!("Clock identifier:");
     sysvar::clock::id().log();
     let clock = Clock::from_account_info(&accounts[2]).expect("clock");
     assert_eq!(clock.slot, DEFAULT_SLOTS_PER_EPOCH + 1);
 
     // Fees
-    info!("Fees identifier:");
+    msg!("Fees identifier:");
     sysvar::fees::id().log();
     let fees = Fees::from_account_info(&accounts[3]).expect("fees");
     let fee_calculator = fees.fee_calculator;
     assert_eq!(fee_calculator.lamports_per_signature, 0);
 
     // Slot Hashes
-    info!("SlotHashes identifier:");
+    msg!("SlotHashes identifier:");
     sysvar::slot_hashes::id().log();
     let slot_hashes = SlotHashes::from_account_info(&accounts[4]).expect("slot_hashes");
     assert!(slot_hashes.len() >= 1);
 
     // Stake History
-    info!("StakeHistory identifier:");
+    msg!("StakeHistory identifier:");
     sysvar::stake_history::id().log();
     let stake_history = StakeHistory::from_account_info(&accounts[5]).expect("stake_history");
     assert!(stake_history.len() >= 1);

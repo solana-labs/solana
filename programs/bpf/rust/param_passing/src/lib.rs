@@ -2,7 +2,7 @@
 
 extern crate solana_program;
 use solana_bpf_rust_param_passing_dep::{Data, TestDep};
-use solana_program::{entrypoint::SUCCESS, info};
+use solana_program::{entrypoint::SUCCESS, msg};
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
@@ -17,7 +17,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     };
 
     let test_dep = TestDep::new(&data, 1, 2, 3, 4, 5);
-    info!(0, 0, 0, 0, test_dep.thirty);
+    msg!(0, 0, 0, 0, test_dep.thirty);
     assert!(test_dep.thirty == 30);
 
     SUCCESS
