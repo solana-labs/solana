@@ -1,6 +1,7 @@
 use {
     crate::{
         cluster_info::Node,
+        gossip_service::discover_cluster,
         validator::{Validator, ValidatorConfig},
     },
     solana_ledger::create_new_tmp_ledger,
@@ -127,6 +128,7 @@ impl TestValidator {
         let rpc_url = format!("http://{}:{}", node.info.rpc.ip(), node.info.rpc.port());
         let rpc_pubsub_url = format!("ws://{}/", node.info.rpc_pubsub);
         let tpu = node.info.tpu;
+        let gossip = node.info.gossip;
 
         let validator = Validator::new(
             node,
@@ -137,6 +139,10 @@ impl TestValidator {
             None,
             &config,
         );
+
+        // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
+        // test validators concurrently...
+        discover_cluster(&gossip, 1).expect("TestValidator startup failed");
 
         TestValidator {
             validator,
