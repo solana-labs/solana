@@ -6,7 +6,6 @@ use crate::{
         bank_from_stream, bank_to_stream, SerdeStyle, SnapshotStorage, SnapshotStorages,
     },
     snapshot_package::{AccountsPackage, AccountsPackageSendError, AccountsPackageSender},
-    status_cache::MAX_CACHE_ENTRIES,
 };
 use bincode::{config::Options, serialize_into};
 use bzip2::bufread::BzDecoder;
@@ -41,6 +40,7 @@ pub const TAR_SNAPSHOTS_DIR: &str = "snapshots";
 pub const TAR_ACCOUNTS_DIR: &str = "accounts";
 pub const TAR_VERSION_FILE: &str = "version";
 
+pub const MAX_SNAPSHOTS: usize = 8; // Save some snapshots but not too many
 const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 const VERSION_STRING_V1_2_0: &str = "1.2.0";
 const DEFAULT_SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::V1_2_0;
@@ -882,7 +882,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
 pub fn purge_old_snapshots(snapshot_path: &Path) {
     // Remove outdated snapshots
     let slot_snapshot_paths = get_snapshot_paths(snapshot_path);
-    let num_to_remove = slot_snapshot_paths.len().saturating_sub(MAX_CACHE_ENTRIES);
+    let num_to_remove = slot_snapshot_paths.len().saturating_sub(MAX_SNAPSHOTS);
     for slot_files in &slot_snapshot_paths[..num_to_remove] {
         let r = remove_snapshot(slot_files.slot, snapshot_path);
         if r.is_err() {
