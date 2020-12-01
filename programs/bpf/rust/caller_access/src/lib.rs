@@ -3,7 +3,7 @@ use solana_sdk::{
     entrypoint,
     entrypoint::ProgramResult,
     instruction::{AccountMeta, Instruction},
-    msg,
+    info,
     program::invoke,
     pubkey::Pubkey,
 };
@@ -31,7 +31,7 @@ fn process_instruction(
             true,
             0,
         );
-        msg!("{:?} calling {:?}", program_id, key);
+        info!(&format!("{:?} calling {:?}", program_id, key));
         invoke(&ix, &[account])?;
     } else {
         match instruction_data[0] {
@@ -41,11 +41,11 @@ fn process_instruction(
                     &accounts[1].key.to_bytes(),
                     vec![AccountMeta::new_readonly(*program_id, false)],
                 );
-                msg!("{:?} calling {:?}", program_id, program_id);
+                info!(&format!("{:?} calling {:?}", program_id, program_id));
                 invoke(&ix, accounts)?;
             }
 
-            _ => msg!("Should never get here"),
+            _ => info!("Should never get here"),
         }
     }
     Ok(())
