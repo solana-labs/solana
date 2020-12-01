@@ -2,7 +2,7 @@
 
 extern crate solana_program;
 use solana_program::{
-    account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, info,
+    account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, msg,
     program_error::ProgramError, pubkey::Pubkey,
 };
 
@@ -14,36 +14,36 @@ fn process_instruction(
 ) -> ProgramResult {
     match instruction_data[0] {
         1 => {
-            info!("modify first account data");
+            msg!("modify first account data");
             accounts[2].data.borrow_mut()[0] = 1;
         }
         2 => {
-            info!("modify first account data");
+            msg!("modify first account data");
             accounts[3].data.borrow_mut()[0] = 2;
         }
         3 => {
-            info!("modify both account data");
+            msg!("modify both account data");
             accounts[2].data.borrow_mut()[0] += 1;
             accounts[3].data.borrow_mut()[0] += 2;
         }
         4 => {
-            info!("modify first account lamports");
+            msg!("modify first account lamports");
             **accounts[1].lamports.borrow_mut() -= 1;
             **accounts[2].lamports.borrow_mut() += 1;
         }
         5 => {
-            info!("modify first account lamports");
+            msg!("modify first account lamports");
             **accounts[1].lamports.borrow_mut() -= 2;
             **accounts[3].lamports.borrow_mut() += 2;
         }
         6 => {
-            info!("modify both account lamports");
+            msg!("modify both account lamports");
             **accounts[1].lamports.borrow_mut() -= 3;
             **accounts[2].lamports.borrow_mut() += 1;
             **accounts[3].lamports.borrow_mut() += 2;
         }
         _ => {
-            info!("Unrecognized command");
+            msg!("Unrecognized command");
             return Err(ProgramError::InvalidArgument);
         }
     }

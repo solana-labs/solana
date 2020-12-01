@@ -93,7 +93,7 @@ macro_rules! custom_panic_default {
         #[no_mangle]
         fn custom_panic(info: &core::panic::PanicInfo<'_>) {
             // Full panic reporting
-            $crate::info!(&format!("{}", info));
+            $crate::msg!("{}", info);
         }
     };
 }

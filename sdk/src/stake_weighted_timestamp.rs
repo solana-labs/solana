@@ -1,7 +1,6 @@
 /// A helper for calculating a stake-weighted timestamp estimate from a set of timestamps and epoch
 /// stake.
 use solana_sdk::{
-    account::Account,
     clock::{Slot, UnixTimestamp},
     pubkey::Pubkey,
 };
@@ -19,9 +18,9 @@ pub enum EstimateType {
     Unbounded, // Deprecated.  Remove in the Solana v1.6.0 timeframe
 }
 
-pub fn calculate_stake_weighted_timestamp(
+pub fn calculate_stake_weighted_timestamp<T>(
     unique_timestamps: &HashMap<Pubkey, (Slot, UnixTimestamp)>,
-    stakes: &HashMap<Pubkey, (u64, Account)>,
+    stakes: &HashMap<Pubkey, (u64, T /*Account|ArcVoteAccount*/)>,
     slot: Slot,
     slot_duration: Duration,
     estimate_type: EstimateType,
@@ -44,9 +43,9 @@ pub fn calculate_stake_weighted_timestamp(
     }
 }
 
-fn calculate_unbounded_stake_weighted_timestamp(
+fn calculate_unbounded_stake_weighted_timestamp<T>(
     unique_timestamps: &HashMap<Pubkey, (Slot, UnixTimestamp)>,
-    stakes: &HashMap<Pubkey, (u64, Account)>,
+    stakes: &HashMap<Pubkey, (u64, T /*Account|ArcVoteAccount*/)>,
     slot: Slot,
     slot_duration: Duration,
 ) -> Option<UnixTimestamp> {
@@ -71,9 +70,9 @@ fn calculate_unbounded_stake_weighted_timestamp(
     }
 }
 
-fn calculate_bounded_stake_weighted_timestamp(
+fn calculate_bounded_stake_weighted_timestamp<T>(
     unique_timestamps: &HashMap<Pubkey, (Slot, UnixTimestamp)>,
-    stakes: &HashMap<Pubkey, (u64, Account)>,
+    stakes: &HashMap<Pubkey, (u64, T /*Account|ArcVoteAccount*/)>,
     slot: Slot,
     slot_duration: Duration,
     epoch_start_timestamp: Option<(Slot, UnixTimestamp)>,
@@ -135,7 +134,7 @@ fn calculate_bounded_stake_weighted_timestamp(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use solana_sdk::native_token::sol_to_lamports;
+    use solana_sdk::{account::Account, native_token::sol_to_lamports};
 
     #[test]
     fn test_calculate_stake_weighted_timestamp() {

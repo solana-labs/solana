@@ -4,7 +4,7 @@ extern crate solana_program;
 use solana_program::{
     custom_panic_default,
     hash::{hashv, Hasher},
-    info,
+    msg,
 };
 
 fn test_hasher() {
@@ -16,7 +16,7 @@ fn test_hasher() {
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
-    info!("sha256");
+    msg!("sha256");
 
     test_hasher();
 

@@ -41,6 +41,8 @@ type SignatureProps = {
   signature: TransactionSignature;
 };
 
+export const SignatureContext = React.createContext("");
+
 enum AutoRefresh {
   Active,
   Inactive,
@@ -107,7 +109,9 @@ export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
         <>
           <StatusCard signature={signature} autoRefresh={autoRefresh} />
           <AccountsCard signature={signature} autoRefresh={autoRefresh} />
-          <InstructionsSection signature={signature} />
+          <SignatureContext.Provider value={signature}>
+            <InstructionsSection signature={signature} />
+          </SignatureContext.Provider>
           <ProgramLogSection signature={signature} />
         </>
       )}
@@ -400,6 +404,8 @@ function InstructionsSection({ signature }: SignatureProps) {
 
   if (!status?.data?.info || !details?.data?.transaction) return null;
 
+  const raw = details.data.raw?.transaction;
+
   const { transaction } = details.data.transaction;
   if (transaction.message.instructions.length === 0) {
     return <ErrorCard retry={refreshDetails} text="No instructions found" />;
@@ -460,7 +466,12 @@ function InstructionsSection({ signature }: SignatureProps) {
               />
             );
           default:
-            const props = { ix: next, result, index };
+            const props = {
+              ix: next,
+              result,
+              index,
+              raw: raw?.instructions[index],
+            };
             return <UnknownDetailsCard key={index} {...props} />;
         }
       }

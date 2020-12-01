@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useContext } from "react";
 import {
   TransactionInstruction,
   SignatureResult,
@@ -6,6 +6,11 @@ import {
 } from "@solana/web3.js";
 import { RawDetails } from "./RawDetails";
 import { RawParsedDetails } from "./RawParsedDetails";
+import { SignatureContext } from "../../pages/TransactionDetailsPage";
+import {
+  useTransactionDetails,
+  useFetchRawTransaction,
+} from "providers/transactions/details";
 
 type InstructionProps = {
   title: string;
@@ -26,6 +31,22 @@ export function InstructionCard({
 }: InstructionProps) {
   const [resultClass] = ixResult(result, index);
   const [showRaw, setShowRaw] = React.useState(defaultRaw || false);
+  const signature = useContext(SignatureContext);
+  const details = useTransactionDetails(signature);
+  let raw: TransactionInstruction | undefined = undefined;
+  if (details) {
+    raw = details?.data?.raw?.transaction.instructions[index];
+  }
+  const fetchRaw = useFetchRawTransaction();
+  const fetchRawTrigger = () => fetchRaw(signature);
+
+  const rawClickHandler = () => {
+    if (!defaultRaw && !showRaw && !raw) {
+      fetchRawTrigger();
+    }
+
+    return setShowRaw((r) => !r);
+  };
 
   return (
     <div className="card">
@@ -42,7 +63,7 @@ export function InstructionCard({
           className={`btn btn-sm d-flex ${
             showRaw ? "btn-black active" : "btn-white"
           }`}
-          onClick={() => setShowRaw((r) => !r)}
+          onClick={rawClickHandler}
         >
           <span className="fe fe-code mr-1"></span>
           Raw
@@ -53,7 +74,7 @@ export function InstructionCard({
           <tbody className="list">
             {showRaw ? (
               "parsed" in ix ? (
-                <RawParsedDetails ix={ix} />
+                <RawParsedDetails ix={ix} raw={raw} />
               ) : (
                 <RawDetails ix={ix} />
               )

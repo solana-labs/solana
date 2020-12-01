@@ -537,13 +537,15 @@ impl JsonRpcRequestProcessor {
         let epoch_vote_accounts = bank
             .epoch_vote_accounts(bank.get_epoch_and_slot_index(bank.slot()).0)
             .ok_or_else(Error::invalid_request)?;
+        let default_vote_state = VoteState::default();
         let (current_vote_accounts, delinquent_vote_accounts): (
             Vec<RpcVoteAccountInfo>,
             Vec<RpcVoteAccountInfo>,
         ) = vote_accounts
             .iter()
             .map(|(pubkey, (activated_stake, account))| {
-                let vote_state = VoteState::from(&account).unwrap_or_default();
+                let vote_state = account.vote_state();
+                let vote_state = vote_state.as_ref().unwrap_or(&default_vote_state);
                 let last_vote = if let Some(vote) = vote_state.votes.iter().last() {
                     vote.slot
                 } else {
@@ -608,10 +610,15 @@ impl JsonRpcRequestProcessor {
         T: std::fmt::Debug,
     {
         if result.is_err() {
-            if let BlockstoreError::SlotNotRooted = result.as_ref().unwrap_err() {
-                if slot > self.blockstore.max_root() {
-                    return Err(RpcCustomError::BlockNotAvailable { slot }.into());
-                }
+            let err = result.as_ref().unwrap_err();
+            debug!(
+                "check_blockstore_max_root, slot: {:?}, max root: {:?}, err: {:?}",
+                slot,
+                self.blockstore.max_root(),
+                err
+            );
+            if slot >= self.blockstore.max_root() {
+                return Err(RpcCustomError::BlockNotAvailable { slot }.into());
             }
         }
         Ok(())
