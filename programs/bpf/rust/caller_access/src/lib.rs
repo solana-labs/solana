@@ -1,4 +1,4 @@
-use solana_program::{
+use solana_sdk::{
     account_info::AccountInfo,
     entrypoint,
     entrypoint::ProgramResult,
