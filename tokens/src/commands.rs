@@ -18,6 +18,7 @@ use solana_client::{
     client_error::{ClientError, Result as ClientResult},
     rpc_client::RpcClient,
     rpc_config::RpcSendTransactionConfig,
+    rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
 };
 use solana_sdk::{
     commitment_config::CommitmentConfig,
@@ -566,15 +567,23 @@ fn update_finalized_transactions(
         .map(|(tx, _slot)| tx.signatures[0])
         .filter(|sig| *sig != Signature::default()) // Filter out dry-run signatures
         .collect();
-    let transaction_statuses = client
-        .get_signature_statuses(&unconfirmed_signatures)?
-        .value;
+    let mut statuses = vec![];
+    for unconfirmed_signatures_chunk in
+        unconfirmed_signatures.chunks(MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS - 1)
+    {
+        statuses.extend(
+            client
+                .get_signature_statuses(&unconfirmed_signatures_chunk)?
+                .value
+                .into_iter(),
+        );
+    }
     let root_slot = client.get_slot()?;
 
     let mut confirmations = None;
     for ((transaction, last_valid_slot), opt_transaction_status) in unconfirmed_transactions
         .into_iter()
-        .zip(transaction_statuses.into_iter())
+        .zip(statuses.into_iter())
     {
         match db::update_finalized_transaction(
             db,
