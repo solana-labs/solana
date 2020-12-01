@@ -4985,6 +4985,7 @@ dependencies = [
  "clap",
  "console",
  "csv",
+ "ctrlc",
  "dirs-next",
  "indexmap",
  "indicatif",
