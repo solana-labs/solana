@@ -2171,4 +2171,45 @@ mod tests {
         assert_eq!(transaction_info.len(), 1);
         assert!(transaction_info[0].finalized_date.is_some());
     }
+
+    #[test]
+    fn test_update_finalized_transactions_dump_db() {
+        let client = RpcClient::new_mock("mock_client".to_string());
+        let dir = tempdir().unwrap();
+        let db_file = dir
+            .path()
+            .join("update_finalized_transactions.db")
+            .to_str()
+            .unwrap()
+            .to_string();
+        let mut db = db::open_db(&db_file, false).unwrap();
+
+        let sender = Keypair::new();
+        let recipient = Pubkey::new_unique();
+        let amount = sol_to_lamports(1.0);
+        let last_valid_slot = 222;
+        let transaction = transfer(&client, amount, &sender, &recipient).unwrap();
+
+        // Queue unconfirmed transaction into db
+        db::set_transaction_info(
+            &mut db,
+            &recipient,
+            amount,
+            &transaction,
+            None,
+            false,
+            last_valid_slot,
+            None,
+        )
+        .unwrap();
+
+        // Ensure data is always dumped after update_finalized_transactions
+        let confs =
+            update_finalized_transactions(&client, &mut db, Arc::new(AtomicBool::new(false)))
+                .unwrap();
+        let read_db = db::open_db(&db_file, true).unwrap();
+        let transaction_info = db::read_transaction_infos(&read_db);
+        assert_eq!(transaction_info.len(), 1);
+        assert_eq!(confs, None);
+    }
 }
