@@ -311,7 +311,7 @@ mod tests {
         let saved_slot = 4;
         let mut saved_archive_path = None;
 
-        for forks in 0..MAX_CACHE_ENTRIES + 2 {
+        for forks in 0..snapshot_utils::MAX_SNAPSHOTS + 2 {
             let bank = Bank::new_from_parent(
                 &bank_forks[forks as u64],
                 &Pubkey::default(),
@@ -381,7 +381,7 @@ mod tests {
         assert!(snapshot_utils::get_snapshot_paths(&snapshots_dir)
             .into_iter()
             .map(|path| path.slot)
-            .eq(3..=MAX_CACHE_ENTRIES as u64 + 2));
+            .eq(3..=snapshot_utils::MAX_SNAPSHOTS as u64 + 2));
 
         // Create a SnapshotPackagerService to create tarballs from all the pending
         // SnapshotPackage's on the channel. By the time this service starts, we have already
