@@ -37,7 +37,11 @@ use spl_associated_token_account_v1_0::get_associated_token_address;
 use spl_token_v2_0::solana_program::program_error::ProgramError;
 use std::{
     cmp::{self},
-    io,
+    io, process,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     thread::sleep,
     time::Duration,
 };
@@ -244,12 +248,17 @@ fn distribute_allocations(
     db: &mut PickleDb,
     allocations: &[Allocation],
     args: &DistributeTokensArgs,
+    exit: Arc<AtomicBool>,
 ) -> Result<(), Error> {
     type StakeExtras = Vec<(Keypair, Option<DateTime<Utc>>)>;
     let mut messages: Vec<Message> = vec![];
     let mut stake_extras: StakeExtras = vec![];
     let mut created_accounts = 0;
     for allocation in allocations.iter() {
+        if exit.load(Ordering::SeqCst) {
+            db.dump()?;
+            process::exit(0);
+        }
         let new_stake_account_keypair = Keypair::new();
         let lockup_date = if allocation.lockup_date == "" {
             None
@@ -310,6 +319,10 @@ fn distribute_allocations(
     for ((allocation, message), (new_stake_account_keypair, lockup_date)) in
         allocations.iter().zip(messages).zip(stake_extras)
     {
+        if exit.load(Ordering::SeqCst) {
+            db.dump()?;
+            process::exit(0);
+        }
         let new_stake_account_address = new_stake_account_keypair.pubkey();
 
         let mut signers = vec![&*args.fee_payer, &*args.sender_keypair];
@@ -438,6 +451,7 @@ fn new_spinner_progress_bar() -> ProgressBar {
 pub fn process_allocations(
     client: &RpcClient,
     args: &DistributeTokensArgs,
+    exit: Arc<AtomicBool>,
 ) -> Result<Option<usize>, Error> {
     let require_lockup_heading = args.stake_args.is_some();
     let mut allocations: Vec<Allocation> = read_allocations(
@@ -462,7 +476,7 @@ pub fn process_allocations(
     let mut db = db::open_db(&args.transaction_db, args.dry_run)?;
 
     // Start by finalizing any transactions from the previous run.
-    let confirmations = finalize_transactions(client, &mut db, args.dry_run)?;
+    let confirmations = finalize_transactions(client, &mut db, args.dry_run, exit.clone())?;
 
     let transaction_infos = db::read_transaction_infos(&db);
     apply_previous_transactions(&mut allocations, &transaction_infos);
@@ -503,9 +517,9 @@ pub fn process_allocations(
         style(format!("{:<44}  {:>24}", "Recipient", "Expected Balance",)).bold()
     );
 
-    distribute_allocations(client, &mut db, &allocations, args)?;
+    distribute_allocations(client, &mut db, &allocations, args, exit.clone())?;
 
-    let opt_confirmations = finalize_transactions(client, &mut db, args.dry_run)?;
+    let opt_confirmations = finalize_transactions(client, &mut db, args.dry_run, exit)?;
 
     if !args.dry_run {
         if let Some(output_path) = &args.output_path {
@@ -520,12 +534,13 @@ fn finalize_transactions(
     client: &RpcClient,
     db: &mut PickleDb,
     dry_run: bool,
+    exit: Arc<AtomicBool>,
 ) -> Result<Option<usize>, Error> {
     if dry_run {
         return Ok(None);
     }
 
-    let mut opt_confirmations = update_finalized_transactions(client, db)?;
+    let mut opt_confirmations = update_finalized_transactions(client, db, exit.clone())?;
 
     let progress_bar = new_spinner_progress_bar();
 
@@ -539,7 +554,7 @@ fn finalize_transactions(
 
         // Sleep for about 1 slot
         sleep(Duration::from_millis(500));
-        let opt_conf = update_finalized_transactions(client, db)?;
+        let opt_conf = update_finalized_transactions(client, db, exit.clone())?;
         opt_confirmations = opt_conf;
     }
 
@@ -551,6 +566,7 @@ fn finalize_transactions(
 fn update_finalized_transactions(
     client: &RpcClient,
     db: &mut PickleDb,
+    exit: Arc<AtomicBool>,
 ) -> Result<Option<usize>, Error> {
     let transaction_infos = db::read_transaction_infos(db);
     let unconfirmed_transactions: Vec<_> = transaction_infos
@@ -599,6 +615,10 @@ fn update_finalized_transactions(
             result => {
                 result?;
             }
+        }
+        if exit.load(Ordering::SeqCst) {
+            db.dump()?;
+            process::exit(0);
         }
     }
     db.dump()?;
@@ -744,6 +764,7 @@ pub fn test_process_distribute_tokens_with_client(
     sender_keypair: Keypair,
     transfer_amount: Option<u64>,
 ) {
+    let exit = Arc::new(AtomicBool::default());
     let fee_payer = Keypair::new();
     let transaction = transfer(
         client,
@@ -799,7 +820,7 @@ pub fn test_process_distribute_tokens_with_client(
         spl_token_args: None,
         transfer_amount,
     };
-    let confirmations = process_allocations(client, &args).unwrap();
+    let confirmations = process_allocations(client, &args, exit.clone()).unwrap();
     assert_eq!(confirmations, None);
 
     let transaction_infos =
@@ -813,7 +834,7 @@ pub fn test_process_distribute_tokens_with_client(
     check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
 
     // Now, run it again, and check there's no double-spend.
-    process_allocations(client, &args).unwrap();
+    process_allocations(client, &args, exit).unwrap();
     let transaction_infos =
         db::read_transaction_infos(&db::open_db(&transaction_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
@@ -826,6 +847,7 @@ pub fn test_process_distribute_tokens_with_client(
 }
 
 pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keypair: Keypair) {
+    let exit = Arc::new(AtomicBool::default());
     let fee_payer = Keypair::new();
     let transaction = transfer(
         client,
@@ -907,7 +929,7 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
         sender_keypair: Box::new(sender_keypair),
         transfer_amount: None,
     };
-    let confirmations = process_allocations(client, &args).unwrap();
+    let confirmations = process_allocations(client, &args, exit.clone()).unwrap();
     assert_eq!(confirmations, None);
 
     let transaction_infos =
@@ -929,7 +951,7 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
     check_output_file(&output_path, &db::open_db(&transaction_db, true).unwrap());
 
     // Now, run it again, and check there's no double-spend.
-    process_allocations(client, &args).unwrap();
+    process_allocations(client, &args, exit).unwrap();
     let transaction_infos =
         db::read_transaction_infos(&db::open_db(&transaction_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
