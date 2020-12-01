@@ -51,13 +51,14 @@ macro_rules! entrypoint {
                 Err(error) => error.into(),
             }
         }
-        $crate::custom_feature_fallback!();
+        $crate::custom_heap_default!();
+        $crate::custom_panic_default!();
     };
 }
 
-/// Fallback to default for unused custom features.
+/// Fallback to default for unused custom heap feature.
 #[macro_export]
-macro_rules! custom_feature_fallback {
+macro_rules! custom_heap_default {
     () => {
         /// A program can provide their own custom heap implementation by adding
         /// a `custom-heap` feature to `Cargo.toml` and implementing their own
@@ -72,7 +73,14 @@ macro_rules! custom_feature_fallback {
             start: $crate::entrypoint::HEAP_START_ADDRESS,
             len: $crate::entrypoint::HEAP_LENGTH,
         };
+    };
+}
 
+/// Fallback to default for unused custom panic feature.
+/// This must be used if the entrypoint! macro is not used.
+#[macro_export]
+macro_rules! custom_panic_default {
+    () => {
         /// A program can provide their own custom panic implementation by
         /// adding a `custom-panic` feature to `Cargo.toml` and implementing
         /// their own `custom_panic`.

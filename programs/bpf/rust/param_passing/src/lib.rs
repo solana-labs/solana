@@ -2,7 +2,7 @@
 
 extern crate solana_program;
 use solana_bpf_rust_param_passing_dep::{Data, TestDep};
-use solana_program::{custom_feature_fallback, entrypoint::SUCCESS, info};
+use solana_program::{custom_panic_default, entrypoint::SUCCESS, info};
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
@@ -23,7 +23,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     SUCCESS
 }
 
-custom_feature_fallback!();
+custom_panic_default!();
 
 #[cfg(test)]
 mod test {
