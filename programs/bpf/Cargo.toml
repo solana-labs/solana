@@ -37,6 +37,11 @@ members = [
     "rust/128bit",
     "rust/128bit_dep",
     "rust/alloc",
+<<<<<<< HEAD
+=======
+    "rust/call_depth",
+    "rust/caller_access",
+>>>>>>> 733fcbaa6... Check that the program was granted access to program_id (#13890)
     "rust/custom_heap",
     "rust/dep_crate",
     "rust/deprecated_loader",
