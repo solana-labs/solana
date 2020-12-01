@@ -21,6 +21,7 @@ use solana_client::{
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
 };
 use solana_sdk::{
+    clock::Slot,
     commitment_config::CommitmentConfig,
     instruction::Instruction,
     message::Message,
@@ -33,6 +34,7 @@ use solana_stake_program::{
     stake_instruction::{self, LockupArgs},
     stake_state::{Authorized, Lockup, StakeAuthorize},
 };
+use solana_transaction_status::TransactionStatus;
 use spl_associated_token_account_v1_0::get_associated_token_address;
 use spl_token_v2_0::solana_program::program_error::ProgramError;
 #[cfg(not(test))]
@@ -638,9 +640,29 @@ fn update_finalized_transactions(
                 .into_iter(),
         );
     }
-    let root_slot = client.get_slot()?;
 
     let mut confirmations = None;
+    log_transaction_confirmations(
+        client,
+        db,
+        exit,
+        unconfirmed_transactions,
+        statuses,
+        &mut confirmations,
+    )?;
+    db.dump()?;
+    Ok(confirmations)
+}
+
+fn log_transaction_confirmations(
+    client: &RpcClient,
+    db: &mut PickleDb,
+    exit: Arc<AtomicBool>,
+    unconfirmed_transactions: Vec<(&Transaction, Slot)>,
+    statuses: Vec<Option<TransactionStatus>>,
+    confirmations: &mut Option<usize>,
+) -> Result<(), Error> {
+    let root_slot = client.get_slot()?;
     for ((transaction, last_valid_slot), opt_transaction_status) in unconfirmed_transactions
         .into_iter()
         .zip(statuses.into_iter())
@@ -653,7 +675,7 @@ fn update_finalized_transactions(
             root_slot,
         ) {
             Ok(Some(confs)) => {
-                confirmations = Some(cmp::min(confs, confirmations.unwrap_or(usize::MAX)));
+                *confirmations = Some(cmp::min(confs, confirmations.unwrap_or(usize::MAX)));
             }
             result => {
                 result?;
@@ -665,8 +687,7 @@ fn update_finalized_transactions(
             process::exit(0);
         }
     }
-    db.dump()?;
-    Ok(confirmations)
+    Ok(())
 }
 
 fn check_payer_balances(
@@ -2058,5 +2079,96 @@ mod tests {
         let read_db = db::open_db(&db_file, true).unwrap();
         let transaction_info = db::read_transaction_infos(&read_db);
         assert_eq!(transaction_info.len(), 1);
+    }
+
+    #[test]
+    fn test_log_transaction_confirmations_dump_db() {
+        let client = RpcClient::new_mock("mock_client".to_string());
+        let dir = tempdir().unwrap();
+        let db_file = dir
+            .path()
+            .join("log_transaction_confirmations.db")
+            .to_str()
+            .unwrap()
+            .to_string();
+        let mut db = db::open_db(&db_file, false).unwrap();
+
+        let sender = Keypair::new();
+        let recipient = Pubkey::new_unique();
+        let amount = sol_to_lamports(1.0);
+        let last_valid_slot = 222;
+        let transaction = transfer(&client, amount, &sender, &recipient).unwrap();
+
+        // Queue unconfirmed transaction into db
+        db::set_transaction_info(
+            &mut db,
+            &recipient,
+            amount,
+            &transaction,
+            None,
+            false,
+            last_valid_slot,
+            None,
+        )
+        .unwrap();
+
+        // Check that data has not been dumped
+        let read_db = db::open_db(&db_file, true).unwrap();
+        assert!(db::read_transaction_infos(&read_db).is_empty());
+
+        // Empty unconfirmed_transactions will not dump data
+        let mut confirmations = None;
+        let exit = Arc::new(AtomicBool::new(true));
+        log_transaction_confirmations(
+            &client,
+            &mut db,
+            exit.clone(),
+            vec![],
+            vec![],
+            &mut confirmations,
+        )
+        .unwrap();
+        let read_db = db::open_db(&db_file, true).unwrap();
+        assert!(db::read_transaction_infos(&read_db).is_empty());
+        assert_eq!(confirmations, None);
+
+        // Exit false will not dump data
+        log_transaction_confirmations(
+            &client,
+            &mut db,
+            Arc::new(AtomicBool::new(false)),
+            vec![(&transaction, 111)],
+            vec![Some(TransactionStatus {
+                slot: 40,
+                confirmations: Some(15),
+                status: Ok(()),
+                err: None,
+            })],
+            &mut confirmations,
+        )
+        .unwrap();
+        let read_db = db::open_db(&db_file, true).unwrap();
+        assert!(db::read_transaction_infos(&read_db).is_empty());
+        assert_eq!(confirmations, Some(15));
+
+        // Exit true should dump data
+        log_transaction_confirmations(
+            &client,
+            &mut db,
+            exit,
+            vec![(&transaction, 111)],
+            vec![Some(TransactionStatus {
+                slot: 55,
+                confirmations: None,
+                status: Ok(()),
+                err: None,
+            })],
+            &mut confirmations,
+        )
+        .unwrap();
+        let read_db = db::open_db(&db_file, true).unwrap();
+        let transaction_info = db::read_transaction_infos(&read_db);
+        assert_eq!(transaction_info.len(), 1);
+        assert!(transaction_info[0].finalized_date.is_some());
     }
 }
