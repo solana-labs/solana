@@ -1170,13 +1170,15 @@ impl ClusterInfo {
 
     /// all validators that have a valid tvu port and are on the same `shred_version`.
     pub fn tvu_peers(&self) -> Vec<ContactInfo> {
+        let self_pubkey = self.id();
+        let self_shred_version = self.my_shred_version();
         self.time_gossip_read_lock("tvu_peers", &self.stats.tvu_peers)
             .crds
             .get_nodes_contact_info()
-            .filter(|x| {
-                ContactInfo::is_valid_address(&x.tvu)
-                    && x.id != self.id()
-                    && x.shred_version == self.my_shred_version()
+            .filter(|node| {
+                node.id != self_pubkey
+                    && node.shred_version == self_shred_version
+                    && ContactInfo::is_valid_address(&node.tvu)
             })
             .cloned()
             .collect()
@@ -1200,22 +1202,24 @@ impl ClusterInfo {
     /// all tvu peers with valid gossip addrs that likely have the slot being requested
     pub fn repair_peers(&self, slot: Slot) -> Vec<ContactInfo> {
         let mut time = Measure::start("repair_peers");
-        let ret = ClusterInfo::tvu_peers(self)
-            .into_iter()
-            .filter(|x| {
-                x.id != self.id()
-                    && x.shred_version == self.my_shred_version()
-                    && ContactInfo::is_valid_address(&x.serve_repair)
-                    && {
-                        self.get_lowest_slot_for_node(&x.id, None, |lowest_slot, _| {
-                            lowest_slot.lowest <= slot
-                        })
-                        .unwrap_or_else(|| /* fallback to legacy behavior */ true)
-                    }
-            })
-            .collect();
+        // self.tvu_peers() already filters on:
+        //   node.id != self.id() &&
+        //     node.shred_verion == self.my_shred_version()
+        let nodes = {
+            let gossip = self.gossip.read().unwrap();
+            self.tvu_peers()
+                .into_iter()
+                .filter(|node| {
+                    ContactInfo::is_valid_address(&node.serve_repair)
+                        && match gossip.crds.get_lowest_slot(node.id) {
+                            None => true, // fallback to legacy behavior
+                            Some(lowest_slot) => lowest_slot.lowest <= slot,
+                        }
+                })
+                .collect()
+        };
         self.stats.repair_peers.add_measure(&mut time);
-        ret
+        nodes
     }
 
     fn is_spy_node(contact_info: &ContactInfo) -> bool {
@@ -1654,7 +1658,7 @@ impl ClusterInfo {
             push_messages
                 .into_iter()
                 .filter_map(|(pubkey, messages)| {
-                    let peer = gossip.crds.get_contact_info(&pubkey)?;
+                    let peer = gossip.crds.get_contact_info(pubkey)?;
                     Some((peer.gossip, messages))
                 })
                 .collect()
@@ -2351,7 +2355,7 @@ impl ClusterInfo {
             let gossip = self.gossip.read().unwrap();
             messages
                 .iter()
-                .map(|(from, _)| match gossip.crds.get_contact_info(from) {
+                .map(|(from, _)| match gossip.crds.get_contact_info(*from) {
                     None => 0,
                     Some(info) => info.shred_version,
                 })
@@ -2424,7 +2428,7 @@ impl ClusterInfo {
                     .into_par_iter()
                     .with_min_len(256)
                     .filter_map(|(from, prunes)| {
-                        let peer = gossip.crds.get_contact_info(&from)?;
+                        let peer = gossip.crds.get_contact_info(from)?;
                         let mut prune_data = PruneData {
                             pubkey: self_pubkey,
                             prunes,
