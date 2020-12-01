@@ -81,8 +81,10 @@ serum_dex() {
   (
     set -x
     rm -rf serum-dex
-    git clone https://github.com/project-serum/serum-dex.git  # TODO: Consider using a tag
+    git clone https://github.com/project-serum/serum-dex.git
     cd serum-dex
+    # TODO: Remove next line and debug build failure
+    git checkout 937e26da947ff04047b5dd1bde0939e000534429
 
     update_solana_dependencies .
     patch_crates_io Cargo.toml
