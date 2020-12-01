@@ -610,10 +610,15 @@ impl JsonRpcRequestProcessor {
         T: std::fmt::Debug,
     {
         if result.is_err() {
-            if let BlockstoreError::SlotNotRooted = result.as_ref().unwrap_err() {
-                if slot > self.blockstore.max_root() {
-                    return Err(RpcCustomError::BlockNotAvailable { slot }.into());
-                }
+            let err = result.as_ref().unwrap_err();
+            debug!(
+                "check_blockstore_max_root, slot: {:?}, max root: {:?}, err: {:?}",
+                slot,
+                self.blockstore.max_root(),
+                err
+            );
+            if slot >= self.blockstore.max_root() {
+                return Err(RpcCustomError::BlockNotAvailable { slot }.into());
             }
         }
         Ok(())
