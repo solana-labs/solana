@@ -94,8 +94,12 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     let slot = 0;
     create_test_accounts(&accounts, &mut pubkeys, num_accounts, slot);
     let ancestors = vec![(0, 0)].into_iter().collect();
-    let (_, total_lamports) = accounts.accounts_db.update_accounts_hash(0, &ancestors);
-    bencher.iter(|| assert!(accounts.verify_bank_hash_and_lamports(0, &ancestors, total_lamports)));
+    let (_, total_lamports) = accounts
+        .accounts_db
+        .update_accounts_hash(0, &ancestors, true);
+    bencher.iter(|| {
+        assert!(accounts.verify_bank_hash_and_lamports(0, &ancestors, total_lamports, true))
+    });
 }
 
 #[bench]
@@ -109,7 +113,9 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
     create_test_accounts(&accounts, &mut pubkeys, 50_000, 0);
     let ancestors = vec![(0, 0)].into_iter().collect();
     bencher.iter(|| {
-        accounts.accounts_db.update_accounts_hash(0, &ancestors);
+        accounts
+            .accounts_db
+            .update_accounts_hash(0, &ancestors, true);
     });
 }
 

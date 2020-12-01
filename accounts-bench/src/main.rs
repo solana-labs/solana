@@ -98,7 +98,10 @@ fn main() {
         } else {
             let mut pubkeys: Vec<Pubkey> = vec![];
             let mut time = Measure::start("hash");
-            let hash = accounts.accounts_db.update_accounts_hash(0, &ancestors).0;
+            let hash = accounts
+                .accounts_db
+                .update_accounts_hash(0, &ancestors, true)
+                .0;
             time.stop();
             println!("hash: {} {}", hash, time);
             create_test_accounts(&accounts, &mut pubkeys, 1, 0);

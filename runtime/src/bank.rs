@@ -1241,7 +1241,12 @@ impl Bank {
     {
         let old_account = self.get_sysvar_account(pubkey);
         let new_account = updater(&old_account);
-        self.store_account(pubkey, &new_account);
+
+        if !self.simpler_capitalization_enabled() {
+            self.store_account(pubkey, &new_account);
+        } else {
+            self.store_account_and_update_capitalization(pubkey, &new_account);
+        }
     }
 
     fn inherit_specially_retained_account_balance(&self, old_account: &Option<Account>) -> u64 {
@@ -2102,7 +2107,7 @@ impl Bank {
                     return;
                 }
             }
-        }
+        };
 
         assert!(
             !self.is_frozen(),
@@ -2117,7 +2122,11 @@ impl Bank {
             name,
             self.inherit_specially_retained_account_balance(&existing_genuine_program),
         );
-        self.store_account(&program_id, &account);
+        if !self.simpler_capitalization_enabled() {
+            self.store_account(&program_id, &account);
+        } else {
+            self.store_account_and_update_capitalization(&program_id, &account);
+        }
 
         debug!("Added native program {} under {:?}", name, program_id);
     }
@@ -3734,7 +3743,6 @@ impl Bank {
         }
     }
 
-    #[cfg(test)]
     fn store_account_and_update_capitalization(&self, pubkey: &Pubkey, new_account: &Account) {
         if let Some(old_account) = self.get_account(&pubkey) {
             match new_account.lamports.cmp(&old_account.lamports) {
@@ -4040,6 +4048,7 @@ impl Bank {
             self.slot(),
             &self.ancestors,
             self.capitalization(),
+            self.simpler_capitalization_enabled(),
         )
     }
 
@@ -4070,7 +4079,9 @@ impl Bank {
     }
 
     pub fn calculate_capitalization(&self) -> u64 {
-        self.rc.accounts.calculate_capitalization(&self.ancestors)
+        self.rc
+            .accounts
+            .calculate_capitalization(&self.ancestors, self.simpler_capitalization_enabled())
     }
 
     pub fn calculate_and_verify_capitalization(&self) -> bool {
@@ -4101,11 +4112,11 @@ impl Bank {
     }
 
     pub fn update_accounts_hash(&self) -> Hash {
-        let (hash, total_lamports) = self
-            .rc
-            .accounts
-            .accounts_db
-            .update_accounts_hash(self.slot(), &self.ancestors);
+        let (hash, total_lamports) = self.rc.accounts.accounts_db.update_accounts_hash(
+            self.slot(),
+            &self.ancestors,
+            self.simpler_capitalization_enabled(),
+        );
         assert_eq!(total_lamports, self.capitalization());
         hash
     }
@@ -4414,6 +4425,28 @@ impl Bank {
             .is_active(&feature_set::stake_program_v2::id())
     }
 
+    pub fn simpler_capitalization_enabled(&self) -> bool {
+        self.simpler_capitalization_enabled_at_genesis()
+            || self
+                .feature_set
+                .is_active(&feature_set::simpler_capitalization::id())
+    }
+
+    pub fn simpler_capitalization_enabled_at_genesis(&self) -> bool {
+        // genesis builtin initialization codepath is called even before the initial
+        // feature activation, so we need to peek this flag at very early bank
+        // initialization phase
+        if let Some(account) = self.get_account(&feature_set::simpler_capitalization::id()) {
+            if let Some(feature) = feature::from_account(&account) {
+                if feature.activated_at == Some(0) {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
     // This is called from snapshot restore AND for each epoch boundary
     // The entire code path herein must be idempotent
     fn apply_feature_activations(&mut self, init_finish_or_warp: bool) {
@@ -4443,6 +4476,15 @@ impl Bank {
             // bugs which again creates bad stake accounts..
 
             self.rewrite_stakes();
+        }
+
+        if new_feature_activations.contains(&feature_set::simpler_capitalization::id()) {
+            let existing_sysvar_account_count = 9;
+            let existing_native_program_account_count = 7;
+            self.capitalization.fetch_add(
+                existing_sysvar_account_count + existing_native_program_account_count,
+                Relaxed,
+            );
         }
 
         self.ensure_feature_builtins(init_finish_or_warp, &new_feature_activations);
@@ -5387,6 +5429,7 @@ pub(crate) mod tests {
             burn_percent: 10,
         };
 
+        genesis_config.disable_cap_altering_features_for_preciseness();
         let mut bank = Bank::new(&genesis_config);
         // Enable rent collection
         bank.rent_collector.epoch = 5;
@@ -7083,6 +7126,7 @@ pub(crate) mod tests {
         let (expected_fee_collected, expected_fee_burned) =
             genesis_config.fee_rate_governor.burn(expected_fee_paid);
 
+        genesis_config.disable_cap_altering_features_for_preciseness();
         let mut bank = Bank::new(&genesis_config);
 
         let capitalization = bank.capitalization();
@@ -10285,6 +10329,7 @@ pub(crate) mod tests {
             reward_pubkey,
             Account::new(u64::MAX, 0, &solana_sdk::pubkey::new_rand()),
         );
+        genesis_config.disable_cap_altering_features_for_preciseness();
         let bank0 = Bank::new(&genesis_config);
         // because capitalization has been reset with bogus capitalization calculation allowing overflows,
         // deliberately substract 1 lamport to simulate it
