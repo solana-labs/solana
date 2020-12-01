@@ -22,21 +22,12 @@ walkdir = "2"
 bincode = "1.1.4"
 byteorder = "1.3.2"
 elf = "0.0.10"
-<<<<<<< HEAD
 solana-bpf-loader-program = { path = "../bpf_loader", version = "1.3.24" }
 solana-logger = { path = "../../logger", version = "1.3.24" }
 solana-measure = { path = "../../measure", version = "1.3.24" }
 solana-runtime = { path = "../../runtime", version = "1.3.24" }
 solana-sdk = { path = "../../sdk", version = "1.3.24" }
-solana_rbpf = "=0.1.32"
-=======
-solana-bpf-loader-program = { path = "../bpf_loader", version = "1.4.14" }
-solana-logger = { path = "../../logger", version = "1.4.14" }
-solana-measure = { path = "../../measure", version = "1.4.14" }
-solana-runtime = { path = "../../runtime", version = "1.4.14" }
-solana-sdk = { path = "../../sdk", version = "1.4.14" }
 solana_rbpf = "=0.1.34"
->>>>>>> 789095725... Bump to rbpf v0.1.34 (#13874)
 
 [[bench]]
 name = "bpf_loader"
