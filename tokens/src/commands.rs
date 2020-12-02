@@ -2076,6 +2076,8 @@ mod tests {
         let read_db = db::open_db(&db_file, true).unwrap();
         let transaction_info = db::read_transaction_infos(&read_db);
         assert_eq!(transaction_info.len(), 1);
+
+        test_validator.close();
     }
 
     #[test]
