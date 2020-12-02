@@ -128,34 +128,25 @@ async function fetchRawTransaction(
   cluster: Cluster,
   url: string
 ) {
-  dispatch({
-    type: ActionType.Update,
-    status: FetchStatus.Fetching,
-    key: signature,
-    url,
-  });
-
   let fetchStatus;
   let transaction;
   try {
     transaction = await new Connection(url).getConfirmedTransaction(signature);
     fetchStatus = FetchStatus.Fetched;
+    dispatch({
+      type: ActionType.Update,
+      status: fetchStatus,
+      key: signature,
+      data: {
+        raw: transaction,
+      },
+      url,
+    });
   } catch (error) {
     if (cluster !== Cluster.Custom) {
       reportError(error, { url });
     }
-    fetchStatus = FetchStatus.FetchFailed;
   }
-
-  dispatch({
-    type: ActionType.Update,
-    status: fetchStatus,
-    key: signature,
-    data: {
-      raw: transaction,
-    },
-    url,
-  });
 }
 
 export function useFetchRawTransaction() {
