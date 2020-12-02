@@ -12,9 +12,7 @@ use solana_clap_utils::{
 use solana_cli_config::CONFIG_FILE;
 use solana_remote_wallet::remote_wallet::maybe_wallet_manager;
 use solana_sdk::native_token::sol_to_lamports;
-use std::error::Error;
-use std::ffi::OsString;
-use std::process::exit;
+use std::{error::Error, ffi::OsString, process::exit};
 
 fn get_matches<'a, I, T>(args: I) -> ArgMatches<'a>
 where
