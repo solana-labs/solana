@@ -29,7 +29,8 @@ use solana_ledger::{
 };
 use solana_runtime::{
     accounts_background_service::{
-        ABSRequestHandler, ABSRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
+        ABSRequestHandler, ABSRequestSender, AccountsBackgroundService, SendDroppedBankCallback,
+        SnapshotRequestHandler,
     },
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
@@ -41,6 +42,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
 };
 use std::{
+    boxed::Box,
     collections::HashSet,
     net::UdpSocket,
     sync::{
@@ -212,13 +214,19 @@ impl Tvu {
 
         let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
 
+        // Before replay starts, set the callbacks in each of the banks in BankForks
+        for bank in bank_forks.read().unwrap().banks.values() {
+            bank.set_callback(Some(Box::new(SendDroppedBankCallback::new(
+                pruned_banks_sender.clone(),
+            ))));
+        }
+
+        let accounts_background_request_sender = ABSRequestSender::new(snapshot_request_sender);
+
         let accounts_background_request_handler = ABSRequestHandler {
             snapshot_request_handler,
             pruned_banks_receiver,
         };
-
-        let accounts_background_request_sender =
-            ABSRequestSender::new(snapshot_request_sender, Some(pruned_banks_sender));
 
         let replay_stage_config = ReplayStageConfig {
             my_pubkey: keypair.pubkey(),

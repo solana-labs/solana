@@ -243,13 +243,8 @@ impl BankForks {
             root_bank.squash();
         }
         let new_tx_count = root_bank.transaction_count();
+        self.prune_non_root(root, highest_confirmed_root);
 
-        let pruned_banks = self.prune_non_root(root, highest_confirmed_root);
-        if let Err(e) = accounts_background_request_sender.send_pruned_banks(pruned_banks) {
-            {
-                warn!("Error sending dropped banks: {:?}", e);
-            }
-        }
         inc_new_counter_info!(
             "bank-forks_set_root_ms",
             timing::duration_as_ms(&set_root_start.elapsed()) as usize
@@ -264,29 +259,19 @@ impl BankForks {
         self.root
     }
 
-    fn prune_non_root(
-        &mut self,
-        root: Slot,
-        highest_confirmed_root: Option<Slot>,
-    ) -> Vec<Arc<Bank>> {
+    fn prune_non_root(&mut self, root: Slot, highest_confirmed_root: Option<Slot>) {
         let descendants = self.descendants();
-        let mut pruned_roots = vec![];
-        self.banks.retain(|slot, bank| {
-            let should_keep = *slot == root
+        self.banks.retain(|slot, _| {
+            *slot == root
                 || descendants[&root].contains(slot)
                 || (*slot < root
                     && *slot >= highest_confirmed_root.unwrap_or(root)
-                    && descendants[slot].contains(&root));
-            if !should_keep {
-                pruned_roots.push(bank.clone());
-            }
-            should_keep
+                    && descendants[slot].contains(&root))
         });
         datapoint_debug!(
             "bank_forks_purge_non_root",
             ("num_banks_retained", self.banks.len(), i64),
         );
-        pruned_roots
     }
 
     pub fn set_snapshot_config(&mut self, snapshot_config: Option<SnapshotConfig>) {

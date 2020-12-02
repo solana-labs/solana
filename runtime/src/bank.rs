@@ -699,6 +699,11 @@ impl fmt::Display for RewardType {
     }
 }
 
+pub trait DropCallback: fmt::Debug {
+    fn callback(&self, b: &Bank);
+    fn clone_box(&self) -> Box<dyn DropCallback + Send + Sync>;
+}
+
 #[derive(Debug, PartialEq, Serialize, Deserialize, AbiExample, Clone, Copy)]
 pub struct RewardInfo {
     pub reward_type: RewardType,
@@ -849,6 +854,8 @@ pub struct Bank {
     pub transaction_log_collector: Arc<RwLock<TransactionLogCollector>>,
 
     pub feature_set: Arc<FeatureSet>,
+
+    pub drop_callback: RwLock<Option<Box<dyn DropCallback + Send + Sync>>>,
 }
 
 impl Default for BlockhashQueue {
@@ -995,6 +1002,14 @@ impl Bank {
             transaction_log_collector_config: parent.transaction_log_collector_config.clone(),
             transaction_log_collector: Arc::new(RwLock::new(TransactionLogCollector::default())),
             feature_set: parent.feature_set.clone(),
+            drop_callback: RwLock::new(
+                parent
+                    .drop_callback
+                    .read()
+                    .unwrap()
+                    .as_ref()
+                    .map(|drop_callback| drop_callback.clone_box()),
+            ),
         };
 
         datapoint_info!(
@@ -1033,6 +1048,10 @@ impl Bank {
         }
 
         new
+    }
+
+    pub fn set_callback(&self, callback: Option<Box<dyn DropCallback + Send + Sync>>) {
+        *self.drop_callback.write().unwrap() = callback;
     }
 
     /// Like `new_from_parent` but additionally:
@@ -1113,6 +1132,7 @@ impl Bank {
             transaction_log_collector_config: new(),
             transaction_log_collector: new(),
             feature_set: new(),
+            drop_callback: RwLock::new(None),
         };
         bank.finish_init(genesis_config, additional_builtins);
 
@@ -4615,9 +4635,16 @@ impl Bank {
 
 impl Drop for Bank {
     fn drop(&mut self) {
-        // For root slots this is a noop
         if !self.skip_drop.load(Relaxed) {
-            self.rc.accounts.purge_slot(self.slot());
+            if let Some(drop_callback) = self.drop_callback.read().unwrap().as_ref() {
+                drop_callback.callback(self);
+            } else {
+                // Default case
+                // 1. Tests
+                // 2. At startup when replaying blockstore and there's no
+                // AccountsBackgroundService to perform cleanups yet.
+                self.rc.accounts.purge_slot(self.slot());
+            }
         }
     }
 }
