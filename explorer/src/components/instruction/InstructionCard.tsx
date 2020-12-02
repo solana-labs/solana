@@ -11,6 +11,7 @@ import {
   useTransactionDetails,
   useFetchRawTransaction,
 } from "providers/transactions/details";
+import { Address } from "components/common/Address";
 
 type InstructionProps = {
   title: string;
@@ -73,11 +74,21 @@ export function InstructionCard({
         <table className="table table-sm table-nowrap card-table">
           <tbody className="list">
             {showRaw ? (
-              "parsed" in ix ? (
-                <RawParsedDetails ix={ix} raw={raw} />
-              ) : (
-                <RawDetails ix={ix} />
-              )
+              <>
+                <tr>
+                  <td>Program</td>
+                  <td className="text-lg-right">
+                    <Address pubkey={ix.programId} alignRight link />
+                  </td>
+                </tr>
+                {"parsed" in ix ? (
+                  <RawParsedDetails ix={ix}>
+                    {raw ? <RawDetails ix={raw} /> : null}
+                  </RawParsedDetails>
+                ) : (
+                  <RawDetails ix={ix} />
+                )}
+              </>
             ) : (
               children
             )}
