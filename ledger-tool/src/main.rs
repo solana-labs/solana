@@ -2337,6 +2337,8 @@ fn main() {
                                 if let Some(ref mut csv_writer) = csv_writer {
                                     #[derive(Serialize)]
                                     struct InflationRecord {
+                                        cluster_type: String,
+                                        rewarded_epoch: Epoch,
                                         account: String,
                                         owner: String,
                                         old_balance: u64,
@@ -2362,6 +2364,8 @@ fn main() {
                                         commission: String,
                                         cluster_rewards: String,
                                         cluster_points: String,
+                                        old_capitalization: u64,
+                                        new_capitalization: u64,
                                     };
                                     fn format_or_na<T: std::fmt::Display>(
                                         data: Option<T>,
@@ -2380,6 +2384,8 @@ fn main() {
 
                                     for point_detail in point_details {
                                         let record = InflationRecord {
+                                            cluster_type: format!("{:?}", base_bank.cluster_type()),
+                                            rewarded_epoch: base_bank.epoch(),
                                             account: format!("{}", pubkey),
                                             owner: format!("{}", base_account.owner),
                                             old_balance: base_account.lamports,
@@ -2442,6 +2448,8 @@ fn main() {
                                             cluster_points: format_or_na(
                                                 last_point_value.as_ref().map(|pv| pv.points),
                                             ),
+                                            old_capitalization: base_bank.capitalization(),
+                                            new_capitalization: warped_bank.capitalization(),
                                         };
                                         csv_writer.serialize(&record).unwrap();
                                     }
