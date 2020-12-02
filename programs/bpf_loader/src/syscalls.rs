@@ -748,19 +748,11 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                         )?;
                         translate_type_mut!(u64, *ptr, rw_regions, self.loader_id)?
                     };
-<<<<<<< HEAD
                     let owner = translate_type_mut!(
                         Pubkey,
                         account_info.owner as *const _,
-                        ro_regions,
+                        rw_regions,
                         self.loader_id
-=======
-                    let owner = translate_type_mut::<Pubkey>(
-                        memory_mapping,
-                        AccessType::Store,
-                        account_info.owner as *const _ as u64,
-                        self.loader_id,
->>>>>>> 85bec37be... Translate data length and owner as writable (#13914)
                     )?;
                     let (data, ref_to_len_in_vm, serialized_len_ptr) = {
                         // Double translate data out of RefCell
@@ -770,21 +762,13 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                             ro_regions,
                             self.loader_id
                         )?;
-<<<<<<< HEAD
-                        let translated =
-                            translate!(account_info.data.as_ptr(), 8, ro_regions, self.loader_id)?
-                                as *mut u64;
-                        let ref_to_len_in_vm = unsafe { &mut *translated.offset(1) };
-=======
-                        let translated = translate(
-                            memory_mapping,
-                            AccessType::Load,
+                        let translated = translate!(
                             unsafe { (account_info.data.as_ptr() as *const u64).offset(1) as u64 },
                             8,
-                            self.loader_id,
+                            rw_regions,
+                            self.loader_id
                         )? as *mut u64;
                         let ref_to_len_in_vm = unsafe { &mut *translated };
->>>>>>> 85bec37be... Translate data length and owner as writable (#13914)
                         let ref_of_len_in_input_buffer = unsafe { data.as_ptr().offset(-8) };
                         let serialized_len_ptr = translate_type_mut!(
                             u64,
@@ -1030,16 +1014,10 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                         rw_regions,
                         self.loader_id
                     )?;
-<<<<<<< HEAD
                     let owner = translate_type_mut!(
                         Pubkey,
-=======
-                    let owner = translate_type_mut::<Pubkey>(
-                        memory_mapping,
-                        AccessType::Store,
->>>>>>> 85bec37be... Translate data length and owner as writable (#13914)
                         account_info.owner_addr,
-                        ro_regions,
+                        rw_regions,
                         self.loader_id
                     )?;
                     let data = translate_slice_mut!(
@@ -1052,13 +1030,11 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
 
                     let addr = &account_info.data_len as *const u64 as u64;
                     let vm_addr = account_infos_addr + (addr - first_info_addr);
-                    let _ = translate(
-                        memory_mapping,
-                        AccessType::Store,
+                    let _ = translate!(
                         vm_addr,
                         size_of::<u64>() as u64,
-                        self.loader_id,
-                    )?;
+                        rw_regions,
+                        self.loader_id)?;
                     let ref_to_len_in_vm = unsafe { &mut *(addr as *mut u64) };
 
                     let ref_of_len_in_input_buffer =

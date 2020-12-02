@@ -1,5 +1,5 @@
 use solana_program::{
-    account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, msg, program::invoke,
+    account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, info, program::invoke,
     program_error::ProgramError, pubkey::Pubkey, system_instruction,
 };
 
@@ -203,12 +203,12 @@ fn process_instruction(
 macro_rules! check {
     ($left:expr, $right:expr) => {
         if $left != $right {
-            msg!(
+            info!(&format!(
                 "Condition failure: {:?} != {:?} at line {:?}",
                 $left,
                 $right,
                 line!()
-            );
+            ));
             return Err(ProgramError::Custom(0));
         }
     };
