@@ -84,6 +84,7 @@ fn main() {
             "noop",
             "panic",
             "param_passing",
+            "ro_modify",
             "sanity",
             "sysval",
         ];
