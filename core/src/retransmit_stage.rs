@@ -19,7 +19,6 @@ use solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats};
 use solana_ledger::{
     blockstore::{Blockstore, CompletedSlotsReceiver},
     leader_schedule_cache::LeaderScheduleCache,
-    staking_utils,
 };
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_error;
@@ -278,7 +277,7 @@ fn retransmit(
         drop(r_epoch_stakes_cache);
         let mut w_epoch_stakes_cache = epoch_stakes_cache.write().unwrap();
         if w_epoch_stakes_cache.epoch != bank_epoch {
-            let stakes = staking_utils::staked_nodes_at_epoch(&r_bank, bank_epoch);
+            let stakes = r_bank.epoch_staked_nodes(bank_epoch);
             let stakes = stakes.map(Arc::new);
             w_epoch_stakes_cache.stakes = stakes;
             w_epoch_stakes_cache.epoch = bank_epoch;

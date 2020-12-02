@@ -4293,6 +4293,10 @@ impl Bank {
         self.stakes.read().unwrap().stake_delegations().clone()
     }
 
+    pub fn staked_nodes(&self) -> HashMap<Pubkey, u64> {
+        self.stakes.read().unwrap().staked_nodes()
+    }
+
     /// current vote accounts for this bank along with the stake
     ///   attributed to each account
     /// Note: This clones the entire vote-accounts hashmap. For a single
@@ -4321,6 +4325,10 @@ impl Bank {
 
     pub fn epoch_stakes_map(&self) -> &HashMap<Epoch, EpochStakes> {
         &self.epoch_stakes
+    }
+
+    pub fn epoch_staked_nodes(&self, epoch: Epoch) -> Option<HashMap<Pubkey, u64>> {
+        Some(self.epoch_stakes.get(&epoch)?.stakes().staked_nodes())
     }
 
     /// vote accounts for the specific epoch along with the stake
