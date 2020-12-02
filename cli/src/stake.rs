@@ -1580,6 +1580,7 @@ pub fn build_stake_state(
             CliStakeState {
                 stake_type: CliStakeType::Initialized,
                 account_balance,
+                credits_observed: Some(0),
                 authorized: Some(authorized.into()),
                 lockup,
                 use_lamports_unit,

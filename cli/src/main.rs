@@ -168,17 +168,19 @@ pub fn parse_args<'a>(
     let CliCommandInfo { command, signers } =
         parse_command(&matches, &default_signer, &mut wallet_manager)?;
 
-    let mut output_format = matches
+    let verbose = matches.is_present("verbose");
+    let output_format = matches
         .value_of("output_format")
         .map(|value| match value {
             "json" => OutputFormat::Json,
             "json-compact" => OutputFormat::JsonCompact,
             _ => unreachable!(),
         })
-        .unwrap_or(OutputFormat::Display);
-    if output_format == OutputFormat::Display && matches.is_present("verbose") {
-        output_format = OutputFormat::DisplayVerbose;
-    }
+        .unwrap_or(if verbose {
+            OutputFormat::DisplayVerbose
+        } else {
+            OutputFormat::Display
+        });
 
     let commitment = matches
         .subcommand_name()
@@ -201,7 +203,7 @@ pub fn parse_args<'a>(
             keypair_path: default_signer_path,
             rpc_client: None,
             rpc_timeout,
-            verbose: matches.is_present("verbose"),
+            verbose,
             output_format,
             commitment,
             send_transaction_config: RpcSendTransactionConfig::default(),
