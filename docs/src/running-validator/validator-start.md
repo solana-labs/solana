@@ -366,3 +366,18 @@ systemctl restart logrotate.service
 Once your validator is operating normally, you can reduce the time it takes to
 restart your validator by adding the `--no-port-check` flag to your
 `solana-validator` command-line.
+
+### Using a ramdisk for the accounts database to reduce SSD wear
+If your machine has plenty of RAM, a ramdisk
+([tmpfs](https://man7.org/linux/man-pages/man5/tmpfs.5.html)) may be used to hold
+the accounts database.
+
+Assuming your tmpfs ramdisk is mounted at `/mnt/solana-accounts` and writable
+by the validator user, add the `--accounts /mnt/solana-accounts` argument to
+your validator command-line to use it.  Once your validator restarts, you should
+now see activity in `/mnt/solana-accounts` instead of the `accounts/`
+subdirectory of your ledger (`--ledger` argument) directory.
+
+For Mainnet Beta it's recommended that a ramdisk of 64GB be used.  Note that if
+your machine has less than 100GB of RAM in total, using a ramdisk is not
+recommended.
