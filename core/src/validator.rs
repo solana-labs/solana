@@ -656,18 +656,9 @@ impl Validator {
             optimistically_confirmed_bank_tracker,
         }) = self.rpc_service
         {
-<<<<<<< HEAD
             json_rpc_service.join()?;
             pubsub_service.join()?;
-            rpc_banks_service.join()?;
             optimistically_confirmed_bank_tracker.join()?;
-=======
-            json_rpc_service.join().expect("rpc_service");
-            pubsub_service.join().expect("pubsub_service");
-            optimistically_confirmed_bank_tracker
-                .join()
-                .expect("optimistically_confirmed_bank_tracker");
->>>>>>> 10c81a244... Remove rpc_banks from validator (#13882)
         }
         if let Some(transaction_status_service) = self.transaction_status_service {
             transaction_status_service.join()?;
