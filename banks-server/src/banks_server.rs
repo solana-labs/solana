@@ -122,6 +122,16 @@ impl BanksServer {
     }
 }
 
+fn verify_transaction(transaction: &Transaction) -> transaction::Result<()> {
+    if let Err(err) = transaction.verify() {
+        Err(err)
+    } else if let Err(err) = transaction.verify_precompiles() {
+        Err(err)
+    } else {
+        Ok(())
+    }
+}
+
 #[tarpc::server]
 impl Banks for BanksServer {
     async fn send_transaction_with_context(self, _: Context, transaction: Transaction) {
@@ -183,6 +193,10 @@ impl Banks for BanksServer {
         transaction: Transaction,
         commitment: CommitmentLevel,
     ) -> Option<transaction::Result<()>> {
+        if let Err(err) = verify_transaction(&transaction) {
+            return Some(Err(err));
+        }
+
         let blockhash = &transaction.message.recent_blockhash;
         let last_valid_slot = self
             .bank_forks
