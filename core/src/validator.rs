@@ -30,7 +30,6 @@ use crate::{
 };
 use crossbeam_channel::{bounded, unbounded};
 use rand::{thread_rng, Rng};
-use solana_banks_server::rpc_banks_service::RpcBanksService;
 use solana_ledger::{
     bank_forks_utils,
     blockstore::{Blockstore, BlockstoreSignals, CompletedSlotsReceiver, PurgeType},
@@ -82,7 +81,7 @@ pub struct ValidatorConfig {
     pub voting_disabled: bool,
     pub account_paths: Vec<PathBuf>,
     pub rpc_config: JsonRpcConfig,
-    pub rpc_addrs: Option<(SocketAddr, SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub, Banks)
+    pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
     pub snapshot_config: Option<SnapshotConfig>,
     pub max_ledger_shreds: Option<u64>,
@@ -174,7 +173,6 @@ struct TransactionHistoryServices {
 struct RpcServices {
     json_rpc_service: JsonRpcService,
     pubsub_service: PubSubService,
-    rpc_banks_service: RpcBanksService,
     optimistically_confirmed_bank_tracker: OptimisticallyConfirmedBankTracker,
 }
 
@@ -395,62 +393,52 @@ impl Validator {
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
-        let (rpc_service, bank_notification_sender) =
-            if let Some((rpc_addr, rpc_pubsub_addr, rpc_banks_addr)) = config.rpc_addrs {
-                if ContactInfo::is_valid_address(&node.info.rpc) {
-                    assert!(ContactInfo::is_valid_address(&node.info.rpc_pubsub));
-                    assert!(ContactInfo::is_valid_address(&node.info.rpc_banks));
-                } else {
-                    assert!(!ContactInfo::is_valid_address(&node.info.rpc_pubsub));
-                    assert!(!ContactInfo::is_valid_address(&node.info.rpc_banks));
-                }
-                let tpu_address = cluster_info.my_contact_info().tpu;
-                let (bank_notification_sender, bank_notification_receiver) = unbounded();
-                (
-                    Some(RpcServices {
-                        json_rpc_service: JsonRpcService::new(
-                            rpc_addr,
-                            config.rpc_config.clone(),
-                            config.snapshot_config.clone(),
-                            bank_forks.clone(),
-                            block_commitment_cache.clone(),
-                            blockstore.clone(),
-                            cluster_info.clone(),
-                            Some(poh_recorder.clone()),
-                            genesis_config.hash(),
-                            ledger_path,
-                            validator_exit.clone(),
-                            config.trusted_validators.clone(),
-                            rpc_override_health_check.clone(),
-                            optimistically_confirmed_bank.clone(),
-                        ),
-                        pubsub_service: PubSubService::new(
-                            config.pubsub_config.clone(),
-                            &subscriptions,
-                            rpc_pubsub_addr,
-                            &exit,
-                        ),
-                        rpc_banks_service: RpcBanksService::new(
-                            rpc_banks_addr,
-                            tpu_address,
-                            &bank_forks,
-                            &block_commitment_cache,
-                            &exit,
-                        ),
-                        optimistically_confirmed_bank_tracker:
-                            OptimisticallyConfirmedBankTracker::new(
-                                bank_notification_receiver,
-                                &exit,
-                                bank_forks.clone(),
-                                optimistically_confirmed_bank,
-                                subscriptions.clone(),
-                            ),
-                    }),
-                    Some(bank_notification_sender),
-                )
+        let (rpc_service, bank_notification_sender) = if let Some((rpc_addr, rpc_pubsub_addr)) =
+            config.rpc_addrs
+        {
+            if ContactInfo::is_valid_address(&node.info.rpc) {
+                assert!(ContactInfo::is_valid_address(&node.info.rpc_pubsub));
             } else {
-                (None, None)
-            };
+                assert!(!ContactInfo::is_valid_address(&node.info.rpc_pubsub));
+            }
+            let (bank_notification_sender, bank_notification_receiver) = unbounded();
+            (
+                Some(RpcServices {
+                    json_rpc_service: JsonRpcService::new(
+                        rpc_addr,
+                        config.rpc_config.clone(),
+                        config.snapshot_config.clone(),
+                        bank_forks.clone(),
+                        block_commitment_cache.clone(),
+                        blockstore.clone(),
+                        cluster_info.clone(),
+                        Some(poh_recorder.clone()),
+                        genesis_config.hash(),
+                        ledger_path,
+                        validator_exit.clone(),
+                        config.trusted_validators.clone(),
+                        rpc_override_health_check.clone(),
+                        optimistically_confirmed_bank.clone(),
+                    ),
+                    pubsub_service: PubSubService::new(
+                        config.pubsub_config.clone(),
+                        &subscriptions,
+                        rpc_pubsub_addr,
+                        &exit,
+                    ),
+                    optimistically_confirmed_bank_tracker: OptimisticallyConfirmedBankTracker::new(
+                        bank_notification_receiver,
+                        &exit,
+                        bank_forks.clone(),
+                        optimistically_confirmed_bank,
+                        subscriptions.clone(),
+                    ),
+                }),
+                Some(bank_notification_sender),
+            )
+        } else {
+            (None, None)
+        };
 
         if config.dev_halt_at_slot.is_some() {
             // Simulate a confirmed root to avoid RPC errors with CommitmentConfig::max() and
@@ -665,13 +653,11 @@ impl Validator {
         if let Some(RpcServices {
             json_rpc_service,
             pubsub_service,
-            rpc_banks_service,
             optimistically_confirmed_bank_tracker,
         }) = self.rpc_service
         {
             json_rpc_service.join()?;
             pubsub_service.join()?;
-            rpc_banks_service.join()?;
             optimistically_confirmed_bank_tracker.join()?;
         }
         if let Some(transaction_status_service) = self.transaction_status_service {
@@ -1227,11 +1213,7 @@ mod tests {
 
         let voting_keypair = Arc::new(Keypair::new());
         let config = ValidatorConfig {
-            rpc_addrs: Some((
-                validator_node.info.rpc,
-                validator_node.info.rpc_pubsub,
-                validator_node.info.rpc_banks,
-            )),
+            rpc_addrs: Some((validator_node.info.rpc, validator_node.info.rpc_pubsub)),
             ..ValidatorConfig::default()
         };
         let validator = Validator::new(
@@ -1301,11 +1283,7 @@ mod tests {
                 ledger_paths.push(validator_ledger_path.clone());
                 let vote_account_keypair = Keypair::new();
                 let config = ValidatorConfig {
-                    rpc_addrs: Some((
-                        validator_node.info.rpc,
-                        validator_node.info.rpc_pubsub,
-                        validator_node.info.rpc_banks,
-                    )),
+                    rpc_addrs: Some((validator_node.info.rpc, validator_node.info.rpc_pubsub)),
                     ..ValidatorConfig::default()
                 };
                 Validator::new(
