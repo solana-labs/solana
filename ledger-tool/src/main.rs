@@ -2338,7 +2338,7 @@ fn main() {
                                     #[derive(Serialize)]
                                     struct InflationRecord {
                                         cluster_type: String,
-                                        rewarded_epoch: String,
+                                        rewarded_epoch: Epoch,
                                         account: String,
                                         owner: String,
                                         old_balance: u64,
@@ -2385,7 +2385,7 @@ fn main() {
                                     for point_detail in point_details {
                                         let record = InflationRecord {
                                             cluster_type: format!("{:?}", base_bank.cluster_type()),
-                                            rewarded_epoch: base_bank.epoch().to_string(),
+                                            rewarded_epoch: base_bank.epoch(),
                                             account: format!("{}", pubkey),
                                             owner: format!("{}", base_account.owner),
                                             old_balance: base_account.lamports,
