@@ -1030,11 +1030,8 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
 
                     let addr = &account_info.data_len as *const u64 as u64;
                     let vm_addr = account_infos_addr + (addr - first_info_addr);
-                    let _ = translate!(
-                        vm_addr,
-                        size_of::<u64>() as u64,
-                        rw_regions,
-                        self.loader_id)?;
+                    let _ =
+                        translate!(vm_addr, size_of::<u64>() as u64, rw_regions, self.loader_id)?;
                     let ref_to_len_in_vm = unsafe { &mut *(addr as *mut u64) };
 
                     let ref_of_len_in_input_buffer =
