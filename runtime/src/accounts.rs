@@ -860,7 +860,7 @@ impl Accounts {
                             (false, true, Some((_, _, Some(fee_payer_account)))) => {
                                 *account = fee_payer_account.clone();
                             }
-                            _ => unreachable!(),
+                            _ => panic!("unexpected nonce_rollback condition"),
                         }
                     }
                     if account.rent_epoch == 0 {
