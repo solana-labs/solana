@@ -1528,6 +1528,7 @@ pub fn build_stake_state(
             CliStakeState {
                 stake_type: CliStakeType::Stake,
                 account_balance,
+                credits_observed: Some(stake.credits_observed),
                 delegated_stake: Some(stake.delegation.stake),
                 delegated_vote_account_address: if stake.delegation.voter_pubkey
                     != Pubkey::default()
@@ -1579,6 +1580,7 @@ pub fn build_stake_state(
             CliStakeState {
                 stake_type: CliStakeType::Initialized,
                 account_balance,
+                credits_observed: Some(0),
                 authorized: Some(authorized.into()),
                 lockup,
                 use_lamports_unit,
