@@ -746,7 +746,7 @@ fn test_program_bpf_ro_modify() {
     } = create_genesis_config(50);
     let mut bank = Bank::new(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin_loader(&name, id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 

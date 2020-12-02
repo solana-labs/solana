@@ -56,12 +56,7 @@ members = [
     "rust/panic",
     "rust/param_passing",
     "rust/param_passing_dep",
-<<<<<<< HEAD
-=======
-    "rust/rand",
-    "rust/ristretto",
     "rust/ro_modify",
->>>>>>> 85bec37be... Translate data length and owner as writable (#13914)
     "rust/sanity",
     "rust/sysval",
 ]

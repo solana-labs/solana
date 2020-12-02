@@ -1947,9 +1947,9 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-ro-modify"
-version = "1.5.0"
+version = "1.3.24"
 dependencies = [
- "solana-program",
+ "solana-sdk",
 ]
 
 [[package]]
