@@ -515,7 +515,7 @@ impl NonceRollbackFull {
             .account_keys
             .iter()
             .enumerate()
-            .find(|(i, k)| Accounts::is_non_loader_key(message, k, *i))
+            .find(|(i, k)| message.is_non_loader_key(k, *i))
             .and_then(|(i, k)| accounts.get(i).cloned().map(|a| (*k, a)));
         if let Some((fee_pubkey, fee_account)) = fee_payer {
             if fee_pubkey == nonce_address {

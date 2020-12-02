@@ -298,6 +298,10 @@ impl Message {
         false
     }
 
+    pub fn is_non_loader_key(&self, key: &Pubkey, key_index: usize) -> bool {
+        !self.program_ids().contains(&key) || self.is_key_passed_to_program(key_index)
+    }
+
     pub fn program_position(&self, index: usize) -> Option<usize> {
         let program_ids = self.program_ids();
         program_ids
@@ -793,5 +797,62 @@ mod tests {
                 *instruction
             );
         }
+    }
+
+    #[test]
+    fn test_program_ids() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let loader2 = Pubkey::new_unique();
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
+        let message = Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            vec![key0, key1, loader2],
+            Hash::default(),
+            instructions,
+        );
+        assert_eq!(message.program_ids(), vec![&loader2]);
+    }
+
+    #[test]
+    fn test_is_key_passed_to_program() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let loader2 = Pubkey::new_unique();
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
+        let message = Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            vec![key0, key1, loader2],
+            Hash::default(),
+            instructions,
+        );
+
+        assert!(message.is_key_passed_to_program(0));
+        assert!(message.is_key_passed_to_program(1));
+        assert!(!message.is_key_passed_to_program(2));
+    }
+
+    #[test]
+    fn test_is_non_loader_key() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let loader2 = Pubkey::new_unique();
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
+        let message = Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            vec![key0, key1, loader2],
+            Hash::default(),
+            instructions,
+        );
+
+        assert!(message.is_non_loader_key(&key0, 0));
+        assert!(message.is_non_loader_key(&key1, 1));
+        assert!(!message.is_non_loader_key(&loader2, 2));
     }
 }
