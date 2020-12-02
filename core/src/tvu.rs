@@ -28,7 +28,9 @@ use solana_ledger::{
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_runtime::{
-    accounts_background_service::{AccountsBackgroundService, SnapshotRequestHandler},
+    accounts_background_service::{
+        ABSRequestHandler, ABSRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
+    },
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
     snapshot_package::AccountsPackageSender,
@@ -208,6 +210,16 @@ impl Tvu {
                 .unwrap_or((None, None))
         };
 
+        let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
+
+        let accounts_background_request_handler = ABSRequestHandler {
+            snapshot_request_handler,
+            pruned_banks_receiver,
+        };
+
+        let accounts_background_request_sender =
+            ABSRequestSender::new(snapshot_request_sender, Some(pruned_banks_sender));
+
         let replay_stage_config = ReplayStageConfig {
             my_pubkey: keypair.pubkey(),
             vote_account: *vote_account,
@@ -216,7 +228,7 @@ impl Tvu {
             subscriptions: subscriptions.clone(),
             leader_schedule_cache: leader_schedule_cache.clone(),
             latest_root_senders: vec![ledger_cleanup_slot_sender],
-            snapshot_request_sender,
+            accounts_background_request_sender,
             block_commitment_cache,
             transaction_status_sender,
             rewards_recorder_sender,
@@ -248,8 +260,11 @@ impl Tvu {
             )
         });
 
-        let accounts_background_service =
-            AccountsBackgroundService::new(bank_forks.clone(), &exit, snapshot_request_handler);
+        let accounts_background_service = AccountsBackgroundService::new(
+            bank_forks.clone(),
+            &exit,
+            accounts_background_request_handler,
+        );
 
         Tvu {
             fetch_stage,
