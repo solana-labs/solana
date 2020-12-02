@@ -143,6 +143,7 @@ module.exports = {
     ],
     "Clusters": [
       "clusters",
+      "cluster/rpc-endpoints",
       "cluster/bench-tps",
       "cluster/performance-metrics"
     ],
