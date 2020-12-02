@@ -2072,19 +2072,19 @@ mod tests {
 
     #[test]
     fn test_distribute_allocations_dump_db() {
-        let test_validator = TestValidator::with_no_fees();
-        let sender_keypair = test_validator.mint_keypair();
-        let url = test_validator.rpc_url();
+        let TestValidator {
+            server,
+            leader_data,
+            alice,
+            ledger_path,
+            ..
+        } = TestValidator::run();
+        let url = get_rpc_request_str(leader_data.rpc, false);
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
 
         let fee_payer = Keypair::new();
-        let transaction = transfer(
-            &client,
-            sol_to_lamports(1.0),
-            &sender_keypair,
-            &fee_payer.pubkey(),
-        )
-        .unwrap();
+        let transaction =
+            transfer(&client, sol_to_lamports(1.0), &alice, &fee_payer.pubkey()).unwrap();
         client
             .send_and_confirm_transaction_with_spinner(&transaction)
             .unwrap();
@@ -2105,7 +2105,7 @@ mod tests {
         };
         // This is just dummy data; Args will not affect messages
         let args = DistributeTokensArgs {
-            sender_keypair: Box::new(sender_keypair),
+            sender_keypair: Box::new(alice),
             fee_payer: Box::new(fee_payer),
             dry_run: true,
             input_csv: "".to_string(),
@@ -2124,7 +2124,9 @@ mod tests {
         let transaction_info = db::read_transaction_infos(&read_db);
         assert_eq!(transaction_info.len(), 1);
 
-        test_validator.close();
+        // Explicit cleanup, otherwise "pure virtual method called" crash in Docker
+        server.close().unwrap();
+        remove_dir_all(ledger_path).unwrap();
     }
 
     #[test]
