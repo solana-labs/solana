@@ -629,7 +629,7 @@ impl ProgramTest {
 
         // User-supplied additional builtins
         for builtin in self.builtins {
-            bank.replace_builtin(
+            bank.add_builtin(
                 &builtin.name,
                 builtin.id,
                 builtin.process_instruction_with_context,
