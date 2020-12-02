@@ -16,8 +16,8 @@ use solana_metrics::{datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
     bank::{
-        Bank, InnerInstructionsList, TransactionBalancesSet, TransactionLogMessages,
-        TransactionProcessResult, TransactionResults,
+        Bank, InnerInstructionsList, TransactionBalancesSet, TransactionExecutionResult,
+        TransactionLogMessages, TransactionResults,
     },
     bank_forks::BankForks,
     bank_utils,
@@ -115,7 +115,7 @@ fn execute_batch(
 
     let TransactionResults {
         fee_collection_results,
-        processing_results,
+        execution_results,
         ..
     } = tx_results;
 
@@ -124,7 +124,7 @@ fn execute_batch(
             bank.clone(),
             batch.transactions(),
             batch.iteration_order_vec(),
-            processing_results,
+            execution_results,
             balances,
             inner_instructions,
             transaction_logs,
@@ -1029,7 +1029,7 @@ pub struct TransactionStatusBatch {
     pub bank: Arc<Bank>,
     pub transactions: Vec<Transaction>,
     pub iteration_order: Option<Vec<usize>>,
-    pub statuses: Vec<TransactionProcessResult>,
+    pub statuses: Vec<TransactionExecutionResult>,
     pub balances: TransactionBalancesSet,
     pub inner_instructions: Vec<Option<InnerInstructionsList>>,
     pub transaction_logs: Vec<TransactionLogMessages>,
@@ -1041,7 +1041,7 @@ pub fn send_transaction_status_batch(
     bank: Arc<Bank>,
     transactions: &[Transaction],
     iteration_order: Option<Vec<usize>>,
-    statuses: Vec<TransactionProcessResult>,
+    statuses: Vec<TransactionExecutionResult>,
     balances: TransactionBalancesSet,
     inner_instructions: Vec<Option<InnerInstructionsList>>,
     transaction_logs: Vec<TransactionLogMessages>,
