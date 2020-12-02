@@ -24,7 +24,7 @@ use solana_sdk::{
     message::Message,
     process_instruction::{stable_log, ComputeMeter, InvokeContext, Logger},
     program_error::ProgramError,
-    pubkey::{Pubkey, PubkeyError},
+    pubkey::{Pubkey, PubkeyError, MAX_SEEDS},
 };
 use std::{
     alloc::Layout,
@@ -600,6 +600,10 @@ impl<'a> SyscallObject<BPFError> for SyscallCreateProgramAddress<'a> {
             translate_slice::<&[&u8]>(memory_mapping, seeds_addr, seeds_len, self.loader_id),
             result
         );
+        if untranslated_seeds.len() > MAX_SEEDS {
+            *result = Ok(1);
+            return;
+        }
         let seeds = question_mark!(
             untranslated_seeds
                 .iter()
@@ -619,9 +623,7 @@ impl<'a> SyscallObject<BPFError> for SyscallCreateProgramAddress<'a> {
             result
         );
 
-        let new_address = match Pubkey::create_program_address(&seeds, program_id)
-            .map_err(SyscallError::BadSeeds)
-        {
+        let new_address = match Pubkey::create_program_address(&seeds, program_id) {
             Ok(address) => address,
             Err(_) => {
                 *result = Ok(1);
@@ -921,6 +923,9 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                 signers_seeds_len,
                 self.loader_id,
             )?;
+            if signers_seeds.len() > MAX_SEEDS {
+                return Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into());
+            }
             for signer_seeds in signers_seeds.iter() {
                 let untranslated_seeds = translate_slice::<&[u8]>(
                     memory_mapping,
@@ -1170,6 +1175,9 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                 signers_seeds_len,
                 self.loader_id,
             )?;
+            if signers_seeds.len() > MAX_SEEDS {
+                return Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into());
+            }
             Ok(signers_seeds
                 .iter()
                 .map(|signer_seeds| {

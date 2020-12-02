@@ -3,8 +3,10 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use std::{convert::TryFrom, fmt, mem, str::FromStr};
 use thiserror::Error;
 
-/// maximum length of derived pubkey seed
+/// maximum length of derived `Pubkey` seed
 pub const MAX_SEED_LEN: usize = 32;
+/// Maximum number of seeds
+pub const MAX_SEEDS: usize = 16;
 
 #[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum PubkeyError {
@@ -136,15 +138,21 @@ impl Pubkey {
         seeds: &[&[u8]],
         program_id: &Pubkey,
     ) -> Result<Pubkey, PubkeyError> {
+        if seeds.len() > MAX_SEEDS {
+            return Err(PubkeyError::MaxSeedLengthExceeded);
+        }
+        for seed in seeds.iter() {
+            if seed.len() > MAX_SEED_LEN {
+                return Err(PubkeyError::MaxSeedLengthExceeded);
+            }
+        }
+
         // Perform the calculation inline, calling this from within a program is
         // not supported
         #[cfg(not(target_arch = "bpf"))]
         {
             let mut hasher = crate::hash::Hasher::default();
             for seed in seeds.iter() {
-                if seed.len() > MAX_SEED_LEN {
-                    return Err(PubkeyError::MaxSeedLengthExceeded);
-                }
                 hasher.hash(seed);
             }
             hasher.hashv(&[program_id.as_ref(), "ProgramDerivedAddress".as_ref()]);
