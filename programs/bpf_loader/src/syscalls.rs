@@ -534,9 +534,9 @@ impl<'a> SyscallObject<BPFError> for SyscallCreateProgramAddress<'a> {
         // TODO need ref?
         let untranslated_seeds =
             translate_slice!(&[&u8], seeds_addr, seeds_len, ro_regions, self.loader_id)?;
-            if untranslated_seeds.len() > MAX_SEEDS {
-                return Ok(1);
-            }
+        if untranslated_seeds.len() > MAX_SEEDS {
+            return Ok(1);
+        }
         let seeds = untranslated_seeds
             .iter()
             .map(|untranslated_seed| {
