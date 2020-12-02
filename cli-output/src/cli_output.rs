@@ -541,7 +541,15 @@ impl CliStakeVec {
 }
 
 impl QuietDisplay for CliStakeVec {}
-impl VerboseDisplay for CliStakeVec {}
+impl VerboseDisplay for CliStakeVec {
+    fn write_str(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        for state in &self.0 {
+            writeln!(w)?;
+            VerboseDisplay::write_str(state, w)?;
+        }
+        Ok(())
+    }
+}
 
 impl fmt::Display for CliStakeVec {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -562,7 +570,12 @@ pub struct CliKeyedStakeState {
 }
 
 impl QuietDisplay for CliKeyedStakeState {}
-impl VerboseDisplay for CliKeyedStakeState {}
+impl VerboseDisplay for CliKeyedStakeState {
+    fn write_str(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        writeln!(w, "Stake Pubkey: {}", self.stake_pubkey)?;
+        VerboseDisplay::write_str(&self.stake_state, w)
+    }
+}
 
 impl fmt::Display for CliKeyedStakeState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -658,6 +671,8 @@ pub struct CliStakeState {
     pub stake_type: CliStakeType,
     pub account_balance: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub credits_observed: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub delegated_stake: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub delegated_vote_account_address: Option<String>,
@@ -686,7 +701,15 @@ pub struct CliStakeState {
 }
 
 impl QuietDisplay for CliStakeState {}
-impl VerboseDisplay for CliStakeState {}
+impl VerboseDisplay for CliStakeState {
+    fn write_str(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        write!(w, "{}", self)?;
+        if let Some(credits) = self.credits_observed {
+            writeln!(w, "Credits Observed: {}", credits)?;
+        }
+        Ok(())
+    }
+}
 
 impl fmt::Display for CliStakeState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
