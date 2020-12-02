@@ -23,7 +23,7 @@ use solana_sdk::{
     message::Message,
     process_instruction::{stable_log, ComputeMeter, InvokeContext, Logger},
     program_error::ProgramError,
-    pubkey::{Pubkey, PubkeyError},
+    pubkey::{Pubkey, PubkeyError, MAX_SEEDS},
 };
 use std::{
     alloc::Layout,
@@ -534,6 +534,9 @@ impl<'a> SyscallObject<BPFError> for SyscallCreateProgramAddress<'a> {
         // TODO need ref?
         let untranslated_seeds =
             translate_slice!(&[&u8], seeds_addr, seeds_len, ro_regions, self.loader_id)?;
+            if untranslated_seeds.len() > MAX_SEEDS {
+                return Ok(1);
+            }
         let seeds = untranslated_seeds
             .iter()
             .map(|untranslated_seed| {
@@ -548,9 +551,7 @@ impl<'a> SyscallObject<BPFError> for SyscallCreateProgramAddress<'a> {
             .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
         let program_id = translate_type!(Pubkey, program_id_addr, ro_regions, self.loader_id)?;
 
-        let new_address = match Pubkey::create_program_address(&seeds, program_id)
-            .map_err(SyscallError::BadSeeds)
-        {
+        let new_address = match Pubkey::create_program_address(&seeds, program_id) {
             Ok(address) => address,
             Err(_) => return Ok(1),
         };
@@ -828,6 +829,9 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                 ro_regions,
                 self.loader_id
             )?;
+            if signers_seeds.len() > MAX_SEEDS {
+                return Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into());
+            }
             for signer_seeds in signers_seeds.iter() {
                 let untranslated_seeds = translate_slice!(
                     &[u8],
@@ -1081,6 +1085,9 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                 ro_regions,
                 self.loader_id
             )?;
+            if signers_seeds.len() > MAX_SEEDS {
+                return Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into());
+            }
             Ok(signers_seeds
                 .iter()
                 .map(|signer_seeds| {
