@@ -152,7 +152,7 @@ impl Accounts {
             let rent_fix_enabled = feature_set.cumulative_rent_related_fixes_enabled();
 
             for (i, key) in message.account_keys.iter().enumerate() {
-                let account = if Self::is_non_loader_key(message, key, i) {
+                let account = if message.is_non_loader_key(key, i) {
                     if payer_index.is_none() {
                         payer_index = Some(i);
                     }
@@ -793,10 +793,6 @@ impl Accounts {
         self.accounts_db.add_root(slot)
     }
 
-    pub fn is_non_loader_key(message: &Message, key: &Pubkey, key_index: usize) -> bool {
-        !message.program_ids().contains(&key) || message.is_key_passed_to_program(key_index)
-    }
-
     fn collect_accounts_to_store<'a>(
         &self,
         txs: &'a [Transaction],
@@ -843,7 +839,7 @@ impl Accounts {
                 .iter()
                 .enumerate()
                 .zip(acc.0.iter_mut())
-                .filter(|((i, key), _account)| Self::is_non_loader_key(message, key, *i))
+                .filter(|((i, key), _account)| message.is_non_loader_key(key, *i))
             {
                 let is_nonce_account = prepare_if_nonce_account(
                     account,
