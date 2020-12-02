@@ -905,7 +905,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                     };
                     let owner = translate_type_mut::<Pubkey>(
                         memory_mapping,
-                        AccessType::Load,
+                        AccessType::Store,
                         account_info.owner as *const _ as u64,
                         self.loader_id,
                     )?;
@@ -920,11 +920,11 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                         let translated = translate(
                             memory_mapping,
                             AccessType::Load,
-                            account_info.data.as_ptr() as *const _ as u64,
+                            unsafe { (account_info.data.as_ptr() as *const u64).offset(1) as u64 },
                             8,
                             self.loader_id,
                         )? as *mut u64;
-                        let ref_to_len_in_vm = unsafe { &mut *translated.offset(1) };
+                        let ref_to_len_in_vm = unsafe { &mut *translated };
                         let ref_of_len_in_input_buffer = unsafe { data.as_ptr().offset(-8) };
                         let serialized_len_ptr = translate_type_mut::<u64>(
                             memory_mapping,
@@ -1168,6 +1168,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             account_infos_len,
             self.loader_id,
         )?;
+        let first_info_addr = &account_infos[0] as *const _ as u64;
         let mut accounts = Vec::with_capacity(message.account_keys.len());
         let mut refs = Vec::with_capacity(message.account_keys.len());
         'root: for account_key in message.account_keys.iter() {
@@ -1187,7 +1188,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                     )?;
                     let owner = translate_type_mut::<Pubkey>(
                         memory_mapping,
-                        AccessType::Load,
+                        AccessType::Store,
                         account_info.owner_addr,
                         self.loader_id,
                     )?;
@@ -1198,8 +1199,18 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                         account_info.data_len,
                         self.loader_id,
                     )?;
-                    let ref_to_len_in_vm =
-                        unsafe { &mut *(&account_info.data_len as *const u64 as u64 as *mut u64) };
+
+                    let addr = &account_info.data_len as *const u64 as u64;
+                    let vm_addr = account_infos_addr + (addr - first_info_addr);
+                    let _ = translate(
+                        memory_mapping,
+                        AccessType::Store,
+                        vm_addr,
+                        size_of::<u64>() as u64,
+                        self.loader_id,
+                    )?;
+                    let ref_to_len_in_vm = unsafe { &mut *(addr as *mut u64) };
+
                     let ref_of_len_in_input_buffer =
                         unsafe { (account_info.data_addr as *mut u8).offset(-8) };
                     let serialized_len_ptr = translate_type_mut::<u64>(
