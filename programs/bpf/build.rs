@@ -84,6 +84,12 @@ fn main() {
             "noop",
             "panic",
             "param_passing",
+<<<<<<< HEAD
+=======
+            "rand",
+            "ristretto",
+            "ro_modify",
+>>>>>>> 85bec37be... Translate data length and owner as writable (#13914)
             "sanity",
             "sysval",
         ];
