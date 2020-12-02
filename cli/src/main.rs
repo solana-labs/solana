@@ -168,7 +168,7 @@ pub fn parse_args<'a>(
     let CliCommandInfo { command, signers } =
         parse_command(&matches, &default_signer, &mut wallet_manager)?;
 
-    let output_format = matches
+    let mut output_format = matches
         .value_of("output_format")
         .map(|value| match value {
             "json" => OutputFormat::Json,
@@ -176,6 +176,9 @@ pub fn parse_args<'a>(
             _ => unreachable!(),
         })
         .unwrap_or(OutputFormat::Display);
+    if output_format == OutputFormat::Display && matches.is_present("verbose") {
+        output_format = OutputFormat::DisplayVerbose;
+    }
 
     let commitment = matches
         .subcommand_name()
