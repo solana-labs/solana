@@ -751,7 +751,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                     let owner = translate_type_mut!(
                         Pubkey,
                         account_info.owner as *const _,
-                        ro_regions,
+                        rw_regions,
                         self.loader_id
                     )?;
                     let (data, ref_to_len_in_vm, serialized_len_ptr) = {
@@ -762,10 +762,13 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                             ro_regions,
                             self.loader_id
                         )?;
-                        let translated =
-                            translate!(account_info.data.as_ptr(), 8, ro_regions, self.loader_id)?
-                                as *mut u64;
-                        let ref_to_len_in_vm = unsafe { &mut *translated.offset(1) };
+                        let translated = translate!(
+                            unsafe { (account_info.data.as_ptr() as *const u64).offset(1) as u64 },
+                            8,
+                            rw_regions,
+                            self.loader_id
+                        )? as *mut u64;
+                        let ref_to_len_in_vm = unsafe { &mut *translated };
                         let ref_of_len_in_input_buffer = unsafe { data.as_ptr().offset(-8) };
                         let serialized_len_ptr = translate_type_mut!(
                             u64,
@@ -997,6 +1000,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             ro_regions,
             self.loader_id
         )?;
+        let first_info_addr = &account_infos[0] as *const _ as u64;
         let mut accounts = Vec::with_capacity(message.account_keys.len());
         let mut refs = Vec::with_capacity(message.account_keys.len());
         'root: for account_key in message.account_keys.iter() {
@@ -1013,7 +1017,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                     let owner = translate_type_mut!(
                         Pubkey,
                         account_info.owner_addr,
-                        ro_regions,
+                        rw_regions,
                         self.loader_id
                     )?;
                     let data = translate_slice_mut!(
@@ -1023,8 +1027,13 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                         rw_regions,
                         self.loader_id
                     )?;
-                    let ref_to_len_in_vm =
-                        unsafe { &mut *(&account_info.data_len as *const u64 as u64 as *mut u64) };
+
+                    let addr = &account_info.data_len as *const u64 as u64;
+                    let vm_addr = account_infos_addr + (addr - first_info_addr);
+                    let _ =
+                        translate!(vm_addr, size_of::<u64>() as u64, rw_regions, self.loader_id)?;
+                    let ref_to_len_in_vm = unsafe { &mut *(addr as *mut u64) };
+
                     let ref_of_len_in_input_buffer =
                         unsafe { (account_info.data_addr as *mut u8).offset(-8) };
                     let serialized_len_ptr = translate_type_mut!(
