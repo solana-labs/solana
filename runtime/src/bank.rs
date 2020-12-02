@@ -711,6 +711,16 @@ pub struct RewardInfo {
     pub post_balance: u64, // Account balance in lamports after `lamports` was applied
 }
 
+#[derive(Debug, Default)]
+pub struct OptionalDropCallback(Option<Box<dyn DropCallback + Send + Sync>>);
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl AbiExample for OptionalDropCallback {
+    fn example() -> Self {
+        Self(None)
+    }
+}
+
 /// Manager for the state of all accounts and programs after processing its entries.
 /// AbiExample is needed even without Serialize/Deserialize; actual (de-)serialization
 /// are implemented elsewhere for versioning
@@ -855,7 +865,7 @@ pub struct Bank {
 
     pub feature_set: Arc<FeatureSet>,
 
-    pub drop_callback: RwLock<Option<Box<dyn DropCallback + Send + Sync>>>,
+    pub drop_callback: RwLock<OptionalDropCallback>,
 }
 
 impl Default for BlockhashQueue {
@@ -1002,14 +1012,15 @@ impl Bank {
             transaction_log_collector_config: parent.transaction_log_collector_config.clone(),
             transaction_log_collector: Arc::new(RwLock::new(TransactionLogCollector::default())),
             feature_set: parent.feature_set.clone(),
-            drop_callback: RwLock::new(
+            drop_callback: RwLock::new(OptionalDropCallback(
                 parent
                     .drop_callback
                     .read()
                     .unwrap()
+                    .0
                     .as_ref()
                     .map(|drop_callback| drop_callback.clone_box()),
-            ),
+            )),
         };
 
         datapoint_info!(
@@ -1051,7 +1062,7 @@ impl Bank {
     }
 
     pub fn set_callback(&self, callback: Option<Box<dyn DropCallback + Send + Sync>>) {
-        *self.drop_callback.write().unwrap() = callback;
+        *self.drop_callback.write().unwrap() = OptionalDropCallback(callback);
     }
 
     /// Like `new_from_parent` but additionally:
@@ -1132,7 +1143,7 @@ impl Bank {
             transaction_log_collector_config: new(),
             transaction_log_collector: new(),
             feature_set: new(),
-            drop_callback: RwLock::new(None),
+            drop_callback: RwLock::new(OptionalDropCallback(None)),
         };
         bank.finish_init(genesis_config, additional_builtins);
 
@@ -4636,7 +4647,7 @@ impl Bank {
 impl Drop for Bank {
     fn drop(&mut self) {
         if !self.skip_drop.load(Relaxed) {
-            if let Some(drop_callback) = self.drop_callback.read().unwrap().as_ref() {
+            if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
                 drop_callback.callback(self);
             } else {
                 // Default case
