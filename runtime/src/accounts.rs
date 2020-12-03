@@ -716,7 +716,7 @@ impl Accounts {
         &self,
         txs: &[Transaction],
         txs_iteration_order: Option<&[usize]>,
-    ) -> Vec<Result<()>> {
+    ) -> (Vec<Result<()>>, usize) {
         use solana_sdk::sanitize::Sanitize;
         let keys: Vec<Result<_>> = OrderedIterator::new(txs, txs_iteration_order)
             .map(|(_, tx)| {
@@ -730,14 +730,23 @@ impl Accounts {
             })
             .collect();
         let mut account_locks = &mut self.account_locks.lock().unwrap();
-        keys.into_iter()
+        let mut total_keys = 0;
+        let ret = keys
+            .into_iter()
             .map(|result| match result {
                 Ok((writable_keys, readonly_keys)) => {
-                    self.lock_account(&mut account_locks, writable_keys, readonly_keys)
+                    let num_accounts = writable_keys.len() + readonly_keys.len();
+                    let lock_res =
+                        self.lock_account(&mut account_locks, writable_keys, readonly_keys);
+                    if lock_res.is_ok() {
+                        total_keys += num_accounts;
+                    }
+                    lock_res
                 }
                 Err(e) => Err(e),
             })
-            .collect()
+            .collect();
+        (ret, total_keys)
     }
 
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
@@ -1596,7 +1605,7 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair0], message, Hash::default());
-        let results0 = accounts.lock_accounts(&[tx.clone()], None);
+        let results0 = accounts.lock_accounts(&[tx.clone()], None).0;
 
         assert!(results0[0].is_ok());
         assert_eq!(
@@ -1635,7 +1644,7 @@ mod tests {
         );
         let tx1 = Transaction::new(&[&keypair1], message, Hash::default());
         let txs = vec![tx0, tx1];
-        let results1 = accounts.lock_accounts(&txs, None);
+        let results1 = accounts.lock_accounts(&txs, None).0;
 
         assert!(results1[0].is_ok()); // Read-only account (keypair1) can be referenced multiple times
         assert!(results1[1].is_err()); // Read-only account (keypair1) cannot also be locked as writable
@@ -1667,7 +1676,7 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair1], message, Hash::default());
-        let results2 = accounts.lock_accounts(&[tx], None);
+        let results2 = accounts.lock_accounts(&[tx], None).0;
 
         assert!(results2[0].is_ok()); // Now keypair1 account can be locked as writable
 
@@ -1729,7 +1738,7 @@ mod tests {
             let exit_clone = exit_clone.clone();
             loop {
                 let txs = vec![writable_tx.clone()];
-                let results = accounts_clone.clone().lock_accounts(&txs, None);
+                let results = accounts_clone.clone().lock_accounts(&txs, None).0;
                 for result in results.iter() {
                     if result.is_ok() {
                         counter_clone.clone().fetch_add(1, Ordering::SeqCst);
@@ -1744,7 +1753,7 @@ mod tests {
         let counter_clone = counter;
         for _ in 0..5 {
             let txs = vec![readonly_tx.clone()];
-            let results = accounts_arc.clone().lock_accounts(&txs, None);
+            let results = accounts_arc.clone().lock_accounts(&txs, None).0;
             if results[0].is_ok() {
                 let counter_value = counter_clone.clone().load(Ordering::SeqCst);
                 thread::sleep(time::Duration::from_millis(50));

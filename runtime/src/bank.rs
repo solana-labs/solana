@@ -2228,12 +2228,15 @@ impl Bank {
         &'a self,
         txs: &'b [Transaction],
         iteration_order: Option<Vec<usize>>,
-    ) -> TransactionBatch<'a, 'b> {
-        let results = self
+    ) -> (TransactionBatch<'a, 'b>, usize) {
+        let (results, total_accounts) = self
             .rc
             .accounts
             .lock_accounts(txs, iteration_order.as_deref());
-        TransactionBatch::new(results, &self, txs, iteration_order)
+        (
+            TransactionBatch::new(results, &self, txs, iteration_order),
+            total_accounts,
+        )
     }
 
     pub fn prepare_simulation_batch<'a, 'b>(
@@ -3637,7 +3640,7 @@ impl Bank {
 
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
-        let batch = self.prepare_batch(txs, None);
+        let batch = self.prepare_batch(txs, None).0;
         self.load_execute_and_commit_transactions(&batch, MAX_PROCESSING_AGE, false, false, false)
             .0
             .fee_collection_results
@@ -7245,7 +7248,7 @@ pub(crate) mod tests {
             system_transaction::transfer(&mint_keypair, &alice.pubkey(), 1, genesis_config.hash());
         let pay_alice = vec![tx1];
 
-        let lock_result = bank.prepare_batch(&pay_alice, None);
+        let lock_result = bank.prepare_batch(&pay_alice, None).0;
         let results_alice = bank
             .load_execute_and_commit_transactions(
                 &lock_result,
@@ -7297,7 +7300,7 @@ pub(crate) mod tests {
         let tx = Transaction::new(&[&key0], message, genesis_config.hash());
         let txs = vec![tx];
 
-        let batch0 = bank.prepare_batch(&txs, None);
+        let batch0 = bank.prepare_batch(&txs, None).0;
         assert!(batch0.lock_results()[0].is_ok());
 
         // Try locking accounts, locking a previously read-only account as writable
@@ -7315,7 +7318,7 @@ pub(crate) mod tests {
         let tx = Transaction::new(&[&key1], message, genesis_config.hash());
         let txs = vec![tx];
 
-        let batch1 = bank.prepare_batch(&txs, None);
+        let batch1 = bank.prepare_batch(&txs, None).0;
         assert!(batch1.lock_results()[0].is_err());
 
         // Try locking a previously read-only account a 2nd time; should succeed
@@ -7332,7 +7335,7 @@ pub(crate) mod tests {
         let tx = Transaction::new(&[&key2], message, genesis_config.hash());
         let txs = vec![tx];
 
-        let batch2 = bank.prepare_batch(&txs, None);
+        let batch2 = bank.prepare_batch(&txs, None).0;
         assert!(batch2.lock_results()[0].is_ok());
     }
 
@@ -9046,14 +9049,14 @@ pub(crate) mod tests {
         );
         let txs = vec![tx0, tx1];
         let iteration_order: Vec<usize> = vec![0, 1];
-        let batch = bank0.prepare_batch(&txs, Some(iteration_order));
+        let batch = bank0.prepare_batch(&txs, Some(iteration_order)).0;
         let balances = bank0.collect_balances(&batch);
         assert_eq!(balances.len(), 2);
         assert_eq!(balances[0], vec![8, 11, 1]);
         assert_eq!(balances[1], vec![8, 0, 1]);
 
         let iteration_order: Vec<usize> = vec![1, 0];
-        let batch = bank0.prepare_batch(&txs, Some(iteration_order));
+        let batch = bank0.prepare_batch(&txs, Some(iteration_order)).0;
         let balances = bank0.collect_balances(&batch);
         assert_eq!(balances.len(), 2);
         assert_eq!(balances[0], vec![8, 0, 1]);
@@ -9087,7 +9090,7 @@ pub(crate) mod tests {
         let tx2 = system_transaction::transfer(&keypair1, &pubkey2, 12, blockhash);
         let txs = vec![tx0, tx1, tx2];
 
-        let lock_result = bank0.prepare_batch(&txs, None);
+        let lock_result = bank0.prepare_batch(&txs, None).0;
         let (transaction_results, transaction_balances_set, inner_instructions, transaction_logs) =
             bank0.load_execute_and_commit_transactions(
                 &lock_result,

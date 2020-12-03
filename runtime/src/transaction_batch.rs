@@ -69,20 +69,20 @@ mod tests {
         let (bank, txs) = setup();
 
         // Test getting locked accounts
-        let batch = bank.prepare_batch(&txs, None);
+        let batch = bank.prepare_batch(&txs, None).0;
 
         // Grab locks
         assert!(batch.lock_results().iter().all(|x| x.is_ok()));
 
         // Trying to grab locks again should fail
-        let batch2 = bank.prepare_batch(&txs, None);
+        let batch2 = bank.prepare_batch(&txs, None).0;
         assert!(batch2.lock_results().iter().all(|x| x.is_err()));
 
         // Drop the first set of locks
         drop(batch);
 
         // Now grabbing locks should work again
-        let batch2 = bank.prepare_batch(&txs, None);
+        let batch2 = bank.prepare_batch(&txs, None).0;
         assert!(batch2.lock_results().iter().all(|x| x.is_ok()));
     }
 
@@ -95,7 +95,7 @@ mod tests {
         assert!(batch.lock_results().iter().all(|x| x.is_ok()));
 
         // Grab locks
-        let batch2 = bank.prepare_batch(&txs, None);
+        let batch2 = bank.prepare_batch(&txs, None).0;
         assert!(batch2.lock_results().iter().all(|x| x.is_ok()));
 
         // Prepare another batch without locks
