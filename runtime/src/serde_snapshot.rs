@@ -126,7 +126,6 @@ pub(crate) fn bank_from_stream<R, P>(
     frozen_account_pubkeys: &[Pubkey],
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
-    bpf_jit: bool,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -145,7 +144,6 @@ where
                 append_vecs_path,
                 debug_keys,
                 additional_builtins,
-                bpf_jit,
             )?;
             Ok(bank)
         }};
@@ -232,7 +230,6 @@ fn reconstruct_bank_from_fields<E, P>(
     append_vecs_path: P,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
-    bpf_jit: bool,
 ) -> Result<Bank, Error>
 where
     E: Into<AccountStorageEntry>,
@@ -253,7 +250,6 @@ where
         bank_fields,
         debug_keys,
         additional_builtins,
-        bpf_jit,
     );
 
     Ok(bank)

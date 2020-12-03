@@ -210,10 +210,8 @@ pub struct ThisInvokeContext<'a> {
     executors: Rc<RefCell<Executors>>,
     instruction_recorder: Option<InstructionRecorder>,
     feature_set: Arc<FeatureSet>,
-    bpf_jit: bool,
 }
 impl<'a> ThisInvokeContext<'a> {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         program_id: &Pubkey,
         rent: Rent,
@@ -224,7 +222,6 @@ impl<'a> ThisInvokeContext<'a> {
         executors: Rc<RefCell<Executors>>,
         instruction_recorder: Option<InstructionRecorder>,
         feature_set: Arc<FeatureSet>,
-        bpf_jit: bool,
     ) -> Self {
         let mut program_ids = Vec::with_capacity(bpf_compute_budget.max_invoke_depth);
         program_ids.push(*program_id);
@@ -241,7 +238,6 @@ impl<'a> ThisInvokeContext<'a> {
             executors,
             instruction_recorder,
             feature_set,
-            bpf_jit,
         }
     }
 }
@@ -311,9 +307,6 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     }
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
         self.feature_set.is_active(feature_id)
-    }
-    fn use_bpf_jit(&self) -> bool {
-        self.bpf_jit
     }
 }
 pub struct ThisLogger {
@@ -670,7 +663,6 @@ impl MessageProcessor {
         instruction_index: usize,
         feature_set: Arc<FeatureSet>,
         bpf_compute_budget: BpfComputeBudget,
-        bpf_jit: bool,
     ) -> Result<(), InstructionError> {
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
@@ -698,7 +690,6 @@ impl MessageProcessor {
             executors,
             instruction_recorder,
             feature_set,
-            bpf_jit,
         );
         let keyed_accounts =
             Self::create_keyed_accounts(message, instruction, executable_accounts, accounts)?;
@@ -729,7 +720,6 @@ impl MessageProcessor {
         instruction_recorders: Option<&[InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
         bpf_compute_budget: BpfComputeBudget,
-        bpf_jit: bool,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let instruction_recorder = instruction_recorders
@@ -747,7 +737,6 @@ impl MessageProcessor {
                 instruction_index,
                 feature_set.clone(),
                 bpf_compute_budget,
-                bpf_jit,
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
@@ -802,7 +791,6 @@ mod tests {
             Rc::new(RefCell::new(Executors::default())),
             None,
             Arc::new(FeatureSet::all_enabled()),
-            true,
         );
 
         // Check call depth increases and has a limit
@@ -1348,7 +1336,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(&FeatureSet::all_enabled()),
-            true,
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 100);
@@ -1373,7 +1360,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(&FeatureSet::all_enabled()),
-            true,
         );
         assert_eq!(
             result,
@@ -1402,7 +1388,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(&FeatureSet::all_enabled()),
-            true,
         );
         assert_eq!(
             result,
@@ -1515,7 +1500,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(&FeatureSet::all_enabled()),
-            true,
         );
         assert_eq!(
             result,
@@ -1544,7 +1528,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(&FeatureSet::all_enabled()),
-            true,
         );
         assert_eq!(result, Ok(()));
 
@@ -1570,7 +1553,6 @@ mod tests {
             None,
             Arc::new(FeatureSet::all_enabled()),
             BpfComputeBudget::new(&FeatureSet::all_enabled()),
-            true,
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].borrow().lamports, 80);
@@ -1656,7 +1638,6 @@ mod tests {
             Rc::new(RefCell::new(Executors::default())),
             None,
             Arc::new(FeatureSet::all_enabled()),
-            true,
         );
         let metas = vec![
             AccountMeta::new(owned_key, false),

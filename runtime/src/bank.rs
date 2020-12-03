@@ -851,8 +851,6 @@ pub struct Bank {
     pub transaction_log_collector: Arc<RwLock<TransactionLogCollector>>,
 
     pub feature_set: Arc<FeatureSet>,
-
-    bpf_jit: bool,
 }
 
 impl Default for BlockhashQueue {
@@ -863,7 +861,7 @@ impl Default for BlockhashQueue {
 
 impl Bank {
     pub fn new(genesis_config: &GenesisConfig) -> Self {
-        Self::new_with_paths(&genesis_config, Vec::new(), &[], None, None, false)
+        Self::new_with_paths(&genesis_config, Vec::new(), &[], None, None)
     }
 
     pub fn new_with_paths(
@@ -872,7 +870,6 @@ impl Bank {
         frozen_account_pubkeys: &[Pubkey],
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
-        bpf_jit: bool,
     ) -> Self {
         let mut bank = Self::default();
         bank.transaction_debug_keys = debug_keys;
@@ -882,7 +879,6 @@ impl Bank {
         bank.rc.accounts = Arc::new(Accounts::new(paths, &genesis_config.cluster_type));
         bank.process_genesis_config(genesis_config);
         bank.finish_init(genesis_config, additional_builtins);
-        bank.bpf_jit = bpf_jit;
 
         // Freeze accounts after process_genesis_config creates the initial append vecs
         Arc::get_mut(&mut Arc::get_mut(&mut bank.rc.accounts).unwrap().accounts_db)
@@ -1001,7 +997,6 @@ impl Bank {
             transaction_log_collector_config: parent.transaction_log_collector_config.clone(),
             transaction_log_collector: Arc::new(RwLock::new(TransactionLogCollector::default())),
             feature_set: parent.feature_set.clone(),
-            bpf_jit: parent.bpf_jit,
         };
 
         datapoint_info!(
@@ -1064,7 +1059,6 @@ impl Bank {
         fields: BankFieldsToDeserialize,
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
-        bpf_jit: bool,
     ) -> Self {
         fn new<T: Default>() -> T {
             T::default()
@@ -1121,7 +1115,6 @@ impl Bank {
             transaction_log_collector_config: new(),
             transaction_log_collector: new(),
             feature_set: new(),
-            bpf_jit,
         };
         bank.finish_init(genesis_config, additional_builtins);
 
@@ -2769,7 +2762,6 @@ impl Bank {
                         instruction_recorders.as_deref(),
                         self.feature_set.clone(),
                         bpf_compute_budget,
-                        self.bpf_jit,
                     );
 
                     if enable_log_recording {
@@ -10093,6 +10085,7 @@ pub(crate) mod tests {
             _keyed_accounts: &[KeyedAccount],
             _instruction_data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
+            _use_jit: bool,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
         }

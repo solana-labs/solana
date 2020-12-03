@@ -61,8 +61,6 @@ pub trait InvokeContext {
     fn record_instruction(&self, instruction: &Instruction);
     /// Get the bank's active feature set
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool;
-    /// Get whether to use the JIT compiler or the interpreter
-    fn use_bpf_jit(&self) -> bool;
 }
 
 #[derive(Clone, Copy, Debug, AbiExample)]
@@ -243,6 +241,7 @@ pub trait Executor: Debug + Send + Sync {
         keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
+        use_jit: bool,
     ) -> Result<(), InstructionError>;
 }
 
@@ -339,9 +338,6 @@ impl InvokeContext for MockInvokeContext {
     }
     fn record_instruction(&self, _instruction: &Instruction) {}
     fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
-        true
-    }
-    fn use_bpf_jit(&self) -> bool {
         true
     }
 }

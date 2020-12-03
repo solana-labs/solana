@@ -343,8 +343,10 @@ pub fn process_blockstore(
         account_paths,
         &opts.frozen_accounts,
         opts.debug_keys.clone(),
-        Some(&crate::builtins::get(genesis_config.cluster_type)),
-        opts.bpf_jit,
+        Some(&crate::builtins::get(
+            genesis_config.cluster_type,
+            opts.bpf_jit,
+        )),
     );
     let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");
@@ -2832,7 +2834,7 @@ pub mod tests {
         genesis_config: &GenesisConfig,
         account_paths: Vec<PathBuf>,
     ) -> EpochSchedule {
-        let bank = Bank::new_with_paths(&genesis_config, account_paths, &[], None, None, false);
+        let bank = Bank::new_with_paths(&genesis_config, account_paths, &[], None, None);
         *bank.epoch_schedule()
     }
 

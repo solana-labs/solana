@@ -4,6 +4,7 @@ pub mod bpf_verifier;
 pub mod deprecated;
 pub mod serialization;
 pub mod syscalls;
+pub mod with_jit;
 
 use crate::{
     bpf_verifier::VerifierError,
@@ -94,6 +95,7 @@ fn map_ebpf_error(
 pub fn create_and_cache_executor(
     program: &KeyedAccount,
     invoke_context: &mut dyn InvokeContext,
+    use_jit: bool,
 ) -> Result<Arc<BPFExecutor>, InstructionError> {
     let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
     let mut executable = Executable::<BPFError, ThisInstructionMeter>::from_elf(
@@ -118,8 +120,7 @@ pub fn create_and_cache_executor(
     let syscall_registry = syscalls::register_syscalls(invoke_context)
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
     executable.set_syscall_registry(syscall_registry);
-
-    if invoke_context.use_bpf_jit() && executable.jit_compile().is_err() {
+    if use_jit && executable.jit_compile().is_err() {
         return Err(BPFLoaderError::JustInTimeCompilationFailed.into());
     }
     let executor = Arc::new(BPFExecutor { executable });
@@ -152,11 +153,12 @@ pub fn create_vm<'a>(
     Ok(vm)
 }
 
-pub fn process_instruction(
+pub fn process_instruction_general(
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
+    use_jit: bool,
 ) -> Result<(), InstructionError> {
     debug_assert!(bpf_loader::check_id(program_id) || bpf_loader_deprecated::check_id(program_id));
 
@@ -171,9 +173,15 @@ pub fn process_instruction(
     if is_executable(keyed_accounts)? {
         let executor = match invoke_context.get_executor(program.unsigned_key()) {
             Some(executor) => executor,
-            None => create_and_cache_executor(program, invoke_context)?,
+            None => create_and_cache_executor(program, invoke_context, use_jit)?,
         };
-        executor.execute(program_id, keyed_accounts, instruction_data, invoke_context)?
+        executor.execute(
+            program_id,
+            keyed_accounts,
+            instruction_data,
+            invoke_context,
+            use_jit,
+        )?
     } else if !keyed_accounts.is_empty() {
         match limited_deserialize(instruction_data)? {
             LoaderInstruction::Write { offset, bytes } => {
@@ -200,7 +208,7 @@ pub fn process_instruction(
                     return Err(InstructionError::MissingRequiredSignature);
                 }
 
-                let _ = create_and_cache_executor(program, invoke_context)?;
+                let _ = create_and_cache_executor(program, invoke_context, use_jit)?;
                 program.try_account_ref_mut()?.executable = true;
                 log!(
                     logger,
@@ -211,6 +219,36 @@ pub fn process_instruction(
         }
     }
     Ok(())
+}
+
+pub fn process_instruction(
+    program_id: &Pubkey,
+    keyed_accounts: &[KeyedAccount],
+    instruction_data: &[u8],
+    invoke_context: &mut dyn InvokeContext,
+) -> Result<(), InstructionError> {
+    process_instruction_general(
+        program_id,
+        keyed_accounts,
+        instruction_data,
+        invoke_context,
+        false,
+    )
+}
+
+pub fn process_instruction_jit(
+    program_id: &Pubkey,
+    keyed_accounts: &[KeyedAccount],
+    instruction_data: &[u8],
+    invoke_context: &mut dyn InvokeContext,
+) -> Result<(), InstructionError> {
+    process_instruction_general(
+        program_id,
+        keyed_accounts,
+        instruction_data,
+        invoke_context,
+        true,
+    )
 }
 
 /// Passed to the VM to enforce the compute budget
@@ -252,6 +290,7 @@ impl Executor for BPFExecutor {
         keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
+        use_jit: bool,
     ) -> Result<(), InstructionError> {
         let logger = invoke_context.get_logger();
         let invoke_depth = invoke_context.invoke_depth();
@@ -267,7 +306,6 @@ impl Executor for BPFExecutor {
             &instruction_data,
         )?;
         {
-            let use_bpf_jit = invoke_context.use_bpf_jit();
             let compute_meter = invoke_context.get_compute_meter();
             let mut vm = match create_vm(
                 program_id,
@@ -286,7 +324,7 @@ impl Executor for BPFExecutor {
             stable_log::program_invoke(&logger, program.unsigned_key(), invoke_depth);
             let mut instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
             let before = compute_meter.borrow().get_remaining();
-            let result = if use_bpf_jit {
+            let result = if use_jit {
                 vm.execute_program_jit(&mut instruction_meter)
             } else {
                 vm.execute_program_interpreted(&mut instruction_meter)
@@ -592,7 +630,6 @@ mod tests {
             Rc::new(RefCell::new(Executors::default())),
             None,
             Arc::new(FeatureSet::default()),
-            true,
         );
         assert_eq!(
             Err(InstructionError::Custom(194969602)),
