@@ -2109,7 +2109,7 @@ impl Bank {
                     return;
                 }
             }
-        };
+        }
 
         assert!(
             !self.is_frozen(),
