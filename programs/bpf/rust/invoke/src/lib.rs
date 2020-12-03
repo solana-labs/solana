@@ -20,6 +20,7 @@ const TEST_SUCCESS: u8 = 1;
 const TEST_PRIVILEGE_ESCALATION_SIGNER: u8 = 2;
 const TEST_PRIVILEGE_ESCALATION_WRITABLE: u8 = 3;
 const TEST_PPROGRAM_NOT_EXECUTABLE: u8 = 4;
+const TEST_EMPTY_ACCOUNTS_SLICE: u8 = 5;
 
 // const MINT_INDEX: usize = 0;
 const ARGUMENT_INDEX: usize = 1;
@@ -365,6 +366,11 @@ fn process_instruction(
                 vec![TEST_RETURN_ERROR],
             );
             invoke(&instruction, accounts)?;
+        }
+        TEST_EMPTY_ACCOUNTS_SLICE => {
+            msg!("Empty accounts slice");
+            let instruction = create_instruction(*accounts[INVOKED_PROGRAM_INDEX].key, &[], vec![]);
+            invoke(&instruction, &[])?;
         }
         _ => panic!(),
     }
