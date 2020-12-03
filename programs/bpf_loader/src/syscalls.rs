@@ -880,7 +880,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             ro_regions,
             self.loader_id
         )?;
-        let first_info_addr = &account_infos[0] as *const _ as u64;
         let mut accounts = Vec::with_capacity(message.account_keys.len());
         let mut refs = Vec::with_capacity(message.account_keys.len());
         'root: for account_key in message.account_keys.iter() {
@@ -908,6 +907,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                         self.loader_id
                     )?;
 
+                    let first_info_addr = &account_infos[0] as *const _ as u64;
                     let addr = &account_info.data_len as *const u64 as u64;
                     let vm_addr = account_infos_addr + (addr - first_info_addr);
                     let _ =
