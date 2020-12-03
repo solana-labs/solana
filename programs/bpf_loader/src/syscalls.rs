@@ -923,9 +923,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                 signers_seeds_len,
                 self.loader_id,
             )?;
-            if signers_seeds.len() > MAX_SEEDS {
-                return Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into());
-            }
             for signer_seeds in signers_seeds.iter() {
                 let untranslated_seeds = translate_slice::<&[u8]>(
                     memory_mapping,
@@ -933,6 +930,12 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                     signer_seeds.len() as u64,
                     self.loader_id,
                 )?;
+                if untranslated_seeds.len() > MAX_SEEDS {
+                    return Err(SyscallError::InstructionError(
+                        InstructionError::MaxSeedLengthExceeded,
+                    )
+                    .into());
+                }
                 let seeds = untranslated_seeds
                     .iter()
                     .map(|untranslated_seed| {
@@ -1175,9 +1178,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                 signers_seeds_len,
                 self.loader_id,
             )?;
-            if signers_seeds.len() > MAX_SEEDS {
-                return Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into());
-            }
             Ok(signers_seeds
                 .iter()
                 .map(|signer_seeds| {
@@ -1187,6 +1187,12 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                         signer_seeds.len,
                         self.loader_id,
                     )?;
+                    if seeds.len() > MAX_SEEDS {
+                        return Err(SyscallError::InstructionError(
+                            InstructionError::MaxSeedLengthExceeded,
+                        )
+                        .into());
+                    }
                     let seeds_bytes = seeds
                         .iter()
                         .map(|seed| {

@@ -491,6 +491,7 @@ fn test_program_bpf_invoke() {
     const TEST_PRIVILEGE_ESCALATION_WRITABLE: u8 = 3;
     const TEST_PPROGRAM_NOT_EXECUTABLE: u8 = 4;
     const TEST_EMPTY_ACCOUNTS_SLICE: u8 = 5;
+    const TEST_CAP_SEEDS: u8 = 6;
 
     #[allow(dead_code)]
     #[derive(Debug)]
@@ -763,6 +764,33 @@ fn test_program_bpf_invoke() {
         assert_eq!(
             result.unwrap_err(),
             TransactionError::InstructionError(0, InstructionError::MissingAccount)
+        );
+
+        let instruction = Instruction::new(
+            invoke_program_id,
+            &[TEST_CAP_SEEDS, bump_seed1, bump_seed2, bump_seed3],
+            account_metas.clone(),
+        );
+        let message = Message::new(&[instruction], Some(&mint_pubkey));
+        let tx = Transaction::new(
+            &[
+                &mint_keypair,
+                &argument_keypair,
+                &invoked_argument_keypair,
+                &from_keypair,
+            ],
+            message.clone(),
+            bank.last_blockhash(),
+        );
+        let (result, inner_instructions) = process_transaction_and_record_inner(&bank, tx);
+        let invoked_programs: Vec<Pubkey> = inner_instructions[0]
+            .iter()
+            .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
+            .collect();
+        assert_eq!(invoked_programs, vec![]);
+        assert_eq!(
+            result.unwrap_err(),
+            TransactionError::InstructionError(0, InstructionError::MaxSeedLengthExceeded)
         );
 
         // Check final state
