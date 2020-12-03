@@ -37,6 +37,7 @@ where
 
 /// Returns the highest index after computing a weighted shuffle.
 /// Saves doing any sorting for O(n) max calculation.
+// TODO: Remove in favor of rand::distributions::WeightedIndex.
 pub fn weighted_best(weights_and_indexes: &[(u64, usize)], seed: [u8; 32]) -> usize {
     if weights_and_indexes.is_empty() {
         return 0;
