@@ -1994,7 +1994,6 @@ impl Bank {
         // Bootstrap validator collects fees until `new_from_parent` is called.
         self.fee_rate_governor = genesis_config.fee_rate_governor.clone();
         self.fee_calculator = self.fee_rate_governor.create_fee_calculator();
-        self.update_fees();
 
         for (pubkey, account) in genesis_config.accounts.iter() {
             if self.get_account(&pubkey).is_some() {
@@ -2003,6 +2002,7 @@ impl Bank {
             self.store_account(pubkey, account);
             self.capitalization.fetch_add(account.lamports, Relaxed);
         }
+        self.update_fees();
 
         for (pubkey, account) in genesis_config.rewards_pools.iter() {
             if self.get_account(&pubkey).is_some() {
@@ -4432,7 +4432,7 @@ impl Bank {
                 .is_active(&feature_set::simpler_capitalization::id())
     }
 
-    pub fn simpler_capitalization_enabled_at_genesis(&self) -> bool {
+    fn simpler_capitalization_enabled_at_genesis(&self) -> bool {
         // genesis builtin initialization codepath is called even before the initial
         // feature activation, so we need to peek this flag at very early bank
         // initialization phase
