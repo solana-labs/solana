@@ -16,6 +16,7 @@ import {
   SignatureResult,
   ParsedTransaction,
   ParsedInnerInstruction,
+  Transaction,
 } from "@solana/web3.js";
 import { PublicKey } from "@solana/web3.js";
 import { lamportsToSolString } from "utils";
@@ -462,6 +463,7 @@ function InstructionsSection({ signature }: SignatureProps) {
             signature,
             tx: transaction,
             childIndex,
+            raw,
           });
 
           innerCards.push(res);
@@ -475,6 +477,7 @@ function InstructionsSection({ signature }: SignatureProps) {
         signature,
         tx: transaction,
         innerCards,
+        raw,
       });
     }
   );
@@ -529,6 +532,7 @@ function renderInstructionCard({
   signature,
   innerCards,
   childIndex,
+  raw,
 }: {
   ix: ParsedInstruction | PartiallyDecodedInstruction;
   tx: ParsedTransaction;
@@ -537,6 +541,7 @@ function renderInstructionCard({
   signature: TransactionSignature;
   innerCards?: JSX.Element[];
   childIndex?: number;
+  raw?: Transaction;
 }) {
   const key = `${index}-${childIndex}`;
 
