@@ -153,7 +153,7 @@ pub fn create_vm<'a>(
     Ok(vm)
 }
 
-pub fn process_instruction_general(
+fn process_instruction_general(
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
