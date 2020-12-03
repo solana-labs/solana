@@ -8,6 +8,7 @@ use crate::{
     weighted_shuffle::weighted_best,
 };
 use bincode::serialize;
+use rand::distributions::{Distribution, WeightedIndex};
 use solana_ledger::{blockstore::Blockstore, shred::Nonce};
 use solana_measure::measure::Measure;
 use solana_measure::thread_mem_usage;
@@ -21,7 +22,7 @@ use solana_sdk::{
 };
 use solana_streamer::streamer::{PacketReceiver, PacketSender};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap, HashSet},
     net::SocketAddr,
     sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, RwLock},
@@ -80,7 +81,7 @@ pub struct ServeRepair {
     cluster_info: Arc<ClusterInfo>,
 }
 
-type RepairCache = HashMap<Slot, (Vec<ContactInfo>, Vec<(u64, usize)>)>;
+type RepairCache = HashMap<Slot, (Vec<ContactInfo>, WeightedIndex<u64>)>;
 
 impl ServeRepair {
     /// Without a valid keypair gossip will not function. Only useful for tests.
@@ -387,16 +388,20 @@ impl ServeRepair {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
         let slot = repair_request.slot();
-        if cache.get(&slot).is_none() {
-            let repair_peers = self.repair_peers(&repair_validators, slot);
-            if repair_peers.is_empty() {
-                return Err(ClusterInfoError::NoPeers.into());
+        let (repair_peers, weighted_index) = match cache.entry(slot) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                let repair_peers = self.repair_peers(&repair_validators, slot);
+                if repair_peers.is_empty() {
+                    return Err(Error::from(ClusterInfoError::NoPeers));
+                }
+                let weights = cluster_slots.compute_weights(slot, &repair_peers);
+                debug_assert_eq!(weights.len(), repair_peers.len());
+                let weighted_index = WeightedIndex::new(weights)?;
+                entry.insert((repair_peers, weighted_index))
             }
-            let weights = cluster_slots.compute_weights(slot, &repair_peers);
-            cache.insert(slot, (repair_peers, weights));
-        }
-        let (repair_peers, weights) = cache.get(&slot).unwrap();
-        let n = weighted_best(&weights, solana_sdk::pubkey::new_rand().to_bytes());
+        };
+        let n = weighted_index.sample(&mut rand::thread_rng());
         let addr = repair_peers[n].serve_repair; // send the request to the peer's serve_repair port
         let repair_peer_id = repair_peers[n].id;
         let out = self.map_repair_request(

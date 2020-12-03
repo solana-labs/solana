@@ -26,7 +26,7 @@
 
 use crate::contact_info::ContactInfo;
 use crate::crds_shards::CrdsShards;
-use crate::crds_value::{CrdsData, CrdsValue, CrdsValueLabel};
+use crate::crds_value::{CrdsData, CrdsValue, CrdsValueLabel, LowestSlot};
 use bincode::serialize;
 use indexmap::map::{rayon::ParValues, Entry, IndexMap, Iter, Values};
 use indexmap::set::IndexSet;
@@ -182,9 +182,14 @@ impl Crds {
         self.table.get(label)
     }
 
-    pub fn get_contact_info(&self, pubkey: &Pubkey) -> Option<&ContactInfo> {
-        let label = CrdsValueLabel::ContactInfo(*pubkey);
+    pub fn get_contact_info(&self, pubkey: Pubkey) -> Option<&ContactInfo> {
+        let label = CrdsValueLabel::ContactInfo(pubkey);
         self.table.get(&label)?.value.contact_info()
+    }
+
+    pub fn get_lowest_slot(&self, pubkey: Pubkey) -> Option<&LowestSlot> {
+        let lable = CrdsValueLabel::LowestSlot(pubkey);
+        self.table.get(&lable)?.value.lowest_slot()
     }
 
     /// Returns all entries which are ContactInfo.
