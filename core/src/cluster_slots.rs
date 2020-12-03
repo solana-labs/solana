@@ -106,28 +106,30 @@ impl ClusterSlots {
         }
     }
 
-    pub fn compute_weights(&self, slot: Slot, repair_peers: &[ContactInfo]) -> Vec<(u64, usize)> {
-        let slot_peers = self.lookup(slot);
+    pub fn compute_weights(&self, slot: Slot, repair_peers: &[ContactInfo]) -> Vec<u64> {
+        let stakes = {
+            let validator_stakes = self.validator_stakes.read().unwrap();
+            repair_peers
+                .iter()
+                .map(|peer| {
+                    validator_stakes
+                        .get(&peer.id)
+                        .map(|node| node.total_stake)
+                        .unwrap_or(0)
+                        + 1
+                })
+                .collect()
+        };
+        let slot_peers = match self.lookup(slot) {
+            None => return stakes,
+            Some(slot_peers) => slot_peers,
+        };
+        let slot_peers = slot_peers.read().unwrap();
         repair_peers
             .iter()
-            .enumerate()
-            .map(|(i, x)| {
-                let peer_stake = slot_peers
-                    .as_ref()
-                    .and_then(|v| v.read().unwrap().get(&x.id).cloned())
-                    .unwrap_or(0);
-                (
-                    1 + peer_stake
-                        + self
-                            .validator_stakes
-                            .read()
-                            .unwrap()
-                            .get(&x.id)
-                            .map(|v| v.total_stake)
-                            .unwrap_or(0),
-                    i,
-                )
-            })
+            .map(|peer| slot_peers.get(&peer.id).cloned().unwrap_or(0))
+            .zip(stakes)
+            .map(|(a, b)| a + b)
             .collect()
     }
 
@@ -228,7 +230,7 @@ mod tests {
     fn test_compute_weights() {
         let cs = ClusterSlots::default();
         let ci = ContactInfo::default();
-        assert_eq!(cs.compute_weights(0, &[ci]), vec![(1, 0)]);
+        assert_eq!(cs.compute_weights(0, &[ci]), vec![1]);
     }
 
     #[test]
@@ -249,7 +251,7 @@ mod tests {
         c2.id = k2;
         assert_eq!(
             cs.compute_weights(0, &[c1, c2]),
-            vec![(std::u64::MAX / 2 + 1, 0), (1, 1)]
+            vec![std::u64::MAX / 2 + 1, 1]
         );
     }
 
@@ -281,7 +283,7 @@ mod tests {
         c2.id = k2;
         assert_eq!(
             cs.compute_weights(0, &[c1, c2]),
-            vec![(std::u64::MAX / 2 + 1, 0), (1, 1)]
+            vec![std::u64::MAX / 2 + 1, 1]
         );
     }
 
