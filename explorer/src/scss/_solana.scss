@@ -205,7 +205,7 @@ h4.slot-pill {
   }
 }
 
-.address-truncate {
+.address-truncate, .signature-truncate {
   @include media-breakpoint-down(md) {
     max-width: 180px;
     display: inline-block;

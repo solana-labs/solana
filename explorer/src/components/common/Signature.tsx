@@ -42,7 +42,7 @@ export function Signature({ signature, alignRight, link, truncate }: Props) {
       <span className="text-monospace">
         {link ? (
           <Link
-            className={truncate ? "text-truncate address-truncate" : ""}
+            className={truncate ? "text-truncate signature-truncate" : ""}
             to={clusterPath(`/tx/${signature}`)}
           >
             {signature}
