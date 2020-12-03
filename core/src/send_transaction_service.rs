@@ -4,7 +4,11 @@ use crate::poh_recorder::PohRecorder;
 use log::*;
 use solana_metrics::{datapoint_warn, inc_new_counter_info};
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
+use solana_sdk::{
+    clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
+    pubkey::Pubkey,
+    signature::Signature,
+};
 use std::sync::Mutex;
 use std::{
     collections::HashMap,
@@ -64,12 +68,16 @@ impl LeaderInfo {
             .collect();
     }
 
-    pub fn get_leader_tpu(&self) -> Option<&SocketAddr> {
-        self.poh_recorder
-            .lock()
-            .unwrap()
-            .leader_after_n_slots(0)
-            .and_then(|leader| self.recent_peers.get(&leader))
+    pub fn get_leader_tpus(&self, count: u64) -> Vec<&SocketAddr> {
+        let recorder = self.poh_recorder.lock().unwrap();
+        let leaders: Vec<_> = (0..count)
+            .filter_map(|i| recorder.leader_after_n_slots(i * NUM_CONSECUTIVE_LEADER_SLOTS))
+            .collect();
+        drop(recorder);
+        leaders
+            .into_iter()
+            .filter_map(|leader| self.recent_peers.get(&leader))
+            .collect()
     }
 }
 
@@ -88,8 +96,17 @@ impl SendTransactionService {
         bank_forks: &Arc<RwLock<BankForks>>,
         leader_info: Option<LeaderInfo>,
         receiver: Receiver<TransactionInfo>,
+        retry_rate_ms: u64,
+        leader_forward_count: u64,
     ) -> Self {
-        let thread = Self::retry_thread(tpu_address, receiver, bank_forks.clone(), leader_info);
+        let thread = Self::retry_thread(
+            tpu_address,
+            receiver,
+            bank_forks.clone(),
+            leader_info,
+            retry_rate_ms,
+            leader_forward_count,
+        );
         Self { thread }
     }
 
@@ -98,8 +115,11 @@ impl SendTransactionService {
         receiver: Receiver<TransactionInfo>,
         bank_forks: Arc<RwLock<BankForks>>,
         mut leader_info: Option<LeaderInfo>,
+        retry_rate_ms: u64,
+        leader_forward_count: u64,
     ) -> JoinHandle<()> {
         let mut last_status_check = Instant::now();
+        let mut last_leader_refresh = Instant::now();
         let mut transactions = HashMap::new();
         let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
@@ -110,19 +130,21 @@ impl SendTransactionService {
         Builder::new()
             .name("send-tx-sv2".to_string())
             .spawn(move || loop {
-                match receiver.recv_timeout(Duration::from_secs(1)) {
+                match receiver.recv_timeout(Duration::from_millis(1000.min(retry_rate_ms))) {
                     Err(RecvTimeoutError::Disconnected) => break,
                     Err(RecvTimeoutError::Timeout) => {}
                     Ok(transaction_info) => {
-                        let address = leader_info
+                        let addresses = leader_info
                             .as_ref()
-                            .and_then(|leader_info| leader_info.get_leader_tpu())
-                            .unwrap_or(&tpu_address);
-                        Self::send_transaction(
-                            &send_socket,
-                            address,
-                            &transaction_info.wire_transaction,
-                        );
+                            .map(|leader_info| leader_info.get_leader_tpus(leader_forward_count));
+                        let addresses = addresses.unwrap_or_else(|| vec![&tpu_address]);
+                        for address in addresses {
+                            Self::send_transaction(
+                                &send_socket,
+                                address,
+                                &transaction_info.wire_transaction,
+                            );
+                        }
                         if transactions.len() < MAX_TRANSACTION_QUEUE_SIZE {
                             transactions.insert(transaction_info.signature, transaction_info);
                         } else {
@@ -131,15 +153,19 @@ impl SendTransactionService {
                     }
                 }
 
-                if Instant::now().duration_since(last_status_check).as_secs() >= 5 {
+                if last_status_check.elapsed().as_millis() as u64 >= retry_rate_ms {
                     if !transactions.is_empty() {
                         datapoint_info!(
                             "send_transaction_service-queue-size",
                             ("len", transactions.len(), i64)
                         );
-                        let bank_forks = bank_forks.read().unwrap();
-                        let root_bank = bank_forks.root_bank();
-                        let working_bank = bank_forks.working_bank();
+                        let (root_bank, working_bank) = {
+                            let bank_forks = bank_forks.read().unwrap();
+                            (
+                                bank_forks.root_bank().clone(),
+                                bank_forks.working_bank().clone(),
+                            )
+                        };
 
                         let _result = Self::process_transactions(
                             &working_bank,
@@ -151,8 +177,11 @@ impl SendTransactionService {
                         );
                     }
                     last_status_check = Instant::now();
-                    if let Some(leader_info) = leader_info.as_mut() {
-                        leader_info.refresh_recent_peers();
+                    if last_leader_refresh.elapsed().as_millis() > 1000 {
+                        if let Some(leader_info) = leader_info.as_mut() {
+                            leader_info.refresh_recent_peers();
+                        }
+                        last_leader_refresh = Instant::now();
                     }
                 }
             })
@@ -188,12 +217,21 @@ impl SendTransactionService {
                         info!("Retrying transaction: {}", signature);
                         result.retried += 1;
                         inc_new_counter_info!("send_transaction_service-retry", 1);
+                        let leaders = leader_info
+                            .as_ref()
+                            .map(|leader_info| leader_info.get_leader_tpus(1));
+                        let leader = if let Some(leaders) = leaders {
+                            if leaders.is_empty() {
+                                &tpu_address
+                            } else {
+                                leaders[0]
+                            }
+                        } else {
+                            &tpu_address
+                        };
                         Self::send_transaction(
                             &send_socket,
-                            leader_info
-                                .as_ref()
-                                .and_then(|leader_info| leader_info.get_leader_tpu())
-                                .unwrap_or(&tpu_address),
+                            leader,
                             &transaction_info.wire_transaction,
                         );
                         true
@@ -248,7 +286,7 @@ mod test {
         let (sender, receiver) = channel();
 
         let send_tranaction_service =
-            SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
+            SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
 
         drop(sender);
         send_tranaction_service.join().unwrap();
