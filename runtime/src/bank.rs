@@ -2002,6 +2002,8 @@ impl Bank {
             self.store_account(pubkey, account);
             self.capitalization.fetch_add(account.lamports, Relaxed);
         }
+        // updating sysvar (the fees sysvar in this case) now depends on feature activations in
+        // genesis_config.accounts above
         self.update_fees();
 
         for (pubkey, account) in genesis_config.rewards_pools.iter() {
