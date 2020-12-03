@@ -39,7 +39,7 @@ export function InstructionCard({
   const signature = useContext(SignatureContext);
   const details = useTransactionDetails(signature);
   let raw: TransactionInstruction | undefined = undefined;
-  if (details) {
+  if (details && childIndex === undefined) {
     raw = details?.data?.raw?.transaction.instructions[index];
   }
   const fetchRaw = useFetchRawTransaction();
