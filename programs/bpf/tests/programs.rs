@@ -747,6 +747,9 @@ fn test_program_bpf_invoke() {
         let tx = Transaction::new(
             &[
                 &mint_keypair,
+                &argument_keypair,
+                &invoked_argument_keypair,
+                &from_keypair,
             ],
             message.clone(),
             bank.last_blockhash(),
