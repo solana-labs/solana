@@ -224,7 +224,7 @@ declare module '@solana/web3.js' {
   declare export type ParsedInstruction = {|
     programId: PublicKey,
     program: string,
-    parsed: string,
+    parsed: any,
   |};
 
   declare export type PartiallyDecodedInstruction = {|
