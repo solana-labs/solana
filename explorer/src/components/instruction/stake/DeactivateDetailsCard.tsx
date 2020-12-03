@@ -13,8 +13,10 @@ export function DeactivateDetailsCard(props: {
   index: number;
   result: SignatureResult;
   info: DeactivateInfo;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
 }) {
-  const { ix, index, result, info } = props;
+  const { ix, index, result, info, innerCards, childIndex } = props;
 
   return (
     <InstructionCard
@@ -22,6 +24,8 @@ export function DeactivateDetailsCard(props: {
       index={index}
       result={result}
       title="Deactivate Stake"
+      innerCards={innerCards}
+      childIndex={childIndex}
     >
       <tr>
         <td>Program</td>

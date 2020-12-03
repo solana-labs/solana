@@ -14,8 +14,10 @@ export function CreateDetailsCard(props: {
   index: number;
   result: SignatureResult;
   info: CreateAccountInfo;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
 }) {
-  const { ix, index, result, info } = props;
+  const { ix, index, result, info, innerCards, childIndex } = props;
 
   return (
     <InstructionCard
@@ -23,6 +25,8 @@ export function CreateDetailsCard(props: {
       index={index}
       result={result}
       title="Create Account"
+      innerCards={innerCards}
+      childIndex={childIndex}
     >
       <tr>
         <td>Program</td>

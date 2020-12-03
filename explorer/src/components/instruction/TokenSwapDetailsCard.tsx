@@ -10,11 +10,15 @@ export function TokenSwapDetailsCard({
   index,
   result,
   signature,
+  innerCards,
+  childIndex,
 }: {
   ix: TransactionInstruction;
   index: number;
   result: SignatureResult;
   signature: string;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
 }) {
   const { url } = useCluster();
 
@@ -34,6 +38,8 @@ export function TokenSwapDetailsCard({
       index={index}
       result={result}
       title={`Token Swap: ${title || "Unknown"}`}
+      innerCards={innerCards}
+      childIndex={childIndex}
       defaultRaw
     />
   );

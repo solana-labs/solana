@@ -19,6 +19,8 @@ type DetailsProps = {
   ix: ParsedInstruction;
   index: number;
   result: SignatureResult;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
 };
 
 export function BpfLoaderDetailsCard(props: DetailsProps) {
@@ -50,10 +52,12 @@ type Props<T> = {
   index: number;
   result: SignatureResult;
   info: T;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
 };
 
 export function BpfLoaderWriteDetailsCard(props: Props<WriteInfo>) {
-  const { ix, index, result, info } = props;
+  const { ix, index, result, info, innerCards, childIndex } = props;
   const bytes = wrap(info.bytes, 50);
   return (
     <InstructionCard
@@ -61,6 +65,8 @@ export function BpfLoaderWriteDetailsCard(props: Props<WriteInfo>) {
       index={index}
       result={result}
       title="BPF Loader 2: Write"
+      innerCards={innerCards}
+      childIndex={childIndex}
     >
       <tr>
         <td>Program</td>
@@ -94,7 +100,7 @@ export function BpfLoaderWriteDetailsCard(props: Props<WriteInfo>) {
 }
 
 export function BpfLoaderFinalizeDetailsCard(props: Props<FinalizeInfo>) {
-  const { ix, index, result, info } = props;
+  const { ix, index, result, info, innerCards, childIndex } = props;
 
   return (
     <InstructionCard
@@ -102,6 +108,8 @@ export function BpfLoaderFinalizeDetailsCard(props: Props<FinalizeInfo>) {
       index={index}
       result={result}
       title="BPF Loader 2: Finalize"
+      innerCards={innerCards}
+      childIndex={childIndex}
     >
       <tr>
         <td>Program</td>

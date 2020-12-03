@@ -20,6 +20,8 @@ type InstructionProps = {
   index: number;
   ix: TransactionInstruction | ParsedInstruction;
   defaultRaw?: boolean;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
 };
 
 export function InstructionCard({
@@ -29,6 +31,8 @@ export function InstructionCard({
   index,
   ix,
   defaultRaw,
+  innerCards,
+  childIndex,
 }: InstructionProps) {
   const [resultClass] = ixResult(result, index);
   const [showRaw, setShowRaw] = React.useState(defaultRaw || false);
@@ -55,6 +59,7 @@ export function InstructionCard({
         <h3 className="card-header-title mb-0 d-flex align-items-center">
           <span className={`badge badge-soft-${resultClass} mr-2`}>
             #{index + 1}
+            {childIndex !== undefined ? `.${childIndex + 1}` : ""}
           </span>
           {title}
         </h3>
@@ -91,6 +96,14 @@ export function InstructionCard({
               </>
             ) : (
               children
+            )}
+            {innerCards && innerCards.length > 0 && (
+              <tr>
+                <td colSpan={2}>
+                  Inner Instructions
+                  <div className="inner-cards">{innerCards}</div>
+                </td>
+              </tr>
             )}
           </tbody>
         </table>

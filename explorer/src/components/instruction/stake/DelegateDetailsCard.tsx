@@ -13,8 +13,10 @@ export function DelegateDetailsCard(props: {
   index: number;
   result: SignatureResult;
   info: DelegateInfo;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
 }) {
-  const { ix, index, result, info } = props;
+  const { ix, index, result, info, innerCards, childIndex } = props;
 
   return (
     <InstructionCard
@@ -22,6 +24,8 @@ export function DelegateDetailsCard(props: {
       index={index}
       result={result}
       title="Delegate Stake"
+      innerCards={innerCards}
+      childIndex={childIndex}
     >
       <tr>
         <td>Program</td>

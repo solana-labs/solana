@@ -14,11 +14,20 @@ export function SplitDetailsCard(props: {
   index: number;
   result: SignatureResult;
   info: SplitInfo;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
 }) {
-  const { ix, index, result, info } = props;
+  const { ix, index, result, info, innerCards, childIndex } = props;
 
   return (
-    <InstructionCard ix={ix} index={index} result={result} title="Split Stake">
+    <InstructionCard
+      ix={ix}
+      index={index}
+      result={result}
+      title="Split Stake"
+      innerCards={innerCards}
+      childIndex={childIndex}
+    >
       <tr>
         <td>Program</td>
         <td className="text-lg-right">
