@@ -272,7 +272,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     return sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
   }
   case TEST_EMPTY_ACCOUNTS_SLICE: {
-    sol_log("Empty accounts slice");
+    sol_log("Empty accounts slice ");
 
     SolAccountMeta arguments[] = {};
     uint8_t data[] = {};
