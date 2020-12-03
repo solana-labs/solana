@@ -8,6 +8,7 @@ static const uint8_t TEST_SUCCESS = 1;
 static const uint8_t TEST_PRIVILEGE_ESCALATION_SIGNER = 2;
 static const uint8_t TEST_PRIVILEGE_ESCALATION_WRITABLE = 3;
 static const uint8_t TEST_PPROGRAM_NOT_EXECUTABLE = 4;
+static const uint8_t TEST_EMPTY_ACCOUNTS_SLICE = 5;
 
 static const int MINT_INDEX = 0;
 static const int ARGUMENT_INDEX = 1;
@@ -269,6 +270,17 @@ extern uint64_t entrypoint(const uint8_t *input) {
                                         SOL_ARRAY_SIZE(arguments), data,
                                         SOL_ARRAY_SIZE(data)};
     return sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
+  }
+  case TEST_EMPTY_ACCOUNTS_SLICE: {
+    sol_log("Empty accounts slice");
+
+    SolAccountMeta arguments[] = {};
+    uint8_t data[] = {};
+    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                        arguments, SOL_ARRAY_SIZE(arguments),
+                                        data, SOL_ARRAY_SIZE(data)};
+
+    sol_assert(SUCCESS == sol_invoke(&instruction, 0, 0));
   }
   default:
     sol_panic();
