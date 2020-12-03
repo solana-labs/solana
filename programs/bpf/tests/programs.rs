@@ -446,7 +446,10 @@ fn test_program_bpf_invoke() {
     const TEST_PRIVILEGE_ESCALATION_WRITABLE: u8 = 3;
     const TEST_PPROGRAM_NOT_EXECUTABLE: u8 = 4;
     const TEST_EMPTY_ACCOUNTS_SLICE: u8 = 5;
+<<<<<<< HEAD
     const TEST_CAP_SEEDS: u8 = 6;
+=======
+>>>>>>> f70534097... Invoke with empty account slice (bp #13931) (#13940)
 
     #[allow(dead_code)]
     #[derive(Debug)]
@@ -721,6 +724,7 @@ fn test_program_bpf_invoke() {
             TransactionError::InstructionError(0, InstructionError::MissingAccount)
         );
 
+<<<<<<< HEAD
         let instruction = Instruction::new(
             invoke_program_id,
             &[TEST_CAP_SEEDS, bump_seed1, bump_seed2, bump_seed3],
@@ -748,6 +752,8 @@ fn test_program_bpf_invoke() {
             TransactionError::InstructionError(0, InstructionError::MaxSeedLengthExceeded)
         );
 
+=======
+>>>>>>> f70534097... Invoke with empty account slice (bp #13931) (#13940)
         // Check final state
 
         assert_eq!(43, bank.get_balance(&derived_key1));

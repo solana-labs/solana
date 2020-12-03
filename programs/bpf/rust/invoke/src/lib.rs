@@ -21,7 +21,10 @@ const TEST_PRIVILEGE_ESCALATION_SIGNER: u8 = 2;
 const TEST_PRIVILEGE_ESCALATION_WRITABLE: u8 = 3;
 const TEST_PPROGRAM_NOT_EXECUTABLE: u8 = 4;
 const TEST_EMPTY_ACCOUNTS_SLICE: u8 = 5;
+<<<<<<< HEAD
 const TEST_CAP_SEEDS: u8 = 6;
+=======
+>>>>>>> f70534097... Invoke with empty account slice (bp #13931) (#13940)
 
 // const MINT_INDEX: usize = 0;
 const ARGUMENT_INDEX: usize = 1;
@@ -363,6 +366,7 @@ fn process_instruction(
             let instruction = create_instruction(*accounts[INVOKED_PROGRAM_INDEX].key, &[], vec![]);
             invoke(&instruction, &[])?;
         }
+<<<<<<< HEAD
         TEST_CAP_SEEDS => {
             msg!("Test program max seeds");
             let instruction = create_instruction(*accounts[INVOKED_PROGRAM_INDEX].key, &[], vec![]);
@@ -375,6 +379,8 @@ fn process_instruction(
                 ]],
             )?;
         }
+=======
+>>>>>>> f70534097... Invoke with empty account slice (bp #13931) (#13940)
         _ => panic!(),
     }
 

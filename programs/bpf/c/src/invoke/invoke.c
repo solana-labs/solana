@@ -9,7 +9,10 @@ static const uint8_t TEST_PRIVILEGE_ESCALATION_SIGNER = 2;
 static const uint8_t TEST_PRIVILEGE_ESCALATION_WRITABLE = 3;
 static const uint8_t TEST_PPROGRAM_NOT_EXECUTABLE = 4;
 static const uint8_t TEST_EMPTY_ACCOUNTS_SLICE = 5;
+<<<<<<< HEAD
 static const uint8_t TEST_CAP_SEEDS = 6;
+=======
+>>>>>>> f70534097... Invoke with empty account slice (bp #13931) (#13940)
 
 static const int MINT_INDEX = 0;
 static const int ARGUMENT_INDEX = 1;
@@ -283,6 +286,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
 
     sol_assert(SUCCESS == sol_invoke(&instruction, 0, 0));
   }
+<<<<<<< HEAD
   case TEST_CAP_SEEDS: {
     sol_log("Test cap seeds");
     {
@@ -310,6 +314,8 @@ extern uint64_t entrypoint(const uint8_t *input) {
                                               SOL_ARRAY_SIZE(signers_seeds)));
     }
   }
+=======
+>>>>>>> f70534097... Invoke with empty account slice (bp #13931) (#13940)
   default:
     sol_panic();
   }
