@@ -829,9 +829,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                 ro_regions,
                 self.loader_id
             )?;
-            if signers_seeds.len() > MAX_SEEDS {
-                return Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into());
-            }
             for signer_seeds in signers_seeds.iter() {
                 let untranslated_seeds = translate_slice!(
                     &[u8],
@@ -840,6 +837,12 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                     ro_regions,
                     self.loader_id
                 )?;
+                if untranslated_seeds.len() > MAX_SEEDS {
+                    return Err(SyscallError::InstructionError(
+                        InstructionError::MaxSeedLengthExceeded,
+                    )
+                    .into());
+                }
                 let seeds = untranslated_seeds
                     .iter()
                     .map(|untranslated_seed| {
@@ -1085,9 +1088,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                 ro_regions,
                 self.loader_id
             )?;
-            if signers_seeds.len() > MAX_SEEDS {
-                return Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into());
-            }
             Ok(signers_seeds
                 .iter()
                 .map(|signer_seeds| {
@@ -1098,6 +1098,12 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                         ro_regions,
                         self.loader_id
                     )?;
+                    if seeds.len() > MAX_SEEDS {
+                        return Err(SyscallError::InstructionError(
+                            InstructionError::MaxSeedLengthExceeded,
+                        )
+                        .into());
+                    }
                     let seeds_bytes = seeds
                         .iter()
                         .map(|seed| {
