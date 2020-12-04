@@ -4437,7 +4437,7 @@ impl Bank {
     fn simpler_capitalization_enabled_at_genesis(&self) -> bool {
         // genesis builtin initialization codepath is called even before the initial
         // feature activation, so we need to peek this flag at very early bank
-        // initialization phase
+        // initialization phase for the development genesis case
         if let Some(account) = self.get_account(&feature_set::simpler_capitalization::id()) {
             if let Some(feature) = feature::from_account(&account) {
                 if feature.activated_at == Some(0) {
@@ -4481,12 +4481,7 @@ impl Bank {
         }
 
         if new_feature_activations.contains(&feature_set::simpler_capitalization::id()) {
-            let existing_sysvar_account_count = 9;
-            let existing_native_program_account_count = 7;
-            self.capitalization.fetch_add(
-                existing_sysvar_account_count + existing_native_program_account_count,
-                Relaxed,
-            );
+            self.adjust_capitalization_for_existing_specially_retained_accounts();
         }
 
         self.ensure_feature_builtins(init_finish_or_warp, &new_feature_activations);
@@ -4571,6 +4566,39 @@ impl Bank {
             self.store_account(&inline_spl_token_v2_0::id(), &account);
             self.remove_executor(&inline_spl_token_v2_0::id());
         }
+    }
+
+    fn adjust_capitalization_for_existing_specially_retained_accounts(&self) {
+        use solana_sdk::{bpf_loader, bpf_loader_deprecated, secp256k1_program};
+        let mut existing_sysvar_account_count = 8;
+        let mut existing_native_program_account_count = 4;
+
+        if self.get_account(&sysvar::rewards::id()).is_some() {
+            existing_sysvar_account_count += 1;
+        }
+
+        if self.get_account(&bpf_loader::id()).is_some() {
+            existing_native_program_account_count += 1;
+        }
+
+        if self.get_account(&bpf_loader_deprecated::id()).is_some() {
+            existing_native_program_account_count += 1;
+        }
+
+        if self.get_account(&secp256k1_program::id()).is_some() {
+            existing_native_program_account_count += 1;
+        }
+
+        info!(
+            "Adjusted capitalization for existing {} sysvars and {} native programs from {}",
+            existing_sysvar_account_count,
+            existing_native_program_account_count,
+            self.capitalization()
+        );
+        self.capitalization.fetch_add(
+            existing_sysvar_account_count + existing_native_program_account_count,
+            Relaxed,
+        );
     }
 
     fn reconfigure_token2_native_mint(&mut self) {
@@ -5227,6 +5255,19 @@ pub(crate) mod tests {
         let new = bank.capitalization();
         asserter(old, new);
         assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+    }
+
+    fn assert_capitalization_diff_with_new_bank(
+        bank: &Bank,
+        updater: impl Fn() -> Bank,
+        asserter: impl Fn(u64, u64),
+    ) -> Bank {
+        let old = bank.capitalization();
+        let bank = updater();
+        let new = bank.capitalization();
+        asserter(old, new);
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+        bank
     }
 
     #[test]
@@ -6422,6 +6463,11 @@ pub(crate) mod tests {
                 .iter()
                 .map(|(slot, _)| *slot)
                 .collect::<Vec<Slot>>()
+        }
+
+        fn first_slot_in_next_epoch(&self) -> Slot {
+            self.epoch_schedule()
+                .get_first_slot_in_epoch(self.epoch() + 1)
         }
     }
 
@@ -10784,6 +10830,102 @@ pub(crate) mod tests {
         assert_eq!(
             bank.clock().unix_timestamp,
             bank.unix_timestamp_from_genesis() + additional_secs
+        );
+    }
+
+    #[test]
+    fn test_simpler_capitalization_adjustment_minimum_genesis_set() {
+        solana_logger::setup();
+
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(0);
+        let feature_balance =
+            std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
+
+        // inhibit deprecated rewards sysvar creation altogether
+        genesis_config.accounts.insert(
+            feature_set::deprecate_rewards_sysvar::id(),
+            feature::create_account(
+                &Feature {
+                    activated_at: Some(0),
+                },
+                feature_balance,
+            ),
+        );
+
+        let bank0 = Bank::new(&genesis_config);
+        let bank1 = Arc::new(new_from_parent(&Arc::new(bank0)));
+
+        // schedule activation of simpler capitalization
+        bank1.store_account_and_update_capitalization(
+            &feature_set::simpler_capitalization::id(),
+            &feature::create_account(&Feature { activated_at: None }, feature_balance),
+        );
+
+        // 16 is minimum adjusted cap increase in adjust_capitalization_for_existing_specially_retained_accounts
+        assert_capitalization_diff_with_new_bank(
+            &bank1,
+            || Bank::new_from_parent(&bank1, &Pubkey::default(), bank1.first_slot_in_next_epoch()),
+            |old, new| assert_eq!(old + 12, new),
+        );
+    }
+
+    #[test]
+    fn test_simpler_capitalization_adjustment_full_set() {
+        solana_logger::setup();
+
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(0);
+        let feature_balance =
+            std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
+
+        // activate all features but simpler capitalization
+        activate_all_features(&mut genesis_config);
+        genesis_config
+            .accounts
+            .remove(&feature_set::simpler_capitalization::id());
+        // intentionally create deprecated rewards sysvar creation
+        genesis_config
+            .accounts
+            .remove(&feature_set::deprecate_rewards_sysvar::id());
+
+        // intentionally create bogus native programs
+        fn mock_process_instruction(
+            _program_id: &Pubkey,
+            _keyed_accounts: &[KeyedAccount],
+            _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
+        ) -> std::result::Result<(), solana_sdk::instruction::InstructionError> {
+            Ok(())
+        }
+        let builtins = Builtins {
+            genesis_builtins: vec![
+                Builtin::new(
+                    "mock bpf",
+                    solana_sdk::bpf_loader::id(),
+                    mock_process_instruction,
+                ),
+                Builtin::new(
+                    "mock bpf",
+                    solana_sdk::bpf_loader_deprecated::id(),
+                    mock_process_instruction,
+                ),
+            ],
+            feature_builtins: (vec![]),
+        };
+
+        let bank0 = Bank::new_with_paths(&genesis_config, Vec::new(), &[], None, Some(&builtins));
+        let bank1 = Arc::new(new_from_parent(&Arc::new(bank0)));
+
+        // schedule activation of simpler capitalization
+        bank1.store_account_and_update_capitalization(
+            &feature_set::simpler_capitalization::id(),
+            &feature::create_account(&Feature { activated_at: None }, feature_balance),
+        );
+
+        // 16 is maximum adjusted cap increase in adjust_capitalization_for_existing_specially_retained_accounts
+        assert_capitalization_diff_with_new_bank(
+            &bank1,
+            || Bank::new_from_parent(&bank1, &Pubkey::default(), bank1.first_slot_in_next_epoch()),
+            |old, new| assert_eq!(old + 16, new),
         );
     }
 
