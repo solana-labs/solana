@@ -1333,14 +1333,9 @@ impl AccountsDB {
         bank_hashes.insert(slot, new_hash_info);
     }
 
-    pub fn load(
-        storage: &AccountStorage,
-        ancestors: &Ancestors,
-        accounts_index: &AccountsIndex<AccountInfo>,
-        pubkey: &Pubkey,
-    ) -> Option<(Account, Slot)> {
+    pub fn load(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Option<(Account, Slot)> {
         let (slot, store_id, offset) = {
-            let (lock, index) = accounts_index.get(pubkey, Some(ancestors), None)?;
+            let (lock, index) = self.accounts_index.get(pubkey, Some(ancestors), None)?;
             let slot_list = lock.slot_list();
             let (
                 slot,
@@ -1353,7 +1348,7 @@ impl AccountsDB {
         };
 
         //TODO: thread this as a ref
-        storage
+        self.storage
             .get_account_storage_entry(slot, store_id)
             .and_then(|store| {
                 store
@@ -1390,7 +1385,7 @@ impl AccountsDB {
     }
 
     pub fn load_slow(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Option<(Account, Slot)> {
-        Self::load(&self.storage, ancestors, &self.accounts_index, pubkey)
+        self.load(ancestors, pubkey)
     }
 
     fn get_account_from_storage(&self, slot: Slot, account_info: &AccountInfo) -> Option<Account> {
