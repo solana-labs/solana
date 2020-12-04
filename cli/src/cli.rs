@@ -522,6 +522,7 @@ impl CliConfig<'_> {
             commitment: CommitmentConfig::recent(),
             send_transaction_config: RpcSendTransactionConfig {
                 skip_preflight: true,
+                preflight_commitment: Some(CommitmentConfig::recent().commitment),
                 ..RpcSendTransactionConfig::default()
             },
             ..Self::default()
@@ -1406,6 +1407,7 @@ fn send_deploy_messages(
             config.commitment,
             RpcSendTransactionConfig {
                 skip_preflight: true,
+                preflight_commitment: Some(config.commitment.commitment),
                 ..RpcSendTransactionConfig::default()
             },
         )
@@ -1815,6 +1817,7 @@ fn process_set_program_upgrade_authority(
             config.commitment,
             RpcSendTransactionConfig {
                 skip_preflight: true,
+                preflight_commitment: Some(config.commitment.commitment),
                 ..RpcSendTransactionConfig::default()
             },
         )
