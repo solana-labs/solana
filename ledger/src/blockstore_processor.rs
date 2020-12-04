@@ -2922,7 +2922,6 @@ pub mod tests {
                 ..
             },
             _balances,
-            _token_balances,
             _inner_instructions,
             _log_messages,
         ) = batch.bank().load_execute_and_commit_transactions(
