@@ -178,7 +178,7 @@ impl RepairService {
         let mut repair_stats = RepairStats::default();
         let mut repair_timing = RepairTiming::default();
         let mut last_stats = Instant::now();
-        let duplicate_slot_repair_statuses: HashMap<Slot, DuplicateSlotRepairStatus> =
+        let mut duplicate_slot_repair_statuses: HashMap<Slot, DuplicateSlotRepairStatus> =
             HashMap::new();
 
         loop {
@@ -221,7 +221,7 @@ impl RepairService {
                     root_bank.epoch_schedule(),
                 );
                 add_votes_elapsed.stop();
-                /*let new_duplicate_slots = Self::find_new_duplicate_slots(
+                let new_duplicate_slots = Self::find_new_duplicate_slots(
                     &duplicate_slot_repair_statuses,
                     blockstore,
                     cluster_slots,
@@ -245,7 +245,7 @@ impl RepairService {
                     &mut repair_stats,
                     &repair_socket,
                     &repair_info.repair_validators,
-                );*/
+                );
 
                 repair_weight.get_best_weighted_repairs(
                     blockstore,
@@ -432,7 +432,6 @@ impl RepairService {
         }
     }
 
-    #[allow(dead_code)]
     fn generate_duplicate_repairs_for_slot(
         blockstore: &Blockstore,
         slot: Slot,
@@ -457,7 +456,6 @@ impl RepairService {
         }
     }
 
-    #[allow(dead_code)]
     fn generate_and_send_duplicate_repairs(
         duplicate_slot_repair_statuses: &mut HashMap<Slot, DuplicateSlotRepairStatus>,
         cluster_slots: &ClusterSlots,
@@ -505,7 +503,6 @@ impl RepairService {
         })
     }
 
-    #[allow(dead_code)]
     fn serialize_and_send_request(
         repair_type: &RepairType,
         repair_socket: &UdpSocket,
