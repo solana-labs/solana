@@ -572,6 +572,23 @@ function renderInstructionCard({
     }
   }
 
+  // TODO: There is a bug in web3, where inner instructions
+  // aren't getting coerced. This is a temporary fix.
+
+  if (typeof ix.programId === "string") {
+    ix.programId = new PublicKey(ix.programId);
+  }
+
+  ix.accounts = ix.accounts.map((account) => {
+    if (typeof account === "string") {
+      return new PublicKey(account);
+    }
+
+    return account;
+  });
+
+  // TODO: End hotfix
+
   const transactionIx = intoTransactionInstruction(tx, ix);
 
   if (!transactionIx) {
