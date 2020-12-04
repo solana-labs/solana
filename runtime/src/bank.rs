@@ -7941,6 +7941,8 @@ pub(crate) mod tests {
             activate_all_features(&mut genesis_config);
         }
         let bank1 = Arc::new(Bank::new(&genesis_config));
+        assert_eq!(bank1.calculate_capitalization(), bank1.capitalization());
+
         assert_capitalization_diff(
             &bank1,
             || {
@@ -7962,7 +7964,12 @@ pub(crate) mod tests {
                 );
             },
             |old, new| {
-                assert_eq!(old, new);
+                // only if simpler_capitalization_enabled, cap should increment
+                if simpler_capitalization_enabled {
+                    assert_eq!(old + 1, new);
+                } else {
+                    assert_eq!(old, new);
+                }
             },
         );
 
@@ -7982,12 +7989,8 @@ pub(crate) mod tests {
                 })
             },
             |old, new| {
-                // only if simpler_capitalization_enabled, cap should increment
-                if simpler_capitalization_enabled {
-                    assert_eq!(old + 1, new);
-                } else {
-                    assert_eq!(old, new);
-                }
+                // creating new sysvar twice in a slot shouldn't increment capitalization twice
+                assert_eq!(old, new);
             },
         );
 
@@ -10125,9 +10128,11 @@ pub(crate) mod tests {
         assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
     }
 
-    #[test]
-    fn test_add_native_program_no_overwrite() {
-        let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
+    fn do_test_add_native_program(simpler_capitalization_enabled: bool) {
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(100_000);
+        if simpler_capitalization_enabled {
+            activate_all_features(&mut genesis_config);
+        }
 
         let slot = 123;
         let program_id = solana_sdk::pubkey::new_rand();
@@ -10143,7 +10148,11 @@ pub(crate) mod tests {
             &bank,
             || bank.add_native_program("mock_program", &program_id, false),
             |old, new| {
-                assert_eq!(old, new);
+                if simpler_capitalization_enabled {
+                    assert_eq!(old + 1, new);
+                } else {
+                    assert_eq!(old, new);
+                }
             },
         );
 
@@ -10184,6 +10193,16 @@ pub(crate) mod tests {
             bank.get_account_modified_slot(&program_id).unwrap().1,
             bank.parent_slot()
         );
+    }
+
+    #[test]
+    fn test_add_native_program_with_simpler_capitalization_disabled() {
+        do_test_add_native_program(false);
+    }
+
+    #[test]
+    fn test_add_native_program_with_simpler_capitalization_enabled() {
+        do_test_add_native_program(true);
     }
 
     #[test]
