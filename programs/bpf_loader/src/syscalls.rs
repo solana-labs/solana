@@ -763,7 +763,13 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                             ro_regions,
                             self.loader_id
                         )?;
+<<<<<<< HEAD
                         let translated = translate!(
+=======
+                        let translated = translate(
+                            memory_mapping,
+                            AccessType::Store,
+>>>>>>> f1fd999bb... Translate data length as mutable (#13956)
                             unsafe { (account_info.data.as_ptr() as *const u64).offset(1) as u64 },
                             8,
                             rw_regions,
