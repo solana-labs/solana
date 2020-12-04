@@ -19,7 +19,6 @@ use crate::{
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
-    token_balances::{collect_token_balance_from_account, is_token_program},
     transaction_batch::TransactionBatch,
     transaction_utils::OrderedIterator,
 };
@@ -27,7 +26,6 @@ use byteorder::{ByteOrder, LittleEndian};
 use itertools::Itertools;
 use log::*;
 
-use solana_account_decoder::parse_token::UiTokenAmount;
 use solana_measure::measure::Measure;
 use solana_metrics::{
     datapoint_debug, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
@@ -402,32 +400,6 @@ impl TransactionBalancesSet {
 }
 
 pub type TransactionBalances = Vec<Vec<u64>>;
-
-pub struct TransactionTokenBalance {
-    pub account_index: usize,
-    pub mint: String,
-    pub ui_token_amount: UiTokenAmount,
-}
-
-pub type TransactionTokenBalances = Vec<Vec<TransactionTokenBalance>>;
-
-pub struct TransactionTokenBalancesSet {
-    pub pre_token_balances: TransactionTokenBalances,
-    pub post_token_balances: TransactionTokenBalances,
-}
-
-impl TransactionTokenBalancesSet {
-    pub fn new(
-        pre_token_balances: TransactionTokenBalances,
-        post_token_balances: TransactionTokenBalances,
-    ) -> Self {
-        assert_eq!(pre_token_balances.len(), post_token_balances.len());
-        Self {
-            pre_token_balances,
-            post_token_balances,
-        }
-    }
-}
 
 /// An ordered list of instructions that were invoked during a transaction instruction
 pub type InnerInstructions = Vec<CompiledInstruction>;
@@ -2292,42 +2264,6 @@ impl Bank {
         }
     }
 
-    pub fn collect_token_balances(&self, batch: &TransactionBatch) -> TransactionTokenBalances {
-        let mut balances: TransactionTokenBalances = vec![];
-
-        for (_, transaction) in OrderedIterator::new(batch.transactions(), batch.iteration_order())
-        {
-            let account_keys = &transaction.message.account_keys;
-            let mut fetch_account_hash: HashMap<u8, bool> = HashMap::new();
-            for instruction in transaction.message.instructions.iter() {
-                if let Some(program_id) = account_keys.get(instruction.program_id_index as usize) {
-                    if is_token_program(&program_id) {
-                        for account in &instruction.accounts {
-                            fetch_account_hash.insert(*account, true);
-                        }
-                    }
-                }
-            }
-
-            let mut transaction_balances: Vec<TransactionTokenBalance> = vec![];
-            for (index, _fetch) in &fetch_account_hash {
-                if let Some(account_id) = account_keys.get(*index as usize) {
-                    if let Some(results) = collect_token_balance_from_account(&self, account_id) {
-                        let (mint, ui_token_amount) = results;
-
-                        transaction_balances.push(TransactionTokenBalance {
-                            account_index: *index as usize,
-                            mint: mint,
-                            ui_token_amount: ui_token_amount,
-                        });
-                    }
-                }
-            }
-            balances.push(transaction_balances);
-        }
-        balances
-    }
-
     pub fn collect_balances(&self, batch: &TransactionBatch) -> TransactionBalances {
         let mut balances: TransactionBalances = vec![];
         for (_, transaction) in OrderedIterator::new(batch.transactions(), batch.iteration_order())
@@ -3409,18 +3345,11 @@ impl Bank {
     ) -> (
         TransactionResults,
         TransactionBalancesSet,
-        TransactionTokenBalancesSet,
         Vec<Option<InnerInstructionsList>>,
         Vec<TransactionLogMessages>,
     ) {
         let pre_balances = if collect_balances {
             self.collect_balances(batch)
-        } else {
-            vec![]
-        };
-
-        let pre_token_balances = if collect_balances {
-            self.collect_token_balances(batch)
         } else {
             vec![]
         };
@@ -3454,16 +3383,9 @@ impl Bank {
             vec![]
         };
 
-        let post_token_balances = if collect_balances {
-            self.collect_token_balances(batch)
-        } else {
-            vec![]
-        };
-
         (
             results,
             TransactionBalancesSet::new(pre_balances, post_balances),
-            TransactionTokenBalancesSet::new(pre_token_balances, post_token_balances),
             inner_instructions,
             transaction_logs,
         )
@@ -8719,28 +8641,20 @@ pub(crate) mod tests {
         let txs = vec![tx0, tx1, tx2];
 
         let lock_result = bank0.prepare_batch(&txs, None);
-        let (
-            transaction_results,
-            transaction_balances_set,
-            transaction_token_balances_set,
-            inner_instructions,
-            transaction_logs,
-        ) = bank0.load_execute_and_commit_transactions(
-            &lock_result,
-            MAX_PROCESSING_AGE,
-            true,
-            false,
-            false,
-        );
+        let (transaction_results, transaction_balances_set, inner_instructions, transaction_logs) =
+            bank0.load_execute_and_commit_transactions(
+                &lock_result,
+                MAX_PROCESSING_AGE,
+                true,
+                false,
+                false,
+            );
 
         assert!(inner_instructions[0].iter().all(|ix| ix.is_empty()));
         assert_eq!(transaction_logs.len(), 0);
 
         assert_eq!(transaction_balances_set.pre_balances.len(), 3);
         assert_eq!(transaction_balances_set.post_balances.len(), 3);
-
-        assert_eq!(transaction_token_balances_set.pre_token_balances.len(), 3);
-        assert_eq!(transaction_token_balances_set.post_token_balances.len(), 3);
 
         assert!(transaction_results.processing_results[0].0.is_ok());
         assert_eq!(transaction_balances_set.pre_balances[0], vec![8, 11, 1]);

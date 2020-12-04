@@ -1,15 +1,12 @@
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 use itertools::izip;
-use solana_account_decoder::parse_token::UiTokenAmount;
 use solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusBatch};
 use solana_runtime::{
     bank::{Bank, HashAgeKind},
     transaction_utils::OrderedIterator,
 };
 use solana_sdk::nonce_account;
-use solana_transaction_status::{
-    InnerInstructions, TransactionStatusMeta, TransactionTokenBalance,
-};
+use solana_transaction_status::{InnerInstructions, TransactionStatusMeta};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -108,36 +105,8 @@ impl TransactionStatusService {
                 });
 
                 let log_messages = Some(log_messages);
-
-                let pre_token_balances = Some(
-                    pre_token_balances
-                        .iter()
-                        .map(|balance| TransactionTokenBalance {
-                            account_index: balance.account_index as u8,
-                            mint: balance.mint.clone(),
-                            ui_token_amount: UiTokenAmount {
-                                ui_amount: balance.ui_token_amount.ui_amount,
-                                decimals: balance.ui_token_amount.decimals,
-                                amount: balance.ui_token_amount.amount.clone(),
-                            },
-                        })
-                        .collect(),
-                );
-
-                let post_token_balances = Some(
-                    post_token_balances
-                        .iter()
-                        .map(|balance| TransactionTokenBalance {
-                            account_index: balance.account_index as u8,
-                            mint: balance.mint.clone(),
-                            ui_token_amount: UiTokenAmount {
-                                ui_amount: balance.ui_token_amount.ui_amount,
-                                decimals: balance.ui_token_amount.decimals,
-                                amount: balance.ui_token_amount.amount.clone(),
-                            },
-                        })
-                        .collect(),
-                );
+                let pre_token_balances = Some(pre_token_balances);
+                let post_token_balances = Some(post_token_balances);
 
                 blockstore
                     .write_transaction_status(

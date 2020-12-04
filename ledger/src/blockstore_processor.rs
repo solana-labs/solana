@@ -17,7 +17,7 @@ use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
     bank::{
         Bank, InnerInstructionsList, TransactionBalancesSet, TransactionLogMessages,
-        TransactionProcessResult, TransactionResults, TransactionTokenBalancesSet,
+        TransactionProcessResult, TransactionResults,
     },
     bank_forks::BankForks,
     bank_utils,
@@ -35,6 +35,9 @@ use solana_sdk::{
     signature::{Keypair, Signature},
     timing::duration_as_ms,
     transaction::{Result, Transaction, TransactionError},
+};
+use solana_transaction_status::token_balances::{
+    collect_token_balances, TransactionTokenBalancesSet,
 };
 use solana_vote_program::vote_state::VoteState;
 use std::{
@@ -103,7 +106,15 @@ fn execute_batch(
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
-    let (tx_results, balances, token_balances, inner_instructions, transaction_logs) =
+    let record_token_balances = transaction_status_sender.is_some();
+
+    let pre_token_balances = if record_token_balances {
+        collect_token_balances(&bank, &batch)
+    } else {
+        vec![]
+    };
+
+    let (tx_results, balances, inner_instructions, transaction_logs) =
         batch.bank().load_execute_and_commit_transactions(
             batch,
             MAX_PROCESSING_AGE,
@@ -121,6 +132,15 @@ fn execute_batch(
     } = tx_results;
 
     if let Some(sender) = transaction_status_sender {
+        let post_token_balances = if record_token_balances {
+            collect_token_balances(&bank, &batch)
+        } else {
+            vec![]
+        };
+
+        let token_balances =
+            TransactionTokenBalancesSet::new(pre_token_balances, post_token_balances);
+
         send_transaction_status_batch(
             bank.clone(),
             batch.transactions(),

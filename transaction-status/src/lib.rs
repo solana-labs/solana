@@ -10,6 +10,7 @@ pub mod parse_stake;
 pub mod parse_system;
 pub mod parse_token;
 pub mod parse_vote;
+pub mod token_balances;
 
 use crate::{
     parse_accounts::{parse_accounts, ParsedAccount},
@@ -130,6 +131,16 @@ pub struct UiTransactionTokenBalance {
     pub ui_token_amount: UiTokenAmount,
 }
 
+impl From<TransactionTokenBalance> for UiTransactionTokenBalance {
+    fn from(token_balance: TransactionTokenBalance) -> Self {
+        Self {
+            account_index: token_balance.account_index,
+            mint: token_balance.mint,
+            ui_token_amount: token_balance.ui_token_amount,
+        }
+    }
+}
+
 impl UiInnerInstructions {
     fn parse(inner_instructions: InnerInstructions, message: &Message) -> Self {
         Self {
@@ -139,16 +150,6 @@ impl UiInnerInstructions {
                 .iter()
                 .map(|ix| UiInstruction::parse(ix, message))
                 .collect(),
-        }
-    }
-}
-
-impl UiTransactionTokenBalance {
-    fn parse(token_balance: TransactionTokenBalance) -> Self {
-        Self {
-            account_index: token_balance.account_index,
-            mint: token_balance.mint,
-            ui_token_amount: token_balance.ui_token_amount,
         }
     }
 }
@@ -227,16 +228,12 @@ impl UiTransactionStatusMeta {
                     .collect()
             }),
             log_messages: meta.log_messages,
-            pre_token_balances: meta.pre_token_balances.map(|bal| {
-                bal.into_iter()
-                    .map(|bal| UiTransactionTokenBalance::parse(bal))
-                    .collect()
-            }),
-            post_token_balances: meta.post_token_balances.map(|bal| {
-                bal.into_iter()
-                    .map(|bal| UiTransactionTokenBalance::parse(bal))
-                    .collect()
-            }),
+            pre_token_balances: meta
+                .pre_token_balances
+                .map(|balance| balance.into_iter().map(|balance| balance.into()).collect()),
+            post_token_balances: meta
+                .post_token_balances
+                .map(|balance| balance.into_iter().map(|balance| balance.into()).collect()),
         }
     }
 }
