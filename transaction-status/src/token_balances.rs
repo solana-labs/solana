@@ -33,7 +33,7 @@ impl TransactionTokenBalancesSet {
 }
 
 fn is_token_program(program_id: &Pubkey) -> bool {
-    return program_id == &spl_token_id_v2_0();
+    program_id == &spl_token_id_v2_0()
 }
 
 fn get_mint_owner_and_decimals(bank: &Bank, mint: &Pubkey) -> Option<(Pubkey, u8)> {
@@ -67,15 +67,15 @@ pub fn collect_token_balances(bank: &Bank, batch: &TransactionBatch) -> Transact
         }
 
         let mut transaction_balances: Vec<TransactionTokenBalance> = vec![];
-        for (index, _fetch) in &fetch_account_hash {
+        for index in fetch_account_hash.keys() {
             if let Some(account_id) = account_keys.get(*index as usize) {
                 if let Some(results) = collect_token_balance_from_account(&bank, account_id) {
                     let (mint, ui_token_amount) = results;
 
                     transaction_balances.push(TransactionTokenBalance {
                         account_index: *index,
-                        mint: mint,
-                        ui_token_amount: ui_token_amount,
+                        mint,
+                        ui_token_amount,
                     });
                 }
             }

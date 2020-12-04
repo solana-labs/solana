@@ -250,18 +250,12 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
                 .inner_instructions
                 .map(|ixs| ixs.into_iter().map(|ix| ix.into()).collect()),
             log_messages: meta.log_messages,
-            pre_token_balances: meta.pre_token_balances.map(|balance| {
-                balance
-                    .into_iter()
-                    .map(|balance| balance.into())
-                    .collect()
-            }),
-            post_token_balances: meta.post_token_balances.map(|balance| {
-                balance
-                    .into_iter()
-                    .map(|balance| balance.into())
-                    .collect()
-            }),
+            pre_token_balances: meta
+                .pre_token_balances
+                .map(|balance| balance.into_iter().map(|balance| balance.into()).collect()),
+            post_token_balances: meta
+                .post_token_balances
+                .map(|balance| balance.into_iter().map(|balance| balance.into()).collect()),
         }
     }
 }
