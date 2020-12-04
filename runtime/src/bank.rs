@@ -2002,7 +2002,7 @@ impl Bank {
             self.store_account(pubkey, account);
             self.capitalization.fetch_add(account.lamports, Relaxed);
         }
-        // updating sysvar (the fees sysvar in this case) now depends on feature activations in
+        // updating sysvars (the fees sysvar in this case) now depends on feature activations in
         // genesis_config.accounts above
         self.update_fees();
 
@@ -7927,17 +7927,19 @@ pub(crate) mod tests {
         assert_eq!(None, bank3.get_account_modified_since_parent(&pubkey));
     }
 
-    #[test]
-    fn test_bank_update_sysvar_account() {
+    fn do_test_bank_update_sysvar_account(simpler_capitalization_enabled: bool) {
         use sysvar::clock::Clock;
 
         let dummy_clock_id = solana_sdk::pubkey::new_rand();
-        let (genesis_config, _mint_keypair) = create_genesis_config(500);
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(500);
 
         let expected_previous_slot = 3;
         let expected_next_slot = expected_previous_slot + 1;
 
         // First, initialize the clock sysvar
+        if simpler_capitalization_enabled {
+            activate_all_features(&mut genesis_config);
+        }
         let bank1 = Arc::new(Bank::new(&genesis_config));
         assert_capitalization_diff(
             &bank1,
@@ -7980,8 +7982,12 @@ pub(crate) mod tests {
                 })
             },
             |old, new| {
-                // creating new sysvar twice in a slot shouldn't increment capitalization twice
-                assert_eq!(old, new);
+                // only if simpler_capitalization_enabled, cap should increment
+                if simpler_capitalization_enabled {
+                    assert_eq!(old + 1, new);
+                } else {
+                    assert_eq!(old, new);
+                }
             },
         );
 
@@ -8046,6 +8052,16 @@ pub(crate) mod tests {
                 assert_eq!(old, new);
             },
         );
+    }
+
+    #[test]
+    fn test_bank_update_sysvar_account_with_simpler_capitalization_disabled() {
+        do_test_bank_update_sysvar_account(false)
+    }
+
+    #[test]
+    fn test_bank_update_sysvar_account_with_simpler_capitalization_enabled() {
+        do_test_bank_update_sysvar_account(true);
     }
 
     #[test]
