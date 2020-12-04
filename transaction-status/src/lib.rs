@@ -253,21 +253,13 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
             pre_token_balances: meta.pre_token_balances.map(|balance| {
                 balance
                     .into_iter()
-                    .map(|balance| UiTransactionTokenBalance {
-                        account_index: balance.account_index,
-                        mint: balance.mint,
-                        ui_token_amount: balance.ui_token_amount,
-                    })
+                    .map(|balance| balance.into())
                     .collect()
             }),
             post_token_balances: meta.post_token_balances.map(|balance| {
                 balance
                     .into_iter()
-                    .map(|balance| UiTransactionTokenBalance {
-                        account_index: balance.account_index,
-                        mint: balance.mint,
-                        ui_token_amount: balance.ui_token_amount,
-                    })
+                    .map(|balance| balance.into())
                     .collect()
             }),
         }
