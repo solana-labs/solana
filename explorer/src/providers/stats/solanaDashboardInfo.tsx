@@ -52,6 +52,9 @@ export function dashboardInfoReducer(
       }
 
       const samples = action.data
+        .filter((sample) => {
+          return sample.numSlots !== 0;
+        })
         .map((sample) => {
           return sample.samplePeriodSecs / sample.numSlots;
         })
