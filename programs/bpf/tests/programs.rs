@@ -24,10 +24,12 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
+    loader_instruction,
     message::Message,
     process_instruction::{BpfComputeBudget, InvokeContext, MockInvokeContext},
     pubkey::Pubkey,
     signature::{Keypair, Signer},
+    system_instruction,
     sysvar::{clock, fees, rent, slot_hashes, stake_history},
     transaction::{Transaction, TransactionError},
 };
@@ -54,13 +56,41 @@ fn load_bpf_program(
     payer_keypair: &Keypair,
     name: &str,
 ) -> Pubkey {
+    let elf = read_bpf_program(name);
+    load_program(bank_client, payer_keypair, loader_id, elf)
+}
+
+fn read_bpf_program(name: &str) -> Vec<u8> {
     let path = create_bpf_path(name);
     let mut file = File::open(&path).unwrap_or_else(|err| {
         panic!("Failed to open {}: {}", path.display(), err);
     });
     let mut elf = Vec::new();
     file.read_to_end(&mut elf).unwrap();
-    load_program(bank_client, payer_keypair, loader_id, elf)
+
+    elf
+}
+
+fn write_bpf_program(
+    bank_client: &BankClient,
+    loader_id: &Pubkey,
+    payer_keypair: &Keypair,
+    program_keypair: &Keypair,
+    elf: &[u8],
+) {
+    let chunk_size = 256; // Size of chunk just needs to fit into tx
+    let mut offset = 0;
+    for chunk in elf.chunks(chunk_size) {
+        let instruction =
+            loader_instruction::write(&program_keypair.pubkey(), loader_id, offset, chunk.to_vec());
+        let message = Message::new(&[instruction], Some(&payer_keypair.pubkey()));
+
+        bank_client
+            .send_and_confirm_message(&[payer_keypair, &program_keypair], message)
+            .unwrap();
+
+        offset += chunk_size as u32;
+    }
 }
 
 fn run_program(
@@ -931,7 +961,6 @@ fn test_program_bpf_ro_modify() {
     let instruction = Instruction::new(program_pubkey, &[1_u8], account_metas.clone());
     let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
     let result = bank_client.send_and_confirm_message(&[&mint_keypair, &test_keypair], message);
-    println!("result {:?}", result);
     assert_eq!(
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::Custom(0xb9f0002))
@@ -940,7 +969,6 @@ fn test_program_bpf_ro_modify() {
     let instruction = Instruction::new(program_pubkey, &[3_u8], account_metas.clone());
     let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
     let result = bank_client.send_and_confirm_message(&[&mint_keypair, &test_keypair], message);
-    println!("result {:?}", result);
     assert_eq!(
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::Custom(0xb9f0002))
@@ -1106,4 +1134,216 @@ fn test_program_bpf_instruction_introspection() {
     assert!(bank
         .get_account(&solana_sdk::sysvar::instructions::id())
         .is_none());
+}
+
+#[cfg(feature = "bpf_rust")]
+#[test]
+fn test_program_bpf_test_use_latest_executor() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, id, entrypoint);
+    let bank_client = BankClient::new(bank);
+    let panic_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_panic",
+    );
+
+    let program_keypair = Keypair::new();
+
+    // Write the panic program into the program account
+    let elf = read_bpf_program("solana_bpf_rust_panic");
+    let message = Message::new(
+        &[system_instruction::create_account(
+            &mint_keypair.pubkey(),
+            &program_keypair.pubkey(),
+            1,
+            elf.len() as u64 * 2,
+            &bpf_loader::id(),
+        )],
+        Some(&mint_keypair.pubkey()),
+    );
+    assert!(bank_client
+        .send_and_confirm_message(&[&mint_keypair, &program_keypair], message)
+        .is_ok());
+    write_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        &program_keypair,
+        &elf,
+    );
+
+    // Finalize the panic program, but fail the tx
+    let message = Message::new(
+        &[
+            loader_instruction::finalize(&program_keypair.pubkey(), &bpf_loader::id()),
+            Instruction::new(panic_id, &0u8, vec![]),
+        ],
+        Some(&mint_keypair.pubkey()),
+    );
+    assert!(bank_client
+        .send_and_confirm_message(&[&mint_keypair, &program_keypair], message)
+        .is_err());
+
+    // Write the noop program into the same program account
+    let elf = read_bpf_program("solana_bpf_rust_noop");
+    write_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        &program_keypair,
+        &elf,
+    );
+
+    // Finalize the noop program
+    let message = Message::new(
+        &[loader_instruction::finalize(
+            &program_keypair.pubkey(),
+            &bpf_loader::id(),
+        )],
+        Some(&mint_keypair.pubkey()),
+    );
+    assert!(bank_client
+        .send_and_confirm_message(&[&mint_keypair, &program_keypair], message)
+        .is_ok());
+
+    // Call the noop program, should get noop not panic
+    let message = Message::new(
+        &[Instruction::new(program_keypair.pubkey(), &0u8, vec![])],
+        Some(&mint_keypair.pubkey()),
+    );
+    assert!(bank_client
+        .send_and_confirm_message(&[&mint_keypair], message)
+        .is_ok());
+}
+
+#[cfg(feature = "bpf_rust")]
+#[test]
+fn test_program_bpf_test_use_latest_executor2() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, id, entrypoint);
+    let bank_client = BankClient::new(bank);
+    let invoke_and_error = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_invoke_and_error",
+    );
+    let invoke_and_ok = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_invoke_and_ok",
+    );
+
+    let program_keypair = Keypair::new();
+
+    // Write the panic program into the program account
+    let elf = read_bpf_program("solana_bpf_rust_panic");
+    let message = Message::new(
+        &[system_instruction::create_account(
+            &mint_keypair.pubkey(),
+            &program_keypair.pubkey(),
+            1,
+            elf.len() as u64 * 2,
+            &bpf_loader::id(),
+        )],
+        Some(&mint_keypair.pubkey()),
+    );
+    assert!(bank_client
+        .send_and_confirm_message(&[&mint_keypair, &program_keypair], message)
+        .is_ok());
+    write_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        &program_keypair,
+        &elf,
+    );
+
+    // - invoke finalize and return error, swallow error
+    let mut instruction =
+        loader_instruction::finalize(&program_keypair.pubkey(), &bpf_loader::id());
+    instruction.accounts.insert(
+        0,
+        AccountMeta {
+            is_signer: false,
+            is_writable: false,
+            pubkey: instruction.program_id,
+        },
+    );
+    instruction.program_id = invoke_and_ok;
+    instruction.accounts.insert(
+        0,
+        AccountMeta {
+            is_signer: false,
+            is_writable: false,
+            pubkey: invoke_and_error,
+        },
+    );
+    let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
+    assert!(bank_client
+        .send_and_confirm_message(&[&mint_keypair, &program_keypair], message)
+        .is_ok());
+
+    // invoke program, verify not found
+    let message = Message::new(
+        &[Instruction::new(program_keypair.pubkey(), &0u8, vec![])],
+        Some(&mint_keypair.pubkey()),
+    );
+    assert_eq!(
+        bank_client
+            .send_and_confirm_message(&[&mint_keypair], message)
+            .unwrap_err()
+            .unwrap(),
+        TransactionError::InvalidProgramForExecution
+    );
+
+    // Write the noop program into the same program account
+    let elf = read_bpf_program("solana_bpf_rust_noop");
+    write_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        &program_keypair,
+        &elf,
+    );
+
+    // Finalize the noop program
+    let message = Message::new(
+        &[loader_instruction::finalize(
+            &program_keypair.pubkey(),
+            &bpf_loader::id(),
+        )],
+        Some(&mint_keypair.pubkey()),
+    );
+    assert!(bank_client
+        .send_and_confirm_message(&[&mint_keypair, &program_keypair], message)
+        .is_ok());
+
+    // Call the program, should get noop, not panic
+    let message = Message::new(
+        &[Instruction::new(program_keypair.pubkey(), &0u8, vec![])],
+        Some(&mint_keypair.pubkey()),
+    );
+    assert!(bank_client
+        .send_and_confirm_message(&[&mint_keypair], message)
+        .is_ok());
 }
