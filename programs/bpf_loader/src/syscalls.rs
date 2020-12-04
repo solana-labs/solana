@@ -862,7 +862,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                         )?;
                         let translated = translate(
                             memory_mapping,
-                            AccessType::Load,
+                            AccessType::Store,
                             unsafe { (account_info.data.as_ptr() as *const u64).offset(1) as u64 },
                             8,
                         )? as *mut u64;
