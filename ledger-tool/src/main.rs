@@ -9,7 +9,9 @@ use serde::Serialize;
 use serde_json::json;
 use solana_clap_utils::{
     input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
-    input_validators::{is_parsable, is_pubkey_or_keypair, is_slot, is_valid_percentage},
+    input_validators::{
+        is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
+    },
 };
 use solana_ledger::entry::Entry;
 use solana_ledger::{
@@ -1140,6 +1142,16 @@ fn main() {
                     .help("Re-calculate the bank hash and overwrite the original bank hash."),
             )
             .arg(
+                Arg::with_name("accounts_to_remove")
+                    .required(false)
+                    .long("remove-account")
+                    .takes_value(true)
+                    .value_name("PUBKEY")
+                    .validator(is_pubkey)
+                    .multiple(true)
+                    .help("List if accounts to remove while creating the snapshot"),
+            )
+            .arg(
                 Arg::with_name("remove_stake_accounts")
                     .required(false)
                     .long("remove-stake-accounts")
@@ -1678,6 +1690,8 @@ fn main() {
                 exit(1);
             }
             let bootstrap_validator_pubkeys = pubkeys_of(&arg_matches, "bootstrap_validator");
+            let accounts_to_remove =
+                pubkeys_of(&arg_matches, "accounts_to_remove").unwrap_or_default();
 
             let snapshot_version =
                 arg_matches
@@ -1744,6 +1758,14 @@ fn main() {
                             .get_program_accounts(&solana_stake_program::id())
                             .into_iter()
                         {
+                            account.lamports = 0;
+                            bank.store_account(&address, &account);
+                        }
+                    }
+
+                    for address in accounts_to_remove {
+                        if let Some(mut account) = bank.get_account(&address) {
+                            rehash = true;
                             account.lamports = 0;
                             bank.store_account(&address, &account);
                         }
