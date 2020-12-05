@@ -113,7 +113,17 @@ impl AggregateCommitmentService {
                     "aggregate-commitment-ms",
                     aggregate_commitment_time.as_ms() as i64,
                     i64
-                )
+                ),
+                (
+                    "highest-confirmed-root",
+                    update_commitment_slots.highest_confirmed_root as i64,
+                    i64
+                ),
+                (
+                    "highest-confirmed-slot",
+                    update_commitment_slots.highest_confirmed_slot as i64,
+                    i64
+                ),
             );
 
             // Triggers rpc_subscription notifications as soon as new commitment data is available,
