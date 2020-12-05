@@ -15,8 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 1547,
-  "iteration": 1591834899194,
+  "id": 2075,
+  "iteration": 1607116926093,
   "links": [
     {
       "asDropdown": true,
@@ -116,7 +116,7 @@
         "lineColor": "rgb(31, 120, 193)",
         "show": false
       },
-      "tableColumn": "mode",
+      "tableColumn": "last",
       "targets": [
         {
           "groupBy": [
@@ -8608,10 +8608,126 @@
       "gridPos": {
         "h": 6,
         "w": 8,
+        "x": 0,
+        "y": 71
+      },
+      "id": 78,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT sum(\"count\") AS \"dropped-vote\" FROM \"$testnet\".\"autogen\".\"dropped-vote-hash\"  WHERE host_id::tag =~ /$hostid/ AND  $timeFilter  GROUP BY time(1s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Vote dropped hash mismatch ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "none",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "none",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
         "x": 8,
         "y": 71
       },
-      "id": 77,
+      "id": 50,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -8932,7 +9048,7 @@
         "x": 16,
         "y": 71
       },
-      "id": 50,
+      "id": 51,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9204,7 +9320,7 @@
         "x": 0,
         "y": 77
       },
-      "id": 51,
+      "id": 52,
       "panels": [],
       "title": "Tower Consensus",
       "type": "row"
@@ -9227,7 +9343,7 @@
         "x": 0,
         "y": 78
       },
-      "id": 52,
+      "id": 53,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9387,7 +9503,7 @@
         "x": 8,
         "y": 78
       },
-      "id": 53,
+      "id": 54,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9547,7 +9663,7 @@
         "x": 16,
         "y": 78
       },
-      "id": 54,
+      "id": 55,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9743,7 +9859,7 @@
         "x": 0,
         "y": 83
       },
-      "id": 55,
+      "id": 56,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9866,7 +9982,7 @@
         "x": 8,
         "y": 83
       },
-      "id": 56,
+      "id": 57,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -9989,7 +10105,7 @@
         "x": 16,
         "y": 83
       },
-      "id": 57,
+      "id": 58,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -10101,7 +10217,7 @@
         "x": 0,
         "y": 88
       },
-      "id": 58,
+      "id": 59,
       "panels": [],
       "repeat": null,
       "title": "IP Network",
@@ -10120,7 +10236,7 @@
         "x": 0,
         "y": 89
       },
-      "id": 59,
+      "id": 60,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -10353,7 +10469,7 @@
         "x": 12,
         "y": 89
       },
-      "id": 60,
+      "id": 61,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -10506,7 +10622,7 @@
         "x": 0,
         "y": 94
       },
-      "id": 61,
+      "id": 62,
       "panels": [],
       "title": "Signature Verification",
       "type": "row"
@@ -10524,7 +10640,7 @@
         "x": 0,
         "y": 95
       },
-      "id": 62,
+      "id": 63,
       "legend": {
         "avg": false,
         "current": false,
@@ -10726,7 +10842,7 @@
         "x": 12,
         "y": 95
       },
-      "id": 63,
+      "id": 64,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -10875,7 +10991,7 @@
         "x": 0,
         "y": 100
       },
-      "id": 64,
+      "id": 65,
       "panels": [],
       "title": "Snapshots",
       "type": "row"
@@ -10893,7 +11009,7 @@
         "x": 0,
         "y": 101
       },
-      "id": 65,
+      "id": 66,
       "legend": {
         "avg": false,
         "current": false,
@@ -11085,7 +11201,7 @@
         "x": 8,
         "y": 101
       },
-      "id": 66,
+      "id": 67,
       "legend": {
         "avg": false,
         "current": false,
@@ -11353,7 +11469,7 @@
         "x": 16,
         "y": 101
       },
-      "id": 67,
+      "id": 68,
       "legend": {
         "avg": false,
         "current": false,
@@ -11547,7 +11663,7 @@
         "x": 0,
         "y": 107
       },
-      "id": 68,
+      "id": 69,
       "legend": {
         "avg": false,
         "current": false,
@@ -11738,7 +11854,7 @@
         "x": 0,
         "y": 113
       },
-      "id": 69,
+      "id": 70,
       "panels": [],
       "title": "RPC Send Transaction Service",
       "type": "row"
@@ -11756,7 +11872,7 @@
         "x": 0,
         "y": 114
       },
-      "id": 70,
+      "id": 71,
       "legend": {
         "avg": false,
         "current": false,
@@ -11874,7 +11990,7 @@
         "x": 12,
         "y": 114
       },
-      "id": 71,
+      "id": 72,
       "legend": {
         "avg": false,
         "current": false,
@@ -12137,7 +12253,7 @@
         "x": 0,
         "y": 120
       },
-      "id": 72,
+      "id": 73,
       "panels": [],
       "title": "Bench TPS",
       "type": "row"
@@ -12155,7 +12271,7 @@
         "x": 0,
         "y": 121
       },
-      "id": 73,
+      "id": 74,
       "legend": {
         "avg": false,
         "current": false,
@@ -12270,7 +12386,7 @@
         "x": 7,
         "y": 121
       },
-      "id": 74,
+      "id": 75,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -12495,7 +12611,7 @@
         "x": 14,
         "y": 121
       },
-      "id": 75,
+      "id": 76,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -12583,7 +12699,7 @@
         "x": 0,
         "y": 126
       },
-      "id": 76,
+      "id": 77,
       "legend": {
         "avg": false,
         "current": false,
