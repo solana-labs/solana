@@ -1205,9 +1205,10 @@ impl ClusterInfo {
         // self.tvu_peers() already filters on:
         //   node.id != self.id() &&
         //     node.shred_verion == self.my_shred_version()
+        let nodes = self.tvu_peers();
         let nodes = {
             let gossip = self.gossip.read().unwrap();
-            self.tvu_peers()
+            nodes
                 .into_iter()
                 .filter(|node| {
                     ContactInfo::is_valid_address(&node.serve_repair)
