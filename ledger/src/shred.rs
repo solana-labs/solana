@@ -612,6 +612,7 @@ impl Shredder {
                             self.fec_rate,
                             shred_data_batch,
                             self.version,
+                            shred_data_batch.len(),
                         )
                     })
                     .collect()
@@ -675,12 +676,14 @@ impl Shredder {
         fec_rate: f32,
         data_shred_batch: &[Shred],
         version: u16,
+        max_coding_shreds: usize,
     ) -> Vec<Shred> {
         assert!(!data_shred_batch.is_empty());
         if fec_rate != 0.0 {
             let num_data = data_shred_batch.len();
             // always generate at least 1 coding shred even if the fec_rate doesn't allow it
-            let num_coding = Self::calculate_num_coding_shreds(num_data, fec_rate);
+            let num_coding =
+                Self::calculate_num_coding_shreds(num_data, fec_rate, max_coding_shreds);
             let session =
                 Session::new(num_data, num_coding).expect("Failed to create erasure session");
             let start_index = data_shred_batch[0].common_header.index;
@@ -748,11 +751,15 @@ impl Shredder {
         }
     }
 
-    fn calculate_num_coding_shreds(num_data_shreds: usize, fec_rate: f32) -> usize {
+    fn calculate_num_coding_shreds(
+        num_data_shreds: usize,
+        fec_rate: f32,
+        max_coding_shreds: usize,
+    ) -> usize {
         if num_data_shreds == 0 {
             0
         } else {
-            num_data_shreds.min(1.max((fec_rate * num_data_shreds as f32) as usize))
+            max_coding_shreds.min(1.max((fec_rate * num_data_shreds as f32) as usize))
         }
     }
 
@@ -1095,8 +1102,11 @@ pub mod tests {
         let size = serialized_size(&entries).unwrap();
         let no_header_size = SIZE_OF_DATA_SHRED_PAYLOAD as u64;
         let num_expected_data_shreds = (size + no_header_size - 1) / no_header_size;
-        let num_expected_coding_shreds =
-            Shredder::calculate_num_coding_shreds(num_expected_data_shreds as usize, fec_rate);
+        let num_expected_coding_shreds = Shredder::calculate_num_coding_shreds(
+            num_expected_data_shreds as usize,
+            fec_rate,
+            num_expected_data_shreds as usize,
+        );
 
         let start_index = 0;
         let (data_shreds, coding_shreds, next_index) =
