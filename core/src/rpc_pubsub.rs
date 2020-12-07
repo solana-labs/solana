@@ -87,7 +87,7 @@ pub trait RpcSolPubSub {
         meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<RpcLogsResponse>>,
         filter: RpcTransactionLogsFilter,
-        config: RpcTransactionLogsConfig,
+        config: Option<RpcTransactionLogsConfig>,
     );
 
     // Unsubscribe from logs notification subscription.
@@ -269,7 +269,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         _meta: Self::Metadata,
         subscriber: Subscriber<RpcResponse<RpcLogsResponse>>,
         filter: RpcTransactionLogsFilter,
-        config: RpcTransactionLogsConfig,
+        config: Option<RpcTransactionLogsConfig>,
     ) {
         info!("logs_subscribe");
 
@@ -306,7 +306,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         self.subscriptions.add_logs_subscription(
             address,
             include_votes,
-            config.commitment,
+            config.and_then(|config| config.commitment),
             sub_id,
             subscriber,
         )
