@@ -181,7 +181,7 @@ impl Tower {
         vote_account: &Pubkey,
     ) -> Self {
         let root_bank = bank_forks.root_bank();
-        let (_progress, heaviest_subtree_fork_choice, unlock_heaviest_subtree_fork_choice_slot) =
+        let (_progress, heaviest_subtree_fork_choice) =
             crate::replay_stage::ReplayStage::initialize_progress_and_fork_choice(
                 root_bank,
                 bank_forks.frozen_banks().values().cloned().collect(),
@@ -190,14 +190,12 @@ impl Tower {
             );
         let root = root_bank.slot();
 
-        let heaviest_bank = if root > unlock_heaviest_subtree_fork_choice_slot {
-            bank_forks
-                .get(heaviest_subtree_fork_choice.best_overall_slot())
-                .expect("The best overall slot must be one of `frozen_banks` which all exist in bank_forks")
-                .clone()
-        } else {
-            Tower::find_heaviest_bank(&bank_forks, &my_pubkey).unwrap_or_else(|| root_bank.clone())
-        };
+        let heaviest_bank = bank_forks
+            .get(heaviest_subtree_fork_choice.best_overall_slot())
+            .expect(
+                "The best overall slot must be one of `frozen_banks` which all exist in bank_forks",
+            )
+            .clone();
 
         Self::new(
             &my_pubkey,
@@ -785,26 +783,6 @@ impl Tower {
         }
     }
 
-    pub(crate) fn find_heaviest_bank(
-        bank_forks: &BankForks,
-        node_pubkey: &Pubkey,
-    ) -> Option<Arc<Bank>> {
-        let ancestors = bank_forks.ancestors();
-        let mut bank_weights: Vec<_> = bank_forks
-            .frozen_banks()
-            .values()
-            .map(|b| {
-                (
-                    Self::bank_weight(node_pubkey, b, &ancestors),
-                    b.parents().len(),
-                    b.clone(),
-                )
-            })
-            .collect();
-        bank_weights.sort_by_key(|b| (b.0, b.1));
-        bank_weights.pop().map(|b| b.2)
-    }
-
     /// Update stake for all the ancestors.
     /// Note, stake is the same for all the ancestor.
     fn update_ancestor_voted_stakes(
@@ -825,21 +803,6 @@ impl Tower {
             let current = voted_stakes.entry(slot).or_default();
             *current += voted_stake;
         }
-    }
-
-    fn bank_weight(
-        node_pubkey: &Pubkey,
-        bank: &Bank,
-        ancestors: &HashMap<Slot, HashSet<Slot>>,
-    ) -> u128 {
-        let ComputedBankState { bank_weight, .. } = Self::collect_vote_lockouts(
-            node_pubkey,
-            bank.slot(),
-            bank.vote_accounts().into_iter(),
-            ancestors,
-            &mut PubkeyReferences::default(),
-        );
-        bank_weight
     }
 
     fn voted_slots(&self) -> Vec<Slot> {
@@ -1273,7 +1236,6 @@ pub fn reconcile_blockstore_roots_with_tower(
 pub mod test {
     use super::*;
     use crate::{
-        bank_weight_fork_choice::BankWeightForkChoice,
         cluster_info_vote_listener::VoteTracker,
         cluster_slots::ClusterSlots,
         fork_choice::SelectVoteAndResetForkResult,
@@ -1413,7 +1375,6 @@ pub mod test {
                 &self.bank_forks,
                 &mut PubkeyReferences::default(),
                 &mut self.heaviest_subtree_fork_choice,
-                &mut BankWeightForkChoice::default(),
             );
 
             let vote_bank = self
