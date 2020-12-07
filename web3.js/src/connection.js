@@ -2602,6 +2602,18 @@ export class Connection {
     assert(typeof result !== 'undefined');
     if (result === null) return result;
 
+    if (result.meta.innerInstructions) {
+      result.meta.innerInstructions.forEach(inner => {
+        inner.instructions.forEach(ix => {
+          ix.programId = new PublicKey(ix.programId);
+
+          if (ix.accounts) {
+            ix.accounts = ix.accounts.map(account => new PublicKey(account));
+          }
+        });
+      });
+    }
+
     const {
       accountKeys,
       instructions,
