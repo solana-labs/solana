@@ -38,23 +38,9 @@ pub const HEAP_LENGTH: usize = 32 * 1024;
 /// Deserialize the program input arguments and call the user defined
 /// `process_instruction` function. Users must call this macro otherwise an
 /// entry point for their program will not be created.
-///
-/// If the program defines the feature `custom-heap` then the default heap
-/// implementation will not be included and the program is free to implement
-/// their own `#[global_allocator]`
 #[macro_export]
 macro_rules! entrypoint {
     ($process_instruction:ident) => {
-        /// A program can provide their own custom heap implementation by adding
-        /// a `custom-heap` feature to `Cargo.toml` and implementing their own
-        /// `global_allocator`.
-        #[cfg(all(not(feature = "custom-heap"), target_arch = "bpf"))]
-        #[global_allocator]
-        static A: $crate::entrypoint::BumpAllocator = $crate::entrypoint::BumpAllocator {
-            start: $crate::entrypoint::HEAP_START_ADDRESS,
-            len: $crate::entrypoint::HEAP_LENGTH,
-        };
-
         /// # Safety
         #[no_mangle]
         pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
@@ -64,6 +50,50 @@ macro_rules! entrypoint {
                 Ok(()) => $crate::entrypoint::SUCCESS,
                 Err(error) => error.into(),
             }
+        }
+        $crate::custom_heap_default!();
+        $crate::custom_panic_default!();
+    };
+}
+
+/// Fallback to default for unused custom heap feature.
+#[macro_export]
+macro_rules! custom_heap_default {
+    () => {
+        /// A program can provide their own custom heap implementation by adding
+        /// a `custom-heap` feature to `Cargo.toml` and implementing their own
+        /// `global_allocator`.
+        ///
+        /// If the program defines the feature `custom-heap` then the default heap
+        /// implementation will not be included and the program is free to implement
+        /// their own `#[global_allocator]`
+        #[cfg(all(not(feature = "custom-heap"), target_arch = "bpf"))]
+        #[global_allocator]
+        static A: $crate::entrypoint::BumpAllocator = $crate::entrypoint::BumpAllocator {
+            start: $crate::entrypoint::HEAP_START_ADDRESS,
+            len: $crate::entrypoint::HEAP_LENGTH,
+        };
+    };
+}
+
+/// Fallback to default for unused custom panic feature.
+/// This must be used if the entrypoint! macro is not used.
+#[macro_export]
+macro_rules! custom_panic_default {
+    () => {
+        /// A program can provide their own custom panic implementation by
+        /// adding a `custom-panic` feature to `Cargo.toml` and implementing
+        /// their own `custom_panic`.
+        ///
+        /// A good way to reduce the final size of the program is to provide a
+        /// `custom_panic` implementation that does nothing.  Doing so will cut
+        /// ~25kb from a noop program.  That number goes down the more the
+        /// programs pulls in Rust's libstd for other purposes.
+        #[cfg(all(not(feature = "custom-panic"), target_arch = "bpf"))]
+        #[no_mangle]
+        fn custom_panic(info: &core::panic::PanicInfo<'_>) {
+            // Full panic reporting
+            $crate::msg!("{}", info);
         }
     };
 }
