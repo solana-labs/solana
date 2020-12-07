@@ -212,7 +212,9 @@ fn get_rpc_node(
         );
 
         if rpc_peers_blacklisted == rpc_peers_total {
-            retry_reason = if blacklist_timeout.elapsed().as_secs() > 60 {
+            retry_reason = if !blacklisted_rpc_nodes.is_empty()
+                && blacklist_timeout.elapsed().as_secs() > 60
+            {
                 // If all nodes are blacklisted and no additional nodes are discovered after 60 seconds,
                 // remove the blacklist and try them all again
                 blacklisted_rpc_nodes.clear();
