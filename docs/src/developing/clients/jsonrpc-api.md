@@ -3013,7 +3013,7 @@ Request:
   "params": [
     {
       "mentions": [ "11111111111111111111111111111111" ]
-    }
+    },
     {
       "commitment": "max"
     }
