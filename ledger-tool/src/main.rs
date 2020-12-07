@@ -1196,11 +1196,12 @@ fn main() {
                            which could be an epoch in a galaxy far far away"),
             )
             .arg(
-                Arg::with_name("enable_inflation")
+                Arg::with_name("inflation")
                     .required(false)
-                    .long("enable-inflation")
-                    .takes_value(false)
-                    .help("Always enable inflation when warping even if it's disabled"),
+                    .long("inflation")
+                    .takes_value(true)
+                    .possible_values(&["pico", "full", "none"])
+                    .help("Overwrite inflation when warping"),
             )
             .arg(
                 Arg::with_name("enable_stake_program_v2")
@@ -2044,8 +2045,13 @@ fn main() {
                             exit(1);
                         }
 
-                        if arg_matches.is_present("enable_inflation") {
-                            let inflation = Inflation::pico();
+                        if let Ok(raw_inflation) = value_t!(arg_matches, "inflation", String) {
+                            let inflation = match raw_inflation.as_str() {
+                                "pico" => Inflation::pico(),
+                                "full" => Inflation::full(),
+                                "none" => Inflation::new_disabled(),
+                                _ => unreachable!(),
+                            };
                             println!(
                                 "Forcing to: {:?} (was: {:?})",
                                 inflation,
@@ -2094,6 +2100,10 @@ fn main() {
                                     ),
                                 );
                                 force_enabled_count += 1;
+                            }
+
+                            if force_enabled_count == 0 {
+                                warn!("Already stake_program_v2 is activated (or scheduled)");
                             }
 
                             let mut store_failed_count = 0;
@@ -2488,7 +2498,7 @@ fn main() {
                         if arg_matches.is_present("recalculate_capitalization") {
                             eprintln!("Capitalization isn't verified because it's recalculated");
                         }
-                        if arg_matches.is_present("enable_inflation") {
+                        if arg_matches.is_present("inflation") {
                             eprintln!(
                                 "Forcing inflation isn't meaningful because bank isn't warping"
                             );

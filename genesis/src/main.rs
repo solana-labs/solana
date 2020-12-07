@@ -23,6 +23,7 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     fee_calculator::FeeRateGovernor,
     genesis_config::{ClusterType, GenesisConfig},
+    inflation::Inflation,
     native_token::sol_to_lamports,
     poh_config::PohConfig,
     pubkey::Pubkey,
@@ -271,6 +272,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .validator(is_valid_percentage),
         )
         .arg(
+            Arg::with_name("vote_commission_percentage")
+                .long("vote-commission-percentage")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .default_value("100")
+                .help("percentage of vote commission")
+                .validator(is_valid_percentage),
+        )
+        .arg(
             Arg::with_name("target_signatures_per_slot")
                 .long("target-signatures-per-slot")
                 .value_name("NUMBER")
@@ -362,6 +372,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .number_of_values(3)
                 .multiple(true)
                 .help("Install a BPF program at the given address"),
+        )
+        .arg(
+            Arg::with_name("inflation")
+                .required(false)
+                .long("inflation")
+                .takes_value(true)
+                .possible_values(&["pico", "full", "none"])
+                .help("Selects inflation"),
         )
         .get_matches();
 
@@ -491,6 +509,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         ..GenesisConfig::default()
     };
 
+    if let Ok(raw_inflation) = value_t!(matches, "inflation", String) {
+        let inflation = match raw_inflation.as_str() {
+            "pico" => Inflation::pico(),
+            "full" => Inflation::full(),
+            "none" => Inflation::new_disabled(),
+            _ => unreachable!(),
+        };
+        genesis_config.inflation = inflation;
+    }
+
+    let commission = value_t_or_exit!(matches, "vote_commission_percentage", u8);
+
     let mut bootstrap_validator_pubkeys_iter = bootstrap_validator_pubkeys.iter();
     loop {
         let identity_pubkey = match bootstrap_validator_pubkeys_iter.next() {
@@ -509,7 +539,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             &identity_pubkey,
             &identity_pubkey,
             &identity_pubkey,
-            100,
+            commission,
             VoteState::get_rent_exempt_reserve(&rent).max(1),
         );
 
