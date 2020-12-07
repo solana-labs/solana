@@ -154,13 +154,13 @@ impl BroadcastStage {
     fn run(
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
-        blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
+        socket_sender: Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
+        blockstore_sender: Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         mut broadcast_stage_run: impl BroadcastRun,
     ) -> BroadcastStageReturnType {
         loop {
             let res =
-                broadcast_stage_run.run(blockstore, receiver, socket_sender, blockstore_sender);
+                broadcast_stage_run.run(blockstore, receiver, &socket_sender, &blockstore_sender);
             let res = Self::handle_error(res, "run");
             if let Some(res) = res {
                 return res;
@@ -225,13 +225,7 @@ impl BroadcastStage {
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _finalizer = Finalizer::new(exit);
-                Self::run(
-                    &btree,
-                    &receiver,
-                    &socket_sender_,
-                    &blockstore_sender,
-                    bs_run,
-                )
+                Self::run(&btree, &receiver, socket_sender_, blockstore_sender, bs_run)
             })
             .unwrap();
         let mut thread_hdls = vec![thread_hdl];
@@ -273,16 +267,19 @@ impl BroadcastStage {
         let blockstore = blockstore.clone();
         let retransmit_thread = Builder::new()
             .name("solana-broadcaster-retransmit".to_string())
-            .spawn(move || loop {
-                if let Some(res) = Self::handle_error(
-                    Self::check_retransmit_signals(
-                        &blockstore,
-                        &retransmit_slots_receiver,
-                        &socket_sender,
-                    ),
-                    "solana-broadcaster-retransmit-check_retransmit_signals",
-                ) {
-                    return res;
+            .spawn(move || {
+                let socket_sender = socket_sender;
+                loop {
+                    if let Some(res) = Self::handle_error(
+                        Self::check_retransmit_signals(
+                            &blockstore,
+                            &retransmit_slots_receiver,
+                            &socket_sender,
+                        ),
+                        "solana-broadcaster-retransmit-check_retransmit_signals",
+                    ) {
+                        return res;
+                    }
                 }
             })
             .unwrap();

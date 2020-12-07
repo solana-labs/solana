@@ -1324,6 +1324,7 @@ fn test_fail_entry_verification_leader() {
 }
 
 #[test]
+#[serial]
 #[allow(unused_attributes)]
 #[ignore]
 fn test_fake_shreds_broadcast_leader() {

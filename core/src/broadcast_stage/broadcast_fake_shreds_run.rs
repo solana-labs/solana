@@ -107,21 +107,20 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
     ) -> Result<()> {
-        for ((stakes, data_shreds), _) in receiver.lock().unwrap().iter() {
-            let peers = cluster_info.tvu_peers();
-            peers.iter().enumerate().for_each(|(i, peer)| {
-                if i <= self.partition && stakes.is_some() {
-                    // Send fake shreds to the first N peers
-                    data_shreds.iter().for_each(|b| {
-                        sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
-                    });
-                } else if i > self.partition && stakes.is_none() {
-                    data_shreds.iter().for_each(|b| {
-                        sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
-                    });
-                }
-            });
-        }
+        let ((stakes, data_shreds), _) = receiver.lock().unwrap().recv()?;
+        let peers = cluster_info.tvu_peers();
+        peers.iter().enumerate().for_each(|(i, peer)| {
+            if i <= self.partition && stakes.is_some() {
+                // Send fake shreds to the first N peers
+                data_shreds.iter().for_each(|b| {
+                    sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
+                });
+            } else if i > self.partition && stakes.is_none() {
+                data_shreds.iter().for_each(|b| {
+                    sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
+                });
+            }
+        });
         Ok(())
     }
     fn record(
@@ -129,9 +128,8 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         receiver: &Arc<Mutex<RecordReceiver>>,
         blockstore: &Arc<Blockstore>,
     ) -> Result<()> {
-        for (data_shreds, _) in receiver.lock().unwrap().iter() {
-            blockstore.insert_shreds(data_shreds.to_vec(), None, true)?;
-        }
+        let (data_shreds, _) = receiver.lock().unwrap().recv()?;
+        blockstore.insert_shreds(data_shreds.to_vec(), None, true)?;
         Ok(())
     }
 }

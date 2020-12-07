@@ -857,8 +857,8 @@ impl Validator {
         self.serve_repair_service
             .join()
             .expect("serve_repair_service");
-        self.tpu.join().expect("tpu");
         self.tvu.join().expect("tvu");
+        self.tpu.join().expect("tpu");
         self.completed_data_sets_service
             .join()
             .expect("completed_data_sets_service");
