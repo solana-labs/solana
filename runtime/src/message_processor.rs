@@ -80,9 +80,11 @@ impl PreAccount {
     ) -> Result<(), InstructionError> {
         // Only the owner of the account may change owner and
         //   only if the account is writable and
+        //   only if the account is not executable and
         //   only if the data is zero-initialized or empty
         if self.owner != post.owner
             && (!self.is_writable // line coverage used to get branch coverage
+                || self.is_executable
                 || *program_id != self.owner
             || !Self::is_zeroed(&post.data))
         {
@@ -993,6 +995,15 @@ mod tests {
                 .verify(),
             Ok(()),
             "mallory should be able to change the account owner, if she leaves clear data"
+        );
+        assert_eq!(
+            Change::new(&mallory_program_id, &mallory_program_id)
+                .owner(&alice_program_id)
+                .executable(true, true)
+                .data(vec![42], vec![0])
+                .verify(),
+            Err(InstructionError::ModifiedProgramId),
+            "mallory should not be able to change the account owner, if the account executable"
         );
         assert_eq!(
             Change::new(&mallory_program_id, &mallory_program_id)
