@@ -47,7 +47,7 @@ pub fn write(
 pub fn finalize(account_pubkey: &Pubkey, program_id: &Pubkey) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*account_pubkey, true),
-        AccountMeta::new(rent::id(), false),
+        AccountMeta::new_readonly(rent::id(), false),
     ];
     Instruction::new(*program_id, &LoaderInstruction::Finalize, account_metas)
 }
