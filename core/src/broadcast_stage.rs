@@ -53,10 +53,18 @@ pub enum BroadcastStageReturnType {
 }
 
 #[derive(PartialEq, Clone, Debug)]
+pub struct BroadcastDuplicatesConfig {
+    /// Percentage of stake to send different version of slots to
+    pub stake_partition: u8,
+    /// Number of slots to wait before sending duplicate shreds
+    pub duplicate_send_delay: usize,
+}
+
+#[derive(PartialEq, Clone, Debug)]
 pub enum BroadcastStageType {
     Standard,
     FailEntryVerification,
-    BroadcastFakeShreds,
+    BroadcastDuplicates(BroadcastDuplicatesConfig),
 }
 
 impl BroadcastStageType {
@@ -92,14 +100,14 @@ impl BroadcastStageType {
                 FailEntryVerificationBroadcastRun::new(keypair, shred_version),
             ),
 
-            BroadcastStageType::BroadcastFakeShreds => BroadcastStage::new(
+            BroadcastStageType::BroadcastDuplicates(config) => BroadcastStage::new(
                 sock,
                 cluster_info,
                 receiver,
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
-                BroadcastFakeShredsRun::new(keypair, 0, shred_version),
+                BroadcastFakeShredsRun::new(keypair, shred_version, config.clone()),
             ),
         }
     }

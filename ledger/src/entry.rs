@@ -163,7 +163,7 @@ impl Entry {
         if self.hash != ref_hash {
             warn!(
                 "next_hash is invalid expected: {:?} actual: {:?}",
-                self.hash, ref_hash
+                ref_hash, self.hash
             );
             return false;
         }
