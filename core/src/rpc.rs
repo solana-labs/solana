@@ -108,6 +108,7 @@ pub struct JsonRpcConfig {
     pub health_check_slot_distance: u64,
     pub enable_bigtable_ledger_storage: bool,
     pub enable_bigtable_ledger_upload: bool,
+    pub max_multiple_accounts: Option<usize>,
 }
 
 #[derive(Clone)]
@@ -1923,10 +1924,15 @@ impl RpcSol for RpcSolImpl {
             "get_multiple_accounts rpc request received: {:?}",
             pubkey_strs.len()
         );
-        if pubkey_strs.len() > MAX_MULTIPLE_ACCOUNTS {
+
+        let max_multiple_accounts = meta
+            .config
+            .max_multiple_accounts
+            .unwrap_or(MAX_MULTIPLE_ACCOUNTS);
+        if pubkey_strs.len() > max_multiple_accounts {
             return Err(Error::invalid_params(format!(
                 "Too many inputs provided; max {}",
-                MAX_MULTIPLE_ACCOUNTS
+                max_multiple_accounts
             )));
         }
         let mut pubkeys: Vec<Pubkey> = vec![];
