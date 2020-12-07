@@ -10085,6 +10085,7 @@ pub(crate) mod tests {
             _keyed_accounts: &[KeyedAccount],
             _instruction_data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
+            _use_jit: bool,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
         }

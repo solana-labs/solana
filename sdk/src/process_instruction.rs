@@ -241,6 +241,7 @@ pub trait Executor: Debug + Send + Sync {
         keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
+        use_jit: bool,
     ) -> Result<(), InstructionError>;
 }
 

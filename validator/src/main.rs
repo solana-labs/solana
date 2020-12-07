@@ -1398,6 +1398,12 @@ pub fn main() {
                     "Mode to recovery the ledger db write ahead log."
                 ),
         )
+        .arg(
+            Arg::with_name("bpf_jit")
+                .long("bpf-jit")
+                .takes_value(false)
+                .help("Use the just-in-time compiler instead of the interpreter for BPF."),
+        )
         .get_matches();
 
     let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(Keypair::new));
@@ -1540,6 +1546,7 @@ pub fn main() {
         poh_verify: !matches.is_present("skip_poh_verify"),
         debug_keys,
         contact_debug_interval,
+        bpf_jit: matches.is_present("bpf_jit"),
         ..ValidatorConfig::default()
     };
 
