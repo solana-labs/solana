@@ -1854,7 +1854,7 @@ mod tests {
             "--commitment",
             "max",
             "--blockhash",
-            "4CCNp28j6AhGq7PkjPDP4wbQWBS8LLbQin2xV5n8frKXj",
+            "4CCNp28j6AhGq7PkjPDP4wbQWBS8LLbQin2xV5n8frKX",
         ]);
         assert_eq!(
             parse_command(&test_ping, &default_signer, &mut None).unwrap(),
@@ -1865,7 +1865,7 @@ mod tests {
                     count: Some(2),
                     timeout: Duration::from_secs(3),
                     blockhash: Some(
-                        Hash::from_str("4CCNp28j6AhGq7PkjPDP4wbQWBS8LLbQin2xV5n8frKXj").unwrap()
+                        Hash::from_str("4CCNp28j6AhGq7PkjPDP4wbQWBS8LLbQin2xV5n8frKX").unwrap()
                     ),
                     print_timestamp: true,
                 },
