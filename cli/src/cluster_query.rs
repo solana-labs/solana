@@ -11,6 +11,7 @@ use solana_clap_utils::{
     input_parsers::*,
     input_validators::*,
     keypair::DefaultSigner,
+    offline::{blockhash_arg, BLOCKHASH_ARG},
 };
 use solana_cli_output::{
     display::{
@@ -36,6 +37,7 @@ use solana_sdk::{
     clock::{self, Clock, Slot},
     commitment_config::CommitmentConfig,
     epoch_schedule::Epoch,
+    hash::Hash,
     message::Message,
     native_token::lamports_to_sol,
     pubkey::{self, Pubkey},
@@ -56,7 +58,7 @@ use std::{
         Arc,
     },
     thread::sleep,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 static CHECK_MARK: Emoji = Emoji("✅ ", "");
@@ -213,6 +215,13 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .help("Stop after submitting count transactions"),
                 )
                 .arg(
+                    Arg::with_name("print_timestamp")
+                        .short("D")
+                        .long("print-timestamp")
+                        .takes_value(false)
+                        .help("Print timestamp (unix time + microseconds as in gettimeofday) before each line"),
+                )
+                .arg(
                     Arg::with_name("lamports")
                         .long("lamports")
                         .value_name("NUMBER")
@@ -230,6 +239,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .default_value("15")
                         .help("Wait up to timeout seconds for transaction confirmation"),
                 )
+                .arg(blockhash_arg())
                 .arg(commitment_arg()),
         )
         .subcommand(
@@ -385,12 +395,16 @@ pub fn parse_cluster_ping(
         None
     };
     let timeout = Duration::from_secs(value_t_or_exit!(matches, "timeout", u64));
+    let blockhash = value_of(matches, BLOCKHASH_ARG.name);
+    let print_timestamp = matches.is_present("print_timestamp");
     Ok(CliCommandInfo {
         command: CliCommand::Ping {
             lamports,
             interval,
             count,
             timeout,
+            blockhash,
+            print_timestamp,
         },
         signers: vec![default_signer.signer_from_path(matches, wallet_manager)?],
     })
@@ -1060,6 +1074,8 @@ pub fn process_ping(
     interval: &Duration,
     count: &Option<u64>,
     timeout: &Duration,
+    fixed_blockhash: &Option<Hash>,
+    print_timestamp: bool,
 ) -> ProcessResult {
     println_name_value("Source Account:", &config.signers[0].pubkey().to_string());
     println!();
@@ -1077,9 +1093,21 @@ pub fn process_ping(
     let (mut blockhash, mut fee_calculator) = rpc_client.get_recent_blockhash()?;
     let mut blockhash_transaction_count = 0;
     let mut blockhash_acquired = Instant::now();
+    if let Some(fixed_blockhash) = fixed_blockhash {
+        let blockhash_origin = if *fixed_blockhash != Hash::default() {
+            blockhash = *fixed_blockhash;
+            "supplied from cli arguments"
+        } else {
+            "fetched from cluster"
+        };
+        println!(
+            "Fixed blockhash is used: {} ({})",
+            blockhash, blockhash_origin
+        );
+    }
     'mainloop: for seq in 0..count.unwrap_or(std::u64::MAX) {
         let now = Instant::now();
-        if now.duration_since(blockhash_acquired).as_secs() > 60 {
+        if fixed_blockhash.is_none() && now.duration_since(blockhash_acquired).as_secs() > 60 {
             // Fetch a new blockhash every minute
             let (new_blockhash, new_fee_calculator) = rpc_client.get_new_blockhash(&blockhash)?;
             blockhash = new_blockhash;
@@ -1110,6 +1138,18 @@ pub fn process_ping(
         let mut tx = Transaction::new_unsigned(message);
         tx.try_sign(&config.signers, blockhash)?;
 
+        let timestamp = || {
+            let micros = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_micros();
+            if print_timestamp {
+                format!("[{}.{:06}] ", micros / 1_000_000, micros % 1_000_000)
+            } else {
+                format!("")
+            }
+        };
+
         match rpc_client.send_transaction(&tx) {
             Ok(signature) => {
                 let transaction_sent = Instant::now();
@@ -1123,15 +1163,20 @@ pub fn process_ping(
                                 let elapsed_time_millis = elapsed_time.as_millis() as u64;
                                 confirmation_time.push_back(elapsed_time_millis);
                                 println!(
-                                    "{}{} lamport(s) transferred: seq={:<3} time={:>4}ms signature={}",
+                                    "{}{}{} lamport(s) transferred: seq={:<3} time={:>4}ms signature={}",
+                                    timestamp(),
                                     CHECK_MARK, lamports, seq, elapsed_time_millis, signature
                                 );
                                 confirmed_count += 1;
                             }
                             Err(err) => {
                                 println!(
-                                    "{}Transaction failed:    seq={:<3} error={:?} signature={}",
-                                    CROSS_MARK, seq, err, signature
+                                    "{}{}Transaction failed:    seq={:<3} error={:?} signature={}",
+                                    timestamp(),
+                                    CROSS_MARK,
+                                    seq,
+                                    err,
+                                    signature
                                 );
                             }
                         }
@@ -1140,8 +1185,11 @@ pub fn process_ping(
 
                     if elapsed_time >= *timeout {
                         println!(
-                            "{}Confirmation timeout:  seq={:<3}             signature={}",
-                            CROSS_MARK, seq, signature
+                            "{}{}Confirmation timeout:  seq={:<3}             signature={}",
+                            timestamp(),
+                            CROSS_MARK,
+                            seq,
+                            signature
                         );
                         break;
                     }
@@ -1159,8 +1207,11 @@ pub fn process_ping(
             }
             Err(err) => {
                 println!(
-                    "{}Submit failed:         seq={:<3} error={:?}",
-                    CROSS_MARK, seq, err
+                    "{}{}Submit failed:         seq={:<3} error={:?}",
+                    timestamp(),
+                    CROSS_MARK,
+                    seq,
+                    err
                 );
             }
         }
@@ -1663,6 +1714,7 @@ mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
     use solana_sdk::signature::{write_keypair, Keypair};
+    use std::str::FromStr;
     use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {
@@ -1798,8 +1850,11 @@ mod tests {
             "2",
             "-t",
             "3",
+            "-D",
             "--commitment",
             "max",
+            "--blockhash",
+            "4CCNp28j6AhGq7PkjPDP4wbQWBS8LLbQin2xV5n8frKX",
         ]);
         assert_eq!(
             parse_command(&test_ping, &default_signer, &mut None).unwrap(),
@@ -1809,6 +1864,10 @@ mod tests {
                     interval: Duration::from_secs(1),
                     count: Some(2),
                     timeout: Duration::from_secs(3),
+                    blockhash: Some(
+                        Hash::from_str("4CCNp28j6AhGq7PkjPDP4wbQWBS8LLbQin2xV5n8frKX").unwrap()
+                    ),
+                    print_timestamp: true,
                 },
                 signers: vec![default_keypair.into()],
             }

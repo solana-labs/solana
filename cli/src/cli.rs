@@ -128,6 +128,8 @@ pub enum CliCommand {
         interval: Duration,
         count: Option<u64>,
         timeout: Duration,
+        blockhash: Option<Hash>,
+        print_timestamp: bool,
     },
     ShowBlockProduction {
         epoch: Option<Epoch>,
@@ -1570,7 +1572,18 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             interval,
             count,
             timeout,
-        } => process_ping(&rpc_client, config, *lamports, interval, count, timeout),
+            blockhash,
+            print_timestamp,
+        } => process_ping(
+            &rpc_client,
+            config,
+            *lamports,
+            interval,
+            count,
+            timeout,
+            blockhash,
+            *print_timestamp,
+        ),
         CliCommand::ShowBlockProduction { epoch, slot_limit } => {
             process_show_block_production(&rpc_client, config, *epoch, *slot_limit)
         }
