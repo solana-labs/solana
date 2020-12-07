@@ -105,7 +105,11 @@ if [[ ! -e xargo-$version.md ]] || [[ ! -x bin/xargo ]]; then
 fi
 
 # Install Criterion
-version=v2.3.2
+if [[ $machine == "linux" ]]; then
+  version=v2.3.3
+else
+  version=v2.3.2
+fi
 if [[ ! -e criterion-$version.md || ! -e criterion ]]; then
   (
     set -e
