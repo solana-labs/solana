@@ -11,7 +11,7 @@ use solana_clap_utils::{
     },
     keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
 };
-use solana_client::rpc_client::RpcClient;
+use solana_client::{rpc_client::RpcClient, rpc_request::MAX_MULTIPLE_ACCOUNTS};
 use solana_core::ledger_cleanup_service::{
     DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
 };
@@ -862,6 +862,7 @@ pub fn main() {
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
     let default_genesis_archive_unpacked_size = &MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
+    let default_rpc_max_multiple_accounts = &MAX_MULTIPLE_ACCOUNTS.to_string();
     let default_rpc_pubsub_max_connections = PubSubConfig::default().max_connections.to_string();
     let default_rpc_pubsub_max_fragment_size =
         PubSubConfig::default().max_fragment_size.to_string();
@@ -1038,6 +1039,15 @@ pub fn main() {
                 .requires("enable_rpc_transaction_history")
                 .takes_value(false)
                 .help("Upload new confirmed blocks into a BigTable instance"),
+        )
+        .arg(
+            Arg::with_name("rpc_max_multiple_accounts")
+                .long("rpc-max-multiple-accounts")
+                .value_name("MAX ACCOUNTS")
+                .takes_value(true)
+                .default_value(default_rpc_max_multiple_accounts)
+                .help("Override the default maximum accounts accepted by \
+                       the getMultipleAccounts JSON RPC method")
         )
         .arg(
             Arg::with_name("health_check_slot_distance")
@@ -1507,6 +1517,11 @@ pub fn main() {
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
+            max_multiple_accounts: Some(value_t_or_exit!(
+                matches,
+                "rpc_max_multiple_accounts",
+                usize
+            )),
             health_check_slot_distance: value_t_or_exit!(
                 matches,
                 "health_check_slot_distance",
