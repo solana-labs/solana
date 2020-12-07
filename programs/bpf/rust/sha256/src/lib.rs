@@ -2,6 +2,7 @@
 
 extern crate solana_program;
 use solana_program::{
+    custom_panic_default,
     hash::{hashv, Hasher},
     msg,
 };
@@ -21,6 +22,8 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
 
     0
 }
+
+custom_panic_default!();
 
 #[cfg(test)]
 mod test {

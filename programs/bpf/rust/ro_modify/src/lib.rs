@@ -203,12 +203,12 @@ fn process_instruction(
 macro_rules! check {
     ($left:expr, $right:expr) => {
         if $left != $right {
-            msg!(&format!(
+            msg!(
                 "Condition failure: {:?} != {:?} at line {:?}",
                 $left,
                 $right,
                 line!()
-            ));
+            );
             return Err(ProgramError::Custom(0));
         }
     };

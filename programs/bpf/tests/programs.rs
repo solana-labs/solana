@@ -835,7 +835,6 @@ fn test_program_bpf_ro_modify() {
     let instruction = Instruction::new(program_pubkey, &[1_u8], account_metas.clone());
     let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
     let result = bank_client.send_and_confirm_message(&[&mint_keypair, &test_keypair], message);
-    println!("result {:?}", result);
     assert_eq!(
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::Custom(0xb9f0002))
@@ -844,7 +843,6 @@ fn test_program_bpf_ro_modify() {
     let instruction = Instruction::new(program_pubkey, &[3_u8], account_metas.clone());
     let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
     let result = bank_client.send_and_confirm_message(&[&mint_keypair, &test_keypair], message);
-    println!("result {:?}", result);
     assert_eq!(
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::Custom(0xb9f0002))
@@ -911,8 +909,8 @@ fn assert_instruction_count() {
             ("multiple_static", 8),
             ("noop", 57),
             ("relative_call", 10),
-            ("sanity", 1140),
-            ("sanity++", 1140),
+            ("sanity", 176),
+            ("sanity++", 176),
             ("struct_pass", 8),
             ("struct_ret", 22),
         ]);
@@ -920,16 +918,16 @@ fn assert_instruction_count() {
     #[cfg(feature = "bpf_rust")]
     {
         programs.extend_from_slice(&[
-            ("solana_bpf_rust_128bit", 543),
-            ("solana_bpf_rust_alloc", 19082),
+            ("solana_bpf_rust_128bit", 572),
+            ("solana_bpf_rust_alloc", 12919),
             ("solana_bpf_rust_dep_crate", 2),
-            ("solana_bpf_rust_external_spend", 538),
-            ("solana_bpf_rust_iter", 723),
-            ("solana_bpf_rust_many_args", 231),
+            ("solana_bpf_rust_external_spend", 514),
+            ("solana_bpf_rust_iter", 724),
+            ("solana_bpf_rust_many_args", 237),
             ("solana_bpf_rust_noop", 488),
-            ("solana_bpf_rust_param_passing", 46),
+            ("solana_bpf_rust_param_passing", 48),
             ("solana_bpf_rust_ristretto", 19399),
-            ("solana_bpf_rust_sanity", 1965),
+            ("solana_bpf_rust_sanity", 894),
         ]);
     }
 
@@ -982,7 +980,6 @@ fn test_program_bpf_instruction_introspection() {
         Some(&mint_keypair.pubkey()),
     );
     let result = bank_client.send_and_confirm_message(&[&mint_keypair], message);
-    println!("result: {:?}", result);
     assert!(result.is_ok());
 
     // writable special instructions11111 key, should not be allowed
