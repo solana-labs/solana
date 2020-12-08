@@ -343,9 +343,11 @@ impl NodeInstance {
         }
     }
 
-    pub fn update_wallclock(&mut self, now: u64) {
-        if self.wallclock < now {
-            self.wallclock = now;
+    // Clones the value with an updated wallclock.
+    pub fn with_wallclock(&self, now: u64) -> Self {
+        Self {
+            wallclock: now,
+            ..*self
         }
     }
 
@@ -896,6 +898,18 @@ mod test {
             timestamp: now - 1,
             token: rng.gen(),
         })));
+        // Updated wallclock is not a duplicate.
+        let other = node.with_wallclock(now + 8);
+        assert_eq!(
+            other,
+            NodeInstance {
+                from: pubkey,
+                wallclock: now + 8,
+                timestamp: now,
+                token: node.token,
+            }
+        );
+        assert!(!node.check_duplicate(&make_crds_value(other)));
         // Duplicate instance.
         assert!(node.check_duplicate(&make_crds_value(NodeInstance {
             from: pubkey,
