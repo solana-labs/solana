@@ -59,7 +59,7 @@ pub struct ErasureMeta {
     pub config: ErasureConfig,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug, Eq, PartialEq)]
 pub struct DuplicateSlotProof {
     #[serde(with = "serde_bytes")]
     pub shred1: Vec<u8>,

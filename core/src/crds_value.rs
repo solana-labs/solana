@@ -28,6 +28,9 @@ pub const MAX_VOTES: VoteIndex = 32;
 pub type EpochSlotsIndex = u8;
 pub const MAX_EPOCH_SLOTS: EpochSlotsIndex = 255;
 
+pub type DuplicateProofIndex = u8;
+pub const MAX_DUPLICATE_PROOFS: DuplicateProofIndex = 32;
+
 /// CrdsValue that is replicated across the cluster
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
 pub struct CrdsValue {
@@ -65,6 +68,35 @@ impl Signable for CrdsValue {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct CrdsDuplicateSlotProof {
+    from: Pubkey,
+    wallclock: u64,
+    pub slot: Slot,
+    proof: Vec<u8>,
+}
+
+impl CrdsDuplicateSlotProof {
+    pub fn new(from: Pubkey, wallclock: u64, proof: Vec<u8>, slot: Slot) -> Self {
+        CrdsDuplicateSlotProof {
+            from,
+            wallclock,
+            proof,
+            slot,
+        }
+    }
+}
+
+impl Sanitize for CrdsDuplicateSlotProof {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        // TODO: other checks
+        if self.wallclock >= MAX_WALLCLOCK {
+            return Err(SanitizeError::ValueOutOfBounds);
+        }
+        Ok(())
+    }
+}
+
 /// CrdsData that defines the different types of items CrdsValues can hold
 /// * Merge Strategy - Latest wallclock is picked
 /// * LowestSlot index is deprecated
@@ -79,6 +111,7 @@ pub enum CrdsData {
     EpochSlots(EpochSlotsIndex, EpochSlots),
     LegacyVersion(LegacyVersion),
     Version(Version),
+    DuplicateSlotProof(DuplicateProofIndex, CrdsDuplicateSlotProof),
 }
 
 impl Sanitize for CrdsData {
@@ -107,6 +140,21 @@ impl Sanitize for CrdsData {
             }
             CrdsData::LegacyVersion(version) => version.sanitize(),
             CrdsData::Version(version) => version.sanitize(),
+            CrdsData::DuplicateSlotProof(ix, proof) => {
+                if *ix as usize >= MAX_DUPLICATE_PROOFS as usize {
+                    return Err(SanitizeError::ValueOutOfBounds);
+                }
+                proof.sanitize()?;
+                let shred = solana_ledger::shred::Shred::new_from_serialized_shred(proof.proof.clone()).map_err(|_e| SanitizeError::InvalidValue)?;
+                if shred.slot() != proof.slot {
+                    return Err(SanitizeError::InvalidValue);
+                }
+                // todo: shred leader matches slot
+                /*if !shred.verify(Pubkey::default()) {
+                    return Err(SanitizeError::InvalidValue);
+                }*/
+                Ok(())
+            },
         }
     }
 }
@@ -335,6 +383,7 @@ pub enum CrdsValueLabel {
     AccountsHashes(Pubkey),
     LegacyVersion(Pubkey),
     Version(Pubkey),
+    DuplicateSlotProof(DuplicateProofIndex, Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -348,6 +397,7 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::AccountsHashes(_) => write!(f, "AccountsHashes({})", self.pubkey()),
             CrdsValueLabel::LegacyVersion(_) => write!(f, "LegacyVersion({})", self.pubkey()),
             CrdsValueLabel::Version(_) => write!(f, "Version({})", self.pubkey()),
+            CrdsValueLabel::DuplicateSlotProof(ix, _) => write!(f, "DuplicateProof({}, {})", ix, self.pubkey()),
         }
     }
 }
@@ -363,6 +413,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::AccountsHashes(p) => *p,
             CrdsValueLabel::LegacyVersion(p) => *p,
             CrdsValueLabel::Version(p) => *p,
+            CrdsValueLabel::DuplicateSlotProof(_, p) => *p,
         }
     }
 }
@@ -409,6 +460,7 @@ impl CrdsValue {
             CrdsData::EpochSlots(_, p) => p.wallclock,
             CrdsData::LegacyVersion(version) => version.wallclock,
             CrdsData::Version(version) => version.wallclock,
+            CrdsData::DuplicateSlotProof(_, proof) => proof.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -421,6 +473,7 @@ impl CrdsValue {
             CrdsData::EpochSlots(_, p) => p.from,
             CrdsData::LegacyVersion(version) => version.from,
             CrdsData::Version(version) => version.from,
+            CrdsData::DuplicateSlotProof(_, proof) => proof.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -433,6 +486,7 @@ impl CrdsValue {
             CrdsData::EpochSlots(ix, _) => CrdsValueLabel::EpochSlots(*ix, self.pubkey()),
             CrdsData::LegacyVersion(_) => CrdsValueLabel::LegacyVersion(self.pubkey()),
             CrdsData::Version(_) => CrdsValueLabel::Version(self.pubkey()),
+            CrdsData::DuplicateSlotProof(_, _) => CrdsValueLabel::Version(self.pubkey()),
         }
     }
     pub fn contact_info(&self) -> Option<&ContactInfo> {
@@ -458,6 +512,13 @@ impl CrdsValue {
     pub fn lowest_slot(&self) -> Option<&LowestSlot> {
         match &self.data {
             CrdsData::LowestSlot(_, slots) => Some(slots),
+            _ => None,
+        }
+    }
+
+    pub fn duplicate_slot_proof(&self) -> Option<&CrdsDuplicateSlotProof> {
+        match &self.data {
+            CrdsData::DuplicateSlotProof(_, proof) => Some(proof),
             _ => None,
         }
     }
@@ -598,6 +659,7 @@ mod test {
                 CrdsValueLabel::EpochSlots(ix, _) => {
                     hits[*ix as usize + MAX_VOTES as usize + 6] = true
                 }
+                CrdsValueLabel::DuplicateSlotProof(),
             }
         }
         assert!(hits.iter().all(|x| *x));

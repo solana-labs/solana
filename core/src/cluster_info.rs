@@ -19,7 +19,7 @@ use crate::{
     crds_gossip_pull::{CrdsFilter, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
     crds_value::{
         self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, SnapshotHash,
-        Version, Vote, MAX_WALLCLOCK,
+        Version, Vote, MAX_WALLCLOCK, CrdsDuplicateSlotProof,
     },
     data_budget::DataBudget,
     epoch_slots::EpochSlots,
@@ -831,6 +831,42 @@ impl ClusterInfo {
                 "".to_string()
             }
         )
+    }
+
+    pub fn push_duplicate_shred_proof(&self, slot: Slot, proof: solana_ledger::blockstore_meta::DuplicateSlotProof) {
+        let now = timestamp();
+
+        let current_proofs = self.get_duplicate_slots_proofs(slot);
+        if current_proofs.len() >= 2 {
+            return;
+        }
+
+        let solana_ledger::blockstore_meta::DuplicateSlotProof {
+            shred1,
+            shred2,
+        } = proof;
+        for (i, shred) in vec![shred1, shred2].into_iter().enumerate() {
+            let crds_proof = CrdsDuplicateSlotProof::new(self.id(), now, shred, slot);
+            let entry = CrdsValue::new_signed(
+                CrdsData::DuplicateSlotProof(i as u8, crds_proof),
+                &self.keypair,
+            );
+
+            self.local_message_pending_push_queue
+                .write()
+                .unwrap()
+                .push((entry, now));
+        }
+    }
+
+    pub fn get_duplicate_slots_proofs(&self, slot: Slot) -> Vec<CrdsDuplicateSlotProof> {
+        self.gossip.read().unwrap()
+            .crds
+            .iter()
+            .filter_map(|(_label, value)| value.value.duplicate_slot_proof())
+            .filter(|value| value.slot == slot)
+            .cloned()
+            .collect()
     }
 
     pub fn push_lowest_slot(&self, id: Pubkey, min: Slot) {
