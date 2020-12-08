@@ -94,7 +94,11 @@ Add
 LimitNOFILE=500000
 ```
 to the `[Service]` section of your systemd service file, if you use one,
-otherwise add it to `/etc/systemd/system.conf`.
+otherwise add
+```
+DefaultLimitNOFILE=500000
+```
+to the `[Manager]` section of `/etc/systemd/system.conf`.
 ```bash
 sudo systemctl daemon-reload
 ```
