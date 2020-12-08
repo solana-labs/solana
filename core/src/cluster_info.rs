@@ -300,7 +300,7 @@ pub struct ClusterInfo {
     socket: UdpSocket,
     local_message_pending_push_queue: RwLock<Vec<(CrdsValue, u64)>>,
     contact_debug_interval: u64,
-    instance: RwLock<NodeInstance>,
+    instance: NodeInstance,
 }
 
 impl Default for ClusterInfo {
@@ -557,7 +557,7 @@ impl ClusterInfo {
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
             local_message_pending_push_queue: RwLock::new(vec![]),
             contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL,
-            instance: RwLock::new(NodeInstance::new(id, timestamp())),
+            instance: NodeInstance::new(id, timestamp()),
         };
         {
             let mut gossip = me.gossip.write().unwrap();
@@ -592,7 +592,7 @@ impl ClusterInfo {
                     .clone(),
             ),
             contact_debug_interval: self.contact_debug_interval,
-            instance: RwLock::new(NodeInstance::new(*new_id, timestamp())),
+            instance: NodeInstance::new(*new_id, timestamp()),
         }
     }
 
@@ -617,10 +617,9 @@ impl ClusterInfo {
     ) {
         let now = timestamp();
         self.my_contact_info.write().unwrap().wallclock = now;
-        self.instance.write().unwrap().update_wallclock(now);
         let entries: Vec<_> = vec![
             CrdsData::ContactInfo(self.my_contact_info()),
-            CrdsData::NodeInstance(self.instance.read().unwrap().clone()),
+            CrdsData::NodeInstance(self.instance.with_wallclock(now)),
         ]
         .into_iter()
         .map(|v| CrdsValue::new_signed(v, &self.keypair))
@@ -1811,7 +1810,7 @@ impl ClusterInfo {
                 let recycler = PacketsRecycler::default();
                 let crds_data = vec![
                     CrdsData::Version(Version::new(self.id())),
-                    CrdsData::NodeInstance(self.instance.read().unwrap().clone()),
+                    CrdsData::NodeInstance(self.instance.with_wallclock(timestamp())),
                 ];
                 for value in crds_data {
                     let value = CrdsValue::new_signed(value, &self.keypair);
@@ -2530,10 +2529,9 @@ impl ClusterInfo {
         });
         // Check if there is a duplicate instance of
         // this node with more recent timestamp.
-        let self_instance = self.instance.read().unwrap().clone();
         let check_duplicate_instance = |values: &[CrdsValue]| {
             for value in values {
-                if self_instance.check_duplicate(value) {
+                if self.instance.check_duplicate(value) {
                     return Err(Error::DuplicateNodeInstance);
                 }
             }
