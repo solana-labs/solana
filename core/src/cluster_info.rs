@@ -369,7 +369,11 @@ pub fn make_accounts_hashes_message(
 type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
+<<<<<<< HEAD
 #[frozen_abi(digest = "CXtFSsGZga9KPs22QhkTmeBd2KsJe34xdXrbRuW34xiS")]
+=======
+#[frozen_abi(digest = "6PpTdBvyX37y5ERokb8DejgKobpsuTbFJC39f8Eqz7Vy")]
+>>>>>>> 542198180... pushes node-instance along with version early in gossip
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 enum Protocol {
@@ -1765,9 +1769,14 @@ impl ClusterInfo {
                 let mut last_contact_info_trace = timestamp();
                 let mut adopt_shred_version = self.my_shred_version() == 0;
                 let recycler = PacketsRecycler::default();
-
-                let message = CrdsData::Version(Version::new(self.id()));
-                self.push_message(CrdsValue::new_signed(message, &self.keypair));
+                let crds_data = vec![
+                    CrdsData::Version(Version::new(self.id())),
+                    CrdsData::NodeInstance(self.instance.read().unwrap().clone()),
+                ];
+                for value in crds_data {
+                    let value = CrdsValue::new_signed(value, &self.keypair);
+                    self.push_message(value);
+                }
                 let mut generate_pull_requests = true;
                 loop {
                     let start = timestamp();
