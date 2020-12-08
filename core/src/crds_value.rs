@@ -77,6 +77,7 @@ pub enum CrdsData {
     EpochSlots(EpochSlotsIndex, EpochSlots),
     LegacyVersion(LegacyVersion),
     Version(Version),
+    NodeInstance(NodeInstance),
 }
 
 impl Sanitize for CrdsData {
@@ -105,6 +106,7 @@ impl Sanitize for CrdsData {
             }
             CrdsData::LegacyVersion(version) => version.sanitize(),
             CrdsData::Version(version) => version.sanitize(),
+            CrdsData::NodeInstance(node) => node.sanitize(),
         }
     }
 }
@@ -254,6 +256,53 @@ impl Version {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, AbiExample, Deserialize, Serialize)]
+pub struct NodeInstance {
+    from: Pubkey,
+    wallclock: u64,
+    timestamp: u64, // Timestamp when the instance was created.
+    token: u64,     // Randomly generated value at node instantiation.
+}
+
+impl NodeInstance {
+    pub fn new(pubkey: Pubkey, now: u64) -> Self {
+        Self {
+            from: pubkey,
+            wallclock: now,
+            timestamp: now,
+            token: rand::thread_rng().gen(),
+        }
+    }
+
+    pub fn update_wallclock(&mut self, now: u64) {
+        if self.wallclock < now {
+            self.wallclock = now;
+        }
+    }
+
+    // Returns true if the crds-value is a duplicate instance
+    // of this node, with a more recent timestamp.
+    pub fn check_duplicate(&self, other: &CrdsValue) -> bool {
+        match &other.data {
+            CrdsData::NodeInstance(other) => {
+                self.token != other.token
+                    && self.timestamp <= other.timestamp
+                    && self.from == other.from
+            }
+            _ => false,
+        }
+    }
+}
+
+impl Sanitize for NodeInstance {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        if self.wallclock >= MAX_WALLCLOCK {
+            return Err(SanitizeError::ValueOutOfBounds);
+        }
+        self.from.sanitize()
+    }
+}
+
 /// Type of the replicated value
 /// These are labels for values in a record that is associated with `Pubkey`
 #[derive(PartialEq, Hash, Eq, Clone, Debug)]
@@ -266,6 +315,7 @@ pub enum CrdsValueLabel {
     AccountsHashes(Pubkey),
     LegacyVersion(Pubkey),
     Version(Pubkey),
+    NodeInstance(Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -279,6 +329,7 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::AccountsHashes(_) => write!(f, "AccountsHashes({})", self.pubkey()),
             CrdsValueLabel::LegacyVersion(_) => write!(f, "LegacyVersion({})", self.pubkey()),
             CrdsValueLabel::Version(_) => write!(f, "Version({})", self.pubkey()),
+            CrdsValueLabel::NodeInstance(_) => write!(f, "NodeInstance({})", self.pubkey()),
         }
     }
 }
@@ -294,6 +345,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::AccountsHashes(p) => *p,
             CrdsValueLabel::LegacyVersion(p) => *p,
             CrdsValueLabel::Version(p) => *p,
+            CrdsValueLabel::NodeInstance(p) => *p,
         }
     }
 }
@@ -335,6 +387,7 @@ impl CrdsValue {
             CrdsData::EpochSlots(_, p) => p.wallclock,
             CrdsData::LegacyVersion(version) => version.wallclock,
             CrdsData::Version(version) => version.wallclock,
+            CrdsData::NodeInstance(node) => node.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -347,6 +400,7 @@ impl CrdsValue {
             CrdsData::EpochSlots(_, p) => p.from,
             CrdsData::LegacyVersion(version) => version.from,
             CrdsData::Version(version) => version.from,
+            CrdsData::NodeInstance(node) => node.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -359,6 +413,7 @@ impl CrdsValue {
             CrdsData::EpochSlots(ix, _) => CrdsValueLabel::EpochSlots(*ix, self.pubkey()),
             CrdsData::LegacyVersion(_) => CrdsValueLabel::LegacyVersion(self.pubkey()),
             CrdsData::Version(_) => CrdsValueLabel::Version(self.pubkey()),
+            CrdsData::NodeInstance(_) => CrdsValueLabel::NodeInstance(self.pubkey()),
         }
     }
     pub fn contact_info(&self) -> Option<&ContactInfo> {
@@ -424,6 +479,7 @@ impl CrdsValue {
     }
 
     /// Return all the possible labels for a record identified by Pubkey.
+<<<<<<< HEAD
     pub fn record_labels(key: &Pubkey) -> Vec<CrdsValueLabel> {
         let mut labels = vec![
             CrdsValueLabel::ContactInfo(*key),
@@ -432,6 +488,17 @@ impl CrdsValue {
             CrdsValueLabel::AccountsHashes(*key),
             CrdsValueLabel::LegacyVersion(*key),
             CrdsValueLabel::Version(*key),
+=======
+    pub fn record_labels(key: Pubkey) -> impl Iterator<Item = CrdsValueLabel> {
+        const CRDS_VALUE_LABEL_STUBS: [fn(Pubkey) -> CrdsValueLabel; 7] = [
+            CrdsValueLabel::ContactInfo,
+            CrdsValueLabel::LowestSlot,
+            CrdsValueLabel::SnapshotHashes,
+            CrdsValueLabel::AccountsHashes,
+            CrdsValueLabel::LegacyVersion,
+            CrdsValueLabel::Version,
+            CrdsValueLabel::NodeInstance,
+>>>>>>> 8cd5eb986... checks for duplicate validator instances using gossip
         ];
         labels.extend((0..MAX_VOTES).map(|ix| CrdsValueLabel::Vote(ix, *key)));
         labels.extend((0..MAX_EPOCH_SLOTS).map(|ix| CrdsValueLabel::EpochSlots(ix, *key)));
@@ -469,6 +536,15 @@ impl CrdsValue {
             .vote_index()
             .expect("all values must be votes")
     }
+
+    /// Returns true if, regardless of prunes, this crds-value
+    /// should be pushed to the receiving node.
+    pub fn should_force_push(&self, peer: &Pubkey) -> bool {
+        match &self.data {
+            CrdsData::NodeInstance(node) => node.from == *peer,
+            _ => false,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -482,7 +558,7 @@ mod test {
 
     #[test]
     fn test_labels() {
-        let mut hits = [false; 6 + MAX_VOTES as usize + MAX_EPOCH_SLOTS as usize];
+        let mut hits = [false; 7 + MAX_VOTES as usize + MAX_EPOCH_SLOTS as usize];
         // this method should cover all the possible labels
         for v in &CrdsValue::record_labels(&Pubkey::default()) {
             match v {
@@ -492,9 +568,10 @@ mod test {
                 CrdsValueLabel::AccountsHashes(_) => hits[3] = true,
                 CrdsValueLabel::LegacyVersion(_) => hits[4] = true,
                 CrdsValueLabel::Version(_) => hits[5] = true,
-                CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 6] = true,
+                CrdsValueLabel::NodeInstance(_) => hits[6] = true,
+                CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 7] = true,
                 CrdsValueLabel::EpochSlots(ix, _) => {
-                    hits[*ix as usize + MAX_VOTES as usize + 6] = true
+                    hits[*ix as usize + MAX_VOTES as usize + 7] = true
                 }
             }
         }
@@ -669,4 +746,106 @@ mod test {
         assert!(!value.verify());
         serialize_deserialize_value(value, correct_keypair);
     }
+<<<<<<< HEAD
+=======
+
+    #[test]
+    fn test_filter_current() {
+        let mut rng = rand::thread_rng();
+        let keys: Vec<_> = repeat_with(Keypair::new).take(16).collect();
+        let values: Vec<_> = repeat_with(|| {
+            let index = rng.gen_range(0, keys.len());
+            CrdsValue::new_rand(&mut rng, Some(&keys[index]))
+        })
+        .take(256)
+        .collect();
+        let mut currents = HashMap::new();
+        for value in filter_current(&values) {
+            // Assert that filtered values have unique labels.
+            assert!(currents.insert(value.label(), value).is_none());
+        }
+        // Assert that currents are the most recent version of each value.
+        let mut count = 0;
+        for value in &values {
+            let current_value = currents.get(&value.label()).unwrap();
+            match value.wallclock().cmp(&current_value.wallclock()) {
+                Ordering::Less => (),
+                Ordering::Equal => {
+                    assert_eq!(value, *current_value);
+                    count += 1;
+                }
+                Ordering::Greater => panic!("this should not happen!"),
+            }
+        }
+        assert_eq!(count, currents.len());
+        // Currently CrdsData::new_rand is only implemented for 5 different
+        // kinds and excludes Vote and EpochSlots, and so the unique labels
+        // cannot be more than 5 times number of keys.
+        assert!(currents.len() <= keys.len() * 5);
+    }
+
+    #[test]
+    fn test_check_duplicate_instance() {
+        fn make_crds_value(node: NodeInstance) -> CrdsValue {
+            CrdsValue::new_unsigned(CrdsData::NodeInstance(node))
+        }
+        let now = timestamp();
+        let mut rng = rand::thread_rng();
+        let pubkey = Pubkey::new_unique();
+        let node = NodeInstance::new(pubkey, now);
+        // Same token is not a duplicate.
+        assert!(!node.check_duplicate(&make_crds_value(NodeInstance {
+            from: pubkey,
+            wallclock: now + 1,
+            timestamp: now + 1,
+            token: node.token,
+        })));
+        // Older timestamp is not a duplicate.
+        assert!(!node.check_duplicate(&make_crds_value(NodeInstance {
+            from: pubkey,
+            wallclock: now + 1,
+            timestamp: now - 1,
+            token: rng.gen(),
+        })));
+        // Duplicate instance.
+        assert!(node.check_duplicate(&make_crds_value(NodeInstance {
+            from: pubkey,
+            wallclock: 0,
+            timestamp: now,
+            token: rng.gen(),
+        })));
+        // Different pubkey is not a duplicate.
+        assert!(!node.check_duplicate(&make_crds_value(NodeInstance {
+            from: Pubkey::new_unique(),
+            wallclock: now + 1,
+            timestamp: now + 1,
+            token: rng.gen(),
+        })));
+        // Differnt crds value is not a duplicate.
+        assert!(
+            !node.check_duplicate(&CrdsValue::new_unsigned(CrdsData::ContactInfo(
+                ContactInfo::new_rand(&mut rng, Some(pubkey))
+            )))
+        );
+    }
+
+    #[test]
+    fn test_should_force_push() {
+        let mut rng = rand::thread_rng();
+        let pubkey = Pubkey::new_unique();
+        assert!(
+            !CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_rand(
+                &mut rng,
+                Some(pubkey),
+            )))
+            .should_force_push(&pubkey)
+        );
+        let node = CrdsValue::new_unsigned(CrdsData::NodeInstance(NodeInstance::new(
+            pubkey,
+            timestamp(),
+        )));
+        assert!(node.should_force_push(&pubkey));
+        assert!(!node.should_force_push(&Pubkey::new_unique()));
+    }
+>>>>>>> 8cd5eb986... checks for duplicate validator instances using gossip
 }

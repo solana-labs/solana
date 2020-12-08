@@ -31,6 +31,11 @@ pub enum Error {
     BlockstoreError(blockstore::BlockstoreError),
     FsExtra(fs_extra::error::Error),
     SnapshotError(snapshot_utils::SnapshotError),
+<<<<<<< HEAD
+=======
+    WeightedIndexError(rand::distributions::weighted::WeightedError),
+    DuplicateNodeInstance,
+>>>>>>> 8cd5eb986... checks for duplicate validator instances using gossip
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
