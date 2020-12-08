@@ -247,7 +247,7 @@ impl CrdsGossipPush {
             for i in start..(start + push_fanout) {
                 let index = i % self.active_set.len();
                 let (peer, filter) = self.active_set.get_index(index).unwrap();
-                if !filter.contains(&origin) {
+                if !filter.contains(&origin) || value.should_force_push(peer) {
                     trace!("new_push_messages insert {} {:?}", *peer, value);
                     push_messages.entry(*peer).or_default().push(value.clone());
                     num_pushes += 1;
