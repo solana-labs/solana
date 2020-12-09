@@ -368,11 +368,6 @@ const SimulatedTransactionResponseValidator = jsonRpcResultAndContext(
   }),
 );
 
-type PartiallyDecodedInnerInstruction = {
-  index: number,
-  instructions: PartiallyDecodedInstruction[],
-};
-
 type ParsedInnerInstruction = {
   index: number,
   instructions: (ParsedInstruction | PartiallyDecodedInstruction)[],
