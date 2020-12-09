@@ -501,7 +501,7 @@ mod tests {
             result,
             Err(UnpackError::Archive(ref message))
                 if message == &format!(
-                    "too large archive: 1125899906842624 than limit: {}", MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE
+                    "too large archive: 1125899906842624 than limit: {}", MAX_SNAPSHOT_ARCHIVE_UNPACKED_APPARENT_SIZE
                 )
         );
     }
