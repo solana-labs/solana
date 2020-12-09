@@ -201,7 +201,10 @@ function StatusCard({
   const transaction = details?.data?.transaction?.transaction;
   const blockhash = transaction?.message.recentBlockhash;
   const isNonce = (() => {
-    if (!transaction) return false;
+    if (!transaction || transaction.message.instructions.length < 1) {
+      return false;
+    }
+
     const ix = intoTransactionInstruction(
       transaction,
       transaction.message.instructions[0]
