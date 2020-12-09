@@ -83,16 +83,16 @@ fn check_unpack_result(unpack_result: bool, path: String) -> Result<()> {
 fn unpack_archive<A: Read, P: AsRef<Path>, C>(
     archive: &mut Archive<A>,
     unpack_dir: P,
-    actual_limit_size: u64,
     apparent_limit_size: u64,
+    actual_limit_size: u64,
     limit_count: u64,
     entry_checker: C,
 ) -> Result<()>
 where
     C: Fn(&[&str], tar::EntryType) -> bool,
 {
-    let mut actual_total_size: u64 = 0;
     let mut apparent_total_size: u64 = 0;
+    let mut actual_total_size: u64 = 0;
     let mut total_count: u64 = 0;
 
     let mut total_entries = 0;
@@ -160,8 +160,8 @@ pub fn unpack_snapshot<A: Read, P: AsRef<Path>>(
     unpack_archive(
         archive,
         unpack_dir,
-        MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE,
         MAX_SNAPSHOT_ARCHIVE_UNPACKED_APPARENT_SIZE,
+        MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE,
         MAX_SNAPSHOT_ARCHIVE_UNPACKED_COUNT,
         is_valid_snapshot_archive_entry,
     )
