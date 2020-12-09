@@ -1071,7 +1071,7 @@ fn test_program_bpf_test_use_latest_executor() {
             &mint_keypair.pubkey(),
             &program_keypair.pubkey(),
             1,
-            elf.len() as u64 * 2,
+            elf.len() as u64 * 10, // needs to be big enough for second write
             &bpf_loader::id(),
         )],
         Some(&mint_keypair.pubkey()),
@@ -1167,7 +1167,7 @@ fn test_program_bpf_test_use_latest_executor2() {
             &mint_keypair.pubkey(),
             &program_keypair.pubkey(),
             1,
-            elf.len() as u64 * 2,
+            elf.len() as u64 * 10, // needs to be big enough for second write
             &bpf_loader::id(),
         )],
         Some(&mint_keypair.pubkey()),
