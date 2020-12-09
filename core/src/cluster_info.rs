@@ -298,15 +298,7 @@ pub struct ClusterInfo {
     stats: GossipStats,
     socket: UdpSocket,
     local_message_pending_push_queue: RwLock<Vec<(CrdsValue, u64)>>,
-<<<<<<< HEAD
-=======
-    contact_debug_interval: u64,
-<<<<<<< HEAD
-    instance: RwLock<NodeInstance>,
->>>>>>> 8cd5eb986... checks for duplicate validator instances using gossip
-=======
     instance: NodeInstance,
->>>>>>> 895d7d6a6... removes RwLock on ClusterInfo.instance
 }
 
 impl Default for ClusterInfo {
@@ -562,15 +554,7 @@ impl ClusterInfo {
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
             local_message_pending_push_queue: RwLock::new(vec![]),
-<<<<<<< HEAD
-=======
-            contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL,
-<<<<<<< HEAD
-            instance: RwLock::new(NodeInstance::new(id, timestamp())),
->>>>>>> 8cd5eb986... checks for duplicate validator instances using gossip
-=======
             instance: NodeInstance::new(id, timestamp()),
->>>>>>> 895d7d6a6... removes RwLock on ClusterInfo.instance
         };
         {
             let mut gossip = me.gossip.write().unwrap();
@@ -604,15 +588,7 @@ impl ClusterInfo {
                     .unwrap()
                     .clone(),
             ),
-<<<<<<< HEAD
-=======
-            contact_debug_interval: self.contact_debug_interval,
-<<<<<<< HEAD
-            instance: RwLock::new(NodeInstance::new(*new_id, timestamp())),
->>>>>>> 8cd5eb986... checks for duplicate validator instances using gossip
-=======
             instance: NodeInstance::new(*new_id, timestamp()),
->>>>>>> 895d7d6a6... removes RwLock on ClusterInfo.instance
         }
     }
 
