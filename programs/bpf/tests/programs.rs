@@ -22,12 +22,10 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
-    loader_instruction,
     message::Message,
-    process_instruction::{BpfComputeBudget, MockInvokeContext},
+    process_instruction::MockInvokeContext,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
-    system_instruction,
     sysvar::{clock, fees, rent, slot_hashes, stake_history},
     transaction::{Transaction, TransactionError},
 };
@@ -69,6 +67,7 @@ fn read_bpf_program(name: &str) -> Vec<u8> {
     elf
 }
 
+#[cfg(feature = "bpf_rust")]
 fn write_bpf_program(
     bank_client: &BankClient,
     loader_id: &Pubkey,
@@ -76,6 +75,8 @@ fn write_bpf_program(
     program_keypair: &Keypair,
     elf: &[u8],
 ) {
+    use solana_sdk::loader_instruction;
+
     let chunk_size = 256; // Size of chunk just needs to fit into tx
     let mut offset = 0;
     for chunk in elf.chunks(chunk_size) {
@@ -477,6 +478,7 @@ fn test_program_bpf_invoke() {
     const TEST_PPROGRAM_NOT_EXECUTABLE: u8 = 4;
     const TEST_EMPTY_ACCOUNTS_SLICE: u8 = 5;
     const TEST_CAP_SEEDS: u8 = 6;
+    const TEST_CAP_SIGNERS: u8 = 7;
 
     #[allow(dead_code)]
     #[derive(Debug)]
@@ -778,6 +780,33 @@ fn test_program_bpf_invoke() {
             TransactionError::InstructionError(0, InstructionError::MaxSeedLengthExceeded)
         );
 
+        let instruction = Instruction::new(
+            invoke_program_id,
+            &[TEST_CAP_SIGNERS, bump_seed1, bump_seed2, bump_seed3],
+            account_metas.clone(),
+        );
+        let message = Message::new(&[instruction], Some(&mint_pubkey));
+        let tx = Transaction::new(
+            &[
+                &mint_keypair,
+                &argument_keypair,
+                &invoked_argument_keypair,
+                &from_keypair,
+            ],
+            message.clone(),
+            bank.last_blockhash(),
+        );
+        let (result, inner_instructions) = process_transaction_and_record_inner(&bank, tx);
+        let invoked_programs: Vec<Pubkey> = inner_instructions[0]
+            .iter()
+            .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
+            .collect();
+        assert_eq!(invoked_programs, vec![]);
+        assert_eq!(
+            result.unwrap_err(),
+            TransactionError::InstructionError(0, InstructionError::Custom(194969602))
+        );
+
         // Check final state
 
         assert_eq!(43, bank.get_balance(&derived_key1));
@@ -890,6 +919,8 @@ fn test_program_bpf_ro_modify() {
 #[cfg(feature = "bpf_rust")]
 #[test]
 fn test_program_bpf_call_depth() {
+    use solana_sdk::process_instruction::BpfComputeBudget;
+
     solana_logger::setup();
 
     println!("Test program: solana_bpf_rust_call_depth");
@@ -1043,6 +1074,8 @@ fn test_program_bpf_instruction_introspection() {
 #[cfg(feature = "bpf_rust")]
 #[test]
 fn test_program_bpf_test_use_latest_executor() {
+    use solana_sdk::{loader_instruction, system_instruction};
+
     solana_logger::setup();
 
     let GenesisConfigInfo {
@@ -1133,6 +1166,8 @@ fn test_program_bpf_test_use_latest_executor() {
 #[cfg(feature = "bpf_rust")]
 #[test]
 fn test_program_bpf_test_use_latest_executor2() {
+    use solana_sdk::{loader_instruction, system_instruction};
+
     solana_logger::setup();
 
     let GenesisConfigInfo {
