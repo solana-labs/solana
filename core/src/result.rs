@@ -31,6 +31,7 @@ pub enum Error {
     BlockstoreError(blockstore::BlockstoreError),
     FsExtra(fs_extra::error::Error),
     SnapshotError(snapshot_utils::SnapshotError),
+    DuplicateNodeInstance,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
