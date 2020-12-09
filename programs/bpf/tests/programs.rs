@@ -23,11 +23,7 @@ use solana_sdk::{
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     message::Message,
-<<<<<<< HEAD
-    process_instruction::{BpfComputeBudget, MockInvokeContext},
-=======
-    process_instruction::{InvokeContext, MockInvokeContext},
->>>>>>> e1a4251b0... Cap CPI signers (#14021)
+    process_instruction::MockInvokeContext,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     sysvar::{clock, fees, rent, slot_hashes, stake_history},
