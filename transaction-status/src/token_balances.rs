@@ -36,9 +36,9 @@ fn is_token_program(program_id: &Pubkey) -> bool {
     program_id == &spl_token_id_v2_0()
 }
 
-fn get_mint_owner_and_decimals(bank: &Bank, mint: &Pubkey) -> Option<(Pubkey, u8)> {
+fn get_mint_decimals(bank: &Bank, mint: &Pubkey) -> Option<u8> {
     if mint == &spl_token_v2_0_native_mint() {
-        Some((spl_token_id_v2_0(), spl_token_v2_0::native_mint::DECIMALS))
+        Some(spl_token_v2_0::native_mint::DECIMALS)
     } else {
         let mint_account = bank.get_account(mint)?;
 
@@ -46,11 +46,15 @@ fn get_mint_owner_and_decimals(bank: &Bank, mint: &Pubkey) -> Option<(Pubkey, u8
             .map(|mint| mint.decimals)
             .ok()?;
 
-        Some((mint_account.owner, decimals))
+        Some(decimals)
     }
 }
 
-pub fn collect_token_balances(bank: &Bank, batch: &TransactionBatch) -> TransactionTokenBalances {
+pub fn collect_token_balances(
+    bank: &Bank,
+    batch: &TransactionBatch,
+    mut mint_decimals: &mut HashMap<Pubkey, u8>,
+) -> TransactionTokenBalances {
     let mut balances: TransactionTokenBalances = vec![];
 
     for (_, transaction) in OrderedIterator::new(batch.transactions(), batch.iteration_order()) {
@@ -69,7 +73,9 @@ pub fn collect_token_balances(bank: &Bank, batch: &TransactionBatch) -> Transact
         let mut transaction_balances: Vec<TransactionTokenBalance> = vec![];
         for index in fetch_account_hash.keys() {
             if let Some(account_id) = account_keys.get(*index as usize) {
-                if let Some(results) = collect_token_balance_from_account(&bank, account_id) {
+                if let Some(results) =
+                    collect_token_balance_from_account(&bank, account_id, &mut mint_decimals)
+                {
                     let (mint, ui_token_amount) = results;
 
                     transaction_balances.push(TransactionTokenBalance {
@@ -88,6 +94,7 @@ pub fn collect_token_balances(bank: &Bank, batch: &TransactionBatch) -> Transact
 pub fn collect_token_balance_from_account(
     bank: &Bank,
     account_id: &Pubkey,
+    mint_decimals: &mut HashMap<Pubkey, u8>,
 ) -> Option<(String, UiTokenAmount)> {
     let account = bank.get_account(account_id)?;
 
@@ -95,7 +102,11 @@ pub fn collect_token_balance_from_account(
     let mint_string = &token_account.mint.to_string();
     let mint = &Pubkey::from_str(&mint_string).unwrap_or_default();
 
-    let (_, decimals) = get_mint_owner_and_decimals(bank, &mint)?;
+    let decimals = mint_decimals.get(&mint).cloned().or_else(|| {
+        let decimals = get_mint_decimals(bank, &mint)?;
+        mint_decimals.insert(*mint, decimals);
+        Some(decimals)
+    })?;
 
     Some((
         mint_string.to_string(),

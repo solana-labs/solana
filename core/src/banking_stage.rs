@@ -42,7 +42,9 @@ use solana_transaction_status::token_balances::{
     collect_token_balances, TransactionTokenBalancesSet,
 };
 use std::{
-    cmp, env,
+    cmp,
+    collections::HashMap,
+    env,
     net::UdpSocket,
     sync::atomic::AtomicBool,
     sync::mpsc::Receiver,
@@ -534,8 +536,10 @@ impl BankingStage {
             vec![]
         };
 
+        let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
+
         let pre_token_balances = if transaction_status_sender.is_some() {
-            collect_token_balances(&bank, &batch)
+            collect_token_balances(&bank, &batch, &mut mint_decimals)
         } else {
             vec![]
         };
@@ -584,7 +588,7 @@ impl BankingStage {
             bank_utils::find_and_send_votes(txs, &tx_results, Some(gossip_vote_sender));
             if let Some(sender) = transaction_status_sender {
                 let post_balances = bank.collect_balances(batch);
-                let post_token_balances = collect_token_balances(&bank, &batch);
+                let post_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
                 send_transaction_status_batch(
                     bank.clone(),
                     batch.transactions(),
