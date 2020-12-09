@@ -260,16 +260,7 @@ pub struct ClusterInfo {
     id: Pubkey,
     stats: GossipStats,
     socket: UdpSocket,
-<<<<<<< HEAD
-=======
-    local_message_pending_push_queue: RwLock<Vec<(CrdsValue, u64)>>,
-    contact_debug_interval: u64,
-<<<<<<< HEAD
-    instance: RwLock<NodeInstance>,
->>>>>>> 8cd5eb986... checks for duplicate validator instances using gossip
-=======
     instance: NodeInstance,
->>>>>>> 895d7d6a6... removes RwLock on ClusterInfo.instance
 }
 
 impl Default for ClusterInfo {
@@ -373,11 +364,7 @@ pub fn make_accounts_hashes_message(
 type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-<<<<<<< HEAD
-#[frozen_abi(digest = "CXtFSsGZga9KPs22QhkTmeBd2KsJe34xdXrbRuW34xiS")]
-=======
-#[frozen_abi(digest = "6PpTdBvyX37y5ERokb8DejgKobpsuTbFJC39f8Eqz7Vy")]
->>>>>>> 542198180... pushes node-instance along with version early in gossip
+#[frozen_abi(digest = "GrTTbzFi3Psb1Mn5tdxj5B1szC2647PYZv2Zdhevxrtz")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 enum Protocol {
@@ -507,16 +494,7 @@ impl ClusterInfo {
             id,
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
-<<<<<<< HEAD
-=======
-            local_message_pending_push_queue: RwLock::new(vec![]),
-            contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL,
-<<<<<<< HEAD
-            instance: RwLock::new(NodeInstance::new(id, timestamp())),
->>>>>>> 8cd5eb986... checks for duplicate validator instances using gossip
-=======
             instance: NodeInstance::new(id, timestamp()),
->>>>>>> 895d7d6a6... removes RwLock on ClusterInfo.instance
         };
         {
             let mut gossip = me.gossip.write().unwrap();
@@ -544,21 +522,7 @@ impl ClusterInfo {
             id: *new_id,
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
-<<<<<<< HEAD
-=======
-            local_message_pending_push_queue: RwLock::new(
-                self.local_message_pending_push_queue
-                    .read()
-                    .unwrap()
-                    .clone(),
-            ),
-            contact_debug_interval: self.contact_debug_interval,
-<<<<<<< HEAD
-            instance: RwLock::new(NodeInstance::new(*new_id, timestamp())),
->>>>>>> 8cd5eb986... checks for duplicate validator instances using gossip
-=======
             instance: NodeInstance::new(*new_id, timestamp()),
->>>>>>> 895d7d6a6... removes RwLock on ClusterInfo.instance
         }
     }
 
@@ -579,17 +543,6 @@ impl ClusterInfo {
     ) {
         let now = timestamp();
         self.my_contact_info.write().unwrap().wallclock = now;
-<<<<<<< HEAD
-<<<<<<< HEAD
-        let entry =
-            CrdsValue::new_signed(CrdsData::ContactInfo(self.my_contact_info()), &self.keypair);
-        let mut w_gossip = self.gossip.write().unwrap();
-        w_gossip.refresh_push_active_set(stakes, gossip_validators);
-        w_gossip.process_push_message(&self.id(), vec![entry], now);
-=======
-        self.instance.write().unwrap().update_wallclock(now);
-=======
->>>>>>> 895d7d6a6... removes RwLock on ClusterInfo.instance
         let entries: Vec<_> = vec![
             CrdsData::ContactInfo(self.my_contact_info()),
             CrdsData::NodeInstance(self.instance.with_wallclock(now)),
@@ -597,18 +550,9 @@ impl ClusterInfo {
         .into_iter()
         .map(|v| CrdsValue::new_signed(v, &self.keypair))
         .collect();
-        {
-            let mut local_message_pending_push_queue =
-                self.local_message_pending_push_queue.write().unwrap();
-            for entry in entries {
-                local_message_pending_push_queue.push((entry, now));
-            }
-        }
-        self.gossip
-            .write()
-            .unwrap()
-            .refresh_push_active_set(stakes, gossip_validators);
->>>>>>> 8cd5eb986... checks for duplicate validator instances using gossip
+        let mut w_gossip = self.gossip.write().unwrap();
+        w_gossip.refresh_push_active_set(stakes, gossip_validators);
+        w_gossip.process_push_message(&self.id(), entries, now);
     }
 
     // TODO kill insert_info, only used by tests
@@ -2436,7 +2380,7 @@ impl ClusterInfo {
         feature_set: Option<&FeatureSet>,
         epoch_time_ms: u64,
     ) -> Result<()> {
-        let _st = ScopedTimer::from(&self.stats.process_gossip_packets_time);
+        let mut timer = Measure::start("process_gossip_packets_time");
         let packets: Vec<_> = thread_pool.install(|| {
             requests
                 .into_par_iter()
@@ -2498,6 +2442,9 @@ impl ClusterInfo {
             response_sender,
             feature_set,
         );
+        self.stats
+            .process_gossip_packets_time
+            .add_measure(&mut timer);
         Ok(())
     }
 
@@ -2788,23 +2735,10 @@ impl ClusterInfo {
                         &response_sender,
                         &thread_pool,
                         &mut last_print,
-<<<<<<< HEAD
-                    );
-                    if exit.load(Ordering::Relaxed) {
-                        return;
-                    }
-                    if e.is_err() {
-                        let r_gossip = self.gossip.read().unwrap();
-                        debug!(
-                            "{}: run_listen timeout, table size: {}",
-                            self.id(),
-                            r_gossip.crds.table.len()
-                        );
-=======
                     ) {
                         match err {
                             Error::RecvTimeoutError(_) => {
-                                let table_size = self.gossip.read().unwrap().crds.len();
+                                let table_size = self.gossip.read().unwrap().crds.table.len();
                                 debug!(
                                     "{}: run_listen timeout, table size: {}",
                                     self.id(),
@@ -2823,7 +2757,6 @@ impl ClusterInfo {
                             }
                             _ => error!("gossip run_listen failed: {}", err),
                         }
->>>>>>> 8cd5eb986... checks for duplicate validator instances using gossip
                     }
                     thread_mem_usage::datapoint("solana-listen");
                 }

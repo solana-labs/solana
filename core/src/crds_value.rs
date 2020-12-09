@@ -2,6 +2,7 @@ use crate::contact_info::ContactInfo;
 use crate::deprecated;
 use crate::epoch_slots::EpochSlots;
 use bincode::{serialize, serialized_size};
+use rand::Rng;
 use solana_sdk::sanitize::{Sanitize, SanitizeError};
 use solana_sdk::timing::timestamp;
 use solana_sdk::{
@@ -481,7 +482,6 @@ impl CrdsValue {
     }
 
     /// Return all the possible labels for a record identified by Pubkey.
-<<<<<<< HEAD
     pub fn record_labels(key: &Pubkey) -> Vec<CrdsValueLabel> {
         let mut labels = vec![
             CrdsValueLabel::ContactInfo(*key),
@@ -490,17 +490,7 @@ impl CrdsValue {
             CrdsValueLabel::AccountsHashes(*key),
             CrdsValueLabel::LegacyVersion(*key),
             CrdsValueLabel::Version(*key),
-=======
-    pub fn record_labels(key: Pubkey) -> impl Iterator<Item = CrdsValueLabel> {
-        const CRDS_VALUE_LABEL_STUBS: [fn(Pubkey) -> CrdsValueLabel; 7] = [
-            CrdsValueLabel::ContactInfo,
-            CrdsValueLabel::LowestSlot,
-            CrdsValueLabel::SnapshotHashes,
-            CrdsValueLabel::AccountsHashes,
-            CrdsValueLabel::LegacyVersion,
-            CrdsValueLabel::Version,
-            CrdsValueLabel::NodeInstance,
->>>>>>> 8cd5eb986... checks for duplicate validator instances using gossip
+            CrdsValueLabel::NodeInstance(*key),
         ];
         labels.extend((0..MAX_VOTES).map(|ix| CrdsValueLabel::Vote(ix, *key)));
         labels.extend((0..MAX_EPOCH_SLOTS).map(|ix| CrdsValueLabel::EpochSlots(ix, *key)));
@@ -748,43 +738,6 @@ mod test {
         assert!(!value.verify());
         serialize_deserialize_value(value, correct_keypair);
     }
-<<<<<<< HEAD
-=======
-
-    #[test]
-    fn test_filter_current() {
-        let mut rng = rand::thread_rng();
-        let keys: Vec<_> = repeat_with(Keypair::new).take(16).collect();
-        let values: Vec<_> = repeat_with(|| {
-            let index = rng.gen_range(0, keys.len());
-            CrdsValue::new_rand(&mut rng, Some(&keys[index]))
-        })
-        .take(256)
-        .collect();
-        let mut currents = HashMap::new();
-        for value in filter_current(&values) {
-            // Assert that filtered values have unique labels.
-            assert!(currents.insert(value.label(), value).is_none());
-        }
-        // Assert that currents are the most recent version of each value.
-        let mut count = 0;
-        for value in &values {
-            let current_value = currents.get(&value.label()).unwrap();
-            match value.wallclock().cmp(&current_value.wallclock()) {
-                Ordering::Less => (),
-                Ordering::Equal => {
-                    assert_eq!(value, *current_value);
-                    count += 1;
-                }
-                Ordering::Greater => panic!("this should not happen!"),
-            }
-        }
-        assert_eq!(count, currents.len());
-        // Currently CrdsData::new_rand is only implemented for 5 different
-        // kinds and excludes Vote and EpochSlots, and so the unique labels
-        // cannot be more than 5 times number of keys.
-        assert!(currents.len() <= keys.len() * 5);
-    }
 
     #[test]
     fn test_check_duplicate_instance() {
@@ -861,5 +814,4 @@ mod test {
         assert!(node.should_force_push(&pubkey));
         assert!(!node.should_force_push(&Pubkey::new_unique()));
     }
->>>>>>> 8cd5eb986... checks for duplicate validator instances using gossip
 }
