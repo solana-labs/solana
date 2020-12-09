@@ -27,12 +27,28 @@ pub enum UnpackError {
 
 pub type Result<T> = std::result::Result<T, UnpackError>;
 
-const MAX_SNAPSHOT_ARCHIVE_UNPACKED_SIZE: u64 = 500 * 1024 * 1024 * 1024; // 500 GiB
+// 64 TiB; some safe margin to the max 128 TiB in amd64 linux userspace VmSize
+// (ref: https://unix.stackexchange.com/a/386555/364236)
+// note that this is directly related to the mmaped data size
+// so protect against insane value
+// This is the file size including holes for sparse files
+const MAX_SNAPSHOT_ARCHIVE_UNPACKED_APPARENT_SIZE: u64 = 64 * 1024 * 1024 * 1024 * 1024;
+
+// 4 TiB;
+// This is the actually consumed disk usage for sparse files
+const MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE: u64 = 4 * 1024 * 1024 * 1024 * 1024;
+
 const MAX_SNAPSHOT_ARCHIVE_UNPACKED_COUNT: u64 = 500_000;
 pub const MAX_GENESIS_ARCHIVE_UNPACKED_SIZE: u64 = 10 * 1024 * 1024; // 10 MiB
 const MAX_GENESIS_ARCHIVE_UNPACKED_COUNT: u64 = 100;
 
 fn checked_total_size_sum(total_size: u64, entry_size: u64, limit_size: u64) -> Result<u64> {
+    trace!(
+        "checked_total_size_sum: {} + {} < {}",
+        total_size,
+        entry_size,
+        limit_size,
+    );
     let total_size = total_size.saturating_add(entry_size);
     if total_size > limit_size {
         return Err(UnpackError::Archive(format!(
@@ -67,14 +83,16 @@ fn check_unpack_result(unpack_result: bool, path: String) -> Result<()> {
 fn unpack_archive<A: Read, P: AsRef<Path>, C>(
     archive: &mut Archive<A>,
     unpack_dir: P,
-    limit_size: u64,
+    apparent_limit_size: u64,
+    actual_limit_size: u64,
     limit_count: u64,
     entry_checker: C,
 ) -> Result<()>
 where
     C: Fn(&[&str], tar::EntryType) -> bool,
 {
-    let mut total_size: u64 = 0;
+    let mut apparent_total_size: u64 = 0;
+    let mut actual_total_size: u64 = 0;
     let mut total_count: u64 = 0;
 
     let mut total_entries = 0;
@@ -108,7 +126,16 @@ where
                 entry.header().entry_type(),
             )));
         }
-        total_size = checked_total_size_sum(total_size, entry.header().size()?, limit_size)?;
+        apparent_total_size = checked_total_size_sum(
+            apparent_total_size,
+            entry.header().size()?,
+            apparent_limit_size,
+        )?;
+        actual_total_size = checked_total_size_sum(
+            actual_total_size,
+            entry.header().entry_size()?,
+            actual_limit_size,
+        )?;
         total_count = checked_total_count_increment(total_count, limit_count)?;
 
         // unpack_in does its own sanitization
@@ -133,7 +160,8 @@ pub fn unpack_snapshot<A: Read, P: AsRef<Path>>(
     unpack_archive(
         archive,
         unpack_dir,
-        MAX_SNAPSHOT_ARCHIVE_UNPACKED_SIZE,
+        MAX_SNAPSHOT_ARCHIVE_UNPACKED_APPARENT_SIZE,
+        MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE,
         MAX_SNAPSHOT_ARCHIVE_UNPACKED_COUNT,
         is_valid_snapshot_archive_entry,
     )
@@ -218,6 +246,7 @@ fn unpack_genesis<A: Read, P: AsRef<Path>>(
     unpack_archive(
         archive,
         unpack_dir,
+        max_genesis_archive_unpacked_size,
         max_genesis_archive_unpacked_size,
         MAX_GENESIS_ARCHIVE_UNPACKED_COUNT,
         is_valid_genesis_archive_entry,
@@ -468,7 +497,13 @@ mod tests {
         let mut archive = Builder::new(Vec::new());
         archive.append(&header, data).unwrap();
         let result = finalize_and_unpack_snapshot(archive);
-        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message == &format!("too large archive: 1125899906842624 than limit: {}", MAX_SNAPSHOT_ARCHIVE_UNPACKED_SIZE));
+        assert_matches!(
+            result,
+            Err(UnpackError::Archive(ref message))
+                if message == &format!(
+                    "too large archive: 1125899906842624 than limit: {}", MAX_SNAPSHOT_ARCHIVE_UNPACKED_APPARENT_SIZE
+                )
+        );
     }
 
     #[test]
@@ -479,12 +514,21 @@ mod tests {
 
     #[test]
     fn test_archive_checked_total_size_sum() {
-        let result = checked_total_size_sum(500, 500, MAX_SNAPSHOT_ARCHIVE_UNPACKED_SIZE);
+        let result = checked_total_size_sum(500, 500, MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE);
         assert_matches!(result, Ok(1000));
 
-        let result =
-            checked_total_size_sum(u64::max_value() - 2, 2, MAX_SNAPSHOT_ARCHIVE_UNPACKED_SIZE);
-        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message == &format!("too large archive: 18446744073709551615 than limit: {}", MAX_SNAPSHOT_ARCHIVE_UNPACKED_SIZE));
+        let result = checked_total_size_sum(
+            u64::max_value() - 2,
+            2,
+            MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE,
+        );
+        assert_matches!(
+            result,
+            Err(UnpackError::Archive(ref message))
+                if message == &format!(
+                    "too large archive: 18446744073709551615 than limit: {}", MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE
+                )
+        );
     }
 
     #[test]
@@ -494,6 +538,10 @@ mod tests {
 
         let result =
             checked_total_count_increment(999_999_999_999, MAX_SNAPSHOT_ARCHIVE_UNPACKED_COUNT);
-        assert_matches!(result, Err(UnpackError::Archive(ref message)) if message == "too many files in snapshot: 1000000000000");
+        assert_matches!(
+            result,
+            Err(UnpackError::Archive(ref message))
+                if message == "too many files in snapshot: 1000000000000"
+        );
     }
 }
