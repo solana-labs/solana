@@ -375,7 +375,7 @@ type PartiallyDecodedInnerInstruction = {
 
 type ParsedInnerInstruction = {
   index: number,
-  instructions: (ParsedInstruction | PartiallyDecodedInnerInstruction)[],
+  instructions: (ParsedInstruction | PartiallyDecodedInstruction)[],
 };
 
 /**

@@ -1006,16 +1006,11 @@ test('get parsed confirmed transaction coerces public keys of inner instructions
 
   const connection = new Connection(url);
 
-  const confirmedTransaction =
+  const confirmedTransaction: TransactionSignature =
     '4ADvAUQYxkh4qWKYE9QLW8gCLomGG94QchDLG4quvpBz1WqARYvzWQDDitKduAKspuy1DjcbnaDAnCAfnKpJYs48';
 
-  mockRpc.push([
-    url,
-    {
-      method: 'getConfirmedTransaction',
-      params: [confirmedTransaction, 'jsonParsed'],
-    },
-    {
+  function getMockData(inner) {
+    return {
       error: null,
       result: {
         slot: 353050305,
@@ -1050,46 +1045,69 @@ test('get parsed confirmed transaction coerces public keys of inner instructions
           innerInstructions: [
             {
               index: 0,
-              instructions: [
-                {
-                  parsed: {},
-                  program: 'spl-token',
-                  programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
-                },
-                {
-                  accounts: [
-                    'EeJqWk5pczNjsqqY3jia9xfFNG1dD68te4s8gsdCuEk7',
-                    '6tVrjJhFm5SAvvdh6tysjotQurCSELpxuW3JaAAYeC1m',
-                  ],
-                  data: 'ai3535',
-                  programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
-                },
-              ],
+              instructions: [inner],
             },
           ],
           status: {Ok: null},
           err: null,
         },
       },
+    };
+  }
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getConfirmedTransaction',
+      params: [confirmedTransaction, 'jsonParsed'],
     },
+    getMockData({
+      parsed: {},
+      program: 'spl-token',
+      programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+    }),
   ]);
 
   const result = await connection.getParsedConfirmedTransaction(
     confirmedTransaction,
   );
 
-  expect(
-    result.meta.innerInstructions[0].instructions[0].programId,
-  ).toBeInstanceOf(PublicKey);
-  expect(
-    result.meta.innerInstructions[0].instructions[1].programId,
-  ).toBeInstanceOf(PublicKey);
-  expect(
-    result.meta.innerInstructions[0].instructions[1].accounts[0],
-  ).toBeInstanceOf(PublicKey);
-  expect(
-    result.meta.innerInstructions[0].instructions[1].accounts[1],
-  ).toBeInstanceOf(PublicKey);
+  if (
+    result !== null &&
+    result.meta &&
+    result.meta.innerInstructions !== undefined &&
+    result.meta.innerInstructions.length > 0
+  ) {
+    expect(
+      result.meta.innerInstructions[0].instructions[0].programId,
+    ).toBeInstanceOf(PublicKey);
+  }
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getConfirmedTransaction',
+      params: [confirmedTransaction, 'jsonParsed'],
+    },
+    getMockData({
+      accounts: [
+        'EeJqWk5pczNjsqqY3jia9xfFNG1dD68te4s8gsdCuEk7',
+        '6tVrjJhFm5SAvvdh6tysjotQurCSELpxuW3JaAAYeC1m',
+      ],
+      data: 'ai3535',
+      programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+    }),
+  ]);
+
+  //$FlowFixMe
+  const result2 = await connection.getParsedConfirmedTransaction(
+    confirmedTransaction,
+  );
+
+  let instruction = result2.meta.innerInstructions[0].instructions[0];
+  expect(instruction.programId).toBeInstanceOf(PublicKey);
+  expect(instruction.accounts[0]).toBeInstanceOf(PublicKey);
+  expect(instruction.accounts[1]).toBeInstanceOf(PublicKey);
 });
 
 test('get confirmed block', async () => {
