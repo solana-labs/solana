@@ -12,8 +12,11 @@ use solana_runtime::{
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
 };
 use solana_sdk::{
-    commitment_config::CommitmentConfig, native_token::sol_to_lamports, rpc_port,
-    signature::Signer, system_transaction,
+    commitment_config::CommitmentConfig,
+    native_token::sol_to_lamports,
+    rpc_port,
+    signature::{Keypair, Signer},
+    system_transaction,
 };
 use std::{
     net::{IpAddr, SocketAddr},
@@ -30,8 +33,8 @@ use systemstat::Ipv4Addr;
 fn test_rpc_client() {
     solana_logger::setup();
 
-    let test_validator = TestValidator::with_no_fees();
-    let alice = test_validator.mint_keypair();
+    let alice = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(alice.pubkey());
 
     let bob_pubkey = solana_sdk::pubkey::new_rand();
 
