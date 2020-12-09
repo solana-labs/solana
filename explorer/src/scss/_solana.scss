@@ -193,7 +193,19 @@ h4.slot-pill {
   height: 24px;
 }
 
-.address-truncate {
+.forced-truncate {
+  .address-truncate {
+    max-width: 180px;
+    display: inline-block;
+    vertical-align: bottom;
+
+    @include media-breakpoint-down(sm) {
+      max-width: 120px;
+    }
+  }
+}
+
+.address-truncate, .signature-truncate {
   @include media-breakpoint-down(md) {
     max-width: 180px;
     display: inline-block;
@@ -202,6 +214,57 @@ h4.slot-pill {
 
   @include media-breakpoint-down(sm) {
     max-width: 120px;
+  }
+}
+
+p.tree,
+ul.tree,
+ul.tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+p.tree span.c-pointer {
+  color: $primary-dark;
+}
+
+ul.tree ul {
+  margin-left: 1.0em;
+}
+
+ul.tree li {
+  margin-left: 0.35em;
+  border-left: thin solid #808080;
+}
+
+ul.tree li:last-child {
+  border-left: none;
+}
+
+ul.tree li:before {
+  width: 1.4em;
+  height: 0.6em;
+  margin-right: 0.1em;
+  vertical-align: top;
+  border-bottom: thin solid #808080;
+  content: "";
+  display: inline-block;
+}
+
+ul.tree li:last-child:before {
+  border-left: thin solid #808080;
+}
+
+div.inner-cards {
+  margin: 1.5rem;
+
+  .card {
+    background-color: $gray-700-dark;
+  }
+
+  .table td {
+    border-top: 1px solid $gray-800-dark;
   }
 }
 

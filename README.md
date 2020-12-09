@@ -29,7 +29,7 @@ On Linux systems you may need to install libssl-dev, pkg-config, zlib1g-dev, etc
 
 ```bash
 $ sudo apt-get update
-$ sudo apt-get install libssl-dev libudev-dev pkg-config zlib1g-dev llvm clang
+$ sudo apt-get install libssl-dev libudev-dev pkg-config zlib1g-dev llvm clang make
 ```
 
 ## **2. Download the source code.**

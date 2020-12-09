@@ -1,104 +1,190 @@
-use crate::{
-    cluster_info::Node,
-    contact_info::ContactInfo,
-    gossip_service::discover_cluster,
-    validator::{Validator, ValidatorConfig},
+use {
+    crate::{
+        cluster_info::Node,
+        gossip_service::discover_cluster,
+        validator::{Validator, ValidatorConfig},
+    },
+    solana_ledger::create_new_tmp_ledger,
+    solana_sdk::{
+        fee_calculator::FeeRateGovernor,
+        hash::Hash,
+        native_token::sol_to_lamports,
+        pubkey::Pubkey,
+        rent::Rent,
+        signature::{Keypair, Signer},
+    },
+    std::{fs::remove_dir_all, net::SocketAddr, path::PathBuf, sync::Arc},
 };
-use solana_ledger::create_new_tmp_ledger;
-use solana_sdk::{
-    hash::Hash,
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-};
-use std::{path::PathBuf, sync::Arc};
+
+pub struct TestValidatorConfig {
+    pub fee_rate_governor: FeeRateGovernor,
+    pub mint_lamports: u64,
+    pub rent: Rent,
+    pub validator_identity_keypair: Keypair,
+    pub validator_identity_lamports: u64,
+    pub validator_stake_lamports: u64,
+}
+
+impl Default for TestValidatorConfig {
+    fn default() -> Self {
+        Self {
+            fee_rate_governor: FeeRateGovernor::default(),
+            mint_lamports: sol_to_lamports(500_000_000.),
+            rent: Rent::default(),
+            validator_identity_keypair: Keypair::new(),
+            validator_identity_lamports: sol_to_lamports(500.),
+            validator_stake_lamports: sol_to_lamports(1.),
+        }
+    }
+}
 
 pub struct TestValidator {
-    pub server: Validator,
-    pub leader_data: ContactInfo,
-    pub alice: Keypair,
-    pub ledger_path: PathBuf,
-    pub genesis_hash: Hash,
-    pub vote_pubkey: Pubkey,
+    validator: Validator,
+    ledger_path: PathBuf,
+    preserve_ledger: bool,
+
+    genesis_hash: Hash,
+    mint_keypair: Keypair,
+    vote_account_address: Pubkey,
+
+    tpu: SocketAddr,
+    rpc_url: String,
+    rpc_pubsub_url: String,
 }
 
-pub struct TestValidatorOptions {
-    pub fees: u64,
-    pub bootstrap_validator_lamports: u64,
-    pub mint_lamports: u64,
-}
-
-impl Default for TestValidatorOptions {
+impl Default for TestValidator {
     fn default() -> Self {
-        use solana_ledger::genesis_utils::BOOTSTRAP_VALIDATOR_LAMPORTS;
-        TestValidatorOptions {
-            fees: 0,
-            bootstrap_validator_lamports: BOOTSTRAP_VALIDATOR_LAMPORTS,
-            mint_lamports: 1_000_000,
-        }
+        Self::new(TestValidatorConfig::default())
     }
 }
 
 impl TestValidator {
-    pub fn run() -> Self {
-        Self::run_with_options(TestValidatorOptions::default())
+    pub fn with_no_fees() -> Self {
+        Self::new(TestValidatorConfig {
+            fee_rate_governor: FeeRateGovernor::new(0, 0),
+            rent: Rent {
+                lamports_per_byte_year: 1,
+                exemption_threshold: 1.0,
+                ..Rent::default()
+            },
+            ..TestValidatorConfig::default()
+        })
     }
 
-    pub fn run_with_options(options: TestValidatorOptions) -> Self {
+    pub fn with_custom_fees(target_lamports_per_signature: u64) -> Self {
+        Self::new(TestValidatorConfig {
+            fee_rate_governor: FeeRateGovernor::new(target_lamports_per_signature, 0),
+            rent: Rent {
+                lamports_per_byte_year: 1,
+                exemption_threshold: 1.0,
+                ..Rent::default()
+            },
+            ..TestValidatorConfig::default()
+        })
+    }
+
+    pub fn new(config: TestValidatorConfig) -> Self {
         use solana_ledger::genesis_utils::{
             create_genesis_config_with_leader_ex, GenesisConfigInfo,
         };
-        use solana_sdk::fee_calculator::FeeRateGovernor;
 
-        let TestValidatorOptions {
-            fees,
-            bootstrap_validator_lamports,
+        let TestValidatorConfig {
+            fee_rate_governor,
             mint_lamports,
-        } = options;
-        let node_keypair = Arc::new(Keypair::new());
-        let node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
-        let contact_info = node.info.clone();
+            rent,
+            validator_identity_keypair,
+            validator_identity_lamports,
+            validator_stake_lamports,
+        } = config;
+        let validator_identity_keypair = Arc::new(validator_identity_keypair);
+
+        let node = Node::new_localhost_with_pubkey(&validator_identity_keypair.pubkey());
 
         let GenesisConfigInfo {
             mut genesis_config,
             mint_keypair,
-            voting_keypair,
+            voting_keypair: vote_account_keypair,
         } = create_genesis_config_with_leader_ex(
             mint_lamports,
-            &contact_info.id,
+            &node.info.id,
             &Keypair::new(),
-            &solana_sdk::pubkey::new_rand(),
-            42,
-            bootstrap_validator_lamports,
+            &Keypair::new().pubkey(),
+            validator_stake_lamports,
+            validator_identity_lamports,
             solana_sdk::genesis_config::ClusterType::Development,
         );
-        genesis_config.rent.lamports_per_byte_year = 1;
-        genesis_config.rent.exemption_threshold = 1.0;
-        genesis_config.fee_rate_governor = FeeRateGovernor::new(fees, 0);
+
+        genesis_config.rent = rent;
+        genesis_config.fee_rate_governor = fee_rate_governor;
 
         let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
 
         let config = ValidatorConfig {
-            rpc_addrs: Some((node.info.rpc, node.info.rpc_pubsub, node.info.rpc_banks)),
+            rpc_addrs: Some((node.info.rpc, node.info.rpc_pubsub)),
             ..ValidatorConfig::default()
         };
-        let vote_pubkey = voting_keypair.pubkey();
-        let node = Validator::new(
+
+        let vote_account_address = vote_account_keypair.pubkey();
+        let rpc_url = format!("http://{}:{}", node.info.rpc.ip(), node.info.rpc.port());
+        let rpc_pubsub_url = format!("ws://{}/", node.info.rpc_pubsub);
+        let tpu = node.info.tpu;
+        let gossip = node.info.gossip;
+
+        let validator = Validator::new(
             node,
-            &node_keypair,
+            &validator_identity_keypair,
             &ledger_path,
-            &voting_keypair.pubkey(),
-            vec![Arc::new(voting_keypair)],
+            &vote_account_keypair.pubkey(),
+            vec![Arc::new(vote_account_keypair)],
             None,
             &config,
         );
-        discover_cluster(&contact_info.gossip, 1).expect("Node startup failed");
+
+        // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
+        // test validators concurrently...
+        discover_cluster(&gossip, 1).expect("TestValidator startup failed");
+
         TestValidator {
-            server: node,
-            leader_data: contact_info,
-            alice: mint_keypair,
+            validator,
+            vote_account_address,
+            mint_keypair,
             ledger_path,
             genesis_hash: blockhash,
-            vote_pubkey,
+            tpu,
+            rpc_url,
+            rpc_pubsub_url,
+            preserve_ledger: false,
         }
+    }
+
+    pub fn close(self) {
+        self.validator.close().unwrap();
+        if !self.preserve_ledger {
+            remove_dir_all(&self.ledger_path).unwrap();
+        }
+    }
+
+    pub fn tpu(&self) -> &SocketAddr {
+        &self.tpu
+    }
+
+    pub fn mint_keypair(&self) -> Keypair {
+        Keypair::from_bytes(&self.mint_keypair.to_bytes()).unwrap()
+    }
+
+    pub fn rpc_url(&self) -> String {
+        self.rpc_url.clone()
+    }
+
+    pub fn rpc_pubsub_url(&self) -> String {
+        self.rpc_pubsub_url.clone()
+    }
+
+    pub fn genesis_hash(&self) -> Hash {
+        self.genesis_hash
+    }
+
+    pub fn vote_account_address(&self) -> Pubkey {
+        self.vote_account_address
     }
 }

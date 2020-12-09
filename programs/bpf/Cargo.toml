@@ -27,7 +27,7 @@ solana-logger = { path = "../../logger", version = "1.5.0" }
 solana-measure = { path = "../../measure", version = "1.5.0" }
 solana-runtime = { path = "../../runtime", version = "1.5.0" }
 solana-sdk = { path = "../../sdk", version = "1.5.0" }
-solana_rbpf = "=0.2.0"
+solana_rbpf = "=0.2.1"
 
 [[bench]]
 name = "bpf_loader"
@@ -37,6 +37,8 @@ members = [
     "rust/128bit",
     "rust/128bit_dep",
     "rust/alloc",
+    "rust/call_depth",
+    "rust/caller_access",
     "rust/custom_heap",
     "rust/dep_crate",
     "rust/deprecated_loader",
@@ -45,6 +47,8 @@ members = [
     "rust/external_spend",
     "rust/instruction_introspection",
     "rust/invoke",
+    "rust/invoke_and_error",
+    "rust/invoke_and_ok",
     "rust/invoked",
     "rust/iter",
     "rust/many_args",
@@ -56,9 +60,11 @@ members = [
     "rust/param_passing_dep",
     "rust/rand",
     "rust/ristretto",
+    "rust/ro_modify",
     "rust/sanity",
     "rust/sha256",
-    "rust/call_depth",
+    "rust/spoof1",
+    "rust/spoof1_system",
     "rust/sysval",
 ]
 

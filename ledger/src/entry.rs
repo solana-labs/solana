@@ -18,6 +18,7 @@ use solana_perf::perf_libs;
 use solana_perf::recycler::Recycler;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
+use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
 use std::cell::RefCell;
@@ -490,20 +491,24 @@ impl EntrySlice for [Entry] {
     }
 
     fn verify_transaction_signatures(&self, secp256k1_program_enabled: bool) -> bool {
+        let verify = |tx: &Transaction| {
+            tx.verify().is_ok()
+                && {
+                    match bincode::serialized_size(tx) {
+                        Ok(size) => size <= PACKET_DATA_SIZE as u64,
+                        Err(_) => false,
+                    }
+                }
+                && (
+                    // Verify tx precompiles if secp256k1 program is enabled.
+                    !secp256k1_program_enabled || tx.verify_precompiles().is_ok()
+                )
+        };
         PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
-                self.par_iter().all(|e| {
-                    e.transactions.par_iter().all(|transaction| {
-                        let sig_verify = transaction.verify().is_ok();
-                        if sig_verify
-                            && secp256k1_program_enabled
-                            && transaction.verify_precompiles().is_err()
-                        {
-                            return false;
-                        }
-                        sig_verify
-                    })
-                })
+                self.par_iter()
+                    .flat_map(|entry| &entry.transactions)
+                    .all(verify)
             })
         })
     }
@@ -690,7 +695,7 @@ mod tests {
     use chrono::prelude::Utc;
     use solana_budget_program::budget_instruction;
     use solana_sdk::{
-        hash::{hash, Hash},
+        hash::{hash, new_rand as hash_new_rand, Hash},
         message::Message,
         signature::{Keypair, Signer},
         system_transaction,
@@ -894,6 +899,50 @@ mod tests {
         bad_ticks.push(next_entry(&bad_ticks.last().unwrap().hash, 1, vec![tx1]));
         bad_ticks[1].hash = one;
         assert_eq!(bad_ticks.verify(&one), false); // inductive step, bad
+    }
+
+    #[test]
+    fn test_verify_transaction_signatures_packet_data_size() {
+        let mut rng = rand::thread_rng();
+        let recent_blockhash = hash_new_rand(&mut rng);
+        let keypair = Keypair::new();
+        let pubkey = keypair.pubkey();
+        let budget_contract = Keypair::new();
+        let budget_pubkey = budget_contract.pubkey();
+        let make_transaction = |size| {
+            let ixs: Vec<_> = std::iter::repeat_with(|| {
+                budget_instruction::payment(&pubkey, &pubkey, &budget_pubkey, 1)
+            })
+            .take(size)
+            .flat_map(|x| x.into_iter())
+            .collect();
+            let message = Message::new(&ixs[..], Some(&pubkey));
+            Transaction::new(&[&keypair, &budget_contract], message, recent_blockhash)
+        };
+        // Small transaction.
+        {
+            let tx = make_transaction(5);
+            let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
+            assert!(bincode::serialized_size(&tx).unwrap() <= PACKET_DATA_SIZE as u64);
+            assert!(entries[..].verify_transaction_signatures(false));
+        }
+        // Big transaction.
+        {
+            let tx = make_transaction(15);
+            let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
+            assert!(bincode::serialized_size(&tx).unwrap() > PACKET_DATA_SIZE as u64);
+            assert!(!entries[..].verify_transaction_signatures(false));
+        }
+        // Assert that verify fails as soon as serialized
+        // size exceeds packet data size.
+        for size in 1..20 {
+            let tx = make_transaction(size);
+            let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
+            assert_eq!(
+                bincode::serialized_size(&tx).unwrap() <= PACKET_DATA_SIZE as u64,
+                entries[..].verify_transaction_signatures(false),
+            );
+        }
     }
 
     #[test]

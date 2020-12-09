@@ -11,7 +11,7 @@ use solana_clap_utils::{
     },
     keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
 };
-use solana_client::rpc_client::RpcClient;
+use solana_client::{rpc_client::RpcClient, rpc_request::MAX_MULTIPLE_ACCOUNTS};
 use solana_core::ledger_cleanup_service::{
     DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS,
 };
@@ -212,7 +212,9 @@ fn get_rpc_node(
         );
 
         if rpc_peers_blacklisted == rpc_peers_total {
-            retry_reason = if blacklist_timeout.elapsed().as_secs() > 60 {
+            retry_reason = if !blacklisted_rpc_nodes.is_empty()
+                && blacklist_timeout.elapsed().as_secs() > 60
+            {
                 // If all nodes are blacklisted and no additional nodes are discovered after 60 seconds,
                 // remove the blacklist and try them all again
                 blacklisted_rpc_nodes.clear();
@@ -573,11 +575,10 @@ fn verify_reachable_ports(
     }
 
     let mut tcp_listeners = vec![];
-    if let Some((rpc_addr, rpc_pubsub_addr, rpc_banks_addr)) = validator_config.rpc_addrs {
+    if let Some((rpc_addr, rpc_pubsub_addr)) = validator_config.rpc_addrs {
         for (purpose, bind_addr, public_addr) in &[
             ("RPC", rpc_addr, &node.info.rpc),
             ("RPC pubsub", rpc_pubsub_addr, &node.info.rpc_pubsub),
-            ("RPC banks", rpc_banks_addr, &node.info.rpc_banks),
         ] {
             if ContactInfo::is_valid_address(&public_addr) {
                 tcp_listeners.push((
@@ -640,6 +641,7 @@ fn rpc_bootstrap(
     bootstrap_config: RpcBootstrapConfig,
     no_port_check: bool,
     use_progress_bar: bool,
+    maximum_local_snapshot_age: Slot,
 ) {
     if !no_port_check {
         verify_reachable_ports(&node, cluster_entrypoint, &validator_config);
@@ -723,23 +725,40 @@ fn rpc_bootstrap(
             }
 
             if let Some(snapshot_hash) = snapshot_hash {
-                rpc_client
-                    .get_slot_with_commitment(CommitmentConfig::root())
-                    .map_err(|err| format!("Failed to get RPC node slot: {}", err))
-                    .and_then(|slot| {
-                        info!("RPC node root slot: {}", slot);
-                        let (_cluster_info, gossip_exit_flag, gossip_service) =
-                            gossip.take().unwrap();
-                        gossip_exit_flag.store(true, Ordering::Relaxed);
-                        let ret = download_snapshot(
-                            &rpc_contact_info.rpc,
-                            &ledger_path,
-                            snapshot_hash,
-                            use_progress_bar,
-                        );
-                        gossip_service.join().unwrap();
-                        ret
-                    })
+                let mut use_local_snapshot = false;
+
+                if let Some(highest_local_snapshot_slot) =
+                    get_highest_snapshot_archive_path(ledger_path)
+                        .map(|(_path, (slot, _hash, _compression))| slot)
+                {
+                    if highest_local_snapshot_slot > snapshot_hash.0.saturating_sub(maximum_local_snapshot_age) {
+                        info!("Reusing local snapshot at slot {} instead of downloading a newer snapshot for slot {}",
+                              highest_local_snapshot_slot, snapshot_hash.0);
+                        use_local_snapshot = true;
+                    }
+                }
+
+                if use_local_snapshot {
+                    Ok(())
+                } else {
+                    rpc_client
+                        .get_slot_with_commitment(CommitmentConfig::root())
+                        .map_err(|err| format!("Failed to get RPC node slot: {}", err))
+                        .and_then(|slot| {
+                            info!("RPC node root slot: {}", slot);
+                            let (_cluster_info, gossip_exit_flag, gossip_service) =
+                                gossip.take().unwrap();
+                            gossip_exit_flag.store(true, Ordering::Relaxed);
+                            let ret = download_snapshot(
+                                &rpc_contact_info.rpc,
+                                &ledger_path,
+                                snapshot_hash,
+                                use_progress_bar,
+                            );
+                            gossip_service.join().unwrap();
+                            ret
+                        })
+                }
             } else {
                 Ok(())
             }
@@ -803,12 +822,14 @@ fn create_validator(
     rpc_bootstrap_config: RpcBootstrapConfig,
     no_port_check: bool,
     use_progress_bar: bool,
+    maximum_local_snapshot_age: Slot,
 ) -> Validator {
     if validator_config.cuda {
         solana_perf::perf_libs::init_cuda();
         enable_recycler_warming();
     }
     solana_ledger::entry::init_poh();
+    solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(ledger_path);
 
     if let Some(ref cluster_entrypoint) = cluster_entrypoint {
         rpc_bootstrap(
@@ -822,6 +843,7 @@ fn create_validator(
             rpc_bootstrap_config,
             no_port_check,
             use_progress_bar,
+            maximum_local_snapshot_age,
         );
     }
 
@@ -840,6 +862,7 @@ pub fn main() {
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
     let default_genesis_archive_unpacked_size = &MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
+    let default_rpc_max_multiple_accounts = &MAX_MULTIPLE_ACCOUNTS.to_string();
     let default_rpc_pubsub_max_connections = PubSubConfig::default().max_connections.to_string();
     let default_rpc_pubsub_max_fragment_size =
         PubSubConfig::default().max_fragment_size.to_string();
@@ -1018,6 +1041,15 @@ pub fn main() {
                 .help("Upload new confirmed blocks into a BigTable instance"),
         )
         .arg(
+            Arg::with_name("rpc_max_multiple_accounts")
+                .long("rpc-max-multiple-accounts")
+                .value_name("MAX ACCOUNTS")
+                .takes_value(true)
+                .default_value(default_rpc_max_multiple_accounts)
+                .help("Override the default maximum accounts accepted by \
+                       the getMultipleAccounts JSON RPC method")
+        )
+        .arg(
             Arg::with_name("health_check_slot_distance")
                 .long("health-check-slot-distance")
                 .value_name("SLOT_DISTANCE")
@@ -1091,6 +1123,16 @@ pub fn main() {
                 .help("Range to use for dynamically assigned ports"),
         )
         .arg(
+            Arg::with_name("maximum_local_snapshot_age")
+                .long("maximum-local-snapshot-age")
+                .value_name("NUMBER_OF_SLOTS")
+                .takes_value(true)
+                .default_value("500")
+                .help("Reuse a local snapshot if it's less than this many \
+                       slots behind the highest snapshot available for \
+                       download from other validators"),
+        )
+        .arg(
             Arg::with_name("snapshot_interval_slots")
                 .long("snapshot-interval-slots")
                 .value_name("SNAPSHOT_INTERVAL_SLOTS")
@@ -1098,6 +1140,14 @@ pub fn main() {
                 .default_value("100")
                 .help("Number of slots between generating snapshots, \
                       0 to disable snapshots"),
+        )
+        .arg(
+            Arg::with_name("contact_debug_interval")
+                .long("contact-debug-interval")
+                .value_name("CONTACT_DEBUG_INTERVAL")
+                .takes_value(true)
+                .default_value("10000")
+                .help("Milliseconds between printing contact debug from gossip."),
         )
         .arg(
             Arg::with_name("accounts_hash_interval_slots")
@@ -1360,6 +1410,12 @@ pub fn main() {
                     "Mode to recovery the ledger db write ahead log."
                 ),
         )
+        .arg(
+            Arg::with_name("bpf_jit")
+                .long("bpf-jit")
+                .takes_value(false)
+                .help("Use the just-in-time compiler instead of the interpreter for BPF."),
+        )
         .get_matches();
 
     let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(Keypair::new));
@@ -1435,6 +1491,8 @@ pub fn main() {
         bind_address
     };
 
+    let contact_debug_interval = value_t_or_exit!(matches, "contact_debug_interval", u64);
+
     let restricted_repair_only_mode = matches.is_present("restricted_repair_only_mode");
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
@@ -1459,6 +1517,11 @@ pub fn main() {
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
+            max_multiple_accounts: Some(value_t_or_exit!(
+                matches,
+                "rpc_max_multiple_accounts",
+                usize
+            )),
             health_check_slot_distance: value_t_or_exit!(
                 matches,
                 "health_check_slot_distance",
@@ -1469,9 +1532,9 @@ pub fn main() {
             (
                 SocketAddr::new(rpc_bind_address, rpc_port),
                 SocketAddr::new(rpc_bind_address, rpc_port + 1),
-                // +2 is skipped to avoid a conflict with the websocket port (which is +2) in web3.js
-                // This odd port shifting is tracked at https://github.com/solana-labs/solana/issues/12250
-                SocketAddr::new(rpc_bind_address, rpc_port + 3),
+                // If additional ports are added, +2 needs to be skipped to avoid a conflict with
+                // the websocket port (which is +2) in web3.js This odd port shifting is tracked at
+                // https://github.com/solana-labs/solana/issues/12250
             )
         }),
         pubsub_config: PubSubConfig {
@@ -1499,6 +1562,8 @@ pub fn main() {
         wal_recovery_mode,
         poh_verify: !matches.is_present("skip_poh_verify"),
         debug_keys,
+        contact_debug_interval,
+        bpf_jit: matches.is_present("bpf_jit"),
         ..ValidatorConfig::default()
     };
 
@@ -1538,6 +1603,7 @@ pub fn main() {
         .collect();
 
     let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", u64);
+    let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
     let snapshot_path = ledger_path.join("snapshot");
     fs::create_dir_all(&snapshot_path).unwrap_or_else(|err| {
         eprintln!(
@@ -1718,12 +1784,9 @@ pub fn main() {
         if let Some(public_rpc_addr) = public_rpc_addr {
             node.info.rpc = public_rpc_addr;
             node.info.rpc_pubsub = public_rpc_addr;
-            node.info.rpc_banks = public_rpc_addr;
-        } else if let Some((rpc_addr, rpc_pubsub_addr, rpc_banks_addr)) = validator_config.rpc_addrs
-        {
+        } else if let Some((rpc_addr, rpc_pubsub_addr)) = validator_config.rpc_addrs {
             node.info.rpc = SocketAddr::new(node.info.gossip.ip(), rpc_addr.port());
             node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), rpc_pubsub_addr.port());
-            node.info.rpc_banks = SocketAddr::new(node.info.gossip.ip(), rpc_banks_addr.port());
         }
     }
 
@@ -1744,6 +1807,7 @@ pub fn main() {
         rpc_bootstrap_config,
         no_port_check,
         use_progress_bar,
+        maximum_local_snapshot_age,
     );
 
     if let Some(filename) = init_complete_file {

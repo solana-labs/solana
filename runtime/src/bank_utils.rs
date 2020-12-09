@@ -32,13 +32,13 @@ pub fn find_and_send_votes(
     vote_sender: Option<&ReplayVoteSender>,
 ) {
     let TransactionResults {
-        processing_results,
+        execution_results,
         overwritten_vote_accounts,
         ..
     } = tx_results;
     if let Some(vote_sender) = vote_sender {
         for old_account in overwritten_vote_accounts {
-            assert!(processing_results[old_account.transaction_result_index]
+            assert!(execution_results[old_account.transaction_result_index]
                 .0
                 .is_ok());
             let transaction = &txs[old_account.transaction_index];

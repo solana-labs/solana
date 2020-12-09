@@ -9,7 +9,7 @@ use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, json, Value};
 use solana_account_decoder::{UiAccount, UiAccountEncoding};
-use solana_bpf_loader_program::{bpf_verifier, BPFError};
+use solana_bpf_loader_program::{bpf_verifier, BPFError, ThisInstructionMeter};
 use solana_clap_utils::{
     self,
     commitment::commitment_arg_with_default,
@@ -31,7 +31,7 @@ use solana_client::{
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     nonce_utils,
     rpc_client::RpcClient,
-    rpc_config::{RpcLargestAccountsFilter, RpcSendTransactionConfig},
+    rpc_config::{RpcLargestAccountsFilter, RpcSendTransactionConfig, RpcTransactionLogsFilter},
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
     rpc_response::{RpcKeyedAccount, RpcLeaderSchedule},
 };
@@ -39,7 +39,7 @@ use solana_client::{
 use solana_faucet::faucet::request_airdrop_transaction;
 #[cfg(test)]
 use solana_faucet::faucet_mock::request_airdrop_transaction;
-use solana_rbpf::vm::Executable;
+use solana_rbpf::vm::{Config, Executable};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
@@ -120,11 +120,16 @@ pub enum CliCommand {
     },
     LeaderSchedule,
     LiveSlots,
+    Logs {
+        filter: RpcTransactionLogsFilter,
+    },
     Ping {
         lamports: u64,
         interval: Duration,
         count: Option<u64>,
         timeout: Duration,
+        blockhash: Option<Hash>,
+        print_timestamp: bool,
     },
     ShowBlockProduction {
         epoch: Option<Epoch>,
@@ -585,6 +590,7 @@ pub fn parse_command(
             command: CliCommand::LiveSlots,
             signers: vec![],
         }),
+        ("logs", Some(matches)) => parse_logs(matches, wallet_manager),
         ("block-production", Some(matches)) => parse_show_block_production(matches),
         ("gossip", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::ShowGossip,
@@ -1227,8 +1233,12 @@ fn do_process_deploy(
         CliError::DynamicProgramError(format!("Unable to read program file: {}", err))
     })?;
 
-    Executable::<BPFError>::from_elf(&program_data, Some(|x| bpf_verifier::check(x, true)))
-        .map_err(|err| CliError::DynamicProgramError(format!("ELF error: {}", err)))?;
+    Executable::<BPFError, ThisInstructionMeter>::from_elf(
+        &program_data,
+        Some(|x| bpf_verifier::check(x, false)),
+        Config::default(),
+    )
+    .map_err(|err| CliError::DynamicProgramError(format!("ELF error: {}", err)))?;
 
     let loader_id = if use_deprecated_loader {
         bpf_loader_deprecated::id()
@@ -1555,13 +1565,25 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             process_inflation_subcommand(&rpc_client, config, inflation_subcommand)
         }
         CliCommand::LeaderSchedule => process_leader_schedule(&rpc_client),
-        CliCommand::LiveSlots => process_live_slots(&config.websocket_url),
+        CliCommand::LiveSlots => process_live_slots(&config),
+        CliCommand::Logs { filter } => process_logs(&config, filter),
         CliCommand::Ping {
             lamports,
             interval,
             count,
             timeout,
-        } => process_ping(&rpc_client, config, *lamports, interval, count, timeout),
+            blockhash,
+            print_timestamp,
+        } => process_ping(
+            &rpc_client,
+            config,
+            *lamports,
+            interval,
+            count,
+            timeout,
+            blockhash,
+            *print_timestamp,
+        ),
         CliCommand::ShowBlockProduction { epoch, slot_limit } => {
             process_show_block_production(&rpc_client, config, *epoch, *slot_limit)
         }

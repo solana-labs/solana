@@ -1,7 +1,6 @@
-use crate::stakes::Stakes;
+use crate::{stakes::Stakes, vote_account::ArcVoteAccount};
 use serde::{Deserialize, Serialize};
-use solana_sdk::{account::Account, clock::Epoch, pubkey::Pubkey};
-use solana_vote_program::vote_state::VoteState;
+use solana_sdk::{clock::Epoch, pubkey::Pubkey};
 use std::{collections::HashMap, sync::Arc};
 
 pub type NodeIdToVoteAccounts = HashMap<Pubkey, NodeVoteAccounts>;
@@ -58,7 +57,7 @@ impl EpochStakes {
     }
 
     fn parse_epoch_vote_accounts(
-        epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
+        epoch_vote_accounts: &HashMap<Pubkey, (u64, ArcVoteAccount)>,
         leader_schedule_epoch: Epoch,
     ) -> (u64, NodeIdToVoteAccounts, EpochAuthorizedVoters) {
         let mut node_id_to_vote_accounts: NodeIdToVoteAccounts = HashMap::new();
@@ -69,19 +68,21 @@ impl EpochStakes {
         let epoch_authorized_voters = epoch_vote_accounts
             .iter()
             .filter_map(|(key, (stake, account))| {
-                let vote_state = VoteState::from(&account);
-                if vote_state.is_none() {
-                    datapoint_warn!(
-                        "parse_epoch_vote_accounts",
-                        (
-                            "warn",
-                            format!("Unable to get vote_state from account {}", key),
-                            String
-                        ),
-                    );
-                    return None;
-                }
-                let vote_state = vote_state.unwrap();
+                let vote_state = account.vote_state();
+                let vote_state = match vote_state.as_ref() {
+                    Err(_) => {
+                        datapoint_warn!(
+                            "parse_epoch_vote_accounts",
+                            (
+                                "warn",
+                                format!("Unable to get vote_state from account {}", key),
+                                String
+                            ),
+                        );
+                        return None;
+                    }
+                    Ok(vote_state) => vote_state,
+                };
                 if *stake > 0 {
                     // Read out the authorized voters
                     let authorized_voter = vote_state
@@ -113,6 +114,7 @@ impl EpochStakes {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use solana_sdk::account::Account;
     use solana_vote_program::vote_state::create_account_with_authorized;
     use std::iter;
 
@@ -181,9 +183,12 @@ pub(crate) mod tests {
         let epoch_vote_accounts: HashMap<_, _> = vote_accounts_map
             .iter()
             .flat_map(|(_, vote_accounts)| {
-                vote_accounts
-                    .iter()
-                    .map(|v| (v.vote_account, (stake_per_account, v.account.clone())))
+                vote_accounts.iter().map(|v| {
+                    (
+                        v.vote_account,
+                        (stake_per_account, ArcVoteAccount::from(v.account.clone())),
+                    )
+                })
             })
             .collect();
 

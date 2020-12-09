@@ -12,10 +12,10 @@ use solana_runtime::{
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
 };
 use solana_sdk::{
-    commitment_config::CommitmentConfig, rpc_port, signature::Signer, system_transaction,
+    commitment_config::CommitmentConfig, native_token::sol_to_lamports, rpc_port,
+    signature::Signer, system_transaction,
 };
 use std::{
-    fs::remove_dir_all,
     net::{IpAddr, SocketAddr},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -30,16 +30,12 @@ use systemstat::Ipv4Addr;
 fn test_rpc_client() {
     solana_logger::setup();
 
-    let TestValidator {
-        server,
-        leader_data,
-        alice,
-        ledger_path,
-        ..
-    } = TestValidator::run();
+    let test_validator = TestValidator::with_no_fees();
+    let alice = test_validator.mint_keypair();
+
     let bob_pubkey = solana_sdk::pubkey::new_rand();
 
-    let client = RpcClient::new_socket(leader_data.rpc);
+    let client = RpcClient::new(test_validator.rpc_url());
 
     assert_eq!(
         client.get_version().unwrap().solana_core,
@@ -50,11 +46,11 @@ fn test_rpc_client() {
 
     assert_eq!(client.get_balance(&bob_pubkey).unwrap(), 0);
 
-    assert_eq!(client.get_balance(&alice.pubkey()).unwrap(), 1_000_000);
+    let original_alice_balance = client.get_balance(&alice.pubkey()).unwrap();
 
     let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
 
-    let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
+    let tx = system_transaction::transfer(&alice, &bob_pubkey, sol_to_lamports(20.0), blockhash);
     let signature = client.send_transaction(&tx).unwrap();
 
     let mut confirmed_tx = false;
@@ -75,11 +71,15 @@ fn test_rpc_client() {
 
     assert!(confirmed_tx);
 
-    assert_eq!(client.get_balance(&bob_pubkey).unwrap(), 20);
-    assert_eq!(client.get_balance(&alice.pubkey()).unwrap(), 999_980);
-
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
+    assert_eq!(
+        client.get_balance(&bob_pubkey).unwrap(),
+        sol_to_lamports(20.0)
+    );
+    assert_eq!(
+        client.get_balance(&alice.pubkey()).unwrap(),
+        original_alice_balance - sol_to_lamports(20.0)
+    );
+    test_validator.close();
 }
 
 #[test]

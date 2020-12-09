@@ -2933,15 +2933,10 @@ export class Connection {
     const skipPreflight = options && options.skipPreflight;
     const preflightCommitment = options && options.preflightCommitment;
 
-    if (skipPreflight && preflightCommitment) {
-      throw new Error(
-        'cannot set preflightCommitment when skipPreflight is enabled',
-      );
-    }
-
     if (skipPreflight) {
       config.skipPreflight = skipPreflight;
-    } else if (preflightCommitment) {
+    }
+    if (preflightCommitment) {
       config.preflightCommitment = preflightCommitment;
     }
 

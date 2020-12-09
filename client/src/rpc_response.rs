@@ -110,6 +110,14 @@ pub enum RpcSignatureResult {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
+pub struct RpcLogsResponse {
+    pub signature: String, // Signature as base58 string
+    pub err: Option<TransactionError>,
+    pub logs: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct ProcessedSignatureResult {
     pub err: Option<TransactionError>,
 }

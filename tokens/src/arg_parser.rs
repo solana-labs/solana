@@ -1,17 +1,18 @@
 use crate::args::{
-    Args, BalancesArgs, Command, DistributeTokensArgs, StakeArgs, TransactionLogArgs,
+    Args, BalancesArgs, Command, DistributeTokensArgs, SplTokenArgs, StakeArgs, TransactionLogArgs,
 };
-use clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand};
+use clap::{
+    crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand,
+};
 use solana_clap_utils::{
-    input_parsers::value_of,
+    input_parsers::{pubkey_of_signer, value_of},
     input_validators::{is_amount, is_valid_pubkey, is_valid_signer},
     keypair::{pubkey_from_path, signer_from_path},
 };
 use solana_cli_config::CONFIG_FILE;
 use solana_remote_wallet::remote_wallet::maybe_wallet_manager;
-use std::error::Error;
-use std::ffi::OsString;
-use std::process::exit;
+use solana_sdk::native_token::sol_to_lamports;
+use std::{error::Error, ffi::OsString, process::exit};
 
 fn get_matches<'a, I, T>(args: I) -> ArgMatches<'a>
 where
@@ -19,9 +20,9 @@ where
     T: Into<OsString> + Clone,
 {
     let default_config_file = CONFIG_FILE.as_ref().unwrap();
-    App::new("solana-tokens")
-        .about("about")
-        .version("version")
+    App::new(crate_name!())
+        .about(crate_description!())
+        .version(solana_version::version!())
         .arg(
             Arg::with_name("config_file")
                 .long("config")
@@ -40,7 +41,7 @@ where
         )
         .subcommand(
             SubCommand::with_name("distribute-tokens")
-                .about("Distribute tokens")
+                .about("Distribute SOL")
                 .arg(
                     Arg::with_name("db_path")
                         .long("db-path")
@@ -200,6 +201,78 @@ where
                 ),
         )
         .subcommand(
+            SubCommand::with_name("distribute-spl-tokens")
+                .about("Distribute SPL tokens")
+                .arg(
+                    Arg::with_name("db_path")
+                        .long("db-path")
+                        .required(true)
+                        .takes_value(true)
+                        .value_name("FILE")
+                        .help(
+                            "Location for storing distribution database. \
+                            The database is used for tracking transactions as they are finalized \
+                            and preventing double spends.",
+                        ),
+                )
+                .arg(
+                    Arg::with_name("input_csv")
+                        .long("input-csv")
+                        .required(true)
+                        .takes_value(true)
+                        .value_name("FILE")
+                        .help("Allocations CSV file"),
+                )
+                .arg(
+                    Arg::with_name("dry_run")
+                        .long("dry-run")
+                        .help("Do not execute any transfers"),
+                )
+                .arg(
+                    Arg::with_name("transfer_amount")
+                        .long("transfer-amount")
+                        .takes_value(true)
+                        .value_name("AMOUNT")
+                        .validator(is_amount)
+                        .help("The amount of SPL tokens to send to each recipient"),
+                )
+                .arg(
+                    Arg::with_name("output_path")
+                        .long("output-path")
+                        .short("o")
+                        .value_name("FILE")
+                        .takes_value(true)
+                        .help("Write the transaction log to this file"),
+                )
+                .arg(
+                    Arg::with_name("token_account_address")
+                        .long("from")
+                        .required(true)
+                        .takes_value(true)
+                        .value_name("TOKEN_ACCOUNT_ADDRESS")
+                        .validator(is_valid_pubkey)
+                        .help("SPL token account to send from"),
+                )
+                .arg(
+                    Arg::with_name("token_owner")
+                        .long("owner")
+                        .required(true)
+                        .takes_value(true)
+                        .value_name("TOKEN_ACCOUNT_OWNER_KEYPAIR")
+                        .validator(is_valid_signer)
+                        .help("SPL token account owner"),
+                )
+                .arg(
+                    Arg::with_name("fee_payer")
+                        .long("fee-payer")
+                        .required(true)
+                        .takes_value(true)
+                        .value_name("KEYPAIR")
+                        .validator(is_valid_signer)
+                        .help("Fee payer"),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("balances")
                 .about("Balance of each account")
                 .arg(
@@ -209,6 +282,27 @@ where
                         .takes_value(true)
                         .value_name("FILE")
                         .help("Allocations CSV file"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("spl-token-balances")
+                .about("Balance of SPL token associated accounts")
+                .arg(
+                    Arg::with_name("input_csv")
+                        .long("input-csv")
+                        .required(true)
+                        .takes_value(true)
+                        .value_name("FILE")
+                        .help("Allocations CSV file"),
+                )
+                .arg(
+                    Arg::with_name("mint_address")
+                        .long("mint")
+                        .required(true)
+                        .takes_value(true)
+                        .value_name("MINT_ADDRESS")
+                        .validator(is_valid_pubkey)
+                        .help("SPL token mint of distribution"),
                 ),
         )
         .subcommand(
@@ -264,7 +358,8 @@ fn parse_distribute_tokens_args(
         sender_keypair,
         fee_payer,
         stake_args: None,
-        transfer_amount: value_of(matches, "transfer_amount"),
+        spl_token_args: None,
+        transfer_amount: value_of(matches, "transfer_amount").map(sol_to_lamports),
     })
 }
 
@@ -327,7 +422,7 @@ fn parse_distribute_stake_args(
 
     let stake_args = StakeArgs {
         stake_account_address,
-        unlocked_sol: value_t_or_exit!(matches, "unlocked_sol", f64),
+        unlocked_sol: sol_to_lamports(value_t_or_exit!(matches, "unlocked_sol", f64)),
         stake_authority,
         withdraw_authority,
         lockup_authority,
@@ -340,14 +435,68 @@ fn parse_distribute_stake_args(
         sender_keypair,
         fee_payer,
         stake_args: Some(stake_args),
+        spl_token_args: None,
         transfer_amount: None,
     })
 }
 
-fn parse_balances_args(matches: &ArgMatches<'_>) -> BalancesArgs {
-    BalancesArgs {
+fn parse_distribute_spl_tokens_args(
+    matches: &ArgMatches<'_>,
+) -> Result<DistributeTokensArgs, Box<dyn Error>> {
+    let mut wallet_manager = maybe_wallet_manager()?;
+    let signer_matches = ArgMatches::default(); // No default signer
+
+    let token_owner_str = value_t_or_exit!(matches, "token_owner", String);
+    let token_owner = signer_from_path(
+        &signer_matches,
+        &token_owner_str,
+        "owner",
+        &mut wallet_manager,
+    )?;
+
+    let fee_payer_str = value_t_or_exit!(matches, "fee_payer", String);
+    let fee_payer = signer_from_path(
+        &signer_matches,
+        &fee_payer_str,
+        "fee-payer",
+        &mut wallet_manager,
+    )?;
+
+    let token_account_address_str = value_t_or_exit!(matches, "token_account_address", String);
+    let token_account_address = pubkey_from_path(
+        &signer_matches,
+        &token_account_address_str,
+        "token account address",
+        &mut wallet_manager,
+    )?;
+
+    Ok(DistributeTokensArgs {
         input_csv: value_t_or_exit!(matches, "input_csv", String),
-    }
+        transaction_db: value_t_or_exit!(matches, "db_path", String),
+        output_path: matches.value_of("output_path").map(|path| path.to_string()),
+        dry_run: matches.is_present("dry_run"),
+        sender_keypair: token_owner,
+        fee_payer,
+        stake_args: None,
+        spl_token_args: Some(SplTokenArgs {
+            token_account_address,
+            ..SplTokenArgs::default()
+        }),
+        transfer_amount: value_of(matches, "transfer_amount"),
+    })
+}
+
+fn parse_balances_args(matches: &ArgMatches<'_>) -> Result<BalancesArgs, Box<dyn Error>> {
+    let mut wallet_manager = maybe_wallet_manager()?;
+    let spl_token_args =
+        pubkey_of_signer(matches, "mint_address", &mut wallet_manager)?.map(|mint| SplTokenArgs {
+            mint,
+            ..SplTokenArgs::default()
+        });
+    Ok(BalancesArgs {
+        input_csv: value_t_or_exit!(matches, "input_csv", String),
+        spl_token_args,
+    })
 }
 
 fn parse_transaction_log_args(matches: &ArgMatches<'_>) -> TransactionLogArgs {
@@ -373,7 +522,11 @@ where
         ("distribute-stake", Some(matches)) => {
             Command::DistributeTokens(parse_distribute_stake_args(matches)?)
         }
-        ("balances", Some(matches)) => Command::Balances(parse_balances_args(matches)),
+        ("distribute-spl-tokens", Some(matches)) => {
+            Command::DistributeTokens(parse_distribute_spl_tokens_args(matches)?)
+        }
+        ("balances", Some(matches)) => Command::Balances(parse_balances_args(matches)?),
+        ("spl-token-balances", Some(matches)) => Command::Balances(parse_balances_args(matches)?),
         ("transaction-log", Some(matches)) => {
             Command::TransactionLog(parse_transaction_log_args(matches))
         }

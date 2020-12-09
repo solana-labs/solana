@@ -14,7 +14,7 @@ export const PROGRAM_IDS: string[] = [
 
 const INSTRUCTION_LOOKUP: { [key: number]: string } = {
   0: "Initialize Swap",
-  1: "Swap",
+  1: "Exchange",
   2: "Deposit",
   3: "Withdraw",
 };

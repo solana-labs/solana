@@ -1,19 +1,21 @@
+use crate::cluster_info::MAX_SNAPSHOT_HASHES;
 use crate::contact_info::ContactInfo;
 use crate::deprecated;
 use crate::epoch_slots::EpochSlots;
 use bincode::{serialize, serialized_size};
+use rand::Rng;
 use solana_sdk::sanitize::{Sanitize, SanitizeError};
 use solana_sdk::timing::timestamp;
 use solana_sdk::{
     clock::Slot,
     hash::Hash,
-    pubkey::Pubkey,
-    signature::{Keypair, Signable, Signature},
+    pubkey::{self, Pubkey},
+    signature::{Keypair, Signable, Signature, Signer},
     transaction::Transaction,
 };
 use std::{
     borrow::{Borrow, Cow},
-    collections::{BTreeSet, HashSet},
+    collections::{hash_map::Entry, BTreeSet, HashMap, HashSet},
     fmt,
 };
 
@@ -109,6 +111,29 @@ impl Sanitize for CrdsData {
     }
 }
 
+/// Random timestamp for tests and benchmarks.
+pub(crate) fn new_rand_timestamp<R: Rng>(rng: &mut R) -> u64 {
+    const DELAY: u64 = 10 * 60 * 1000; // 10 minutes
+    timestamp() - DELAY + rng.gen_range(0, 2 * DELAY)
+}
+
+impl CrdsData {
+    /// New random CrdsData for tests and benchmarks.
+    fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> CrdsData {
+        let kind = rng.gen_range(0, 5);
+        // TODO: Implement other kinds of CrdsData here.
+        // TODO: Assign ranges to each arm proportional to their frequency in
+        // the mainnet crds table.
+        match kind {
+            0 => CrdsData::ContactInfo(ContactInfo::new_rand(rng, pubkey)),
+            1 => CrdsData::LowestSlot(rng.gen(), LowestSlot::new_rand(rng, pubkey)),
+            2 => CrdsData::SnapshotHashes(SnapshotHash::new_rand(rng, pubkey)),
+            3 => CrdsData::AccountsHashes(SnapshotHash::new_rand(rng, pubkey)),
+            _ => CrdsData::Version(Version::new_rand(rng, pubkey)),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
 pub struct SnapshotHash {
     pub from: Pubkey,
@@ -138,6 +163,23 @@ impl SnapshotHash {
             wallclock: timestamp(),
         }
     }
+
+    /// New random SnapshotHash for tests and benchmarks.
+    pub(crate) fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
+        let num_hashes = rng.gen_range(0, MAX_SNAPSHOT_HASHES) + 1;
+        let hashes = std::iter::repeat_with(|| {
+            let slot = 47825632 + rng.gen_range(0, 512);
+            let hash = solana_sdk::hash::new_rand(rng);
+            (slot, hash)
+        })
+        .take(num_hashes)
+        .collect();
+        Self {
+            from: pubkey.unwrap_or_else(pubkey::new_rand),
+            hashes,
+            wallclock: new_rand_timestamp(rng),
+        }
+    }
 }
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
 pub struct LowestSlot {
@@ -158,6 +200,18 @@ impl LowestSlot {
             slots: BTreeSet::new(),
             stash: vec![],
             wallclock,
+        }
+    }
+
+    /// New random LowestSlot for tests and benchmarks.
+    fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
+        Self {
+            from: pubkey.unwrap_or_else(pubkey::new_rand),
+            root: rng.gen(),
+            lowest: rng.gen(),
+            slots: BTreeSet::default(),
+            stash: Vec::default(),
+            wallclock: new_rand_timestamp(rng),
         }
     }
 }
@@ -252,6 +306,21 @@ impl Version {
             version: solana_version::Version::default(),
         }
     }
+
+    /// New random Version for tests and benchmarks.
+    fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
+        Self {
+            from: pubkey.unwrap_or_else(pubkey::new_rand),
+            wallclock: new_rand_timestamp(rng),
+            version: solana_version::Version {
+                major: rng.gen(),
+                minor: rng.gen(),
+                patch: rng.gen(),
+                commit: Some(rng.gen()),
+                feature_set: rng.gen(),
+            },
+        }
+    }
 }
 
 /// Type of the replicated value
@@ -312,14 +381,19 @@ impl CrdsValue {
         value
     }
 
-    /// New random crds value for tests and benchmarks.
-    pub fn new_rand<R: ?Sized>(rng: &mut R) -> CrdsValue
-    where
-        R: rand::Rng,
-    {
-        let now = rng.gen();
-        let contact_info = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), now);
-        Self::new_signed(CrdsData::ContactInfo(contact_info), &Keypair::new())
+    /// New random CrdsValue for tests and benchmarks.
+    pub fn new_rand<R: Rng>(rng: &mut R, keypair: Option<&Keypair>) -> CrdsValue {
+        match keypair {
+            None => {
+                let keypair = Keypair::new();
+                let data = CrdsData::new_rand(rng, Some(keypair.pubkey()));
+                Self::new_signed(data, &keypair)
+            }
+            Some(keypair) => {
+                let data = CrdsData::new_rand(rng, Some(keypair.pubkey()));
+                Self::new_signed(data, keypair)
+            }
+        }
     }
 
     /// Totally unsecure unverifiable wallclock of the node that generated this message
@@ -424,18 +498,20 @@ impl CrdsValue {
     }
 
     /// Return all the possible labels for a record identified by Pubkey.
-    pub fn record_labels(key: &Pubkey) -> Vec<CrdsValueLabel> {
-        let mut labels = vec![
-            CrdsValueLabel::ContactInfo(*key),
-            CrdsValueLabel::LowestSlot(*key),
-            CrdsValueLabel::SnapshotHashes(*key),
-            CrdsValueLabel::AccountsHashes(*key),
-            CrdsValueLabel::LegacyVersion(*key),
-            CrdsValueLabel::Version(*key),
+    pub fn record_labels(key: Pubkey) -> impl Iterator<Item = CrdsValueLabel> {
+        const CRDS_VALUE_LABEL_STUBS: [fn(Pubkey) -> CrdsValueLabel; 6] = [
+            CrdsValueLabel::ContactInfo,
+            CrdsValueLabel::LowestSlot,
+            CrdsValueLabel::SnapshotHashes,
+            CrdsValueLabel::AccountsHashes,
+            CrdsValueLabel::LegacyVersion,
+            CrdsValueLabel::Version,
         ];
-        labels.extend((0..MAX_VOTES).map(|ix| CrdsValueLabel::Vote(ix, *key)));
-        labels.extend((0..MAX_EPOCH_SLOTS).map(|ix| CrdsValueLabel::EpochSlots(ix, *key)));
-        labels
+        CRDS_VALUE_LABEL_STUBS
+            .iter()
+            .map(move |f| (f)(key))
+            .chain((0..MAX_VOTES).map(move |ix| CrdsValueLabel::Vote(ix, key)))
+            .chain((0..MAX_EPOCH_SLOTS).map(move |ix| CrdsValueLabel::EpochSlots(ix, key)))
     }
 
     /// Returns the size (in bytes) of a CrdsValue
@@ -471,6 +547,30 @@ impl CrdsValue {
     }
 }
 
+/// Filters out an iterator of crds values, returning
+/// the unique ones with the most recent wallclock.
+pub(crate) fn filter_current<'a, I>(values: I) -> impl Iterator<Item = &'a CrdsValue>
+where
+    I: IntoIterator<Item = &'a CrdsValue>,
+{
+    let mut out = HashMap::new();
+    for value in values {
+        match out.entry(value.label()) {
+            Entry::Vacant(entry) => {
+                entry.insert((value, value.wallclock()));
+            }
+            Entry::Occupied(mut entry) => {
+                let value_wallclock = value.wallclock();
+                let (_, entry_wallclock) = entry.get();
+                if *entry_wallclock < value_wallclock {
+                    entry.insert((value, value_wallclock));
+                }
+            }
+        }
+    }
+    out.into_iter().map(|(_, (v, _))| v)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -479,13 +579,15 @@ mod test {
     use solana_perf::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, Signer};
     use solana_sdk::timing::timestamp;
+    use std::cmp::Ordering;
+    use std::iter::repeat_with;
 
     #[test]
     fn test_labels() {
         let mut hits = [false; 6 + MAX_VOTES as usize + MAX_EPOCH_SLOTS as usize];
         // this method should cover all the possible labels
-        for v in &CrdsValue::record_labels(&Pubkey::default()) {
-            match v {
+        for v in CrdsValue::record_labels(Pubkey::default()) {
+            match &v {
                 CrdsValueLabel::ContactInfo(_) => hits[0] = true,
                 CrdsValueLabel::LowestSlot(_) => hits[1] = true,
                 CrdsValueLabel::SnapshotHashes(_) => hits[2] = true,
@@ -668,5 +770,40 @@ mod test {
         value.sign(&wrong_keypair);
         assert!(!value.verify());
         serialize_deserialize_value(value, correct_keypair);
+    }
+
+    #[test]
+    fn test_filter_current() {
+        let mut rng = rand::thread_rng();
+        let keys: Vec<_> = repeat_with(Keypair::new).take(16).collect();
+        let values: Vec<_> = repeat_with(|| {
+            let index = rng.gen_range(0, keys.len());
+            CrdsValue::new_rand(&mut rng, Some(&keys[index]))
+        })
+        .take(256)
+        .collect();
+        let mut currents = HashMap::new();
+        for value in filter_current(&values) {
+            // Assert that filtered values have unique labels.
+            assert!(currents.insert(value.label(), value).is_none());
+        }
+        // Assert that currents are the most recent version of each value.
+        let mut count = 0;
+        for value in &values {
+            let current_value = currents.get(&value.label()).unwrap();
+            match value.wallclock().cmp(&current_value.wallclock()) {
+                Ordering::Less => (),
+                Ordering::Equal => {
+                    assert_eq!(value, *current_value);
+                    count += 1;
+                }
+                Ordering::Greater => panic!("this should not happen!"),
+            }
+        }
+        assert_eq!(count, currents.len());
+        // Currently CrdsData::new_rand is only implemented for 5 different
+        // kinds and excludes Vote and EpochSlots, and so the unique labels
+        // cannot be more than 5 times number of keys.
+        assert!(currents.len() <= keys.len() * 5);
     }
 }

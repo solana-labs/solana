@@ -9,6 +9,7 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
+crossbeam-channel = "0.4"
 itertools = "0.9.0"
 gag = "0.1.10"
 fs_extra = "1.1.0"

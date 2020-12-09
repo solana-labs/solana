@@ -16,7 +16,6 @@ default = ["custom-heap"]
 custom-heap = []
 
 [lib]
-name = "solana_bpf_rust_custom_heap"
 crate-type = ["cdylib"]
 
 [package.metadata.docs.rs]

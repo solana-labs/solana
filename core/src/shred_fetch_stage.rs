@@ -1,6 +1,10 @@
 //! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
-use bv::BitVec;
+use ahash::AHasher;
+use lru::LruCache;
+use rand::{thread_rng, Rng};
+use std::hash::Hasher;
+
 use solana_ledger::blockstore::MAX_DATA_SHREDS_PER_SLOT;
 use solana_ledger::shred::{
     CODING_SHRED, DATA_SHRED, OFFSET_OF_SHRED_INDEX, OFFSET_OF_SHRED_SLOT, OFFSET_OF_SHRED_TYPE,
@@ -10,9 +14,8 @@ use solana_perf::cuda_runtime::PinnedVec;
 use solana_perf::packet::{limited_deserialize, Packet, PacketsRecycler};
 use solana_perf::recycler::Recycler;
 use solana_runtime::bank_forks::BankForks;
-use solana_sdk::clock::Slot;
+use solana_sdk::clock::{Slot, DEFAULT_MS_PER_SLOT};
 use solana_streamer::streamer::{self, PacketReceiver, PacketSender};
-use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
@@ -21,7 +24,8 @@ use std::sync::RwLock;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
 
-pub type ShredsReceived = HashMap<(Slot, u8), BitVec<u64>>;
+const DEFAULT_LRU_SIZE: usize = 10_000;
+pub type ShredsReceived = LruCache<u64, ()>;
 
 #[derive(Default)]
 struct ShredFetchStats {
@@ -73,11 +77,12 @@ impl ShredFetchStage {
         last_slot: Slot,
         slots_per_epoch: u64,
         modify: &F,
+        seeds: (u128, u128),
     ) where
         F: Fn(&mut Packet),
     {
         p.meta.discard = true;
-        if let Some((slot, index)) = Self::get_slot_index(p, stats) {
+        if let Some((slot, _index)) = Self::get_slot_index(p, stats) {
             // Seems reasonable to limit shreds to 2 epochs away
             if slot > last_root
                 && slot < (last_slot + 2 * slots_per_epoch)
@@ -86,16 +91,15 @@ impl ShredFetchStage {
                 let shred_type = p.data[OFFSET_OF_SHRED_TYPE];
                 if shred_type == DATA_SHRED || shred_type == CODING_SHRED {
                     // Shred filter
-                    let slot_received =
-                        shreds_received
-                            .entry((slot, shred_type))
-                            .or_insert_with(|| {
-                                BitVec::new_fill(false, MAX_DATA_SHREDS_PER_SLOT as u64)
-                            });
-                    if !slot_received.get(index.into()) {
+
+                    let mut hasher = AHasher::new_with_keys(seeds.0, seeds.1);
+                    hasher.write(&p.data[0..p.meta.size]);
+                    let hash = hasher.finish();
+
+                    if shreds_received.get(&hash).is_none() {
+                        shreds_received.put(hash, ());
                         p.meta.discard = false;
                         modify(p);
-                        slot_received.set(index.into(), true);
                     } else {
                         stats.duplicate_shred += 1;
                     }
@@ -116,8 +120,8 @@ impl ShredFetchStage {
     ) where
         F: Fn(&mut Packet),
     {
-        let mut shreds_received = ShredsReceived::default();
-        let mut last_cleared = Instant::now();
+        let mut shreds_received = LruCache::new(DEFAULT_LRU_SIZE);
+        let mut last_updated = Instant::now();
 
         // In the case of bank_forks=None, setup to accept any slot range
         let mut last_root = 0;
@@ -126,11 +130,13 @@ impl ShredFetchStage {
 
         let mut last_stats = Instant::now();
         let mut stats = ShredFetchStats::default();
+        let mut seeds = (thread_rng().gen::<u128>(), thread_rng().gen::<u128>());
 
         while let Some(mut p) = recvr.iter().next() {
-            if last_cleared.elapsed().as_millis() > 200 {
+            if last_updated.elapsed().as_millis() as u64 > DEFAULT_MS_PER_SLOT {
+                last_updated = Instant::now();
+                seeds = (thread_rng().gen::<u128>(), thread_rng().gen::<u128>());
                 shreds_received.clear();
-                last_cleared = Instant::now();
                 if let Some(bank_forks) = bank_forks.as_ref() {
                     let bank_forks_r = bank_forks.read().unwrap();
                     last_root = bank_forks_r.root();
@@ -150,6 +156,7 @@ impl ShredFetchStage {
                     last_slot,
                     slots_per_epoch,
                     &modify,
+                    seeds,
                 );
             });
             if last_stats.elapsed().as_millis() > 1000 {
@@ -215,15 +222,15 @@ impl ShredFetchStage {
     ) -> Self {
         let recycler: PacketsRecycler = Recycler::warmed(100, 1024);
 
-        let tvu_threads = sockets.into_iter().map(|socket| {
-            streamer::receiver(
-                socket,
-                &exit,
-                sender.clone(),
-                recycler.clone(),
-                "shred_fetch_stage",
-            )
-        });
+        let (mut tvu_threads, tvu_filter) = Self::packet_modifier(
+            sockets,
+            &exit,
+            sender.clone(),
+            recycler.clone(),
+            bank_forks.clone(),
+            "shred_fetch",
+            |_| {},
+        );
 
         let (tvu_forwards_threads, fwd_thread_hdl) = Self::packet_modifier(
             forward_sockets,
@@ -239,20 +246,21 @@ impl ShredFetchStage {
             vec![repair_socket],
             &exit,
             sender.clone(),
-            recycler.clone(),
+            recycler,
             bank_forks,
             "shred_fetch_repair",
             |p| p.meta.repair = true,
         );
 
-        let mut thread_hdls: Vec<_> = tvu_threads
-            .chain(tvu_forwards_threads.into_iter())
-            .collect();
-        thread_hdls.extend(repair_receiver.into_iter());
-        thread_hdls.push(fwd_thread_hdl);
-        thread_hdls.push(repair_handler);
+        tvu_threads.extend(tvu_forwards_threads.into_iter());
+        tvu_threads.extend(repair_receiver.into_iter());
+        tvu_threads.push(tvu_filter);
+        tvu_threads.push(fwd_thread_hdl);
+        tvu_threads.push(repair_handler);
 
-        Self { thread_hdls }
+        Self {
+            thread_hdls: tvu_threads,
+        }
     }
 
     pub fn join(self) -> thread::Result<()> {
@@ -271,13 +279,15 @@ mod tests {
     #[test]
     fn test_data_code_same_index() {
         solana_logger::setup();
-        let mut shreds_received = ShredsReceived::default();
+        let mut shreds_received = LruCache::new(DEFAULT_LRU_SIZE);
         let mut packet = Packet::default();
         let mut stats = ShredFetchStats::default();
 
         let slot = 1;
         let shred = Shred::new_from_data(slot, 3, 0, None, true, true, 0, 0, 0);
         shred.copy_to_packet(&mut packet);
+
+        let seeds = (thread_rng().gen::<u128>(), thread_rng().gen::<u128>());
 
         let last_root = 0;
         let last_slot = 100;
@@ -290,6 +300,7 @@ mod tests {
             last_slot,
             slots_per_epoch,
             &|_p| {},
+            seeds,
         );
         assert!(!packet.meta.discard);
 
@@ -304,6 +315,7 @@ mod tests {
             last_slot,
             slots_per_epoch,
             &|_p| {},
+            seeds,
         );
         assert!(!packet.meta.discard);
     }
@@ -311,12 +323,13 @@ mod tests {
     #[test]
     fn test_shred_filter() {
         solana_logger::setup();
-        let mut shreds_received = ShredsReceived::default();
+        let mut shreds_received = LruCache::new(DEFAULT_LRU_SIZE);
         let mut packet = Packet::default();
         let mut stats = ShredFetchStats::default();
         let last_root = 0;
         let last_slot = 100;
         let slots_per_epoch = 10;
+        let seeds = (thread_rng().gen::<u128>(), thread_rng().gen::<u128>());
         // packet size is 0, so cannot get index
         ShredFetchStage::process_packet(
             &mut packet,
@@ -326,6 +339,7 @@ mod tests {
             last_slot,
             slots_per_epoch,
             &|_p| {},
+            seeds,
         );
         assert_eq!(stats.index_overrun, 1);
         assert!(packet.meta.discard);
@@ -341,6 +355,7 @@ mod tests {
             last_slot,
             slots_per_epoch,
             &|_p| {},
+            seeds,
         );
         assert!(packet.meta.discard);
 
@@ -353,6 +368,7 @@ mod tests {
             last_slot,
             slots_per_epoch,
             &|_p| {},
+            seeds,
         );
         assert!(!packet.meta.discard);
 
@@ -365,6 +381,7 @@ mod tests {
             last_slot,
             slots_per_epoch,
             &|_p| {},
+            seeds,
         );
         assert!(packet.meta.discard);
 
@@ -380,6 +397,7 @@ mod tests {
             last_slot,
             slots_per_epoch,
             &|_p| {},
+            seeds,
         );
         assert!(packet.meta.discard);
 
@@ -394,6 +412,7 @@ mod tests {
             last_slot,
             slots_per_epoch,
             &|_p| {},
+            seeds,
         );
         assert!(packet.meta.discard);
     }

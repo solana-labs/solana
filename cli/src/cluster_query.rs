@@ -7,7 +7,11 @@ use chrono::{Local, TimeZone};
 use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
 use solana_clap_utils::{
-    commitment::commitment_arg, input_parsers::*, input_validators::*, keypair::DefaultSigner,
+    commitment::{commitment_arg, commitment_arg_with_default},
+    input_parsers::*,
+    input_validators::*,
+    keypair::DefaultSigner,
+    offline::{blockhash_arg, BLOCKHASH_ARG},
 };
 use solana_cli_output::{
     display::{
@@ -21,7 +25,7 @@ use solana_client::{
     rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
     rpc_config::{
         RpcAccountInfoConfig, RpcLargestAccountsConfig, RpcLargestAccountsFilter,
-        RpcProgramAccountsConfig,
+        RpcProgramAccountsConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter,
     },
     rpc_filter,
     rpc_response::SlotInfo,
@@ -33,6 +37,7 @@ use solana_sdk::{
     clock::{self, Clock, Slot},
     commitment_config::CommitmentConfig,
     epoch_schedule::Epoch,
+    hash::Hash,
     message::Message,
     native_token::lamports_to_sol,
     pubkey::{self, Pubkey},
@@ -53,7 +58,7 @@ use std::{
         Arc,
     },
     thread::sleep,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 static CHECK_MARK: Emoji = Emoji("✅ ", "");
@@ -210,6 +215,13 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .help("Stop after submitting count transactions"),
                 )
                 .arg(
+                    Arg::with_name("print_timestamp")
+                        .short("D")
+                        .long("print-timestamp")
+                        .takes_value(false)
+                        .help("Print timestamp (unix time + microseconds as in gettimeofday) before each line"),
+                )
+                .arg(
                     Arg::with_name("lamports")
                         .long("lamports")
                         .value_name("NUMBER")
@@ -227,11 +239,32 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .default_value("15")
                         .help("Wait up to timeout seconds for transaction confirmation"),
                 )
+                .arg(blockhash_arg())
                 .arg(commitment_arg()),
         )
         .subcommand(
             SubCommand::with_name("live-slots")
                 .about("Show information about the current slot progression"),
+        )
+        .subcommand(
+            SubCommand::with_name("logs")
+                .about("Stream transaction logs")
+                .arg(
+                    pubkey!(Arg::with_name("address")
+                        .index(1)
+                        .value_name("ADDRESS"),
+                        "Account address to monitor \
+                         [default: monitor all transactions except for votes] \
+                        ")
+                )
+                .arg(
+                    Arg::with_name("include_votes")
+                        .long("include-votes")
+                        .takes_value(false)
+                        .conflicts_with("address")
+                        .help("Include vote transactions when monitoring all transactions")
+                )
+                .arg(commitment_arg_with_default("singleGossip")),
         )
         .subcommand(
             SubCommand::with_name("block-production")
@@ -362,12 +395,16 @@ pub fn parse_cluster_ping(
         None
     };
     let timeout = Duration::from_secs(value_t_or_exit!(matches, "timeout", u64));
+    let blockhash = value_of(matches, BLOCKHASH_ARG.name);
+    let print_timestamp = matches.is_present("print_timestamp");
     Ok(CliCommandInfo {
         command: CliCommand::Ping {
             lamports,
             interval,
             count,
             timeout,
+            blockhash,
+            print_timestamp,
         },
         signers: vec![default_signer.signer_from_path(matches, wallet_manager)?],
     })
@@ -1037,6 +1074,8 @@ pub fn process_ping(
     interval: &Duration,
     count: &Option<u64>,
     timeout: &Duration,
+    fixed_blockhash: &Option<Hash>,
+    print_timestamp: bool,
 ) -> ProcessResult {
     println_name_value("Source Account:", &config.signers[0].pubkey().to_string());
     println!();
@@ -1054,9 +1093,21 @@ pub fn process_ping(
     let (mut blockhash, mut fee_calculator) = rpc_client.get_recent_blockhash()?;
     let mut blockhash_transaction_count = 0;
     let mut blockhash_acquired = Instant::now();
+    if let Some(fixed_blockhash) = fixed_blockhash {
+        let blockhash_origin = if *fixed_blockhash != Hash::default() {
+            blockhash = *fixed_blockhash;
+            "supplied from cli arguments"
+        } else {
+            "fetched from cluster"
+        };
+        println!(
+            "Fixed blockhash is used: {} ({})",
+            blockhash, blockhash_origin
+        );
+    }
     'mainloop: for seq in 0..count.unwrap_or(std::u64::MAX) {
         let now = Instant::now();
-        if now.duration_since(blockhash_acquired).as_secs() > 60 {
+        if fixed_blockhash.is_none() && now.duration_since(blockhash_acquired).as_secs() > 60 {
             // Fetch a new blockhash every minute
             let (new_blockhash, new_fee_calculator) = rpc_client.get_new_blockhash(&blockhash)?;
             blockhash = new_blockhash;
@@ -1087,6 +1138,18 @@ pub fn process_ping(
         let mut tx = Transaction::new_unsigned(message);
         tx.try_sign(&config.signers, blockhash)?;
 
+        let timestamp = || {
+            let micros = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_micros();
+            if print_timestamp {
+                format!("[{}.{:06}] ", micros / 1_000_000, micros % 1_000_000)
+            } else {
+                format!("")
+            }
+        };
+
         match rpc_client.send_transaction(&tx) {
             Ok(signature) => {
                 let transaction_sent = Instant::now();
@@ -1100,15 +1163,20 @@ pub fn process_ping(
                                 let elapsed_time_millis = elapsed_time.as_millis() as u64;
                                 confirmation_time.push_back(elapsed_time_millis);
                                 println!(
-                                    "{}{} lamport(s) transferred: seq={:<3} time={:>4}ms signature={}",
+                                    "{}{}{} lamport(s) transferred: seq={:<3} time={:>4}ms signature={}",
+                                    timestamp(),
                                     CHECK_MARK, lamports, seq, elapsed_time_millis, signature
                                 );
                                 confirmed_count += 1;
                             }
                             Err(err) => {
                                 println!(
-                                    "{}Transaction failed:    seq={:<3} error={:?} signature={}",
-                                    CROSS_MARK, seq, err, signature
+                                    "{}{}Transaction failed:    seq={:<3} error={:?} signature={}",
+                                    timestamp(),
+                                    CROSS_MARK,
+                                    seq,
+                                    err,
+                                    signature
                                 );
                             }
                         }
@@ -1117,8 +1185,11 @@ pub fn process_ping(
 
                     if elapsed_time >= *timeout {
                         println!(
-                            "{}Confirmation timeout:  seq={:<3}             signature={}",
-                            CROSS_MARK, seq, signature
+                            "{}{}Confirmation timeout:  seq={:<3}             signature={}",
+                            timestamp(),
+                            CROSS_MARK,
+                            seq,
+                            signature
                         );
                         break;
                     }
@@ -1136,8 +1207,11 @@ pub fn process_ping(
             }
             Err(err) => {
                 println!(
-                    "{}Submit failed:         seq={:<3} error={:?}",
-                    CROSS_MARK, seq, err
+                    "{}{}Submit failed:         seq={:<3} error={:?}",
+                    timestamp(),
+                    CROSS_MARK,
+                    seq,
+                    err
                 );
             }
         }
@@ -1172,24 +1246,83 @@ pub fn process_ping(
     Ok("".to_string())
 }
 
-pub fn process_live_slots(url: &str) -> ProcessResult {
-    let exit = Arc::new(AtomicBool::new(false));
+pub fn parse_logs(
+    matches: &ArgMatches<'_>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
+    let address = pubkey_of_signer(matches, "address", wallet_manager)?;
+    let include_votes = matches.is_present("include_votes");
 
-    // Disable Ctrl+C handler as sometimes the PubsubClient shutdown can stall.  Also it doesn't
-    // really matter that the shutdown is clean because the process is terminating.
-    /*
-    let exit_clone = exit.clone();
-    ctrlc::set_handler(move || {
-        exit_clone.store(true, Ordering::Relaxed);
-    })?;
-    */
+    let filter = match address {
+        None => {
+            if include_votes {
+                RpcTransactionLogsFilter::AllWithVotes
+            } else {
+                RpcTransactionLogsFilter::All
+            }
+        }
+        Some(address) => RpcTransactionLogsFilter::Mentions(vec![address.to_string()]),
+    };
+
+    Ok(CliCommandInfo {
+        command: CliCommand::Logs { filter },
+        signers: vec![],
+    })
+}
+
+pub fn process_logs(config: &CliConfig, filter: &RpcTransactionLogsFilter) -> ProcessResult {
+    println!(
+        "Streaming transaction logs{}. {:?} commitment",
+        match filter {
+            RpcTransactionLogsFilter::All => "".into(),
+            RpcTransactionLogsFilter::AllWithVotes => " (including votes)".into(),
+            RpcTransactionLogsFilter::Mentions(addresses) =>
+                format!(" mentioning {}", addresses.join(",")),
+        },
+        config.commitment.commitment
+    );
+
+    let (_client, receiver) = PubsubClient::logs_subscribe(
+        &config.websocket_url,
+        filter.clone(),
+        RpcTransactionLogsConfig {
+            commitment: Some(config.commitment),
+        },
+    )?;
+
+    loop {
+        match receiver.recv() {
+            Ok(logs) => {
+                println!("Transaction executed in slot {}:", logs.context.slot);
+                println!("  Signature: {}", logs.value.signature);
+                println!(
+                    "  Status: {}",
+                    logs.value
+                        .err
+                        .map(|err| err.to_string())
+                        .unwrap_or_else(|| "Ok".to_string())
+                );
+                println!("  Log Messages:");
+                for log in logs.value.logs {
+                    println!("    {}", log);
+                }
+            }
+            Err(err) => {
+                return Ok(format!("Disconnected: {}", err));
+            }
+        }
+    }
+}
+
+pub fn process_live_slots(config: &CliConfig) -> ProcessResult {
+    let exit = Arc::new(AtomicBool::new(false));
 
     let mut current: Option<SlotInfo> = None;
     let mut message = "".to_string();
 
     let slot_progress = new_spinner_progress_bar();
     slot_progress.set_message("Connecting...");
-    let (mut client, receiver) = PubsubClient::slot_subscribe(url)?;
+    let (mut client, receiver) = PubsubClient::slot_subscribe(&config.websocket_url)?;
     slot_progress.set_message("Connected.");
 
     let spacer = "|";
@@ -1581,6 +1714,7 @@ mod tests {
     use super::*;
     use crate::cli::{app, parse_command};
     use solana_sdk::signature::{write_keypair, Keypair};
+    use std::str::FromStr;
     use tempfile::NamedTempFile;
 
     fn make_tmp_file() -> (String, NamedTempFile) {
@@ -1716,8 +1850,11 @@ mod tests {
             "2",
             "-t",
             "3",
+            "-D",
             "--commitment",
             "max",
+            "--blockhash",
+            "4CCNp28j6AhGq7PkjPDP4wbQWBS8LLbQin2xV5n8frKX",
         ]);
         assert_eq!(
             parse_command(&test_ping, &default_signer, &mut None).unwrap(),
@@ -1727,6 +1864,10 @@ mod tests {
                     interval: Duration::from_secs(1),
                     count: Some(2),
                     timeout: Duration::from_secs(3),
+                    blockhash: Some(
+                        Hash::from_str("4CCNp28j6AhGq7PkjPDP4wbQWBS8LLbQin2xV5n8frKX").unwrap()
+                    ),
+                    print_timestamp: true,
                 },
                 signers: vec![default_keypair.into()],
             }

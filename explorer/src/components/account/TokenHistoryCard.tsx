@@ -3,6 +3,7 @@ import {
   PublicKey,
   ConfirmedSignatureInfo,
   ParsedInstruction,
+  PartiallyDecodedInstruction,
 } from "@solana/web3.js";
 import { CacheEntry, FetchStatus } from "providers/cache";
 import {
@@ -40,6 +41,13 @@ import {
   isSerumInstruction,
   parseSerumInstructionTitle,
 } from "components/instruction/serum/types";
+import { INNER_INSTRUCTIONS_START_SLOT } from "pages/TransactionDetailsPage";
+import { useCluster, Cluster } from "providers/cluster";
+
+type InstructionType = {
+  name: string;
+  innerInstructions: (ParsedInstruction | PartiallyDecodedInstruction)[];
+};
 
 export function TokenHistoryCard({ pubkey }: { pubkey: PublicKey }) {
   const address = pubkey.toBase58();
@@ -263,6 +271,7 @@ const TokenTransactionRow = React.memo(
     details: CacheEntry<Details> | undefined;
   }) => {
     const fetchDetails = useFetchTransactionDetails();
+    const { cluster } = useCluster();
 
     // Fetch details on load
     React.useEffect(() => {
@@ -309,58 +318,91 @@ const TokenTransactionRow = React.memo(
         </tr>
       );
 
-    const tokenInstructionNames = instructions
-      .map((ix, index): string | undefined => {
-        let transactionInstruction;
-        if (details?.data?.transaction?.transaction) {
-          transactionInstruction = intoTransactionInstruction(
-            details.data.transaction.transaction,
-            index
-          );
-        }
+    let tokenInstructionNames: InstructionType[] = [];
 
-        if ("parsed" in ix) {
-          if (ix.program === "spl-token") {
-            return instructionTypeName(ix, tx);
-          } else {
-            return undefined;
-          }
-        } else if (
-          transactionInstruction &&
-          isSerumInstruction(transactionInstruction)
-        ) {
-          try {
-            return parseSerumInstructionTitle(transactionInstruction);
-          } catch (error) {
-            reportError(error, { signature: tx.signature });
-            return undefined;
-          }
-        } else if (
-          transactionInstruction &&
-          isTokenSwapInstruction(transactionInstruction)
-        ) {
-          try {
-            return parseTokenSwapInstructionTitle(transactionInstruction);
-          } catch (error) {
-            reportError(error, { signature: tx.signature });
-            return undefined;
-          }
-        } else {
+    if (details?.data?.transaction) {
+      const transaction = details.data.transaction;
+
+      tokenInstructionNames = instructions
+        .map((ix, index): InstructionType | undefined => {
+          let name = "Unknown";
+
+          const innerInstructions: (
+            | ParsedInstruction
+            | PartiallyDecodedInstruction
+          )[] = [];
+
           if (
-            ix.accounts.findIndex((account) =>
-              account.equals(TOKEN_PROGRAM_ID)
-            ) >= 0
+            transaction.meta?.innerInstructions &&
+            (cluster !== Cluster.MainnetBeta ||
+              transaction.slot >= INNER_INSTRUCTIONS_START_SLOT)
           ) {
-            return "Unknown (Inner)";
+            transaction.meta.innerInstructions.forEach((ix) => {
+              if (ix.index === index) {
+                ix.instructions.forEach((inner) => {
+                  innerInstructions.push(inner);
+                });
+              }
+            });
           }
-          return undefined;
-        }
-      })
-      .filter((name) => name !== undefined) as string[];
+
+          let transactionInstruction;
+          if (transaction?.transaction) {
+            transactionInstruction = intoTransactionInstruction(
+              transaction.transaction,
+              ix
+            );
+          }
+
+          if ("parsed" in ix) {
+            if (ix.program === "spl-token") {
+              name = instructionTypeName(ix, tx);
+            } else {
+              return undefined;
+            }
+          } else if (
+            transactionInstruction &&
+            isSerumInstruction(transactionInstruction)
+          ) {
+            try {
+              name = parseSerumInstructionTitle(transactionInstruction);
+            } catch (error) {
+              reportError(error, { signature: tx.signature });
+              return undefined;
+            }
+          } else if (
+            transactionInstruction &&
+            isTokenSwapInstruction(transactionInstruction)
+          ) {
+            try {
+              name = parseTokenSwapInstructionTitle(transactionInstruction);
+            } catch (error) {
+              reportError(error, { signature: tx.signature });
+              return undefined;
+            }
+          } else {
+            if (
+              ix.accounts.findIndex((account) =>
+                account.equals(TOKEN_PROGRAM_ID)
+              ) >= 0
+            ) {
+              name = "Unknown (Inner)";
+            } else {
+              return undefined;
+            }
+          }
+
+          return {
+            name: name,
+            innerInstructions: innerInstructions,
+          };
+        })
+        .filter((name) => name !== undefined) as InstructionType[];
+    }
 
     return (
       <>
-        {tokenInstructionNames.map((typeName, index) => {
+        {tokenInstructionNames.map((instructionType, index) => {
           return (
             <tr key={index}>
               <td className="w-1">
@@ -373,14 +415,16 @@ const TokenTransactionRow = React.memo(
                 </span>
               </td>
 
-              <td>
-                <Address pubkey={mint} link truncate />
+              <td className="forced-truncate">
+                <Address pubkey={mint} link truncateUnknown />
               </td>
 
-              <td>{typeName}</td>
-
               <td>
-                <Signature signature={tx.signature} link />
+                <InstructionDetails instructionType={instructionType} tx={tx} />
+              </td>
+
+              <td className="forced-truncate">
+                <Signature signature={tx.signature} link truncate />
               </td>
             </tr>
           );
@@ -389,3 +433,48 @@ const TokenTransactionRow = React.memo(
     );
   }
 );
+
+function InstructionDetails({
+  instructionType,
+  tx,
+}: {
+  instructionType: InstructionType;
+  tx: ConfirmedSignatureInfo;
+}) {
+  const [expanded, setExpanded] = React.useState(false);
+
+  let instructionTypes = instructionType.innerInstructions
+    .map((ix) => {
+      if ("parsed" in ix && ix.program === "spl-token") {
+        return instructionTypeName(ix, tx);
+      }
+      return undefined;
+    })
+    .filter((type) => type !== undefined);
+
+  return (
+    <>
+      <p className="tree">
+        {instructionTypes.length > 0 && (
+          <span
+            onClick={(e) => {
+              e.preventDefault();
+              setExpanded(!expanded);
+            }}
+            className={`c-pointer fe mr-2 ${
+              expanded ? "fe-minus-square" : "fe-plus-square"
+            }`}
+          ></span>
+        )}
+        {instructionType.name}
+      </p>
+      {expanded && (
+        <ul className="tree">
+          {instructionTypes.map((type, index) => {
+            return <li key={index}>{type}</li>;
+          })}
+        </ul>
+      )}
+    </>
+  );
+}

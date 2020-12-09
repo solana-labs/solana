@@ -37,17 +37,17 @@ fn rerun_if_changed(files: &[&str], directories: &[&str], excludes: &[&str]) {
 fn main() {
     let bpf_c = env::var("CARGO_FEATURE_BPF_C").is_ok();
     if bpf_c {
-        let install_dir =
-            "OUT_DIR=../target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
+         let install_dir =
+             "OUT_DIR=../target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
 
         println!("cargo:warning=(not a warning) Building C-based BPF programs");
-        assert!(Command::new("make")
-            .current_dir("c")
-            .arg("programs")
-            .arg(&install_dir)
-            .status()
-            .expect("Failed to build C-based BPF programs")
-            .success());
+         assert!(Command::new("make")
+             .current_dir("c")
+             .arg("programs")
+             .arg(&install_dir)
+             .status()
+             .expect("Failed to build C-based BPF programs")
+             .success());
 
         rerun_if_changed(&["c/makefile"], &["c/src", "../../sdk"], &["/target/"]);
     }
@@ -61,6 +61,7 @@ fn main() {
             "128bit",
             "alloc",
             "call_depth",
+            "caller_access",
             "custom_heap",
             "dep_crate",
             "deprecated_loader",
@@ -69,6 +70,8 @@ fn main() {
             "external_spend",
             "instruction_introspection",
             "invoke",
+            "invoke_and_error",
+            "invoke_and_ok",
             "invoked",
             "iter",
             "many_args",
@@ -78,9 +81,11 @@ fn main() {
             "param_passing",
             "rand",
             "ristretto",
+            "ro_modify",
             "sanity",
             "sha256",
-            "call_depth",
+            "spoof1",
+            "spoof1_system",
             "sysval",
         ];
         for program in rust_programs.iter() {

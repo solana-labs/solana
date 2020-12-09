@@ -23,7 +23,7 @@ use solana_perf::{
 };
 use solana_runtime::{
     accounts_db::ErrorCounters,
-    bank::{Bank, TransactionBalancesSet, TransactionProcessResult},
+    bank::{Bank, TransactionBalancesSet, TransactionCheckResult, TransactionExecutionResult},
     bank_utils,
     transaction_batch::TransactionBatch,
     vote_sender_types::ReplayVoteSender,
@@ -463,7 +463,7 @@ impl BankingStage {
     fn record_transactions(
         bank_slot: Slot,
         txs: &[Transaction],
-        results: &[TransactionProcessResult],
+        results: &[TransactionExecutionResult],
         poh: &Arc<Mutex<PohRecorder>>,
     ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
         let mut processed_generation = Measure::start("record::process_generation");
@@ -589,7 +589,7 @@ impl BankingStage {
                     bank.clone(),
                     batch.transactions(),
                     batch.iteration_order_vec(),
-                    tx_results.processing_results,
+                    tx_results.execution_results,
                     TransactionBalancesSet::new(pre_balances, post_balances),
                     TransactionTokenBalancesSet::new(pre_token_balances, post_token_balances),
                     inner_instructions,
@@ -731,7 +731,7 @@ impl BankingStage {
     // This function returns a vector containing index of all valid transactions. A valid
     // transaction has result Ok() as the value
     fn filter_valid_transaction_indexes(
-        valid_txs: &[TransactionProcessResult],
+        valid_txs: &[TransactionCheckResult],
         transaction_indexes: &[usize],
     ) -> Vec<usize> {
         let valid_transactions = valid_txs
@@ -1105,7 +1105,6 @@ mod tests {
         get_tmp_ledger_path,
     };
     use solana_perf::packet::to_packets;
-    use solana_runtime::bank::HashAgeKind;
     use solana_sdk::{
         instruction::InstructionError,
         signature::{Keypair, Signer},
@@ -1469,10 +1468,7 @@ mod tests {
                 system_transaction::transfer(&keypair2, &pubkey2, 1, genesis_config.hash()),
             ];
 
-            let mut results = vec![
-                (Ok(()), Some(HashAgeKind::Extant)),
-                (Ok(()), Some(HashAgeKind::Extant)),
-            ];
+            let mut results = vec![(Ok(()), None), (Ok(()), None)];
             let _ = BankingStage::record_transactions(
                 bank.slot(),
                 &transactions,
@@ -1488,7 +1484,7 @@ mod tests {
                     1,
                     SystemError::ResultWithNegativeLamports.into(),
                 )),
-                Some(HashAgeKind::Extant),
+                None,
             );
             let (res, retryable) = BankingStage::record_transactions(
                 bank.slot(),
@@ -1664,10 +1660,10 @@ mod tests {
                 &[
                     (Err(TransactionError::BlockhashNotFound), None),
                     (Err(TransactionError::BlockhashNotFound), None),
-                    (Ok(()), Some(HashAgeKind::Extant)),
+                    (Ok(()), None),
                     (Err(TransactionError::BlockhashNotFound), None),
-                    (Ok(()), Some(HashAgeKind::Extant)),
-                    (Ok(()), Some(HashAgeKind::Extant)),
+                    (Ok(()), None),
+                    (Ok(()), None),
                 ],
                 &[2, 4, 5, 9, 11, 13]
             ),
@@ -1677,12 +1673,12 @@ mod tests {
         assert_eq!(
             BankingStage::filter_valid_transaction_indexes(
                 &[
-                    (Ok(()), Some(HashAgeKind::Extant)),
+                    (Ok(()), None),
                     (Err(TransactionError::BlockhashNotFound), None),
                     (Err(TransactionError::BlockhashNotFound), None),
-                    (Ok(()), Some(HashAgeKind::Extant)),
-                    (Ok(()), Some(HashAgeKind::Extant)),
-                    (Ok(()), Some(HashAgeKind::Extant)),
+                    (Ok(()), None),
+                    (Ok(()), None),
+                    (Ok(()), None),
                 ],
                 &[1, 6, 7, 9, 31, 43]
             ),

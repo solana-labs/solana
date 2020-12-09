@@ -56,9 +56,13 @@ export function performanceInfoReducer(
         return state;
       }
 
-      let short = action.data.map((sample) => {
-        return sample.numTransactions / sample.samplePeriodSecs;
-      });
+      let short = action.data
+        .filter((sample) => {
+          return sample.numTransactions !== 0;
+        })
+        .map((sample) => {
+          return sample.numTransactions / sample.samplePeriodSecs;
+        });
 
       const avgTps = short[0];
       const medium = downsampleByFactor(short, 4);

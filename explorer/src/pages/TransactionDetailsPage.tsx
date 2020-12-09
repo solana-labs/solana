@@ -6,12 +6,19 @@ import {
   useTransactionDetails,
 } from "providers/transactions";
 import { useFetchTransactionDetails } from "providers/transactions/details";
-import { useCluster, ClusterStatus } from "providers/cluster";
+import { useCluster, ClusterStatus, Cluster } from "providers/cluster";
 import {
   TransactionSignature,
   SystemProgram,
   SystemInstruction,
+  ParsedInstruction,
+  PartiallyDecodedInstruction,
+  SignatureResult,
+  ParsedTransaction,
+  ParsedInnerInstruction,
+  Transaction,
 } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import { lamportsToSolString } from "utils";
 import { UnknownDetailsCard } from "components/instruction/UnknownDetailsCard";
 import { SystemDetailsCard } from "components/instruction/system/SystemDetailsCard";
@@ -32,13 +39,17 @@ import { Slot } from "components/common/Slot";
 import { isTokenSwapInstruction } from "components/instruction/token-swap/types";
 import { TokenSwapDetailsCard } from "components/instruction/TokenSwapDetailsCard";
 import { isSerumInstruction } from "components/instruction/serum/types";
+import { MemoDetailsCard } from "components/instruction/MemoDetailsCard";
 
 const AUTO_REFRESH_INTERVAL = 2000;
 const ZERO_CONFIRMATION_BAILOUT = 5;
+export const INNER_INSTRUCTIONS_START_SLOT = 46915769;
 
 type SignatureProps = {
   signature: TransactionSignature;
 };
+
+export const SignatureContext = React.createContext("");
 
 enum AutoRefresh {
   Active,
@@ -106,7 +117,9 @@ export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
         <>
           <StatusCard signature={signature} autoRefresh={autoRefresh} />
           <AccountsCard signature={signature} autoRefresh={autoRefresh} />
-          <InstructionsSection signature={signature} />
+          <SignatureContext.Provider value={signature}>
+            <InstructionsSection signature={signature} />
+          </SignatureContext.Provider>
           <ProgramLogSection signature={signature} />
         </>
       )}
@@ -189,7 +202,10 @@ function StatusCard({
   const blockhash = transaction?.message.recentBlockhash;
   const isNonce = (() => {
     if (!transaction) return false;
-    const ix = intoTransactionInstruction(transaction, 0);
+    const ix = intoTransactionInstruction(
+      transaction,
+      transaction.message.instructions[0]
+    );
     return (
       ix &&
       SystemProgram.programId.equals(ix.programId) &&
@@ -394,87 +410,75 @@ function AccountsCard({
 function InstructionsSection({ signature }: SignatureProps) {
   const status = useTransactionStatus(signature);
   const details = useTransactionDetails(signature);
+  const { cluster } = useCluster();
   const fetchDetails = useFetchTransactionDetails();
   const refreshDetails = () => fetchDetails(signature);
 
   if (!status?.data?.info || !details?.data?.transaction) return null;
 
+  const raw = details.data.raw?.transaction;
+
   const { transaction } = details.data.transaction;
+  const { meta } = details.data.transaction;
+
   if (transaction.message.instructions.length === 0) {
     return <ErrorCard retry={refreshDetails} text="No instructions found" />;
   }
 
+  const innerInstructions: {
+    [index: number]: (ParsedInstruction | PartiallyDecodedInstruction)[];
+  } = {};
+
+  if (
+    meta?.innerInstructions &&
+    (cluster !== Cluster.MainnetBeta ||
+      details.data.transaction.slot >= INNER_INSTRUCTIONS_START_SLOT)
+  ) {
+    meta.innerInstructions.forEach((parsed: ParsedInnerInstruction) => {
+      if (!innerInstructions[parsed.index]) {
+        innerInstructions[parsed.index] = [];
+      }
+
+      parsed.instructions.forEach((ix) => {
+        innerInstructions[parsed.index].push(ix);
+      });
+    });
+  }
+
   const result = status.data.info.result;
   const instructionDetails = transaction.message.instructions.map(
-    (next, index) => {
-      if ("parsed" in next) {
-        switch (next.program) {
-          case "spl-token":
-            return (
-              <TokenDetailsCard
-                key={index}
-                tx={transaction}
-                ix={next}
-                result={result}
-                index={index}
-              />
-            );
-          case "bpf-loader":
-            return (
-              <BpfLoaderDetailsCard
-                key={index}
-                tx={transaction}
-                ix={next}
-                result={result}
-                index={index}
-              />
-            );
-          case "system":
-            return (
-              <SystemDetailsCard
-                key={index}
-                tx={transaction}
-                ix={next}
-                result={result}
-                index={index}
-              />
-            );
-          case "stake":
-            return (
-              <StakeDetailsCard
-                key={index}
-                tx={transaction}
-                ix={next}
-                result={result}
-                index={index}
-              />
-            );
-          default:
-            const props = { ix: next, result, index };
-            return <UnknownDetailsCard key={index} {...props} />;
-        }
+    (instruction, index) => {
+      let innerCards: JSX.Element[] = [];
+
+      if (index in innerInstructions) {
+        innerInstructions[index].forEach((ix, childIndex) => {
+          if (typeof ix.programId === "string") {
+            ix.programId = new PublicKey(ix.programId);
+          }
+
+          let res = renderInstructionCard({
+            index,
+            ix,
+            result,
+            signature,
+            tx: transaction,
+            childIndex,
+            raw,
+          });
+
+          innerCards.push(res);
+        });
       }
 
-      const ix = intoTransactionInstruction(transaction, index);
-
-      if (!ix) {
-        return (
-          <ErrorCard
-            key={index}
-            text="Could not display this instruction, please report"
-          />
-        );
-      }
-
-      const props = { ix, result, index, signature };
-
-      if (isSerumInstruction(ix)) {
-        return <SerumDetailsCard key={index} {...props} />;
-      } else if (isTokenSwapInstruction(ix)) {
-        return <TokenSwapDetailsCard key={index} {...props} />;
-      } else {
-        return <UnknownDetailsCard key={index} {...props} />;
-      }
+      return renderInstructionCard({
+        index,
+        ix: instruction,
+        result,
+        signature,
+        tx: transaction,
+        innerCards,
+        raw,
+      });
     }
   );
 
@@ -518,4 +522,98 @@ function ProgramLogSection({ signature }: SignatureProps) {
       </div>
     </>
   );
+}
+
+function renderInstructionCard({
+  ix,
+  tx,
+  result,
+  index,
+  signature,
+  innerCards,
+  childIndex,
+  raw,
+}: {
+  ix: ParsedInstruction | PartiallyDecodedInstruction;
+  tx: ParsedTransaction;
+  result: SignatureResult;
+  index: number;
+  signature: TransactionSignature;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
+  raw?: Transaction;
+}) {
+  const key = `${index}-${childIndex}`;
+
+  if ("parsed" in ix) {
+    const props = {
+      tx,
+      ix,
+      result,
+      index,
+      innerCards,
+      childIndex,
+      key,
+    };
+
+    switch (ix.program) {
+      case "spl-token":
+        return <TokenDetailsCard {...props} />;
+      case "bpf-loader":
+        return <BpfLoaderDetailsCard {...props} />;
+      case "system":
+        return <SystemDetailsCard {...props} />;
+      case "stake":
+        return <StakeDetailsCard {...props} />;
+      case "spl-memo":
+        return <MemoDetailsCard {...props} />;
+      default:
+        return <UnknownDetailsCard {...props} />;
+    }
+  }
+
+  // TODO: There is a bug in web3, where inner instructions
+  // aren't getting coerced. This is a temporary fix.
+
+  if (typeof ix.programId === "string") {
+    ix.programId = new PublicKey(ix.programId);
+  }
+
+  ix.accounts = ix.accounts.map((account) => {
+    if (typeof account === "string") {
+      return new PublicKey(account);
+    }
+
+    return account;
+  });
+
+  // TODO: End hotfix
+
+  const transactionIx = intoTransactionInstruction(tx, ix);
+
+  if (!transactionIx) {
+    return (
+      <ErrorCard
+        key={key}
+        text="Could not display this instruction, please report"
+      />
+    );
+  }
+
+  const props = {
+    ix: transactionIx,
+    result,
+    index,
+    signature,
+    innerCards,
+    childIndex,
+  };
+
+  if (isSerumInstruction(transactionIx)) {
+    return <SerumDetailsCard key={key} {...props} />;
+  } else if (isTokenSwapInstruction(transactionIx)) {
+    return <TokenSwapDetailsCard key={key} {...props} />;
+  } else {
+    return <UnknownDetailsCard key={key} {...props} />;
+  }
 }

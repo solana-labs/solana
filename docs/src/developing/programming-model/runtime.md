@@ -30,6 +30,7 @@ adhere to the runtime policy.
 The policy is as follows:
 - Only the owner of the account may change owner.
   - And only if the account is writable.
+  - And only if the account is not executable
   - And only if the data is zero-initialized or empty.
 - An account not assigned to the program cannot have its balance decrease.
 - The balance of read-only and executable accounts may not change.

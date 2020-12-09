@@ -17,6 +17,7 @@ use solana_runtime::genesis_utils::{
     ValidatorVoteKeypairs,
 };
 use solana_sdk::{
+    account::Account,
     client::SyncClient,
     clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
     commitment_config::CommitmentConfig,
@@ -67,6 +68,7 @@ pub struct ClusterConfig {
     pub native_instruction_processors: Vec<(String, Pubkey)>,
     pub cluster_type: ClusterType,
     pub poh_config: PohConfig,
+    pub additional_accounts: Vec<(Pubkey, Account)>,
 }
 
 impl Default for ClusterConfig {
@@ -84,6 +86,7 @@ impl Default for ClusterConfig {
             cluster_type: ClusterType::Development,
             poh_config: PohConfig::default(),
             skip_warmup_slots: false,
+            additional_accounts: vec![],
         }
     }
 }
@@ -104,16 +107,16 @@ impl LocalCluster {
         lamports_per_node: u64,
     ) -> Self {
         let stakes: Vec<_> = (0..num_nodes).map(|_| lamports_per_node).collect();
-        let config = ClusterConfig {
+        let mut config = ClusterConfig {
             node_stakes: stakes,
             cluster_lamports,
             validator_configs: vec![ValidatorConfig::default(); num_nodes],
             ..ClusterConfig::default()
         };
-        Self::new(&config)
+        Self::new(&mut config)
     }
 
-    pub fn new(config: &ClusterConfig) -> Self {
+    pub fn new(config: &mut ClusterConfig) -> Self {
         assert_eq!(config.validator_configs.len(), config.node_stakes.len());
         let mut validator_keys = {
             if let Some(ref keys) = config.validator_keys {
@@ -162,6 +165,9 @@ impl LocalCluster {
             stakes_in_genesis,
             config.cluster_type,
         );
+        genesis_config
+            .accounts
+            .extend(config.additional_accounts.drain(..));
         genesis_config.ticks_per_slot = config.ticks_per_slot;
         genesis_config.epoch_schedule = EpochSchedule::custom(
             config.slots_per_epoch,
@@ -188,11 +194,7 @@ impl LocalCluster {
         let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let leader_contact_info = leader_node.info.clone();
         let mut leader_config = config.validator_configs[0].clone();
-        leader_config.rpc_addrs = Some((
-            leader_node.info.rpc,
-            leader_node.info.rpc_pubsub,
-            leader_node.info.rpc_banks,
-        ));
+        leader_config.rpc_addrs = Some((leader_node.info.rpc, leader_node.info.rpc_pubsub));
         leader_config.account_paths = vec![leader_ledger_path.join("accounts")];
         let leader_keypair = Arc::new(Keypair::from_bytes(&leader_keypair.to_bytes()).unwrap());
         let leader_vote_keypair =
@@ -337,11 +339,7 @@ impl LocalCluster {
         }
 
         let mut config = validator_config.clone();
-        config.rpc_addrs = Some((
-            validator_node.info.rpc,
-            validator_node.info.rpc_pubsub,
-            validator_node.info.rpc_banks,
-        ));
+        config.rpc_addrs = Some((validator_node.info.rpc, validator_node.info.rpc_pubsub));
         config.account_paths = vec![ledger_path.join("accounts")];
         let voting_keypair = voting_keypair.unwrap();
         let validator_server = Validator::new(
@@ -623,8 +621,7 @@ impl Cluster for LocalCluster {
         // Update the stored ContactInfo for this node
         let node = Node::new_localhost_with_pubkey(&pubkey);
         cluster_validator_info.info.contact_info = node.info.clone();
-        cluster_validator_info.config.rpc_addrs =
-            Some((node.info.rpc, node.info.rpc_pubsub, node.info.rpc_banks));
+        cluster_validator_info.config.rpc_addrs = Some((node.info.rpc, node.info.rpc_pubsub));
 
         let entry_point_info = {
             if *pubkey == self.entry_point_info.id {
@@ -706,7 +703,7 @@ mod test {
         let mut validator_config = ValidatorConfig::default();
         validator_config.rpc_config.enable_validator_exit = true;
         const NUM_NODES: usize = 1;
-        let config = ClusterConfig {
+        let mut config = ClusterConfig {
             validator_configs: vec![ValidatorConfig::default(); NUM_NODES],
             node_stakes: vec![3; NUM_NODES],
             cluster_lamports: 100,
@@ -715,7 +712,7 @@ mod test {
             stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH as u64,
             ..ClusterConfig::default()
         };
-        let cluster = LocalCluster::new(&config);
+        let cluster = LocalCluster::new(&mut config);
         assert_eq!(cluster.validators.len(), NUM_NODES);
     }
 }

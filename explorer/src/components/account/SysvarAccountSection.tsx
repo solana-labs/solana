@@ -105,7 +105,7 @@ function SysvarAccountRecentBlockhashesCard({
   return (
     <div className="card">
       <AccountHeader
-        title="SYSVAR_RECENT_BLOCKHASHES"
+        title="Sysvar: Recent Blockhashes"
         refresh={() => refresh(account.pubkey)}
       />
 
@@ -127,7 +127,7 @@ function SysvarAccountSlotHashes({
   return (
     <div className="card">
       <AccountHeader
-        title="SYSVAR_SLOT_HASHES"
+        title="Sysvar: Slot Hashes"
         refresh={() => refresh(account.pubkey)}
       />
 
@@ -156,7 +156,7 @@ function SysvarAccountSlotHistory({
   return (
     <div className="card">
       <AccountHeader
-        title="SYSVAR_SLOT_HISTORY"
+        title="Sysvar: Slot History"
         refresh={() => refresh(account.pubkey)}
       />
 
@@ -192,7 +192,7 @@ function SysvarAccountStakeHistory({
   return (
     <div className="card">
       <AccountHeader
-        title="SYSVAR_STAKE_HISTORY"
+        title="Sysvar: Stake History"
         refresh={() => refresh(account.pubkey)}
       />
 
@@ -215,7 +215,7 @@ function SysvarAccountFeesCard({
   return (
     <div className="card">
       <AccountHeader
-        title="SYSVAR_FEES"
+        title="Sysvar: Fees"
         refresh={() => refresh(account.pubkey)}
       />
 
@@ -245,7 +245,7 @@ function SysvarAccountEpochScheduleCard({
   return (
     <div className="card">
       <AccountHeader
-        title="SYSVAR_EPOCH_SCHEDULE"
+        title="Sysvar: Epoch Schedule"
         refresh={() => refresh(account.pubkey)}
       />
 
@@ -301,7 +301,7 @@ function SysvarAccountClockCard({
   return (
     <div className="card">
       <AccountHeader
-        title="SYSVAR_CLOCK"
+        title="Sysvar: Clock"
         refresh={() => refresh(account.pubkey)}
       />
 
@@ -350,7 +350,7 @@ function SysvarAccountRentCard({
   return (
     <div className="card">
       <AccountHeader
-        title="SYSVAR_RENT"
+        title="Sysvar: Rent"
         refresh={() => refresh(account.pubkey)}
       />
 
@@ -399,7 +399,7 @@ function SysvarAccountRewardsCard({
   return (
     <div className="card">
       <AccountHeader
-        title="SYSVAR_REWARDS"
+        title="Sysvar: Rewards"
         refresh={() => refresh(account.pubkey)}
       />
 

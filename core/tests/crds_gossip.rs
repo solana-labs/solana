@@ -498,7 +498,7 @@ fn network_run_pull(
         }
         let total: usize = network_values
             .par_iter()
-            .map(|v| v.lock().unwrap().crds.table.len())
+            .map(|v| v.lock().unwrap().crds.len())
             .sum();
         convergance = total as f64 / ((num * num) as f64);
         if convergance > max_convergance {

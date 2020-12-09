@@ -88,6 +88,9 @@ pub fn to_packets_with_destination<T: Serialize>(
     for (dest_and_data, o) in dests_and_data.iter().zip(out.packets.iter_mut()) {
         if !dest_and_data.0.ip().is_unspecified() && dest_and_data.0.port() != 0 {
             if let Err(e) = Packet::populate_packet(o, Some(&dest_and_data.0), &dest_and_data.1) {
+                // TODO: This should never happen. Instead the caller should
+                // break the payload into smaller messages, and here any errors
+                // should be propagated.
                 error!("Couldn't write to packet {:?}. Data skipped.", e);
             }
         } else {

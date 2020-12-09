@@ -9,8 +9,10 @@ export function CancelOrderByClientIdDetailsCard(props: {
   index: number;
   result: SignatureResult;
   info: CancelOrderByClientId;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
 }) {
-  const { ix, index, result, info } = props;
+  const { ix, index, result, info, innerCards, childIndex } = props;
 
   return (
     <InstructionCard
@@ -18,6 +20,8 @@ export function CancelOrderByClientIdDetailsCard(props: {
       index={index}
       result={result}
       title="Serum: Cancel Order By Client Id"
+      innerCards={innerCards}
+      childIndex={childIndex}
     >
       <tr>
         <td>Market</td>

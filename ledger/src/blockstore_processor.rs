@@ -16,18 +16,18 @@ use solana_metrics::{datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
     bank::{
-        Bank, InnerInstructionsList, TransactionBalancesSet, TransactionLogMessages,
-        TransactionProcessResult, TransactionResults,
+        Bank, InnerInstructionsList, TransactionBalancesSet, TransactionExecutionResult,
+        TransactionLogMessages, TransactionResults,
     },
     bank_forks::BankForks,
     bank_utils,
     commitment::VOTE_THRESHOLD_SIZE,
     transaction_batch::TransactionBatch,
     transaction_utils::OrderedIterator,
+    vote_account::ArcVoteAccount,
     vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{
-    account::Account,
     clock::{Slot, MAX_PROCESSING_AGE},
     genesis_config::GenesisConfig,
     hash::Hash,
@@ -39,7 +39,7 @@ use solana_sdk::{
 use solana_transaction_status::token_balances::{
     collect_token_balances, TransactionTokenBalancesSet,
 };
-use solana_vote_program::vote_state::VoteState;
+
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -127,7 +127,7 @@ fn execute_batch(
 
     let TransactionResults {
         fee_collection_results,
-        processing_results,
+        execution_results,
         ..
     } = tx_results;
 
@@ -145,7 +145,7 @@ fn execute_batch(
             bank.clone(),
             batch.transactions(),
             batch.iteration_order_vec(),
-            processing_results,
+            execution_results,
             balances,
             token_balances,
             inner_instructions,
@@ -333,6 +333,7 @@ pub type ProcessCallback = Arc<dyn Fn(&Bank) + Sync + Send>;
 
 #[derive(Default, Clone)]
 pub struct ProcessOptions {
+    pub bpf_jit: bool,
     pub poh_verify: bool,
     pub full_leader_cache: bool,
     pub dev_halt_at_slot: Option<Slot>,
@@ -364,7 +365,10 @@ pub fn process_blockstore(
         account_paths,
         &opts.frozen_accounts,
         opts.debug_keys.clone(),
-        Some(&crate::builtins::get(genesis_config.cluster_type)),
+        Some(&crate::builtins::get(
+            genesis_config.cluster_type,
+            opts.bpf_jit,
+        )),
     );
     let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");
@@ -842,115 +846,121 @@ fn load_frozen_forks(
     )?;
 
     let dev_halt_at_slot = opts.dev_halt_at_slot.unwrap_or(std::u64::MAX);
-    while !pending_slots.is_empty() {
-        let (meta, bank, last_entry_hash) = pending_slots.pop().unwrap();
-        let slot = bank.slot();
-        if last_status_report.elapsed() > Duration::from_secs(2) {
-            let secs = last_status_report.elapsed().as_secs() as f32;
-            last_status_report = Instant::now();
-            info!(
-                "processing ledger: slot={}, last root slot={} slots={} slots/s={:?} txs/s={}",
+    if root_bank.slot() != dev_halt_at_slot {
+        while !pending_slots.is_empty() {
+            let (meta, bank, last_entry_hash) = pending_slots.pop().unwrap();
+            let slot = bank.slot();
+            if last_status_report.elapsed() > Duration::from_secs(2) {
+                let secs = last_status_report.elapsed().as_secs() as f32;
+                last_status_report = Instant::now();
+                info!(
+                    "processing ledger: slot={}, last root slot={} slots={} slots/s={:?} txs/s={}",
+                    slot,
+                    last_root_slot,
+                    slots_elapsed,
+                    slots_elapsed as f32 / secs,
+                    txs as f32 / secs,
+                );
+                slots_elapsed = 0;
+                txs = 0;
+            }
+
+            let allocated = thread_mem_usage::Allocatedp::default();
+            let initial_allocation = allocated.get();
+
+            let mut progress = ConfirmationProgress::new(last_entry_hash);
+
+            if process_single_slot(
+                blockstore,
+                &bank,
+                opts,
+                recyclers,
+                &mut progress,
+                transaction_status_sender.clone(),
+                None,
+            )
+            .is_err()
+            {
+                continue;
+            }
+            txs += progress.num_txs;
+
+            // Block must be frozen by this point, otherwise `process_single_slot` would
+            // have errored above
+            assert!(bank.is_frozen());
+            all_banks.insert(bank.slot(), bank.clone());
+
+            // If we've reached the last known root in blockstore, start looking
+            // for newer cluster confirmed roots
+            let new_root_bank = {
+                if *root == max_root {
+                    supermajority_root_from_vote_accounts(
+                        bank.slot(),
+                        bank.total_epoch_stake(),
+                        bank.vote_accounts(),
+                    ).and_then(|supermajority_root| {
+                        if supermajority_root > *root {
+                            // If there's a cluster confirmed root greater than our last
+                            // replayed root, then beccause the cluster confirmed root should
+                            // be descended from our last root, it must exist in `all_banks`
+                            let cluster_root_bank = all_banks.get(&supermajority_root).unwrap();
+
+                            // cluster root must be a descendant of our root, otherwise something
+                            // is drastically wrong
+                            assert!(cluster_root_bank.ancestors.contains_key(root));
+                            info!("blockstore processor found new cluster confirmed root: {}, observed in bank: {}", cluster_root_bank.slot(), bank.slot());
+                            Some(cluster_root_bank)
+                        } else {
+                            None
+                        }
+                    })
+                } else if blockstore.is_root(slot) {
+                    Some(&bank)
+                } else {
+                    None
+                }
+            };
+
+            if let Some(new_root_bank) = new_root_bank {
+                *root = new_root_bank.slot();
+                last_root_slot = new_root_bank.slot();
+                leader_schedule_cache.set_root(&new_root_bank);
+                new_root_bank.squash();
+
+                if last_free.elapsed() > Duration::from_secs(30) {
+                    // This could take few secs; so update last_free later
+                    new_root_bank.exhaustively_free_unused_resource();
+                    last_free = Instant::now();
+                }
+
+                // Filter out all non descendants of the new root
+                pending_slots
+                    .retain(|(_, pending_bank, _)| pending_bank.ancestors.contains_key(root));
+                initial_forks.retain(|_, fork_tip_bank| fork_tip_bank.ancestors.contains_key(root));
+                all_banks.retain(|_, bank| bank.ancestors.contains_key(root));
+            }
+
+            slots_elapsed += 1;
+
+            trace!(
+                "Bank for {}slot {} is complete. {} bytes allocated",
+                if last_root_slot == slot { "root " } else { "" },
                 slot,
-                last_root_slot,
-                slots_elapsed,
-                slots_elapsed as f32 / secs,
-                txs as f32 / secs,
+                allocated.since(initial_allocation)
             );
-            slots_elapsed = 0;
-            txs = 0;
-        }
 
-        let allocated = thread_mem_usage::Allocatedp::default();
-        let initial_allocation = allocated.get();
+            process_next_slots(
+                &bank,
+                &meta,
+                blockstore,
+                leader_schedule_cache,
+                &mut pending_slots,
+                &mut initial_forks,
+            )?;
 
-        let mut progress = ConfirmationProgress::new(last_entry_hash);
-
-        if process_single_slot(
-            blockstore,
-            &bank,
-            opts,
-            recyclers,
-            &mut progress,
-            transaction_status_sender.clone(),
-            None,
-        )
-        .is_err()
-        {
-            continue;
-        }
-        txs += progress.num_txs;
-
-        // Block must be frozen by this point, otherwise `process_single_slot` would
-        // have errored above
-        assert!(bank.is_frozen());
-        all_banks.insert(bank.slot(), bank.clone());
-
-        // If we've reached the last known root in blockstore, start looking
-        // for newer cluster confirmed roots
-        let new_root_bank = {
-            if *root == max_root {
-                supermajority_root_from_vote_accounts(bank.slot(), bank.total_epoch_stake(), bank.vote_accounts()
-                .into_iter()).and_then(|supermajority_root| {
-                    if supermajority_root > *root {
-                        // If there's a cluster confirmed root greater than our last
-                        // replayed root, then beccause the cluster confirmed root should
-                        // be descended from our last root, it must exist in `all_banks`
-                        let cluster_root_bank = all_banks.get(&supermajority_root).unwrap();
-
-                        // cluster root must be a descendant of our root, otherwise something
-                        // is drastically wrong
-                        assert!(cluster_root_bank.ancestors.contains_key(root));
-                        info!("blockstore processor found new cluster confirmed root: {}, observed in bank: {}", cluster_root_bank.slot(), bank.slot());
-                        Some(cluster_root_bank)
-                    } else {
-                        None
-                    }
-                })
-            } else if blockstore.is_root(slot) {
-                Some(&bank)
-            } else {
-                None
+            if slot >= dev_halt_at_slot {
+                break;
             }
-        };
-
-        if let Some(new_root_bank) = new_root_bank {
-            *root = new_root_bank.slot();
-            last_root_slot = new_root_bank.slot();
-            leader_schedule_cache.set_root(&new_root_bank);
-            new_root_bank.squash();
-
-            if last_free.elapsed() > Duration::from_secs(30) {
-                // This could take few secs; so update last_free later
-                new_root_bank.exhaustively_free_unused_resource();
-                last_free = Instant::now();
-            }
-
-            // Filter out all non descendants of the new root
-            pending_slots.retain(|(_, pending_bank, _)| pending_bank.ancestors.contains_key(root));
-            initial_forks.retain(|_, fork_tip_bank| fork_tip_bank.ancestors.contains_key(root));
-            all_banks.retain(|_, bank| bank.ancestors.contains_key(root));
-        }
-
-        slots_elapsed += 1;
-
-        trace!(
-            "Bank for {}slot {} is complete. {} bytes allocated",
-            if last_root_slot == slot { "root " } else { "" },
-            slot,
-            allocated.since(initial_allocation)
-        );
-
-        process_next_slots(
-            &bank,
-            &meta,
-            blockstore,
-            leader_schedule_cache,
-            &mut pending_slots,
-            &mut initial_forks,
-        )?;
-
-        if slot >= dev_halt_at_slot {
-            break;
         }
     }
 
@@ -981,30 +991,28 @@ fn supermajority_root(roots: &[(Slot, u64)], total_epoch_stake: u64) -> Option<S
 fn supermajority_root_from_vote_accounts<I>(
     bank_slot: Slot,
     total_epoch_stake: u64,
-    vote_accounts_iter: I,
+    vote_accounts: I,
 ) -> Option<Slot>
 where
-    I: Iterator<Item = (Pubkey, (u64, Account))>,
+    I: IntoIterator<Item = (Pubkey, (u64, ArcVoteAccount))>,
 {
-    let mut roots_stakes: Vec<(Slot, u64)> = vote_accounts_iter
+    let mut roots_stakes: Vec<(Slot, u64)> = vote_accounts
+        .into_iter()
         .filter_map(|(key, (stake, account))| {
             if stake == 0 {
                 return None;
             }
 
-            let vote_state = VoteState::from(&account);
-            if vote_state.is_none() {
-                warn!(
-                    "Unable to get vote_state from account {} in bank: {}",
-                    key, bank_slot
-                );
-                return None;
+            match account.vote_state().as_ref() {
+                Err(_) => {
+                    warn!(
+                        "Unable to get vote_state from account {} in bank: {}",
+                        key, bank_slot
+                    );
+                    None
+                }
+                Ok(vote_state) => vote_state.root_slot.map(|root_slot| (root_slot, stake)),
             }
-
-            vote_state
-                .unwrap()
-                .root_slot
-                .map(|root_slot| (root_slot, stake))
         })
         .collect();
 
@@ -1050,7 +1058,7 @@ pub struct TransactionStatusBatch {
     pub bank: Arc<Bank>,
     pub transactions: Vec<Transaction>,
     pub iteration_order: Option<Vec<usize>>,
-    pub statuses: Vec<TransactionProcessResult>,
+    pub statuses: Vec<TransactionExecutionResult>,
     pub balances: TransactionBalancesSet,
     pub token_balances: TransactionTokenBalancesSet,
     pub inner_instructions: Vec<Option<InnerInstructionsList>>,
@@ -1063,7 +1071,7 @@ pub fn send_transaction_status_batch(
     bank: Arc<Bank>,
     transactions: &[Transaction],
     iteration_order: Option<Vec<usize>>,
-    statuses: Vec<TransactionProcessResult>,
+    statuses: Vec<TransactionExecutionResult>,
     balances: TransactionBalancesSet,
     token_balances: TransactionTokenBalancesSet,
     inner_instructions: Vec<Option<InnerInstructionsList>>,
@@ -1136,6 +1144,7 @@ pub mod tests {
         self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
     };
     use solana_sdk::{
+        account::Account,
         epoch_schedule::EpochSchedule,
         hash::Hash,
         pubkey::Pubkey,
@@ -1146,7 +1155,7 @@ pub mod tests {
     };
     use solana_vote_program::{
         self,
-        vote_state::{VoteStateVersions, MAX_LOCKOUT_HISTORY},
+        vote_state::{VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY},
         vote_transaction,
     };
     use std::{collections::BTreeSet, sync::RwLock};
@@ -2631,6 +2640,37 @@ pub mod tests {
     }
 
     #[test]
+    fn test_halt_at_slot_starting_snapshot_root() {
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
+
+        // Create roots at slots 0, 1
+        let forks = tr(0) / tr(1);
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        blockstore.add_tree(
+            forks,
+            false,
+            true,
+            genesis_config.ticks_per_slot,
+            genesis_config.hash(),
+        );
+        blockstore.set_roots(&[0, 1]).unwrap();
+
+        // Specify halting at slot 0
+        let opts = ProcessOptions {
+            poh_verify: true,
+            dev_halt_at_slot: Some(0),
+            ..ProcessOptions::default()
+        };
+        let (bank_forks, _leader_schedule) =
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
+
+        // Should be able to fetch slot 0 because we specified halting at slot 0, even
+        // if there is a greater root at slot 1.
+        assert!(bank_forks.get(0).is_some());
+    }
+
+    #[test]
     fn test_process_blockstore_from_root() {
         let GenesisConfigInfo {
             mut genesis_config, ..
@@ -3170,7 +3210,7 @@ pub mod tests {
     #[test]
     fn test_supermajority_root_from_vote_accounts() {
         let convert_to_vote_accounts =
-            |roots_stakes: Vec<(Slot, u64)>| -> Vec<(Pubkey, (u64, Account))> {
+            |roots_stakes: Vec<(Slot, u64)>| -> Vec<(Pubkey, (u64, ArcVoteAccount))> {
                 roots_stakes
                     .into_iter()
                     .map(|(root, stake)| {
@@ -3180,7 +3220,10 @@ pub mod tests {
                             Account::new(1, VoteState::size_of(), &solana_vote_program::id());
                         let versioned = VoteStateVersions::Current(Box::new(vote_state));
                         VoteState::serialize(&versioned, &mut vote_account.data).unwrap();
-                        (solana_sdk::pubkey::new_rand(), (stake, vote_account))
+                        (
+                            solana_sdk::pubkey::new_rand(),
+                            (stake, ArcVoteAccount::from(vote_account)),
+                        )
                     })
                     .collect_vec()
             };

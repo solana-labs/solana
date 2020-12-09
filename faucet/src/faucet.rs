@@ -59,7 +59,7 @@ pub enum FaucetRequest {
 }
 
 pub struct Faucet {
-    mint_keypair: Keypair,
+    faucet_keypair: Keypair,
     ip_cache: Vec<IpAddr>,
     pub time_slice: Duration,
     per_time_cap: u64,
@@ -69,7 +69,7 @@ pub struct Faucet {
 
 impl Faucet {
     pub fn new(
-        mint_keypair: Keypair,
+        faucet_keypair: Keypair,
         time_input: Option<u64>,
         per_time_cap: Option<u64>,
         per_request_cap: Option<u64>,
@@ -77,7 +77,7 @@ impl Faucet {
         let time_slice = Duration::new(time_input.unwrap_or(TIME_SLICE), 0);
         let per_time_cap = per_time_cap.unwrap_or(REQUEST_CAP);
         Faucet {
-            mint_keypair,
+            faucet_keypair,
             ip_cache: Vec::new(),
             time_slice,
             per_time_cap,
@@ -133,11 +133,15 @@ impl Faucet {
                     );
                     info!("Requesting airdrop of {} to {:?}", lamports, to);
 
-                    let mint_pubkey = self.mint_keypair.pubkey();
+                    let mint_pubkey = self.faucet_keypair.pubkey();
                     let create_instruction =
                         system_instruction::transfer(&mint_pubkey, &to, lamports);
                     let message = Message::new(&[create_instruction], Some(&mint_pubkey));
-                    Ok(Transaction::new(&[&self.mint_keypair], message, blockhash))
+                    Ok(Transaction::new(
+                        &[&self.faucet_keypair],
+                        message,
+                        blockhash,
+                    ))
                 } else {
                     Err(Error::new(
                         ErrorKind::Other,
@@ -254,14 +258,14 @@ pub fn request_airdrop_transaction(
 
 // For integration tests. Listens on random open port and reports port to Sender.
 pub fn run_local_faucet(
-    mint_keypair: Keypair,
+    faucet_keypair: Keypair,
     sender: Sender<SocketAddr>,
     per_time_cap: Option<u64>,
 ) {
     thread::spawn(move || {
         let faucet_addr = socketaddr!(0, 0);
         let faucet = Arc::new(Mutex::new(Faucet::new(
-            mint_keypair,
+            faucet_keypair,
             None,
             per_time_cap,
             None,
@@ -280,6 +284,11 @@ pub fn run_faucet(
         send_addr.send(socket.local_addr().unwrap()).unwrap();
     }
     info!("Faucet started. Listening on: {}", faucet_addr);
+    info!(
+        "Faucet account address: {}",
+        faucet.lock().unwrap().faucet_keypair.pubkey()
+    );
+
     let done = socket
         .incoming()
         .map_err(|e| debug!("failed to accept socket; error = {:?}", e))

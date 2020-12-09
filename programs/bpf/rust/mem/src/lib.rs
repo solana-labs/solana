@@ -4,7 +4,7 @@
 #![feature(compiler_builtins_lib)]
 
 extern crate compiler_builtins;
-use solana_program::entrypoint::SUCCESS;
+use solana_program::{custom_panic_default, entrypoint::SUCCESS, info};
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
@@ -183,3 +183,5 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
 
     SUCCESS
 }
+
+custom_panic_default!();

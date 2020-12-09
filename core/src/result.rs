@@ -31,6 +31,7 @@ pub enum Error {
     BlockstoreError(blockstore::BlockstoreError),
     FsExtra(fs_extra::error::Error),
     SnapshotError(snapshot_utils::SnapshotError),
+    WeightedIndexError(rand::distributions::weighted::WeightedError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -141,6 +142,11 @@ impl std::convert::From<blockstore::BlockstoreError> for Error {
 impl std::convert::From<snapshot_utils::SnapshotError> for Error {
     fn from(e: snapshot_utils::SnapshotError) -> Error {
         Error::SnapshotError(e)
+    }
+}
+impl std::convert::From<rand::distributions::weighted::WeightedError> for Error {
+    fn from(e: rand::distributions::weighted::WeightedError) -> Error {
+        Error::WeightedIndexError(e)
     }
 }
 

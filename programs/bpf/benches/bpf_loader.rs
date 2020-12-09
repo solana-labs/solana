@@ -6,9 +6,12 @@ extern crate test;
 extern crate solana_bpf_loader_program;
 
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
-use solana_bpf_loader_program::ThisInstructionMeter;
+use solana_bpf_loader_program::{
+    create_vm, serialization::serialize_parameters, syscalls::register_syscalls, BPFError,
+    ThisInstructionMeter,
+};
 use solana_measure::measure::Measure;
-use solana_rbpf::vm::{Executable, InstructionMeter};
+use solana_rbpf::vm::{Config, Executable, InstructionMeter};
 use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
@@ -72,7 +75,9 @@ fn bench_program_create_executable(bencher: &mut Bencher) {
     let elf = load_elf("bench_alu").unwrap();
 
     bencher.iter(|| {
-        let _ = Executable::<solana_bpf_loader_program::BPFError>::from_elf(&elf, None).unwrap();
+        let _ =
+            Executable::<BPFError, ThisInstructionMeter>::from_elf(&elf, None, Config::default())
+                .unwrap();
     });
 }
 
@@ -89,11 +94,14 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let mut invoke_context = MockInvokeContext::default();
 
     let elf = load_elf("bench_alu").unwrap();
-    let executable =
-        Executable::<solana_bpf_loader_program::BPFError>::from_elf(&elf, None).unwrap();
+    let mut executable =
+        Executable::<BPFError, ThisInstructionMeter>::from_elf(&elf, None, Config::default())
+            .unwrap();
+    executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
+    executable.jit_compile().unwrap();
     let compute_meter = invoke_context.get_compute_meter();
     let mut instruction_meter = ThisInstructionMeter { compute_meter };
-    let mut vm = solana_bpf_loader_program::create_vm(
+    let mut vm = create_vm(
         &loader_id,
         executable.as_ref(),
         &mut inner_iter,
@@ -128,22 +136,17 @@ fn bench_program_alu(bencher: &mut Bencher) {
     println!("{{ \"type\": \"bench\", \"name\": \"bench_program_alu_interpreted_mips\", \"median\": {:?}, \"deviation\": 0 }}", mips);
 
     println!("JIT to native:");
-    vm.jit_compile().unwrap();
-    unsafe {
-        assert_eq!(
-            SUCCESS,
-            vm.execute_program_jit(&mut instruction_meter).unwrap()
-        );
-    }
+    assert_eq!(
+        SUCCESS,
+        vm.execute_program_jit(&mut instruction_meter).unwrap()
+    );
     assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
     assert_eq!(
         ARMSTRONG_EXPECTED,
         LittleEndian::read_u64(&inner_iter[mem::size_of::<u64>()..])
     );
 
-    bencher.iter(|| unsafe {
-        vm.execute_program_jit(&mut instruction_meter).unwrap();
-    });
+    bencher.iter(|| vm.execute_program_jit(&mut instruction_meter).unwrap());
     let summary = bencher.bench(|_bencher| {}).unwrap();
     println!("  {:?} instructions", instructions);
     println!("  {:?} ns/iter median", summary.median as u64);
@@ -208,7 +211,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     let instruction_data = vec![0u8];
 
     // Serialize account data
-    let serialized = solana_bpf_loader_program::serialization::serialize_parameters(
+    let mut serialized = serialize_parameters(
         &bpf_loader::id(),
         &solana_sdk::pubkey::new_rand(),
         &keyed_accounts,
@@ -217,14 +220,16 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     .unwrap();
 
     let elf = load_elf("tuner").unwrap();
-    let executable =
-        Executable::<solana_bpf_loader_program::BPFError>::from_elf(&elf, None).unwrap();
+    let mut executable =
+        Executable::<BPFError, ThisInstructionMeter>::from_elf(&elf, None, Config::default())
+            .unwrap();
+    executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
     let compute_meter = invoke_context.get_compute_meter();
     let mut instruction_meter = ThisInstructionMeter { compute_meter };
-    let mut vm = solana_bpf_loader_program::create_vm(
+    let mut vm = create_vm(
         &loader_id,
         executable.as_ref(),
-        &serialized,
+        &mut serialized,
         &[],
         &mut invoke_context,
     )

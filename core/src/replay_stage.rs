@@ -1,7 +1,6 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
 
 use crate::{
-    bank_weight_fork_choice::BankWeightForkChoice,
     broadcast_stage::RetransmitSlotsSender,
     cache_block_time_service::CacheBlockTimeSender,
     cluster_info::ClusterInfo,
@@ -42,10 +41,7 @@ use solana_sdk::{
     timing::timestamp,
     transaction::Transaction,
 };
-use solana_vote_program::{
-    vote_instruction,
-    vote_state::{Vote, VoteState},
-};
+use solana_vote_program::{vote_instruction, vote_state::Vote};
 use std::{
     collections::{HashMap, HashSet},
     ops::Deref,
@@ -262,13 +258,11 @@ impl ReplayStage {
                 let (
                     mut progress,
                     mut heaviest_subtree_fork_choice,
-                    unlock_heaviest_subtree_fork_choice_slot,
                 ) = Self::initialize_progress_and_fork_choice_with_locked_bank_forks(
                     &bank_forks,
                     &my_pubkey,
                     &vote_account,
                 );
-                let mut bank_weight_fork_choice = BankWeightForkChoice::default();
                 let mut current_leader = None;
                 let mut last_reset = Hash::default();
                 let mut partition_exists = false;
@@ -358,7 +352,6 @@ impl ReplayStage {
                         &bank_forks,
                         &mut all_pubkeys,
                         &mut heaviest_subtree_fork_choice,
-                        &mut bank_weight_fork_choice,
                     );
                     compute_bank_stats_time.stop();
 
@@ -385,11 +378,7 @@ impl ReplayStage {
 
                     let mut select_forks_time = Measure::start("select_forks_time");
                     let fork_choice: &mut dyn ForkChoice =
-                        if forks_root > unlock_heaviest_subtree_fork_choice_slot {
-                            &mut heaviest_subtree_fork_choice
-                        } else {
-                            &mut bank_weight_fork_choice
-                        };
+                            &mut heaviest_subtree_fork_choice;
                     let (heaviest_bank, heaviest_bank_on_same_voted_fork) = fork_choice
                         .select_forks(&frozen_banks, &tower, &progress, &ancestors, &bank_forks);
                     select_forks_time.stop();
@@ -623,7 +612,7 @@ impl ReplayStage {
         bank_forks: &RwLock<BankForks>,
         my_pubkey: &Pubkey,
         vote_account: &Pubkey,
-    ) -> (ProgressMap, HeaviestSubtreeForkChoice, Slot) {
+    ) -> (ProgressMap, HeaviestSubtreeForkChoice) {
         let (root_bank, frozen_banks) = {
             let bank_forks = bank_forks.read().unwrap();
             (
@@ -645,7 +634,7 @@ impl ReplayStage {
         mut frozen_banks: Vec<Arc<Bank>>,
         my_pubkey: &Pubkey,
         vote_account: &Pubkey,
-    ) -> (ProgressMap, HeaviestSubtreeForkChoice, Slot) {
+    ) -> (ProgressMap, HeaviestSubtreeForkChoice) {
         let mut progress = ProgressMap::default();
 
         frozen_banks.sort_by_key(|bank| bank.slot());
@@ -666,16 +655,10 @@ impl ReplayStage {
             );
         }
         let root = root_bank.slot();
-        let unlock_heaviest_subtree_fork_choice_slot =
-            Self::get_unlock_heaviest_subtree_fork_choice(root_bank.cluster_type());
         let heaviest_subtree_fork_choice =
             HeaviestSubtreeForkChoice::new_from_frozen_banks(root, &frozen_banks);
 
-        (
-            progress,
-            heaviest_subtree_fork_choice,
-            unlock_heaviest_subtree_fork_choice_slot,
-        )
+        (progress, heaviest_subtree_fork_choice)
     }
 
     fn report_memory(
@@ -821,18 +804,34 @@ impl ReplayStage {
         parent_slot: Slot,
         progress_map: &ProgressMap,
     ) -> bool {
-        // Check if the next leader slot is part of a consecutive block, in
-        // which case ignore the propagation check
-        let is_consecutive_leader = progress_map
-            .get_propagated_stats(parent_slot)
-            .unwrap()
-            .is_leader_slot
-            && parent_slot == poh_slot - 1;
-
-        if is_consecutive_leader {
-            return true;
+        // Assume `NUM_CONSECUTIVE_LEADER_SLOTS` = 4. Then `skip_propagated_check`
+        // below is true if `poh_slot` is within the same `NUM_CONSECUTIVE_LEADER_SLOTS`
+        // set of blocks as `latest_leader_slot`.
+        //
+        // Example 1 (`poh_slot` directly descended from `latest_leader_slot`):
+        //
+        // [B B B B] [B B B latest_leader_slot] poh_slot
+        //
+        // Example 2:
+        //
+        // [B latest_leader_slot B poh_slot]
+        //
+        // In this example, even if there's a block `B` on another fork between
+        // `poh_slot` and `parent_slot`, because they're in the same
+        // `NUM_CONSECUTIVE_LEADER_SLOTS` block, we still skip the propagated
+        // check because it's still within the propagation grace period.
+        if let Some(latest_leader_slot) = progress_map.get_latest_leader_slot(parent_slot) {
+            let skip_propagated_check =
+                poh_slot - latest_leader_slot < NUM_CONSECUTIVE_LEADER_SLOTS;
+            if skip_propagated_check {
+                return true;
+            }
         }
 
+        // Note that `is_propagated(parent_slot)` doesn't necessarily check
+        // propagation of `parent_slot`, it checks propagation of the latest ancestor
+        // of `parent_slot` (hence the call to `get_latest_leader_slot()` in the
+        // check above)
         progress_map.is_propagated(parent_slot)
     }
 
@@ -1132,26 +1131,27 @@ impl ReplayStage {
         if authorized_voter_keypairs.is_empty() {
             return;
         }
-
-        let vote_state =
-            if let Some((_, vote_account)) = bank.vote_accounts().get(vote_account_pubkey) {
-                if let Some(vote_state) = VoteState::from(&vote_account) {
-                    vote_state
-                } else {
-                    warn!(
-                        "Vote account {} is unreadable.  Unable to vote",
-                        vote_account_pubkey,
-                    );
-                    return;
-                }
-            } else {
+        let vote_account = match bank.get_vote_account(vote_account_pubkey) {
+            None => {
                 warn!(
                     "Vote account {} does not exist.  Unable to vote",
                     vote_account_pubkey,
                 );
                 return;
-            };
-
+            }
+            Some((_stake, vote_account)) => vote_account,
+        };
+        let vote_state = vote_account.vote_state();
+        let vote_state = match vote_state.as_ref() {
+            Err(_) => {
+                warn!(
+                    "Vote account {} is unreadable.  Unable to vote",
+                    vote_account_pubkey,
+                );
+                return;
+            }
+            Ok(vote_state) => vote_state,
+        };
         let authorized_voter_pubkey =
             if let Some(authorized_voter_pubkey) = vote_state.get_authorized_voter(bank.epoch()) {
                 authorized_voter_pubkey
@@ -1365,7 +1365,6 @@ impl ReplayStage {
         bank_forks: &RwLock<BankForks>,
         all_pubkeys: &mut PubkeyReferences,
         heaviest_subtree_fork_choice: &mut dyn ForkChoice,
-        bank_weight_fork_choice: &mut dyn ForkChoice,
     ) -> Vec<Slot> {
         frozen_banks.sort_by_key(|bank| bank.slot());
         let mut new_stats = vec![];
@@ -1390,12 +1389,6 @@ impl ReplayStage {
                     // Notify any listeners of the votes found in this newly computed
                     // bank
                     heaviest_subtree_fork_choice.compute_bank_stats(
-                        &bank,
-                        tower,
-                        progress,
-                        &computed_bank_state,
-                    );
-                    bank_weight_fork_choice.compute_bank_stats(
                         &bank,
                         tower,
                         progress,
@@ -1937,17 +1930,6 @@ impl ReplayStage {
     }
 
     pub fn get_unlock_switch_vote_slot(cluster_type: ClusterType) -> Slot {
-        match cluster_type {
-            ClusterType::Development => 0,
-            ClusterType::Devnet => 0,
-            // Epoch 63
-            ClusterType::Testnet => 21_692_256,
-            // 400_000 slots into epoch 61
-            ClusterType::MainnetBeta => 26_752_000,
-        }
-    }
-
-    pub fn get_unlock_heaviest_subtree_fork_choice(cluster_type: ClusterType) -> Slot {
         match cluster_type {
             ClusterType::Development => 0,
             ClusterType::Devnet => 0,
@@ -2824,7 +2806,6 @@ pub(crate) mod tests {
             &bank_forks,
             &mut PubkeyReferences::default(),
             &mut heaviest_subtree_fork_choice,
-            &mut BankWeightForkChoice::default(),
         );
 
         // bank 0 has no votes, should not send any votes on the channel
@@ -2870,7 +2851,6 @@ pub(crate) mod tests {
             &bank_forks,
             &mut PubkeyReferences::default(),
             &mut heaviest_subtree_fork_choice,
-            &mut BankWeightForkChoice::default(),
         );
 
         // Bank 1 had one vote
@@ -2906,7 +2886,6 @@ pub(crate) mod tests {
             &bank_forks,
             &mut PubkeyReferences::default(),
             &mut heaviest_subtree_fork_choice,
-            &mut BankWeightForkChoice::default(),
         );
         // No new stats should have been computed
         assert!(newly_computed.is_empty());
@@ -2944,7 +2923,6 @@ pub(crate) mod tests {
             &vote_simulator.bank_forks,
             &mut PubkeyReferences::default(),
             &mut heaviest_subtree_fork_choice,
-            &mut BankWeightForkChoice::default(),
         );
 
         assert_eq!(
@@ -2953,17 +2931,6 @@ pub(crate) mod tests {
         );
 
         let (heaviest_bank, _) = heaviest_subtree_fork_choice.select_forks(
-            &frozen_banks,
-            &tower,
-            &vote_simulator.progress,
-            &ancestors,
-            &vote_simulator.bank_forks,
-        );
-
-        // Should pick the lower of the two equally weighted banks
-        assert_eq!(heaviest_bank.slot(), 1);
-
-        let (heaviest_bank, _) = BankWeightForkChoice::default().select_forks(
             &frozen_banks,
             &tower,
             &vote_simulator.progress,
@@ -3018,7 +2985,6 @@ pub(crate) mod tests {
             &vote_simulator.bank_forks,
             &mut PubkeyReferences::default(),
             &mut vote_simulator.heaviest_subtree_fork_choice,
-            &mut BankWeightForkChoice::default(),
         );
 
         frozen_banks.sort_by_key(|bank| bank.slot());
@@ -3515,20 +3481,25 @@ pub(crate) mod tests {
     fn test_check_propagation_for_start_leader() {
         let mut progress_map = ProgressMap::default();
         let poh_slot = 5;
-        let parent_slot = 3;
+        let parent_slot = poh_slot - NUM_CONSECUTIVE_LEADER_SLOTS;
 
         // If there is no previous leader slot (previous leader slot is None),
         // should succeed
-        progress_map.insert(3, ForkProgress::new(Hash::default(), None, None, 0, 0));
+        progress_map.insert(
+            parent_slot,
+            ForkProgress::new(Hash::default(), None, None, 0, 0),
+        );
         assert!(ReplayStage::check_propagation_for_start_leader(
             poh_slot,
             parent_slot,
             &progress_map,
         ));
 
-        // If the parent was itself the leader, then requires propagation confirmation
+        // Now if we make the parent was itself the leader, then requires propagation
+        // confirmation check because the parent is at least NUM_CONSECUTIVE_LEADER_SLOTS
+        // slots from the `poh_slot`
         progress_map.insert(
-            3,
+            parent_slot,
             ForkProgress::new(
                 Hash::default(),
                 None,
@@ -3543,7 +3514,7 @@ pub(crate) mod tests {
             &progress_map,
         ));
         progress_map
-            .get_mut(&3)
+            .get_mut(&parent_slot)
             .unwrap()
             .propagated_stats
             .is_propagated = true;
@@ -3552,12 +3523,16 @@ pub(crate) mod tests {
             parent_slot,
             &progress_map,
         ));
-        // Now, set up the progress map to show that the previous leader slot of 5 is
-        // 2 (even though the parent is 3), so 2 needs to see propagation confirmation
-        // before we can start a leader for block 5
-        progress_map.insert(3, ForkProgress::new(Hash::default(), Some(2), None, 0, 0));
+        // Now, set up the progress map to show that the `previous_leader_slot` of 5 is
+        // `parent_slot - 1` (not equal to the actual parent!), so `parent_slot - 1` needs
+        // to see propagation confirmation before we can start a leader for block 5
+        let previous_leader_slot = parent_slot - 1;
         progress_map.insert(
-            2,
+            parent_slot,
+            ForkProgress::new(Hash::default(), Some(previous_leader_slot), None, 0, 0),
+        );
+        progress_map.insert(
+            previous_leader_slot,
             ForkProgress::new(
                 Hash::default(),
                 None,
@@ -3567,17 +3542,17 @@ pub(crate) mod tests {
             ),
         );
 
-        // Last leader slot has not seen propagation threshold, so should fail
+        // `previous_leader_slot` has not seen propagation threshold, so should fail
         assert!(!ReplayStage::check_propagation_for_start_leader(
             poh_slot,
             parent_slot,
             &progress_map,
         ));
 
-        // If we set the is_propagated = true for the last leader slot, should
+        // If we set the is_propagated = true for the `previous_leader_slot`, should
         // allow the block to be generated
         progress_map
-            .get_mut(&2)
+            .get_mut(&previous_leader_slot)
             .unwrap()
             .propagated_stats
             .is_propagated = true;
@@ -3587,15 +3562,17 @@ pub(crate) mod tests {
             &progress_map,
         ));
 
-        // If the root is 3, this filters out slot 2 from the progress map,
+        // If the root is now set to `parent_slot`, this filters out `previous_leader_slot` from the progress map,
         // which implies confirmation
         let bank0 = Bank::new(&genesis_config::create_genesis_config(10000).0);
-        let bank3 = Bank::new_from_parent(&Arc::new(bank0), &Pubkey::default(), 3);
-        let mut bank_forks = BankForks::new(bank3);
-        let bank5 = Bank::new_from_parent(bank_forks.get(3).unwrap(), &Pubkey::default(), 5);
+        let parent_slot_bank =
+            Bank::new_from_parent(&Arc::new(bank0), &Pubkey::default(), parent_slot);
+        let mut bank_forks = BankForks::new(parent_slot_bank);
+        let bank5 =
+            Bank::new_from_parent(bank_forks.get(parent_slot).unwrap(), &Pubkey::default(), 5);
         bank_forks.insert(bank5);
 
-        // Should purge only slot 2 from the progress map
+        // Should purge only `previous_leader_slot` from the progress map
         progress_map.handle_new_root(&bank_forks);
 
         // Should succeed
@@ -3607,10 +3584,10 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_check_propagation_for_consecutive_start_leader() {
+    fn test_check_propagation_skip_propagation_check() {
         let mut progress_map = ProgressMap::default();
         let poh_slot = 4;
-        let mut parent_slot = 3;
+        let mut parent_slot = poh_slot - 1;
 
         // Set up the progress map to show that the last leader slot of 4 is 3,
         // which means 3 and 4 are consecutive leader slots
@@ -3624,18 +3601,8 @@ pub(crate) mod tests {
                 0,
             ),
         );
-        progress_map.insert(
-            2,
-            ForkProgress::new(
-                Hash::default(),
-                None,
-                Some(ValidatorStakeInfo::default()),
-                0,
-                0,
-            ),
-        );
 
-        // If the last leader slot has not seen propagation threshold, but
+        // If the previous leader slot has not seen propagation threshold, but
         // was the direct parent (implying consecutive leader slots), create
         // the block regardless
         assert!(ReplayStage::check_propagation_for_start_leader(
@@ -3657,10 +3624,41 @@ pub(crate) mod tests {
             &progress_map,
         ));
 
-        parent_slot = 2;
+        // Now insert another parent slot 2 for which this validator is also the leader
+        parent_slot = poh_slot - NUM_CONSECUTIVE_LEADER_SLOTS + 1;
+        progress_map.insert(
+            parent_slot,
+            ForkProgress::new(
+                Hash::default(),
+                None,
+                Some(ValidatorStakeInfo::default()),
+                0,
+                0,
+            ),
+        );
 
-        // Even thought 2 is also a leader slot, because it's not consecutive
-        // we still have to respect the propagation threshold check
+        // Even though `parent_slot` and `poh_slot` are separated by another block,
+        // because they're within `NUM_CONSECUTIVE` blocks of each other, the propagation
+        // check is still skipped
+        assert!(ReplayStage::check_propagation_for_start_leader(
+            poh_slot,
+            parent_slot,
+            &progress_map,
+        ));
+
+        // Once the distance becomes >= NUM_CONSECUTIVE_LEADER_SLOTS, then we need to
+        // enforce the propagation check
+        parent_slot = poh_slot - NUM_CONSECUTIVE_LEADER_SLOTS;
+        progress_map.insert(
+            parent_slot,
+            ForkProgress::new(
+                Hash::default(),
+                None,
+                Some(ValidatorStakeInfo::default()),
+                0,
+                0,
+            ),
+        );
         assert!(!ReplayStage::check_propagation_for_start_leader(
             poh_slot,
             parent_slot,
@@ -3834,7 +3832,6 @@ pub(crate) mod tests {
             &bank_forks,
             &mut PubkeyReferences::default(),
             &mut HeaviestSubtreeForkChoice::new_from_bank_forks(&bank_forks.read().unwrap()),
-            &mut BankWeightForkChoice::default(),
         );
 
         // Check status is true

@@ -24,9 +24,11 @@ use rocksdb::DBRawIterator;
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
 use solana_rayon_threadlimit::get_thread_count;
-use solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE};
+use solana_runtime::{
+    hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+    vote_account::ArcVoteAccount,
+};
 use solana_sdk::{
-    account::Account,
     clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
     genesis_config::GenesisConfig,
     hash::Hash,
@@ -1623,7 +1625,7 @@ impl Blockstore {
         &self,
         slot: Slot,
         slot_duration: Duration,
-        stakes: &HashMap<Pubkey, (u64, Account)>,
+        stakes: &HashMap<Pubkey, (u64, ArcVoteAccount)>,
     ) -> Result<()> {
         if !self.is_root(slot) {
             return Err(BlockstoreError::SlotNotRooted);
@@ -2490,7 +2492,8 @@ impl Blockstore {
             .collect();
 
         let data_shreds = data_shreds?;
-        assert!(data_shreds.last().unwrap().data_complete());
+        let last_shred = data_shreds.last().unwrap();
+        assert!(last_shred.data_complete() || last_shred.last_in_slot());
 
         let deshred_payload = Shredder::deshred(&data_shreds).map_err(|e| {
             BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(format!(
@@ -5822,7 +5825,7 @@ pub mod tests {
 
         // Build epoch vote_accounts HashMap to test stake-weighted block time
         for (i, keypair) in vote_keypairs.iter().enumerate() {
-            stakes.insert(keypair.pubkey(), (1 + i as u64, Account::default()));
+            stakes.insert(keypair.pubkey(), (1 + i as u64, ArcVoteAccount::default()));
         }
         for slot in &[1, 2, 3, 8] {
             blockstore
@@ -5881,7 +5884,7 @@ pub mod tests {
         // Build epoch vote_accounts HashMap to test stake-weighted block time
         let mut stakes = HashMap::new();
         for (i, keypair) in vote_keypairs.iter().enumerate() {
-            stakes.insert(keypair.pubkey(), (1 + i as u64, Account::default()));
+            stakes.insert(keypair.pubkey(), (1 + i as u64, ArcVoteAccount::default()));
         }
         let slot_duration = Duration::from_millis(400);
         for slot in &[1, 2, 3, 8] {
@@ -7333,5 +7336,25 @@ pub mod tests {
             }
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_remove_shred_data_complete_flag() {
+        let (mut shreds, entries) = make_slot_entries(0, 0, 1);
+
+        let ledger_path = get_tmp_ledger_path!();
+        let ledger = Blockstore::open(&ledger_path).unwrap();
+
+        // Remove the data complete flag from the last shred
+        shreds[0].unset_data_complete();
+
+        ledger.insert_shreds(shreds, None, false).unwrap();
+
+        // Check that the `data_complete` flag was unset in the stored shred, but the
+        // `last_in_slot` flag is set.
+        let stored_shred = &ledger.get_data_shreds_for_slot(0, 0).unwrap()[0];
+        assert!(!stored_shred.data_complete());
+        assert!(stored_shred.last_in_slot());
+        assert_eq!(entries, ledger.get_any_valid_slot_entries(0, 0));
     }
 }

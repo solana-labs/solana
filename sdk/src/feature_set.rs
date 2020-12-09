@@ -18,12 +18,16 @@ pub mod consistent_recent_blockhashes_sysvar {
     solana_sdk::declare_id!("3h1BQWPDS5veRsq6mDBWruEpgPxRJkfwGexg5iiQ9mYg");
 }
 
-pub mod pico_inflation {
+pub mod deprecate_rewards_sysvar {
     solana_sdk::declare_id!("GaBtBJvmS4Arjj5W1NmFcyvPjsHN38UGYDq2MDwbs9Qu");
 }
 
-pub mod inflation_kill_switch {
-    solana_sdk::declare_id!("SECCKV5UVUsr8sTVSVAzULjdm87r7mLPaqH2FGZjevR");
+pub mod pico_inflation {
+    solana_sdk::declare_id!("4RWNif6C2WCNiKVW7otP4G7dkmkHGyKQWRpuZ1pxKU5m");
+}
+
+pub mod full_inflation {
+    solana_sdk::declare_id!("DT4n6ABDqs6w4bnfwrXT9rsprcPf6cdDga1egctaPkLC");
 }
 
 pub mod spl_token_v2_multisig_fix {
@@ -86,14 +90,19 @@ pub mod stake_program_v2 {
     solana_sdk::declare_id!("Gvd9gGJZDHGMNf1b3jkxrfBQSR5etrfTQSBNKCvLSFJN");
 }
 
+pub mod rewrite_stake {
+    solana_sdk::declare_id!("6ap2eGy7wx5JmsWUmQ5sHwEWrFSDUxSti2k5Hbfv5BZG");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
         (instructions_sysvar_enabled::id(), "instructions sysvar"),
         (secp256k1_program_enabled::id(), "secp256k1 program"),
         (consistent_recent_blockhashes_sysvar::id(), "consistent recentblockhashes sysvar"),
+        (deprecate_rewards_sysvar::id(), "deprecate unused rewards sysvar"),
         (pico_inflation::id(), "pico-inflation"),
-        (inflation_kill_switch::id(), "inflation kill switch"),
+        (full_inflation::id(), "full-inflation"),
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
         (bpf_loader2_program::id(), "bpf_loader2 program"),
         (bpf_compute_budget_balancing::id(), "compute budget balancing"),
@@ -109,6 +118,7 @@ lazy_static! {
         (pull_request_ping_pong_check::id(), "ping-pong packet check #12794"),
         (timestamp_bounding::id(), "add timestamp-correction bounding #13120"),
         (stake_program_v2::id(), "solana_stake_program v2"),
+        (rewrite_stake::id(), "rewrite stake"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

@@ -21,13 +21,11 @@ impl CrdsShards {
         }
     }
 
-    #[must_use]
     pub fn insert(&mut self, index: usize, value: &VersionedCrdsValue) -> bool {
         let hash = CrdsFilter::hash_as_u64(&value.value_hash);
         self.shard_mut(hash).insert(index, hash).is_none()
     }
 
-    #[must_use]
     pub fn remove(&mut self, index: usize, value: &VersionedCrdsValue) -> bool {
         let hash = CrdsFilter::hash_as_u64(&value.value_hash);
         self.shard_mut(hash).swap_remove(&index).is_some()

@@ -541,7 +541,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             StakeState::Stake(meta, stake) => {
                 // stake must be fully de-activated
                 if stake.stake(clock.epoch, Some(stake_history)) != 0 {
-                    return Err(StakeError::MergeActivatedStake.into());
+                    return Err(StakeError::MergeTransientStake.into());
                 }
                 meta
             }
@@ -555,7 +555,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             StakeState::Stake(meta, stake) => {
                 // stake must be fully de-activated
                 if stake.stake(clock.epoch, Some(stake_history)) != 0 {
-                    return Err(StakeError::MergeActivatedStake.into());
+                    return Err(StakeError::MergeTransientStake.into());
                 }
                 meta
             }
@@ -3239,7 +3239,7 @@ mod tests {
                         &StakeHistory::default(),
                         &signers,
                     ),
-                    Err(StakeError::MergeActivatedStake.into())
+                    Err(StakeError::MergeTransientStake.into())
                 );
             }
         }

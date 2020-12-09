@@ -5,9 +5,11 @@ use crate::{
 use chrono::prelude::*;
 use solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_db};
 use solana_measure::measure::Measure;
-use solana_runtime::{bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE};
+use solana_runtime::{
+    bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE,
+    vote_account::ArcVoteAccount,
+};
 use solana_sdk::{
-    account::Account,
     clock::{Slot, UnixTimestamp},
     hash::Hash,
     instruction::Instruction,
@@ -179,7 +181,7 @@ impl Tower {
         vote_account: &Pubkey,
     ) -> Self {
         let root_bank = bank_forks.root_bank();
-        let (_progress, heaviest_subtree_fork_choice, unlock_heaviest_subtree_fork_choice_slot) =
+        let (_progress, heaviest_subtree_fork_choice) =
             crate::replay_stage::ReplayStage::initialize_progress_and_fork_choice(
                 root_bank,
                 bank_forks.frozen_banks().values().cloned().collect(),
@@ -188,14 +190,12 @@ impl Tower {
             );
         let root = root_bank.slot();
 
-        let heaviest_bank = if root > unlock_heaviest_subtree_fork_choice_slot {
-            bank_forks
-                .get(heaviest_subtree_fork_choice.best_overall_slot())
-                .expect("The best overall slot must be one of `frozen_banks` which all exist in bank_forks")
-                .clone()
-        } else {
-            Tower::find_heaviest_bank(&bank_forks, &my_pubkey).unwrap_or_else(|| root_bank.clone())
-        };
+        let heaviest_bank = bank_forks
+            .get(heaviest_subtree_fork_choice.best_overall_slot())
+            .expect(
+                "The best overall slot must be one of `frozen_banks` which all exist in bank_forks",
+            )
+            .clone();
 
         Self::new(
             &my_pubkey,
@@ -214,7 +214,7 @@ impl Tower {
         all_pubkeys: &mut PubkeyReferences,
     ) -> ComputedBankState
     where
-        F: Iterator<Item = (Pubkey, (u64, Account))>,
+        F: IntoIterator<Item = (Pubkey, (u64, ArcVoteAccount))>,
     {
         let mut voted_stakes = HashMap::new();
         let mut total_stake = 0;
@@ -228,20 +228,20 @@ impl Tower {
                 continue;
             }
             trace!("{} {} with stake {}", node_pubkey, key, voted_stake);
-            let vote_state = VoteState::from(&account);
-            if vote_state.is_none() {
-                datapoint_warn!(
-                    "tower_warn",
-                    (
-                        "warn",
-                        format!("Unable to get vote_state from account {}", key),
-                        String
-                    ),
-                );
-                continue;
-            }
-            let mut vote_state = vote_state.unwrap();
-
+            let mut vote_state = match account.vote_state().as_ref() {
+                Err(_) => {
+                    datapoint_warn!(
+                        "tower_warn",
+                        (
+                            "warn",
+                            format!("Unable to get vote_state from account {}", key),
+                            String
+                        ),
+                    );
+                    continue;
+                }
+                Ok(vote_state) => vote_state.clone(),
+            };
             for vote in &vote_state.votes {
                 let key = all_pubkeys.get_or_insert(&key);
                 lockout_intervals
@@ -376,9 +376,9 @@ impl Tower {
     }
 
     fn last_voted_slot_in_bank(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
-        let vote_account = bank.vote_accounts().get(vote_account_pubkey)?.1.clone();
-        let bank_vote_state = VoteState::deserialize(&vote_account.data).ok()?;
-        bank_vote_state.last_voted_slot()
+        let (_stake, vote_account) = bank.get_vote_account(vote_account_pubkey)?;
+        let slot = vote_account.vote_state().as_ref().ok()?.last_voted_slot();
+        slot
     }
 
     pub fn new_vote_from_bank(&self, bank: &Bank, vote_account_pubkey: &Pubkey) -> (Vote, usize) {
@@ -509,7 +509,7 @@ impl Tower {
         descendants: &HashMap<Slot, HashSet<u64>>,
         progress: &ProgressMap,
         total_stake: u64,
-        epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
+        epoch_vote_accounts: &HashMap<Pubkey, (u64, ArcVoteAccount)>,
     ) -> SwitchForkDecision {
         self.last_voted_slot()
             .map(|last_voted_slot| {
@@ -703,7 +703,7 @@ impl Tower {
         descendants: &HashMap<Slot, HashSet<u64>>,
         progress: &ProgressMap,
         total_stake: u64,
-        epoch_vote_accounts: &HashMap<Pubkey, (u64, Account)>,
+        epoch_vote_accounts: &HashMap<Pubkey, (u64, ArcVoteAccount)>,
     ) -> SwitchForkDecision {
         let decision = self.make_check_switch_threshold_decision(
             switch_slot,
@@ -783,26 +783,6 @@ impl Tower {
         }
     }
 
-    pub(crate) fn find_heaviest_bank(
-        bank_forks: &BankForks,
-        node_pubkey: &Pubkey,
-    ) -> Option<Arc<Bank>> {
-        let ancestors = bank_forks.ancestors();
-        let mut bank_weights: Vec<_> = bank_forks
-            .frozen_banks()
-            .values()
-            .map(|b| {
-                (
-                    Self::bank_weight(node_pubkey, b, &ancestors),
-                    b.parents().len(),
-                    b.clone(),
-                )
-            })
-            .collect();
-        bank_weights.sort_by_key(|b| (b.0, b.1));
-        bank_weights.pop().map(|b| b.2)
-    }
-
     /// Update stake for all the ancestors.
     /// Note, stake is the same for all the ancestor.
     fn update_ancestor_voted_stakes(
@@ -823,21 +803,6 @@ impl Tower {
             let current = voted_stakes.entry(slot).or_default();
             *current += voted_stake;
         }
-    }
-
-    fn bank_weight(
-        node_pubkey: &Pubkey,
-        bank: &Bank,
-        ancestors: &HashMap<Slot, HashSet<Slot>>,
-    ) -> u128 {
-        let ComputedBankState { bank_weight, .. } = Self::collect_vote_lockouts(
-            node_pubkey,
-            bank.slot(),
-            bank.vote_accounts().into_iter(),
-            ancestors,
-            &mut PubkeyReferences::default(),
-        );
-        bank_weight
     }
 
     fn voted_slots(&self) -> Vec<Slot> {
@@ -1058,10 +1023,12 @@ impl Tower {
         root: Slot,
         bank: &Bank,
     ) {
-        if let Some((_stake, vote_account)) = bank.vote_accounts().get(vote_account_pubkey) {
-            let vote_state = VoteState::deserialize(&vote_account.data)
-                .expect("vote_account isn't a VoteState?");
-            self.lockouts = vote_state;
+        if let Some((_stake, vote_account)) = bank.get_vote_account(vote_account_pubkey) {
+            self.lockouts = vote_account
+                .vote_state()
+                .as_ref()
+                .expect("vote_account isn't a VoteState?")
+                .clone();
             self.initialize_root(root);
             self.initialize_lockouts(|v| v.slot > root);
             trace!(
@@ -1269,7 +1236,6 @@ pub fn reconcile_blockstore_roots_with_tower(
 pub mod test {
     use super::*;
     use crate::{
-        bank_weight_fork_choice::BankWeightForkChoice,
         cluster_info_vote_listener::VoteTracker,
         cluster_slots::ClusterSlots,
         fork_choice::SelectVoteAndResetForkResult,
@@ -1286,7 +1252,8 @@ pub mod test {
         },
     };
     use solana_sdk::{
-        clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signer, slot_history::SlotHistory,
+        account::Account, clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signer,
+        slot_history::SlotHistory,
     };
     use solana_vote_program::{
         vote_state::{Vote, VoteStateVersions, MAX_LOCKOUT_HISTORY},
@@ -1408,7 +1375,6 @@ pub mod test {
                 &self.bank_forks,
                 &mut PubkeyReferences::default(),
                 &mut self.heaviest_subtree_fork_choice,
-                &mut BankWeightForkChoice::default(),
             );
 
             let vote_bank = self
@@ -1604,7 +1570,7 @@ pub mod test {
         (bank_forks, progress, heaviest_subtree_fork_choice)
     }
 
-    fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, (u64, Account))> {
+    fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, (u64, ArcVoteAccount))> {
         let mut stakes = vec![];
         for (lamports, votes) in stake_votes {
             let mut account = Account::default();
@@ -1619,7 +1585,10 @@ pub mod test {
                 &mut account.data,
             )
             .expect("serialize state");
-            stakes.push((solana_sdk::pubkey::new_rand(), (*lamports, account)));
+            stakes.push((
+                solana_sdk::pubkey::new_rand(),
+                (*lamports, ArcVoteAccount::from(account)),
+            ));
         }
         stakes
     }
@@ -1973,16 +1942,16 @@ pub mod test {
         }
 
         info!("local tower: {:#?}", tower.lockouts.votes);
-        let vote_accounts = vote_simulator
+        let observed = vote_simulator
             .bank_forks
             .read()
             .unwrap()
             .get(next_unlocked_slot)
             .unwrap()
-            .vote_accounts();
-        let observed = vote_accounts.get(&vote_pubkey).unwrap();
-        let state = VoteState::from(&observed.1).unwrap();
-        info!("observed tower: {:#?}", state.votes);
+            .get_vote_account(&vote_pubkey)
+            .unwrap();
+        let state = observed.1.vote_state();
+        info!("observed tower: {:#?}", state.as_ref().unwrap().votes);
 
         let num_slots_to_try = 200;
         cluster_votes

@@ -32,6 +32,8 @@ type DetailsProps = {
   ix: ParsedInstruction;
   result: SignatureResult;
   index: number;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
 };
 
 export function TokenDetailsCard(props: DetailsProps) {
@@ -56,6 +58,8 @@ type InfoProps = {
   result: SignatureResult;
   index: number;
   title: string;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
 };
 
 function TokenInstruction(props: InfoProps) {
@@ -195,6 +199,8 @@ function TokenInstruction(props: InfoProps) {
       index={props.index}
       result={props.result}
       title={props.title}
+      innerCards={props.innerCards}
+      childIndex={props.childIndex}
     >
       {attributes}
     </InstructionCard>

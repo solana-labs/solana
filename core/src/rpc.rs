@@ -108,6 +108,7 @@ pub struct JsonRpcConfig {
     pub health_check_slot_distance: u64,
     pub enable_bigtable_ledger_storage: bool,
     pub enable_bigtable_ledger_upload: bool,
+    pub max_multiple_accounts: Option<usize>,
 }
 
 #[derive(Clone)]
@@ -171,7 +172,7 @@ impl JsonRpcRequestProcessor {
         };
 
         r_bank_forks.get(slot).cloned().unwrap_or_else(|| {
-            // We log an error instead of returning an error, because all known error cases
+            // We log a warning instead of returning an error, because all known error cases
             // are due to known bugs that should be fixed instead.
             //
             // The slot may not be found as a result of a known bug in snapshot creation, where
@@ -182,7 +183,7 @@ impl JsonRpcRequestProcessor {
             // a slot.
             //
             // For more information, see https://github.com/solana-labs/solana/issues/11078
-            error!(
+            warn!(
                 "Bank with {:?} not found at slot: {:?}",
                 commitment_level, slot
             );
@@ -537,13 +538,15 @@ impl JsonRpcRequestProcessor {
         let epoch_vote_accounts = bank
             .epoch_vote_accounts(bank.get_epoch_and_slot_index(bank.slot()).0)
             .ok_or_else(Error::invalid_request)?;
+        let default_vote_state = VoteState::default();
         let (current_vote_accounts, delinquent_vote_accounts): (
             Vec<RpcVoteAccountInfo>,
             Vec<RpcVoteAccountInfo>,
         ) = vote_accounts
             .iter()
             .map(|(pubkey, (activated_stake, account))| {
-                let vote_state = VoteState::from(&account).unwrap_or_default();
+                let vote_state = account.vote_state();
+                let vote_state = vote_state.as_ref().unwrap_or(&default_vote_state);
                 let last_vote = if let Some(vote) = vote_state.votes.iter().last() {
                     vote.slot
                 } else {
@@ -599,6 +602,29 @@ impl JsonRpcRequestProcessor {
         }
     }
 
+    fn check_blockstore_max_root<T>(
+        &self,
+        result: &std::result::Result<T, BlockstoreError>,
+        slot: Slot,
+    ) -> Result<()>
+    where
+        T: std::fmt::Debug,
+    {
+        if result.is_err() {
+            let err = result.as_ref().unwrap_err();
+            debug!(
+                "check_blockstore_max_root, slot: {:?}, max root: {:?}, err: {:?}",
+                slot,
+                self.blockstore.max_root(),
+                err
+            );
+            if slot >= self.blockstore.max_root() {
+                return Err(RpcCustomError::BlockNotAvailable { slot }.into());
+            }
+        }
+        Ok(())
+    }
+
     fn check_slot_cleaned_up<T>(
         &self,
         result: &std::result::Result<T, BlockstoreError>,
@@ -637,6 +663,7 @@ impl JsonRpcRequestProcessor {
                     .highest_confirmed_root()
         {
             let result = self.blockstore.get_confirmed_block(slot);
+            self.check_blockstore_max_root(&result, slot)?;
             if result.is_err() {
                 if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                     return Ok(self
@@ -742,6 +769,7 @@ impl JsonRpcRequestProcessor {
                 .highest_confirmed_root()
         {
             let result = self.blockstore.get_block_time(slot);
+            self.check_blockstore_max_root(&result, slot)?;
             if result.is_err() {
                 if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                     return Ok(self
@@ -1332,7 +1360,10 @@ fn check_slice_and_encoding(encoding: &UiAccountEncoding, data_slice_is_some: bo
                 Ok(())
             }
         }
-        UiAccountEncoding::Binary | UiAccountEncoding::Base58 | UiAccountEncoding::Base64 => Ok(()),
+        UiAccountEncoding::Binary
+        | UiAccountEncoding::Base58
+        | UiAccountEncoding::Base64
+        | UiAccountEncoding::Base64Zstd => Ok(()),
     }
 }
 
@@ -1893,10 +1924,15 @@ impl RpcSol for RpcSolImpl {
             "get_multiple_accounts rpc request received: {:?}",
             pubkey_strs.len()
         );
-        if pubkey_strs.len() > MAX_MULTIPLE_ACCOUNTS {
+
+        let max_multiple_accounts = meta
+            .config
+            .max_multiple_accounts
+            .unwrap_or(MAX_MULTIPLE_ACCOUNTS);
+        if pubkey_strs.len() > max_multiple_accounts {
             return Err(Error::invalid_params(format!(
                 "Too many inputs provided; max {}",
-                MAX_MULTIPLE_ACCOUNTS
+                max_multiple_accounts
             )));
         }
         let mut pubkeys: Vec<Pubkey> = vec![];

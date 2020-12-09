@@ -9,7 +9,9 @@ use serde::Serialize;
 use serde_json::json;
 use solana_clap_utils::{
     input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
-    input_validators::{is_parsable, is_pubkey_or_keypair, is_slot, is_valid_percentage},
+    input_validators::{
+        is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
+    },
 };
 use solana_ledger::entry::Entry;
 use solana_ledger::{
@@ -19,6 +21,7 @@ use solana_ledger::{
     blockstore_db::{self, AccessType, BlockstoreRecoveryMode, Column, Database},
     blockstore_processor::ProcessOptions,
     rooted_slot_iterator::RootedSlotIterator,
+    shred::Shred,
 };
 use solana_runtime::{
     bank::{Bank, RewardCalculationEvent},
@@ -30,6 +33,8 @@ use solana_runtime::{
 use solana_sdk::{
     account::Account,
     clock::{Epoch, Slot},
+    feature::{self, Feature},
+    feature_set,
     genesis_config::{ClusterType, GenesisConfig},
     hash::Hash,
     inflation::Inflation,
@@ -297,6 +302,7 @@ fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
 
     // Search all forks and collect the last vote made by each validator
     let mut last_votes = HashMap::new();
+    let default_vote_state = VoteState::default();
     for fork_slot in &fork_slots {
         let bank = &bank_forks[*fork_slot];
 
@@ -306,7 +312,8 @@ fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
             .map(|(_, (stake, _))| stake)
             .sum();
         for (_, (stake, vote_account)) in bank.vote_accounts() {
-            let vote_state = VoteState::from(&vote_account).unwrap_or_default();
+            let vote_state = vote_account.vote_state();
+            let vote_state = vote_state.as_ref().unwrap_or(&default_vote_state);
             if let Some(last_vote) = vote_state.votes.iter().last() {
                 let entry = last_votes.entry(vote_state.node_pubkey).or_insert((
                     last_vote.slot,
@@ -315,7 +322,7 @@ fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
                     total_stake,
                 ));
                 if entry.0 < last_vote.slot {
-                    *entry = (last_vote.slot, vote_state, stake, total_stake);
+                    *entry = (last_vote.slot, vote_state.clone(), stake, total_stake);
                 }
             }
         }
@@ -346,7 +353,8 @@ fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
         let mut first = true;
         loop {
             for (_, (_, vote_account)) in bank.vote_accounts() {
-                let vote_state = VoteState::from(&vote_account).unwrap_or_default();
+                let vote_state = vote_account.vote_state();
+                let vote_state = vote_state.as_ref().unwrap_or(&default_vote_state);
                 if let Some(last_vote) = vote_state.votes.iter().last() {
                     let validator_votes = all_votes.entry(vote_state.node_pubkey).or_default();
                     validator_votes
@@ -734,6 +742,11 @@ fn main() {
         .takes_value(true)
         .default_value("0")
         .help("Start at this slot");
+    let ending_slot_arg = Arg::with_name("ending_slot")
+        .long("ending-slot")
+        .value_name("SLOT")
+        .takes_value(true)
+        .help("The last slot to iterate to");
     let no_snapshot_arg = Arg::with_name("no_snapshot")
         .long("no-snapshot")
         .takes_value(false)
@@ -919,13 +932,7 @@ fn main() {
             SubCommand::with_name("parse_full_frozen")
             .about("Parses log for information about critical events about ancestors of the given `ending_slot`")
             .arg(&starting_slot_arg)
-            .arg(
-                Arg::with_name("ending_slot")
-                    .long("ending-slot")
-                    .value_name("SLOT")
-                    .takes_value(true)
-                    .help("The last slot to iterate to"),
-            )
+            .arg(&ending_slot_arg)
             .arg(
                 Arg::with_name("log_path")
                     .long("log-path")
@@ -966,6 +973,12 @@ fn main() {
             .about("Prints the ledger's shred hash")
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
+        )
+        .subcommand(
+            SubCommand::with_name("shred-meta")
+            .about("Prints raw shred metadata")
+            .arg(&starting_slot_arg)
+            .arg(&ending_slot_arg)
         )
         .subcommand(
             SubCommand::with_name("bank-hash")
@@ -1135,6 +1148,16 @@ fn main() {
                     .help("Re-calculate the bank hash and overwrite the original bank hash."),
             )
             .arg(
+                Arg::with_name("accounts_to_remove")
+                    .required(false)
+                    .long("remove-account")
+                    .takes_value(true)
+                    .value_name("PUBKEY")
+                    .validator(is_pubkey)
+                    .multiple(true)
+                    .help("List if accounts to remove while creating the snapshot"),
+            )
+            .arg(
                 Arg::with_name("remove_stake_accounts")
                     .required(false)
                     .long("remove-stake-accounts")
@@ -1179,11 +1202,20 @@ fn main() {
                            which could be an epoch in a galaxy far far away"),
             )
             .arg(
-                Arg::with_name("enable_inflation")
+                Arg::with_name("inflation")
                     .required(false)
-                    .long("enable-inflation")
+                    .long("inflation")
+                    .takes_value(true)
+                    .possible_values(&["pico", "full", "none"])
+                    .help("Overwrite inflation when warping"),
+            )
+            .arg(
+                Arg::with_name("enable_stake_program_v2")
+                    .required(false)
+                    .long("enable-stake-program-v2")
                     .takes_value(false)
-                    .help("Always enable inflation when warping even if it's disabled"),
+                    .help("Enable stake program v2 (several inflation-related staking \
+                           bugs are feature-gated behind this)"),
             )
             .arg(
                 Arg::with_name("recalculate_capitalization")
@@ -1407,6 +1439,46 @@ fn main() {
                 Err(err) => {
                     eprintln!("Failed to load ledger: {:?}", err);
                     exit(1);
+                }
+            }
+        }
+        ("shred-meta", Some(arg_matches)) => {
+            #[derive(Debug)]
+            struct ShredMeta<'a> {
+                slot: Slot,
+                full_slot: bool,
+                shred_index: usize,
+                data: bool,
+                code: bool,
+                last_in_slot: bool,
+                data_complete: bool,
+                shred: &'a Shred,
+            };
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            let ending_slot = value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);
+            let ledger = open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary, None);
+            for (slot, _meta) in ledger
+                .slot_meta_iterator(starting_slot)
+                .unwrap()
+                .take_while(|(slot, _)| *slot <= ending_slot)
+            {
+                let full_slot = ledger.is_full(slot);
+                if let Ok(shreds) = ledger.get_data_shreds_for_slot(slot, 0) {
+                    for (shred_index, shred) in shreds.iter().enumerate() {
+                        println!(
+                            "{:#?}",
+                            ShredMeta {
+                                slot,
+                                full_slot,
+                                shred_index,
+                                data: shred.is_data(),
+                                code: shred.is_code(),
+                                data_complete: shred.data_complete(),
+                                last_in_slot: shred.last_in_slot(),
+                                shred,
+                            }
+                        );
+                    }
                 }
             }
         }
@@ -1665,6 +1737,8 @@ fn main() {
                 exit(1);
             }
             let bootstrap_validator_pubkeys = pubkeys_of(&arg_matches, "bootstrap_validator");
+            let accounts_to_remove =
+                pubkeys_of(&arg_matches, "accounts_to_remove").unwrap_or_default();
 
             let snapshot_version =
                 arg_matches
@@ -1731,6 +1805,14 @@ fn main() {
                             .get_program_accounts(&solana_stake_program::id())
                             .into_iter()
                         {
+                            account.lamports = 0;
+                            bank.store_account(&address, &account);
+                        }
+                    }
+
+                    for address in accounts_to_remove {
+                        if let Some(mut account) = bank.get_account(&address) {
+                            rehash = true;
                             account.lamports = 0;
                             bank.store_account(&address, &account);
                         }
@@ -2009,8 +2091,13 @@ fn main() {
                             exit(1);
                         }
 
-                        if arg_matches.is_present("enable_inflation") {
-                            let inflation = Inflation::pico();
+                        if let Ok(raw_inflation) = value_t!(arg_matches, "inflation", String) {
+                            let inflation = match raw_inflation.as_str() {
+                                "pico" => Inflation::pico(),
+                                "full" => Inflation::full(),
+                                "none" => Inflation::new_disabled(),
+                                _ => unreachable!(),
+                            };
                             println!(
                                 "Forcing to: {:?} (was: {:?})",
                                 inflation,
@@ -2022,18 +2109,118 @@ fn main() {
                         let next_epoch = base_bank
                             .epoch_schedule()
                             .get_first_slot_in_epoch(warp_epoch);
+                        // disable eager rent collection because this creates many unrelated
+                        // rent collection account updates
                         base_bank
                             .lazy_rent_collection
                             .store(true, std::sync::atomic::Ordering::Relaxed);
+
+                        if arg_matches.is_present("enable_stake_program_v2") {
+                            let feature_account_balance = std::cmp::max(
+                                genesis_config.rent.minimum_balance(Feature::size_of()),
+                                1,
+                            );
+                            let mut force_enabled_count = 0;
+                            if base_bank
+                                .get_account(&feature_set::stake_program_v2::id())
+                                .is_none()
+                            {
+                                base_bank.store_account(
+                                    &feature_set::stake_program_v2::id(),
+                                    &feature::create_account(
+                                        &Feature { activated_at: None },
+                                        feature_account_balance,
+                                    ),
+                                );
+                                force_enabled_count += 1;
+                            }
+                            if base_bank
+                                .get_account(&feature_set::rewrite_stake::id())
+                                .is_none()
+                            {
+                                base_bank.store_account(
+                                    &feature_set::rewrite_stake::id(),
+                                    &feature::create_account(
+                                        &Feature { activated_at: None },
+                                        feature_account_balance,
+                                    ),
+                                );
+                                force_enabled_count += 1;
+                            }
+
+                            if force_enabled_count == 0 {
+                                warn!("Already stake_program_v2 is activated (or scheduled)");
+                            }
+
+                            let mut store_failed_count = 0;
+                            if force_enabled_count >= 1 {
+                                if base_bank
+                                    .get_account(&feature_set::secp256k1_program_enabled::id())
+                                    .is_some()
+                                {
+                                    // steal some lamports from the pretty old feature not to affect
+                                    // capitalizaion, which doesn't affect inflation behavior!
+                                    base_bank.store_account(
+                                        &feature_set::secp256k1_program_enabled::id(),
+                                        &Account::default(),
+                                    );
+                                    force_enabled_count -= 1;
+                                } else {
+                                    store_failed_count += 1;
+                                }
+                            }
+
+                            if force_enabled_count >= 1 {
+                                if base_bank
+                                    .get_account(&feature_set::instructions_sysvar_enabled::id())
+                                    .is_some()
+                                {
+                                    // steal some lamports from the pretty old feature not to affect
+                                    // capitalizaion, which doesn't affect inflation behavior!
+                                    base_bank.store_account(
+                                        &feature_set::instructions_sysvar_enabled::id(),
+                                        &Account::default(),
+                                    );
+                                    force_enabled_count -= 1;
+                                } else {
+                                    store_failed_count += 1;
+                                }
+                            }
+                            assert_eq!(force_enabled_count, store_failed_count);
+                            if store_failed_count >= 1 {
+                                // we have no choice; maybe locally created blank cluster with
+                                // not-Development cluster type.
+                                let old_cap = base_bank.set_capitalization();
+                                let new_cap = base_bank.capitalization();
+                                warn!(
+                                    "Skewing capitalization a bit to enable stake_program_v2 as \
+                                     requested: increasing {} from {} to {}",
+                                    feature_account_balance, old_cap, new_cap,
+                                );
+                                assert_eq!(
+                                    old_cap + feature_account_balance * store_failed_count,
+                                    new_cap
+                                );
+                            }
+                        }
+
+                        #[derive(Default, Debug)]
+                        struct PointDetail {
+                            epoch: Epoch,
+                            points: u128,
+                            stake: u128,
+                            credits: u128,
+                        }
+
                         #[derive(Default, Debug)]
                         struct CalculationDetail {
                             epochs: usize,
                             voter: Pubkey,
-                            point: u128,
-                            stake: u128,
+                            voter_owner: Pubkey,
+                            current_effective_stake: u64,
                             total_stake: u64,
                             rent_exempt_reserve: u64,
-                            credits: u128,
+                            points: Vec<PointDetail>,
                             base_rewards: u64,
                             commission: u8,
                             vote_rewards: u64,
@@ -2041,6 +2228,8 @@ fn main() {
                             activation_epoch: Epoch,
                             deactivation_epoch: Option<Epoch>,
                             point_value: Option<PointValue>,
+                            old_credits_observed: Option<u64>,
+                            new_credits_observed: Option<u64>,
                         }
                         use solana_stake_program::stake_state::InflationPointCalculationEvent;
                         let mut stake_calcuration_details: HashMap<Pubkey, CalculationDetail> =
@@ -2054,16 +2243,14 @@ fn main() {
                                 let detail = stake_calcuration_details.entry(**pubkey).or_default();
                                 match event {
                                     InflationPointCalculationEvent::CalculatedPoints(
-                                        point,
+                                        epoch,
                                         stake,
                                         credits,
+                                        points,
                                     ) => {
-                                        // Don't sum for epochs where no credits are earned
-                                        if *credits > 0 {
+                                        if *points > 0 {
                                             detail.epochs += 1;
-                                            detail.point += *point;
-                                            detail.stake += *stake;
-                                            detail.credits += *credits;
+                                            detail.points.push(PointDetail {epoch: *epoch, points: *points, stake: *stake, credits: *credits});
                                         }
                                     }
                                     InflationPointCalculationEvent::SplitRewards(
@@ -2086,14 +2273,28 @@ fn main() {
                                             last_point_value = point_value;
                                         }
                                     }
+                                    InflationPointCalculationEvent::EffectiveStakeAtRewardedEpoch(stake) => {
+                                        detail.current_effective_stake = *stake;
+                                    }
                                     InflationPointCalculationEvent::Commission(commission) => {
                                         detail.commission = *commission;
                                     }
                                     InflationPointCalculationEvent::RentExemptReserve(reserve) => {
                                         detail.rent_exempt_reserve = *reserve;
                                     }
-                                    InflationPointCalculationEvent::Delegation(delegation) => {
+                                    InflationPointCalculationEvent::CreditsObserved(
+                                        old_credits_observed,
+                                        new_credits_observed,
+                                    ) => {
+                                        detail.old_credits_observed = Some(*old_credits_observed);
+                                        detail.new_credits_observed = Some(*new_credits_observed);
+                                    }
+                                    InflationPointCalculationEvent::Delegation(
+                                        delegation,
+                                        owner,
+                                    ) => {
                                         detail.voter = delegation.voter_pubkey;
+                                        detail.voter_owner = *owner;
                                         detail.total_stake = delegation.stake;
                                         detail.activation_epoch = delegation.activation_epoch;
                                         if delegation.deactivation_epoch < Epoch::max_value() {
@@ -2214,25 +2415,35 @@ fn main() {
                                 if let Some(ref mut csv_writer) = csv_writer {
                                     #[derive(Serialize)]
                                     struct InflationRecord {
+                                        cluster_type: String,
+                                        rewarded_epoch: Epoch,
                                         account: String,
                                         owner: String,
                                         old_balance: u64,
                                         new_balance: u64,
                                         data_size: usize,
                                         delegation: String,
+                                        delegation_owner: String,
                                         effective_stake: String,
                                         delegated_stake: String,
                                         rent_exempt_reserve: String,
                                         activation_epoch: String,
                                         deactivation_epoch: String,
                                         earned_epochs: String,
-                                        earned_credits: String,
+                                        epoch: String,
+                                        epoch_credits: String,
+                                        epoch_points: String,
+                                        epoch_stake: String,
+                                        old_credits_observed: String,
+                                        new_credits_observed: String,
                                         base_rewards: String,
                                         stake_rewards: String,
                                         vote_rewards: String,
                                         commission: String,
                                         cluster_rewards: String,
                                         cluster_points: String,
+                                        old_capitalization: u64,
+                                        new_capitalization: u64,
                                     };
                                     fn format_or_na<T: std::fmt::Display>(
                                         data: Option<T>,
@@ -2240,47 +2451,86 @@ fn main() {
                                         data.map(|data| format!("{}", data))
                                             .unwrap_or_else(|| "N/A".to_owned())
                                     };
-                                    let record = InflationRecord {
-                                        account: format!("{}", pubkey),
-                                        owner: format!("{}", base_account.owner),
-                                        old_balance: base_account.lamports,
-                                        new_balance: warped_account.lamports,
-                                        data_size: base_account.data.len(),
-                                        delegation: format_or_na(detail.map(|d| d.voter)),
-                                        effective_stake: format_or_na(detail.map(|d| d.stake)),
-                                        delegated_stake: format_or_na(
-                                            detail.map(|d| d.total_stake),
-                                        ),
-                                        rent_exempt_reserve: format_or_na(
-                                            detail.map(|d| d.rent_exempt_reserve),
-                                        ),
-                                        activation_epoch: format_or_na(detail.map(|d| {
-                                            if d.activation_epoch < Epoch::max_value() {
-                                                d.activation_epoch
-                                            } else {
-                                                // bootstraped
-                                                0
-                                            }
-                                        })),
-                                        deactivation_epoch: format_or_na(
-                                            detail.and_then(|d| d.deactivation_epoch),
-                                        ),
-                                        earned_epochs: format_or_na(detail.map(|d| d.epochs)),
-                                        earned_credits: format_or_na(detail.map(|d| d.credits)),
-                                        base_rewards: format_or_na(detail.map(|d| d.base_rewards)),
-                                        stake_rewards: format_or_na(
-                                            detail.map(|d| d.stake_rewards),
-                                        ),
-                                        vote_rewards: format_or_na(detail.map(|d| d.vote_rewards)),
-                                        commission: format_or_na(detail.map(|d| d.commission)),
-                                        cluster_rewards: format_or_na(
-                                            last_point_value.as_ref().map(|pv| pv.rewards),
-                                        ),
-                                        cluster_points: format_or_na(
-                                            last_point_value.as_ref().map(|pv| pv.points),
-                                        ),
-                                    };
-                                    csv_writer.serialize(&record).unwrap();
+                                    let mut point_details = detail
+                                        .map(|d| d.points.iter().map(Some).collect::<Vec<_>>())
+                                        .unwrap_or_default();
+
+                                    // ensure to print even if there is no calculation/point detail
+                                    if point_details.is_empty() {
+                                        point_details.push(None);
+                                    }
+
+                                    for point_detail in point_details {
+                                        let record = InflationRecord {
+                                            cluster_type: format!("{:?}", base_bank.cluster_type()),
+                                            rewarded_epoch: base_bank.epoch(),
+                                            account: format!("{}", pubkey),
+                                            owner: format!("{}", base_account.owner),
+                                            old_balance: base_account.lamports,
+                                            new_balance: warped_account.lamports,
+                                            data_size: base_account.data.len(),
+                                            delegation: format_or_na(detail.map(|d| d.voter)),
+                                            delegation_owner: format_or_na(
+                                                detail.map(|d| d.voter_owner),
+                                            ),
+                                            effective_stake: format_or_na(
+                                                detail.map(|d| d.current_effective_stake),
+                                            ),
+                                            delegated_stake: format_or_na(
+                                                detail.map(|d| d.total_stake),
+                                            ),
+                                            rent_exempt_reserve: format_or_na(
+                                                detail.map(|d| d.rent_exempt_reserve),
+                                            ),
+                                            activation_epoch: format_or_na(detail.map(|d| {
+                                                if d.activation_epoch < Epoch::max_value() {
+                                                    d.activation_epoch
+                                                } else {
+                                                    // bootstraped
+                                                    0
+                                                }
+                                            })),
+                                            deactivation_epoch: format_or_na(
+                                                detail.and_then(|d| d.deactivation_epoch),
+                                            ),
+                                            earned_epochs: format_or_na(detail.map(|d| d.epochs)),
+                                            epoch: format_or_na(point_detail.map(|d| d.epoch)),
+                                            epoch_credits: format_or_na(
+                                                point_detail.map(|d| d.credits),
+                                            ),
+                                            epoch_points: format_or_na(
+                                                point_detail.map(|d| d.points),
+                                            ),
+                                            epoch_stake: format_or_na(
+                                                point_detail.map(|d| d.stake),
+                                            ),
+                                            old_credits_observed: format_or_na(
+                                                detail.and_then(|d| d.old_credits_observed),
+                                            ),
+                                            new_credits_observed: format_or_na(
+                                                detail.and_then(|d| d.new_credits_observed),
+                                            ),
+                                            base_rewards: format_or_na(
+                                                detail.map(|d| d.base_rewards),
+                                            ),
+                                            stake_rewards: format_or_na(
+                                                detail.map(|d| d.stake_rewards),
+                                            ),
+                                            vote_rewards: format_or_na(
+                                                detail.map(|d| d.vote_rewards),
+                                            ),
+                                            commission: format_or_na(detail.map(|d| d.commission)),
+                                            cluster_rewards: format_or_na(
+                                                last_point_value.as_ref().map(|pv| pv.rewards),
+                                            ),
+                                            cluster_points: format_or_na(
+                                                last_point_value.as_ref().map(|pv| pv.points),
+                                            ),
+                                            old_capitalization: base_bank.capitalization(),
+                                            new_capitalization: warped_bank.capitalization(),
+                                        };
+                                        csv_writer.serialize(&record).unwrap();
+                                    }
                                 }
                                 overall_delta += delta;
                             } else {
@@ -2294,7 +2544,7 @@ fn main() {
                         if arg_matches.is_present("recalculate_capitalization") {
                             eprintln!("Capitalization isn't verified because it's recalculated");
                         }
-                        if arg_matches.is_present("enable_inflation") {
+                        if arg_matches.is_present("inflation") {
                             eprintln!(
                                 "Forcing inflation isn't meaningful because bank isn't warping"
                             );

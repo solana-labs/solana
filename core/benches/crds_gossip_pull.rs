@@ -39,7 +39,7 @@ fn bench_build_crds_filters(bencher: &mut Bencher) {
     let mut num_inserts = 0;
     for _ in 0..90_000 {
         if crds
-            .insert(CrdsValue::new_rand(&mut rng), rng.gen())
+            .insert(CrdsValue::new_rand(&mut rng, None), rng.gen())
             .is_ok()
         {
             num_inserts += 1;

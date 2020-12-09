@@ -13,8 +13,10 @@ export function NonceAuthorizeDetailsCard(props: {
   index: number;
   result: SignatureResult;
   info: AuthorizeNonceInfo;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
 }) {
-  const { ix, index, result, info } = props;
+  const { ix, index, result, info, innerCards, childIndex } = props;
 
   return (
     <InstructionCard
@@ -22,6 +24,8 @@ export function NonceAuthorizeDetailsCard(props: {
       index={index}
       result={result}
       title="Authorize Nonce"
+      innerCards={innerCards}
+      childIndex={childIndex}
     >
       <tr>
         <td>Program</td>

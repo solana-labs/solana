@@ -744,6 +744,14 @@ impl AccountsDB {
         // hold a lock to prevent slot shrinking from running because it might modify some rooted
         // slot storages which can not happen as long as we're cleaning accounts because we're also
         // modifying the rooted slot storages!
+        let max_clean_root = match (self.accounts_index.min_ongoing_scan_root(), max_clean_root) {
+            (None, None) => None,
+            (Some(min_scan_root), None) => Some(min_scan_root),
+            (None, Some(max_clean_root)) => Some(max_clean_root),
+            (Some(min_scan_root), Some(max_clean_root)) => {
+                Some(std::cmp::min(min_scan_root, max_clean_root))
+            }
+        };
         let mut candidates = self.shrink_candidate_slots.lock().unwrap();
 
         self.report_store_stats();
@@ -771,7 +779,8 @@ impl AccountsDB {
                         if account_info.lamports == 0 {
                             purges.insert(
                                 *pubkey,
-                                self.accounts_index.roots_and_ref_count(&locked_entry),
+                                self.accounts_index
+                                    .roots_and_ref_count(&locked_entry, max_clean_root),
                             );
                         }
 
@@ -1289,6 +1298,22 @@ impl AccountsDB {
         collector
     }
 
+    pub fn unchecked_scan_accounts<F, A>(&self, ancestors: &Ancestors, scan_func: F) -> A
+    where
+        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>),
+        A: Default,
+    {
+        let mut collector = A::default();
+        self.accounts_index
+            .unchecked_scan_accounts(ancestors, |pubkey, (account_info, slot)| {
+                let account_slot = self
+                    .get_account_from_storage(slot, account_info)
+                    .map(|account| (pubkey, account, slot));
+                scan_func(&mut collector, account_slot)
+            });
+        collector
+    }
+
     pub fn range_scan_accounts<F, A, R>(&self, ancestors: &Ancestors, range: R, scan_func: F) -> A
     where
         F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>),
@@ -1361,14 +1386,9 @@ impl AccountsDB {
         bank_hashes.insert(slot, new_hash_info);
     }
 
-    pub fn load(
-        storage: &AccountStorage,
-        ancestors: &Ancestors,
-        accounts_index: &AccountsIndex<AccountInfo>,
-        pubkey: &Pubkey,
-    ) -> Option<(Account, Slot)> {
+    pub fn load(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Option<(Account, Slot)> {
         let (slot, store_id, offset) = {
-            let (lock, index) = accounts_index.get(pubkey, Some(ancestors), None)?;
+            let (lock, index) = self.accounts_index.get(pubkey, Some(ancestors), None)?;
             let slot_list = lock.slot_list();
             let (
                 slot,
@@ -1381,7 +1401,7 @@ impl AccountsDB {
         };
 
         //TODO: thread this as a ref
-        storage
+        self.storage
             .get_account_storage_entry(slot, store_id)
             .and_then(|store| {
                 store
@@ -1418,7 +1438,7 @@ impl AccountsDB {
     }
 
     pub fn load_slow(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Option<(Account, Slot)> {
-        Self::load(&self.storage, ancestors, &self.accounts_index, pubkey)
+        self.load(ancestors, pubkey)
     }
 
     fn get_account_from_storage(&self, slot: Slot, account_info: &AccountInfo) -> Option<Account> {
@@ -3019,7 +3039,7 @@ pub mod tests {
         assert_eq!(&db.load_slow(&ancestors, &key).unwrap().0, &account1);
 
         let accounts: Vec<Account> =
-            db.scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
+            db.unchecked_scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
                 if let Some(data) = option {
                     accounts.push(data.1);
                 }
@@ -4344,7 +4364,7 @@ pub mod tests {
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         let accounts: Vec<Account> =
-            db.scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
+            db.unchecked_scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
                 if let Some(data) = option {
                     accounts.push(data.1);
                 }
@@ -4353,7 +4373,7 @@ pub mod tests {
 
         let ancestors = vec![(1, 1), (0, 0)].into_iter().collect();
         let accounts: Vec<Account> =
-            db.scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
+            db.unchecked_scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
                 if let Some(data) = option {
                     accounts.push(data.1);
                 }
@@ -5356,11 +5376,11 @@ pub mod tests {
         accounts_index.add_root(3);
         let mut purges = HashMap::new();
         let (key0_entry, _) = accounts_index.get(&key0, None, None).unwrap();
-        purges.insert(key0, accounts_index.roots_and_ref_count(&key0_entry));
+        purges.insert(key0, accounts_index.roots_and_ref_count(&key0_entry, None));
         let (key1_entry, _) = accounts_index.get(&key1, None, None).unwrap();
-        purges.insert(key1, accounts_index.roots_and_ref_count(&key1_entry));
+        purges.insert(key1, accounts_index.roots_and_ref_count(&key1_entry, None));
         let (key2_entry, _) = accounts_index.get(&key2, None, None).unwrap();
-        purges.insert(key2, accounts_index.roots_and_ref_count(&key2_entry));
+        purges.insert(key2, accounts_index.roots_and_ref_count(&key2_entry, None));
         for (key, (list, ref_count)) in &purges {
             info!(" purge {} ref_count {} =>", key, ref_count);
             for x in list {
@@ -5585,5 +5605,27 @@ pub mod tests {
         for (key, account_ref) in keys[..num_to_store].iter().zip(account_refs) {
             assert_eq!(accounts.load_slow(&ancestors, key).unwrap().0, account_ref);
         }
+    }
+
+    #[test]
+    fn test_zero_lamport_new_root_not_cleaned() {
+        let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
+        let account_key = Pubkey::new_unique();
+        let zero_lamport_account = Account::new(0, 0, &Account::default().owner);
+
+        // Store zero lamport account into slots 0 and 1, root both slots
+        db.store(0, &[(&account_key, &zero_lamport_account)]);
+        db.store(1, &[(&account_key, &zero_lamport_account)]);
+        db.add_root(0);
+        db.add_root(1);
+
+        // Only clean zero lamport accounts up to slot 0
+        db.clean_accounts(Some(0));
+
+        // Should still be able to find zero lamport account in slot 1
+        assert_eq!(
+            db.load_slow(&HashMap::new(), &account_key),
+            Some((zero_lamport_account, 1))
+        );
     }
 }
