@@ -32,7 +32,7 @@ import {
   IX_TITLES,
 } from "components/instruction/token/types";
 import { reportError } from "utils/sentry";
-import { intoTransactionInstruction } from "utils/tx";
+import { intoTransactionInstruction, displayAddress } from "utils/tx";
 import {
   isTokenSwapInstruction,
   parseTokenSwapInstructionTitle,
@@ -43,6 +43,11 @@ import {
 } from "components/instruction/serum/types";
 import { INNER_INSTRUCTIONS_START_SLOT } from "pages/TransactionDetailsPage";
 import { useCluster, Cluster } from "providers/cluster";
+import { Link } from "react-router-dom";
+import { Location } from "history";
+import { useQuery } from "utils/url";
+
+const TRUNCATE_TOKEN_DISPLAY = 8;
 
 type InstructionType = {
   name: string;
@@ -69,16 +74,34 @@ export function TokenHistoryCard({ pubkey }: { pubkey: PublicKey }) {
   return <TokenHistoryTable tokens={tokens} />;
 }
 
+const useQueryFilter = (): string => {
+  const query = useQuery();
+  const filter = query.get("filter");
+  return filter || "";
+};
+
+type DropdownProps = {
+  filter: string;
+  toggle: () => void;
+  show: boolean;
+  tokens: TokenInfoWithPubkey[];
+};
+
 function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
   const accountHistories = useAccountHistories();
   const fetchAccountHistory = useFetchAccountHistory();
   const transactionDetailsCache = useTransactionDetailsCache();
+  const [showDropdown, setDropdown] = React.useState(false);
+  const filter = useQueryFilter();
 
-  const fetchHistories = (refresh?: boolean) => {
-    tokens.forEach((token) => {
-      fetchAccountHistory(token.pubkey, refresh);
-    });
-  };
+  const fetchHistories = React.useCallback(
+    (refresh?: boolean) => {
+      tokens.forEach((token) => {
+        fetchAccountHistory(token.pubkey, refresh);
+      });
+    },
+    [tokens, fetchAccountHistory]
+  );
 
   // Fetch histories on load
   React.useEffect(() => {
@@ -148,7 +171,21 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
       return oldestSlot !== undefined && tx.slot >= oldestSlot;
     });
 
-  if (mintAndTxs.length === 0) {
+  const filtered = mintAndTxs.filter(({ mint }) => {
+    if (filter === "") {
+      return true;
+    }
+
+    return mint.toBase58() === filter;
+  });
+
+  React.useEffect(() => {
+    if (!fetching && filtered.length < 1 && !allFoundOldest) {
+      fetchHistories();
+    }
+  }, [fetching, filtered, allFoundOldest, fetchHistories]);
+
+  if (filtered.length === 0) {
     if (fetching) {
       return <LoadingCard message="Loading history" />;
     } else if (failed) {
@@ -168,7 +205,7 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
     );
   }
 
-  mintAndTxs.sort((a, b) => {
+  filtered.sort((a, b) => {
     if (a.tx.slot > b.tx.slot) return -1;
     if (a.tx.slot < b.tx.slot) return 1;
     return 0;
@@ -178,6 +215,12 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
     <div className="card">
       <div className="card-header align-items-center">
         <h3 className="card-header-title">Token History</h3>
+        <DisplayDropdown
+          filter={filter}
+          toggle={() => setDropdown((show) => !show)}
+          show={showDropdown}
+          tokens={tokens}
+        ></DisplayDropdown>
         <button
           className="btn btn-white btn-sm"
           disabled={fetching}
@@ -209,7 +252,7 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
             </tr>
           </thead>
           <tbody className="list">
-            {mintAndTxs.map(({ mint, tx }) => (
+            {filtered.map(({ mint, tx }) => (
               <TokenTransactionRow
                 key={tx.signature}
                 mint={mint}
@@ -244,6 +287,76 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
     </div>
   );
 }
+
+const DisplayDropdown = ({ filter, toggle, show, tokens }: DropdownProps) => {
+  const { cluster } = useCluster();
+
+  const buildLocation = (location: Location, display: string) => {
+    const params = new URLSearchParams(location.search);
+    if (display === "") {
+      params.delete("filter");
+    } else {
+      params.set("filter", display);
+    }
+    return {
+      ...location,
+      search: params.toString(),
+    };
+  };
+
+  const DISPLAY_OPTIONS: (TokenInfoWithPubkey | null)[] = [null];
+  const nameLookup: { [mint: string]: string } = {};
+
+  tokens.forEach((token) => {
+    DISPLAY_OPTIONS.push(token);
+    const pubkey = token.info.mint.toBase58();
+    nameLookup[pubkey] = formatTokenDisplay(pubkey, cluster);
+  });
+
+  return (
+    <div className="dropdown mr-2">
+      <small className="mr-2">Filter:</small>
+      <button
+        className="btn btn-white btn-sm dropdown-toggle"
+        type="button"
+        onClick={toggle}
+      >
+        {filter === "" ? "All Tokens" : nameLookup[filter]}
+      </button>
+      <div
+        className={`token-filter dropdown-menu-right dropdown-menu${
+          show ? " show" : ""
+        }`}
+      >
+        {DISPLAY_OPTIONS.map((displayOption) => {
+          const key = displayOption?.info.mint.toBase58() || null;
+          return (
+            <Link
+              key={key}
+              to={(location: Location) =>
+                buildLocation(
+                  location,
+                  displayOption?.info.mint.toBase58() || ""
+                )
+              }
+              className={`dropdown-item${
+                displayOption?.info.mint.toBase58() === filter ? " active" : ""
+              }`}
+              onClick={toggle}
+            >
+              {displayOption === null
+                ? "All Tokens"
+                : formatTokenDisplay(
+                    displayOption.info.mint.toBase58(),
+                    cluster
+                  )}
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 function instructionTypeName(
   ix: ParsedInstruction,
@@ -477,4 +590,14 @@ function InstructionDetails({
       )}
     </>
   );
+}
+
+function formatTokenDisplay(pubkey: string, cluster: Cluster): string {
+  let display = displayAddress(pubkey, cluster);
+
+  if (display === pubkey) {
+    display = display.slice(0, TRUNCATE_TOKEN_DISPLAY) + "...";
+  }
+
+  return display;
 }
