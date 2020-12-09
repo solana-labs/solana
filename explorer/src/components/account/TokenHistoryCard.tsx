@@ -80,7 +80,7 @@ const useQueryFilter = (): string => {
   return filter || "";
 };
 
-type DropdownProps = {
+type FilterProps = {
   filter: string;
   toggle: () => void;
   show: boolean;
@@ -215,12 +215,12 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
     <div className="card">
       <div className="card-header align-items-center">
         <h3 className="card-header-title">Token History</h3>
-        <DisplayDropdown
+        <FilterDropdown
           filter={filter}
           toggle={() => setDropdown((show) => !show)}
           show={showDropdown}
           tokens={tokens}
-        ></DisplayDropdown>
+        ></FilterDropdown>
         <button
           className="btn btn-white btn-sm"
           disabled={fetching}
@@ -288,15 +288,15 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
   );
 }
 
-const DisplayDropdown = ({ filter, toggle, show, tokens }: DropdownProps) => {
+const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
   const { cluster } = useCluster();
 
-  const buildLocation = (location: Location, display: string) => {
+  const buildLocation = (location: Location, filter: string) => {
     const params = new URLSearchParams(location.search);
-    if (display === "") {
+    if (filter === "") {
       params.delete("filter");
     } else {
-      params.set("filter", display);
+      params.set("filter", filter);
     }
     return {
       ...location,
@@ -304,11 +304,11 @@ const DisplayDropdown = ({ filter, toggle, show, tokens }: DropdownProps) => {
     };
   };
 
-  const DISPLAY_OPTIONS: (TokenInfoWithPubkey | null)[] = [null];
+  const FILTER_OPTIONS: (TokenInfoWithPubkey | null)[] = [null];
   const nameLookup: { [mint: string]: string } = {};
 
   tokens.forEach((token) => {
-    DISPLAY_OPTIONS.push(token);
+    FILTER_OPTIONS.push(token);
     const pubkey = token.info.mint.toBase58();
     nameLookup[pubkey] = formatTokenDisplay(pubkey, cluster);
   });
@@ -328,26 +328,26 @@ const DisplayDropdown = ({ filter, toggle, show, tokens }: DropdownProps) => {
           show ? " show" : ""
         }`}
       >
-        {DISPLAY_OPTIONS.map((displayOption) => {
-          const key = displayOption?.info.mint.toBase58() || null;
+        {FILTER_OPTIONS.map((filterOption) => {
+          const key = filterOption?.info.mint.toBase58() || null;
           return (
             <Link
               key={key}
               to={(location: Location) =>
                 buildLocation(
                   location,
-                  displayOption?.info.mint.toBase58() || ""
+                  filterOption?.info.mint.toBase58() || ""
                 )
               }
               className={`dropdown-item${
-                displayOption?.info.mint.toBase58() === filter ? " active" : ""
+                filterOption?.info.mint.toBase58() === filter ? " active" : ""
               }`}
               onClick={toggle}
             >
-              {displayOption === null
+              {filterOption === null
                 ? "All Tokens"
                 : formatTokenDisplay(
-                    displayOption.info.mint.toBase58(),
+                    filterOption.info.mint.toBase58(),
                     cluster
                   )}
             </Link>
