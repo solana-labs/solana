@@ -18,8 +18,8 @@ use crate::{
     crds_gossip_error::CrdsGossipError,
     crds_gossip_pull::{CrdsFilter, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
     crds_value::{
-        self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, SnapshotHash,
-        Version, Vote, MAX_WALLCLOCK,
+        self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, NodeInstance,
+        SnapshotHash, Version, Vote, MAX_WALLCLOCK,
     },
     data_budget::DataBudget,
     epoch_slots::EpochSlots,
@@ -298,6 +298,7 @@ pub struct ClusterInfo {
     stats: GossipStats,
     socket: UdpSocket,
     local_message_pending_push_queue: RwLock<Vec<(CrdsValue, u64)>>,
+    instance: NodeInstance,
 }
 
 impl Default for ClusterInfo {
@@ -422,7 +423,7 @@ pub fn make_accounts_hashes_message(
 type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "8L3mKuv292LTa3XFCGNVdaFihWnsgYE4hf941p9gqUxF")]
+#[frozen_abi(digest = "6PpTdBvyX37y5ERokb8DejgKobpsuTbFJC39f8Eqz7Vy")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 enum Protocol {
@@ -553,6 +554,7 @@ impl ClusterInfo {
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
             local_message_pending_push_queue: RwLock::new(vec![]),
+            instance: NodeInstance::new(id, timestamp()),
         };
         {
             let mut gossip = me.gossip.write().unwrap();
@@ -586,6 +588,7 @@ impl ClusterInfo {
                     .unwrap()
                     .clone(),
             ),
+            instance: NodeInstance::new(*new_id, timestamp()),
         }
     }
 
@@ -606,16 +609,24 @@ impl ClusterInfo {
     ) {
         let now = timestamp();
         self.my_contact_info.write().unwrap().wallclock = now;
-        let entry =
-            CrdsValue::new_signed(CrdsData::ContactInfo(self.my_contact_info()), &self.keypair);
+        let entries: Vec<_> = vec![
+            CrdsData::ContactInfo(self.my_contact_info()),
+            CrdsData::NodeInstance(self.instance.with_wallclock(now)),
+        ]
+        .into_iter()
+        .map(|v| CrdsValue::new_signed(v, &self.keypair))
+        .collect();
+        {
+            let mut local_message_pending_push_queue =
+                self.local_message_pending_push_queue.write().unwrap();
+            for entry in entries {
+                local_message_pending_push_queue.push((entry, now));
+            }
+        }
         self.gossip
             .write()
             .unwrap()
             .refresh_push_active_set(stakes, gossip_validators);
-        self.local_message_pending_push_queue
-            .write()
-            .unwrap()
-            .push((entry, now));
     }
 
     // TODO kill insert_info, only used by tests
@@ -1789,9 +1800,14 @@ impl ClusterInfo {
                 let mut last_contact_info_trace = timestamp();
                 let mut adopt_shred_version = self.my_shred_version() == 0;
                 let recycler = PacketsRecycler::default();
-
-                let message = CrdsData::Version(Version::new(self.id()));
-                self.push_message(CrdsValue::new_signed(message, &self.keypair));
+                let crds_data = vec![
+                    CrdsData::Version(Version::new(self.id())),
+                    CrdsData::NodeInstance(self.instance.with_wallclock(timestamp())),
+                ];
+                for value in crds_data {
+                    let value = CrdsValue::new_signed(value, &self.keypair);
+                    self.push_message(value);
+                }
                 let mut generate_pull_requests = true;
                 loop {
                     let start = timestamp();
@@ -2487,8 +2503,8 @@ impl ClusterInfo {
         stakes: HashMap<Pubkey, u64>,
         feature_set: Option<&FeatureSet>,
         epoch_time_ms: u64,
-    ) {
-        let mut timer = Measure::start("process_gossip_packets_time");
+    ) -> Result<()> {
+        let _st = ScopedTimer::from(&self.stats.process_gossip_packets_time);
         let packets: Vec<_> = thread_pool.install(|| {
             packets
                 .into_par_iter()
@@ -2501,6 +2517,16 @@ impl ClusterInfo {
                 })
                 .collect()
         });
+        // Check if there is a duplicate instance of
+        // this node with more recent timestamp.
+        let check_duplicate_instance = |values: &[CrdsValue]| {
+            for value in values {
+                if self.instance.check_duplicate(value) {
+                    return Err(Error::DuplicateNodeInstance);
+                }
+            }
+            Ok(())
+        };
         // Split packets based on their types.
         let mut pull_requests = vec![];
         let mut pull_responses = vec![];
@@ -2513,8 +2539,14 @@ impl ClusterInfo {
                 Protocol::PullRequest(filter, caller) => {
                     pull_requests.push((from_addr, filter, caller))
                 }
-                Protocol::PullResponse(from, data) => pull_responses.push((from, data)),
-                Protocol::PushMessage(from, data) => push_messages.push((from, data)),
+                Protocol::PullResponse(from, data) => {
+                    check_duplicate_instance(&data)?;
+                    pull_responses.push((from, data));
+                }
+                Protocol::PushMessage(from, data) => {
+                    check_duplicate_instance(&data)?;
+                    push_messages.push((from, data));
+                }
                 Protocol::PruneMessage(from, data) => prune_messages.push((from, data)),
                 Protocol::PingMessage(ping) => ping_messages.push((from_addr, ping)),
                 Protocol::PongMessage(pong) => pong_messages.push((from_addr, pong)),
@@ -2539,9 +2571,7 @@ impl ClusterInfo {
             response_sender,
             feature_set,
         );
-        self.stats
-            .process_gossip_packets_time
-            .add_measure(&mut timer);
+        Ok(())
     }
 
     /// Process messages from the network
@@ -2588,7 +2618,7 @@ impl ClusterInfo {
             stakes,
             feature_set.as_deref(),
             epoch_time_ms,
-        );
+        )?;
 
         self.print_reset_stats(last_print);
 
@@ -2853,25 +2883,36 @@ impl ClusterInfo {
                     .build()
                     .unwrap();
                 let mut last_print = Instant::now();
-                loop {
-                    let e = self.run_listen(
+                while !exit.load(Ordering::Relaxed) {
+                    if let Err(err) = self.run_listen(
                         &recycler,
                         bank_forks.as_ref(),
                         &requests_receiver,
                         &response_sender,
                         &thread_pool,
                         &mut last_print,
-                    );
-                    if exit.load(Ordering::Relaxed) {
-                        return;
-                    }
-                    if e.is_err() {
-                        let r_gossip = self.gossip.read().unwrap();
-                        debug!(
-                            "{}: run_listen timeout, table size: {}",
-                            self.id(),
-                            r_gossip.crds.len()
-                        );
+                    ) {
+                        match err {
+                            Error::RecvTimeoutError(_) => {
+                                let table_size = self.gossip.read().unwrap().crds.len();
+                                debug!(
+                                    "{}: run_listen timeout, table size: {}",
+                                    self.id(),
+                                    table_size,
+                                );
+                            }
+                            Error::DuplicateNodeInstance => {
+                                error!(
+                                    "duplicate running instances of the same validator node: {}",
+                                    self.id()
+                                );
+                                exit.store(true, Ordering::Relaxed);
+                                // TODO: Pass through ValidatorExit here so
+                                // that this will exit cleanly.
+                                std::process::exit(1);
+                            }
+                            _ => error!("gossip run_listen failed: {}", err),
+                        }
                     }
                     thread_mem_usage::datapoint("solana-listen");
                 }

@@ -32,6 +32,7 @@ pub enum Error {
     FsExtra(fs_extra::error::Error),
     SnapshotError(snapshot_utils::SnapshotError),
     WeightedIndexError(rand::distributions::weighted::WeightedError),
+    DuplicateNodeInstance,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
