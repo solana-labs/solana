@@ -36,6 +36,9 @@ use std::{
 };
 use thiserror::Error as ThisError;
 
+/// Maximum signers
+pub const MAX_SIGNERS: usize = 16;
+
 /// Error definitions
 #[derive(Debug, ThisError, PartialEq)]
 pub enum SyscallError {
@@ -59,6 +62,8 @@ pub enum SyscallError {
     PrivilegeEscalation,
     #[error("Unaligned pointer")]
     UnalignedPointer,
+    #[error("Too many signers")]
+    TooManySigners,
 }
 impl From<SyscallError> for EbpfError<BPFError> {
     fn from(error: SyscallError) -> Self {
@@ -829,6 +834,9 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                 ro_regions,
                 self.loader_id
             )?;
+            if signers_seeds.len() > MAX_SIGNERS {
+                return Err(SyscallError::TooManySigners.into());
+            }
             for signer_seeds in signers_seeds.iter() {
                 let untranslated_seeds = translate_slice!(
                     &[u8],
@@ -1088,6 +1096,9 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                 ro_regions,
                 self.loader_id
             )?;
+            if signers_seeds.len() > MAX_SIGNERS {
+                return Err(SyscallError::TooManySigners.into());
+            }
             Ok(signers_seeds
                 .iter()
                 .map(|signer_seeds| {
