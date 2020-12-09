@@ -19,9 +19,10 @@ use std::sync::mpsc::channel;
 
 #[test]
 fn test_vote_authorize_and_withdraw() {
-    let test_validator = TestValidator::with_no_fees();
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
     let (sender, receiver) = channel();
-    run_local_faucet(test_validator.mint_keypair(), sender, None);
+    run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());

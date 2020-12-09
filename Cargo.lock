@@ -4014,6 +4014,7 @@ dependencies = [
  "solana-metrics",
  "solana-net-utils",
  "solana-perf",
+ "solana-program-test",
  "solana-rayon-threadlimit",
  "solana-runtime",
  "solana-sdk",
@@ -5071,12 +5072,14 @@ dependencies = [
  "chrono",
  "clap",
  "console",
+ "indicatif",
  "libc",
  "log 0.4.8",
  "rand 0.7.3",
  "serde_json",
  "signal-hook",
  "solana-clap-utils",
+ "solana-cli-config",
  "solana-client",
  "solana-core",
  "solana-download-utils",
@@ -5090,7 +5093,7 @@ dependencies = [
  "solana-sdk",
  "solana-version",
  "solana-vote-program",
- "solana-vote-signer",
+ "symlink",
 ]
 
 [[package]]

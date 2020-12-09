@@ -1038,7 +1038,7 @@ mod tests {
     use solana_core::test_validator::TestValidator;
     use solana_sdk::{
         clock::DEFAULT_MS_PER_SLOT,
-        signature::{read_keypair_file, write_keypair_file},
+        signature::{read_keypair_file, write_keypair_file, Signer},
     };
     use solana_stake_program::stake_instruction::StakeInstruction;
 
@@ -1057,8 +1057,8 @@ mod tests {
 
     #[test]
     fn test_process_token_allocations() {
-        let test_validator = TestValidator::with_no_fees();
-        let alice = test_validator.mint_keypair();
+        let alice = Keypair::new();
+        let test_validator = TestValidator::with_no_fees(alice.pubkey());
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
@@ -1069,8 +1069,8 @@ mod tests {
 
     #[test]
     fn test_process_transfer_amount_allocations() {
-        let test_validator = TestValidator::with_no_fees();
-        let alice = test_validator.mint_keypair();
+        let alice = Keypair::new();
+        let test_validator = TestValidator::with_no_fees(alice.pubkey());
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
@@ -1081,8 +1081,8 @@ mod tests {
 
     #[test]
     fn test_process_stake_allocations() {
-        let test_validator = TestValidator::with_no_fees();
-        let alice = test_validator.mint_keypair();
+        let alice = Keypair::new();
+        let test_validator = TestValidator::with_no_fees(alice.pubkey());
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
@@ -1398,8 +1398,8 @@ mod tests {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
 
-        let test_validator = TestValidator::with_custom_fees(fees);
-        let alice = test_validator.mint_keypair();
+        let alice = Keypair::new();
+        let test_validator = TestValidator::with_custom_fees(alice.pubkey(), fees);
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
@@ -1485,8 +1485,8 @@ mod tests {
     fn test_check_payer_balances_distribute_tokens_separate_payers() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
-        let test_validator = TestValidator::with_custom_fees(fees);
-        let alice = test_validator.mint_keypair();
+        let alice = Keypair::new();
+        let test_validator = TestValidator::with_custom_fees(alice.pubkey(), fees);
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
@@ -1598,8 +1598,8 @@ mod tests {
     fn test_check_payer_balances_distribute_stakes_single_payer() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
-        let test_validator = TestValidator::with_custom_fees(fees);
-        let alice = test_validator.mint_keypair();
+        let alice = Keypair::new();
+        let test_validator = TestValidator::with_custom_fees(alice.pubkey(), fees);
         let url = test_validator.rpc_url();
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
         test_validator_block_0_fee_workaround(&client);
@@ -1707,8 +1707,8 @@ mod tests {
     fn test_check_payer_balances_distribute_stakes_separate_payers() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
-        let test_validator = TestValidator::with_custom_fees(fees);
-        let alice = test_validator.mint_keypair();
+        let alice = Keypair::new();
+        let test_validator = TestValidator::with_custom_fees(alice.pubkey(), fees);
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
@@ -2025,8 +2025,8 @@ mod tests {
 
     #[test]
     fn test_distribute_allocations_dump_db() {
-        let test_validator = TestValidator::with_no_fees();
-        let sender_keypair = test_validator.mint_keypair();
+        let sender_keypair = Keypair::new();
+        let test_validator = TestValidator::with_no_fees(sender_keypair.pubkey());
         let url = test_validator.rpc_url();
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
 

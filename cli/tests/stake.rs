@@ -26,9 +26,10 @@ use std::sync::mpsc::channel;
 
 #[test]
 fn test_stake_delegation_force() {
-    let test_validator = TestValidator::with_no_fees();
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
     let (sender, receiver) = channel();
-    run_local_faucet(test_validator.mint_keypair(), sender, None);
+    run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());
@@ -115,9 +116,10 @@ fn test_stake_delegation_force() {
 fn test_seed_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
-    let test_validator = TestValidator::with_no_fees();
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
     let (sender, receiver) = channel();
-    run_local_faucet(test_validator.mint_keypair(), sender, None);
+    run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());
@@ -195,9 +197,10 @@ fn test_seed_stake_delegation_and_deactivation() {
 fn test_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
-    let test_validator = TestValidator::with_no_fees();
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
     let (sender, receiver) = channel();
-    run_local_faucet(test_validator.mint_keypair(), sender, None);
+    run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());
@@ -271,9 +274,10 @@ fn test_stake_delegation_and_deactivation() {
 fn test_offline_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
-    let test_validator = TestValidator::with_no_fees();
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
     let (sender, receiver) = channel();
-    run_local_faucet(test_validator.mint_keypair(), sender, None);
+    run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());
@@ -404,9 +408,10 @@ fn test_offline_stake_delegation_and_deactivation() {
 fn test_nonced_stake_delegation_and_deactivation() {
     solana_logger::setup();
 
-    let test_validator = TestValidator::with_no_fees();
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
     let (sender, receiver) = channel();
-    run_local_faucet(test_validator.mint_keypair(), sender, None);
+    run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());
@@ -519,9 +524,10 @@ fn test_nonced_stake_delegation_and_deactivation() {
 fn test_stake_authorize() {
     solana_logger::setup();
 
-    let test_validator = TestValidator::with_no_fees();
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
     let (sender, receiver) = channel();
-    run_local_faucet(test_validator.mint_keypair(), sender, None);
+    run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());
@@ -792,9 +798,10 @@ fn test_stake_authorize_with_fee_payer() {
     solana_logger::setup();
     const SIG_FEE: u64 = 42;
 
-    let test_validator = TestValidator::with_custom_fees(SIG_FEE);
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_custom_fees(mint_keypair.pubkey(), SIG_FEE);
     let (sender, receiver) = channel();
-    run_local_faucet(test_validator.mint_keypair(), sender, None);
+    run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());
@@ -917,9 +924,10 @@ fn test_stake_authorize_with_fee_payer() {
 fn test_stake_split() {
     solana_logger::setup();
 
-    let test_validator = TestValidator::with_custom_fees(1);
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_custom_fees(mint_keypair.pubkey(), 1);
     let (sender, receiver) = channel();
-    run_local_faucet(test_validator.mint_keypair(), sender, None);
+    run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());
@@ -1061,9 +1069,10 @@ fn test_stake_split() {
 fn test_stake_set_lockup() {
     solana_logger::setup();
 
-    let test_validator = TestValidator::with_custom_fees(1);
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_custom_fees(mint_keypair.pubkey(), 1);
     let (sender, receiver) = channel();
-    run_local_faucet(test_validator.mint_keypair(), sender, None);
+    run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());
@@ -1323,9 +1332,10 @@ fn test_stake_set_lockup() {
 fn test_offline_nonced_create_stake_account_and_withdraw() {
     solana_logger::setup();
 
-    let test_validator = TestValidator::with_no_fees();
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
     let (sender, receiver) = channel();
-    run_local_faucet(test_validator.mint_keypair(), sender, None);
+    run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());

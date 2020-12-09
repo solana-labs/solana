@@ -490,6 +490,13 @@ impl Validator {
 
         let (snapshot_packager_service, snapshot_config_and_package_sender) =
             if let Some(snapshot_config) = config.snapshot_config.clone() {
+                if is_snapshot_config_invalid(
+                    snapshot_config.snapshot_interval_slots,
+                    config.accounts_hash_interval_slots,
+                ) {
+                    error!("Snapshot config is invalid");
+                }
+
                 // Start a snapshot packaging service
                 let (sender, receiver) = channel();
                 let snapshot_packager_service =
@@ -1218,6 +1225,15 @@ fn cleanup_accounts_path(account_path: &std::path::Path) {
     }
 }
 
+pub fn is_snapshot_config_invalid(
+    snapshot_interval_slots: u64,
+    accounts_hash_interval_slots: u64,
+) -> bool {
+    snapshot_interval_slots != 0
+        && (snapshot_interval_slots < accounts_hash_interval_slots
+            || snapshot_interval_slots % accounts_hash_interval_slots != 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1387,5 +1403,14 @@ mod tests {
             &cluster_info,
             rpc_override_health_check
         ));
+    }
+
+    #[test]
+    fn test_interval_check() {
+        assert!(!is_snapshot_config_invalid(0, 100));
+        assert!(is_snapshot_config_invalid(1, 100));
+        assert!(is_snapshot_config_invalid(230, 100));
+        assert!(!is_snapshot_config_invalid(500, 100));
+        assert!(!is_snapshot_config_invalid(5, 5));
     }
 }

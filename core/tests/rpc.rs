@@ -14,7 +14,10 @@ use solana_client::{
 };
 use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, test_validator::TestValidator};
 use solana_sdk::{
-    commitment_config::CommitmentConfig, hash::Hash, signature::Signer, system_transaction,
+    commitment_config::CommitmentConfig,
+    hash::Hash,
+    signature::{Keypair, Signer},
+    system_transaction,
     transaction::Transaction,
 };
 use std::{
@@ -52,8 +55,8 @@ fn post_rpc(request: Value, rpc_url: &str) -> Value {
 fn test_rpc_send_tx() {
     solana_logger::setup();
 
-    let test_validator = TestValidator::with_no_fees();
-    let alice = test_validator.mint_keypair();
+    let alice = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(alice.pubkey());
     let rpc_url = test_validator.rpc_url();
 
     let bob_pubkey = solana_sdk::pubkey::new_rand();
@@ -113,7 +116,8 @@ fn test_rpc_send_tx() {
 fn test_rpc_invalid_requests() {
     solana_logger::setup();
 
-    let test_validator = TestValidator::with_no_fees();
+    let alice = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(alice.pubkey());
     let rpc_url = test_validator.rpc_url();
 
     let bob_pubkey = solana_sdk::pubkey::new_rand();
@@ -145,11 +149,14 @@ fn test_rpc_invalid_requests() {
 fn test_rpc_subscriptions() {
     solana_logger::setup();
 
-    let test_validator = TestValidator::with_no_fees();
-    let alice = test_validator.mint_keypair();
+    let alice = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(alice.pubkey());
 
     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     transactions_socket.connect(test_validator.tpu()).unwrap();
+
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
+    let recent_blockhash = rpc_client.get_recent_blockhash().unwrap().0;
 
     // Create transaction signatures to subscribe to
     let transactions: Vec<Transaction> = (0..1000)
@@ -158,7 +165,7 @@ fn test_rpc_subscriptions() {
                 &alice,
                 &solana_sdk::pubkey::new_rand(),
                 1,
-                test_validator.genesis_hash(),
+                recent_blockhash,
             )
         })
         .collect();

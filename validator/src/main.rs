@@ -21,7 +21,7 @@ use solana_core::{
     gossip_service::GossipService,
     rpc::JsonRpcConfig,
     rpc_pubsub_service::PubSubConfig,
-    validator::{Validator, ValidatorConfig},
+    validator::{is_snapshot_config_invalid, Validator, ValidatorConfig},
 };
 use solana_download_utils::{download_genesis_if_missing, download_snapshot};
 use solana_ledger::blockstore_db::BlockstoreRecoveryMode;
@@ -39,6 +39,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
+use solana_validator::start_logger;
 use std::{
     collections::HashSet,
     env,
@@ -51,15 +52,9 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    thread::{sleep, JoinHandle},
+    thread::sleep,
     time::{Duration, Instant},
 };
-
-fn port_validator(port: String) -> Result<(), String> {
-    port.parse::<u16>()
-        .map(|_| ())
-        .map_err(|e| format!("{:?}", e))
-}
 
 fn port_range_validator(port_range: String) -> Result<(), String> {
     if let Some((start, end)) = solana_net_utils::parse_port_range(&port_range) {
@@ -480,73 +475,6 @@ fn download_then_check_genesis_hash(
     };
 
     Ok(genesis_config.hash())
-}
-
-fn is_snapshot_config_invalid(
-    snapshot_interval_slots: u64,
-    accounts_hash_interval_slots: u64,
-) -> bool {
-    snapshot_interval_slots != 0
-        && (snapshot_interval_slots < accounts_hash_interval_slots
-            || snapshot_interval_slots % accounts_hash_interval_slots != 0)
-}
-
-#[cfg(unix)]
-fn redirect_stderr(filename: &str) {
-    use std::{fs::OpenOptions, os::unix::io::AsRawFd};
-    match OpenOptions::new()
-        .write(true)
-        .create(true)
-        .append(true)
-        .open(filename)
-    {
-        Ok(file) => unsafe {
-            libc::dup2(file.as_raw_fd(), libc::STDERR_FILENO);
-        },
-        Err(err) => eprintln!("Unable to open {}: {}", filename, err),
-    }
-}
-
-fn start_logger(logfile: Option<String>) -> Option<JoinHandle<()>> {
-    let logger_thread = match logfile {
-        None => None,
-        Some(logfile) => {
-            #[cfg(unix)]
-            {
-                let signals = signal_hook::iterator::Signals::new(&[signal_hook::SIGUSR1])
-                    .unwrap_or_else(|err| {
-                        eprintln!("Unable to register SIGUSR1 handler: {:?}", err);
-                        exit(1);
-                    });
-
-                redirect_stderr(&logfile);
-                Some(std::thread::spawn(move || {
-                    for signal in signals.forever() {
-                        info!(
-                            "received SIGUSR1 ({}), reopening log file: {:?}",
-                            signal, logfile
-                        );
-                        redirect_stderr(&logfile);
-                    }
-                }))
-            }
-            #[cfg(not(unix))]
-            {
-                println!("logging to a file is not supported on this platform");
-                ()
-            }
-        }
-    };
-
-    solana_logger::setup_with_default(
-        &[
-            "solana=info,solana_runtime::message_processor=error", /* info logging for all solana modules */
-            "rpc=trace",   /* json_rpc request/response logging */
-        ]
-        .join(","),
-    );
-
-    logger_thread
 }
 
 fn verify_reachable_ports(
@@ -988,8 +916,8 @@ pub fn main() {
                 .long("rpc-port")
                 .value_name("PORT")
                 .takes_value(true)
-                .validator(port_validator)
-                .help("Use this port for JSON RPC, the next port for the RPC websocket, and then third port for the RPC banks API"),
+                .validator(solana_validator::port_validator)
+                .help("Use this port for JSON RPC and the next port for the RPC websocket"),
         )
         .arg(
             Arg::with_name("private_rpc")
@@ -1715,11 +1643,6 @@ pub fn main() {
     let use_progress_bar = logfile.is_none();
     let _logger_thread = start_logger(logfile);
 
-    // Default to RUST_BACKTRACE=1 for more informative validator logs
-    if env::var_os("RUST_BACKTRACE").is_none() {
-        env::set_var("RUST_BACKTRACE", "1")
-    }
-
     let gossip_host = matches
         .value_of("gossip_host")
         .map(|gossip_host| {
@@ -1819,18 +1742,4 @@ pub fn main() {
     info!("Validator initialized");
     validator.join().expect("validator exit");
     info!("Validator exiting..");
-}
-
-#[cfg(test)]
-pub mod tests {
-    use super::*;
-
-    #[test]
-    fn test_interval_check() {
-        assert!(!is_snapshot_config_invalid(0, 100));
-        assert!(is_snapshot_config_invalid(1, 100));
-        assert!(is_snapshot_config_invalid(230, 100));
-        assert!(!is_snapshot_config_invalid(500, 100));
-        assert!(!is_snapshot_config_invalid(5, 5));
-    }
 }

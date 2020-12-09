@@ -22,13 +22,21 @@ use std::sync::mpsc::channel;
 
 #[test]
 fn test_nonce() {
-    full_battery_tests(TestValidator::with_no_fees(), None, false);
+    let mint_keypair = Keypair::new();
+    full_battery_tests(
+        TestValidator::with_no_fees(mint_keypair.pubkey()),
+        mint_keypair,
+        None,
+        false,
+    );
 }
 
 #[test]
 fn test_nonce_with_seed() {
+    let mint_keypair = Keypair::new();
     full_battery_tests(
-        TestValidator::with_no_fees(),
+        TestValidator::with_no_fees(mint_keypair.pubkey()),
+        mint_keypair,
         Some(String::from("seed")),
         false,
     );
@@ -36,16 +44,23 @@ fn test_nonce_with_seed() {
 
 #[test]
 fn test_nonce_with_authority() {
-    full_battery_tests(TestValidator::with_no_fees(), None, true);
+    let mint_keypair = Keypair::new();
+    full_battery_tests(
+        TestValidator::with_no_fees(mint_keypair.pubkey()),
+        mint_keypair,
+        None,
+        true,
+    );
 }
 
 fn full_battery_tests(
     test_validator: TestValidator,
+    mint_keypair: Keypair,
     seed: Option<String>,
     use_nonce_authority: bool,
 ) {
     let (sender, receiver) = channel();
-    run_local_faucet(test_validator.mint_keypair(), sender, None);
+    run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());
@@ -202,10 +217,11 @@ fn full_battery_tests(
 #[test]
 fn test_create_account_with_seed() {
     solana_logger::setup();
-    let test_validator = TestValidator::with_custom_fees(1);
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_custom_fees(mint_keypair.pubkey(), 1);
 
     let (sender, receiver) = channel();
-    run_local_faucet(test_validator.mint_keypair(), sender, None);
+    run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
     let offline_nonce_authority_signer = keypair_from_seed(&[1u8; 32]).unwrap();

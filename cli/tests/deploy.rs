@@ -21,10 +21,11 @@ fn test_cli_deploy_program() {
     pathbuf.push("noop");
     pathbuf.set_extension("so");
 
-    let test_validator = TestValidator::with_no_fees();
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
 
     let (sender, receiver) = channel();
-    run_local_faucet(test_validator.mint_keypair(), sender, None);
+    run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());

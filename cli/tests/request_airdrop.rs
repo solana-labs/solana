@@ -2,15 +2,19 @@ use solana_cli::cli::{process_command, CliCommand, CliConfig};
 use solana_client::rpc_client::RpcClient;
 use solana_core::test_validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
-use solana_sdk::{commitment_config::CommitmentConfig, signature::Keypair};
+use solana_sdk::{
+    commitment_config::CommitmentConfig,
+    signature::{Keypair, Signer},
+};
 use std::sync::mpsc::channel;
 
 #[test]
 fn test_cli_request_airdrop() {
-    let test_validator = TestValidator::with_no_fees();
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
 
     let (sender, receiver) = channel();
-    run_local_faucet(test_validator.mint_keypair(), sender, None);
+    run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
     let mut bob_config = CliConfig::recent_for_tests();

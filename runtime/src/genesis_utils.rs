@@ -78,15 +78,29 @@ pub fn create_genesis_config_with_vote_accounts_and_cluster_type(
     assert!(!voting_keypairs.is_empty());
     assert_eq!(voting_keypairs.len(), stakes.len());
 
-    let mut genesis_config_info = create_genesis_config_with_leader_ex(
+    let mint_keypair = Keypair::new();
+    let voting_keypair =
+        Keypair::from_bytes(&voting_keypairs[0].borrow().vote_keypair.to_bytes()).unwrap();
+
+    let genesis_config = create_genesis_config_with_leader_ex(
         mint_lamports,
+        &mint_keypair.pubkey(),
         &voting_keypairs[0].borrow().node_keypair.pubkey(),
-        &voting_keypairs[0].borrow().vote_keypair,
+        &voting_keypairs[0].borrow().vote_keypair.pubkey(),
         &voting_keypairs[0].borrow().stake_keypair.pubkey(),
         stakes[0],
         VALIDATOR_LAMPORTS,
+        FeeRateGovernor::new(0, 0), // most tests can't handle transaction fees
+        Rent::free(),               // most tests don't expect rent
         cluster_type,
+        vec![],
     );
+
+    let mut genesis_config_info = GenesisConfigInfo {
+        genesis_config,
+        voting_keypair,
+        mint_keypair,
+    };
 
     for (validator_voting_keypairs, stake) in voting_keypairs[1..].iter().zip(&stakes[1..]) {
         let node_pubkey = validator_voting_keypairs.borrow().node_keypair.pubkey();
@@ -120,15 +134,28 @@ pub fn create_genesis_config_with_leader(
     validator_pubkey: &Pubkey,
     validator_stake_lamports: u64,
 ) -> GenesisConfigInfo {
-    create_genesis_config_with_leader_ex(
+    let mint_keypair = Keypair::new();
+    let voting_keypair = Keypair::new();
+
+    let genesis_config = create_genesis_config_with_leader_ex(
         mint_lamports,
+        &mint_keypair.pubkey(),
         validator_pubkey,
-        &Keypair::new(),
+        &voting_keypair.pubkey(),
         &solana_sdk::pubkey::new_rand(),
         validator_stake_lamports,
         VALIDATOR_LAMPORTS,
+        FeeRateGovernor::new(0, 0), // most tests can't handle transaction fees
+        Rent::free(),               // most tests don't expect rent
         ClusterType::Development,
-    )
+        vec![],
+    );
+
+    GenesisConfigInfo {
+        genesis_config,
+        voting_keypair,
+        mint_keypair,
+    }
 }
 
 pub fn activate_all_features(genesis_config: &mut GenesisConfig) {
@@ -146,55 +173,48 @@ pub fn activate_all_features(genesis_config: &mut GenesisConfig) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_genesis_config_with_leader_ex(
     mint_lamports: u64,
+    mint_pubkey: &Pubkey,
     validator_pubkey: &Pubkey,
-    validator_vote_account_keypair: &Keypair,
+    validator_vote_account_pubkey: &Pubkey,
     validator_stake_account_pubkey: &Pubkey,
     validator_stake_lamports: u64,
     validator_lamports: u64,
+    fee_rate_governor: FeeRateGovernor,
+    rent: Rent,
     cluster_type: ClusterType,
-) -> GenesisConfigInfo {
-    let mint_keypair = Keypair::new();
+    mut initial_accounts: Vec<(Pubkey, Account)>,
+) -> GenesisConfig {
     let validator_vote_account = vote_state::create_account(
-        &validator_vote_account_keypair.pubkey(),
+        &validator_vote_account_pubkey,
         &validator_pubkey,
         0,
         validator_stake_lamports,
     );
 
-    let fee_rate_governor = FeeRateGovernor::new(0, 0); // most tests can't handle transaction fees
-    let rent = Rent::free(); // most tests don't expect rent
-
     let validator_stake_account = stake_state::create_account(
         validator_stake_account_pubkey,
-        &validator_vote_account_keypair.pubkey(),
+        &validator_vote_account_pubkey,
         &validator_vote_account,
         &rent,
         validator_stake_lamports,
     );
 
-    let accounts = [
-        (
-            mint_keypair.pubkey(),
-            Account::new(mint_lamports, 0, &system_program::id()),
-        ),
-        (
-            *validator_pubkey,
-            Account::new(validator_lamports, 0, &system_program::id()),
-        ),
-        (
-            validator_vote_account_keypair.pubkey(),
-            validator_vote_account,
-        ),
-        (*validator_stake_account_pubkey, validator_stake_account),
-    ]
-    .iter()
-    .cloned()
-    .collect();
+    initial_accounts.push((
+        *mint_pubkey,
+        Account::new(mint_lamports, 0, &system_program::id()),
+    ));
+    initial_accounts.push((
+        *validator_pubkey,
+        Account::new(validator_lamports, 0, &system_program::id()),
+    ));
+    initial_accounts.push((*validator_vote_account_pubkey, validator_vote_account));
+    initial_accounts.push((*validator_stake_account_pubkey, validator_stake_account));
 
     let mut genesis_config = GenesisConfig {
-        accounts,
+        accounts: initial_accounts.iter().cloned().collect(),
         fee_rate_governor,
         rent,
         cluster_type,
@@ -206,9 +226,5 @@ pub fn create_genesis_config_with_leader_ex(
         activate_all_features(&mut genesis_config);
     }
 
-    GenesisConfigInfo {
-        genesis_config,
-        mint_keypair,
-        voting_keypair: Keypair::from_bytes(&validator_vote_account_keypair.to_bytes()).unwrap(),
-    }
+    genesis_config
 }
