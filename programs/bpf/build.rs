@@ -70,6 +70,8 @@ fn main() {
             "external_spend",
             "instruction_introspection",
             "invoke",
+            "invoke_and_error",
+            "invoke_and_ok",
             "invoked",
             "iter",
             "many_args",

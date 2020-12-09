@@ -47,6 +47,8 @@ members = [
     "rust/external_spend",
     "rust/instruction_introspection",
     "rust/invoke",
+    "rust/invoke_and_error",
+    "rust/invoke_and_ok",
     "rust/invoked",
     "rust/iter",
     "rust/many_args",
