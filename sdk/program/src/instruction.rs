@@ -167,6 +167,10 @@ pub enum InstructionError {
     /// Computational budget exceeded
     #[error("Computational budget exceeded")]
     ComputationalBudgetExceeded,
+
+    /// Cross-program invocation with unauthorized signer or writable account
+    #[error("Cross-program invocation with unauthorized signer or writable account")]
+    PrivilegeEscalation,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
