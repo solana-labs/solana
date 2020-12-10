@@ -1,5 +1,7 @@
 //! The `retransmit_stage` retransmits shreds between validators
 
+use crate::shred_fetch_stage::ShredFetchStage;
+use crate::shred_fetch_stage::ShredFetchStats;
 use crate::{
     cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
     cluster_info_vote_listener::VerifiedVoteReceiver,
@@ -12,7 +14,10 @@ use crate::{
     result::{Error, Result},
     window_service::{should_retransmit_and_persist, WindowService},
 };
+use ahash::AHasher;
 use crossbeam_channel::Receiver;
+use lru::LruCache;
+use rand::{thread_rng, Rng};
 use solana_ledger::{
     blockstore::{Blockstore, CompletedSlotsReceiver},
     leader_schedule_cache::LeaderScheduleCache,
@@ -27,6 +32,7 @@ use solana_sdk::epoch_schedule::EpochSchedule;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
 use solana_streamer::streamer::PacketReceiver;
+use std::hash::Hasher;
 use std::{
     cmp,
     collections::hash_set::HashSet,
@@ -40,6 +46,9 @@ use std::{
     thread::{self, Builder, JoinHandle},
     time::Duration,
 };
+
+const MAX_DUPLICATE_COUNT: usize = 2;
+const DEFAULT_LRU_SIZE: usize = 10_000;
 
 // Limit a given thread to consume about this many packets so that
 // it doesn't pull up too much work.
@@ -196,6 +205,9 @@ struct EpochStakesCache {
     stakes_and_index: Vec<(u64, usize)>,
 }
 
+pub type ShredFilterAndSeeds = (LruCache<(Slot, u32), Vec<u64>>, u128, u128);
+
+#[allow(clippy::too_many_arguments)]
 fn retransmit(
     bank_forks: &Arc<RwLock<BankForks>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
@@ -206,6 +218,7 @@ fn retransmit(
     stats: &Arc<RetransmitStats>,
     epoch_stakes_cache: &Arc<RwLock<EpochStakesCache>>,
     last_peer_update: &Arc<AtomicU64>,
+    shreds_received: &Arc<Mutex<ShredFilterAndSeeds>>,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
     let r_lock = r.lock().unwrap();
@@ -254,6 +267,12 @@ fn retransmit(
         w_epoch_stakes_cache.stakes_and_index = stakes_and_index;
         drop(w_epoch_stakes_cache);
         r_epoch_stakes_cache = epoch_stakes_cache.read().unwrap();
+        {
+            let mut sr = shreds_received.lock().unwrap();
+            sr.0.clear();
+            sr.1 = thread_rng().gen::<u128>();
+            sr.2 = thread_rng().gen::<u128>();
+        }
     }
     let mut peers_len = 0;
     epoch_cache_update.stop();
@@ -279,6 +298,33 @@ fn retransmit(
                 continue;
             }
 
+            match ShredFetchStage::get_slot_index(packet, &mut ShredFetchStats::default()) {
+                Some(slot_index) => {
+                    let mut received = shreds_received.lock().unwrap();
+                    let seed1 = received.1;
+                    let seed2 = received.2;
+                    if let Some(sent) = received.0.get_mut(&slot_index) {
+                        if sent.len() < MAX_DUPLICATE_COUNT {
+                            let mut hasher = AHasher::new_with_keys(seed1, seed2);
+                            hasher.write(&packet.data[0..packet.meta.size]);
+                            let hash = hasher.finish();
+                            if sent.contains(&hash) {
+                                continue;
+                            }
+
+                            sent.push(hash);
+                        } else {
+                            continue;
+                        }
+                    } else {
+                        let mut hasher = AHasher::new_with_keys(seed1, seed2);
+                        hasher.write(&packet.data[0..packet.meta.size]);
+                        let hash = hasher.finish();
+                        received.0.put(slot_index, vec![hash]);
+                    }
+                }
+                None => continue,
+            }
             let mut compute_turbine_peers = Measure::start("turbine_start");
             let (my_index, mut shuffled_stakes_and_index) = ClusterInfo::shuffle_peers_and_index(
                 &my_id,
@@ -367,6 +413,7 @@ pub fn retransmitter(
     r: Arc<Mutex<PacketReceiver>>,
 ) -> Vec<JoinHandle<()>> {
     let stats = Arc::new(RetransmitStats::default());
+    let shreds_received = Arc::new(Mutex::new((LruCache::new(DEFAULT_LRU_SIZE), 0, 0)));
     (0..sockets.len())
         .map(|s| {
             let sockets = sockets.clone();
@@ -377,6 +424,7 @@ pub fn retransmitter(
             let stats = stats.clone();
             let epoch_stakes_cache = Arc::new(RwLock::new(EpochStakesCache::default()));
             let last_peer_update = Arc::new(AtomicU64::new(0));
+            let shreds_received = shreds_received.clone();
 
             Builder::new()
                 .name("solana-retransmitter".to_string())
@@ -393,6 +441,7 @@ pub fn retransmitter(
                             &stats,
                             &epoch_stakes_cache,
                             &last_peer_update,
+                            &shreds_received,
                         ) {
                             match e {
                                 Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -519,11 +568,12 @@ mod tests {
     use solana_ledger::create_new_tmp_ledger;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_net_utils::find_available_port_in_range;
-    use solana_perf::packet::{Meta, Packet, Packets};
+    use solana_perf::packet::{Packet, Packets};
     use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
     fn test_skip_repair() {
+        solana_logger::setup();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let blockstore = Blockstore::open(&ledger_path).unwrap();
@@ -565,7 +615,12 @@ mod tests {
         );
         let _thread_hdls = vec![t_retransmit];
 
-        let packets = Packets::new(vec![Packet::default()]);
+        let mut shred =
+            solana_ledger::shred::Shred::new_from_data(0, 0, 0, None, true, true, 0, 0x20, 0);
+        let mut packet = Packet::default();
+        shred.copy_to_packet(&mut packet);
+
+        let packets = Packets::new(vec![packet.clone()]);
         // it should send this over the sockets.
         retransmit_sender.send(packets).unwrap();
         let mut packets = Packets::new(vec![]);
@@ -573,16 +628,13 @@ mod tests {
         assert_eq!(packets.packets.len(), 1);
         assert_eq!(packets.packets[0].meta.repair, false);
 
-        let repair = Packet {
-            meta: Meta {
-                repair: true,
-                ..Meta::default()
-            },
-            ..Packet::default()
-        };
+        let mut repair = packet.clone();
+        repair.meta.repair = true;
 
+        shred.set_slot(1);
+        shred.copy_to_packet(&mut packet);
         // send 1 repair and 1 "regular" packet so that we don't block forever on the recv_from
-        let packets = Packets::new(vec![repair, Packet::default()]);
+        let packets = Packets::new(vec![repair, packet]);
         retransmit_sender.send(packets).unwrap();
         let mut packets = Packets::new(vec![]);
         solana_streamer::packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
