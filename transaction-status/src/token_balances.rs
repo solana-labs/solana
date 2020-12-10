@@ -73,11 +73,9 @@ pub fn collect_token_balances(
         let mut transaction_balances: Vec<TransactionTokenBalance> = vec![];
         for index in fetch_account_hash.keys() {
             if let Some(account_id) = account_keys.get(*index as usize) {
-                if let Some(results) =
+                if let Some((mint, ui_token_amount)) =
                     collect_token_balance_from_account(&bank, account_id, &mut mint_decimals)
                 {
-                    let (mint, ui_token_amount) = results;
-
                     transaction_balances.push(TransactionTokenBalance {
                         account_index: *index,
                         mint,

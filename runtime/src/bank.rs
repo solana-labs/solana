@@ -26,7 +26,6 @@ use crate::{
 use byteorder::{ByteOrder, LittleEndian};
 use itertools::Itertools;
 use log::*;
-
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_info};
 use solana_sdk::{
@@ -394,7 +393,6 @@ impl TransactionBalancesSet {
         }
     }
 }
-
 pub type TransactionBalances = Vec<Vec<u64>>;
 
 /// An ordered list of instructions that were invoked during a transaction instruction
@@ -3629,7 +3627,6 @@ impl Bank {
         } else {
             vec![]
         };
-
         (
             results,
             TransactionBalancesSet::new(pre_balances, post_balances),
