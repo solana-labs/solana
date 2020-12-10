@@ -59,8 +59,6 @@ pub enum SyscallError {
     ProgramNotSupported,
     #[error("{0}")]
     InstructionError(InstructionError),
-    #[error("Cross-program invocation with unauthorized signer or writable account")]
-    PrivilegeEscalation,
     #[error("Unaligned pointer")]
     UnalignedPointer,
     #[error("Too many signers")]
@@ -1270,7 +1268,9 @@ fn verify_instruction<'a>(
             ))?;
         // Readonly account cannot become writable
         if account.is_writable && !keyed_account.is_writable() {
-            return Err(SyscallError::PrivilegeEscalation.into());
+            return Err(
+                SyscallError::InstructionError(InstructionError::PrivilegeEscalation).into(),
+            );
         }
 
         if account.is_signer && // If message indicates account is signed
@@ -1278,7 +1278,9 @@ fn verify_instruction<'a>(
             keyed_account.signer_key().is_some() // Signed in the parent instruction
             || signers.contains(&account.pubkey) // Signed by the program
         ) {
-            return Err(SyscallError::PrivilegeEscalation.into());
+            return Err(
+                SyscallError::InstructionError(InstructionError::PrivilegeEscalation).into(),
+            );
         }
     }
 
