@@ -557,7 +557,7 @@ impl ClusterInfo {
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
             local_message_pending_push_queue: RwLock::new(vec![]),
             contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL,
-            instance: NodeInstance::new(id, timestamp()),
+            instance: NodeInstance::new(&mut rand::thread_rng(), id, timestamp()),
         };
         {
             let mut gossip = me.gossip.write().unwrap();
@@ -592,7 +592,7 @@ impl ClusterInfo {
                     .clone(),
             ),
             contact_debug_interval: self.contact_debug_interval,
-            instance: NodeInstance::new(*new_id, timestamp()),
+            instance: NodeInstance::new(&mut rand::thread_rng(), *new_id, timestamp()),
         }
     }
 
