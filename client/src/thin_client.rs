@@ -399,6 +399,12 @@ impl SyncClient for ThinClient {
             .map(|r| r.value)
     }
 
+    fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> TransportResult<u64> {
+        self.rpc_client()
+            .get_minimum_balance_for_rent_exemption(data_len)
+            .map_err(|e| e.into())
+    }
+
     fn get_recent_blockhash(&self) -> TransportResult<(Hash, FeeCalculator)> {
         let (blockhash, fee_calculator, _last_valid_slot) =
             self.get_recent_blockhash_with_commitment(CommitmentConfig::default())?;
