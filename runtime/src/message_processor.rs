@@ -1317,7 +1317,7 @@ mod tests {
         accounts.push(account);
 
         let mut loaders: Vec<Vec<(Pubkey, RefCell<Account>)>> = Vec::new();
-        let account = RefCell::new(create_loadable_account("mock_system_program"));
+        let account = RefCell::new(create_loadable_account("mock_system_program", 1));
         loaders.push(vec![(mock_system_program_id, account)]);
 
         let executors = Rc::new(RefCell::new(Executors::default()));
@@ -1478,7 +1478,7 @@ mod tests {
         accounts.push(account);
 
         let mut loaders: Vec<Vec<(Pubkey, RefCell<Account>)>> = Vec::new();
-        let account = RefCell::new(create_loadable_account("mock_system_program"));
+        let account = RefCell::new(create_loadable_account("mock_system_program", 1));
         loaders.push(vec![(mock_program_id, account)]);
 
         let executors = Rc::new(RefCell::new(Executors::default()));
