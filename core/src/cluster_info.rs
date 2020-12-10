@@ -554,7 +554,7 @@ impl ClusterInfo {
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
             local_message_pending_push_queue: RwLock::new(vec![]),
-            instance: NodeInstance::new(id, timestamp()),
+            instance: NodeInstance::new(&mut rand::thread_rng(), id, timestamp()),
         };
         {
             let mut gossip = me.gossip.write().unwrap();
@@ -588,7 +588,7 @@ impl ClusterInfo {
                     .unwrap()
                     .clone(),
             ),
-            instance: NodeInstance::new(*new_id, timestamp()),
+            instance: NodeInstance::new(&mut rand::thread_rng(), *new_id, timestamp()),
         }
     }
 
