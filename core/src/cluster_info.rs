@@ -554,12 +554,7 @@ impl ClusterInfo {
             stats: GossipStats::default(),
             socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
             local_message_pending_push_queue: RwLock::new(vec![]),
-<<<<<<< HEAD
-            instance: NodeInstance::new(id, timestamp()),
-=======
-            contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL,
             instance: NodeInstance::new(&mut rand::thread_rng(), id, timestamp()),
->>>>>>> 409fe3bca... adds the instance token to crds-labels for node-instance crds-values (#14037)
         };
         {
             let mut gossip = me.gossip.write().unwrap();
@@ -593,12 +588,7 @@ impl ClusterInfo {
                     .unwrap()
                     .clone(),
             ),
-<<<<<<< HEAD
-            instance: NodeInstance::new(*new_id, timestamp()),
-=======
-            contact_debug_interval: self.contact_debug_interval,
             instance: NodeInstance::new(&mut rand::thread_rng(), *new_id, timestamp()),
->>>>>>> 409fe3bca... adds the instance token to crds-labels for node-instance crds-values (#14037)
         }
     }
 
