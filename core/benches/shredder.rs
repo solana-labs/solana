@@ -125,8 +125,14 @@ fn bench_shredder_coding(bencher: &mut Bencher) {
     let symbol_count = MAX_DATA_SHREDS_PER_FEC_BLOCK as usize;
     let data_shreds = make_shreds(symbol_count);
     bencher.iter(|| {
-        Shredder::generate_coding_shreds(0, RECOMMENDED_FEC_RATE, &data_shreds[..symbol_count], 0)
-            .len();
+        Shredder::generate_coding_shreds(
+            0,
+            RECOMMENDED_FEC_RATE,
+            &data_shreds[..symbol_count],
+            0,
+            symbol_count,
+        )
+        .len();
     })
 }
 
@@ -134,8 +140,13 @@ fn bench_shredder_coding(bencher: &mut Bencher) {
 fn bench_shredder_decoding(bencher: &mut Bencher) {
     let symbol_count = MAX_DATA_SHREDS_PER_FEC_BLOCK as usize;
     let data_shreds = make_shreds(symbol_count);
-    let coding_shreds =
-        Shredder::generate_coding_shreds(0, RECOMMENDED_FEC_RATE, &data_shreds[..symbol_count], 0);
+    let coding_shreds = Shredder::generate_coding_shreds(
+        0,
+        RECOMMENDED_FEC_RATE,
+        &data_shreds[..symbol_count],
+        0,
+        symbol_count,
+    );
     bencher.iter(|| {
         Shredder::try_recovery(
             coding_shreds[..].to_vec(),
