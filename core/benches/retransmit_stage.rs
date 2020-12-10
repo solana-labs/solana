@@ -7,14 +7,18 @@ use log::*;
 use solana_core::cluster_info::{ClusterInfo, Node};
 use solana_core::contact_info::ContactInfo;
 use solana_core::retransmit_stage::retransmitter;
+use solana_ledger::entry::Entry;
 use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
+use solana_ledger::shred::Shredder;
 use solana_measure::measure::Measure;
-use solana_perf::packet::to_packets_chunked;
-use solana_perf::test_tx::test_tx;
+use solana_perf::packet::{Packet, Packets};
 use solana_runtime::bank::Bank;
 use solana_runtime::bank_forks::BankForks;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey;
+use solana_sdk::signature::{Keypair, Signer};
+use solana_sdk::system_transaction;
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -63,14 +67,24 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
     // To work reliably with higher values, this needs larger udp rmem size
-    let tx = test_tx();
-    const NUM_PACKETS: usize = 50;
-    let chunk_size = NUM_PACKETS / (4 * NUM_THREADS);
-    let batches = to_packets_chunked(
-        &std::iter::repeat(tx).take(NUM_PACKETS).collect::<Vec<_>>(),
-        chunk_size,
-    );
-    info!("batches: {}", batches.len());
+    let entries: Vec<_> = (0..5)
+        .map(|_| {
+            let keypair0 = Keypair::new();
+            let keypair1 = Keypair::new();
+            let tx0 =
+                system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
+            Entry::new(&Hash::default(), 1, vec![tx0])
+        })
+        .collect();
+
+    let keypair = Arc::new(Keypair::new());
+    let slot = 0;
+    let parent = 0;
+    let shredder =
+        Shredder::new(slot, parent, 0.0, keypair, 0, 0).expect("Failed to create entry shredder");
+    let mut data_shreds = shredder.entries_to_shreds(&entries, true, 0).0;
+
+    let num_packets = data_shreds.len();
 
     let retransmitter_handles = retransmitter(
         Arc::new(sockets),
@@ -80,6 +94,8 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         packet_receiver,
     );
 
+    let mut index = 0;
+    let mut slot = 0;
     let total = Arc::new(AtomicUsize::new(0));
     bencher.iter(move || {
         let peer_sockets1 = peer_sockets.clone();
@@ -96,7 +112,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
                             while peer_sockets2[p].recv(&mut buf).is_ok() {
                                 total2.fetch_add(1, Ordering::Relaxed);
                             }
-                            if total2.load(Ordering::Relaxed) >= NUM_PACKETS {
+                            if total2.load(Ordering::Relaxed) >= num_packets {
                                 break;
                             }
                             info!("{} recv", total2.load(Ordering::Relaxed));
@@ -107,9 +123,17 @@ fn bench_retransmitter(bencher: &mut Bencher) {
             })
             .collect();
 
-        for packets in batches.clone() {
-            packet_sender.send(packets).unwrap();
+        for shred in data_shreds.iter_mut() {
+            shred.set_slot(slot);
+            shred.set_index(index);
+            index += 1;
+            index %= 200;
+            let mut p = Packet::default();
+            shred.copy_to_packet(&mut p);
+            let _ = packet_sender.send(Packets::new(vec![p]));
         }
+        slot += 1;
+
         info!("sent...");
 
         let mut join_time = Measure::start("join");
