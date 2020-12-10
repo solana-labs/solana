@@ -280,6 +280,16 @@ impl Message {
         bincode::serialize(self).unwrap()
     }
 
+    pub fn program_id(&self, instruction_index: usize) -> Option<&Pubkey> {
+        Some(
+            &self.account_keys[self.instructions.get(instruction_index)?.program_id_index as usize],
+        )
+    }
+
+    pub fn program_index(&self, instruction_index: usize) -> Option<usize> {
+        Some(self.instructions.get(instruction_index)?.program_id_index as usize)
+    }
+
     pub fn program_ids(&self) -> Vec<&Pubkey> {
         self.instructions
             .iter()
