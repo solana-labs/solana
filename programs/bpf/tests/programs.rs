@@ -699,7 +699,7 @@ fn test_program_bpf_invoke() {
         assert_eq!(invoked_programs, vec![invoked_program_id.clone()]);
         assert_eq!(
             result.unwrap_err(),
-            TransactionError::InstructionError(0, InstructionError::Custom(194969602))
+            TransactionError::InstructionError(0, InstructionError::PrivilegeEscalation)
         );
 
         let instruction = Instruction::new(
@@ -731,7 +731,7 @@ fn test_program_bpf_invoke() {
         assert_eq!(invoked_programs, vec![invoked_program_id.clone()]);
         assert_eq!(
             result.unwrap_err(),
-            TransactionError::InstructionError(0, InstructionError::Custom(194969602))
+            TransactionError::InstructionError(0, InstructionError::PrivilegeEscalation)
         );
 
         let instruction = Instruction::new(
