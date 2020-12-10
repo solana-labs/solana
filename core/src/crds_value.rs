@@ -485,7 +485,8 @@ impl CrdsValue {
     }
 
     /// Return all the possible labels for a record identified by Pubkey.
-<<<<<<< HEAD
+    /// Excludes NodeInstance, which is pushed priodically, and does not need
+    /// to update its local-timestmap.
     pub fn record_labels(key: &Pubkey) -> Vec<CrdsValueLabel> {
         let mut labels = vec![
             CrdsValueLabel::ContactInfo(*key),
@@ -494,19 +495,6 @@ impl CrdsValue {
             CrdsValueLabel::AccountsHashes(*key),
             CrdsValueLabel::LegacyVersion(*key),
             CrdsValueLabel::Version(*key),
-            CrdsValueLabel::NodeInstance(*key),
-=======
-    /// Excludes NodeInstance, which is pushed priodically, and does not need
-    /// to update its local-timestmap.
-    pub fn record_labels(key: Pubkey) -> impl Iterator<Item = CrdsValueLabel> {
-        const CRDS_VALUE_LABEL_STUBS: [fn(Pubkey) -> CrdsValueLabel; 6] = [
-            CrdsValueLabel::ContactInfo,
-            CrdsValueLabel::LowestSlot,
-            CrdsValueLabel::SnapshotHashes,
-            CrdsValueLabel::AccountsHashes,
-            CrdsValueLabel::LegacyVersion,
-            CrdsValueLabel::Version,
->>>>>>> 409fe3bca... adds the instance token to crds-labels for node-instance crds-values (#14037)
         ];
         labels.extend((0..MAX_VOTES).map(|ix| CrdsValueLabel::Vote(ix, *key)));
         labels.extend((0..MAX_EPOCH_SLOTS).map(|ix| CrdsValueLabel::EpochSlots(ix, *key)));
@@ -756,43 +744,6 @@ mod test {
     }
 
     #[test]
-<<<<<<< HEAD
-=======
-    fn test_filter_current() {
-        let mut rng = rand::thread_rng();
-        let keys: Vec<_> = repeat_with(Keypair::new).take(16).collect();
-        let values: Vec<_> = repeat_with(|| {
-            let index = rng.gen_range(0, keys.len());
-            CrdsValue::new_rand(&mut rng, Some(&keys[index]))
-        })
-        .take(256)
-        .collect();
-        let mut currents = HashMap::new();
-        for value in filter_current(&values) {
-            // Assert that filtered values have unique labels.
-            assert!(currents.insert(value.label(), value).is_none());
-        }
-        // Assert that currents are the most recent version of each value.
-        let mut count = 0;
-        for value in &values {
-            let current_value = currents.get(&value.label()).unwrap();
-            match value.wallclock().cmp(&current_value.wallclock()) {
-                Ordering::Less => (),
-                Ordering::Equal => {
-                    assert_eq!(value, *current_value);
-                    count += 1;
-                }
-                Ordering::Greater => panic!("this should not happen!"),
-            }
-        }
-        assert_eq!(count, currents.len());
-        // Currently CrdsData::new_rand is only implemented for 5 different
-        // kinds and excludes Vote and EpochSlots, and so the unique labels
-        // cannot be more than 5 times number of keys.
-        assert!(currents.len() <= keys.len() * 5);
-    }
-
-    #[test]
     fn test_node_instance_crds_lable() {
         fn make_crds_value(node: NodeInstance) -> CrdsValue {
             CrdsValue::new_unsigned(CrdsData::NodeInstance(node))
@@ -840,7 +791,6 @@ mod test {
     }
 
     #[test]
->>>>>>> 409fe3bca... adds the instance token to crds-labels for node-instance crds-values (#14037)
     fn test_check_duplicate_instance() {
         fn make_crds_value(node: NodeInstance) -> CrdsValue {
             CrdsValue::new_unsigned(CrdsData::NodeInstance(node))
