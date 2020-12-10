@@ -10121,7 +10121,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_add_native_program_squated_while_not_replacing() {
+    fn test_add_native_program_squatted_while_not_replacing() {
         let (genesis_config, mint_keypair) = create_genesis_config(100_000);
         let bank = Bank::new(&genesis_config);
         let program_id = solana_sdk::pubkey::new_rand();
