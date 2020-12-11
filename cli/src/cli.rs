@@ -632,7 +632,7 @@ pub fn parse_command(
             parse_withdraw_from_nonce_account(matches, default_signer, wallet_manager)
         }
         // Program Deployment
-        ("deploy", Some(matches)) => {
+        ("program-deploy", Some(matches)) => {
             let mut signers = vec![default_signer.signer_from_path(matches, wallet_manager)?];
             let (buffer_signer, _address) = signer_of(matches, "buffer_signer", wallet_manager)?;
             let buffer = buffer_signer.map(|signer| {
@@ -656,7 +656,7 @@ pub fn parse_command(
                 signers,
             })
         }
-        ("upgrade-program", Some(matches)) => {
+        ("program-upgrade", Some(matches)) => {
             let mut signers = vec![default_signer.signer_from_path(matches, wallet_manager)?];
             let (upgrade_authority_signer, _address) =
                 signer_of(matches, "upgrade_authority", wallet_manager)?;
@@ -683,7 +683,7 @@ pub fn parse_command(
                 signers,
             })
         }
-        ("set-program-upgrade-authority", Some(matches)) => {
+        ("program-set-upgrade-authority", Some(matches)) => {
             let mut signers = vec![default_signer.signer_from_path(matches, wallet_manager)?];
             let (upgrade_authority_signer, _address) =
                 signer_of(matches, "upgrade_authority", wallet_manager)?;
@@ -2739,7 +2739,8 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
-            SubCommand::with_name("deploy")
+            SubCommand::with_name("program-deploy")
+                .visible_alias("deploy")
                 .about("Deploy a program")
                 .arg(
                     Arg::with_name("program_location")
@@ -2747,7 +2748,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("PROGRAM_FILEPATH")
                         .takes_value(true)
                         .required(true)
-                        .help("/path/to/program.o"),
+                        .help("/path/to/program.so"),
                 )
                 .arg(
                     Arg::with_name("buffer_signer")
@@ -2768,7 +2769,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("use_upgradeable_loader")
                         .long("upgradeable")
-                        .help("Use the upgradeable loader with the specified upgrade authority")
+                        .help("Use the upgradeable loader with an optional upgrade authority")
                 )
                 .arg(
                     Arg::with_name("upgrade_authority")
@@ -2794,19 +2795,11 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(commitment_arg_with_default("max")),
         )
         .subcommand(
-            SubCommand::with_name("upgrade-program")
+            SubCommand::with_name("program-upgrade")
                 .about("Upgrade a program")
                 .arg(
-                    Arg::with_name("program_location")
-                        .index(1)
-                        .value_name("PROGRAM_FILEPATH")
-                        .takes_value(true)
-                        .required(true)
-                        .help("/path/to/program.o"),
-                )
-                .arg(
                     Arg::with_name("program_id")
-                        .index(2)
+                        .index(1)
                         .value_name("PROGRAM_ADDRESS")
                         .takes_value(true)
                         .required(true)
@@ -2814,12 +2807,20 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 )
                 .arg(
                     Arg::with_name("upgrade_authority")
-                        .index(3)
+                        .index(2)
                         .value_name("AUTHORITY_SIGNER")
                         .takes_value(true)
                         .required(true)
                         .validator(is_valid_signer)
                         .help("Signer who has the authority to upgrade the program")
+                )
+                .arg(
+                    Arg::with_name("program_location")
+                        .index(3)
+                        .value_name("PROGRAM_FILEPATH")
+                        .takes_value(true)
+                        .required(true)
+                        .help("/path/to/program.so"),
                 )
                 .arg(
                     Arg::with_name("buffer_signer")
@@ -2832,7 +2833,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(commitment_arg_with_default("max")),
         )
         .subcommand(
-            SubCommand::with_name("set-program-upgrade-authority")
+            SubCommand::with_name("program-set-upgrade-authority")
                 .about("Set a new authority for an upgradeable program")
                 .arg(
                     Arg::with_name("program_id")
@@ -3215,15 +3216,16 @@ mod tests {
         );
 
         // Test Deploy Subcommand
-        let test_deploy =
-            test_commands
-                .clone()
-                .get_matches_from(vec!["test", "deploy", "/Users/test/program.o"]);
+        let test_deploy = test_commands.clone().get_matches_from(vec![
+            "test",
+            "deploy",
+            "/Users/test/program.so",
+        ]);
         assert_eq!(
             parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::ProgramDeploy {
-                    program_location: "/Users/test/program.o".to_string(),
+                    program_location: "/Users/test/program.so".to_string(),
                     buffer: None,
                     use_deprecated_loader: false,
                     use_upgradeable_loader: false,
@@ -3241,14 +3243,42 @@ mod tests {
         let test_deploy = test_commands.clone().get_matches_from(vec![
             "test",
             "deploy",
-            "/Users/test/program.o",
+            "/Users/test/program.so",
             &custom_address_file,
         ]);
         assert_eq!(
             parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::ProgramDeploy {
-                    program_location: "/Users/test/program.o".to_string(),
+                    program_location: "/Users/test/program.so".to_string(),
+                    buffer: Some(1),
+                    use_deprecated_loader: false,
+                    use_upgradeable_loader: false,
+                    allow_excessive_balance: false,
+                    upgrade_authority: None,
+                    max_len: None,
+                },
+                signers: vec![
+                    read_keypair_file(&keypair_file).unwrap().into(),
+                    read_keypair_file(&custom_address_file).unwrap().into(),
+                ],
+            }
+        );
+
+        let custom_address = Keypair::new();
+        let custom_address_file = make_tmp_path("custom_address_file");
+        write_keypair_file(&custom_address, &custom_address_file).unwrap();
+        let test_deploy = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program-deploy",
+            "/Users/test/program.so",
+            &custom_address_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::ProgramDeploy {
+                    program_location: "/Users/test/program.so".to_string(),
                     buffer: Some(1),
                     use_deprecated_loader: false,
                     use_upgradeable_loader: false,
@@ -3266,8 +3296,8 @@ mod tests {
         let upgrade_authority = Pubkey::new_unique();
         let test_deploy = test_commands.clone().get_matches_from(vec![
             "test",
-            "deploy",
-            "/Users/test/program.o",
+            "program-deploy",
+            "/Users/test/program.so",
             "--upgradeable",
             "--upgrade-authority",
             &upgrade_authority.to_string(),
@@ -3278,7 +3308,7 @@ mod tests {
             parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::ProgramDeploy {
-                    program_location: "/Users/test/program.o".to_string(),
+                    program_location: "/Users/test/program.so".to_string(),
                     buffer: None,
                     use_deprecated_loader: false,
                     use_upgradeable_loader: true,
@@ -3297,16 +3327,16 @@ mod tests {
         write_keypair_file(&upgrade_address, &upgrade_address_file).unwrap();
         let test = test_commands.clone().get_matches_from(vec![
             "test",
-            "upgrade-program",
-            "/Users/test/program.o",
+            "program-upgrade",
             &program_pubkey.to_string(),
             &upgrade_address_file,
+            "/Users/test/program.so",
         ]);
         assert_eq!(
             parse_command(&test, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::ProgramUpgrade {
-                    program_location: "/Users/test/program.o".to_string(),
+                    program_location: "/Users/test/program.so".to_string(),
                     program: program_pubkey,
                     buffer: None,
                     upgrade_authority: 1,
@@ -3326,7 +3356,7 @@ mod tests {
         write_keypair_file(&authority_address, &authority_address_file).unwrap();
         let test = test_commands.clone().get_matches_from(vec![
             "test",
-            "set-program-upgrade-authority",
+            "program-set-upgrade-authority",
             &program_pubkey.to_string(),
             &authority_address_file,
             "--new-upgrade-authority",
@@ -3353,7 +3383,7 @@ mod tests {
         write_keypair_file(&authority_address, &authority_address_file).unwrap();
         let test = test_commands.clone().get_matches_from(vec![
             "test",
-            "set-program-upgrade-authority",
+            "program-set-upgrade-authority",
             &program_pubkey.to_string(),
             &authority_address_file,
         ]);
