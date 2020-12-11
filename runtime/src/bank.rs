@@ -1623,6 +1623,7 @@ impl Bank {
     ///  returns a map (has to be copied) of loaded
     ///   ( Vec<(staker info)> (voter account) ) keyed by voter pubkey
     ///
+    /// Filters out invalid pairs
     fn stake_delegation_accounts(
         &self,
         reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
@@ -1640,19 +1641,37 @@ impl Bank {
                     self.get_account(&delegation.voter_pubkey),
                 ) {
                     (Some(stake_account), Some(vote_account)) => {
-                        let vote_owner = vote_account.owner;
-                        let entry = accounts
-                            .entry(delegation.voter_pubkey)
-                            .or_insert((Vec::new(), vote_account));
+                        // call tracer to catch any illegal data if any
                         if let Some(reward_calc_tracer) = reward_calc_tracer {
                             reward_calc_tracer(&RewardCalculationEvent::Staking(
                                 stake_pubkey,
                                 &InflationPointCalculationEvent::Delegation(
                                     *delegation,
-                                    vote_owner,
+                                    vote_account.owner,
                                 ),
                             ));
                         }
+                        if self
+                            .feature_set
+                            .is_active(&feature_set::filter_stake_delegation_accounts::id())
+                            && (stake_account.owner != solana_stake_program::id()
+                                || vote_account.owner != solana_vote_program::id())
+                        {
+                            datapoint_warn!(
+                                "bank-stake_delegation_accounts-invalid-account",
+                                ("slot", self.slot() as i64, i64),
+                                ("stake-address", format!("{:?}", stake_pubkey), String),
+                                (
+                                    "vote-address",
+                                    format!("{:?}", delegation.voter_pubkey),
+                                    String
+                                ),
+                            );
+                            return;
+                        }
+                        let entry = accounts
+                            .entry(delegation.voter_pubkey)
+                            .or_insert((Vec::new(), vote_account));
                         entry.0.push((*stake_pubkey, stake_account));
                     }
                     (_, _) => {}
@@ -11446,5 +11465,63 @@ pub(crate) mod tests {
             bank = new_from_parent(&Arc::new(bank));
         }
         assert_eq!(bank.get_inflation_num_slots(), 2 * slots_per_epoch);
+    }
+
+    #[test]
+    fn test_stake_vote_account_validity() {
+        let validator_vote_keypairs0 = ValidatorVoteKeypairs::new_rand();
+        let validator_vote_keypairs1 = ValidatorVoteKeypairs::new_rand();
+        let validator_keypairs = vec![&validator_vote_keypairs0, &validator_vote_keypairs1];
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair: _,
+            voting_keypair: _,
+        } = create_genesis_config_with_vote_accounts(
+            1_000_000_000,
+            &validator_keypairs,
+            vec![10_000; 2],
+        );
+        let bank = Arc::new(Bank::new(&genesis_config));
+        let stake_delegation_accounts = bank.stake_delegation_accounts(&mut null_tracer());
+        assert_eq!(stake_delegation_accounts.len(), 2);
+
+        let mut vote_account = bank
+            .get_account(&validator_vote_keypairs0.vote_keypair.pubkey())
+            .unwrap_or_default();
+        let original_lamports = vote_account.lamports;
+        vote_account.lamports = 0;
+        // Simulate vote account removal via full withdrawal
+        bank.store_account(
+            &validator_vote_keypairs0.vote_keypair.pubkey(),
+            &vote_account,
+        );
+
+        // Modify staked vote account owner; a vote account owned by another program could be
+        // freely modified with malicious data
+        let bogus_vote_program = Pubkey::new_unique();
+        vote_account.lamports = original_lamports;
+        vote_account.owner = bogus_vote_program;
+        bank.store_account(
+            &validator_vote_keypairs0.vote_keypair.pubkey(),
+            &vote_account,
+        );
+
+        assert_eq!(bank.vote_accounts().len(), 1);
+
+        // Modify stake account owner; a stake account owned by another program could be freely
+        // modified with malicious data
+        let bogus_stake_program = Pubkey::new_unique();
+        let mut stake_account = bank
+            .get_account(&validator_vote_keypairs1.stake_keypair.pubkey())
+            .unwrap_or_default();
+        stake_account.owner = bogus_stake_program;
+        bank.store_account(
+            &validator_vote_keypairs1.stake_keypair.pubkey(),
+            &stake_account,
+        );
+
+        // Accounts must be valid stake and vote accounts
+        let stake_delegation_accounts = bank.stake_delegation_accounts(&mut null_tracer());
+        assert_eq!(stake_delegation_accounts.len(), 0);
     }
 }
