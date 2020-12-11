@@ -1245,62 +1245,6 @@ impl<'a> SyscallObject<BPFError> for SyscallInvokeSignedC<'a> {
     }
 }
 
-fn verify_instruction<'a>(
-    syscall: &dyn SyscallInvokeSigned<'a>,
-    instruction: &Instruction,
-    signers: &[Pubkey],
-) -> Result<(), EbpfError<BPFError>> {
-    let callers_keyed_accounts = syscall.get_callers_keyed_accounts();
-
-    // Check for privilege escalation
-    for account in instruction.accounts.iter() {
-        let keyed_account = callers_keyed_accounts
-            .iter()
-            .find_map(|keyed_account| {
-                if &account.pubkey == keyed_account.unsigned_key() {
-                    Some(keyed_account)
-                } else {
-                    None
-                }
-            })
-            .ok_or(SyscallError::InstructionError(
-                InstructionError::MissingAccount,
-            ))?;
-        // Readonly account cannot become writable
-        if account.is_writable && !keyed_account.is_writable() {
-            return Err(
-                SyscallError::InstructionError(InstructionError::PrivilegeEscalation).into(),
-            );
-        }
-
-        if account.is_signer && // If message indicates account is signed
-        !( // one of the following needs to be true:
-            keyed_account.signer_key().is_some() // Signed in the parent instruction
-            || signers.contains(&account.pubkey) // Signed by the program
-        ) {
-            return Err(
-                SyscallError::InstructionError(InstructionError::PrivilegeEscalation).into(),
-            );
-        }
-    }
-
-    // validate the caller has access to the program account
-    let _ = callers_keyed_accounts
-        .iter()
-        .find_map(|keyed_account| {
-            if &instruction.program_id == keyed_account.unsigned_key() {
-                Some(keyed_account)
-            } else {
-                None
-            }
-        })
-        .ok_or(SyscallError::InstructionError(
-            InstructionError::MissingAccount,
-        ))?;
-
-    Ok(())
-}
-
 /// Call process instruction, common to both Rust and C
 fn call<'a>(
     syscall: &mut dyn SyscallInvokeSigned<'a>,
@@ -1316,7 +1260,7 @@ fn call<'a>(
         .get_compute_meter()
         .consume(invoke_context.get_bpf_compute_budget().invoke_units)?;
 
-    // Translate data passed from the VM
+    // Translate and verify caller's data
 
     let instruction = syscall.translate_instruction(instruction_addr, &memory_mapping)?;
     let caller_program_id = invoke_context
@@ -1328,10 +1272,13 @@ fn call<'a>(
         signers_seeds_len,
         memory_mapping,
     )?;
-    verify_instruction(syscall, &instruction, &signers)?;
-    let message = Message::new(&[instruction.clone()], None);
-    let callee_program_id_index = message.instructions[0].program_id_index as usize;
-    let callee_program_id = message.account_keys[callee_program_id_index];
+    let keyed_account_refs = syscall
+        .get_callers_keyed_accounts()
+        .iter()
+        .collect::<Vec<&KeyedAccount>>();
+    let (message, callee_program_id, callee_program_id_index) =
+        MessageProcessor::create_message(&instruction, &keyed_account_refs, &signers)
+            .map_err(SyscallError::InstructionError)?;
     let (accounts, account_refs) = syscall.translate_accounts(
         &message,
         account_infos_addr,
@@ -1339,11 +1286,16 @@ fn call<'a>(
         memory_mapping,
     )?;
 
-    invoke_context.record_instruction(&instruction);
-
     // Process instruction
 
-    let program_account = (*accounts[callee_program_id_index]).clone();
+    invoke_context.record_instruction(&instruction);
+    let program_account =
+        (**accounts
+            .get(callee_program_id_index)
+            .ok_or(SyscallError::InstructionError(
+                InstructionError::MissingAccount,
+            ))?)
+        .clone();
     if !program_account.borrow().executable {
         return Err(SyscallError::InstructionError(InstructionError::AccountNotExecutable).into());
     }
@@ -1363,7 +1315,7 @@ fn call<'a>(
         },
     }
 
-    // Copy results back into caller's AccountInfos
+    // Copy results back to caller
 
     for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
         let account = account.borrow();
@@ -1375,7 +1327,7 @@ fn call<'a>(
                 *account_ref.serialized_len_ptr = account.data.len() as u64;
                 if !account_ref.data.is_empty() {
                     // Only support for `CreateAccount` at this time.
-                    // Need a way to limit total realloc size accross multiple CPI calls
+                    // Need a way to limit total realloc size across multiple CPI calls
                     return Err(
                         SyscallError::InstructionError(InstructionError::InvalidRealloc).into(),
                     );
