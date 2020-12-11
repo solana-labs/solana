@@ -38,6 +38,4 @@ fn test_cli_request_airdrop() {
         .unwrap()
         .value;
     assert_eq!(balance, 50);
-
-    test_validator.close();
 }

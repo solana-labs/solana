@@ -141,6 +141,4 @@ fn test_cli_deploy_program() {
     assert_eq!(account2.owner, bpf_loader::id());
     assert_eq!(account2.executable, true);
     assert_eq!(account0.data, account2.data);
-
-    test_validator.close();
 }

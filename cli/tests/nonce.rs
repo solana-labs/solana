@@ -210,8 +210,6 @@ fn full_battery_tests(
     check_recent_balance(1000, &rpc_client, &config_payer.signers[0].pubkey());
     check_recent_balance(800, &rpc_client, &nonce_account);
     check_recent_balance(200, &rpc_client, &payee_pubkey);
-
-    test_validator.close();
 }
 
 #[test]
@@ -333,6 +331,4 @@ fn test_create_account_with_seed() {
     check_recent_balance(31, &rpc_client, &offline_nonce_authority_signer.pubkey());
     check_recent_balance(4000, &rpc_client, &online_nonce_creator_signer.pubkey());
     check_recent_balance(10, &rpc_client, &to_address);
-
-    test_validator.close();
 }

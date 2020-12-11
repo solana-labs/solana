@@ -65,7 +65,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::Receiver,
     sync::{mpsc::channel, Arc, Mutex, RwLock},
-    thread::{sleep, Result},
+    thread::sleep,
     time::Duration,
 };
 
@@ -635,9 +635,9 @@ impl Validator {
         }
     }
 
-    pub fn close(mut self) -> Result<()> {
+    pub fn close(mut self) {
         self.exit();
-        self.join()
+        self.join();
     }
 
     fn print_node_info(node: &Node) {
@@ -665,7 +665,7 @@ impl Validator {
         );
     }
 
-    pub fn join(self) -> Result<()> {
+    pub fn join(self) {
         self.poh_service.join().expect("poh_service");
         drop(self.poh_recorder);
         if let Some(RpcServices {
@@ -718,8 +718,6 @@ impl Validator {
             .join()
             .expect("completed_data_sets_service");
         self.ip_echo_server.shutdown_now();
-
-        Ok(())
     }
 }
 
@@ -1267,7 +1265,7 @@ mod tests {
             Some(&leader_node.info),
             &config,
         );
-        validator.close().unwrap();
+        validator.close();
         remove_dir_all(validator_ledger_path).unwrap();
     }
 
@@ -1345,7 +1343,7 @@ mod tests {
         // While join is called sequentially, the above exit call notified all the
         // validators to exit from all their threads
         validators.into_iter().for_each(|validator| {
-            validator.join().unwrap();
+            validator.join();
         });
 
         for path in ledger_paths {

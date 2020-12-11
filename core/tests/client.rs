@@ -82,7 +82,6 @@ fn test_rpc_client() {
         client.get_balance(&alice.pubkey()).unwrap(),
         original_alice_balance - sol_to_lamports(20.0)
     );
-    test_validator.close();
 }
 
 #[test]

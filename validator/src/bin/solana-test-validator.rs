@@ -206,6 +206,7 @@ fn main() {
         TestValidator::start(
             &ledger_path,
             TestValidatorStartConfig {
+                preserve_ledger: true,
                 rpc_config: JsonRpcConfig {
                     enable_validator_exit: true,
                     enable_rpc_transaction_history: true,

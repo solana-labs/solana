@@ -285,7 +285,7 @@ impl LocalCluster {
         self.exit();
         for (_, node) in self.validators.iter_mut() {
             if let Some(v) = node.validator.take() {
-                v.join().expect("Validator join failed");
+                v.join();
             }
         }
     }
@@ -609,7 +609,7 @@ impl Cluster for LocalCluster {
         // Shut down the validator
         let mut validator = node.validator.take().expect("Validator must be running");
         validator.exit();
-        validator.join().unwrap();
+        validator.join();
         node
     }
 

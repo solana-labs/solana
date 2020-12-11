@@ -1740,6 +1740,6 @@ pub fn main() {
         });
     }
     info!("Validator initialized");
-    validator.join().expect("validator exit");
+    validator.join();
     info!("Validator exiting..");
 }

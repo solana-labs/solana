@@ -12,6 +12,4 @@ fn test_process_distribute_with_rpc_client() {
 
     let client = RpcClient::new(test_validator.rpc_url());
     test_process_distribute_tokens_with_client(&client, mint_keypair, None);
-
-    test_validator.close();
 }

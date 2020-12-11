@@ -1063,8 +1063,6 @@ mod tests {
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
         test_process_distribute_tokens_with_client(&client, alice, None);
-
-        test_validator.close();
     }
 
     #[test]
@@ -1075,8 +1073,6 @@ mod tests {
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
         test_process_distribute_tokens_with_client(&client, alice, Some(sol_to_lamports(1.5)));
-
-        test_validator.close();
     }
 
     #[test]
@@ -1087,8 +1083,6 @@ mod tests {
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
         test_process_distribute_stake_with_client(&client, alice);
-
-        test_validator.close();
     }
 
     #[test]
@@ -1477,8 +1471,6 @@ mod tests {
         } else {
             panic!("check_payer_balances should have errored");
         }
-
-        test_validator.close();
     }
 
     #[test]
@@ -1550,8 +1542,6 @@ mod tests {
         } else {
             panic!("check_payer_balances should have errored");
         }
-
-        test_validator.close();
     }
 
     fn initialize_stake_account(
@@ -1699,8 +1689,6 @@ mod tests {
         } else {
             panic!("check_payer_balances should have errored");
         }
-
-        test_validator.close();
     }
 
     #[test]
@@ -1779,8 +1767,6 @@ mod tests {
         } else {
             panic!("check_payer_balances should have errored");
         }
-
-        test_validator.close();
     }
 
     #[test]
@@ -2076,8 +2062,6 @@ mod tests {
         let read_db = db::open_db(&db_file, true).unwrap();
         let transaction_info = db::read_transaction_infos(&read_db);
         assert_eq!(transaction_info.len(), 1);
-
-        test_validator.close();
     }
 
     #[test]

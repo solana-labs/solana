@@ -109,7 +109,6 @@ fn test_rpc_send_tx() {
     );
     let json: Value = post_rpc(req, &rpc_url);
     info!("{:?}", json["result"]["value"]);
-    test_validator.close();
 }
 
 #[test]
@@ -142,7 +141,6 @@ fn test_rpc_invalid_requests() {
 
     let the_value = &json["result"]["value"];
     assert!(the_value.is_null());
-    test_validator.close();
 }
 
 #[test]
@@ -317,5 +315,4 @@ fn test_rpc_subscriptions() {
     }
 
     rt.shutdown_now().wait().unwrap();
-    test_validator.close();
 }
