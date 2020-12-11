@@ -20,7 +20,7 @@ use crate::{
 };
 use bincode::{deserialize, serialize};
 use chrono::{TimeZone, Utc};
-use memmap::Mmap;
+use memmap2::Mmap;
 use std::{
     collections::BTreeMap,
     fmt,

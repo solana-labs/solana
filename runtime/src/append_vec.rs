@@ -1,5 +1,5 @@
 use log::*;
-use memmap::MmapMut;
+use memmap2::MmapMut;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::Account,
