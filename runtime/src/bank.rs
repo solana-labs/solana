@@ -1610,6 +1610,7 @@ impl Bank {
     ///  returns a map (has to be copied) of loaded
     ///   ( Vec<(staker info)> (voter account) ) keyed by voter pubkey
     ///
+    /// Filters out invalid pairs
     fn stake_delegation_accounts(
         &self,
         reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
@@ -1627,19 +1628,24 @@ impl Bank {
                     self.get_account(&delegation.voter_pubkey),
                 ) {
                     (Some(stake_account), Some(vote_account)) => {
-                        let vote_owner = vote_account.owner;
-                        let entry = accounts
-                            .entry(delegation.voter_pubkey)
-                            .or_insert((Vec::new(), vote_account));
+                        // call tracer to catch any illegal data if any
                         if let Some(reward_calc_tracer) = reward_calc_tracer {
                             reward_calc_tracer(&RewardCalculationEvent::Staking(
                                 stake_pubkey,
                                 &InflationPointCalculationEvent::Delegation(
                                     *delegation,
-                                    vote_owner,
+                                    vote_account.owner,
                                 ),
                             ));
                         }
+                        if stake_account.owner != solana_stake_program::id()
+                            || vote_account.owner != solana_vote_program::id()
+                        {
+                            return;
+                        }
+                        let entry = accounts
+                            .entry(delegation.voter_pubkey)
+                            .or_insert((Vec::new(), vote_account));
                         entry.0.push((*stake_pubkey, stake_account));
                     }
                     (_, _) => {}
@@ -11350,7 +11356,7 @@ pub(crate) mod tests {
             &stake_account,
         );
 
-        // Accounts eligible for inclusion in rewards calculations must be valid
+        // Accounts must be valid stake and vote accounts
         let stake_delegation_accounts = bank.stake_delegation_accounts(&mut null_tracer());
         assert_eq!(stake_delegation_accounts.len(), 0);
     }
