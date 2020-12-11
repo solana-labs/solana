@@ -1647,29 +1647,37 @@ pub(crate) fn fetch_epoch_rewards(
         let previous_epoch_rewards = first_confirmed_block.rewards;
 
         if let Some((effective_slot, epoch_end_time, epoch_rewards)) = epoch_info {
-            let wallclock_epoch_duration =
-                { Local.timestamp(epoch_end_time, 0) - Local.timestamp(epoch_start_time, 0) }
-                    .to_std()?
-                    .as_secs_f64();
-
-            let wallclock_epochs_per_year =
-                (SECONDS_PER_DAY * 356) as f64 / wallclock_epoch_duration;
+            let wallclock_epoch_duration = if epoch_end_time > epoch_start_time {
+                Some(
+                    { Local.timestamp(epoch_end_time, 0) - Local.timestamp(epoch_start_time, 0) }
+                        .to_std()?
+                        .as_secs_f64(),
+                )
+            } else {
+                None
+            };
 
             if let Some(reward) = epoch_rewards
                 .into_iter()
                 .find(|reward| reward.pubkey == address.to_string())
             {
                 if reward.post_balance > reward.lamports.try_into().unwrap_or(0) {
-                    let balance_increase_percent = reward.lamports.abs() as f64
+                    let percent_change = reward.lamports.abs() as f64
                         / (reward.post_balance as f64 - reward.lamports as f64);
+
+                    let apr = wallclock_epoch_duration.map(|wallclock_epoch_duration| {
+                        let wallclock_epochs_per_year =
+                            (SECONDS_PER_DAY * 356) as f64 / wallclock_epoch_duration;
+                        percent_change * wallclock_epochs_per_year
+                    });
 
                     all_epoch_rewards.push(CliEpochReward {
                         epoch,
                         effective_slot,
                         amount: reward.lamports.abs() as u64,
                         post_balance: reward.post_balance,
-                        percent_change: balance_increase_percent,
-                        apr: balance_increase_percent * wallclock_epochs_per_year,
+                        percent_change,
+                        apr,
                     });
                 }
             }

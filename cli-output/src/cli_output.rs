@@ -592,7 +592,7 @@ pub struct CliEpochReward {
     pub amount: u64,       // lamports
     pub post_balance: u64, // lamports
     pub percent_change: f64,
-    pub apr: f64,
+    pub apr: Option<f64>,
 }
 
 fn show_votes_and_credits(
@@ -652,13 +652,16 @@ fn show_epoch_rewards(
         for reward in epoch_rewards {
             writeln!(
                 f,
-                "  {:<8}  {:<11}  ◎{:<14.9}  ◎{:<14.9}  {:>13.9}%  {:>13.9}%",
+                "  {:<8}  {:<11}  ◎{:<14.9}  ◎{:<14.9}  {:>13.9}%  {}",
                 reward.epoch,
                 reward.effective_slot,
                 lamports_to_sol(reward.amount),
                 lamports_to_sol(reward.post_balance),
                 reward.percent_change,
-                reward.apr,
+                reward
+                    .apr
+                    .map(|apr| format!("{:>13.9}%", apr))
+                    .unwrap_or_default(),
             )?;
         }
     }
