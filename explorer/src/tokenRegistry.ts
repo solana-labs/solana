@@ -258,4 +258,11 @@ const MAINNET_TOKENS: { [key: string]: TokenDetails } = {
     name: "SRM tee-shirt",
     website: "https://solible.com",
   },
+  EchesyfXePKdLtoiZSL8pBe8Myagyy8ZRqsACNCFGnvp: {
+    symbol: "FIDA",
+    name: "FIDA",
+    logo: "/tokens/fida.svg",
+    icon: "/tokens/fida.svg",
+    website: "https://bonfida.com",
+  },
 };
