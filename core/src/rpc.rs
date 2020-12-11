@@ -347,13 +347,12 @@ impl JsonRpcRequestProcessor {
         let bank = self.bank(None);
         let epoch = bank.epoch();
         let inflation = bank.inflation();
-        let year =
-            (bank.epoch_schedule().get_last_slot_in_epoch(epoch)) as f64 / bank.slots_per_year();
+        let slot_in_year = bank.slot_in_year_for_inflation();
 
         RpcInflationRate {
-            total: inflation.total(year),
-            validator: inflation.validator(year),
-            foundation: inflation.foundation(year),
+            total: inflation.total(slot_in_year),
+            validator: inflation.validator(slot_in_year),
+            foundation: inflation.foundation(slot_in_year),
             epoch,
         }
     }
@@ -3307,12 +3306,11 @@ pub mod tests {
         };
         let inflation = bank.inflation();
         let epoch = bank.epoch();
-        let year =
-            (bank.epoch_schedule().get_last_slot_in_epoch(epoch)) as f64 / bank.slots_per_year();
+        let slot_in_year = bank.slot_in_year_for_inflation();
         let expected_inflation_rate = RpcInflationRate {
-            total: inflation.total(year),
-            validator: inflation.validator(year),
-            foundation: inflation.foundation(year),
+            total: inflation.total(slot_in_year),
+            validator: inflation.validator(slot_in_year),
+            foundation: inflation.foundation(slot_in_year),
             epoch,
         };
         assert_eq!(inflation_rate, expected_inflation_rate);
