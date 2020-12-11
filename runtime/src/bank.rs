@@ -1638,8 +1638,11 @@ impl Bank {
                                 ),
                             ));
                         }
-                        if stake_account.owner != solana_stake_program::id()
-                            || vote_account.owner != solana_vote_program::id()
+                        if self
+                            .feature_set
+                            .is_active(&feature_set::filter_stake_delegation_accounts::id())
+                            && (stake_account.owner != solana_stake_program::id()
+                                || vote_account.owner != solana_vote_program::id())
                         {
                             return;
                         }
