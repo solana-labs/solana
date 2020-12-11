@@ -47,7 +47,7 @@ import { Link } from "react-router-dom";
 import { Location } from "history";
 import { useQuery } from "utils/url";
 
-const TRUNCATE_TOKEN_DISPLAY = 10;
+const TRUNCATE_TOKEN_LENGTH = 10;
 
 type InstructionType = {
   name: string;
@@ -175,7 +175,6 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
     if (filter === "") {
       return true;
     }
-
     return mint.toBase58() === filter;
   });
 
@@ -310,7 +309,7 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
   tokens.forEach((token) => {
     filterOptions.push(token);
     const pubkey = token.info.mint.toBase58();
-    nameLookup[pubkey] = formatTokenDisplay(pubkey, cluster);
+    nameLookup[pubkey] = formatTokenName(pubkey, cluster);
   });
 
   return (
@@ -346,10 +345,7 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
             >
               {filterOption === null
                 ? "All Tokens"
-                : formatTokenDisplay(
-                    filterOption.info.mint.toBase58(),
-                    cluster
-                  )}
+                : formatTokenName(filterOption.info.mint.toBase58(), cluster)}
             </Link>
           );
         })}
@@ -592,11 +588,11 @@ function InstructionDetails({
   );
 }
 
-function formatTokenDisplay(pubkey: string, cluster: Cluster): string {
+function formatTokenName(pubkey: string, cluster: Cluster): string {
   let display = displayAddress(pubkey, cluster);
 
   if (display === pubkey) {
-    display = display.slice(0, TRUNCATE_TOKEN_DISPLAY) + "\u2026";
+    display = display.slice(0, TRUNCATE_TOKEN_LENGTH) + "\u2026";
   }
 
   return display;
