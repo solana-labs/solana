@@ -168,8 +168,9 @@ impl Stakes {
                             fix_stake_deactivate,
                         )
                     } else {
-                        // when account is removed (lamports == 0), this ensure resetting cached
-                        // stake value below
+                        // when account is removed (lamports == 0), this special `else` clause ensures
+                        // resetting cached stake value below, even if the account happens to be
+                        // still staked for some (odd) reason
                         0
                     },
                 )
