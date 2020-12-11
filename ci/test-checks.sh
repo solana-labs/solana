@@ -80,6 +80,11 @@ cargo_audit_ignores=(
   #
   # Blocked on multiple crates updating `time` to >= 0.2.23
   --ignore RUSTSEC-2020-0071
+
+  # memmap crate is unmaintained
+  #
+  # Blocked on us releasing new solana crates
+  --ignore RUSTSEC-2020-0077
 )
 _ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit "${cargo_audit_ignores[@]}"
 
