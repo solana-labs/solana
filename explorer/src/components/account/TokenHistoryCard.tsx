@@ -47,7 +47,7 @@ import { Link } from "react-router-dom";
 import { Location } from "history";
 import { useQuery } from "utils/url";
 
-const TRUNCATE_TOKEN_DISPLAY = 8;
+const TRUNCATE_TOKEN_DISPLAY = 10;
 
 type InstructionType = {
   name: string;
@@ -304,11 +304,11 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
     };
   };
 
-  const FILTER_OPTIONS: (TokenInfoWithPubkey | null)[] = [null];
+  const filterOptions: (TokenInfoWithPubkey | null)[] = [null];
   const nameLookup: { [mint: string]: string } = {};
 
   tokens.forEach((token) => {
-    FILTER_OPTIONS.push(token);
+    filterOptions.push(token);
     const pubkey = token.info.mint.toBase58();
     nameLookup[pubkey] = formatTokenDisplay(pubkey, cluster);
   });
@@ -328,7 +328,7 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
           show ? " show" : ""
         }`}
       >
-        {FILTER_OPTIONS.map((filterOption) => {
+        {filterOptions.map((filterOption) => {
           const key = filterOption?.info.mint.toBase58() || null;
           return (
             <Link
@@ -596,7 +596,7 @@ function formatTokenDisplay(pubkey: string, cluster: Cluster): string {
   let display = displayAddress(pubkey, cluster);
 
   if (display === pubkey) {
-    display = display.slice(0, TRUNCATE_TOKEN_DISPLAY) + "...";
+    display = display.slice(0, TRUNCATE_TOKEN_DISPLAY) + "\u2026";
   }
 
   return display;
