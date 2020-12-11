@@ -88,9 +88,12 @@ fn run_check_duplicate(
 ) -> Result<()> {
     let check_duplicate = |shred: Shred| -> Result<()> {
         if !blockstore.has_duplicate_shreds_in_slot(shred.slot()) {
-            if let Some(existing_shred_payload) =
-                blockstore.is_shred_duplicate(shred.slot(), shred.index(), &shred.payload)
-            {
+            if let Some(existing_shred_payload) = blockstore.is_shred_duplicate(
+                shred.slot(),
+                shred.index(),
+                &shred.payload,
+                shred.is_data(),
+            ) {
                 blockstore.store_duplicate_slot(
                     shred.slot(),
                     existing_shred_payload,
