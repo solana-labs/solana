@@ -1036,24 +1036,8 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
 mod tests {
     use super::*;
     use solana_core::test_validator::TestValidator;
-    use solana_sdk::{
-        clock::DEFAULT_MS_PER_SLOT,
-        signature::{read_keypair_file, write_keypair_file, Signer},
-    };
+    use solana_sdk::signature::{read_keypair_file, write_keypair_file, Signer};
     use solana_stake_program::stake_instruction::StakeInstruction;
-
-    // This is a quick hack until TestValidator can be initialized with fees from block 0
-    fn test_validator_block_0_fee_workaround(client: &RpcClient) {
-        while client
-            .get_recent_blockhash()
-            .unwrap()
-            .1
-            .lamports_per_signature
-            == 0
-        {
-            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
-        }
-    }
 
     #[test]
     fn test_process_token_allocations() {
@@ -1400,8 +1384,6 @@ mod tests {
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
 
-        test_validator_block_0_fee_workaround(&client);
-
         let allocation_amount = 1000.0;
 
         // Fully funded payer
@@ -1482,7 +1464,6 @@ mod tests {
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
-        test_validator_block_0_fee_workaround(&client);
 
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
@@ -1592,7 +1573,6 @@ mod tests {
         let test_validator = TestValidator::with_custom_fees(alice.pubkey(), fees);
         let url = test_validator.rpc_url();
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
-        test_validator_block_0_fee_workaround(&client);
 
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
@@ -1700,7 +1680,6 @@ mod tests {
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
-        test_validator_block_0_fee_workaround(&client);
 
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
