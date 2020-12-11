@@ -45,17 +45,3 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 # Returns info about the current epoch. slotIndex should progress on subsequent calls.
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getEpochInfo"}' http://devnet.solana.com
 ```
-
-## Timezone For Log Messages
-
-Log messages emitted by your validator include a timestamp. When sharing logs
-with others to help triage issues, that timestamp can cause confusion as it does
-not contain timezone information.
-
-To make it easier to compare logs between different sources we request that
-everybody use Pacific Time on their validator nodes. In Linux this can be
-accomplished by running:
-
-```bash
-sudo ln -sf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
-```
