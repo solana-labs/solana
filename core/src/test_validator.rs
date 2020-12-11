@@ -244,6 +244,29 @@ impl TestValidator {
         // test validators concurrently...
         discover_cluster(&gossip, 1).expect("TestValidator startup failed");
 
+        // This is a hack to delay until the single gossip commitment fees are non-zero for test
+        // consistency
+        // (fees from genesis are zero until the first block with a transaction in it is completed)
+        {
+            let rpc_client =
+                RpcClient::new_with_commitment(rpc_url.clone(), CommitmentConfig::single_gossip());
+            let fee_rate_governor = rpc_client
+                .get_fee_rate_governor()
+                .expect("get_fee_rate_governor")
+                .value;
+            if fee_rate_governor.target_lamports_per_signature > 0 {
+                while rpc_client
+                    .get_recent_blockhash()
+                    .expect("get_recent_blockhash")
+                    .1
+                    .lamports_per_signature
+                    == 0
+                {
+                    sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+                }
+            }
+        }
+
         Ok(TestValidator {
             ledger_path: ledger_path.to_path_buf(),
             preserve_ledger: false,
