@@ -1511,6 +1511,13 @@ impl Bank {
         self.epoch_schedule.get_first_slot_in_epoch(self.epoch()) - inflation_start_slot
     }
 
+    pub fn slot_in_year_for_inflation(&self) -> f64 {
+        let num_slots = self.get_inflation_num_slots();
+
+        // calculated as: num_slots / (slots / year)
+        num_slots as f64 / self.slots_per_year
+    }
+
     // update rewards based on the previous epoch
     fn update_rewards(
         &mut self,
@@ -1522,11 +1529,8 @@ impl Bank {
         }
         // if I'm the first Bank in an epoch, count, claim, disburse rewards from Inflation
 
-        // calculated as: num_slots / (slots / year)
-        let num_slots = self.get_inflation_num_slots();
-        let slot_in_year = num_slots as f64 / self.slots_per_year;
-
         let epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
+        let slot_in_year = self.slot_in_year_for_inflation();
 
         let (validator_rate, foundation_rate) = {
             let inflation = self.inflation.read().unwrap();
