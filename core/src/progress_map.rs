@@ -357,6 +357,12 @@ impl ProgressMap {
             .map(|fork_progress| &mut fork_progress.fork_stats)
     }
 
+    pub fn is_dead(&self, slot: Slot) -> Option<bool> {
+        self.progress_map
+            .get(&slot)
+            .map(|fork_progress| fork_progress.is_dead)
+    }
+
     pub fn is_propagated(&self, slot: Slot) -> bool {
         let leader_slot_to_check = self.get_latest_leader_slot(slot);
 
@@ -386,6 +392,15 @@ impl ProgressMap {
         } else {
             propagated_stats.prev_leader_slot
         }
+    }
+
+    pub fn is_unconfirmed_duplicate(&self, slot: Slot) -> Option<bool> {
+        self.get(&slot).map(|p| {
+            p.duplicate_stats
+                .latest_unconfirmed_duplicate_ancestor
+                .map(|ancestor| ancestor == slot)
+                .unwrap_or(false)
+        })
     }
 
     pub fn latest_unconfirmed_duplicate_ancestor(&self, slot: Slot) -> Option<Slot> {
@@ -440,7 +455,6 @@ impl ProgressMap {
         }
     }
 
-    #[cfg(test)]
     pub fn is_confirmed(&self, slot: Slot) -> Option<bool> {
         self.progress_map
             .get(&slot)

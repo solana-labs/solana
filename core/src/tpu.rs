@@ -5,7 +5,9 @@ use crate::{
     banking_stage::BankingStage,
     broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
     cluster_info::ClusterInfo,
-    cluster_info_vote_listener::{ClusterInfoVoteListener, VerifiedVoteSender, VoteTracker},
+    cluster_info_vote_listener::{
+        ClusterInfoVoteListener, GossipConfirmedSlotsSender, VerifiedVoteSender, VoteTracker,
+    },
     fetch_stage::FetchStage,
     optimistically_confirmed_bank_tracker::BankNotificationSender,
     poh_recorder::{PohRecorder, WorkingBankEntry},
@@ -62,6 +64,7 @@ impl Tpu {
         replay_vote_sender: ReplayVoteSender,
         bank_notification_sender: Option<BankNotificationSender>,
         tpu_coalesce_ms: u64,
+        cluster_confirmed_slot_sender: GossipConfirmedSlotsSender,
     ) -> Self {
         let (packet_sender, packet_receiver) = channel();
         let fetch_stage = FetchStage::new_with_sender(
@@ -95,6 +98,7 @@ impl Tpu {
             replay_vote_receiver,
             blockstore.clone(),
             bank_notification_sender,
+            cluster_confirmed_slot_sender,
         );
 
         let banking_stage = BankingStage::new(

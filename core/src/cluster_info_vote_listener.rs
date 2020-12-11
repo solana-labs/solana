@@ -50,6 +50,8 @@ pub type VerifiedVoteTransactionsSender = CrossbeamSender<Vec<Transaction>>;
 pub type VerifiedVoteTransactionsReceiver = CrossbeamReceiver<Vec<Transaction>>;
 pub type VerifiedVoteSender = CrossbeamSender<(Pubkey, Vec<Slot>)>;
 pub type VerifiedVoteReceiver = CrossbeamReceiver<(Pubkey, Vec<Slot>)>;
+pub type GossipConfirmedSlotsSender = CrossbeamSender<Vec<(Slot, Hash)>>;
+pub type GossipConfirmedSlotsReceiver = CrossbeamReceiver<Vec<(Slot, Hash)>>;
 
 #[derive(Default)]
 pub struct SlotVoteTracker {
@@ -245,6 +247,7 @@ impl ClusterInfoVoteListener {
         replay_votes_receiver: ReplayVoteReceiver,
         blockstore: Arc<Blockstore>,
         bank_notification_sender: Option<BankNotificationSender>,
+        cluster_confirmed_slot_sender: GossipConfirmedSlotsSender,
     ) -> Self {
         let exit_ = exit.clone();
 
@@ -291,6 +294,7 @@ impl ClusterInfoVoteListener {
                     replay_votes_receiver,
                     blockstore,
                     bank_notification_sender,
+                    cluster_confirmed_slot_sender,
                 );
             })
             .unwrap();
@@ -416,6 +420,7 @@ impl ClusterInfoVoteListener {
         replay_votes_receiver: ReplayVoteReceiver,
         blockstore: Arc<Blockstore>,
         bank_notification_sender: Option<BankNotificationSender>,
+        cluster_confirmed_slot_sender: GossipConfirmedSlotsSender,
     ) -> Result<()> {
         let mut confirmation_verifier =
             OptimisticConfirmationVerifier::new(bank_forks.read().unwrap().root());
@@ -451,7 +456,9 @@ impl ClusterInfoVoteListener {
             );
             match confirmed_slots {
                 Ok(confirmed_slots) => {
-                    confirmation_verifier.add_new_optimistic_confirmed_slots(confirmed_slots);
+                    confirmation_verifier
+                        .add_new_optimistic_confirmed_slots(confirmed_slots.clone());
+                    let _ = cluster_confirmed_slot_sender.send(confirmed_slots);
                 }
                 Err(e) => match e {
                     Error::CrossbeamRecvTimeoutError(RecvTimeoutError::Timeout)

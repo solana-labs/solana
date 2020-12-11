@@ -1355,7 +1355,7 @@ pub mod test {
         vote_transaction,
     };
     use std::{
-        collections::HashMap,
+        collections::{BTreeMap, HashMap},
         fs::{remove_file, OpenOptions},
         io::{Read, Seek, SeekFrom, Write},
         sync::RwLock,
@@ -1513,6 +1513,7 @@ pub mod test {
                 &AbsRequestSender::default(),
                 None,
                 &mut self.heaviest_subtree_fork_choice,
+                &mut BTreeMap::new(),
             )
         }
 
