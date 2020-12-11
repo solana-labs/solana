@@ -125,6 +125,4 @@ fn test_vote_authorize_and_withdraw() {
         withdraw_authority: 1,
     };
     process_command(&config).unwrap();
-
-    test_validator.close();
 }

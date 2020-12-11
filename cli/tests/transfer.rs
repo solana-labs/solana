@@ -237,8 +237,6 @@ fn test_transfer() {
     process_command(&config).unwrap();
     check_recent_balance(28, &rpc_client, &offline_pubkey);
     check_recent_balance(40, &rpc_client, &recipient_pubkey);
-
-    test_validator.close();
 }
 
 #[test]
@@ -358,8 +356,6 @@ fn test_transfer_multisession_signing() {
     check_recent_balance(1, &rpc_client, &offline_from_signer.pubkey());
     check_recent_balance(1, &rpc_client, &offline_fee_payer_signer.pubkey());
     check_recent_balance(42, &rpc_client, &to_pubkey);
-
-    test_validator.close();
 }
 
 #[test]
@@ -405,6 +401,4 @@ fn test_transfer_all() {
     process_command(&config).unwrap();
     check_recent_balance(0, &rpc_client, &sender_pubkey);
     check_recent_balance(49_999, &rpc_client, &recipient_pubkey);
-
-    test_validator.close();
 }

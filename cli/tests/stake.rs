@@ -108,8 +108,6 @@ fn test_stake_delegation_force() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-
-    test_validator.close();
 }
 
 #[test]
@@ -189,8 +187,6 @@ fn test_seed_stake_delegation_and_deactivation() {
         fee_payer: 0,
     };
     process_command(&config_validator).unwrap();
-
-    test_validator.close();
 }
 
 #[test]
@@ -266,8 +262,6 @@ fn test_stake_delegation_and_deactivation() {
         fee_payer: 0,
     };
     process_command(&config_validator).unwrap();
-
-    test_validator.close();
 }
 
 #[test]
@@ -400,8 +394,6 @@ fn test_offline_stake_delegation_and_deactivation() {
         fee_payer: 0,
     };
     process_command(&config_payer).unwrap();
-
-    test_validator.close();
 }
 
 #[test]
@@ -516,8 +508,6 @@ fn test_nonced_stake_delegation_and_deactivation() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-
-    test_validator.close();
 }
 
 #[test]
@@ -789,8 +779,6 @@ fn test_stake_authorize() {
     .unwrap()
     .blockhash;
     assert_ne!(nonce_hash, new_nonce_hash);
-
-    test_validator.close();
 }
 
 #[test]
@@ -916,8 +904,6 @@ fn test_stake_authorize_with_fee_payer() {
     // `config_offline` however has paid 1 sig due to being both authority
     // and fee payer
     check_recent_balance(100_000 - SIG_FEE, &rpc_client, &offline_pubkey);
-
-    test_validator.close();
 }
 
 #[test]
@@ -1061,8 +1047,6 @@ fn test_stake_split() {
         &rpc_client,
         &split_account.pubkey(),
     );
-
-    test_validator.close();
 }
 
 #[test]
@@ -1324,8 +1308,6 @@ fn test_stake_set_lockup() {
     );
     assert_eq!(current_lockup.epoch, lockup.epoch.unwrap());
     assert_eq!(current_lockup.custodian, offline_pubkey);
-
-    test_validator.close();
 }
 
 #[test]
@@ -1538,6 +1520,4 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     let seed_address =
         Pubkey::create_with_seed(&stake_pubkey, seed, &solana_stake_program::id()).unwrap();
     check_recent_balance(50_000, &rpc_client, &seed_address);
-
-    test_validator.close();
 }

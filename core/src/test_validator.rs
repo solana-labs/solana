@@ -5,6 +5,7 @@ use {
         rpc::JsonRpcConfig,
         validator::{Validator, ValidatorConfig},
     },
+    solana_client::rpc_client::RpcClient,
     solana_ledger::{blockstore::create_new_ledger, create_new_tmp_ledger},
     solana_runtime::{
         bank_forks::{CompressionType, SnapshotConfig, SnapshotVersion},
@@ -12,6 +13,8 @@ use {
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
     },
     solana_sdk::{
+        clock::DEFAULT_MS_PER_SLOT,
+        commitment_config::CommitmentConfig,
         fee_calculator::FeeRateGovernor,
         native_token::sol_to_lamports,
         pubkey::Pubkey,
@@ -23,6 +26,8 @@ use {
         net::SocketAddr,
         path::{Path, PathBuf},
         sync::Arc,
+        thread::sleep,
+        time::Duration,
     },
 };
 
@@ -34,17 +39,19 @@ pub struct TestValidatorGenesisConfig {
 
 #[derive(Default)]
 pub struct TestValidatorStartConfig {
+    pub preserve_ledger: bool,
     pub rpc_config: JsonRpcConfig,
     pub rpc_ports: Option<(u16, u16)>, // (JsonRpc, JsonRpcPubSub), None == random ports
 }
 
 pub struct TestValidator {
     ledger_path: PathBuf,
+    preserve_ledger: bool,
     rpc_pubsub_url: String,
     rpc_url: String,
     tpu: SocketAddr,
     gossip: SocketAddr,
-    validator: Validator,
+    validator: Option<Validator>,
     vote_account_address: Pubkey,
 }
 
@@ -223,7 +230,7 @@ impl TestValidator {
             ..ValidatorConfig::default()
         };
 
-        let validator = Validator::new(
+        let validator = Some(Validator::new(
             node,
             &Arc::new(validator_identity_keypair),
             &ledger_path,
@@ -231,7 +238,7 @@ impl TestValidator {
             vec![Arc::new(validator_vote_account)],
             None,
             &validator_config,
-        );
+        ));
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
         // test validators concurrently...
@@ -239,6 +246,7 @@ impl TestValidator {
 
         Ok(TestValidator {
             ledger_path: ledger_path.to_path_buf(),
+            preserve_ledger: false,
             rpc_pubsub_url,
             rpc_url,
             gossip,
@@ -246,12 +254,6 @@ impl TestValidator {
             validator,
             vote_account_address,
         })
-    }
-
-    /// Stop the test validator and delete its ledger directory
-    pub fn close(self) {
-        self.validator.close().unwrap();
-        remove_dir_all(&self.ledger_path).unwrap();
     }
 
     /// Return the test validator's TPU address
@@ -277,5 +279,22 @@ impl TestValidator {
     /// Return the vote account address of the validator
     pub fn vote_account_address(&self) -> Pubkey {
         self.vote_account_address
+    }
+}
+
+impl Drop for TestValidator {
+    fn drop(&mut self) {
+        if let Some(validator) = self.validator.take() {
+            validator.close();
+        }
+        if !self.preserve_ledger {
+            remove_dir_all(&self.ledger_path).unwrap_or_else(|err| {
+                panic!(
+                    "Failed to remove ledger directory {}: {}",
+                    self.ledger_path.display(),
+                    err
+                )
+            });
+        }
     }
 }
