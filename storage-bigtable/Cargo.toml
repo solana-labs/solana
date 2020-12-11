@@ -9,6 +9,7 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
+arc-swap = "0.4.8"
 backoff = {version="0.2.1", features = ["tokio"]}
 bincode = "1.2.1"
 bzip2 = "0.3.3"
