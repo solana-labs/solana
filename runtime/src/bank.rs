@@ -1644,6 +1644,16 @@ impl Bank {
                             && (stake_account.owner != solana_stake_program::id()
                                 || vote_account.owner != solana_vote_program::id())
                         {
+                            datapoint_warn!(
+                                "bank-stake_delegation_accounts-invalid-account",
+                                ("slot", self.slot() as i64, i64),
+                                ("stake-address", format!("{:?}", stake_pubkey), String),
+                                (
+                                    "vote-address",
+                                    format!("{:?}", delegation.voter_pubkey),
+                                    String
+                                ),
+                            );
                             return;
                         }
                         let entry = accounts
