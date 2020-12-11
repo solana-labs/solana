@@ -1,4 +1,5 @@
 use crate::StoredExtendedRewards;
+use solana_account_decoder::parse_token::UiTokenAmount;
 use solana_sdk::{
     hash::Hash,
     instruction::CompiledInstruction,
@@ -9,7 +10,7 @@ use solana_sdk::{
 };
 use solana_transaction_status::{
     ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionStatusMeta,
-    TransactionWithStatusMeta,
+    TransactionTokenBalance, TransactionWithStatusMeta,
 };
 use std::convert::{TryFrom, TryInto};
 
@@ -260,6 +261,8 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             post_balances,
             inner_instructions,
             log_messages,
+            pre_token_balances,
+            post_token_balances,
         } = value;
         let err = match status {
             Ok(()) => None,
@@ -273,6 +276,17 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             .map(|ii| ii.into())
             .collect();
         let log_messages = log_messages.unwrap_or_default();
+        let pre_token_balances = pre_token_balances
+            .unwrap_or_default()
+            .into_iter()
+            .map(|balance| balance.into())
+            .collect();
+        let post_token_balances = post_token_balances
+            .unwrap_or_default()
+            .into_iter()
+            .map(|balance| balance.into())
+            .collect();
+
         Self {
             err,
             fee,
@@ -280,6 +294,8 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             post_balances,
             inner_instructions,
             log_messages,
+            pre_token_balances,
+            post_token_balances,
         }
     }
 }
@@ -295,6 +311,8 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             post_balances,
             inner_instructions,
             log_messages,
+            pre_token_balances,
+            post_token_balances,
         } = value;
         let status = match &err {
             None => Ok(()),
@@ -307,6 +325,18 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
                 .collect(),
         );
         let log_messages = Some(log_messages);
+        let pre_token_balances = Some(
+            pre_token_balances
+                .into_iter()
+                .map(|balance| balance.into())
+                .collect(),
+        );
+        let post_token_balances = Some(
+            post_token_balances
+                .into_iter()
+                .map(|balance| balance.into())
+                .collect(),
+        );
         Ok(Self {
             status,
             fee,
@@ -314,6 +344,8 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             post_balances,
             inner_instructions,
             log_messages,
+            pre_token_balances,
+            post_token_balances,
         })
     }
 }
@@ -332,6 +364,35 @@ impl From<generated::InnerInstructions> for InnerInstructions {
         Self {
             index: value.index as u8,
             instructions: value.instructions.into_iter().map(|i| i.into()).collect(),
+        }
+    }
+}
+
+impl From<TransactionTokenBalance> for generated::TokenBalance {
+    fn from(value: TransactionTokenBalance) -> Self {
+        Self {
+            account_index: value.account_index as u32,
+            mint: value.mint,
+            ui_token_amount: Some(generated::UiTokenAmount {
+                ui_amount: value.ui_token_amount.ui_amount,
+                decimals: value.ui_token_amount.decimals as u32,
+                amount: value.ui_token_amount.amount,
+            }),
+        }
+    }
+}
+
+impl From<generated::TokenBalance> for TransactionTokenBalance {
+    fn from(value: generated::TokenBalance) -> Self {
+        let ui_token_amount = value.ui_token_amount.unwrap_or_default();
+        Self {
+            account_index: value.account_index as u8,
+            mint: value.mint,
+            ui_token_amount: UiTokenAmount {
+                ui_amount: ui_token_amount.ui_amount,
+                decimals: ui_token_amount.decimals as u8,
+                amount: ui_token_amount.amount,
+            },
         }
     }
 }

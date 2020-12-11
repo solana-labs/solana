@@ -123,7 +123,13 @@ impl Stakes {
         fix_stake_deactivate: bool,
     ) -> Option<ArcVoteAccount> {
         if solana_vote_program::check_id(&account.owner) {
+            // unconditionally remove existing at first; there is no dependent calculated state for
+            // votes, not like stakes (stake codepath maintains calculated stake value grouped by
+            // delegated vote pubkey)
             let old = self.vote_accounts.remove(pubkey);
+            // when account is removed (lamports == 0), don't readd so that given
+            // `pubkey` can be used for any owner in the future, while not
+            // affecting Stakes.
             if account.lamports != 0 {
                 let stake = old.as_ref().map_or_else(
                     || {
@@ -162,6 +168,9 @@ impl Stakes {
                             fix_stake_deactivate,
                         )
                     } else {
+                        // when account is removed (lamports == 0), this special `else` clause ensures
+                        // resetting cached stake value below, even if the account happens to be
+                        // still staked for some (odd) reason
                         0
                     },
                 )
@@ -182,12 +191,19 @@ impl Stakes {
             }
 
             if account.lamports == 0 {
+                // when account is removed (lamports == 0), remove it from Stakes as well
+                // so that given `pubkey` can be used for any owner in the future, while not
+                // affecting Stakes.
                 self.stake_delegations.remove(pubkey);
             } else if let Some(delegation) = delegation {
                 self.stake_delegations.insert(*pubkey, delegation);
             }
             None
         } else {
+            // there is no need to remove possibly existing Stakes cache entries with given
+            // `pubkey` because this isn't possible, first of all.
+            // Runtime always enforces an intermediary write of account.lamports == 0,
+            // when not-System111-owned account.owner is swapped.
             None
         }
     }

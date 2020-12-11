@@ -28,7 +28,7 @@ const DEFAULT_LRU_SIZE: usize = 10_000;
 pub type ShredsReceived = LruCache<u64, ()>;
 
 #[derive(Default)]
-struct ShredFetchStats {
+pub struct ShredFetchStats {
     index_overrun: usize,
     shred_count: usize,
     index_bad_deserialize: usize,
@@ -43,7 +43,7 @@ pub struct ShredFetchStage {
 }
 
 impl ShredFetchStage {
-    fn get_slot_index(p: &Packet, stats: &mut ShredFetchStats) -> Option<(u64, u32)> {
+    pub fn get_slot_index(p: &Packet, stats: &mut ShredFetchStats) -> Option<(u64, u32)> {
         let index_start = OFFSET_OF_SHRED_INDEX;
         let index_end = index_start + SIZE_OF_SHRED_INDEX;
         let slot_start = OFFSET_OF_SHRED_SLOT;
@@ -305,7 +305,7 @@ mod tests {
         assert!(!packet.meta.discard);
 
         let coding =
-            solana_ledger::shred::Shredder::generate_coding_shreds(slot, 1.0f32, &[shred], 10);
+            solana_ledger::shred::Shredder::generate_coding_shreds(slot, 1.0f32, &[shred], 10, 1);
         coding[0].copy_to_packet(&mut packet);
         ShredFetchStage::process_packet(
             &mut packet,

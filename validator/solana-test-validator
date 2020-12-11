@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+here="$(dirname "$0")"
+set -x
+exec cargo run --manifest-path="$here"/Cargo.toml --bin solana-test-validator -- "$@"

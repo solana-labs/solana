@@ -656,6 +656,8 @@ mod tests {
                 post_balances: vec![0, 42, 1],
                 inner_instructions: Some(vec![]),
                 log_messages: Some(vec![]),
+                pre_token_balances: Some(vec![]),
+                post_token_balances: Some(vec![]),
             }),
         };
         let block = ConfirmedBlock {
@@ -705,6 +707,8 @@ mod tests {
             if let Some(meta) = &mut block.transactions[0].meta {
                 meta.inner_instructions = None; // Legacy bincode implementation does not support inner_instructions
                 meta.log_messages = None; // Legacy bincode implementation does not support log_messages
+                meta.pre_token_balances = None; // Legacy bincode implementation does not support token balances
+                meta.post_token_balances = None; // Legacy bincode implementation does not support token balances
             }
             assert_eq!(block, bincode_block.into());
         } else {

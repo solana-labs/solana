@@ -41,6 +41,8 @@ message TransactionStatusMeta {
     repeated uint64 post_balances = 4;
     repeated InnerInstructions inner_instructions = 5;
     repeated string log_messages = 6;
+    repeated TokenBalance pre_token_balances = 7;
+    repeated TokenBalance post_token_balances = 8;
 }
 
 message TransactionError {
@@ -56,6 +58,18 @@ message CompiledInstruction {
     uint32 program_id_index = 1;
     bytes accounts = 2;
     bytes data = 3;
+}
+
+message TokenBalance {
+    uint32 account_index = 1;
+    string mint = 2;
+    UiTokenAmount ui_token_amount = 3;
+}
+
+message UiTokenAmount {
+    double ui_amount = 1;
+    uint32 decimals = 2;
+    string amount = 3;
 }
 
 enum RewardType {

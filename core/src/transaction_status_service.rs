@@ -54,6 +54,7 @@ impl TransactionStatusService {
             iteration_order,
             statuses,
             balances,
+            token_balances,
             inner_instructions,
             transaction_logs,
         } = write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))?;
@@ -64,6 +65,8 @@ impl TransactionStatusService {
             (status, nonce_rollback),
             pre_balances,
             post_balances,
+            pre_token_balances,
+            post_token_balances,
             inner_instructions,
             log_messages,
         ) in izip!(
@@ -71,6 +74,8 @@ impl TransactionStatusService {
             statuses,
             balances.pre_balances,
             balances.post_balances,
+            token_balances.pre_token_balances,
+            token_balances.post_token_balances,
             inner_instructions,
             transaction_logs
         ) {
@@ -98,6 +103,8 @@ impl TransactionStatusService {
                 });
 
                 let log_messages = Some(log_messages);
+                let pre_token_balances = Some(pre_token_balances);
+                let post_token_balances = Some(post_token_balances);
 
                 blockstore
                     .write_transaction_status(
@@ -112,6 +119,8 @@ impl TransactionStatusService {
                             post_balances,
                             inner_instructions,
                             log_messages,
+                            pre_token_balances,
+                            post_token_balances,
                         },
                     )
                     .expect("Expect database write to succeed");

@@ -65,7 +65,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::Receiver,
     sync::{mpsc::channel, Arc, Mutex, RwLock},
-    thread::{sleep, Result},
+    thread::sleep,
     time::Duration,
 };
 
@@ -490,6 +490,13 @@ impl Validator {
 
         let (snapshot_packager_service, snapshot_config_and_package_sender) =
             if let Some(snapshot_config) = config.snapshot_config.clone() {
+                if is_snapshot_config_invalid(
+                    snapshot_config.snapshot_interval_slots,
+                    config.accounts_hash_interval_slots,
+                ) {
+                    error!("Snapshot config is invalid");
+                }
+
                 // Start a snapshot packaging service
                 let (sender, receiver) = channel();
                 let snapshot_packager_service =
@@ -628,9 +635,9 @@ impl Validator {
         }
     }
 
-    pub fn close(mut self) -> Result<()> {
+    pub fn close(mut self) {
         self.exit();
-        self.join()
+        self.join();
     }
 
     fn print_node_info(node: &Node) {
@@ -658,7 +665,7 @@ impl Validator {
         );
     }
 
-    pub fn join(self) -> Result<()> {
+    pub fn join(self) {
         self.poh_service.join().expect("poh_service");
         drop(self.poh_recorder);
         if let Some(RpcServices {
@@ -711,8 +718,6 @@ impl Validator {
             .join()
             .expect("completed_data_sets_service");
         self.ip_echo_server.shutdown_now();
-
-        Ok(())
     }
 }
 
@@ -1218,6 +1223,15 @@ fn cleanup_accounts_path(account_path: &std::path::Path) {
     }
 }
 
+pub fn is_snapshot_config_invalid(
+    snapshot_interval_slots: u64,
+    accounts_hash_interval_slots: u64,
+) -> bool {
+    snapshot_interval_slots != 0
+        && (snapshot_interval_slots < accounts_hash_interval_slots
+            || snapshot_interval_slots % accounts_hash_interval_slots != 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1251,7 +1265,7 @@ mod tests {
             Some(&leader_node.info),
             &config,
         );
-        validator.close().unwrap();
+        validator.close();
         remove_dir_all(validator_ledger_path).unwrap();
     }
 
@@ -1329,7 +1343,7 @@ mod tests {
         // While join is called sequentially, the above exit call notified all the
         // validators to exit from all their threads
         validators.into_iter().for_each(|validator| {
-            validator.join().unwrap();
+            validator.join();
         });
 
         for path in ledger_paths {
@@ -1387,5 +1401,14 @@ mod tests {
             &cluster_info,
             rpc_override_health_check
         ));
+    }
+
+    #[test]
+    fn test_interval_check() {
+        assert!(!is_snapshot_config_invalid(0, 100));
+        assert!(is_snapshot_config_invalid(1, 100));
+        assert!(is_snapshot_config_invalid(230, 100));
+        assert!(!is_snapshot_config_invalid(500, 100));
+        assert!(!is_snapshot_config_invalid(5, 5));
     }
 }

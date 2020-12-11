@@ -36,6 +36,10 @@ use solana_sdk::{
     timing::duration_as_ms,
     transaction::{Result, Transaction, TransactionError},
 };
+use solana_transaction_status::token_balances::{
+    collect_token_balances, TransactionTokenBalancesSet,
+};
+
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -102,6 +106,16 @@ fn execute_batch(
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
+    let record_token_balances = transaction_status_sender.is_some();
+
+    let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
+
+    let pre_token_balances = if record_token_balances {
+        collect_token_balances(&bank, &batch, &mut mint_decimals)
+    } else {
+        vec![]
+    };
+
     let (tx_results, balances, inner_instructions, transaction_logs) =
         batch.bank().load_execute_and_commit_transactions(
             batch,
@@ -120,12 +134,22 @@ fn execute_batch(
     } = tx_results;
 
     if let Some(sender) = transaction_status_sender {
+        let post_token_balances = if record_token_balances {
+            collect_token_balances(&bank, &batch, &mut mint_decimals)
+        } else {
+            vec![]
+        };
+
+        let token_balances =
+            TransactionTokenBalancesSet::new(pre_token_balances, post_token_balances);
+
         send_transaction_status_batch(
             bank.clone(),
             batch.transactions(),
             batch.iteration_order_vec(),
             execution_results,
             balances,
+            token_balances,
             inner_instructions,
             transaction_logs,
             sender,
@@ -1038,6 +1062,7 @@ pub struct TransactionStatusBatch {
     pub iteration_order: Option<Vec<usize>>,
     pub statuses: Vec<TransactionExecutionResult>,
     pub balances: TransactionBalancesSet,
+    pub token_balances: TransactionTokenBalancesSet,
     pub inner_instructions: Vec<Option<InnerInstructionsList>>,
     pub transaction_logs: Vec<TransactionLogMessages>,
 }
@@ -1050,6 +1075,7 @@ pub fn send_transaction_status_batch(
     iteration_order: Option<Vec<usize>>,
     statuses: Vec<TransactionExecutionResult>,
     balances: TransactionBalancesSet,
+    token_balances: TransactionTokenBalancesSet,
     inner_instructions: Vec<Option<InnerInstructionsList>>,
     transaction_logs: Vec<TransactionLogMessages>,
     transaction_status_sender: TransactionStatusSender,
@@ -1061,6 +1087,7 @@ pub fn send_transaction_status_batch(
         iteration_order,
         statuses,
         balances,
+        token_balances,
         inner_instructions,
         transaction_logs,
     }) {

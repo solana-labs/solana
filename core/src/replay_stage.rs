@@ -989,27 +989,41 @@ impl ReplayStage {
             // errors related to the slot being purged
             let slot = bank.slot();
             warn!("Fatal replay error in slot: {}, err: {:?}", slot, err);
-            if let BlockstoreProcessorError::InvalidBlock(BlockError::InvalidTickCount) = err {
-                datapoint_info!(
-                    "replay-stage-mark_dead_slot",
-                    ("error", format!("error: {:?}", err), String),
-                    ("slot", slot, i64)
-                );
-            } else {
-                datapoint_error!(
-                    "replay-stage-mark_dead_slot",
-                    ("error", format!("error: {:?}", err), String),
-                    ("slot", slot, i64)
-                );
-            }
-            bank_progress.is_dead = true;
-            blockstore
-                .set_dead_slot(slot)
-                .expect("Failed to mark slot as dead in blockstore");
+            let is_serious = matches!(
+                err,
+                BlockstoreProcessorError::InvalidBlock(BlockError::InvalidTickCount)
+            );
+            Self::mark_dead_slot(blockstore, bank_progress, slot, &err, is_serious);
             err
         })?;
 
         Ok(tx_count)
+    }
+
+    fn mark_dead_slot(
+        blockstore: &Blockstore,
+        bank_progress: &mut ForkProgress,
+        slot: Slot,
+        err: &BlockstoreProcessorError,
+        is_serious: bool,
+    ) {
+        if is_serious {
+            datapoint_error!(
+                "replay-stage-mark_dead_slot",
+                ("error", format!("error: {:?}", err), String),
+                ("slot", slot, i64)
+            );
+        } else {
+            datapoint_info!(
+                "replay-stage-mark_dead_slot",
+                ("error", format!("error: {:?}", err), String),
+                ("slot", slot, i64)
+            );
+        }
+        bank_progress.is_dead = true;
+        blockstore
+            .set_dead_slot(slot)
+            .expect("Failed to mark slot as dead in blockstore");
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1323,23 +1337,40 @@ impl ReplayStage {
             }
             assert_eq!(*bank_slot, bank.slot());
             if bank.is_complete() {
-                bank_progress.replay_stats.report_stats(
-                    bank.slot(),
-                    bank_progress.replay_progress.num_entries,
-                    bank_progress.replay_progress.num_shreds,
-                );
-                did_complete_bank = true;
-                info!("bank frozen: {}", bank.slot());
-                bank.freeze();
-                heaviest_subtree_fork_choice
-                    .add_new_leaf_slot(bank.slot(), Some(bank.parent_slot()));
-                if let Some(sender) = bank_notification_sender {
-                    sender
-                        .send(BankNotification::Frozen(bank.clone()))
-                        .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
-                }
+                if !blockstore.has_duplicate_shreds_in_slot(bank.slot()) {
+                    bank_progress.replay_stats.report_stats(
+                        bank.slot(),
+                        bank_progress.replay_progress.num_entries,
+                        bank_progress.replay_progress.num_shreds,
+                    );
+                    did_complete_bank = true;
+                    info!("bank frozen: {}", bank.slot());
+                    bank.freeze();
+                    heaviest_subtree_fork_choice
+                        .add_new_leaf_slot(bank.slot(), Some(bank.parent_slot()));
+                    if let Some(sender) = bank_notification_sender {
+                        sender
+                            .send(BankNotification::Frozen(bank.clone()))
+                            .unwrap_or_else(|err| {
+                                warn!("bank_notification_sender failed: {:?}", err)
+                            });
+                    }
 
-                Self::record_rewards(&bank, &rewards_recorder_sender);
+                    Self::record_rewards(&bank, &rewards_recorder_sender);
+                } else {
+                    Self::mark_dead_slot(
+                        blockstore,
+                        bank_progress,
+                        bank.slot(),
+                        &BlockstoreProcessorError::InvalidBlock(BlockError::DuplicateBlock),
+                        true,
+                    );
+                    warn!(
+                        "{} duplicate shreds detected, not freezing bank {}",
+                        my_pubkey,
+                        bank.slot()
+                    );
+                }
             } else {
                 trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",

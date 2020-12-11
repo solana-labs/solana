@@ -21,6 +21,7 @@ use solana_ledger::{
     blockstore_db::{self, AccessType, BlockstoreRecoveryMode, Column, Database},
     blockstore_processor::ProcessOptions,
     rooted_slot_iterator::RootedSlotIterator,
+    shred::Shred,
 };
 use solana_runtime::{
     bank::{Bank, RewardCalculationEvent},
@@ -741,6 +742,11 @@ fn main() {
         .takes_value(true)
         .default_value("0")
         .help("Start at this slot");
+    let ending_slot_arg = Arg::with_name("ending_slot")
+        .long("ending-slot")
+        .value_name("SLOT")
+        .takes_value(true)
+        .help("The last slot to iterate to");
     let no_snapshot_arg = Arg::with_name("no_snapshot")
         .long("no-snapshot")
         .takes_value(false)
@@ -926,13 +932,7 @@ fn main() {
             SubCommand::with_name("parse_full_frozen")
             .about("Parses log for information about critical events about ancestors of the given `ending_slot`")
             .arg(&starting_slot_arg)
-            .arg(
-                Arg::with_name("ending_slot")
-                    .long("ending-slot")
-                    .value_name("SLOT")
-                    .takes_value(true)
-                    .help("The last slot to iterate to"),
-            )
+            .arg(&ending_slot_arg)
             .arg(
                 Arg::with_name("log_path")
                     .long("log-path")
@@ -973,6 +973,12 @@ fn main() {
             .about("Prints the ledger's shred hash")
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
+        )
+        .subcommand(
+            SubCommand::with_name("shred-meta")
+            .about("Prints raw shred metadata")
+            .arg(&starting_slot_arg)
+            .arg(&ending_slot_arg)
         )
         .subcommand(
             SubCommand::with_name("bank-hash")
@@ -1433,6 +1439,46 @@ fn main() {
                 Err(err) => {
                     eprintln!("Failed to load ledger: {:?}", err);
                     exit(1);
+                }
+            }
+        }
+        ("shred-meta", Some(arg_matches)) => {
+            #[derive(Debug)]
+            struct ShredMeta<'a> {
+                slot: Slot,
+                full_slot: bool,
+                shred_index: usize,
+                data: bool,
+                code: bool,
+                last_in_slot: bool,
+                data_complete: bool,
+                shred: &'a Shred,
+            };
+            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+            let ending_slot = value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);
+            let ledger = open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary, None);
+            for (slot, _meta) in ledger
+                .slot_meta_iterator(starting_slot)
+                .unwrap()
+                .take_while(|(slot, _)| *slot <= ending_slot)
+            {
+                let full_slot = ledger.is_full(slot);
+                if let Ok(shreds) = ledger.get_data_shreds_for_slot(slot, 0) {
+                    for (shred_index, shred) in shreds.iter().enumerate() {
+                        println!(
+                            "{:#?}",
+                            ShredMeta {
+                                slot,
+                                full_slot,
+                                shred_index,
+                                data: shred.is_data(),
+                                code: shred.is_code(),
+                                data_complete: shred.data_complete(),
+                                last_in_slot: shred.last_in_slot(),
+                                shred,
+                            }
+                        );
+                    }
                 }
             }
         }

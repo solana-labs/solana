@@ -37,6 +37,9 @@ use std::{
 };
 use thiserror::Error as ThisError;
 
+/// Maximum signers
+pub const MAX_SIGNERS: usize = 16;
+
 /// Error definitions
 #[derive(Debug, ThisError, PartialEq)]
 pub enum SyscallError {
@@ -56,10 +59,10 @@ pub enum SyscallError {
     ProgramNotSupported,
     #[error("{0}")]
     InstructionError(InstructionError),
-    #[error("Cross-program invocation with unauthorized signer or writable account")]
-    PrivilegeEscalation,
     #[error("Unaligned pointer")]
     UnalignedPointer,
+    #[error("Too many signers")]
+    TooManySigners,
 }
 impl From<SyscallError> for EbpfError<BPFError> {
     fn from(error: SyscallError) -> Self {
@@ -923,6 +926,9 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                 signers_seeds_len,
                 self.loader_id,
             )?;
+            if signers_seeds.len() > MAX_SIGNERS {
+                return Err(SyscallError::TooManySigners.into());
+            }
             for signer_seeds in signers_seeds.iter() {
                 let untranslated_seeds = translate_slice::<&[u8]>(
                     memory_mapping,
@@ -1178,6 +1184,9 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                 signers_seeds_len,
                 self.loader_id,
             )?;
+            if signers_seeds.len() > MAX_SIGNERS {
+                return Err(SyscallError::TooManySigners.into());
+            }
             Ok(signers_seeds
                 .iter()
                 .map(|signer_seeds| {
@@ -1236,58 +1245,6 @@ impl<'a> SyscallObject<BPFError> for SyscallInvokeSignedC<'a> {
     }
 }
 
-fn verify_instruction<'a>(
-    syscall: &dyn SyscallInvokeSigned<'a>,
-    instruction: &Instruction,
-    signers: &[Pubkey],
-) -> Result<(), EbpfError<BPFError>> {
-    let callers_keyed_accounts = syscall.get_callers_keyed_accounts();
-
-    // Check for privilege escalation
-    for account in instruction.accounts.iter() {
-        let keyed_account = callers_keyed_accounts
-            .iter()
-            .find_map(|keyed_account| {
-                if &account.pubkey == keyed_account.unsigned_key() {
-                    Some(keyed_account)
-                } else {
-                    None
-                }
-            })
-            .ok_or(SyscallError::InstructionError(
-                InstructionError::MissingAccount,
-            ))?;
-        // Readonly account cannot become writable
-        if account.is_writable && !keyed_account.is_writable() {
-            return Err(SyscallError::PrivilegeEscalation.into());
-        }
-
-        if account.is_signer && // If message indicates account is signed
-        !( // one of the following needs to be true:
-            keyed_account.signer_key().is_some() // Signed in the parent instruction
-            || signers.contains(&account.pubkey) // Signed by the program
-        ) {
-            return Err(SyscallError::PrivilegeEscalation.into());
-        }
-    }
-
-    // validate the caller has access to the program account
-    let _ = callers_keyed_accounts
-        .iter()
-        .find_map(|keyed_account| {
-            if &instruction.program_id == keyed_account.unsigned_key() {
-                Some(keyed_account)
-            } else {
-                None
-            }
-        })
-        .ok_or(SyscallError::InstructionError(
-            InstructionError::MissingAccount,
-        ))?;
-
-    Ok(())
-}
-
 /// Call process instruction, common to both Rust and C
 fn call<'a>(
     syscall: &mut dyn SyscallInvokeSigned<'a>,
@@ -1303,7 +1260,7 @@ fn call<'a>(
         .get_compute_meter()
         .consume(invoke_context.get_bpf_compute_budget().invoke_units)?;
 
-    // Translate data passed from the VM
+    // Translate and verify caller's data
 
     let instruction = syscall.translate_instruction(instruction_addr, &memory_mapping)?;
     let caller_program_id = invoke_context
@@ -1315,10 +1272,13 @@ fn call<'a>(
         signers_seeds_len,
         memory_mapping,
     )?;
-    verify_instruction(syscall, &instruction, &signers)?;
-    let message = Message::new(&[instruction.clone()], None);
-    let callee_program_id_index = message.instructions[0].program_id_index as usize;
-    let callee_program_id = message.account_keys[callee_program_id_index];
+    let keyed_account_refs = syscall
+        .get_callers_keyed_accounts()
+        .iter()
+        .collect::<Vec<&KeyedAccount>>();
+    let (message, callee_program_id, callee_program_id_index) =
+        MessageProcessor::create_message(&instruction, &keyed_account_refs, &signers)
+            .map_err(SyscallError::InstructionError)?;
     let (accounts, account_refs) = syscall.translate_accounts(
         &message,
         account_infos_addr,
@@ -1326,11 +1286,16 @@ fn call<'a>(
         memory_mapping,
     )?;
 
-    invoke_context.record_instruction(&instruction);
-
     // Process instruction
 
-    let program_account = (*accounts[callee_program_id_index]).clone();
+    invoke_context.record_instruction(&instruction);
+    let program_account =
+        (**accounts
+            .get(callee_program_id_index)
+            .ok_or(SyscallError::InstructionError(
+                InstructionError::MissingAccount,
+            ))?)
+        .clone();
     if !program_account.borrow().executable {
         return Err(SyscallError::InstructionError(InstructionError::AccountNotExecutable).into());
     }
@@ -1350,7 +1315,7 @@ fn call<'a>(
         },
     }
 
-    // Copy results back into caller's AccountInfos
+    // Copy results back to caller
 
     for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
         let account = account.borrow();
@@ -1362,7 +1327,7 @@ fn call<'a>(
                 *account_ref.serialized_len_ptr = account.data.len() as u64;
                 if !account_ref.data.is_empty() {
                     // Only support for `CreateAccount` at this time.
-                    // Need a way to limit total realloc size accross multiple CPI calls
+                    // Need a way to limit total realloc size across multiple CPI calls
                     return Err(
                         SyscallError::InstructionError(InstructionError::InvalidRealloc).into(),
                     );
@@ -1385,13 +1350,20 @@ fn call<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_rbpf::memory_region::MemoryRegion;
+    use solana_rbpf::{memory_region::MemoryRegion, vm::Config};
     use solana_sdk::{
         bpf_loader,
         hash::hashv,
         process_instruction::{MockComputeMeter, MockLogger},
     };
     use std::str::FromStr;
+
+    const DEFAULT_CONFIG: Config = Config {
+        max_call_depth: 20,
+        stack_frame_size: 4_096,
+        enable_instruction_meter: true,
+        enable_instruction_tracing: false,
+    };
 
     macro_rules! assert_access_violation {
         ($result:expr, $va:expr, $len:expr) => {
@@ -1408,9 +1380,10 @@ mod tests {
         const LENGTH: u64 = 1000;
         let data = vec![0u8; LENGTH as usize];
         let addr = data.as_ptr() as u64;
-        let memory_mapping = MemoryMapping::new_from_regions(vec![MemoryRegion::new_from_slice(
-            &data, START, 0, false,
-        )]);
+        let memory_mapping = MemoryMapping::new(
+            vec![MemoryRegion::new_from_slice(&data, START, 0, false)],
+            &DEFAULT_CONFIG,
+        );
 
         let cases = vec![
             (true, START, 0, addr),
@@ -1445,13 +1418,16 @@ mod tests {
         // Pubkey
         let pubkey = solana_sdk::pubkey::new_rand();
         let addr = &pubkey as *const _ as u64;
-        let memory_mapping = MemoryMapping::new_from_regions(vec![MemoryRegion {
-            host_addr: addr,
-            vm_addr: 100,
-            len: std::mem::size_of::<Pubkey>() as u64,
-            vm_gap_shift: 63,
-            is_writable: false,
-        }]);
+        let memory_mapping = MemoryMapping::new(
+            vec![MemoryRegion {
+                host_addr: addr,
+                vm_addr: 100,
+                len: std::mem::size_of::<Pubkey>() as u64,
+                vm_gap_shift: 63,
+                is_writable: false,
+            }],
+            &DEFAULT_CONFIG,
+        );
         let translated_pubkey =
             translate_type::<Pubkey>(&memory_mapping, 100, &bpf_loader::id()).unwrap();
         assert_eq!(pubkey, *translated_pubkey);
@@ -1463,13 +1439,16 @@ mod tests {
             vec![AccountMeta::new(solana_sdk::pubkey::new_rand(), false)],
         );
         let addr = &instruction as *const _ as u64;
-        let mut memory_mapping = MemoryMapping::new_from_regions(vec![MemoryRegion {
-            host_addr: addr,
-            vm_addr: 96,
-            len: std::mem::size_of::<Instruction>() as u64,
-            vm_gap_shift: 63,
-            is_writable: false,
-        }]);
+        let mut memory_mapping = MemoryMapping::new(
+            vec![MemoryRegion {
+                host_addr: addr,
+                vm_addr: 96,
+                len: std::mem::size_of::<Instruction>() as u64,
+                vm_gap_shift: 63,
+                is_writable: false,
+            }],
+            &DEFAULT_CONFIG,
+        );
         let translated_instruction =
             translate_type::<Instruction>(&memory_mapping, 96, &bpf_loader::id()).unwrap();
         assert_eq!(instruction, *translated_instruction);
@@ -1484,13 +1463,16 @@ mod tests {
         let data: Vec<u8> = vec![];
         assert_eq!(0x1 as *const u8, data.as_ptr());
         let addr = good_data.as_ptr() as *const _ as u64;
-        let memory_mapping = MemoryMapping::new_from_regions(vec![MemoryRegion {
-            host_addr: addr,
-            vm_addr: 100,
-            len: good_data.len() as u64,
-            vm_gap_shift: 63,
-            is_writable: false,
-        }]);
+        let memory_mapping = MemoryMapping::new(
+            vec![MemoryRegion {
+                host_addr: addr,
+                vm_addr: 100,
+                len: good_data.len() as u64,
+                vm_gap_shift: 63,
+                is_writable: false,
+            }],
+            &DEFAULT_CONFIG,
+        );
         let translated_data =
             translate_slice::<u8>(&memory_mapping, data.as_ptr() as u64, 0, &bpf_loader::id())
                 .unwrap();
@@ -1500,13 +1482,16 @@ mod tests {
         // u8
         let mut data = vec![1u8, 2, 3, 4, 5];
         let addr = data.as_ptr() as *const _ as u64;
-        let memory_mapping = MemoryMapping::new_from_regions(vec![MemoryRegion {
-            host_addr: addr,
-            vm_addr: 100,
-            len: data.len() as u64,
-            vm_gap_shift: 63,
-            is_writable: false,
-        }]);
+        let memory_mapping = MemoryMapping::new(
+            vec![MemoryRegion {
+                host_addr: addr,
+                vm_addr: 100,
+                len: data.len() as u64,
+                vm_gap_shift: 63,
+                is_writable: false,
+            }],
+            &DEFAULT_CONFIG,
+        );
         let translated_data =
             translate_slice::<u8>(&memory_mapping, 100, data.len() as u64, &bpf_loader::id())
                 .unwrap();
@@ -1532,13 +1517,16 @@ mod tests {
         // u64
         let mut data = vec![1u64, 2, 3, 4, 5];
         let addr = data.as_ptr() as *const _ as u64;
-        let memory_mapping = MemoryMapping::new_from_regions(vec![MemoryRegion {
-            host_addr: addr,
-            vm_addr: 96,
-            len: (data.len() * size_of::<u64>()) as u64,
-            vm_gap_shift: 63,
-            is_writable: false,
-        }]);
+        let memory_mapping = MemoryMapping::new(
+            vec![MemoryRegion {
+                host_addr: addr,
+                vm_addr: 96,
+                len: (data.len() * size_of::<u64>()) as u64,
+                vm_gap_shift: 63,
+                is_writable: false,
+            }],
+            &DEFAULT_CONFIG,
+        );
         let translated_data =
             translate_slice::<u64>(&memory_mapping, 96, data.len() as u64, &bpf_loader::id())
                 .unwrap();
@@ -1550,13 +1538,16 @@ mod tests {
         // Pubkeys
         let mut data = vec![solana_sdk::pubkey::new_rand(); 5];
         let addr = data.as_ptr() as *const _ as u64;
-        let memory_mapping = MemoryMapping::new_from_regions(vec![MemoryRegion {
-            host_addr: addr,
-            vm_addr: 100,
-            len: (data.len() * std::mem::size_of::<Pubkey>()) as u64,
-            vm_gap_shift: 63,
-            is_writable: false,
-        }]);
+        let memory_mapping = MemoryMapping::new(
+            vec![MemoryRegion {
+                host_addr: addr,
+                vm_addr: 100,
+                len: (data.len() * std::mem::size_of::<Pubkey>()) as u64,
+                vm_gap_shift: 63,
+                is_writable: false,
+            }],
+            &DEFAULT_CONFIG,
+        );
         let translated_data =
             translate_slice::<Pubkey>(&memory_mapping, 100, data.len() as u64, &bpf_loader::id())
                 .unwrap();
@@ -1569,13 +1560,16 @@ mod tests {
     fn test_translate_string_and_do() {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
-        let memory_mapping = MemoryMapping::new_from_regions(vec![MemoryRegion {
-            host_addr: addr,
-            vm_addr: 100,
-            len: string.len() as u64,
-            vm_gap_shift: 63,
-            is_writable: false,
-        }]);
+        let memory_mapping = MemoryMapping::new(
+            vec![MemoryRegion {
+                host_addr: addr,
+                vm_addr: 100,
+                len: string.len() as u64,
+                vm_gap_shift: 63,
+                is_writable: false,
+            }],
+            &DEFAULT_CONFIG,
+        );
         assert_eq!(
             42,
             translate_string_and_do(
@@ -1595,7 +1589,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "UserError(SyscallError(Abort))")]
     fn test_syscall_abort() {
-        let memory_mapping = MemoryMapping::new_from_regions(vec![MemoryRegion::default()]);
+        let memory_mapping = MemoryMapping::new(vec![MemoryRegion::default()], &DEFAULT_CONFIG);
         let mut result: Result<u64, EbpfError<BPFError>> = Ok(0);
         SyscallAbort::call(
             &mut SyscallAbort {},
@@ -1615,13 +1609,16 @@ mod tests {
     fn test_syscall_sol_panic() {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
-        let memory_mapping = MemoryMapping::new_from_regions(vec![MemoryRegion {
-            host_addr: addr,
-            vm_addr: 100,
-            len: string.len() as u64,
-            vm_gap_shift: 63,
-            is_writable: false,
-        }]);
+        let memory_mapping = MemoryMapping::new(
+            vec![MemoryRegion {
+                host_addr: addr,
+                vm_addr: 100,
+                len: string.len() as u64,
+                vm_gap_shift: 63,
+                is_writable: false,
+            }],
+            &DEFAULT_CONFIG,
+        );
         let mut syscall_panic = SyscallPanic {
             loader_id: &bpf_loader::id(),
         };
@@ -1654,13 +1651,16 @@ mod tests {
             logger,
             loader_id: &bpf_loader::id(),
         };
-        let memory_mapping = MemoryMapping::new_from_regions(vec![MemoryRegion {
-            host_addr: addr,
-            vm_addr: 100,
-            len: string.len() as u64,
-            vm_gap_shift: 63,
-            is_writable: false,
-        }]);
+        let memory_mapping = MemoryMapping::new(
+            vec![MemoryRegion {
+                host_addr: addr,
+                vm_addr: 100,
+                len: string.len() as u64,
+                vm_gap_shift: 63,
+                is_writable: false,
+            }],
+            &DEFAULT_CONFIG,
+        );
 
         let mut result: Result<u64, EbpfError<BPFError>> = Ok(0);
         syscall_sol_log.call(
@@ -1730,7 +1730,7 @@ mod tests {
             compute_meter,
             logger,
         };
-        let memory_mapping = MemoryMapping::new_from_regions(vec![]);
+        let memory_mapping = MemoryMapping::new(vec![], &DEFAULT_CONFIG);
 
         let mut result: Result<u64, EbpfError<BPFError>> = Ok(0);
         syscall_sol_log_u64.call(1, 2, 3, 4, 5, &memory_mapping, &mut result);
@@ -1756,13 +1756,16 @@ mod tests {
             logger,
             loader_id: &bpf_loader::id(),
         };
-        let memory_mapping = MemoryMapping::new_from_regions(vec![MemoryRegion {
-            host_addr: addr,
-            vm_addr: 100,
-            len: 32,
-            vm_gap_shift: 63,
-            is_writable: false,
-        }]);
+        let memory_mapping = MemoryMapping::new(
+            vec![MemoryRegion {
+                host_addr: addr,
+                vm_addr: 100,
+                len: 32,
+                vm_gap_shift: 63,
+                is_writable: false,
+            }],
+            &DEFAULT_CONFIG,
+        );
 
         let mut result: Result<u64, EbpfError<BPFError>> = Ok(0);
         syscall_sol_pubkey.call(100, 0, 0, 0, 0, &memory_mapping, &mut result);
@@ -1798,13 +1801,10 @@ mod tests {
         // large alloc
         {
             let heap = vec![0_u8; 100];
-            let memory_mapping =
-                MemoryMapping::new_from_regions(vec![MemoryRegion::new_from_slice(
-                    &heap,
-                    MM_HEAP_START,
-                    0,
-                    true,
-                )]);
+            let memory_mapping = MemoryMapping::new(
+                vec![MemoryRegion::new_from_slice(&heap, MM_HEAP_START, 0, true)],
+                &DEFAULT_CONFIG,
+            );
             let mut syscall = SyscallAllocFree {
                 aligned: true,
                 allocator: BPFAllocator::new(heap, MM_HEAP_START),
@@ -1822,13 +1822,10 @@ mod tests {
         // many small unaligned allocs
         {
             let heap = vec![0_u8; 100];
-            let memory_mapping =
-                MemoryMapping::new_from_regions(vec![MemoryRegion::new_from_slice(
-                    &heap,
-                    MM_HEAP_START,
-                    0,
-                    true,
-                )]);
+            let memory_mapping = MemoryMapping::new(
+                vec![MemoryRegion::new_from_slice(&heap, MM_HEAP_START, 0, true)],
+                &DEFAULT_CONFIG,
+            );
             let mut syscall = SyscallAllocFree {
                 aligned: false,
                 allocator: BPFAllocator::new(heap, MM_HEAP_START),
@@ -1845,13 +1842,10 @@ mod tests {
         // many small aligned allocs
         {
             let heap = vec![0_u8; 100];
-            let memory_mapping =
-                MemoryMapping::new_from_regions(vec![MemoryRegion::new_from_slice(
-                    &heap,
-                    MM_HEAP_START,
-                    0,
-                    true,
-                )]);
+            let memory_mapping = MemoryMapping::new(
+                vec![MemoryRegion::new_from_slice(&heap, MM_HEAP_START, 0, true)],
+                &DEFAULT_CONFIG,
+            );
             let mut syscall = SyscallAllocFree {
                 aligned: true,
                 allocator: BPFAllocator::new(heap, MM_HEAP_START),
@@ -1869,13 +1863,10 @@ mod tests {
 
         fn check_alignment<T>() {
             let heap = vec![0_u8; 100];
-            let memory_mapping =
-                MemoryMapping::new_from_regions(vec![MemoryRegion::new_from_slice(
-                    &heap,
-                    MM_HEAP_START,
-                    0,
-                    true,
-                )]);
+            let memory_mapping = MemoryMapping::new(
+                vec![MemoryRegion::new_from_slice(&heap, MM_HEAP_START, 0, true)],
+                &DEFAULT_CONFIG,
+            );
             let mut syscall = SyscallAllocFree {
                 aligned: true,
                 allocator: BPFAllocator::new(heap, MM_HEAP_START),
@@ -1923,36 +1914,39 @@ mod tests {
         let ro_len = bytes_to_hash.len() as u64;
         let ro_va = 96;
         let rw_va = 192;
-        let memory_mapping = MemoryMapping::new_from_regions(vec![
-            MemoryRegion {
-                host_addr: bytes1.as_ptr() as *const _ as u64,
-                vm_addr: 4096,
-                len: bytes1.len() as u64,
-                vm_gap_shift: 63,
-                is_writable: false,
-            },
-            MemoryRegion {
-                host_addr: bytes2.as_ptr() as *const _ as u64,
-                vm_addr: 8192,
-                len: bytes2.len() as u64,
-                vm_gap_shift: 63,
-                is_writable: false,
-            },
-            MemoryRegion {
-                host_addr: bytes_to_hash.as_ptr() as *const _ as u64,
-                vm_addr: 96,
-                len: 32,
-                vm_gap_shift: 63,
-                is_writable: false,
-            },
-            MemoryRegion {
-                host_addr: hash_result.as_ptr() as *const _ as u64,
-                vm_addr: rw_va,
-                len: HASH_BYTES as u64,
-                vm_gap_shift: 63,
-                is_writable: true,
-            },
-        ]);
+        let memory_mapping = MemoryMapping::new(
+            vec![
+                MemoryRegion {
+                    host_addr: bytes1.as_ptr() as *const _ as u64,
+                    vm_addr: 4096,
+                    len: bytes1.len() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: bytes2.as_ptr() as *const _ as u64,
+                    vm_addr: 8192,
+                    len: bytes2.len() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: bytes_to_hash.as_ptr() as *const _ as u64,
+                    vm_addr: 96,
+                    len: 32,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: hash_result.as_ptr() as *const _ as u64,
+                    vm_addr: rw_va,
+                    len: HASH_BYTES as u64,
+                    vm_gap_shift: 63,
+                    is_writable: true,
+                },
+            ],
+            &DEFAULT_CONFIG,
+        );
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
             Rc::new(RefCell::new(MockComputeMeter {
                 remaining: (bytes1.len() + bytes2.len()) as u64,

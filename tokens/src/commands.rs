@@ -1036,59 +1036,37 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
 mod tests {
     use super::*;
     use solana_core::test_validator::TestValidator;
-    use solana_sdk::{
-        clock::DEFAULT_MS_PER_SLOT,
-        signature::{read_keypair_file, write_keypair_file},
-    };
+    use solana_sdk::signature::{read_keypair_file, write_keypair_file, Signer};
     use solana_stake_program::stake_instruction::StakeInstruction;
-
-    // This is a quick hack until TestValidator can be initialized with fees from block 0
-    fn test_validator_block_0_fee_workaround(client: &RpcClient) {
-        while client
-            .get_recent_blockhash()
-            .unwrap()
-            .1
-            .lamports_per_signature
-            == 0
-        {
-            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
-        }
-    }
 
     #[test]
     fn test_process_token_allocations() {
-        let test_validator = TestValidator::with_no_fees();
-        let alice = test_validator.mint_keypair();
+        let alice = Keypair::new();
+        let test_validator = TestValidator::with_no_fees(alice.pubkey());
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
         test_process_distribute_tokens_with_client(&client, alice, None);
-
-        test_validator.close();
     }
 
     #[test]
     fn test_process_transfer_amount_allocations() {
-        let test_validator = TestValidator::with_no_fees();
-        let alice = test_validator.mint_keypair();
+        let alice = Keypair::new();
+        let test_validator = TestValidator::with_no_fees(alice.pubkey());
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
         test_process_distribute_tokens_with_client(&client, alice, Some(sol_to_lamports(1.5)));
-
-        test_validator.close();
     }
 
     #[test]
     fn test_process_stake_allocations() {
-        let test_validator = TestValidator::with_no_fees();
-        let alice = test_validator.mint_keypair();
+        let alice = Keypair::new();
+        let test_validator = TestValidator::with_no_fees(alice.pubkey());
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
         test_process_distribute_stake_with_client(&client, alice);
-
-        test_validator.close();
     }
 
     #[test]
@@ -1398,15 +1376,13 @@ mod tests {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
 
-        let test_validator = TestValidator::with_custom_fees(fees);
-        let alice = test_validator.mint_keypair();
+        let alice = Keypair::new();
+        let test_validator = TestValidator::with_custom_fees(alice.pubkey(), fees);
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
-
-        test_validator_block_0_fee_workaround(&client);
 
         let allocation_amount = 1000.0;
 
@@ -1477,20 +1453,17 @@ mod tests {
         } else {
             panic!("check_payer_balances should have errored");
         }
-
-        test_validator.close();
     }
 
     #[test]
     fn test_check_payer_balances_distribute_tokens_separate_payers() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
-        let test_validator = TestValidator::with_custom_fees(fees);
-        let alice = test_validator.mint_keypair();
+        let alice = Keypair::new();
+        let test_validator = TestValidator::with_custom_fees(alice.pubkey(), fees);
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
-        test_validator_block_0_fee_workaround(&client);
 
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
@@ -1550,8 +1523,6 @@ mod tests {
         } else {
             panic!("check_payer_balances should have errored");
         }
-
-        test_validator.close();
     }
 
     fn initialize_stake_account(
@@ -1598,11 +1569,10 @@ mod tests {
     fn test_check_payer_balances_distribute_stakes_single_payer() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
-        let test_validator = TestValidator::with_custom_fees(fees);
-        let alice = test_validator.mint_keypair();
+        let alice = Keypair::new();
+        let test_validator = TestValidator::with_custom_fees(alice.pubkey(), fees);
         let url = test_validator.rpc_url();
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
-        test_validator_block_0_fee_workaround(&client);
 
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
@@ -1699,20 +1669,17 @@ mod tests {
         } else {
             panic!("check_payer_balances should have errored");
         }
-
-        test_validator.close();
     }
 
     #[test]
     fn test_check_payer_balances_distribute_stakes_separate_payers() {
         let fees = 10_000;
         let fees_in_sol = lamports_to_sol(fees);
-        let test_validator = TestValidator::with_custom_fees(fees);
-        let alice = test_validator.mint_keypair();
+        let alice = Keypair::new();
+        let test_validator = TestValidator::with_custom_fees(alice.pubkey(), fees);
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
-        test_validator_block_0_fee_workaround(&client);
 
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
@@ -1779,8 +1746,6 @@ mod tests {
         } else {
             panic!("check_payer_balances should have errored");
         }
-
-        test_validator.close();
     }
 
     #[test]
@@ -2025,8 +1990,8 @@ mod tests {
 
     #[test]
     fn test_distribute_allocations_dump_db() {
-        let test_validator = TestValidator::with_no_fees();
-        let sender_keypair = test_validator.mint_keypair();
+        let sender_keypair = Keypair::new();
+        let test_validator = TestValidator::with_no_fees(sender_keypair.pubkey());
         let url = test_validator.rpc_url();
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
 
@@ -2076,8 +2041,6 @@ mod tests {
         let read_db = db::open_db(&db_file, true).unwrap();
         let transaction_info = db::read_transaction_infos(&read_db);
         assert_eq!(transaction_info.len(), 1);
-
-        test_validator.close();
     }
 
     #[test]

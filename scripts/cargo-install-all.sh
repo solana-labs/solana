@@ -95,6 +95,7 @@ else
     solana-stake-monitor
     solana-stake-o-matic
     solana-sys-tuner
+    solana-test-validator
     solana-tokens
     solana-validator
     solana-watchtower

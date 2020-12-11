@@ -154,6 +154,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
   }
   case TEST_VERIFY_PRIVILEGE_ESCALATION: {
     sol_log("Success");
+    break;
   }
   case TEST_NESTED_INVOKE: {
     sol_log("invoke");
