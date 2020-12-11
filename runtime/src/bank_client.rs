@@ -140,6 +140,10 @@ impl SyncClient for BankClient {
         Ok(self.bank.get_balance(pubkey))
     }
 
+    fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> Result<u64> {
+        Ok(self.bank.get_minimum_balance_for_rent_exemption(data_len))
+    }
+
     fn get_recent_blockhash(&self) -> Result<(Hash, FeeCalculator)> {
         Ok(self.bank.last_blockhash_with_fee_calculator())
     }
