@@ -415,9 +415,9 @@ impl<T: std::cmp::Ord + AbiExample> AbiExample for BTreeSet<T> {
 }
 
 #[cfg(not(target_arch = "bpf"))]
-impl AbiExample for memmap::MmapMut {
+impl AbiExample for memmap2::MmapMut {
     fn example() -> Self {
-        memmap::MmapMut::map_anon(1).expect("failed to map the data file")
+        memmap2::MmapMut::map_anon(1).expect("failed to map the data file")
     }
 }
 
