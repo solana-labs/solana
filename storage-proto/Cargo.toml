@@ -14,8 +14,14 @@ bs58 = "0.3.1"
 prost = "0.6.1"
 serde = "1.0.112"
 serde_derive = "1.0.103"
+<<<<<<< HEAD
 solana-sdk = { path = "../sdk", version = "1.4.25" }
 solana-transaction-status = { path = "../transaction-status", version = "1.4.25" }
+=======
+solana-account-decoder = { path = "../account-decoder", version = "1.5.0" }
+solana-sdk = { path = "../sdk", version = "1.5.0" }
+solana-transaction-status = { path = "../transaction-status", version = "1.5.0" }
+>>>>>>> 13db3eca9... SPL token balance in transaction metadata  (#13673)
 
 [lib]
 crate-type = ["lib"]

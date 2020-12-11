@@ -61,6 +61,10 @@ pub struct TransactionStatusMeta {
     pub inner_instructions: ::std::vec::Vec<InnerInstructions>,
     #[prost(string, repeated, tag = "6")]
     pub log_messages: ::std::vec::Vec<std::string::String>,
+    #[prost(message, repeated, tag = "7")]
+    pub pre_token_balances: ::std::vec::Vec<TokenBalance>,
+    #[prost(message, repeated, tag = "8")]
+    pub post_token_balances: ::std::vec::Vec<TokenBalance>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TransactionError {
@@ -82,6 +86,24 @@ pub struct CompiledInstruction {
     pub accounts: std::vec::Vec<u8>,
     #[prost(bytes, tag = "3")]
     pub data: std::vec::Vec<u8>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TokenBalance {
+    #[prost(uint32, tag = "1")]
+    pub account_index: u32,
+    #[prost(string, tag = "2")]
+    pub mint: std::string::String,
+    #[prost(message, optional, tag = "3")]
+    pub ui_token_amount: ::std::option::Option<UiTokenAmount>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UiTokenAmount {
+    #[prost(double, tag = "1")]
+    pub ui_amount: f64,
+    #[prost(uint32, tag = "2")]
+    pub decimals: u32,
+    #[prost(string, tag = "3")]
+    pub amount: std::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Reward {

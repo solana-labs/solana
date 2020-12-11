@@ -5875,6 +5875,8 @@ pub mod tests {
                             post_balances: post_balances.clone(),
                             inner_instructions: Some(vec![]),
                             log_messages: Some(vec![]),
+                            pre_token_balances: Some(vec![]),
+                            post_token_balances: Some(vec![]),
                         },
                     )
                     .unwrap();
@@ -5889,6 +5891,8 @@ pub mod tests {
                             post_balances: post_balances.clone(),
                             inner_instructions: Some(vec![]),
                             log_messages: Some(vec![]),
+                            pre_token_balances: Some(vec![]),
+                            post_token_balances: Some(vec![]),
                         },
                     )
                     .unwrap();
@@ -5901,6 +5905,8 @@ pub mod tests {
                         post_balances,
                         inner_instructions: Some(vec![]),
                         log_messages: Some(vec![]),
+                        pre_token_balances: Some(vec![]),
+                        post_token_balances: Some(vec![]),
                     }),
                 }
             })
@@ -6091,6 +6097,8 @@ pub mod tests {
                 instructions: vec![CompiledInstruction::new(1, &(), vec![0])],
             }];
             let log_messages_vec = vec![String::from("Test message\n")];
+            let pre_token_balances_vec = vec![];
+            let post_token_balances_vec = vec![];
 
             // result not found
             assert!(transaction_status_cf
@@ -6111,6 +6119,8 @@ pub mod tests {
                         post_balances: post_balances_vec.clone(),
                         inner_instructions: Some(inner_instructions_vec.clone()),
                         log_messages: Some(log_messages_vec.clone()),
+                        pre_token_balances: Some(pre_token_balances_vec.clone()),
+                        post_token_balances: Some(post_token_balances_vec.clone())
                     },
                 )
                 .is_ok());
@@ -6123,6 +6133,8 @@ pub mod tests {
                 post_balances,
                 inner_instructions,
                 log_messages,
+                pre_token_balances,
+                post_token_balances,
             } = transaction_status_cf
                 .get((0, Signature::default(), 0))
                 .unwrap()
@@ -6133,6 +6145,8 @@ pub mod tests {
             assert_eq!(post_balances, post_balances_vec);
             assert_eq!(inner_instructions.unwrap(), inner_instructions_vec);
             assert_eq!(log_messages.unwrap(), log_messages_vec);
+            assert_eq!(pre_token_balances.unwrap(), pre_token_balances_vec);
+            assert_eq!(post_token_balances.unwrap(), post_token_balances_vec);
 
             // insert value
             assert!(transaction_status_cf
@@ -6145,6 +6159,8 @@ pub mod tests {
                         post_balances: post_balances_vec.clone(),
                         inner_instructions: Some(inner_instructions_vec.clone()),
                         log_messages: Some(log_messages_vec.clone()),
+                        pre_token_balances: Some(pre_token_balances_vec.clone()),
+                        post_token_balances: Some(post_token_balances_vec.clone())
                     },
                 )
                 .is_ok());
@@ -6157,6 +6173,8 @@ pub mod tests {
                 post_balances,
                 inner_instructions,
                 log_messages,
+                pre_token_balances,
+                post_token_balances,
             } = transaction_status_cf
                 .get((0, Signature::new(&[2u8; 64]), 9))
                 .unwrap()
@@ -6169,6 +6187,8 @@ pub mod tests {
             assert_eq!(post_balances, post_balances_vec);
             assert_eq!(inner_instructions.unwrap(), inner_instructions_vec);
             assert_eq!(log_messages.unwrap(), log_messages_vec);
+            assert_eq!(pre_token_balances.unwrap(), pre_token_balances_vec);
+            assert_eq!(post_token_balances.unwrap(), post_token_balances_vec);
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
@@ -6397,6 +6417,8 @@ pub mod tests {
                 post_balances: post_balances_vec,
                 inner_instructions: Some(vec![]),
                 log_messages: Some(vec![]),
+                pre_token_balances: Some(vec![]),
+                post_token_balances: Some(vec![]),
             };
 
             let signature1 = Signature::new(&[1u8; 64]);
@@ -6531,6 +6553,8 @@ pub mod tests {
                     instructions: vec![CompiledInstruction::new(1, &(), vec![0])],
                 }]);
                 let log_messages = Some(vec![String::from("Test message\n")]);
+                let pre_token_balances = Some(vec![]);
+                let post_token_balances = Some(vec![]);
                 let signature = transaction.signatures[0];
                 blockstore
                     .transaction_status_cf
@@ -6543,6 +6567,8 @@ pub mod tests {
                             post_balances: post_balances.clone(),
                             inner_instructions: inner_instructions.clone(),
                             log_messages: log_messages.clone(),
+                            pre_token_balances: pre_token_balances.clone(),
+                            post_token_balances: post_token_balances.clone(),
                         },
                     )
                     .unwrap();
@@ -6555,6 +6581,8 @@ pub mod tests {
                         post_balances,
                         inner_instructions,
                         log_messages,
+                        pre_token_balances,
+                        post_token_balances,
                     }),
                 }
             })
@@ -7000,6 +7028,8 @@ pub mod tests {
                             post_balances: vec![],
                             inner_instructions: Some(vec![]),
                             log_messages: Some(vec![]),
+                            pre_token_balances: Some(vec![]),
+                            post_token_balances: Some(vec![]),
                         },
                     )
                     .unwrap();

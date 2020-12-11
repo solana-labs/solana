@@ -4929,6 +4929,7 @@ dependencies = [
  "prost",
  "serde",
  "serde_derive",
+ "solana-account-decoder",
  "solana-sdk",
  "solana-transaction-status",
 ]
