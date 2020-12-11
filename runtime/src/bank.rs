@@ -1529,8 +1529,8 @@ impl Bank {
         }
         // if I'm the first Bank in an epoch, count, claim, disburse rewards from Inflation
 
-        let epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
         let slot_in_year = self.slot_in_year_for_inflation();
+        let epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
 
         let (validator_rate, foundation_rate) = {
             let inflation = self.inflation.read().unwrap();
