@@ -65,7 +65,7 @@ pub enum UpgradeableLoaderInstruction {
     ///   5. [] Clock sysvar.
     ///   6. [] System program (`solana_sdk::system_program::id()`).
     ///   7. [] The program's authority, optional, if omitted then the program
-    ///      will not be upgradeable.
+    ///      will no longer upgradeable.
     DeployWithMaxDataLen {
         /// Maximum length that the program can be upgraded to.
         max_data_len: usize,
@@ -92,7 +92,7 @@ pub enum UpgradeableLoaderInstruction {
     ///   6. [signer] The program's authority.
     Upgrade,
 
-    /// Sets a new program authority that is allowed to update the program.  To
+    /// Set a new authority that is allowed to upgrade the program.  To
     /// permanently disable program updates omit the new authority.
     ///
     /// # Account references

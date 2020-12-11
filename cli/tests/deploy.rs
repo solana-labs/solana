@@ -50,7 +50,7 @@ fn test_cli_deploy_program() {
     config.signers = vec![&keypair];
     process_command(&config).unwrap();
 
-    config.command = CliCommand::Deploy {
+    config.command = CliCommand::ProgramDeploy {
         program_location: pathbuf.to_str().unwrap().to_string(),
         buffer: None,
         use_deprecated_loader: false,
@@ -88,7 +88,7 @@ fn test_cli_deploy_program() {
     // Test custom address
     let custom_address_keypair = Keypair::new();
     config.signers = vec![&keypair, &custom_address_keypair];
-    config.command = CliCommand::Deploy {
+    config.command = CliCommand::ProgramDeploy {
         program_location: pathbuf.to_str().unwrap().to_string(),
         buffer: Some(1),
         use_deprecated_loader: false,
@@ -123,7 +123,7 @@ fn test_cli_deploy_program() {
     process_command(&config).unwrap();
 
     config.signers = vec![&keypair, &custom_address_keypair];
-    config.command = CliCommand::Deploy {
+    config.command = CliCommand::ProgramDeploy {
         program_location: pathbuf.to_str().unwrap().to_string(),
         buffer: Some(1),
         use_deprecated_loader: false,
@@ -135,7 +135,7 @@ fn test_cli_deploy_program() {
     process_command(&config).unwrap_err();
 
     // Use forcing parameter to deploy to account with excess balance
-    config.command = CliCommand::Deploy {
+    config.command = CliCommand::ProgramDeploy {
         program_location: pathbuf.to_str().unwrap().to_string(),
         buffer: Some(1),
         use_deprecated_loader: false,
@@ -166,10 +166,11 @@ fn test_cli_deploy_upgradeable_program() {
     pathbuf.push("noop");
     pathbuf.set_extension("so");
 
-    let test_validator = TestValidator::with_no_fees();
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
 
     let (sender, receiver) = channel();
-    run_local_faucet(test_validator.mint_keypair(), sender, None);
+    run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());
@@ -206,7 +207,7 @@ fn test_cli_deploy_upgradeable_program() {
     process_command(&config).unwrap();
 
     // Deploy and attempt to upgrade a non-upgradeable program
-    config.command = CliCommand::Deploy {
+    config.command = CliCommand::ProgramDeploy {
         program_location: pathbuf.to_str().unwrap().to_string(),
         buffer: None,
         use_deprecated_loader: false,
@@ -227,7 +228,7 @@ fn test_cli_deploy_upgradeable_program() {
     let program_id = Pubkey::from_str(&program_id_str).unwrap();
 
     config.signers = vec![&keypair, &upgrade_authority];
-    config.command = CliCommand::Upgrade {
+    config.command = CliCommand::ProgramUpgrade {
         program_location: pathbuf.to_str().unwrap().to_string(),
         program: program_id,
         buffer: None,
@@ -236,7 +237,7 @@ fn test_cli_deploy_upgradeable_program() {
     process_command(&config).unwrap_err();
 
     // Deploy the upgradeable program
-    config.command = CliCommand::Deploy {
+    config.command = CliCommand::ProgramDeploy {
         program_location: pathbuf.to_str().unwrap().to_string(),
         buffer: None,
         use_deprecated_loader: false,
@@ -283,7 +284,7 @@ fn test_cli_deploy_upgradeable_program() {
 
     // Upgrade the program
     config.signers = vec![&keypair, &upgrade_authority];
-    config.command = CliCommand::Upgrade {
+    config.command = CliCommand::ProgramUpgrade {
         program_location: pathbuf.to_str().unwrap().to_string(),
         program: program_id,
         buffer: None,
@@ -328,7 +329,7 @@ fn test_cli_deploy_upgradeable_program() {
     // Set a new authority
     let new_upgrade_authority = Keypair::new();
     config.signers = vec![&keypair, &upgrade_authority];
-    config.command = CliCommand::SetUpgradeAuthority {
+    config.command = CliCommand::SetProgramUpgradeAuthority {
         program: program_id,
         upgrade_authority: 1,
         new_upgrade_authority: Some(new_upgrade_authority.pubkey()),
@@ -349,7 +350,7 @@ fn test_cli_deploy_upgradeable_program() {
 
     // Upgrade with new authority
     config.signers = vec![&keypair, &new_upgrade_authority];
-    config.command = CliCommand::Upgrade {
+    config.command = CliCommand::ProgramUpgrade {
         program_location: pathbuf.to_str().unwrap().to_string(),
         program: program_id,
         buffer: None,
@@ -393,7 +394,7 @@ fn test_cli_deploy_upgradeable_program() {
 
     // Set a no authority
     config.signers = vec![&keypair, &new_upgrade_authority];
-    config.command = CliCommand::SetUpgradeAuthority {
+    config.command = CliCommand::SetProgramUpgradeAuthority {
         program: program_id,
         upgrade_authority: 1,
         new_upgrade_authority: None,
@@ -411,13 +412,11 @@ fn test_cli_deploy_upgradeable_program() {
 
     // Upgrade with no authority
     config.signers = vec![&keypair, &new_upgrade_authority];
-    config.command = CliCommand::Upgrade {
+    config.command = CliCommand::ProgramUpgrade {
         program_location: pathbuf.to_str().unwrap().to_string(),
         program: program_id,
         buffer: None,
         upgrade_authority: 1,
     };
     process_command(&config).unwrap_err();
-
-    test_validator.close();
 }

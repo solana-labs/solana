@@ -187,7 +187,7 @@ pub enum CliCommand {
         lamports: u64,
     },
     // Program Deployment
-    Deploy {
+    ProgramDeploy {
         program_location: String,
         buffer: Option<SignerIndex>,
         use_deprecated_loader: bool,
@@ -196,13 +196,13 @@ pub enum CliCommand {
         max_len: Option<usize>,
         allow_excessive_balance: bool,
     },
-    Upgrade {
+    ProgramUpgrade {
         program_location: String,
         program: Pubkey,
         upgrade_authority: SignerIndex,
         buffer: Option<SignerIndex>,
     },
-    SetUpgradeAuthority {
+    SetProgramUpgradeAuthority {
         program: Pubkey,
         upgrade_authority: SignerIndex,
         new_upgrade_authority: Option<Pubkey>,
@@ -644,7 +644,7 @@ pub fn parse_command(
             let max_len = value_of(matches, "max_len");
 
             Ok(CliCommandInfo {
-                command: CliCommand::Deploy {
+                command: CliCommand::ProgramDeploy {
                     program_location: matches.value_of("program_location").unwrap().to_string(),
                     buffer,
                     use_deprecated_loader: matches.is_present("use_deprecated_loader"),
@@ -656,7 +656,7 @@ pub fn parse_command(
                 signers,
             })
         }
-        ("upgrade", Some(matches)) => {
+        ("upgrade-program", Some(matches)) => {
             let mut signers = vec![default_signer.signer_from_path(matches, wallet_manager)?];
             let (upgrade_authority_signer, _address) =
                 signer_of(matches, "upgrade_authority", wallet_manager)?;
@@ -674,7 +674,7 @@ pub fn parse_command(
             let program = pubkey_of(matches, "program_id").unwrap();
 
             Ok(CliCommandInfo {
-                command: CliCommand::Upgrade {
+                command: CliCommand::ProgramUpgrade {
                     program_location: matches.value_of("program_location").unwrap().to_string(),
                     program,
                     upgrade_authority,
@@ -683,7 +683,7 @@ pub fn parse_command(
                 signers,
             })
         }
-        ("set-upgrade-authority", Some(matches)) => {
+        ("set-program-upgrade-authority", Some(matches)) => {
             let mut signers = vec![default_signer.signer_from_path(matches, wallet_manager)?];
             let (upgrade_authority_signer, _address) =
                 signer_of(matches, "upgrade_authority", wallet_manager)?;
@@ -696,7 +696,7 @@ pub fn parse_command(
             let program = pubkey_of(matches, "program_id").unwrap();
             let new_upgrade_authority = pubkey_of(matches, "new_upgrade_authority");
             Ok(CliCommandInfo {
-                command: CliCommand::SetUpgradeAuthority {
+                command: CliCommand::SetProgramUpgradeAuthority {
                     program,
                     upgrade_authority,
                     new_upgrade_authority,
@@ -1260,7 +1260,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     Ok(program_data)
 }
 
-fn complete_partial_init(
+fn complete_partial_program_init(
     loader_id: &Pubkey,
     payer_pubkey: &Pubkey,
     elf_pubkey: &Pubkey,
@@ -1415,7 +1415,7 @@ fn send_deploy_messages(
     Ok(())
 }
 
-fn process_deploy(
+fn process_program_deploy(
     rpc_client: &RpcClient,
     config: &CliConfig,
     program_location: &str,
@@ -1426,13 +1426,9 @@ fn process_deploy(
     max_len: Option<usize>,
     allow_excessive_balance: bool,
 ) -> ProcessResult {
-    const WORDS: usize = 12;
     // Create ephemeral keypair to use for Buffer account, if not provided
-    let mnemonic = Mnemonic::new(MnemonicType::for_word_count(WORDS)?, Language::English);
-    let seed = Seed::new(&mnemonic, "");
-    let new_keypair = keypair_from_seed(seed.as_bytes())?;
-
-    let result = do_process_deploy(
+    let (words, mnemonic, new_keypair) = create_ephemeral_keypair()?;
+    let result = do_process_program_deploy(
         rpc_client,
         config,
         program_location,
@@ -1444,28 +1440,14 @@ fn process_deploy(
         allow_excessive_balance,
         new_keypair,
     );
-
     if result.is_err() && buffer.is_none() {
-        let phrase: &str = mnemonic.phrase();
-        let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
-        eprintln!(
-            "{}\nTo resume a failed deploy, recover the ephemeral keypair file with",
-            divider
-        );
-        eprintln!(
-            "`solana-keygen recover` and the following {}-word seed phrase,",
-            WORDS
-        );
-        eprintln!(
-            "then pass it as the [WRITE_SIGNER] argument to `solana deploy ...`\n{}\n{}\n{}",
-            divider, phrase, divider
-        );
+        report_ephemeral_mnemonic(words, mnemonic);
     }
     result
 }
 
 #[allow(clippy::too_many_arguments)]
-fn do_process_deploy(
+fn do_process_program_deploy(
     rpc_client: &RpcClient,
     config: &CliConfig,
     program_location: &str,
@@ -1530,7 +1512,7 @@ fn do_process_deploy(
         } else {
             data_len
         };
-        complete_partial_init(
+        complete_partial_program_init(
             &loader_id,
             &config.signers[0].pubkey(),
             &buffer_signer.pubkey(),
@@ -1642,7 +1624,34 @@ fn do_process_deploy(
     .to_string())
 }
 
-fn process_upgrade(
+fn create_ephemeral_keypair(
+) -> Result<(usize, bip39::Mnemonic, Keypair), Box<dyn std::error::Error>> {
+    const WORDS: usize = 12;
+    let mnemonic = Mnemonic::new(MnemonicType::for_word_count(WORDS)?, Language::English);
+    let seed = Seed::new(&mnemonic, "");
+    let new_keypair = keypair_from_seed(seed.as_bytes())?;
+
+    Ok((WORDS, mnemonic, new_keypair))
+}
+
+fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
+    let phrase: &str = mnemonic.phrase();
+    let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
+    eprintln!(
+        "{}\nTo resume a failed upgrade, recover the ephemeral keypair file with",
+        divider
+    );
+    eprintln!(
+        "`solana-keygen recover` and the following {}-word seed phrase,",
+        words
+    );
+    eprintln!(
+        "then pass it as the [BUFFER_SIGNER] argument to `solana upgrade ...`\n{}\n{}\n{}",
+        divider, phrase, divider
+    );
+}
+
+fn process_program_upgrade(
     rpc_client: &RpcClient,
     config: &CliConfig,
     program_location: &str,
@@ -1650,13 +1659,9 @@ fn process_upgrade(
     upgrade_authority: SignerIndex,
     buffer: Option<SignerIndex>,
 ) -> ProcessResult {
-    const WORDS: usize = 12;
     // Create ephemeral keypair to use for Buffer account, if not provided
-    let mnemonic = Mnemonic::new(MnemonicType::for_word_count(WORDS)?, Language::English);
-    let seed = Seed::new(&mnemonic, "");
-    let new_keypair = keypair_from_seed(seed.as_bytes())?;
-
-    let result = do_process_upgrade(
+    let (words, mnemonic, new_keypair) = create_ephemeral_keypair()?;
+    let result = do_process_program_upgrade(
         rpc_client,
         config,
         program_location,
@@ -1665,27 +1670,13 @@ fn process_upgrade(
         buffer,
         new_keypair,
     );
-
     if result.is_err() && buffer.is_none() {
-        let phrase: &str = mnemonic.phrase();
-        let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
-        eprintln!(
-            "{}\nTo resume a failed upgrade, recover the ephemeral keypair file with",
-            divider
-        );
-        eprintln!(
-            "`solana-keygen recover` and the following {}-word seed phrase,",
-            WORDS
-        );
-        eprintln!(
-            "then pass it as the [BUFFER_SIGNER] argument to `solana upgrade ...`\n{}\n{}\n{}",
-            divider, phrase, divider
-        );
+        report_ephemeral_mnemonic(words, mnemonic);
     }
     result
 }
 
-fn do_process_upgrade(
+fn do_process_program_upgrade(
     rpc_client: &RpcClient,
     config: &CliConfig,
     program_location: &str,
@@ -1717,7 +1708,7 @@ fn do_process_upgrade(
         .get_account_with_commitment(&buffer_signer.pubkey(), config.commitment)?
         .value
     {
-        complete_partial_init(
+        complete_partial_program_init(
             &loader_id,
             &config.signers[0].pubkey(),
             &buffer_signer.pubkey(),
@@ -1795,7 +1786,7 @@ fn do_process_upgrade(
     .to_string())
 }
 
-fn process_set_upgrade_authority(
+fn process_set_program_upgrade_authority(
     rpc_client: &RpcClient,
     config: &CliConfig,
     program: Pubkey,
@@ -2099,7 +2090,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Program Deployment
 
         // Deploy a custom program to the chain
-        CliCommand::Deploy {
+        CliCommand::ProgramDeploy {
             program_location,
             buffer,
             use_deprecated_loader,
@@ -2107,7 +2098,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             upgrade_authority,
             max_len,
             allow_excessive_balance,
-        } => process_deploy(
+        } => process_program_deploy(
             &rpc_client,
             config,
             program_location,
@@ -2120,12 +2111,12 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         ),
 
         // Upgrade a deployed program on the chain
-        CliCommand::Upgrade {
+        CliCommand::ProgramUpgrade {
             program_location,
             program,
             upgrade_authority,
             buffer,
-        } => process_upgrade(
+        } => process_program_upgrade(
             &rpc_client,
             config,
             program_location,
@@ -2135,11 +2126,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         ),
 
         // Set a new program upgrade authority
-        CliCommand::SetUpgradeAuthority {
+        CliCommand::SetProgramUpgradeAuthority {
             program,
             upgrade_authority,
             new_upgrade_authority,
-        } => process_set_upgrade_authority(
+        } => process_set_program_upgrade_authority(
             &rpc_client,
             config,
             *program,
@@ -2803,7 +2794,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(commitment_arg_with_default("max")),
         )
         .subcommand(
-            SubCommand::with_name("upgrade")
+            SubCommand::with_name("upgrade-program")
                 .about("Upgrade a program")
                 .arg(
                     Arg::with_name("program_location")
@@ -2841,7 +2832,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(commitment_arg_with_default("max")),
         )
         .subcommand(
-            SubCommand::with_name("set-upgrade-authority")
+            SubCommand::with_name("set-program-upgrade-authority")
                 .about("Set a new authority for an upgradeable program")
                 .arg(
                     Arg::with_name("program_id")
@@ -3231,7 +3222,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::Deploy {
+                command: CliCommand::ProgramDeploy {
                     program_location: "/Users/test/program.o".to_string(),
                     buffer: None,
                     use_deprecated_loader: false,
@@ -3256,7 +3247,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::Deploy {
+                command: CliCommand::ProgramDeploy {
                     program_location: "/Users/test/program.o".to_string(),
                     buffer: Some(1),
                     use_deprecated_loader: false,
@@ -3286,7 +3277,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::Deploy {
+                command: CliCommand::ProgramDeploy {
                     program_location: "/Users/test/program.o".to_string(),
                     buffer: None,
                     use_deprecated_loader: false,
@@ -3306,7 +3297,7 @@ mod tests {
         write_keypair_file(&upgrade_address, &upgrade_address_file).unwrap();
         let test = test_commands.clone().get_matches_from(vec![
             "test",
-            "upgrade",
+            "upgrade-program",
             "/Users/test/program.o",
             &program_pubkey.to_string(),
             &upgrade_address_file,
@@ -3314,7 +3305,7 @@ mod tests {
         assert_eq!(
             parse_command(&test, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::Upgrade {
+                command: CliCommand::ProgramUpgrade {
                     program_location: "/Users/test/program.o".to_string(),
                     program: program_pubkey,
                     buffer: None,
@@ -3327,7 +3318,7 @@ mod tests {
             }
         );
 
-        // Test SetUpgradeAuthority Subcommand
+        // Test SetProgramUpgradeAuthority Subcommand
         let new_upgrade_authority = Pubkey::new_unique();
         let program_pubkey = Pubkey::new_unique();
         let authority_address = Keypair::new();
@@ -3335,7 +3326,7 @@ mod tests {
         write_keypair_file(&authority_address, &authority_address_file).unwrap();
         let test = test_commands.clone().get_matches_from(vec![
             "test",
-            "set-upgrade-authority",
+            "set-program-upgrade-authority",
             &program_pubkey.to_string(),
             &authority_address_file,
             "--new-upgrade-authority",
@@ -3344,7 +3335,7 @@ mod tests {
         assert_eq!(
             parse_command(&test, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::SetUpgradeAuthority {
+                command: CliCommand::SetProgramUpgradeAuthority {
                     program: program_pubkey,
                     upgrade_authority: 1,
                     new_upgrade_authority: Some(new_upgrade_authority),
@@ -3362,14 +3353,14 @@ mod tests {
         write_keypair_file(&authority_address, &authority_address_file).unwrap();
         let test = test_commands.clone().get_matches_from(vec![
             "test",
-            "set-upgrade-authority",
+            "set-program-upgrade-authority",
             &program_pubkey.to_string(),
             &authority_address_file,
         ]);
         assert_eq!(
             parse_command(&test, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::SetUpgradeAuthority {
+                command: CliCommand::SetProgramUpgradeAuthority {
                     program: program_pubkey,
                     upgrade_authority: 1,
                     new_upgrade_authority: None,
@@ -3684,7 +3675,7 @@ mod tests {
         let default_keypair = Keypair::new();
         config.signers = vec![&default_keypair];
 
-        config.command = CliCommand::Deploy {
+        config.command = CliCommand::ProgramDeploy {
             program_location: pathbuf.to_str().unwrap().to_string(),
             buffer: None,
             use_deprecated_loader: false,
@@ -3706,7 +3697,7 @@ mod tests {
         assert!(program_id.parse::<Pubkey>().is_ok());
 
         // Failure case
-        config.command = CliCommand::Deploy {
+        config.command = CliCommand::ProgramDeploy {
             program_location: "bad/file/location.so".to_string(),
             buffer: None,
             use_deprecated_loader: false,
@@ -3743,7 +3734,7 @@ mod tests {
         let default_keypair = Keypair::new();
         config.signers = vec![&default_keypair];
 
-        config.command = CliCommand::Deploy {
+        config.command = CliCommand::ProgramDeploy {
             program_location: pathbuf.to_str().unwrap().to_string(),
             buffer: None,
             use_deprecated_loader: false,
@@ -3765,7 +3756,7 @@ mod tests {
         assert!(program_id.parse::<Pubkey>().is_ok());
 
         // Failure case
-        config.command = CliCommand::Deploy {
+        config.command = CliCommand::ProgramDeploy {
             program_location: "bad/file/location.so".to_string(),
             buffer: None,
             use_deprecated_loader: false,
@@ -3803,7 +3794,7 @@ mod tests {
         let default_keypair = Keypair::new();
         config.signers = vec![&default_keypair, &upgrade_authority];
 
-        config.command = CliCommand::Upgrade {
+        config.command = CliCommand::ProgramUpgrade {
             program_location: pathbuf.to_str().unwrap().to_string(),
             program,
             buffer: None,
@@ -3822,7 +3813,7 @@ mod tests {
         assert!(program_id.parse::<Pubkey>().is_ok());
 
         // Failure case
-        config.command = CliCommand::Upgrade {
+        config.command = CliCommand::ProgramUpgrade {
             program_location: "bad/file/location.so".to_string(),
             program,
             buffer: None,
@@ -3858,7 +3849,7 @@ mod tests {
         let default_keypair = Keypair::new();
         config.signers = vec![&default_keypair, &upgrade_authority];
 
-        config.command = CliCommand::SetUpgradeAuthority {
+        config.command = CliCommand::SetProgramUpgradeAuthority {
             program,
             upgrade_authority: 1,
             new_upgrade_authority: Some(new_upgrade_authority),
@@ -3875,7 +3866,7 @@ mod tests {
             .unwrap();
         assert!(program_id.parse::<Pubkey>().is_ok());
 
-        config.command = CliCommand::SetUpgradeAuthority {
+        config.command = CliCommand::SetProgramUpgradeAuthority {
             program,
             upgrade_authority: 1,
             new_upgrade_authority: None,
