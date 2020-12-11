@@ -2279,9 +2279,9 @@ dependencies = [
 
 [[package]]
 name = "net2"
-version = "0.2.34"
+version = "0.2.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ba7c918ac76704fb42afcbbb43891e72731f3dcca3bef2a19786297baf14af7"
+checksum = "391630d12b68002ae1e25e8f974306474966550ad82dac6886fb8910c19568ae"
 dependencies = [
  "cfg-if 0.1.10",
  "libc",
@@ -3939,6 +3939,7 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-http-server",
  "log 0.4.8",
+ "net2",
  "rayon",
  "reqwest",
  "semver 0.11.0",
@@ -3998,6 +3999,7 @@ dependencies = [
  "log 0.4.8",
  "lru",
  "matches",
+ "net2",
  "num-traits",
  "num_cpus",
  "rand 0.7.3",
@@ -5167,6 +5169,7 @@ dependencies = [
  "jsonrpc-derive",
  "jsonrpc-http-server",
  "log 0.4.8",
+ "net2",
  "serde_json",
  "solana-clap-utils",
  "solana-metrics",

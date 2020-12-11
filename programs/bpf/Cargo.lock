@@ -1183,9 +1183,9 @@ dependencies = [
 
 [[package]]
 name = "net2"
-version = "0.2.34"
+version = "0.2.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ba7c918ac76704fb42afcbbb43891e72731f3dcca3bef2a19786297baf14af7"
+checksum = "391630d12b68002ae1e25e8f974306474966550ad82dac6886fb8910c19568ae"
 dependencies = [
  "cfg-if 0.1.10",
  "libc",
@@ -1877,6 +1877,7 @@ dependencies = [
  "bincode",
  "byteorder 1.3.4",
  "elf",
+ "net2",
  "solana-bpf-loader-program",
  "solana-logger",
  "solana-measure",
