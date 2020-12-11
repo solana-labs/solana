@@ -266,6 +266,14 @@ impl AccountStorageEntry {
         self.approx_store_count.load(Ordering::Relaxed)
     }
 
+    pub fn written_bytes(&self) -> u64 {
+        self.accounts.len() as u64
+    }
+
+    pub fn total_bytes(&self) -> u64 {
+        self.accounts.capacity()
+    }
+
     pub fn has_accounts(&self) -> bool {
         self.count() > 0
     }
@@ -1019,9 +1027,13 @@ impl AccountsDB {
                 let stores = stores_lock.read().unwrap();
                 let mut alive_count = 0;
                 let mut stored_count = 0;
+                let mut written_bytes = 0;
+                let mut total_bytes = 0;
                 for store in stores.values() {
                     alive_count += store.count();
                     stored_count += store.approx_stored_count();
+                    written_bytes += store.written_bytes();
+                    total_bytes += store.total_bytes();
                 }
                 if alive_count == stored_count && stores.values().len() == 1 {
                     trace!(
@@ -1032,14 +1044,17 @@ impl AccountsDB {
                         if forced { " (forced)" } else { "" },
                     );
                     return 0;
-                } else if (alive_count as f32 / stored_count as f32) >= 0.80 && !forced {
-                    trace!(
-                        "shrink_stale_slot ({}): not enough space to shrink: {} / {}",
-                        slot,
-                        alive_count,
-                        stored_count,
+                } else if !forced {
+                    let sparse_by_count = (alive_count as f32 / stored_count as f32) <= 0.8;
+                    let sparse_by_bytes = (written_bytes as f32 / total_bytes as f32) <= 0.8;
+                    let skip_shrink = !sparse_by_count && !sparse_by_bytes;
+                    info!(
+                        "shrink_stale_slot ({}): skip_shrink: {} count: {}/{} byte: {}/{}",
+                        slot, skip_shrink, alive_count, stored_count, written_bytes, total_bytes,
                     );
-                    return 0;
+                    if skip_shrink {
+                        return 0;
+                    }
                 }
                 for store in stores.values() {
                     let mut start = 0;
@@ -5293,7 +5308,7 @@ pub mod tests {
 
         let accounts = AccountsDB::new_single();
 
-        let pubkey_count = 100;
+        let pubkey_count = 30000;
         let pubkeys: Vec<_> = (0..pubkey_count)
             .map(|_| solana_sdk::pubkey::new_rand())
             .collect();
@@ -5314,7 +5329,7 @@ pub mod tests {
         accounts.add_root(current_slot);
 
         current_slot += 1;
-        let pubkey_count_after_shrink = 90;
+        let pubkey_count_after_shrink = 25000;
         let updated_pubkeys = &pubkeys[0..pubkey_count - pubkey_count_after_shrink];
 
         for pubkey in updated_pubkeys {
