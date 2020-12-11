@@ -1244,7 +1244,7 @@ impl Bank {
         self.store_account(pubkey, &new_account);
     }
 
-    fn inherit_sysvar_account_balance(&self, old_account: &Option<Account>) -> u64 {
+    fn inherit_specially_retained_account_balance(&self, old_account: &Option<Account>) -> u64 {
         old_account.as_ref().map(|a| a.lamports).unwrap_or(1)
     }
 
@@ -1332,7 +1332,10 @@ impl Bank {
             unix_timestamp,
         };
         self.update_sysvar_account(&sysvar::clock::id(), |account| {
-            create_account(&clock, self.inherit_sysvar_account_balance(account))
+            create_account(
+                &clock,
+                self.inherit_specially_retained_account_balance(account),
+            )
         });
     }
 
@@ -1343,7 +1346,10 @@ impl Bank {
                 .map(|account| from_account::<SlotHistory>(&account).unwrap())
                 .unwrap_or_default();
             slot_history.add(self.slot());
-            create_account(&slot_history, self.inherit_sysvar_account_balance(account))
+            create_account(
+                &slot_history,
+                self.inherit_specially_retained_account_balance(account),
+            )
         });
     }
 
@@ -1354,7 +1360,10 @@ impl Bank {
                 .map(|account| from_account::<SlotHashes>(&account).unwrap())
                 .unwrap_or_default();
             slot_hashes.add(self.parent_slot, self.parent_hash);
-            create_account(&slot_hashes, self.inherit_sysvar_account_balance(account))
+            create_account(
+                &slot_hashes,
+                self.inherit_specially_retained_account_balance(account),
+            )
         });
     }
 
@@ -1398,7 +1407,7 @@ impl Bank {
         self.update_sysvar_account(&sysvar::fees::id(), |account| {
             create_account(
                 &sysvar::fees::Fees::new(&self.fee_calculator),
-                self.inherit_sysvar_account_balance(account),
+                self.inherit_specially_retained_account_balance(account),
             )
         });
     }
@@ -1407,7 +1416,7 @@ impl Bank {
         self.update_sysvar_account(&sysvar::rent::id(), |account| {
             create_account(
                 &self.rent_collector.rent,
-                self.inherit_sysvar_account_balance(account),
+                self.inherit_specially_retained_account_balance(account),
             )
         });
     }
@@ -1416,7 +1425,7 @@ impl Bank {
         self.update_sysvar_account(&sysvar::epoch_schedule::id(), |account| {
             create_account(
                 &self.epoch_schedule,
-                self.inherit_sysvar_account_balance(account),
+                self.inherit_specially_retained_account_balance(account),
             )
         });
     }
@@ -1429,7 +1438,7 @@ impl Bank {
         self.update_sysvar_account(&sysvar::stake_history::id(), |account| {
             create_account::<sysvar::stake_history::StakeHistory>(
                 &self.stakes.read().unwrap().history(),
-                self.inherit_sysvar_account_balance(account),
+                self.inherit_specially_retained_account_balance(account),
             )
         });
     }
@@ -1548,7 +1557,7 @@ impl Bank {
             self.update_sysvar_account(&sysvar::rewards::id(), |account| {
                 create_account(
                     &sysvar::rewards::Rewards::new(validator_point_value),
-                    self.inherit_sysvar_account_balance(account),
+                    self.inherit_specially_retained_account_balance(account),
                 )
             });
         }
@@ -1757,7 +1766,7 @@ impl Bank {
         self.update_sysvar_account(&sysvar::recent_blockhashes::id(), |account| {
             let recent_blockhash_iter = locked_blockhash_queue.get_recent_blockhashes();
             recent_blockhashes_account::create_account_with_data(
-                self.inherit_sysvar_account_balance(account),
+                self.inherit_specially_retained_account_balance(account),
                 recent_blockhash_iter,
             )
         });
@@ -2014,9 +2023,13 @@ impl Bank {
 
     // NOTE: must hold idempotent for the same set of arguments
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey, must_replace: bool) {
-        let mut existing_genuine_program = self.get_account(&program_id);
-        if let Some(account) = &mut existing_genuine_program {
-            if !native_loader::check_id(&account.owner) {
+        let existing_genuine_program = if let Some(mut account) = self.get_account(&program_id) {
+            // it's very unlikely to be squatted at program_id as non-system account because of burden to
+            // find victim's pubkey/hash. So, when account.owner is indeed native_loader's, it's
+            // safe to assume it's a genuine program.
+            if native_loader::check_id(&account.owner) {
+                Some(account)
+            } else {
                 // malicious account is pre-occupying at program_id
                 // forcibly burn and purge it
 
@@ -2026,13 +2039,16 @@ impl Bank {
                 // flush the Stakes cache
                 account.lamports = 0;
                 self.store_account(&program_id, &account);
+                None
             }
-        }
+        } else {
+            None
+        };
 
         if must_replace {
             // updating native program
 
-            match existing_genuine_program {
+            match &existing_genuine_program {
                 None => panic!(
                     "There is no account to replace with native program ({}, {}).",
                     name, program_id
@@ -2048,7 +2064,7 @@ impl Bank {
         } else {
             // introducing native program
 
-            match existing_genuine_program {
+            match &existing_genuine_program {
                 None => (), // continue to add account
                 Some(_account) => {
                     // nop; it seems that we already have account
@@ -2074,7 +2090,10 @@ impl Bank {
         );
 
         // Add a bogus executable native account, which will be loaded and ignored.
-        let account = native_loader::create_loadable_account(name);
+        let account = native_loader::create_loadable_account(
+            name,
+            self.inherit_specially_retained_account_balance(&existing_genuine_program),
+        );
         self.store_account(&program_id, &account);
 
         debug!("Added native program {} under {:?}", name, program_id);
@@ -7022,6 +7041,8 @@ pub(crate) mod tests {
 
     #[test]
     fn test_bank_tx_fee() {
+        solana_logger::setup();
+
         let arbitrary_transfer_amount = 42;
         let mint = arbitrary_transfer_amount * 100;
         let leader = solana_sdk::pubkey::new_rand();
@@ -7849,65 +7870,112 @@ pub(crate) mod tests {
 
         // First, initialize the clock sysvar
         let bank1 = Arc::new(Bank::new(&genesis_config));
-        bank1.update_sysvar_account(&dummy_clock_id, |optional_account| {
-            assert!(optional_account.is_none());
+        assert_capitalization_diff(
+            &bank1,
+            || {
+                bank1.update_sysvar_account(&dummy_clock_id, |optional_account| {
+                    assert!(optional_account.is_none());
 
-            create_account(
-                &Clock {
-                    slot: expected_previous_slot,
-                    ..Clock::default()
-                },
-                1,
-            )
-        });
-        let current_account = bank1.get_account(&dummy_clock_id).unwrap();
-        assert_eq!(
-            expected_previous_slot,
-            from_account::<Clock>(&current_account).unwrap().slot
+                    create_account(
+                        &Clock {
+                            slot: expected_previous_slot,
+                            ..Clock::default()
+                        },
+                        bank1.inherit_specially_retained_account_balance(optional_account),
+                    )
+                });
+                let current_account = bank1.get_account(&dummy_clock_id).unwrap();
+                assert_eq!(
+                    expected_previous_slot,
+                    from_account::<Clock>(&current_account).unwrap().slot
+                );
+            },
+            |old, new| {
+                assert_eq!(old, new);
+            },
+        );
+
+        assert_capitalization_diff(
+            &bank1,
+            || {
+                bank1.update_sysvar_account(&dummy_clock_id, |optional_account| {
+                    assert!(optional_account.is_none());
+
+                    create_account(
+                        &Clock {
+                            slot: expected_previous_slot,
+                            ..Clock::default()
+                        },
+                        bank1.inherit_specially_retained_account_balance(optional_account),
+                    )
+                })
+            },
+            |old, new| {
+                // creating new sysvar twice in a slot shouldn't increment capitalization twice
+                assert_eq!(old, new);
+            },
         );
 
         // Updating should increment the clock's slot
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 1));
-        bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
-            let slot = from_account::<Clock>(optional_account.as_ref().unwrap())
-                .unwrap()
-                .slot
-                + 1;
+        assert_capitalization_diff(
+            &bank2,
+            || {
+                bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
+                    let slot = from_account::<Clock>(optional_account.as_ref().unwrap())
+                        .unwrap()
+                        .slot
+                        + 1;
 
-            create_account(
-                &Clock {
-                    slot,
-                    ..Clock::default()
-                },
-                1,
-            )
-        });
-        let current_account = bank2.get_account(&dummy_clock_id).unwrap();
-        assert_eq!(
-            expected_next_slot,
-            from_account::<Clock>(&current_account).unwrap().slot
+                    create_account(
+                        &Clock {
+                            slot,
+                            ..Clock::default()
+                        },
+                        bank2.inherit_specially_retained_account_balance(optional_account),
+                    )
+                });
+                let current_account = bank2.get_account(&dummy_clock_id).unwrap();
+                assert_eq!(
+                    expected_next_slot,
+                    from_account::<Clock>(&current_account).unwrap().slot
+                );
+            },
+            |old, new| {
+                // if existing, capitalization shouldn't change
+                assert_eq!(old, new);
+            },
         );
 
         // Updating again should give bank1's sysvar to the closure not bank2's.
         // Thus, assert with same expected_next_slot as previously
-        bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
-            let slot = from_account::<Clock>(optional_account.as_ref().unwrap())
-                .unwrap()
-                .slot
-                + 1;
+        assert_capitalization_diff(
+            &bank2,
+            || {
+                bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
+                    let slot = from_account::<Clock>(optional_account.as_ref().unwrap())
+                        .unwrap()
+                        .slot
+                        + 1;
 
-            create_account(
-                &Clock {
-                    slot,
-                    ..Clock::default()
-                },
-                1,
-            )
-        });
-        let current_account = bank2.get_account(&dummy_clock_id).unwrap();
-        assert_eq!(
-            expected_next_slot,
-            from_account::<Clock>(&current_account).unwrap().slot
+                    create_account(
+                        &Clock {
+                            slot,
+                            ..Clock::default()
+                        },
+                        bank2.inherit_specially_retained_account_balance(optional_account),
+                    )
+                });
+                let current_account = bank2.get_account(&dummy_clock_id).unwrap();
+                assert_eq!(
+                    expected_next_slot,
+                    from_account::<Clock>(&current_account).unwrap().slot
+                );
+            },
+            |old, new| {
+                // updating twice in a slot shouldn't increment capitalization twice
+                assert_eq!(old, new);
+            },
         );
     }
 
@@ -8523,13 +8591,34 @@ pub(crate) mod tests {
         assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
         assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
         assert_eq!(bank.calculate_capitalization(), bank.capitalization());
+        assert_eq!(
+            "mock_program1",
+            String::from_utf8_lossy(&bank.get_account(&vote_id).unwrap_or_default().data)
+        );
+        assert_eq!(
+            "mock_program2",
+            String::from_utf8_lossy(&bank.get_account(&stake_id).unwrap_or_default().data)
+        );
 
         // Re-adding builtin programs should be no-op
+        bank.update_accounts_hash();
+        let old_hash = bank.get_accounts_hash();
         bank.add_builtin("mock_program1", vote_id, mock_ix_processor);
         bank.add_builtin("mock_program2", stake_id, mock_ix_processor);
+        bank.update_accounts_hash();
+        let new_hash = bank.get_accounts_hash();
+        assert_eq!(old_hash, new_hash);
         assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
         assert!(bank.stakes.read().unwrap().stake_delegations().is_empty());
         assert_eq!(bank.calculate_capitalization(), bank.capitalization());
+        assert_eq!(
+            "mock_program1",
+            String::from_utf8_lossy(&bank.get_account(&vote_id).unwrap_or_default().data)
+        );
+        assert_eq!(
+            "mock_program2",
+            String::from_utf8_lossy(&bank.get_account(&stake_id).unwrap_or_default().data)
+        );
     }
 
     #[test]
@@ -9958,44 +10047,93 @@ pub(crate) mod tests {
         let slot = 123;
         let program_id = solana_sdk::pubkey::new_rand();
 
-        let mut bank = Arc::new(Bank::new_from_parent(
+        let bank = Arc::new(Bank::new_from_parent(
             &Arc::new(Bank::new(&genesis_config)),
             &Pubkey::default(),
             slot,
         ));
         assert_eq!(bank.get_account_modified_slot(&program_id), None);
 
-        Arc::get_mut(&mut bank)
-            .unwrap()
-            .add_native_program("mock_program", &program_id, false);
+        assert_capitalization_diff(
+            &bank,
+            || bank.add_native_program("mock_program", &program_id, false),
+            |old, new| {
+                assert_eq!(old, new);
+            },
+        );
+
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
 
-        let mut bank = Arc::new(new_from_parent(&bank));
-        Arc::get_mut(&mut bank)
-            .unwrap()
-            .add_native_program("mock_program", &program_id, false);
+        let bank = Arc::new(new_from_parent(&bank));
+        assert_capitalization_diff(
+            &bank,
+            || bank.add_native_program("mock_program", &program_id, false),
+            |old, new| assert_eq!(old, new),
+        );
+
         assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
 
-        let mut bank = Arc::new(new_from_parent(&bank));
+        let bank = Arc::new(new_from_parent(&bank));
         // When replacing native_program, name must change to disambiguate from repeated
         // invocations.
-        Arc::get_mut(&mut bank)
-            .unwrap()
-            .add_native_program("mock_program v2", &program_id, true);
+        assert_capitalization_diff(
+            &bank,
+            || bank.add_native_program("mock_program v2", &program_id, true),
+            |old, new| assert_eq!(old, new),
+        );
+
         assert_eq!(
             bank.get_account_modified_slot(&program_id).unwrap().1,
             bank.slot()
         );
 
-        let mut bank = Arc::new(new_from_parent(&bank));
-        Arc::get_mut(&mut bank)
-            .unwrap()
-            .add_native_program("mock_program v2", &program_id, true);
+        let bank = Arc::new(new_from_parent(&bank));
+        assert_capitalization_diff(
+            &bank,
+            || bank.add_native_program("mock_program v2", &program_id, true),
+            |old, new| assert_eq!(old, new),
+        );
+
         // replacing with same name shouldn't update account
         assert_eq!(
             bank.get_account_modified_slot(&program_id).unwrap().1,
             bank.parent_slot()
         );
+    }
+
+    #[test]
+    fn test_add_native_program_inherited_cap_while_replacing() {
+        let (genesis_config, mint_keypair) = create_genesis_config(100_000);
+        let bank = Bank::new(&genesis_config);
+        let program_id = solana_sdk::pubkey::new_rand();
+
+        bank.add_native_program("mock_program", &program_id, false);
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+
+        // someone mess with program_id's balance
+        bank.withdraw(&mint_keypair.pubkey(), 10).unwrap();
+        assert_ne!(bank.capitalization(), bank.calculate_capitalization());
+        bank.deposit(&program_id, 10);
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+
+        bank.add_native_program("mock_program v2", &program_id, true);
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+    }
+
+    #[test]
+    fn test_add_native_program_squatted_while_not_replacing() {
+        let (genesis_config, mint_keypair) = create_genesis_config(100_000);
+        let bank = Bank::new(&genesis_config);
+        let program_id = solana_sdk::pubkey::new_rand();
+
+        // someone managed to squat at program_id!
+        bank.withdraw(&mint_keypair.pubkey(), 10).unwrap();
+        assert_ne!(bank.capitalization(), bank.calculate_capitalization());
+        bank.deposit(&program_id, 10);
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
+
+        bank.add_native_program("mock_program", &program_id, false);
+        assert_eq!(bank.capitalization(), bank.calculate_capitalization());
     }
 
     #[test]
