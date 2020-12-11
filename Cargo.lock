@@ -2191,13 +2191,13 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "0.7.4"
+version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8f1c83949125de4a582aa2da15ae6324d91cf6a58a70ea407643941ff98f558"
+checksum = "f33bc887064ef1fd66020c9adfc45bb9f33d75a42096c81e7c56c65b75dd1a8b"
 dependencies = [
  "libc",
  "log 0.4.8",
- "miow 0.3.5",
+ "miow 0.3.6",
  "ntapi",
  "winapi 0.3.8",
 ]
@@ -2222,7 +2222,7 @@ checksum = "0840c1c50fd55e521b247f949c241c9997709f23bd7f023b9762cd561e935656"
 dependencies = [
  "log 0.4.8",
  "mio 0.6.22",
- "miow 0.3.5",
+ "miow 0.3.6",
  "winapi 0.3.8",
 ]
 
@@ -2251,9 +2251,9 @@ dependencies = [
 
 [[package]]
 name = "miow"
-version = "0.3.5"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07b88fb9795d4d36d62a012dfbf49a8f5cf12751f36d31a9dbe66d528e58979e"
+checksum = "5a33c1b55807fbed163481b5ba66db4b2fa6cde694a5027be10fb724206c5897"
 dependencies = [
  "socket2",
  "winapi 0.3.8",
@@ -3678,6 +3678,7 @@ version = "1.5.0"
 dependencies = [
  "bincode",
  "futures 0.3.8",
+ "mio 0.7.6",
  "solana-banks-interface",
  "solana-banks-server",
  "solana-runtime",
@@ -3691,6 +3692,7 @@ dependencies = [
 name = "solana-banks-interface"
 version = "1.5.0"
 dependencies = [
+ "mio 0.7.6",
  "serde",
  "solana-sdk",
  "tarpc",
@@ -3704,6 +3706,7 @@ dependencies = [
  "bincode",
  "futures 0.3.8",
  "log 0.4.8",
+ "mio 0.7.6",
  "solana-banks-interface",
  "solana-metrics",
  "solana-runtime",
@@ -4651,6 +4654,7 @@ dependencies = [
  "chrono",
  "chrono-humanize",
  "log 0.4.8",
+ "mio 0.7.6",
  "solana-banks-client",
  "solana-banks-server",
  "solana-bpf-loader-program",
@@ -5664,7 +5668,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "memchr 2.3.3",
- "mio 0.7.4",
+ "mio 0.7.6",
  "num_cpus",
  "parking_lot 0.11.0",
  "pin-project-lite",
