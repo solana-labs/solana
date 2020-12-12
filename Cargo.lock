@@ -270,7 +270,7 @@ dependencies = [
  "cfg-if 0.1.10",
  "clang-sys",
  "clap",
- "env_logger",
+ "env_logger 0.7.1",
  "lazy_static",
  "lazycell",
  "log 0.4.8",
@@ -1030,6 +1030,19 @@ checksum = "44533bbbb3bb3c1fa17d9f2e4e38bbbaf8396ba82193c4cb1b6445d711445d36"
 dependencies = [
  "atty",
  "humantime 1.3.0",
+ "log 0.4.8",
+ "regex",
+ "termcolor",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f26ecb66b4bdca6c1409b40fb255eefc2bd4f6d135dab3c3124f80ffa2a9661e"
+dependencies = [
+ "atty",
+ "humantime 2.0.1",
  "log 0.4.8",
  "regex",
  "termcolor",
@@ -4434,7 +4447,7 @@ version = "1.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2e6d1862202b2f6aba9bd346ef10cdecb29e05948d25ad3a3789f4239000012"
 dependencies = [
- "env_logger",
+ "env_logger 0.7.1",
  "lazy_static",
  "log 0.4.8",
 ]
@@ -4443,7 +4456,7 @@ dependencies = [
 name = "solana-logger"
 version = "1.5.0"
 dependencies = [
- "env_logger",
+ "env_logger 0.8.2",
  "lazy_static",
  "log 0.4.8",
 ]
@@ -4472,7 +4485,7 @@ dependencies = [
 name = "solana-metrics"
 version = "1.5.0"
 dependencies = [
- "env_logger",
+ "env_logger 0.8.2",
  "gethostname",
  "lazy_static",
  "log 0.4.8",
