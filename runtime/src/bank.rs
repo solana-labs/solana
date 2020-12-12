@@ -10861,7 +10861,7 @@ pub(crate) mod tests {
             &feature::create_account(&Feature { activated_at: None }, feature_balance),
         );
 
-        // 16 is minimum adjusted cap increase in adjust_capitalization_for_existing_specially_retained_accounts
+        // 12 is minimum adjusted cap increase in adjust_capitalization_for_existing_specially_retained_accounts
         assert_capitalization_diff_with_new_bank(
             &bank1,
             || Bank::new_from_parent(&bank1, &Pubkey::default(), bank1.first_slot_in_next_epoch()),
