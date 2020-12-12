@@ -16,7 +16,6 @@ use crate::{
     rpc_subscriptions::RpcSubscriptions,
     window_service::{should_retransmit_and_persist, WindowService},
 };
-use ahash::AHasher;
 use crossbeam_channel::{Receiver, Sender};
 use lru::LruCache;
 use solana_client::rpc_response::SlotUpdate;

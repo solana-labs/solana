@@ -411,6 +411,14 @@ impl ProgressMap {
 
     pub fn set_unconfirmed_duplicate_slot(&mut self, slot: Slot, descendants: &HashSet<u64>) {
         if let Some(fork_progress) = self.get_mut(&slot) {
+            if fork_progress
+                .duplicate_stats
+                .latest_unconfirmed_duplicate_ancestor
+                == Some(slot)
+            {
+                // Already been marked
+                return;
+            }
             fork_progress
                 .duplicate_stats
                 .latest_unconfirmed_duplicate_ancestor = Some(slot);
@@ -431,13 +439,21 @@ impl ProgressMap {
         }
     }
 
-    pub fn set_confirmed_slot(&mut self, slot: Slot, descendants: &HashSet<u64>) {
-        {
-            let slot_progress = self.get_mut(&slot).unwrap();
-            slot_progress
+    pub fn set_confirmed_duplicate_slot(&mut self, slot: Slot, descendants: &HashSet<u64>) {
+        if let Some(fork_progress) = self.get_mut(&slot) {
+            // Slot was never marked as duplicate, can return
+            if fork_progress
                 .duplicate_stats
-                .latest_unconfirmed_duplicate_ancestor = None;
-            slot_progress.fork_stats.confirmation_reported = true;
+                .latest_unconfirmed_duplicate_ancestor
+                .is_none()
+            {
+                // Slot was never marked as duplicate, can return
+                return;
+            } else {
+                fork_progress
+                    .duplicate_stats
+                    .latest_unconfirmed_duplicate_ancestor = None;
+            }
         }
         for d in descendants {
             if let Some(fork_progress) = self.get_mut(&d) {
@@ -453,6 +469,14 @@ impl ProgressMap {
                 }
             }
         }
+    }
+
+    pub fn set_confirmed_slot(&mut self, slot: Slot) {
+        let slot_progress = self.get_mut(&slot).unwrap();
+        slot_progress
+            .duplicate_stats
+            .latest_unconfirmed_duplicate_ancestor = None;
+        slot_progress.fork_stats.confirmation_reported = true;
     }
 
     pub fn is_confirmed(&self, slot: Slot) -> Option<bool> {
@@ -503,7 +527,8 @@ impl ProgressMap {
 #[cfg(test)]
 mod test {
     use super::*;
-    use core::iter::once;
+    use crate::consensus::test::VoteSimulator;
+    use trees::tr;
 
     #[test]
     fn test_add_vote_pubkey() {
@@ -735,37 +760,46 @@ mod test {
 
     #[test]
     fn test_set_unconfirmed_confirmed_duplicate_slot() {
-        let mut progress_map = ProgressMap::default();
-        let smaller_duplicate_slot = 8;
-        let all_descendants: HashSet<_> = vec![20, 21, 10, 9, 12, 15].into_iter().collect();
-        let larger_duplicate_slot = 15;
-        let larger_descendants: HashSet<_> = all_descendants
-            .iter()
-            .cloned()
-            .filter(|d| *d > larger_duplicate_slot)
-            .collect();
-        for d in all_descendants.iter().chain(once(&smaller_duplicate_slot)) {
-            let slot_progress =
-                ForkProgress::new(Hash::default(), None, DuplicateStats::default(), None, 0, 0);
-            progress_map.insert(*d, slot_progress);
-        }
+        // Create simple fork 0 -> 1 -> 2 -> 3 -> 4 -> 5
+        let forks = tr(0) / (tr(1) / (tr(2) / (tr(3) / (tr(4) / tr(5)))));
+        let mut vote_simulator = VoteSimulator::new(1);
+        vote_simulator.fill_bank_forks(forks, &HashMap::new());
+        let VoteSimulator {
+            mut progress,
+            bank_forks,
+            ..
+        } = vote_simulator;
+        let descendants = bank_forks.read().unwrap().descendants().clone();
+
+        let smaller_duplicate_slot = 1;
+        let larger_duplicate_slot = 4;
 
         // Mark the slots as unconfirmed duplicates
-        progress_map.set_unconfirmed_duplicate_slot(larger_duplicate_slot, &larger_descendants);
-        progress_map.set_unconfirmed_duplicate_slot(smaller_duplicate_slot, &all_descendants);
+        progress.set_unconfirmed_duplicate_slot(
+            smaller_duplicate_slot,
+            &descendants.get(&smaller_duplicate_slot).unwrap(),
+        );
+        progress.set_unconfirmed_duplicate_slot(
+            larger_duplicate_slot,
+            &descendants.get(&larger_duplicate_slot).unwrap(),
+        );
 
-        for d in all_descendants.iter().chain(once(&smaller_duplicate_slot)) {
-            if *d < larger_duplicate_slot {
+        for slot in bank_forks.read().unwrap().banks().keys() {
+            if *slot < smaller_duplicate_slot {
+                assert!(progress
+                    .latest_unconfirmed_duplicate_ancestor(*slot)
+                    .is_none());
+            } else if *slot < larger_duplicate_slot {
                 assert_eq!(
-                    progress_map
-                        .latest_unconfirmed_duplicate_ancestor(*d)
+                    progress
+                        .latest_unconfirmed_duplicate_ancestor(*slot)
                         .unwrap(),
                     smaller_duplicate_slot
                 );
             } else {
                 assert_eq!(
-                    progress_map
-                        .latest_unconfirmed_duplicate_ancestor(*d)
+                    progress
+                        .latest_unconfirmed_duplicate_ancestor(*slot)
                         .unwrap(),
                     larger_duplicate_slot
                 );
@@ -773,51 +807,40 @@ mod test {
         }
 
         // Mark the smaller duplicate slot as confirmed
-        progress_map.set_confirmed_slot(smaller_duplicate_slot, &all_descendants);
-        for d in all_descendants.iter().chain(once(&smaller_duplicate_slot)) {
-            if *d == smaller_duplicate_slot {
-                assert!(progress_map
-                    .latest_unconfirmed_duplicate_ancestor(*d)
-                    .is_none());
-                assert!(progress_map.is_confirmed(*d).unwrap());
-            } else {
-                assert!(!progress_map.is_confirmed(*d).unwrap());
-            }
-
-            if *d < larger_duplicate_slot {
-                // The unconfirmedd duplicate flag has been cleared on the smaller
+        progress.set_confirmed_duplicate_slot(
+            smaller_duplicate_slot,
+            &descendants.get(&smaller_duplicate_slot).unwrap(),
+        );
+        for slot in bank_forks.read().unwrap().banks().keys() {
+            if *slot < larger_duplicate_slot {
+                // The unconfirmed duplicate flag has been cleared on the smaller
                 // descendants because their most recent duplicate ancestor has
                 // been confirmed
-                assert!(progress_map
-                    .latest_unconfirmed_duplicate_ancestor(*d)
+                assert!(progress
+                    .latest_unconfirmed_duplicate_ancestor(*slot)
                     .is_none());
             } else {
-                // The unconfirmedd duplicate flag has not been cleared on the smaller
+                // The unconfirmed duplicate flag has not been cleared on the smaller
                 // descendants because their most recent duplicate ancestor,
                 // `larger_duplicate_slot` has  not yet been confirmed
                 assert_eq!(
-                    progress_map
-                        .latest_unconfirmed_duplicate_ancestor(*d)
+                    progress
+                        .latest_unconfirmed_duplicate_ancestor(*slot)
                         .unwrap(),
                     larger_duplicate_slot
                 );
             }
         }
 
-        // Mark the larger duplicate slot as confirmed
-        progress_map.set_confirmed_slot(larger_duplicate_slot, &larger_descendants);
-        for d in all_descendants.iter().chain(once(&smaller_duplicate_slot)) {
-            if *d == smaller_duplicate_slot || *d == larger_duplicate_slot {
-                assert!(progress_map
-                    .latest_unconfirmed_duplicate_ancestor(*d)
-                    .is_none());
-                assert!(progress_map.is_confirmed(*d).unwrap());
-            } else {
-                assert!(!progress_map.is_confirmed(*d).unwrap());
-            }
-
-            assert!(progress_map
-                .latest_unconfirmed_duplicate_ancestor(*d)
+        // Mark the larger duplicate slot as confirmed, all slots should no longer
+        // have any unconfirmed duplicate ancestors
+        progress.set_confirmed_duplicate_slot(
+            larger_duplicate_slot,
+            &descendants.get(&larger_duplicate_slot).unwrap(),
+        );
+        for slot in bank_forks.read().unwrap().banks().keys() {
+            assert!(progress
+                .latest_unconfirmed_duplicate_ancestor(*slot)
                 .is_none());
         }
     }

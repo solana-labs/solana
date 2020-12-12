@@ -410,6 +410,7 @@ impl ClusterInfoVoteListener {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn process_votes_loop(
         exit: Arc<AtomicBool>,
         gossip_vote_txs_receiver: VerifiedVoteTransactionsReceiver,
