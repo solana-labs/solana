@@ -10912,8 +10912,18 @@ pub(crate) mod tests {
             feature_builtins: (vec![]),
         };
 
-        let bank0 = Bank::new_with_paths(&genesis_config, Vec::new(), &[], None, Some(&builtins));
-        let bank1 = Arc::new(new_from_parent(&Arc::new(bank0)));
+        let bank0 = Arc::new(Bank::new_with_paths(
+            &genesis_config,
+            Vec::new(),
+            &[],
+            None,
+            Some(&builtins),
+        ));
+        let bank1 = Arc::new(Bank::new_from_parent(
+            &bank0,
+            &Pubkey::default(),
+            bank0.first_slot_in_next_epoch(),
+        ));
 
         // schedule activation of simpler capitalization
         bank1.store_account_and_update_capitalization(
