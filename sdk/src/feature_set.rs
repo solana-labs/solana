@@ -94,6 +94,10 @@ pub mod rewrite_stake {
     solana_sdk::declare_id!("6ap2eGy7wx5JmsWUmQ5sHwEWrFSDUxSti2k5Hbfv5BZG");
 }
 
+pub mod filter_stake_delegation_accounts {
+    solana_sdk::declare_id!("GE7fRxmW46K6EmCD9AMZSbnaJ2e3LfqCZzdHi9hmYAgi");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -119,6 +123,7 @@ lazy_static! {
         (timestamp_bounding::id(), "add timestamp-correction bounding #13120"),
         (stake_program_v2::id(), "solana_stake_program v2"),
         (rewrite_stake::id(), "rewrite stake"),
+        (filter_stake_delegation_accounts::id(), "filter stake_delegation_accounts #14062"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
