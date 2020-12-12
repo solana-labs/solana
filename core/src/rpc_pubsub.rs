@@ -218,7 +218,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         config: Option<RpcAccountInfoConfig>,
     ) {
         if let Err(err) = self.check_subscription_count() {
-            subscriber.reject(err).unwrap();
+            subscriber.reject(err).unwrap_or_default();
             return;
         }
         match param::<Pubkey>(&pubkey_str, "pubkey") {
@@ -229,7 +229,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                 self.subscriptions
                     .add_account_subscription(pubkey, config, sub_id, subscriber)
             }
-            Err(e) => subscriber.reject(e).unwrap(),
+            Err(e) => subscriber.reject(e).unwrap_or_default(),
         }
     }
 
@@ -258,7 +258,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         config: Option<RpcProgramAccountsConfig>,
     ) {
         if let Err(err) = self.check_subscription_count() {
-            subscriber.reject(err).unwrap();
+            subscriber.reject(err).unwrap_or_default();
             return;
         }
         match param::<Pubkey>(&pubkey_str, "pubkey") {
@@ -269,7 +269,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                 self.subscriptions
                     .add_program_subscription(pubkey, config, sub_id, subscriber)
             }
-            Err(e) => subscriber.reject(e).unwrap(),
+            Err(e) => subscriber.reject(e).unwrap_or_default(),
         }
     }
 
@@ -299,7 +299,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     ) {
         info!("logs_subscribe");
         if let Err(err) = self.check_subscription_count() {
-            subscriber.reject(err).unwrap();
+            subscriber.reject(err).unwrap_or_default();
             return;
         }
 
@@ -311,7 +311,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                     1 => match param::<Pubkey>(&addresses[0], "mentions") {
                         Ok(address) => (Some(address), false),
                         Err(e) => {
-                            subscriber.reject(e).unwrap();
+                            subscriber.reject(e).unwrap_or_default();
                             return;
                         }
                     },
@@ -324,7 +324,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                                 message: "Invalid Request: Only 1 address supported".into(),
                                 data: None,
                             })
-                            .unwrap();
+                            .unwrap_or_default();
                         return;
                     }
                 }
@@ -364,7 +364,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     ) {
         info!("signature_subscribe");
         if let Err(err) = self.check_subscription_count() {
-            subscriber.reject(err).unwrap();
+            subscriber.reject(err).unwrap_or_default();
             return;
         }
         match param::<Signature>(&signature_str, "signature") {
@@ -382,7 +382,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                     subscriber,
                 );
             }
-            Err(e) => subscriber.reject(e).unwrap(),
+            Err(e) => subscriber.reject(e).unwrap_or_default(),
         }
     }
 
@@ -406,7 +406,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn slot_subscribe(&self, _meta: Self::Metadata, subscriber: Subscriber<SlotInfo>) {
         info!("slot_subscribe");
         if let Err(err) = self.check_subscription_count() {
-            subscriber.reject(err).unwrap();
+            subscriber.reject(err).unwrap_or_default();
             return;
         }
         let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
@@ -431,7 +431,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn vote_subscribe(&self, _meta: Self::Metadata, subscriber: Subscriber<RpcVote>) {
         info!("vote_subscribe");
         if let Err(err) = self.check_subscription_count() {
-            subscriber.reject(err).unwrap();
+            subscriber.reject(err).unwrap_or_default();
             return;
         }
         let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
@@ -456,7 +456,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn root_subscribe(&self, _meta: Self::Metadata, subscriber: Subscriber<Slot>) {
         info!("root_subscribe");
         if let Err(err) = self.check_subscription_count() {
-            subscriber.reject(err).unwrap();
+            subscriber.reject(err).unwrap_or_default();
             return;
         }
         let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
