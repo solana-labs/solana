@@ -5094,6 +5094,7 @@ dependencies = [
 name = "solana-validator"
 version = "1.5.0"
 dependencies = [
+ "base64 0.12.3",
  "chrono",
  "clap",
  "console",

@@ -338,7 +338,17 @@ impl program_stubs::SyscallStubs for SyscallStubs {
     }
 }
 
-fn find_file(filename: &str, search_path: &[PathBuf]) -> Option<PathBuf> {
+pub fn find_file(filename: &str) -> Option<PathBuf> {
+    let mut search_path = vec![];
+    if let Ok(bpf_out_dir) = std::env::var("BPF_OUT_DIR") {
+        search_path.push(PathBuf::from(bpf_out_dir));
+    }
+    search_path.push(PathBuf::from("tests/fixtures"));
+    if let Ok(dir) = std::env::current_dir() {
+        search_path.push(dir);
+    }
+    trace!("search path: {:?}", search_path);
+
     for path in search_path {
         let candidate = path.join(&filename);
         if candidate.exists() {
@@ -348,7 +358,7 @@ fn find_file(filename: &str, search_path: &[PathBuf]) -> Option<PathBuf> {
     None
 }
 
-fn read_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
+pub fn read_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
     let path = path.as_ref();
     let mut file = File::open(path)
         .unwrap_or_else(|err| panic!("Failed to open \"{}\": {}", path.display(), err));
@@ -364,7 +374,6 @@ pub struct ProgramTest {
     builtins: Vec<Builtin>,
     bpf_compute_max_units: Option<u64>,
     prefer_bpf: bool,
-    search_path: Vec<PathBuf>,
 }
 
 impl Default for ProgramTest {
@@ -388,25 +397,13 @@ impl Default for ProgramTest {
              solana_runtime::system_instruction_processor=trace,\
              solana_program_test=info",
         );
-        let mut prefer_bpf = false;
-
-        let mut search_path = vec![];
-        if let Ok(bpf_out_dir) = std::env::var("BPF_OUT_DIR") {
-            prefer_bpf = true;
-            search_path.push(PathBuf::from(bpf_out_dir));
-        }
-        search_path.push(PathBuf::from("tests/fixtures"));
-        if let Ok(dir) = std::env::current_dir() {
-            search_path.push(dir);
-        }
-        debug!("search path: {:?}", search_path);
+        let prefer_bpf = std::env::var("BPF_OUT_DIR").is_ok();
 
         Self {
             accounts: vec![],
             builtins: vec![],
             bpf_compute_max_units: None,
             prefer_bpf,
-            search_path,
         }
     }
 }
@@ -449,7 +446,7 @@ impl ProgramTest {
             address,
             Account {
                 lamports,
-                data: read_file(find_file(filename, &self.search_path).unwrap_or_else(|| {
+                data: read_file(find_file(filename).unwrap_or_else(|| {
                     panic!("Unable to locate {}", filename);
                 })),
                 owner,
@@ -495,7 +492,7 @@ impl ProgramTest {
         process_instruction: Option<ProcessInstructionWithContext>,
     ) {
         let loader = solana_program::bpf_loader::id();
-        let program_file = find_file(&format!("{}.so", program_name), &self.search_path);
+        let program_file = find_file(&format!("{}.so", program_name));
 
         if process_instruction.is_none() && program_file.is_none() {
             panic!("Unable to add program {} ({})", program_name, program_id);
