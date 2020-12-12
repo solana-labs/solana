@@ -256,14 +256,14 @@ pub fn request_airdrop_transaction(
     Ok(transaction)
 }
 
-// For integration tests. Listens on random open port and reports port to Sender.
-pub fn run_local_faucet(
+pub fn run_local_faucet_with_port(
     faucet_keypair: Keypair,
     sender: Sender<SocketAddr>,
     per_time_cap: Option<u64>,
+    port: u16,
 ) {
     thread::spawn(move || {
-        let faucet_addr = socketaddr!(0, 0);
+        let faucet_addr = socketaddr!(0, port);
         let faucet = Arc::new(Mutex::new(Faucet::new(
             faucet_keypair,
             None,
@@ -272,6 +272,15 @@ pub fn run_local_faucet(
         )));
         run_faucet(faucet, faucet_addr, Some(sender));
     });
+}
+
+// For integration tests. Listens on random open port and reports port to Sender.
+pub fn run_local_faucet(
+    faucet_keypair: Keypair,
+    sender: Sender<SocketAddr>,
+    per_time_cap: Option<u64>,
+) {
+    run_local_faucet_with_port(faucet_keypair, sender, per_time_cap, 0)
 }
 
 pub fn run_faucet(
