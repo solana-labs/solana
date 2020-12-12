@@ -6,13 +6,13 @@ source ci/_
 
 commit_range="$(git merge-base HEAD origin/master)..HEAD"
 parsed_update_args="$(
-  git log "$commit_range" --author "dependabot-preview" --oneline -n1 |
+  git log "$commit_range" --author "dependabot\[bot\]" --oneline -n1 |
     grep -o '[Bb]ump.*$' |
     sed -r 's/[Bb]ump ([^ ]+) from ([^ ]+) to ([^ ]+)/-p \1:\2 --precise \3/'
 )"
 # relaxed_parsed_update_args is temporal measure...
 relaxed_parsed_update_args="$(
-  git log "$commit_range" --author "dependabot-preview" --oneline -n1 |
+  git log "$commit_range" --author "dependabot\[bot\]" --oneline -n1 |
     grep -o '[Bb]ump.*$' |
     sed -r 's/[Bb]ump ([^ ]+) from [^ ]+ to ([^ ]+)/-p \1 --precise \2/'
 )"

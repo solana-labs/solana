@@ -263,7 +263,7 @@ if [[ $BUILDKITE_BRANCH =~ ^pull ]]; then
   annotate --style info --context pr-backlink \
     "Github Pull Request: https://github.com/solana-labs/solana/$BUILDKITE_BRANCH"
 
-  if [[ $GITHUB_USER = "dependabot-preview[bot]" ]]; then
+  if [[ $GITHUB_USER = "dependabot[bot]" ]]; then
     command_step dependabot "ci/dependabot-pr.sh" 5
     wait_step
   fi
