@@ -371,6 +371,16 @@ fn filter_logs_results(
     }
 }
 
+fn total_nested_subscriptions<K, L, V>(
+    subscription_map: &RwLock<HashMap<K, HashMap<L, V>>>,
+) -> usize {
+    subscription_map
+        .read()
+        .unwrap()
+        .iter()
+        .fold(0, |acc, x| acc + x.1.len())
+}
+
 #[derive(Clone)]
 struct Subscriptions {
     account_subscriptions: Arc<RpcAccountSubscriptions>,
@@ -384,6 +394,24 @@ struct Subscriptions {
     slot_subscriptions: Arc<RpcSlotSubscriptions>,
     vote_subscriptions: Arc<RpcVoteSubscriptions>,
     root_subscriptions: Arc<RpcRootSubscriptions>,
+}
+
+impl Subscriptions {
+    fn total(&self) -> usize {
+        let mut total = 0;
+        total += total_nested_subscriptions(&self.account_subscriptions);
+        total += total_nested_subscriptions(&self.program_subscriptions);
+        total += total_nested_subscriptions(&self.logs_subscriptions);
+        total += total_nested_subscriptions(&self.signature_subscriptions);
+        total += total_nested_subscriptions(&self.gossip_account_subscriptions);
+        total += total_nested_subscriptions(&self.gossip_logs_subscriptions);
+        total += total_nested_subscriptions(&self.gossip_program_subscriptions);
+        total += total_nested_subscriptions(&self.gossip_signature_subscriptions);
+        total += self.slot_subscriptions.read().unwrap().len();
+        total += self.vote_subscriptions.read().unwrap().len();
+        total += self.root_subscriptions.read().unwrap().len();
+        total
+    }
 }
 
 pub struct RpcSubscriptions {
@@ -592,6 +620,10 @@ impl RpcSubscriptions {
             }
         }
         notified_ids
+    }
+
+    pub fn total(&self) -> usize {
+        self.subscriptions.total()
     }
 
     pub fn add_account_subscription(
@@ -2072,5 +2104,151 @@ pub(crate) mod tests {
             .read()
             .unwrap()
             .contains_key(&alice.pubkey()));
+    }
+
+    #[test]
+    fn test_total_nested_subscriptions() {
+        let mock_subscriptions = RwLock::new(HashMap::new());
+        assert_eq!(total_nested_subscriptions(&mock_subscriptions), 0);
+
+        mock_subscriptions
+            .write()
+            .unwrap()
+            .insert(0, HashMap::new());
+        assert_eq!(total_nested_subscriptions(&mock_subscriptions), 0);
+
+        mock_subscriptions
+            .write()
+            .unwrap()
+            .entry(0)
+            .and_modify(|map| {
+                map.insert(0, "test");
+            });
+        assert_eq!(total_nested_subscriptions(&mock_subscriptions), 1);
+
+        mock_subscriptions
+            .write()
+            .unwrap()
+            .entry(0)
+            .and_modify(|map| {
+                map.insert(1, "test");
+            });
+        assert_eq!(total_nested_subscriptions(&mock_subscriptions), 2);
+
+        mock_subscriptions
+            .write()
+            .unwrap()
+            .insert(1, HashMap::new());
+        assert_eq!(total_nested_subscriptions(&mock_subscriptions), 2);
+
+        mock_subscriptions
+            .write()
+            .unwrap()
+            .entry(1)
+            .and_modify(|map| {
+                map.insert(0, "test");
+            });
+        assert_eq!(total_nested_subscriptions(&mock_subscriptions), 3);
+    }
+
+    #[test]
+    fn test_total_subscriptions() {
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100);
+        let bank = Bank::new(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let subscriptions = RpcSubscriptions::default_with_bank_forks(bank_forks);
+
+        let (subscriber, _id_receiver, _transport_receiver) =
+            Subscriber::new_test("accountNotification");
+        let account_sub_id = SubscriptionId::Number(0u64);
+        subscriptions.add_account_subscription(
+            Pubkey::default(),
+            None,
+            account_sub_id.clone(),
+            subscriber,
+        );
+        assert_eq!(subscriptions.total(), 1);
+
+        let (subscriber, _id_receiver, _transport_receiver) =
+            Subscriber::new_test("programNotification");
+        let program_sub_id = SubscriptionId::Number(1u64);
+        subscriptions.add_program_subscription(
+            Pubkey::default(),
+            None,
+            program_sub_id.clone(),
+            subscriber,
+        );
+        assert_eq!(subscriptions.total(), 2);
+
+        let (subscriber, _id_receiver, _transport_receiver) =
+            Subscriber::new_test("logsNotification");
+        let logs_sub_id = SubscriptionId::Number(2u64);
+        subscriptions.add_logs_subscription(None, false, None, logs_sub_id.clone(), subscriber);
+        assert_eq!(subscriptions.total(), 3);
+
+        let (subscriber, _id_receiver, _transport_receiver) =
+            Subscriber::new_test("signatureNotification");
+        let sig_sub_id = SubscriptionId::Number(3u64);
+        subscriptions.add_signature_subscription(
+            Signature::default(),
+            None,
+            sig_sub_id.clone(),
+            subscriber,
+        );
+        assert_eq!(subscriptions.total(), 4);
+
+        let (subscriber, _id_receiver, _transport_receiver) =
+            Subscriber::new_test("slotNotification");
+        let slot_sub_id = SubscriptionId::Number(4u64);
+        subscriptions.add_slot_subscription(slot_sub_id.clone(), subscriber);
+        assert_eq!(subscriptions.total(), 5);
+
+        let (subscriber, _id_receiver, _transport_receiver) =
+            Subscriber::new_test("voteNotification");
+        let vote_sub_id = SubscriptionId::Number(5u64);
+        subscriptions.add_vote_subscription(vote_sub_id.clone(), subscriber);
+        assert_eq!(subscriptions.total(), 6);
+
+        let (subscriber, _id_receiver, _transport_receiver) =
+            Subscriber::new_test("rootNotification");
+        let root_sub_id = SubscriptionId::Number(6u64);
+        subscriptions.add_root_subscription(root_sub_id.clone(), subscriber);
+        assert_eq!(subscriptions.total(), 7);
+
+        // Add duplicate account subscription to ensure totals include all subscriptions on all keys
+        let (subscriber, _id_receiver, _transport_receiver) =
+            Subscriber::new_test("accountNotification2");
+        let account_dupe_sub_id = SubscriptionId::Number(7u64);
+        subscriptions.add_account_subscription(
+            Pubkey::default(),
+            None,
+            account_dupe_sub_id.clone(),
+            subscriber,
+        );
+        assert_eq!(subscriptions.total(), 8);
+
+        subscriptions.remove_account_subscription(&account_sub_id);
+        assert_eq!(subscriptions.total(), 7);
+
+        subscriptions.remove_account_subscription(&account_dupe_sub_id);
+        assert_eq!(subscriptions.total(), 6);
+
+        subscriptions.remove_program_subscription(&program_sub_id);
+        assert_eq!(subscriptions.total(), 5);
+
+        subscriptions.remove_logs_subscription(&logs_sub_id);
+        assert_eq!(subscriptions.total(), 4);
+
+        subscriptions.remove_signature_subscription(&sig_sub_id);
+        assert_eq!(subscriptions.total(), 3);
+
+        subscriptions.remove_slot_subscription(&slot_sub_id);
+        assert_eq!(subscriptions.total(), 2);
+
+        subscriptions.remove_vote_subscription(&vote_sub_id);
+        assert_eq!(subscriptions.total(), 1);
+
+        subscriptions.remove_root_subscription(&root_sub_id);
+        assert_eq!(subscriptions.total(), 0);
     }
 }
