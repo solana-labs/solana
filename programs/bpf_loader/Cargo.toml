@@ -21,7 +21,7 @@ thiserror = "1.0"
 
 [dev-dependencies]
 rand = "0.7.3"
-rustversion = "1.0.3"
+rustversion = "1.0.4"
 
 [lib]
 crate-type = ["lib"]
