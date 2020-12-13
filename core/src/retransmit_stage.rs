@@ -12,10 +12,8 @@ use crate::{
     result::{Error, Result},
     window_service::{should_retransmit_and_persist, WindowService},
 };
-use ahash::AHasher;
 use crossbeam_channel::Receiver;
 use lru::LruCache;
-use rand::{thread_rng, Rng};
 use solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats};
 use solana_ledger::{
     blockstore::{Blockstore, CompletedSlotsReceiver},
@@ -31,7 +29,6 @@ use solana_sdk::epoch_schedule::EpochSchedule;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
 use solana_streamer::streamer::PacketReceiver;
-use std::hash::Hasher;
 use std::{
     cmp,
     collections::hash_set::HashSet,
@@ -204,26 +201,24 @@ struct EpochStakesCache {
     stakes_and_index: Vec<(u64, usize)>,
 }
 
+use crate::packet_hasher::PacketHasher;
 // Map of shred (slot, index, is_data) => list of hash values seen for that key.
 pub type ShredFilter = LruCache<(Slot, u32, bool), Vec<u64>>;
 
-pub type ShredFilterAndSeeds = (ShredFilter, u128, u128);
+pub type ShredFilterAndHasher = (ShredFilter, PacketHasher);
 
 // Return true if shred is already received and should skip retransmit
 fn check_if_already_received(
     packet: &Packet,
-    shreds_received: &Arc<Mutex<ShredFilterAndSeeds>>,
+    shreds_received: &Arc<Mutex<ShredFilterAndHasher>>,
 ) -> bool {
     match get_shred_slot_index_type(packet, &mut ShredFetchStats::default()) {
         Some(slot_index) => {
             let mut received = shreds_received.lock().unwrap();
-            let seed1 = received.1;
-            let seed2 = received.2;
+            let hasher = received.1.clone();
             if let Some(sent) = received.0.get_mut(&slot_index) {
                 if sent.len() < MAX_DUPLICATE_COUNT {
-                    let mut hasher = AHasher::new_with_keys(seed1, seed2);
-                    hasher.write(&packet.data[0..packet.meta.size]);
-                    let hash = hasher.finish();
+                    let hash = hasher.hash_packet(packet);
                     if sent.contains(&hash) {
                         return true;
                     }
@@ -233,9 +228,7 @@ fn check_if_already_received(
                     return true;
                 }
             } else {
-                let mut hasher = AHasher::new_with_keys(seed1, seed2);
-                hasher.write(&packet.data[0..packet.meta.size]);
-                let hash = hasher.finish();
+                let hash = hasher.hash_packet(&packet);
                 received.0.put(slot_index, vec![hash]);
             }
 
@@ -256,7 +249,7 @@ fn retransmit(
     stats: &Arc<RetransmitStats>,
     epoch_stakes_cache: &Arc<RwLock<EpochStakesCache>>,
     last_peer_update: &Arc<AtomicU64>,
-    shreds_received: &Arc<Mutex<ShredFilterAndSeeds>>,
+    shreds_received: &Arc<Mutex<ShredFilterAndHasher>>,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
     let r_lock = r.lock().unwrap();
@@ -308,8 +301,7 @@ fn retransmit(
         {
             let mut sr = shreds_received.lock().unwrap();
             sr.0.clear();
-            sr.1 = thread_rng().gen::<u128>();
-            sr.2 = thread_rng().gen::<u128>();
+            sr.1.reset();
         }
     }
     let mut peers_len = 0;
@@ -428,7 +420,10 @@ pub fn retransmitter(
     r: Arc<Mutex<PacketReceiver>>,
 ) -> Vec<JoinHandle<()>> {
     let stats = Arc::new(RetransmitStats::default());
-    let shreds_received = Arc::new(Mutex::new((LruCache::new(DEFAULT_LRU_SIZE), 0, 0)));
+    let shreds_received = Arc::new(Mutex::new((
+        LruCache::new(DEFAULT_LRU_SIZE),
+        PacketHasher::default(),
+    )));
     (0..sockets.len())
         .map(|s| {
             let sockets = sockets.clone();
@@ -665,7 +660,7 @@ mod tests {
         let version = 0x40;
         let shred = Shred::new_from_data(slot, index, 0, None, true, true, 0, version, 0);
         shred.copy_to_packet(&mut packet);
-        let shreds_received = Arc::new(Mutex::new((LruCache::new(100), 0, 0)));
+        let shreds_received = Arc::new(Mutex::new((LruCache::new(100), PacketHasher::default())));
         // unique shred for (1, 5) should pass
         assert!(!check_if_already_received(&packet, &shreds_received));
         // duplicate shred for (1, 5) blocked
@@ -700,7 +695,7 @@ mod tests {
 
         let shred = Shred::new_empty_coding(slot, index, 3, 1, 1, 0, version);
         shred.copy_to_packet(&mut packet);
-        // Another unique at (1, 5) always blocked
+        // Another unique coding at (1, 5) always blocked
         assert!(check_if_already_received(&packet, &shreds_received));
         assert!(check_if_already_received(&packet, &shreds_received));
     }

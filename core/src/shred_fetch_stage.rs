@@ -1,10 +1,7 @@
 //! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
-use ahash::AHasher;
+use crate::packet_hasher::PacketHasher;
 use lru::LruCache;
-use rand::{thread_rng, Rng};
-use std::hash::Hasher;
-
 use solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats};
 use solana_perf::cuda_runtime::PinnedVec;
 use solana_perf::packet::{Packet, PacketsRecycler};
@@ -36,7 +33,7 @@ impl ShredFetchStage {
         last_slot: Slot,
         slots_per_epoch: u64,
         modify: &F,
-        seeds: (u128, u128),
+        packet_hasher: &PacketHasher,
     ) where
         F: Fn(&mut Packet),
     {
@@ -46,9 +43,7 @@ impl ShredFetchStage {
             if slot > last_root && slot < (last_slot + 2 * slots_per_epoch) {
                 // Shred filter
 
-                let mut hasher = AHasher::new_with_keys(seeds.0, seeds.1);
-                hasher.write(&p.data[0..p.meta.size]);
-                let hash = hasher.finish();
+                let hash = packet_hasher.hash_packet(p);
 
                 if shreds_received.get(&hash).is_none() {
                     shreds_received.put(hash, ());
@@ -83,12 +78,12 @@ impl ShredFetchStage {
 
         let mut last_stats = Instant::now();
         let mut stats = ShredFetchStats::default();
-        let mut seeds = (thread_rng().gen::<u128>(), thread_rng().gen::<u128>());
+        let mut packet_hasher = PacketHasher::default();
 
         while let Some(mut p) = recvr.iter().next() {
             if last_updated.elapsed().as_millis() as u64 > DEFAULT_MS_PER_SLOT {
                 last_updated = Instant::now();
-                seeds = (thread_rng().gen::<u128>(), thread_rng().gen::<u128>());
+                packet_hasher.reset();
                 shreds_received.clear();
                 if let Some(bank_forks) = bank_forks.as_ref() {
                     let bank_forks_r = bank_forks.read().unwrap();
@@ -109,7 +104,7 @@ impl ShredFetchStage {
                     last_slot,
                     slots_per_epoch,
                     &modify,
-                    seeds,
+                    &packet_hasher,
                 );
             });
             if last_stats.elapsed().as_millis() > 1000 {
@@ -241,7 +236,7 @@ mod tests {
         let shred = Shred::new_from_data(slot, 3, 0, None, true, true, 0, 0, 0);
         shred.copy_to_packet(&mut packet);
 
-        let seeds = (thread_rng().gen::<u128>(), thread_rng().gen::<u128>());
+        let hasher = PacketHasher::default();
 
         let last_root = 0;
         let last_slot = 100;
@@ -254,7 +249,7 @@ mod tests {
             last_slot,
             slots_per_epoch,
             &|_p| {},
-            seeds,
+            &hasher,
         );
         assert!(!packet.meta.discard);
 
@@ -269,7 +264,7 @@ mod tests {
             last_slot,
             slots_per_epoch,
             &|_p| {},
-            seeds,
+            &hasher,
         );
         assert!(!packet.meta.discard);
     }
@@ -283,7 +278,9 @@ mod tests {
         let last_root = 0;
         let last_slot = 100;
         let slots_per_epoch = 10;
-        let seeds = (thread_rng().gen::<u128>(), thread_rng().gen::<u128>());
+
+        let hasher = PacketHasher::default();
+
         // packet size is 0, so cannot get index
         ShredFetchStage::process_packet(
             &mut packet,
@@ -293,7 +290,7 @@ mod tests {
             last_slot,
             slots_per_epoch,
             &|_p| {},
-            seeds,
+            &hasher,
         );
         assert_eq!(stats.index_overrun, 1);
         assert!(packet.meta.discard);
@@ -309,7 +306,7 @@ mod tests {
             last_slot,
             slots_per_epoch,
             &|_p| {},
-            seeds,
+            &hasher,
         );
         assert!(packet.meta.discard);
 
@@ -322,7 +319,7 @@ mod tests {
             last_slot,
             slots_per_epoch,
             &|_p| {},
-            seeds,
+            &hasher,
         );
         assert!(!packet.meta.discard);
 
@@ -335,7 +332,7 @@ mod tests {
             last_slot,
             slots_per_epoch,
             &|_p| {},
-            seeds,
+            &hasher,
         );
         assert!(packet.meta.discard);
 
@@ -351,7 +348,7 @@ mod tests {
             last_slot,
             slots_per_epoch,
             &|_p| {},
-            seeds,
+            &hasher,
         );
         assert!(packet.meta.discard);
 
@@ -366,7 +363,7 @@ mod tests {
             last_slot,
             slots_per_epoch,
             &|_p| {},
-            seeds,
+            &hasher,
         );
         assert!(packet.meta.discard);
     }
