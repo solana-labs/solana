@@ -15,7 +15,7 @@ use solana_ledger::{
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_measure::{measure::Measure, thread_mem_usage};
-use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counter_warn};
+use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_perf::{
     cuda_runtime::PinnedVec,
     packet::{limited_deserialize, Packet, Packets, PACKETS_PER_BATCH},
@@ -487,7 +487,7 @@ impl BankingStage {
         debug!("num_to_commit: {} ", num_to_commit);
         // unlock all the accounts with errors which are filtered by the above `filter_map`
         if !processed_transactions.is_empty() {
-            inc_new_counter_warn!("banking_stage-record_transactions", num_to_commit);
+            inc_new_counter_info!("banking_stage-record_transactions", num_to_commit);
 
             let mut hash_time = Measure::start("record::hash");
             let hash = hash_transactions(&processed_transactions[..]);

@@ -9254,11 +9254,11 @@ pub(crate) mod tests {
         let custodian_pubkey = custodian_keypair.pubkey();
         let nonce_pubkey = nonce_keypair.pubkey();
 
-        warn!("alice: {}", alice_pubkey);
-        warn!("custodian: {}", custodian_pubkey);
-        warn!("nonce: {}", nonce_pubkey);
-        warn!("nonce account: {:?}", bank.get_account(&nonce_pubkey));
-        warn!("cust: {:?}", bank.get_account(&custodian_pubkey));
+        debug!("alice: {}", alice_pubkey);
+        debug!("custodian: {}", custodian_pubkey);
+        debug!("nonce: {}", nonce_pubkey);
+        debug!("nonce account: {:?}", bank.get_account(&nonce_pubkey));
+        debug!("cust: {:?}", bank.get_account(&custodian_pubkey));
         let nonce_hash = get_nonce_account(&bank, &nonce_pubkey).unwrap();
 
         for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
@@ -9275,7 +9275,7 @@ pub(crate) mod tests {
             &[&custodian_keypair, &nonce_keypair],
             nonce_hash,
         );
-        warn!("{:?}", durable_tx);
+        debug!("{:?}", durable_tx);
         assert_eq!(
             bank.process_transaction(&durable_tx),
             Err(TransactionError::InstructionError(
