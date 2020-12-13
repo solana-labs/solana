@@ -104,7 +104,7 @@ curl \
   -d '{"jsonrpc":"2.0","id":1, "method":"validatorExit"}' \
   http://localhost:8899
 
-attempts=400
+attempts=4000
 while [[ -d "/proc/$validator_then_ledger_tool_pid" ]]; do
   attempts=$((attempts - 1))
   if [[ (($attempts == 0)) ]]; then
