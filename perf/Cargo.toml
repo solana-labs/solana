@@ -16,7 +16,7 @@ rayon = "1.4.0"
 serde = "1.0.112"
 dlopen_derive = "0.1.4"
 lazy_static = "1.4.0"
-log = "0.4.8"
+log = "0.4.11"
 solana-sdk = { path = "../sdk", version = "1.5.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.5.0" }
 solana-budget-program = { path = "../programs/budget", version = "1.5.0" }

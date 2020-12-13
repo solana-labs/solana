@@ -13,7 +13,7 @@ base32 = "0.4.0"
 console = "0.11.3"
 dialoguer = "0.6.2"
 hidapi = { version = "1.2.3", default-features = false }
-log = "0.4.8"
+log = "0.4.11"
 num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
 parking_lot = "0.10"

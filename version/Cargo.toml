@@ -9,7 +9,7 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-log = "0.4.8"
+log = "0.4.11"
 serde = "1.0.112"
 serde_derive = "1.0.103"
 solana-frozen-abi = { path = "../frozen-abi", version = "1.5.0" }

@@ -11,7 +11,7 @@ edition = "2018"
 [dependencies]
 bs58 = "0.3.1"
 bv = { version = "0.11.1", features = ["serde"] }
-log = "0.4.8"
+log = "0.4.11"
 serde = "1.0.112"
 serde_derive = "1.0.103"
 sha2 = "0.8.2"
