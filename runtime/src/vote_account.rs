@@ -26,17 +26,15 @@ pub struct VoteAccount {
     vote_state_once: Once,
 }
 
-#[derive(Debug, AbiExample, Deserialize, Serialize)]
+#[derive(Debug, AbiExample)]
 pub struct VoteAccounts {
     vote_accounts: HashMap<Pubkey, (u64 /*stake*/, ArcVoteAccount)>,
-    #[serde(skip)]
     staked_nodes: RwLock<
         HashMap<
             Pubkey, // VoteAccount.vote_state.node_pubkey.
             u64,    // Total stake across all vote-accounts.
         >,
     >,
-    #[serde(skip, default = "std::sync::Once::new")]
     staked_nodes_once: Once,
 }
 
@@ -267,6 +265,25 @@ impl FromIterator<(Pubkey, (u64 /*stake*/, ArcVoteAccount))> for VoteAccounts {
         I: IntoIterator<Item = (Pubkey, (u64, ArcVoteAccount))>,
     {
         Self::from(HashMap::from_iter(iter))
+    }
+}
+
+impl Serialize for VoteAccounts {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.vote_accounts.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for VoteAccounts {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let vote_accounts = VoteAccountsHashMap::deserialize(deserializer)?;
+        Ok(Self::from(vote_accounts))
     }
 }
 
