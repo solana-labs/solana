@@ -4030,6 +4030,7 @@ dependencies = [
  "reqwest",
  "rustc_version",
  "serde",
+ "serde_bytes",
  "serde_derive",
  "serde_json",
  "serial_test",
