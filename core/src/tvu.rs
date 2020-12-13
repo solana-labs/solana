@@ -28,7 +28,10 @@ use solana_ledger::{
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_runtime::{
-    accounts_background_service::{AccountsBackgroundService, SnapshotRequestHandler},
+    accounts_background_service::{
+        ABSRequestHandler, ABSRequestSender, AccountsBackgroundService, SendDroppedBankCallback,
+        SnapshotRequestHandler,
+    },
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
     snapshot_package::AccountsPackageSender,
@@ -39,6 +42,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
 };
 use std::{
+    boxed::Box,
     collections::HashSet,
     net::UdpSocket,
     sync::{
@@ -208,6 +212,22 @@ impl Tvu {
                 .unwrap_or((None, None))
         };
 
+        let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
+
+        // Before replay starts, set the callbacks in each of the banks in BankForks
+        for bank in bank_forks.read().unwrap().banks.values() {
+            bank.set_callback(Some(Box::new(SendDroppedBankCallback::new(
+                pruned_banks_sender.clone(),
+            ))));
+        }
+
+        let accounts_background_request_sender = ABSRequestSender::new(snapshot_request_sender);
+
+        let accounts_background_request_handler = ABSRequestHandler {
+            snapshot_request_handler,
+            pruned_banks_receiver,
+        };
+
         let replay_stage_config = ReplayStageConfig {
             my_pubkey: keypair.pubkey(),
             vote_account: *vote_account,
@@ -216,7 +236,7 @@ impl Tvu {
             subscriptions: subscriptions.clone(),
             leader_schedule_cache: leader_schedule_cache.clone(),
             latest_root_senders: vec![ledger_cleanup_slot_sender],
-            snapshot_request_sender,
+            accounts_background_request_sender,
             block_commitment_cache,
             transaction_status_sender,
             rewards_recorder_sender,
@@ -248,8 +268,11 @@ impl Tvu {
             )
         });
 
-        let accounts_background_service =
-            AccountsBackgroundService::new(bank_forks.clone(), &exit, snapshot_request_handler);
+        let accounts_background_service = AccountsBackgroundService::new(
+            bank_forks.clone(),
+            &exit,
+            accounts_background_request_handler,
+        );
 
         Tvu {
             fetch_stage,

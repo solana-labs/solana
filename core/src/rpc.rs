@@ -2732,7 +2732,9 @@ pub mod tests {
         blockstore_processor::fill_blockstore_slot_with_ticks,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     };
-    use solana_runtime::commitment::BlockCommitment;
+    use solana_runtime::{
+        accounts_background_service::ABSRequestSender, commitment::BlockCommitment,
+    };
     use solana_sdk::{
         clock::MAX_RECENT_BLOCKHASHES,
         fee_calculator::DEFAULT_BURN_PERCENT,
@@ -2833,7 +2835,10 @@ pub mod tests {
             bank_forks.write().unwrap().insert(new_bank);
 
             for root in roots.iter() {
-                bank_forks.write().unwrap().set_root(*root, &None, Some(0));
+                bank_forks
+                    .write()
+                    .unwrap()
+                    .set_root(*root, &ABSRequestSender::default(), Some(0));
                 let mut stakes = HashMap::new();
                 stakes.insert(leader_vote_keypair.pubkey(), (1, Account::default()));
                 let block_time = bank_forks

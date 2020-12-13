@@ -167,7 +167,9 @@ impl OptimisticallyConfirmedBankTracker {
 mod tests {
     use super::*;
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-    use solana_runtime::commitment::BlockCommitmentCache;
+    use solana_runtime::{
+        accounts_background_service::ABSRequestSender, commitment::BlockCommitmentCache,
+    };
     use solana_sdk::pubkey::Pubkey;
 
     #[test]
@@ -279,7 +281,10 @@ mod tests {
         let bank5 = bank_forks.read().unwrap().get(5).unwrap().clone();
         let bank7 = Bank::new_from_parent(&bank5, &Pubkey::default(), 7);
         bank_forks.write().unwrap().insert(bank7);
-        bank_forks.write().unwrap().set_root(7, &None, None);
+        bank_forks
+            .write()
+            .unwrap()
+            .set_root(7, &ABSRequestSender::default(), None);
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::OptimisticallyConfirmed(6),
             &bank_forks,

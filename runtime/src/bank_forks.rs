@@ -1,7 +1,7 @@
 //! The `bank_forks` module implements BankForks a DAG of checkpointed Banks
 
 use crate::{
-    accounts_background_service::{SnapshotRequest, SnapshotRequestSender},
+    accounts_background_service::{ABSRequestSender, SnapshotRequest},
     bank::Bank,
 };
 use log::*;
@@ -170,7 +170,7 @@ impl BankForks {
     pub fn set_root(
         &mut self,
         root: Slot,
-        snapshot_request_sender: &Option<SnapshotRequestSender>,
+        accounts_background_request_sender: &ABSRequestSender,
         highest_confirmed_root: Option<Slot>,
     ) {
         let old_epoch = self.root_bank().epoch();
@@ -216,20 +216,19 @@ impl BankForks {
                 bank.squash();
                 is_root_bank_squashed = bank_slot == root;
 
-                if self.snapshot_config.is_some() && snapshot_request_sender.is_some() {
+                if self.snapshot_config.is_some()
+                    && accounts_background_request_sender.is_snapshot_creation_enabled()
+                {
                     let snapshot_root_bank = self.root_bank().clone();
                     let root_slot = snapshot_root_bank.slot();
                     if let Err(e) =
-                        snapshot_request_sender
-                            .as_ref()
-                            .unwrap()
-                            .send(SnapshotRequest {
-                                snapshot_root_bank,
-                                // Save off the status cache because these may get pruned
-                                // if another `set_root()` is called before the snapshots package
-                                // can be generated
-                                status_cache_slot_deltas: bank.src.slot_deltas(&bank.src.roots()),
-                            })
+                        accounts_background_request_sender.send_snapshot_request(SnapshotRequest {
+                            snapshot_root_bank,
+                            // Save off the status cache because these may get pruned
+                            // if another `set_root()` is called before the snapshots package
+                            // can be generated
+                            status_cache_slot_deltas: bank.src.slot_deltas(&bank.src.roots()),
+                        })
                     {
                         warn!(
                             "Error sending snapshot request for bank: {}, err: {:?}",
@@ -244,7 +243,6 @@ impl BankForks {
             root_bank.squash();
         }
         let new_tx_count = root_bank.transaction_count();
-
         self.prune_non_root(root, highest_confirmed_root);
 
         inc_new_counter_info!(
@@ -405,7 +403,7 @@ mod tests {
 
         let bank0 = Bank::new(&genesis_config);
         let mut bank_forks0 = BankForks::new(bank0);
-        bank_forks0.set_root(0, &None, None);
+        bank_forks0.set_root(0, &ABSRequestSender::default(), None);
 
         let bank1 = Bank::new(&genesis_config);
         let mut bank_forks1 = BankForks::new(bank1);
@@ -438,7 +436,7 @@ mod tests {
 
             // Set root in bank_forks0 to truncate the ancestor history
             bank_forks0.insert(child1);
-            bank_forks0.set_root(slot, &None, None);
+            bank_forks0.set_root(slot, &ABSRequestSender::default(), None);
 
             // Don't set root in bank_forks1 to keep the ancestor history
             bank_forks1.insert(child2);
