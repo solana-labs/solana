@@ -9,7 +9,7 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-log = "0.4.8"
+log = "0.4.11"
 reqwest = { version = "0.10.8", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde_json = "1.0"
 

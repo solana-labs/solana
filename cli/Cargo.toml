@@ -17,7 +17,7 @@ criterion-stats = "0.3.0"
 ctrlc = { version = "3.1.5", features = ["termination"] }
 console = "0.11.3"
 dirs-next = "2.0.0"
-log = "0.4.8"
+log = "0.4.11"
 Inflector = "0.11.4"
 indicatif = "0.15.0"
 humantime = "2.0.1"

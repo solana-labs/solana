@@ -10,7 +10,7 @@ homepage = "https://solana.com/"
 publish = false
 
 [dependencies]
-log = { version = "0.4.8" }
+log = { version = "0.4.11" }
 solana-logger = { path = "../../logger", version = "1.5.0" }
 solana-version = { path = "../../version", version = "1.5.0" }
 solana-measure = { path = "../../measure", version = "1.5.0" }

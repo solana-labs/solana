@@ -11,7 +11,7 @@ homepage = "https://solana.com/"
 [dependencies]
 clap = "2.33.1"
 console = "0.11.3"
-log = "0.4.8"
+log = "0.4.11"
 serde = "1.0.112"
 serde_yaml = "0.8.13"
 solana-clap-utils = { path = "../clap-utils", version = "1.5.0" }
