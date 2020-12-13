@@ -198,9 +198,66 @@ impl<'a, T: Account> IntoAccountInfo<'a> for &'a mut (Pubkey, T) {
     }
 }
 
-/// Return the next AccountInfo or a NotEnoughAccountKeys error.
+/// Return the next `AccountInfo` or a `NotEnoughAccountKeys` error.
 pub fn next_account_info<'a, 'b, I: Iterator<Item = &'a AccountInfo<'b>>>(
     iter: &mut I,
 ) -> Result<I::Item, ProgramError> {
     iter.next().ok_or(ProgramError::NotEnoughAccountKeys)
+}
+
+/// Return a slice of the next `count` `AccountInfo`s or a
+/// `NotEnoughAccountKeys` error.
+pub fn next_account_infos<'a, 'b: 'a>(
+    iter: &mut std::slice::Iter<'a, AccountInfo<'b>>,
+    count: usize,
+) -> Result<&'a [AccountInfo<'b>], ProgramError> {
+    let accounts = iter.as_slice();
+    if accounts.len() < count {
+        return Err(ProgramError::NotEnoughAccountKeys);
+    }
+    let (accounts, remaining) = accounts.split_at(count);
+    *iter = remaining.iter();
+    Ok(accounts)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_next_account_infos() {
+        let k1 = Pubkey::new_unique();
+        let k2 = Pubkey::new_unique();
+        let k3 = Pubkey::new_unique();
+        let k4 = Pubkey::new_unique();
+        let k5 = Pubkey::new_unique();
+        let l1 = &mut 0;
+        let l2 = &mut 0;
+        let l3 = &mut 0;
+        let l4 = &mut 0;
+        let l5 = &mut 0;
+        let d1 = &mut [0u8];
+        let d2 = &mut [0u8];
+        let d3 = &mut [0u8];
+        let d4 = &mut [0u8];
+        let d5 = &mut [0u8];
+
+        let infos = &[
+            AccountInfo::new(&k1, false, false, l1, d1, &k1, false, 0),
+            AccountInfo::new(&k2, false, false, l2, d2, &k2, false, 0),
+            AccountInfo::new(&k3, false, false, l3, d3, &k3, false, 0),
+            AccountInfo::new(&k4, false, false, l4, d4, &k4, false, 0),
+            AccountInfo::new(&k5, false, false, l5, d5, &k5, false, 0),
+        ];
+        let infos_iter = &mut infos.iter();
+        let info1 = next_account_info(infos_iter).unwrap();
+        let info2_3_4 = next_account_infos(infos_iter, 3).unwrap();
+        let info5 = next_account_info(infos_iter).unwrap();
+
+        assert_eq!(k1, *info1.key);
+        assert_eq!(k2, *info2_3_4[0].key);
+        assert_eq!(k3, *info2_3_4[1].key);
+        assert_eq!(k4, *info2_3_4[2].key);
+        assert_eq!(k5, *info5.key);
+    }
 }
