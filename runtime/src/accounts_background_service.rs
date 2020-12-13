@@ -257,10 +257,15 @@ impl AccountsBackgroundService {
                     assert!(last_cleaned_block_height <= snapshot_block_height);
                     last_cleaned_block_height = snapshot_block_height;
                 } else {
-                    consumed_budget = bank.process_stale_slot_with_budget(
-                        consumed_budget,
-                        SHRUNKEN_ACCOUNT_PER_INTERVAL,
-                    );
+                    // under sustained writes, shrink can lag behind so cap to
+                    // SHRUNKEN_ACCOUNT_PER_INTERVAL (which is based on INTERVAL_MS,
+                    // which in turn roughly asscociated block time)
+                    consumed_budget = bank
+                        .process_stale_slot_with_budget(
+                            consumed_budget,
+                            SHRUNKEN_ACCOUNT_PER_INTERVAL,
+                        )
+                        .min(SHRUNKEN_ACCOUNT_PER_INTERVAL);
 
                     if bank.block_height() - last_cleaned_block_height
                         > (CLEAN_INTERVAL_BLOCKS + thread_rng().gen_range(0, 10))
