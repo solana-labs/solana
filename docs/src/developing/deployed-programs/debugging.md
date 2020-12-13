@@ -47,16 +47,16 @@ get more information:
   - `InstructionError::InvalidAccountData` will be returned as part of the
     transaction error.
 - The BPF loader may fail to setup the program's execution environment
-  - `InstrucitonError::Custom(0x0b9f_0001)` will be returned as part of the
+  - `InstructionError::Custom(0x0b9f_0001)` will be returned as part of the
     transaction error.  "0x0b9f_0001" is the hexadecimal representation of
     [`VirtualMachineCreationFailed`](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/programs/bpf_loader/src/lib.rs#L44).
 - The BPF loader may have detected a fatal error during program executions
   (things like panics, memory violations, system call errors, etc...)
-  - `InstrucitonError::Custom(0x0b9f_0002)` will be returned as part of the
+  - `InstructionError::Custom(0x0b9f_0002)` will be returned as part of the
       transaction error.  "0x0b9f_0002" is the hexadecimal representation of
       [`VirtualMachineFailedToRunProgram`](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/programs/bpf_loader/src/lib.rs#L46).
 - The program itself may return an error
-  - `InstrucitonError::Custom(<user defined value>)` will be returned.  The
+  - `InstructionError::Custom(<user defined value>)` will be returned.  The
     "user defined value" must not conflict with any of the [builtin runtime
     program
     errors](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/sdk/program/src/program_error.rs#L87).
