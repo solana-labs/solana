@@ -581,7 +581,7 @@ mod tests {
             3000
         );
         let port = find_available_port_in_range(ip_addr, (3000, 3050)).unwrap();
-        assert!(3000 <= port && port < 3050);
+        assert!((3000..3050).contains(&port));
 
         let _socket = bind_to(ip_addr, port, false).unwrap();
         find_available_port_in_range(ip_addr, (port, port + 1)).unwrap_err();
@@ -591,7 +591,7 @@ mod tests {
     fn test_bind_common_in_range() {
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let (port, _sockets) = bind_common_in_range(ip_addr, (3100, 3150)).unwrap();
-        assert!(3100 <= port && port < 3150);
+        assert!((3100..3150).contains(&port));
 
         bind_common_in_range(ip_addr, (port, port + 1)).unwrap_err();
     }

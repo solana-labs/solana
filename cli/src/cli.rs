@@ -444,7 +444,7 @@ impl CliConfig<'_> {
     ) -> (SettingType, String) {
         settings
             .into_iter()
-            .find(|(_, value)| value != "")
+            .find(|(_, value)| !value.is_empty())
             .expect("no nonempty setting")
     }
 
@@ -502,13 +502,14 @@ impl CliConfig<'_> {
     }
 
     pub fn recent_for_tests() -> Self {
-        let mut config = Self::default();
-        config.commitment = CommitmentConfig::recent();
-        config.send_transaction_config = RpcSendTransactionConfig {
-            skip_preflight: true,
-            ..RpcSendTransactionConfig::default()
-        };
-        config
+        Self {
+            commitment: CommitmentConfig::recent(),
+            send_transaction_config: RpcSendTransactionConfig {
+                skip_preflight: true,
+                ..RpcSendTransactionConfig::default()
+            },
+            ..Self::default()
+        }
     }
 }
 
@@ -995,6 +996,7 @@ fn process_confirm(
     }
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn process_decode_transaction(transaction: &Transaction) -> ProcessResult {
     println_transaction(transaction, &None, "");
     Ok("".to_string())
@@ -2763,9 +2765,11 @@ mod tests {
     #[allow(clippy::cognitive_complexity)]
     fn test_cli_process_command() {
         // Success cases
-        let mut config = CliConfig::default();
-        config.rpc_client = Some(RpcClient::new_mock("succeeds".to_string()));
-        config.json_rpc_url = "http://127.0.0.1:8899".to_string();
+        let mut config = CliConfig {
+            rpc_client: Some(RpcClient::new_mock("succeeds".to_string())),
+            json_rpc_url: "http://127.0.0.1:8899".to_string(),
+            ..CliConfig::default()
+        };
 
         let keypair = Keypair::new();
         let pubkey = keypair.pubkey().to_string();

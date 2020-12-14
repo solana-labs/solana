@@ -1,3 +1,5 @@
+#![allow(clippy::rc_buffer)]
+
 use super::{
     broadcast_utils::{self, ReceiveResults},
     *,
@@ -284,7 +286,7 @@ impl StandardBroadcastRun {
         blockstore: &Arc<Blockstore>,
         shreds: Arc<Vec<Shred>>,
         broadcast_shred_batch_info: Option<BroadcastShredBatchInfo>,
-    ) -> Result<()> {
+    ) {
         // Insert shreds into blockstore
         let insert_shreds_start = Instant::now();
         // The first shred is inserted synchronously
@@ -302,7 +304,6 @@ impl StandardBroadcastRun {
             num_shreds: shreds.len(),
         };
         self.update_insertion_metrics(&new_insert_shreds_stats, &broadcast_shred_batch_info);
-        Ok(())
     }
 
     fn update_insertion_metrics(
@@ -438,7 +439,8 @@ impl BroadcastRun for StandardBroadcastRun {
         blockstore: &Arc<Blockstore>,
     ) -> Result<()> {
         let (shreds, slot_start_ts) = receiver.lock().unwrap().recv()?;
-        self.insert(blockstore, shreds, slot_start_ts)
+        self.insert(blockstore, shreds, slot_start_ts);
+        Ok(())
     }
 }
 

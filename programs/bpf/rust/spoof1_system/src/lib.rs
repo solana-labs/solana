@@ -3,6 +3,7 @@ use solana_program::{
 };
 
 entrypoint!(process_instruction);
+#[allow(clippy::unnecessary_wraps)]
 fn process_instruction(
     _program_id: &Pubkey,
     accounts: &[AccountInfo],

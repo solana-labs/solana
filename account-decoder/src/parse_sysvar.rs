@@ -217,7 +217,6 @@ mod test {
         account::create_account, fee_calculator::FeeCalculator, hash::Hash,
         sysvar::recent_blockhashes::IterItem,
     };
-    use std::iter::FromIterator;
 
     #[test]
     fn test_parse_sysvars() {
@@ -250,8 +249,9 @@ mod test {
         let fee_calculator = FeeCalculator {
             lamports_per_signature: 10,
         };
-        let recent_blockhashes =
-            RecentBlockhashes::from_iter(vec![IterItem(0, &hash, &fee_calculator)].into_iter());
+        let recent_blockhashes: RecentBlockhashes = vec![IterItem(0, &hash, &fee_calculator)]
+            .into_iter()
+            .collect();
         let recent_blockhashes_sysvar = create_account(&recent_blockhashes, 1);
         assert_eq!(
             parse_sysvar(

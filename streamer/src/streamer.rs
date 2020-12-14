@@ -169,7 +169,7 @@ mod test {
     use std::sync::Arc;
     use std::time::Duration;
 
-    fn get_msgs(r: PacketReceiver, num: &mut usize) -> Result<()> {
+    fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _ in 0..10 {
             let m = r.recv_timeout(Duration::new(1, 0));
             if m.is_err() {
@@ -182,9 +182,8 @@ mod test {
                 break;
             }
         }
-
-        Ok(())
     }
+
     #[test]
     fn streamer_debug() {
         write!(io::sink(), "{:?}", Packet::default()).unwrap();
@@ -218,7 +217,7 @@ mod test {
         };
 
         let mut num = 5;
-        get_msgs(r_reader, &mut num).expect("get_msgs");
+        get_msgs(r_reader, &mut num);
         assert_eq!(num, 0);
         exit.store(true, Ordering::Relaxed);
         t_receiver.join().expect("join");

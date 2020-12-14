@@ -192,10 +192,7 @@ fn get_packet_offsets(packet: &Packet, current_offset: u32) -> PacketOffsets {
     }
 }
 
-pub fn generate_offsets(
-    batches: &[Packets],
-    recycler: &Recycler<TxOffset>,
-) -> Result<TxOffsets, ()> {
+pub fn generate_offsets(batches: &[Packets], recycler: &Recycler<TxOffset>) -> TxOffsets {
     debug!("allocating..");
     let mut signature_offsets: PinnedVec<_> = recycler.allocate("sig_offsets");
     signature_offsets.set_pinnable();
@@ -236,13 +233,13 @@ pub fn generate_offsets(
         });
         v_sig_lens.push(sig_lens);
     });
-    Ok((
+    (
         signature_offsets,
         pubkey_offsets,
         msg_start_offsets,
         msg_sizes,
         v_sig_lens,
-    ))
+    )
 }
 
 pub fn ed25519_verify_cpu(batches: &[Packets]) -> Vec<Vec<u8>> {
@@ -346,7 +343,7 @@ pub fn ed25519_verify(
     }
 
     let (signature_offsets, pubkey_offsets, msg_start_offsets, msg_sizes, sig_lens) =
-        generate_offsets(batches, recycler).unwrap();
+        generate_offsets(batches, recycler);
 
     debug!("CUDA ECDSA for {}", batch_size(batches));
     debug!("allocating out..");

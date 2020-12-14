@@ -141,9 +141,10 @@ pub fn process_instruction(
                 trace!("contract already exists");
                 return Err(InstructionError::AccountAlreadyInitialized);
             }
-            let mut budget_state = BudgetState::default();
-            budget_state.pending_budget = Some(*expr);
-            budget_state.initialized = true;
+            let budget_state = BudgetState {
+                pending_budget: Some(*expr),
+                initialized: true,
+            };
             budget_state.serialize(&mut contract_keyed_account.try_account_ref_mut()?.data)
         }
         BudgetInstruction::ApplyTimestamp(dt) => {

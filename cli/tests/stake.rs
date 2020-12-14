@@ -1097,8 +1097,10 @@ fn test_stake_set_lockup() {
     let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let stake_account_pubkey = stake_keypair.pubkey();
 
-    let mut lockup = Lockup::default();
-    lockup.custodian = config.signers[0].pubkey();
+    let lockup = Lockup {
+        custodian: config.signers[0].pubkey(),
+        ..Lockup::default()
+    };
 
     config.signers.push(&stake_keypair);
     config.command = CliCommand::CreateStakeAccount {

@@ -118,8 +118,10 @@ impl Accounts {
     }
 
     fn construct_instructions_account(message: &Message) -> Account {
-        let mut account = Account::default();
-        account.data = message.serialize_instructions();
+        let mut account = Account {
+            data: message.serialize_instructions(),
+            ..Account::default()
+        };
 
         // add room for current instruction index.
         account.data.resize(account.data.len() + 2, 0);

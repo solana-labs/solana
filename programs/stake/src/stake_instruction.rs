@@ -562,13 +562,15 @@ mod tests {
                 } else if sysvar::rent::check_id(&meta.pubkey) {
                     account::create_account(&Rent::default(), 1)
                 } else if meta.pubkey == invalid_stake_state_pubkey() {
-                    let mut account = Account::default();
-                    account.owner = id();
-                    account
+                    Account {
+                        owner: id(),
+                        ..Account::default()
+                    }
                 } else if meta.pubkey == invalid_vote_state_pubkey() {
-                    let mut account = Account::default();
-                    account.owner = solana_vote_program::id();
-                    account
+                    Account {
+                        owner: solana_vote_program::id(),
+                        ..Account::default()
+                    }
                 } else {
                     Account::default()
                 })

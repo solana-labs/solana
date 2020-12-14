@@ -884,7 +884,7 @@ impl ClusterInfo {
                 ))
             })
             .collect();
-        current_slots.sort();
+        current_slots.sort_unstable();
         let min_slot: Slot = current_slots
             .iter()
             .map(|((_, s), _)| *s)
@@ -4139,8 +4139,10 @@ mod tests {
 
     #[test]
     fn test_protocol_sanitize() {
-        let mut pd = PruneData::default();
-        pd.wallclock = MAX_WALLCLOCK;
+        let pd = PruneData {
+            wallclock: MAX_WALLCLOCK,
+            ..PruneData::default()
+        };
         let msg = Protocol::PruneMessage(Pubkey::default(), pd);
         assert_eq!(msg.sanitize(), Err(SanitizeError::ValueOutOfBounds));
     }

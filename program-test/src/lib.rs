@@ -74,9 +74,11 @@ pub fn builtin_process_instruction(
     input: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    let mut mock_invoke_context = MockInvokeContext::default();
-    mock_invoke_context.programs = invoke_context.get_programs().to_vec();
-    mock_invoke_context.key = *program_id;
+    let mock_invoke_context = MockInvokeContext {
+        programs: invoke_context.get_programs().to_vec(),
+        key: *program_id,
+        ..MockInvokeContext::default()
+    };
     // TODO: Populate MockInvokeContext more, or rework to avoid MockInvokeContext entirely.
     //       The context being passed into the program is incomplete...
     let local_invoke_context = RefCell::new(Rc::new(mock_invoke_context));

@@ -55,7 +55,7 @@ fn get_keypair_from_matches(
     let mut path = dirs_next::home_dir().expect("home directory");
     let path = if matches.is_present("keypair") {
         matches.value_of("keypair").unwrap()
-    } else if config.keypair_path != "" {
+    } else if !config.keypair_path.is_empty() {
         &config.keypair_path
     } else {
         path.extend(&[".config", "solana", "id.json"]);

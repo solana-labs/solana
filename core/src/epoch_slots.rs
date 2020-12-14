@@ -116,7 +116,7 @@ impl Uncompressed {
     pub fn to_slots(&self, min_slot: Slot) -> Vec<Slot> {
         let mut rv = vec![];
         let start = if min_slot < self.first_slot {
-            0 as usize
+            0
         } else {
             (min_slot - self.first_slot) as usize
         };

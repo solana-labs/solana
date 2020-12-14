@@ -60,9 +60,9 @@ fn test_bench_tps_local_cluster(config: Config) {
 #[test]
 #[serial]
 fn test_bench_tps_local_cluster_solana() {
-    let mut config = Config::default();
-    config.tx_count = 100;
-    config.duration = Duration::from_secs(10);
-
-    test_bench_tps_local_cluster(config);
+    test_bench_tps_local_cluster(Config {
+        tx_count: 100,
+        duration: Duration::from_secs(10),
+        ..Config::default()
+    });
 }

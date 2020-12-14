@@ -107,7 +107,7 @@ pub async fn upload_confirmed_blocks(
             .difference(&bigtable_slots)
             .cloned()
             .collect::<Vec<_>>();
-        blocks_to_upload.sort();
+        blocks_to_upload.sort_unstable();
         blocks_to_upload
     };
 

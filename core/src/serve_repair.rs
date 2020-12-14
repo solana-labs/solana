@@ -708,11 +708,15 @@ mod tests {
                 nonce,
             );
             assert!(rv.is_none());
-            let mut common_header = ShredCommonHeader::default();
-            common_header.slot = slot;
-            common_header.index = 1;
-            let mut data_header = DataShredHeader::default();
-            data_header.parent_offset = 1;
+            let common_header = ShredCommonHeader {
+                slot,
+                index: 1,
+                ..ShredCommonHeader::default()
+            };
+            let data_header = DataShredHeader {
+                parent_offset: 1,
+                ..DataShredHeader::default()
+            };
             let shred_info = Shred::new_empty_from_header(
                 common_header,
                 data_header,

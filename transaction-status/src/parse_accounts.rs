@@ -31,13 +31,15 @@ mod test {
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
         let pubkey3 = solana_sdk::pubkey::new_rand();
-        let mut message = Message::default();
-        message.header = MessageHeader {
-            num_required_signatures: 2,
-            num_readonly_signed_accounts: 1,
-            num_readonly_unsigned_accounts: 1,
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 2,
+                num_readonly_signed_accounts: 1,
+                num_readonly_unsigned_accounts: 1,
+            },
+            account_keys: vec![pubkey0, pubkey1, pubkey2, pubkey3],
+            ..Message::default()
         };
-        message.account_keys = vec![pubkey0, pubkey1, pubkey2, pubkey3];
 
         assert_eq!(
             parse_accounts(&message),

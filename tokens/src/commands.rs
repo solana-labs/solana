@@ -265,7 +265,7 @@ fn build_messages(
             return Err(Error::ExitSignal);
         }
         let new_stake_account_keypair = Keypair::new();
-        let lockup_date = if allocation.lockup_date == "" {
+        let lockup_date = if allocation.lockup_date.is_empty() {
             None
         } else {
             Some(allocation.lockup_date.parse::<DateTime<Utc>>().unwrap())
@@ -336,7 +336,7 @@ fn send_messages(
             signers.push(&*stake_args.stake_authority);
             signers.push(&*stake_args.withdraw_authority);
             signers.push(&new_stake_account_keypair);
-            if allocation.lockup_date != "" {
+            if !allocation.lockup_date.is_empty() {
                 if let Some(lockup_authority) = &stake_args.lockup_authority {
                     signers.push(&**lockup_authority);
                 } else {

@@ -272,7 +272,7 @@ pub mod tests {
         )
     }
 
-    //   add stake to a vote_pubkey                               (   stake    )
+    // add stake to a vote_pubkey                               (   stake    )
     pub fn create_warming_stake_account(
         stake: u64,
         epoch: Epoch,
@@ -295,8 +295,10 @@ pub mod tests {
     #[test]
     fn test_stakes_basic() {
         for i in 0..4 {
-            let mut stakes = Stakes::default();
-            stakes.epoch = i;
+            let mut stakes = Stakes {
+                epoch: i,
+                ..Stakes::default()
+            };
 
             let ((vote_pubkey, vote_account), (stake_pubkey, mut stake_account)) =
                 create_staked_node_accounts(10);
@@ -372,8 +374,10 @@ pub mod tests {
 
     #[test]
     fn test_stakes_vote_account_disappear_reappear() {
-        let mut stakes = Stakes::default();
-        stakes.epoch = 4;
+        let mut stakes = Stakes {
+            epoch: 4,
+            ..Stakes::default()
+        };
 
         let ((vote_pubkey, mut vote_account), (stake_pubkey, stake_account)) =
             create_staked_node_accounts(10);
@@ -406,8 +410,10 @@ pub mod tests {
 
     #[test]
     fn test_stakes_change_delegate() {
-        let mut stakes = Stakes::default();
-        stakes.epoch = 4;
+        let mut stakes = Stakes {
+            epoch: 4,
+            ..Stakes::default()
+        };
 
         let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) =
             create_staked_node_accounts(10);
@@ -450,8 +456,10 @@ pub mod tests {
     }
     #[test]
     fn test_stakes_multiple_stakers() {
-        let mut stakes = Stakes::default();
-        stakes.epoch = 4;
+        let mut stakes = Stakes {
+            epoch: 4,
+            ..Stakes::default()
+        };
 
         let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) =
             create_staked_node_accounts(10);
@@ -500,8 +508,10 @@ pub mod tests {
 
     #[test]
     fn test_stakes_not_delegate() {
-        let mut stakes = Stakes::default();
-        stakes.epoch = 4;
+        let mut stakes = Stakes {
+            epoch: 4,
+            ..Stakes::default()
+        };
 
         let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) =
             create_staked_node_accounts(10);

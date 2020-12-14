@@ -175,12 +175,7 @@ impl CrdsGossipPush {
         now: u64,
     ) -> Result<Option<VersionedCrdsValue>, CrdsGossipError> {
         self.num_total += 1;
-        if now
-            > value
-                .wallclock()
-                .checked_add(self.msg_timeout)
-                .unwrap_or_else(|| 0)
-        {
+        if now > value.wallclock().checked_add(self.msg_timeout).unwrap_or(0) {
             return Err(CrdsGossipError::PushMessageTimeout);
         }
         if now + self.msg_timeout < value.wallclock() {
@@ -208,7 +203,7 @@ impl CrdsGossipPush {
     /// push pull responses
     pub fn push_pull_responses(&mut self, values: Vec<(CrdsValueLabel, Hash, u64)>, now: u64) {
         for (label, value_hash, wc) in values {
-            if now > wc.checked_add(self.msg_timeout).unwrap_or_else(|| 0) {
+            if now > wc.checked_add(self.msg_timeout).unwrap_or(0) {
                 continue;
             }
             self.push_messages.insert(label, value_hash);

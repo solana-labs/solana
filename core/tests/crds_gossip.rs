@@ -624,8 +624,10 @@ fn test_star_network_large_push() {
 }
 #[test]
 fn test_prune_errors() {
-    let mut crds_gossip = CrdsGossip::default();
-    crds_gossip.id = Pubkey::new(&[0; 32]);
+    let mut crds_gossip = CrdsGossip {
+        id: Pubkey::new(&[0; 32]),
+        ..CrdsGossip::default()
+    };
     let id = crds_gossip.id;
     let ci = ContactInfo::new_localhost(&Pubkey::new(&[1; 32]), 0);
     let prune_pubkey = Pubkey::new(&[2; 32]);

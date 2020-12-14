@@ -1574,9 +1574,11 @@ pub mod test {
     fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, (u64, ArcVoteAccount))> {
         let mut stakes = vec![];
         for (lamports, votes) in stake_votes {
-            let mut account = Account::default();
-            account.data = vec![0; VoteState::size_of()];
-            account.lamports = *lamports;
+            let mut account = Account {
+                data: vec![0; VoteState::size_of()],
+                lamports: *lamports,
+                ..Account::default()
+            };
             let mut vote_state = VoteState::default();
             for slot in *votes {
                 vote_state.process_slot_vote_unchecked(*slot);
@@ -2059,7 +2061,7 @@ pub mod test {
     #[test]
     fn test_check_vote_threshold_without_votes() {
         let tower = Tower::new_for_tests(1, 0.67);
-        let stakes = vec![(0, 1 as Stake)].into_iter().collect();
+        let stakes = vec![(0, 1)].into_iter().collect();
         assert!(tower.check_vote_stake_threshold(0, &stakes, 2));
     }
 
@@ -2069,7 +2071,7 @@ pub mod test {
         let mut tower = Tower::new_for_tests(4, 0.67);
         let mut stakes = HashMap::new();
         for i in 0..(MAX_LOCKOUT_HISTORY as u64 + 1) {
-            stakes.insert(i, 1 as Stake);
+            stakes.insert(i, 1);
             tower.record_vote(i, Hash::default());
         }
         assert!(!tower.check_vote_stake_threshold(MAX_LOCKOUT_HISTORY as u64 + 1, &stakes, 2,));
@@ -2078,7 +2080,7 @@ pub mod test {
     #[test]
     fn test_is_slot_confirmed_not_enough_stake_failure() {
         let tower = Tower::new_for_tests(1, 0.67);
-        let stakes = vec![(0, 1 as Stake)].into_iter().collect();
+        let stakes = vec![(0, 1)].into_iter().collect();
         assert!(!tower.is_slot_confirmed(0, &stakes, 2));
     }
 
@@ -2092,7 +2094,7 @@ pub mod test {
     #[test]
     fn test_is_slot_confirmed_pass() {
         let tower = Tower::new_for_tests(1, 0.67);
-        let stakes = vec![(0, 2 as Stake)].into_iter().collect();
+        let stakes = vec![(0, 2)].into_iter().collect();
         assert!(tower.is_slot_confirmed(0, &stakes, 2));
     }
 
@@ -2205,14 +2207,14 @@ pub mod test {
     #[test]
     fn test_check_vote_threshold_below_threshold() {
         let mut tower = Tower::new_for_tests(1, 0.67);
-        let stakes = vec![(0, 1 as Stake)].into_iter().collect();
+        let stakes = vec![(0, 1)].into_iter().collect();
         tower.record_vote(0, Hash::default());
         assert!(!tower.check_vote_stake_threshold(1, &stakes, 2));
     }
     #[test]
     fn test_check_vote_threshold_above_threshold() {
         let mut tower = Tower::new_for_tests(1, 0.67);
-        let stakes = vec![(0, 2 as Stake)].into_iter().collect();
+        let stakes = vec![(0, 2)].into_iter().collect();
         tower.record_vote(0, Hash::default());
         assert!(tower.check_vote_stake_threshold(1, &stakes, 2));
     }
@@ -2220,7 +2222,7 @@ pub mod test {
     #[test]
     fn test_check_vote_threshold_above_threshold_after_pop() {
         let mut tower = Tower::new_for_tests(1, 0.67);
-        let stakes = vec![(0, 2 as Stake)].into_iter().collect();
+        let stakes = vec![(0, 2)].into_iter().collect();
         tower.record_vote(0, Hash::default());
         tower.record_vote(1, Hash::default());
         tower.record_vote(2, Hash::default());
@@ -2239,7 +2241,7 @@ pub mod test {
     fn test_check_vote_threshold_lockouts_not_updated() {
         solana_logger::setup();
         let mut tower = Tower::new_for_tests(1, 0.67);
-        let stakes = vec![(0, 1 as Stake), (1, 2 as Stake)].into_iter().collect();
+        let stakes = vec![(0, 1), (1, 2)].into_iter().collect();
         tower.record_vote(0, Hash::default());
         tower.record_vote(1, Hash::default());
         tower.record_vote(2, Hash::default());
@@ -2249,8 +2251,10 @@ pub mod test {
     #[test]
     fn test_stake_is_updated_for_entire_branch() {
         let mut voted_stakes = HashMap::new();
-        let mut account = Account::default();
-        account.lamports = 1;
+        let account = Account {
+            lamports: 1,
+            ..Account::default()
+        };
         let set: HashSet<u64> = vec![0u64, 1u64].into_iter().collect();
         let ancestors: HashMap<u64, HashSet<u64>> = [(2u64, set)].iter().cloned().collect();
         Tower::update_ancestor_voted_stakes(&mut voted_stakes, 2, account.lamports, &ancestors);

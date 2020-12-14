@@ -63,8 +63,8 @@ mod tests {
     #[test]
     fn test_get_latest_votes() {
         let pubkey = solana_sdk::pubkey::new_rand();
-        let label1 = CrdsValueLabel::Vote(0 as u8, pubkey);
-        let label2 = CrdsValueLabel::Vote(1 as u8, pubkey);
+        let label1 = CrdsValueLabel::Vote(0, pubkey);
+        let label2 = CrdsValueLabel::Vote(1, pubkey);
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
 
         let data = Packet {
@@ -107,8 +107,8 @@ mod tests {
     fn test_get_and_process_vote_packets() {
         let (s, r) = unbounded();
         let pubkey = solana_sdk::pubkey::new_rand();
-        let label1 = CrdsValueLabel::Vote(0 as u8, pubkey);
-        let label2 = CrdsValueLabel::Vote(1 as u8, pubkey);
+        let label1 = CrdsValueLabel::Vote(0, pubkey);
+        let label2 = CrdsValueLabel::Vote(1, pubkey);
         let mut update_version = 0;
         s.send(vec![(label1.clone(), Packets::default())]).unwrap();
         s.send(vec![(label2.clone(), Packets::default())]).unwrap();

@@ -360,7 +360,7 @@ fn get_windows_path_var() -> Result<Option<String>, String> {
 }
 
 #[cfg(windows)]
-fn add_to_path(new_path: &str) -> Result<bool, String> {
+fn add_to_path(new_path: &str) -> bool {
     use std::ptr;
     use winapi::shared::minwindef::*;
     use winapi::um::winuser::{
@@ -372,7 +372,7 @@ fn add_to_path(new_path: &str) -> Result<bool, String> {
     let old_path = if let Some(s) = get_windows_path_var()? {
         s
     } else {
-        return Ok(false);
+        return false;
     };
 
     if !old_path.contains(&new_path) {
@@ -416,11 +416,11 @@ fn add_to_path(new_path: &str) -> Result<bool, String> {
         new_path,
         style("Future applications will automatically have the correct environment, but you may need to restart your current shell.").bold()
     );
-    Ok(true)
+    true
 }
 
 #[cfg(unix)]
-fn add_to_path(new_path: &str) -> Result<bool, String> {
+fn add_to_path(new_path: &str) -> bool {
     let shell_export_string = format!(r#"export PATH="{}:$PATH""#, new_path);
     let mut modified_rcfiles = false;
 
@@ -502,7 +502,7 @@ fn add_to_path(new_path: &str) -> Result<bool, String> {
        );
     }
 
-    Ok(modified_rcfiles)
+    modified_rcfiles
 }
 
 pub fn init(
@@ -533,7 +533,7 @@ pub fn init(
     update(config_file)?;
 
     let path_modified = if !no_modify_path {
-        add_to_path(&config.active_release_bin_dir().to_str().unwrap())?
+        add_to_path(&config.active_release_bin_dir().to_str().unwrap())
     } else {
         false
     };

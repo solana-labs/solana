@@ -10,7 +10,7 @@ solana_sdk::declare_program!(
     process_instruction
 );
 
-fn process_instruction(
+pub fn process_instruction(
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],

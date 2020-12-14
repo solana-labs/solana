@@ -109,9 +109,11 @@ mod tests {
             (0, true)
         );
 
-        let mut custom_rent = Rent::default();
-        custom_rent.lamports_per_byte_year = 5;
-        custom_rent.exemption_threshold = 2.5;
+        let custom_rent = Rent {
+            lamports_per_byte_year: 5,
+            exemption_threshold: 2.5,
+            ..Rent::default()
+        };
 
         assert_eq!(
             custom_rent.due(0, 2, 1.2),
