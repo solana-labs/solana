@@ -48,6 +48,7 @@ import { Location } from "history";
 import { useQuery } from "utils/url";
 
 const TRUNCATE_TOKEN_LENGTH = 10;
+const ALL_TOKENS = "";
 
 type InstructionType = {
   name: string;
@@ -303,12 +304,12 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
     };
   };
 
-  const filterOptions: (TokenInfoWithPubkey | null)[] = [null];
+  const filterOptions: string[] = [ALL_TOKENS];
   const nameLookup: { [mint: string]: string } = {};
 
   tokens.forEach((token) => {
-    filterOptions.push(token);
     const pubkey = token.info.mint.toBase58();
+    filterOptions.push(pubkey);
     nameLookup[pubkey] = formatTokenName(pubkey, cluster);
   });
 
@@ -328,24 +329,23 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
         }`}
       >
         {filterOptions.map((filterOption) => {
-          const key = filterOption?.info.mint.toBase58() || null;
           return (
             <Link
-              key={key}
+              key={filterOption}
               to={(location: Location) =>
                 buildLocation(
                   location,
-                  filterOption?.info.mint.toBase58() || ""
+                  filterOption
                 )
               }
               className={`dropdown-item${
-                filterOption?.info.mint.toBase58() === filter ? " active" : ""
+                filterOption === filter ? " active" : ""
               }`}
               onClick={toggle}
             >
-              {filterOption === null
+              {filterOption === ALL_TOKENS
                 ? "All Tokens"
-                : formatTokenName(filterOption.info.mint.toBase58(), cluster)}
+                : formatTokenName(filterOption, cluster)}
             </Link>
           );
         })}
