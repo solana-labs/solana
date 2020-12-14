@@ -479,14 +479,31 @@ typedef struct {
  *
  * @param seeds Seed bytes used to sign program accounts
  * @param seeds_len Length of the seeds array
- * @param Progam id of the signer
- * @param Program address created, filled on return
+ * @param program_id Program id of the signer
+ * @param program_address Program address created, filled on return
  */
 static uint64_t sol_create_program_address(
     const SolSignerSeed *seeds,
     int seeds_len,
     const SolPubkey *program_id,
-    const SolPubkey *address
+    const SolPubkey *program_address
+);
+
+/**
+ * Try to find a program address and return corresponding bump seed
+ *
+ * @param seeds Seed bytes used to sign program accounts
+ * @param seeds_len Length of the seeds array
+ * @param program_id Program id of the signer
+ * @param program_address Program address created, filled on return
+ * @param bump_seed Bump seed required to create a valid program address
+ */
+static uint64_t sol_try_find_program_address(
+    const SolSignerSeed *seeds,
+    int seeds_len,
+    const SolPubkey *program_id,
+    const SolPubkey *program_address,
+    const uint8_t *bump_seed
 );
 
 /**

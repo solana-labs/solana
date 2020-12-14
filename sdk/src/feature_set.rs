@@ -106,6 +106,10 @@ pub mod bpf_loader_upgradeable_program {
     solana_sdk::declare_id!("FbhK8HN9qvNHvJcoFVHAEUCNkagHvu7DTWzdnLuVQ5u4");
 }
 
+pub mod try_find_program_address_syscall_enabled {
+    solana_sdk::declare_id!("EMsMNadQNhCYDyGpYH5Tx6dGHxiUqKHk782PU5XaWfmi");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -134,6 +138,7 @@ lazy_static! {
         (filter_stake_delegation_accounts::id(), "filter stake_delegation_accounts #14062"),
         (simple_capitalization::id(), "simple capitalization"),
         (bpf_loader_upgradeable_program::id(), "upgradeable bpf loader"),
+        (try_find_program_address_syscall_enabled::id(), "add try_find_program_address syscall"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

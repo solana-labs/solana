@@ -155,6 +155,20 @@ extern uint64_t entrypoint(const uint8_t *input) {
       sol_assert(SolPubkey_same(&address, accounts[DERIVED_KEY1_INDEX].key));
     }
 
+    sol_log("Test try_find_program_address");
+    {
+      uint8_t seed[] = {'Y', 'o', 'u', ' ', 'p', 'a', 's', 's',
+                        ' ', 'b', 'u', 't', 't', 'e', 'r'};
+      const SolSignerSeed seeds[] = {{seed, SOL_ARRAY_SIZE(seed)}};
+      SolPubkey address;
+      uint8_t bump_seed;
+      sol_assert(SUCCESS == sol_try_find_program_address(
+                                seeds, SOL_ARRAY_SIZE(seeds), params.program_id,
+                                &address, &bump_seed));
+      sol_assert(SolPubkey_same(&address, accounts[DERIVED_KEY1_INDEX].key));
+      sol_assert(bump_seed == bump_seed1);
+    }
+
     sol_log("Test derived signers");
     {
       sol_assert(!accounts[DERIVED_KEY1_INDEX].is_signer);
