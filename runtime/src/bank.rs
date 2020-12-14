@@ -1952,6 +1952,7 @@ impl Bank {
             self.run_incinerator();
 
             // freeze is a one-way trip, idempotent
+            self.rc.accounts.accounts_db.mark_slot_frozen(self.slot());
             *hash = self.hash_internal_state();
         }
     }

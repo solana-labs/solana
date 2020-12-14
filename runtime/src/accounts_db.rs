@@ -41,7 +41,7 @@ use solana_sdk::{
 use std::convert::TryFrom;
 use std::{
     boxed::Box,
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     convert::TryInto,
     io::{Error as IOError, Result as IOResult},
     ops::RangeBounds,
@@ -465,6 +465,8 @@ pub struct AccountsDB {
     stats: AccountsStats,
 
     pub cluster_type: Option<ClusterType>,
+
+    pub frozen_slots: RwLock<BTreeSet<Slot>>,
 }
 
 #[derive(Debug, Default)]
@@ -542,6 +544,7 @@ impl Default for AccountsDB {
             frozen_accounts: HashMap::new(),
             stats: AccountsStats::default(),
             cluster_type: None,
+            frozen_slots: RwLock::new(BTreeSet::new()),
         }
     }
 }
@@ -2640,8 +2643,18 @@ impl AccountsDB {
         }
     }
 
+    pub fn mark_slot_frozen(&self, slot: Slot) {
+        self.frozen_slots.write().unwrap().insert(slot);
+    }
+
     /// Store the account update.
     pub fn store(&self, slot: Slot, accounts: &[(&Pubkey, &Account)]) {
+        if self.frozen_slots.read().unwrap().contains(&slot) {
+            panic!(
+                "Trying to modify frozen slot {} with accounts: {:?}",
+                slot, accounts
+            );
+        }
         // If all transactions in a batch are errored,
         // it's possible to get a store with no accounts.
         if accounts.is_empty() {
@@ -2830,7 +2843,12 @@ impl AccountsDB {
     }
 
     pub fn add_root(&self, slot: Slot) {
-        self.accounts_index.add_root(slot)
+        self.accounts_index.add_root(slot);
+        {
+            let mut w_frozen_slots = self.frozen_slots.write().unwrap();
+            let mut new_unrooted_slots = w_frozen_slots.split_off(&slot);
+            std::mem::swap(&mut *w_frozen_slots, &mut new_unrooted_slots);
+        }
     }
 
     pub fn get_snapshot_storages(&self, snapshot_slot: Slot) -> SnapshotStorages {
@@ -5728,6 +5746,21 @@ pub mod tests {
         assert_eq!(
             db.load_slow(&HashMap::new(), &account_key),
             Some((zero_lamport_account, 1))
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_store_frozen_slot() {
+        let db = AccountsDB::new(Vec::new(), &ClusterType::Development);
+        let frozen_slot = 1;
+        db.mark_slot_frozen(frozen_slot);
+        db.store(
+            frozen_slot,
+            &[(
+                &Pubkey::new_unique(),
+                &Account::new(0, 0, &Account::default().owner),
+            )],
         );
     }
 }
