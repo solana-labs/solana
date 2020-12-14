@@ -10855,7 +10855,7 @@ pub(crate) mod tests {
         let bank0 = Bank::new(&genesis_config);
         let bank1 = Arc::new(new_from_parent(&Arc::new(bank0)));
 
-        // schedule activation of simpler capitalization
+        // schedule activation of simple capitalization
         bank1.store_account_and_update_capitalization(
             &feature_set::simple_capitalization::id(),
             &feature::create_account(&Feature { activated_at: None }, feature_balance),
@@ -10877,7 +10877,7 @@ pub(crate) mod tests {
         let feature_balance =
             std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
 
-        // activate all features but simpler capitalization
+        // activate all features but simple capitalization
         activate_all_features(&mut genesis_config);
         genesis_config
             .accounts
@@ -10919,13 +10919,14 @@ pub(crate) mod tests {
             None,
             Some(&builtins),
         ));
+        // move to next epoch to create now deprecated rewards sysvar intentionally
         let bank1 = Arc::new(Bank::new_from_parent(
             &bank0,
             &Pubkey::default(),
             bank0.first_slot_in_next_epoch(),
         ));
 
-        // schedule activation of simpler capitalization
+        // schedule activation of simple capitalization
         bank1.store_account_and_update_capitalization(
             &feature_set::simple_capitalization::id(),
             &feature::create_account(&Feature { activated_at: None }, feature_balance),

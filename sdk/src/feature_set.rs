@@ -128,7 +128,7 @@ lazy_static! {
         (stake_program_v2::id(), "solana_stake_program v2"),
         (rewrite_stake::id(), "rewrite stake"),
         (filter_stake_delegation_accounts::id(), "filter stake_delegation_accounts #14062"),
-        (simple_capitalization::id(), "simpler capitalization"),
+        (simple_capitalization::id(), "simple capitalization"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

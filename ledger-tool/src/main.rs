@@ -1220,9 +1220,9 @@ fn main() {
             .arg(
                 Arg::with_name("enable_simple_capitalization")
                     .required(false)
-                    .long("enable-simpler-capitalization")
+                    .long("enable-simple-capitalization")
                     .takes_value(false)
-                    .help("Enable simpler capitalization to test hardcoded cap adjustments"),
+                    .help("Enable simple capitalization to test hardcoded cap adjustments"),
             )
             .arg(
                 Arg::with_name("recalculate_capitalization")
@@ -2152,7 +2152,7 @@ fn main() {
                                     let old_cap = base_bank.set_capitalization();
                                     let new_cap = base_bank.capitalization();
                                     warn!(
-                                        "Skewing capitalization a bit to enable simpler capitalization as \
+                                        "Skewing capitalization a bit to enable simple capitalization as \
                                         requested: increasing {} from {} to {}",
                                         feature_account_balance, old_cap, new_cap,
                                     );
