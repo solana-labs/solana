@@ -3893,7 +3893,6 @@ dependencies = [
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
- "solana-vote-signer",
  "solana_rbpf",
  "tempfile",
  "thiserror",
@@ -4048,7 +4047,6 @@ dependencies = [
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
- "solana-vote-signer",
  "spl-token",
  "systemstat",
  "tempfile",
@@ -5169,23 +5167,6 @@ dependencies = [
  "solana-metrics",
  "solana-sdk",
  "thiserror",
-]
-
-[[package]]
-name = "solana-vote-signer"
-version = "1.5.0"
-dependencies = [
- "clap",
- "jsonrpc-core",
- "jsonrpc-derive",
- "jsonrpc-http-server",
- "log 0.4.11",
- "net2",
- "serde_json",
- "solana-clap-utils",
- "solana-metrics",
- "solana-sdk",
- "solana-version",
 ]
 
 [[package]]
