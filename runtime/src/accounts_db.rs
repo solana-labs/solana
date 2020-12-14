@@ -2231,9 +2231,9 @@ impl AccountsDB {
         lamports: u64,
         owner: &Pubkey,
         executable: bool,
-        simpler_capitalization_enabled: bool,
+        simple_capitalization_enabled: bool,
     ) -> u64 {
-        if simpler_capitalization_enabled {
+        if simple_capitalization_enabled {
             return lamports;
         }
 
@@ -2255,7 +2255,7 @@ impl AccountsDB {
         slot: Slot,
         ancestors: &Ancestors,
         check_hash: bool,
-        simpler_capitalization_enabled: bool,
+        simple_capitalization_enabled: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         use BankHashVerificationError::*;
         let mut scan = Measure::start("scan");
@@ -2286,7 +2286,7 @@ impl AccountsDB {
                                             account_info.lamports,
                                             &account.account_meta.owner,
                                             account.account_meta.executable,
-                                            simpler_capitalization_enabled,
+                                            simple_capitalization_enabled,
                                         );
 
                                         if check_hash {
@@ -2349,10 +2349,10 @@ impl AccountsDB {
         &self,
         slot: Slot,
         ancestors: &Ancestors,
-        simpler_capitalization_enabled: bool,
+        simple_capitalization_enabled: bool,
     ) -> (Hash, u64) {
         let (hash, total_lamports) = self
-            .calculate_accounts_hash(slot, ancestors, false, simpler_capitalization_enabled)
+            .calculate_accounts_hash(slot, ancestors, false, simple_capitalization_enabled)
             .unwrap();
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
@@ -2365,12 +2365,12 @@ impl AccountsDB {
         slot: Slot,
         ancestors: &Ancestors,
         total_lamports: u64,
-        simpler_capitalization_enabled: bool,
+        simple_capitalization_enabled: bool,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
         let (calculated_hash, calculated_lamports) =
-            self.calculate_accounts_hash(slot, ancestors, true, simpler_capitalization_enabled)?;
+            self.calculate_accounts_hash(slot, ancestors, true, simple_capitalization_enabled)?;
 
         if calculated_lamports != total_lamports {
             warn!(

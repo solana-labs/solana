@@ -1218,7 +1218,7 @@ fn main() {
                            bugs are feature-gated behind this)"),
             )
             .arg(
-                Arg::with_name("enable_simpler_capitalization")
+                Arg::with_name("enable_simple_capitalization")
                     .required(false)
                     .long("enable-simpler-capitalization")
                     .takes_value(false)
@@ -2126,13 +2126,13 @@ fn main() {
                             genesis_config.rent.minimum_balance(Feature::size_of()),
                             1,
                         );
-                        if arg_matches.is_present("enable_simpler_capitalization") {
+                        if arg_matches.is_present("enable_simple_capitalization") {
                             if base_bank
-                                .get_account(&feature_set::simpler_capitalization::id())
+                                .get_account(&feature_set::simple_capitalization::id())
                                 .is_none()
                             {
                                 base_bank.store_account(
-                                    &feature_set::simpler_capitalization::id(),
+                                    &feature_set::simple_capitalization::id(),
                                     &feature::create_account(
                                         &Feature { activated_at: None },
                                         feature_account_balance,
@@ -2159,7 +2159,7 @@ fn main() {
                                     assert_eq!(old_cap + feature_account_balance, new_cap);
                                 }
                             } else {
-                                warn!("Already simpler_capitalization is activated (or scheduled)");
+                                warn!("Already simple_capitalization is activated (or scheduled)");
                             }
                         }
                         if arg_matches.is_present("enable_stake_program_v2") {

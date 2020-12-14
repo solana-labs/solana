@@ -1242,7 +1242,7 @@ impl Bank {
         let old_account = self.get_sysvar_account(pubkey);
         let new_account = updater(&old_account);
 
-        if !self.simpler_capitalization_enabled() {
+        if !self.simple_capitalization_enabled() {
             self.store_account(pubkey, &new_account);
         } else {
             self.store_account_and_update_capitalization(pubkey, &new_account);
@@ -2124,7 +2124,7 @@ impl Bank {
             name,
             self.inherit_specially_retained_account_balance(&existing_genuine_program),
         );
-        if !self.simpler_capitalization_enabled() {
+        if !self.simple_capitalization_enabled() {
             self.store_account(&program_id, &account);
         } else {
             self.store_account_and_update_capitalization(&program_id, &account);
@@ -4050,7 +4050,7 @@ impl Bank {
             self.slot(),
             &self.ancestors,
             self.capitalization(),
-            self.simpler_capitalization_enabled(),
+            self.simple_capitalization_enabled(),
         )
     }
 
@@ -4083,7 +4083,7 @@ impl Bank {
     pub fn calculate_capitalization(&self) -> u64 {
         self.rc
             .accounts
-            .calculate_capitalization(&self.ancestors, self.simpler_capitalization_enabled())
+            .calculate_capitalization(&self.ancestors, self.simple_capitalization_enabled())
     }
 
     pub fn calculate_and_verify_capitalization(&self) -> bool {
@@ -4117,7 +4117,7 @@ impl Bank {
         let (hash, total_lamports) = self.rc.accounts.accounts_db.update_accounts_hash(
             self.slot(),
             &self.ancestors,
-            self.simpler_capitalization_enabled(),
+            self.simple_capitalization_enabled(),
         );
         assert_eq!(total_lamports, self.capitalization());
         hash
@@ -4427,18 +4427,18 @@ impl Bank {
             .is_active(&feature_set::stake_program_v2::id())
     }
 
-    pub fn simpler_capitalization_enabled(&self) -> bool {
-        self.simpler_capitalization_enabled_at_genesis()
+    pub fn simple_capitalization_enabled(&self) -> bool {
+        self.simple_capitalization_enabled_at_genesis()
             || self
                 .feature_set
-                .is_active(&feature_set::simpler_capitalization::id())
+                .is_active(&feature_set::simple_capitalization::id())
     }
 
-    fn simpler_capitalization_enabled_at_genesis(&self) -> bool {
+    fn simple_capitalization_enabled_at_genesis(&self) -> bool {
         // genesis builtin initialization codepath is called even before the initial
         // feature activation, so we need to peek this flag at very early bank
         // initialization phase for the development genesis case
-        if let Some(account) = self.get_account(&feature_set::simpler_capitalization::id()) {
+        if let Some(account) = self.get_account(&feature_set::simple_capitalization::id()) {
             if let Some(feature) = feature::from_account(&account) {
                 if feature.activated_at == Some(0) {
                     return true;
@@ -4480,7 +4480,7 @@ impl Bank {
             self.rewrite_stakes();
         }
 
-        if new_feature_activations.contains(&feature_set::simpler_capitalization::id()) {
+        if new_feature_activations.contains(&feature_set::simple_capitalization::id()) {
             self.adjust_capitalization_for_existing_specially_retained_accounts();
         }
 
@@ -7973,7 +7973,7 @@ pub(crate) mod tests {
         assert_eq!(None, bank3.get_account_modified_since_parent(&pubkey));
     }
 
-    fn do_test_bank_update_sysvar_account(simpler_capitalization_enabled: bool) {
+    fn do_test_bank_update_sysvar_account(simple_capitalization_enabled: bool) {
         use sysvar::clock::Clock;
 
         let dummy_clock_id = solana_sdk::pubkey::new_rand();
@@ -7983,7 +7983,7 @@ pub(crate) mod tests {
         let expected_next_slot = expected_previous_slot + 1;
 
         // First, initialize the clock sysvar
-        if simpler_capitalization_enabled {
+        if simple_capitalization_enabled {
             activate_all_features(&mut genesis_config);
         }
         let bank1 = Arc::new(Bank::new(&genesis_config));
@@ -8010,8 +8010,8 @@ pub(crate) mod tests {
                 );
             },
             |old, new| {
-                // only if simpler_capitalization_enabled, cap should increment
-                if simpler_capitalization_enabled {
+                // only if simple_capitalization_enabled, cap should increment
+                if simple_capitalization_enabled {
                     assert_eq!(old + 1, new);
                 } else {
                     assert_eq!(old, new);
@@ -8104,12 +8104,12 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_bank_update_sysvar_account_with_simpler_capitalization_disabled() {
+    fn test_bank_update_sysvar_account_with_simple_capitalization_disabled() {
         do_test_bank_update_sysvar_account(false)
     }
 
     #[test]
-    fn test_bank_update_sysvar_account_with_simpler_capitalization_enabled() {
+    fn test_bank_update_sysvar_account_with_simple_capitalization_enabled() {
         do_test_bank_update_sysvar_account(true);
     }
 
@@ -10174,9 +10174,9 @@ pub(crate) mod tests {
         assert_eq!(bank.get_account_modified_slot(&loader_id).unwrap().1, slot);
     }
 
-    fn do_test_add_native_program(simpler_capitalization_enabled: bool) {
+    fn do_test_add_native_program(simple_capitalization_enabled: bool) {
         let (mut genesis_config, _mint_keypair) = create_genesis_config(100_000);
-        if simpler_capitalization_enabled {
+        if simple_capitalization_enabled {
             activate_all_features(&mut genesis_config);
         }
 
@@ -10194,7 +10194,7 @@ pub(crate) mod tests {
             &bank,
             || bank.add_native_program("mock_program", &program_id, false),
             |old, new| {
-                if simpler_capitalization_enabled {
+                if simple_capitalization_enabled {
                     assert_eq!(old + 1, new);
                 } else {
                     assert_eq!(old, new);
@@ -10242,12 +10242,12 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_add_native_program_with_simpler_capitalization_disabled() {
+    fn test_add_native_program_with_simple_capitalization_disabled() {
         do_test_add_native_program(false);
     }
 
     #[test]
-    fn test_add_native_program_with_simpler_capitalization_enabled() {
+    fn test_add_native_program_with_simple_capitalization_enabled() {
         do_test_add_native_program(true);
     }
 
@@ -10834,7 +10834,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_simpler_capitalization_adjustment_minimum_genesis_set() {
+    fn test_simple_capitalization_adjustment_minimum_genesis_set() {
         solana_logger::setup();
 
         let (mut genesis_config, _mint_keypair) = create_genesis_config(0);
@@ -10857,7 +10857,7 @@ pub(crate) mod tests {
 
         // schedule activation of simpler capitalization
         bank1.store_account_and_update_capitalization(
-            &feature_set::simpler_capitalization::id(),
+            &feature_set::simple_capitalization::id(),
             &feature::create_account(&Feature { activated_at: None }, feature_balance),
         );
 
@@ -10870,7 +10870,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_simpler_capitalization_adjustment_full_set() {
+    fn test_simple_capitalization_adjustment_full_set() {
         solana_logger::setup();
 
         let (mut genesis_config, _mint_keypair) = create_genesis_config(0);
@@ -10881,7 +10881,7 @@ pub(crate) mod tests {
         activate_all_features(&mut genesis_config);
         genesis_config
             .accounts
-            .remove(&feature_set::simpler_capitalization::id());
+            .remove(&feature_set::simple_capitalization::id());
         // intentionally create deprecated rewards sysvar creation
         genesis_config
             .accounts
@@ -10927,7 +10927,7 @@ pub(crate) mod tests {
 
         // schedule activation of simpler capitalization
         bank1.store_account_and_update_capitalization(
-            &feature_set::simpler_capitalization::id(),
+            &feature_set::simple_capitalization::id(),
             &feature::create_account(&Feature { activated_at: None }, feature_balance),
         );
 
