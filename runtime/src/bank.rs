@@ -2281,13 +2281,13 @@ impl Bank {
         // not attempt to freeze after observing the last tick and before blockhash is
         // updated
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
-        let current_tick_height = self.tick_height.fetch_add(1, Relaxed) as u64;
-        if self.is_block_boundary(current_tick_height + 1) {
+        if self.is_block_boundary(self.tick_height.load(Relaxed) + 1) {
             w_blockhash_queue.register_hash(hash, &self.fee_calculator);
             if self.fix_recent_blockhashes_sysvar_delay() {
                 self.update_recent_blockhashes_locked(&w_blockhash_queue);
             }
         }
+        let current_tick_height = self.tick_height.fetch_add(1, Relaxed) as u64;
     }
 
     pub fn is_complete(&self) -> bool {
