@@ -1302,8 +1302,6 @@ mod tests {
 
     #[test]
     fn test_bpf_loader_upgradeable_deploy_with_max_len() {
-        solana_logger::setup();
-
         let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000);
         let mut bank = Bank::new(&genesis_config);
         bank.add_builtin(

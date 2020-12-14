@@ -3802,7 +3802,6 @@ dependencies = [
  "num-traits",
  "rand 0.7.3",
  "rustversion",
- "solana-logger 1.5.0",
  "solana-runtime",
  "solana-sdk",
  "solana_rbpf",
