@@ -460,7 +460,11 @@ impl Accounts {
         accounts_balances
     }
 
-    pub fn calculate_capitalization(&self, ancestors: &Ancestors) -> u64 {
+    pub fn calculate_capitalization(
+        &self,
+        ancestors: &Ancestors,
+        simple_capitalization_enabled: bool,
+    ) -> u64 {
         let balances =
             self.load_all_unchecked(ancestors)
                 .into_iter()
@@ -469,6 +473,7 @@ impl Accounts {
                         account.lamports,
                         &account.owner,
                         account.executable,
+                        simple_capitalization_enabled,
                     )
                 });
 
@@ -481,11 +486,14 @@ impl Accounts {
         slot: Slot,
         ancestors: &Ancestors,
         total_lamports: u64,
+        simple_capitalization_enabled: bool,
     ) -> bool {
-        if let Err(err) =
-            self.accounts_db
-                .verify_bank_hash_and_lamports(slot, ancestors, total_lamports)
-        {
+        if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports(
+            slot,
+            ancestors,
+            total_lamports,
+            simple_capitalization_enabled,
+        ) {
             warn!("verify_bank_hash failed: {:?}", err);
             false
         } else {
