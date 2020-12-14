@@ -2277,9 +2277,6 @@ impl Bank {
         );
 
         inc_new_counter_debug!("bank-register_tick-registered", 1);
-        // Grab blockhash lock before incrementing tick height so that replay stage does
-        // not attempt to freeze after observing the last tick and before blockhash is
-        // updated
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
         if self.is_block_boundary(self.tick_height.load(Relaxed) + 1) {
             w_blockhash_queue.register_hash(hash, &self.fee_calculator);
@@ -2287,7 +2284,12 @@ impl Bank {
                 self.update_recent_blockhashes_locked(&w_blockhash_queue);
             }
         }
-        let current_tick_height = self.tick_height.fetch_add(1, Relaxed) as u64;
+        // ReplayStage will start computing the accounts delta hash when it
+        // detects the tick height has reached the boundary, so the system
+        // needs to guarantee all account updates for the slot have been
+        // committed before this tick height is incremented (like the blockhash
+        // sysvar above)
+        self.tick_height.fetch_add(1, Relaxed);
     }
 
     pub fn is_complete(&self) -> bool {
