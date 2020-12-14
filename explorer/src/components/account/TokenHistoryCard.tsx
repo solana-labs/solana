@@ -172,12 +172,16 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
       return oldestSlot !== undefined && tx.slot >= oldestSlot;
     });
 
-  const filtered = mintAndTxs.filter(({ mint }) => {
-    if (filter === "") {
-      return true;
-    }
-    return mint.toBase58() === filter;
-  });
+  const filtered = React.useMemo(
+    () =>
+      mintAndTxs.filter(({ mint }) => {
+        if (filter === ALL_TOKENS) {
+          return true;
+        }
+        return mint.toBase58() === filter;
+      }),
+    [filter, mintAndTxs]
+  );
 
   React.useEffect(() => {
     if (!fetching && filtered.length < 1 && !allFoundOldest) {
@@ -332,12 +336,7 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
           return (
             <Link
               key={filterOption}
-              to={(location: Location) =>
-                buildLocation(
-                  location,
-                  filterOption
-                )
-              }
+              to={(location: Location) => buildLocation(location, filterOption)}
               className={`dropdown-item${
                 filterOption === filter ? " active" : ""
               }`}
