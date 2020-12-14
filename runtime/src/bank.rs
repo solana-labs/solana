@@ -10932,6 +10932,7 @@ pub(crate) mod tests {
             .remove(&feature_set::deprecate_rewards_sysvar::id());
 
         // intentionally create bogus native programs
+        #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
             _program_id: &Pubkey,
             _keyed_accounts: &[KeyedAccount],
