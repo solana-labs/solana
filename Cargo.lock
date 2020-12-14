@@ -3963,10 +3963,10 @@ dependencies = [
 
 [[package]]
 name = "solana-accounts-cluster-bench"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "clap",
- "log 0.4.8",
+ "log 0.4.11",
  "rand 0.7.3",
  "rayon",
  "solana-clap-utils",
@@ -3974,7 +3974,7 @@ dependencies = [
  "solana-core",
  "solana-faucet",
  "solana-local-cluster",
- "solana-logger 1.5.0",
+ "solana-logger 1.6.0",
  "solana-measure",
  "solana-net-utils",
  "solana-sdk",

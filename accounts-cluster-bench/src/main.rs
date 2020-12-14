@@ -1,6 +1,7 @@
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg};
 use log::*;
 use rand::{thread_rng, Rng};
+use rayon::prelude::*;
 use solana_client::rpc_client::RpcClient;
 use solana_core::gossip_service::discover;
 use solana_faucet::faucet::{request_airdrop_transaction, FAUCET_PORT};
@@ -12,7 +13,9 @@ use solana_sdk::{message::Message, transaction::Transaction};
 use solana_sdk::{system_instruction, system_program};
 use std::net::SocketAddr;
 use std::process::exit;
-use std::thread::sleep;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, RwLock};
+use std::thread::{sleep, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 
@@ -80,6 +83,189 @@ pub fn airdrop_lamports(
     true
 }
 
+// signature, timestamp, id
+type PendingQueue = Vec<(Signature, u64, u64)>;
+
+struct TransactionExecutor {
+    sig_clear_t: JoinHandle<()>,
+    sigs: Arc<RwLock<PendingQueue>>,
+    cleared: Arc<RwLock<Vec<u64>>>,
+    exit: Arc<AtomicBool>,
+    counter: AtomicU64,
+    client: RpcClient,
+}
+
+impl TransactionExecutor {
+    fn new(entrypoint_addr: SocketAddr) -> Self {
+        let sigs = Arc::new(RwLock::new(Vec::new()));
+        let cleared = Arc::new(RwLock::new(Vec::new()));
+        let exit = Arc::new(AtomicBool::new(false));
+        let sig_clear_t = Self::start_sig_clear_thread(&exit, &sigs, &cleared, entrypoint_addr);
+        let client = RpcClient::new_socket(entrypoint_addr);
+        Self {
+            sigs,
+            cleared,
+            sig_clear_t,
+            exit,
+            counter: AtomicU64::new(0),
+            client,
+        }
+    }
+
+    fn num_outstanding(&self) -> usize {
+        self.sigs.read().unwrap().len()
+    }
+
+    fn push_transactions(&self, txs: Vec<Transaction>) -> Vec<u64> {
+        let mut ids = vec![];
+        let new_sigs = txs.into_iter().filter_map(|tx| {
+            let id = self.counter.fetch_add(1, Ordering::Relaxed);
+            ids.push(id);
+            match self.client.send_transaction(&tx) {
+                Ok(sig) => {
+                    return Some((sig, timestamp(), id));
+                }
+                Err(e) => {
+                    info!("error: {:#?}", e);
+                }
+            }
+            None
+        });
+        let mut sigs_w = self.sigs.write().unwrap();
+        sigs_w.extend(new_sigs);
+        ids
+    }
+
+    fn drain_cleared(&self) -> Vec<u64> {
+        std::mem::take(&mut *self.cleared.write().unwrap())
+    }
+
+    fn close(self) {
+        self.exit.store(true, Ordering::Relaxed);
+        self.sig_clear_t.join().unwrap();
+    }
+
+    fn start_sig_clear_thread(
+        exit: &Arc<AtomicBool>,
+        sigs: &Arc<RwLock<PendingQueue>>,
+        cleared: &Arc<RwLock<Vec<u64>>>,
+        entrypoint_addr: SocketAddr,
+    ) -> JoinHandle<()> {
+        let sigs = sigs.clone();
+        let exit = exit.clone();
+        let cleared = cleared.clone();
+        Builder::new()
+            .name("sig_clear".to_string())
+            .spawn(move || {
+                let client = RpcClient::new_socket(entrypoint_addr);
+                let mut success = 0;
+                let mut error_count = 0;
+                let mut timed_out = 0;
+                let mut last_log = Instant::now();
+                while !exit.load(Ordering::Relaxed) {
+                    let sigs_len = sigs.read().unwrap().len();
+                    if sigs_len > 0 {
+                        let mut sigs_w = sigs.write().unwrap();
+                        let mut start = Measure::start("sig_status");
+                        let statuses: Vec<_> = sigs_w
+                            .chunks(200)
+                            .map(|sig_chunk| {
+                                let only_sigs: Vec<_> = sig_chunk.iter().map(|s| s.0).collect();
+                                client
+                                    .get_signature_statuses(&only_sigs)
+                                    .expect("status fail")
+                                    .value
+                            })
+                            .flatten()
+                            .collect();
+                        let mut num_cleared = 0;
+                        let start_len = sigs_w.len();
+                        let now = timestamp();
+                        let mut new_ids = vec![];
+                        let mut i = 0;
+                        let mut j = 0;
+                        while i != sigs_w.len() {
+                            let mut retain = true;
+                            let sent_ts = sigs_w[i].1;
+                            if let Some(e) = &statuses[j] {
+                                debug!("error: {:?}", e);
+                                if e.status.is_ok() {
+                                    success += 1;
+                                } else {
+                                    error_count += 1;
+                                }
+                                num_cleared += 1;
+                                retain = false;
+                            } else if now - sent_ts > 30_000 {
+                                retain = false;
+                                timed_out += 1;
+                            }
+                            if !retain {
+                                new_ids.push(sigs_w.remove(i).2);
+                            } else {
+                                i += 1;
+                            }
+                            j += 1;
+                        }
+                        let final_sigs_len = sigs_w.len();
+                        drop(sigs_w);
+                        cleared.write().unwrap().extend(new_ids);
+                        start.stop();
+                        debug!(
+                            "sigs len: {:?} success: {} took: {}ms cleared: {}/{}",
+                            final_sigs_len,
+                            success,
+                            start.as_ms(),
+                            num_cleared,
+                            start_len,
+                        );
+                        if last_log.elapsed().as_millis() > 5000 {
+                            info!(
+                                "success: {} error: {} timed_out: {}",
+                                success, error_count, timed_out,
+                            );
+                            last_log = Instant::now();
+                        }
+                    }
+                    sleep(Duration::from_millis(200));
+                }
+            })
+            .unwrap()
+    }
+}
+
+fn make_message(
+    keypair: &Keypair,
+    num_instructions: usize,
+    balance: u64,
+    maybe_space: Option<u64>,
+) -> (Message, Vec<Keypair>) {
+    let space = maybe_space.unwrap_or_else(|| thread_rng().gen_range(0, 1000));
+
+    let (instructions, new_keypairs): (Vec<_>, Vec<_>) = (0..num_instructions)
+        .into_iter()
+        .map(|_| {
+            let new_keypair = Keypair::new();
+
+            (
+                system_instruction::create_account(
+                    &keypair.pubkey(),
+                    &new_keypair.pubkey(),
+                    balance,
+                    space,
+                    &system_program::id(),
+                ),
+                new_keypair,
+            )
+        })
+        .unzip();
+
+    (
+        Message::new(&instructions, Some(&keypair.pubkey())),
+        new_keypairs,
+    )
+}
+
 fn run_accounts_bench(
     entrypoint_addr: SocketAddr,
     faucet_addr: SocketAddr,
@@ -87,7 +273,6 @@ fn run_accounts_bench(
     iterations: usize,
     maybe_space: Option<u64>,
     batch_size: usize,
-    keep_sigs: bool,
     maybe_lamports: Option<u64>,
     num_instructions: usize,
 ) {
@@ -99,16 +284,11 @@ fn run_accounts_bench(
     let mut last_blockhash = Instant::now();
     let mut last_log = Instant::now();
     let mut count = 0;
-    let mut error_count = 0;
-    let mut sigs: Vec<(Signature, u64)> = vec![];
-    let mut keypairs = vec![];
     let mut recent_blockhash = client.get_recent_blockhash().expect("blockhash");
     let mut tx_sent_count = 0;
     let mut total_account_count = 0;
-    let mut success = 0;
     let mut balance = client.get_balance(&keypair.pubkey()).unwrap_or(0);
     let mut last_balance = Instant::now();
-    let mut timed_out = 0;
 
     let default_max_lamports = 1000;
     let min_balance = maybe_lamports.unwrap_or_else(|| {
@@ -117,9 +297,10 @@ fn run_accounts_bench(
             .get_minimum_balance_for_rent_exemption(space as usize)
             .expect("min balance")
     });
-    let mut from_empty = Instant::now();
 
     info!("Starting balance: {}", balance);
+
+    let executor = TransactionExecutor::new(entrypoint_addr);
 
     loop {
         if last_blockhash.elapsed().as_millis() > 10_000 {
@@ -127,31 +308,8 @@ fn run_accounts_bench(
             last_blockhash = Instant::now();
         }
 
-        let space = maybe_space.unwrap_or_else(|| thread_rng().gen_range(0, 1000));
-
-        let (instructions, mut new_keypairs): (Vec<_>, Vec<_>) = (0..num_instructions)
-            .into_iter()
-            .map(|_| {
-                let new_keypair = Keypair::new();
-
-                (
-                    system_instruction::create_account(
-                        &keypair.pubkey(),
-                        &new_keypair.pubkey(),
-                        min_balance,
-                        space,
-                        &system_program::id(),
-                    ),
-                    new_keypair,
-                )
-            })
-            .unzip();
-
-        let signers: Vec<&Keypair> = new_keypairs
-            .iter()
-            .chain(std::iter::once(keypair))
-            .collect();
-        let message = Message::new(&instructions, Some(&keypair.pubkey()));
+        let (message, _keypairs) =
+            make_message(keypair, num_instructions, min_balance, maybe_space);
         let fee = recent_blockhash.1.calculate_fee(&message);
         let lamports = min_balance + fee;
 
@@ -172,89 +330,51 @@ fn run_accounts_bench(
             }
         }
 
-        let tx = Transaction::new(&signers, message, recent_blockhash.0);
-
-        if keep_sigs {
-            keypairs.extend(new_keypairs.drain(..));
-        }
-
-        if sigs.len() >= batch_size {
-            let time = from_empty.elapsed();
-            let mut start = Measure::start("sig_status");
-            let statuses: Vec<_> = sigs
-                .chunks(200)
-                .map(|sig_chunk| {
-                    let only_sigs: Vec<_> = sig_chunk.iter().map(|s| s.0).collect();
-                    client
-                        .get_signature_statuses(&only_sigs)
-                        .expect("status fail")
-                        .value
+        let sigs_len = executor.num_outstanding();
+        if sigs_len < batch_size {
+            let num_to_create = batch_size - sigs_len;
+            info!("creating {} new", num_to_create);
+            let (txs, _new_keypairs): (Vec<_>, Vec<_>) = (0..num_to_create)
+                .into_par_iter()
+                .map(|_| {
+                    let (message, new_keypairs) =
+                        make_message(keypair, num_instructions, min_balance, maybe_space);
+                    let signers: Vec<&Keypair> = new_keypairs
+                        .iter()
+                        .chain(std::iter::once(keypair))
+                        .collect();
+                    (
+                        Transaction::new(&signers, message, recent_blockhash.0),
+                        new_keypairs,
+                    )
                 })
-                .flatten()
-                .collect();
-            let mut i = 0;
-            let mut cleared = 0;
-            let start_len = sigs.len();
-            let now = timestamp();
-            sigs.retain(|(_sig, sent_ts)| {
-                let mut retain = true;
-                if let Some(e) = &statuses[i] {
-                    debug!("error: {:?}", e);
-                    if e.status.is_ok() {
-                        success += 1;
-                    } else {
-                        error_count += 1;
-                    }
-                    cleared += 1;
-                    retain = false;
-                } else if now - sent_ts > 30_000 {
-                    retain = false;
-                    timed_out += 1;
-                }
-                i += 1;
-                retain
-            });
-            start.stop();
-            info!(
-                "sigs len: {:?} {} took: {}ms cleared: {}/{}",
-                sigs.len(),
-                start,
-                time.as_millis(),
-                cleared,
-                start_len,
-            );
+                .unzip();
+            balance -= lamports * txs.len() as u64;
+            info!("txs: {}", txs.len());
+            let new_ids = executor.push_transactions(txs);
+            info!("ids: {}", new_ids.len());
+            tx_sent_count += new_ids.len();
+            total_account_count += num_instructions * new_ids.len();
         } else {
-            if sigs.is_empty() {
-                from_empty = Instant::now();
-            }
-            balance -= lamports;
-            match client.send_transaction(&tx) {
-                Ok(sig) => {
-                    sigs.push((sig, timestamp()));
-                    tx_sent_count += 1;
-                    total_account_count += num_instructions;
-                }
-                Err(e) => {
-                    info!("error: {:#?}", e);
-                }
-            }
+            let _ = executor.drain_cleared();
         }
 
         count += 1;
-        if last_log.elapsed().as_secs() > 2 {
+        if last_log.elapsed().as_millis() > 3000 {
             info!(
-                "total_accounts: {} tx_sent_count: {} loop_count: {} success: {} errors: {} timed_out: {} balance: {}",
-                total_account_count, tx_sent_count, count, success, error_count, timed_out, balance
+                "total_accounts: {} tx_sent_count: {} loop_count: {} balance: {}",
+                total_account_count, tx_sent_count, count, balance
             );
             last_log = Instant::now();
         }
         if iterations != 0 && count >= iterations {
             break;
         }
-        if sigs.len() >= batch_size {
+        if executor.num_outstanding() >= batch_size {
             sleep(Duration::from_millis(500));
         }
     }
+    executor.close();
 }
 
 fn main() {
@@ -336,8 +456,6 @@ fn main() {
         });
     }
 
-    let keep_sigs = matches.is_present("keep_sigs");
-
     let space = value_t!(matches, "space", u64).ok();
     let lamports = value_t!(matches, "lamports", u64).ok();
     let batch_size = value_t!(matches, "batch_size", usize).unwrap_or(4);
@@ -351,8 +469,7 @@ fn main() {
     let keypair =
         read_keypair_file(&value_t_or_exit!(matches, "identity", String)).expect("bad keypair");
 
-    let mut nodes = vec![];
-    if !skip_gossip {
+    let rpc_addr = if !skip_gossip {
         info!("Finding cluster entry: {:?}", entrypoint_addr);
         let (gossip_nodes, _validators) = discover(
             None,
@@ -368,19 +485,21 @@ fn main() {
             eprintln!("Failed to discover {} node: {:?}", entrypoint_addr, err);
             exit(1);
         });
-        nodes = gossip_nodes;
-    }
 
-    info!("done found {} nodes", nodes.len());
+        info!("done found {} nodes", gossip_nodes.len());
+        gossip_nodes[0].rpc
+    } else {
+        info!("Using {:?} as the RPC address", entrypoint_addr);
+        entrypoint_addr
+    };
 
     run_accounts_bench(
-        entrypoint_addr,
+        rpc_addr,
         faucet_addr,
         &keypair,
         iterations,
         space,
         batch_size,
-        keep_sigs,
         lamports,
         num_instructions,
     );
@@ -410,10 +529,10 @@ pub mod test {
         let cluster = LocalCluster::new(&mut config);
         let iterations = 10;
         let maybe_space = None;
-        let keep_sigs = false;
-        let batch_size = 4;
+        let batch_size = 100;
         let maybe_lamports = None;
         let num_instructions = 2;
+        let mut start = Measure::start("total accounts run");
         run_accounts_bench(
             cluster.entry_point_info.rpc,
             faucet_addr,
@@ -421,9 +540,10 @@ pub mod test {
             iterations,
             maybe_space,
             batch_size,
-            keep_sigs,
             maybe_lamports,
             num_instructions,
         );
+        start.stop();
+        info!("{}", start);
     }
 }
