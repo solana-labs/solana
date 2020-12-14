@@ -109,9 +109,6 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --rpc-faucet-address ]]; then
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --vote-signer-address ]]; then
-      args+=("$1" "$2")
-      shift 2
     elif [[ $1 = --accounts ]]; then
       args+=("$1" "$2")
       shift 2

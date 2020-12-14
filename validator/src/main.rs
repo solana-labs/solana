@@ -998,15 +998,6 @@ pub fn main() {
                 .help("Enable the JSON RPC 'requestAirdrop' API with this faucet address."),
         )
         .arg(
-            Arg::with_name("signer_addr")
-                .long("vote-signer-address")
-                .value_name("HOST:PORT")
-                .takes_value(true)
-                .hidden(true) // Don't document this argument to discourage its use
-                .validator(solana_net_utils::is_host_port)
-                .help("Rendezvous with the vote signer at this RPC end point"),
-        )
-        .arg(
             Arg::with_name("account_paths")
                 .long("accounts")
                 .value_name("PATHS")
@@ -1607,10 +1598,6 @@ pub fn main() {
 
     if matches.is_present("halt_on_trusted_validators_accounts_hash_mismatch") {
         validator_config.halt_on_trusted_validators_accounts_hash_mismatch = true;
-    }
-
-    if matches.value_of("signer_addr").is_some() {
-        warn!("--vote-signer-address ignored");
     }
 
     let entrypoint_addr = matches.value_of("entrypoint").map(|entrypoint| {
