@@ -86,6 +86,8 @@ fn main() {
             "sha256",
             "call_depth",
             "sysval",
+            "upgradeable",
+            "upgraded",
         ];
         for program in rust_programs.iter() {
             println!(

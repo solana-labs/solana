@@ -16,6 +16,7 @@ use rayon::slice::ParallelSliceMut;
 use solana_sdk::{
     account::Account,
     account_utils::StateMut,
+    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::{Epoch, Slot},
     feature_set::{self, FeatureSet},
     fee_calculator::{FeeCalculator, FeeConfig},
@@ -236,7 +237,7 @@ impl Accounts {
         let mut program_id = *program_id;
         loop {
             if native_loader::check_id(&program_id) {
-                // at the root of the chain, ready to dispatch
+                // At the root of the chain, ready to dispatch
                 break;
             }
 
@@ -262,8 +263,31 @@ impl Accounts {
                 return Err(TransactionError::InvalidProgramForExecution);
             }
 
-            // add loader to chain
+            // Add loader to chain
             let program_owner = program.owner;
+
+            if bpf_loader_upgradeable::check_id(&program_owner) {
+                // The upgradeable loader requires the derived ProgramData account
+                if let Ok(UpgradeableLoaderState::Program {
+                    programdata_address,
+                }) = program.state()
+                {
+                    if let Some(program) = self
+                        .accounts_db
+                        .load(ancestors, &programdata_address)
+                        .map(|(account, _)| account)
+                    {
+                        accounts.insert(0, (programdata_address, program));
+                    } else {
+                        error_counters.account_not_found += 1;
+                        return Err(TransactionError::ProgramAccountNotFound);
+                    }
+                } else {
+                    error_counters.invalid_program_for_execution += 1;
+                    return Err(TransactionError::InvalidProgramForExecution);
+                }
+            }
+
             accounts.insert(0, (program_id, program));
             program_id = program_owner;
         }
