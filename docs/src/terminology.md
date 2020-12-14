@@ -120,7 +120,7 @@ An increase in token supply over time used to fund rewards for validation and to
 
 ## instruction
 
-The smallest unit of a [program](terminology.md#program) that a [client](terminology.md#client) can include in a [transaction](terminology.md#instruction).
+The smallest unit of a [program](terminology.md#program) that a [client](terminology.md#client) can include in a [transaction](terminology.md#transaction).
 
 ## keypair
 
