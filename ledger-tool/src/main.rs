@@ -1218,6 +1218,13 @@ fn main() {
                            bugs are feature-gated behind this)"),
             )
             .arg(
+                Arg::with_name("enable_simple_capitalization")
+                    .required(false)
+                    .long("enable-simple-capitalization")
+                    .takes_value(false)
+                    .help("Enable simple capitalization to test hardcoded cap adjustments"),
+            )
+            .arg(
                 Arg::with_name("recalculate_capitalization")
                     .required(false)
                     .long("recalculate-capitalization")
@@ -2115,11 +2122,47 @@ fn main() {
                             .lazy_rent_collection
                             .store(true, std::sync::atomic::Ordering::Relaxed);
 
+                        let feature_account_balance = std::cmp::max(
+                            genesis_config.rent.minimum_balance(Feature::size_of()),
+                            1,
+                        );
+                        if arg_matches.is_present("enable_simple_capitalization") {
+                            if base_bank
+                                .get_account(&feature_set::simple_capitalization::id())
+                                .is_none()
+                            {
+                                base_bank.store_account(
+                                    &feature_set::simple_capitalization::id(),
+                                    &feature::create_account(
+                                        &Feature { activated_at: None },
+                                        feature_account_balance,
+                                    ),
+                                );
+                                if base_bank
+                                    .get_account(&feature_set::cumulative_rent_related_fixes::id())
+                                    .is_some()
+                                {
+                                    // steal some lamports from the pretty old feature not to affect
+                                    // capitalizaion, which doesn't affect inflation behavior!
+                                    base_bank.store_account(
+                                        &feature_set::cumulative_rent_related_fixes::id(),
+                                        &Account::default(),
+                                    );
+                                } else {
+                                    let old_cap = base_bank.set_capitalization();
+                                    let new_cap = base_bank.capitalization();
+                                    warn!(
+                                        "Skewing capitalization a bit to enable simple capitalization as \
+                                        requested: increasing {} from {} to {}",
+                                        feature_account_balance, old_cap, new_cap,
+                                    );
+                                    assert_eq!(old_cap + feature_account_balance, new_cap);
+                                }
+                            } else {
+                                warn!("Already simple_capitalization is activated (or scheduled)");
+                            }
+                        }
                         if arg_matches.is_present("enable_stake_program_v2") {
-                            let feature_account_balance = std::cmp::max(
-                                genesis_config.rent.minimum_balance(Feature::size_of()),
-                                1,
-                            );
                             let mut force_enabled_count = 0;
                             if base_bank
                                 .get_account(&feature_set::stake_program_v2::id())
