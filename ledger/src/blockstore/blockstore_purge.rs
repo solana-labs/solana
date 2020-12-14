@@ -95,7 +95,7 @@ impl Blockstore {
             .batch()
             .expect("Database Error: Failed to get write batch");
         // delete range cf is not inclusive
-        let to_slot = to_slot.checked_add(1).unwrap_or_else(|| std::u64::MAX);
+        let to_slot = to_slot.checked_add(1).unwrap_or(std::u64::MAX);
 
         let mut delete_range_timer = Measure::start("delete_range");
         let mut columns_purged = self

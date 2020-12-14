@@ -375,7 +375,7 @@ pub fn process_blockstore(
     let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");
     let recyclers = VerifyRecyclers::default();
-    process_bank_0(&bank0, blockstore, &opts, &recyclers)?;
+    process_bank_0(&bank0, blockstore, &opts, &recyclers);
     do_process_blockstore_from_root(blockstore, bank0, &opts, &recyclers, None)
 }
 
@@ -738,7 +738,7 @@ fn process_bank_0(
     blockstore: &Blockstore,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
-) -> result::Result<(), BlockstoreProcessorError> {
+) {
     assert_eq!(bank0.slot(), 0);
     let mut progress = ConfirmationProgress::new(bank0.last_blockhash());
     confirm_full_slot(
@@ -752,7 +752,6 @@ fn process_bank_0(
     )
     .expect("processing for bank 0 must succeed");
     bank0.freeze();
-    Ok(())
 }
 
 // Given a bank, add its children to the pending slots queue if those children slots are
@@ -2715,7 +2714,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let recyclers = VerifyRecyclers::default();
-        process_bank_0(&bank0, &blockstore, &opts, &recyclers).unwrap();
+        process_bank_0(&bank0, &blockstore, &opts, &recyclers);
         let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
         confirm_full_slot(
             &blockstore,
@@ -2901,7 +2900,7 @@ pub mod tests {
 
     fn frozen_bank_slots(bank_forks: &BankForks) -> Vec<Slot> {
         let mut slots: Vec<_> = bank_forks.frozen_banks().keys().cloned().collect();
-        slots.sort();
+        slots.sort_unstable();
         slots
     }
 
@@ -3210,6 +3209,7 @@ pub mod tests {
     }
 
     #[test]
+    #[allow(clippy::field_reassign_with_default)]
     fn test_supermajority_root_from_vote_accounts() {
         let convert_to_vote_accounts =
             |roots_stakes: Vec<(Slot, u64)>| -> Vec<(Pubkey, (u64, ArcVoteAccount))> {

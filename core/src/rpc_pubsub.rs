@@ -534,8 +534,10 @@ mod tests {
             .get(current_slot)
             .unwrap()
             .process_transaction(tx)?;
-        let mut commitment_slots = CommitmentSlots::default();
-        commitment_slots.slot = current_slot;
+        let commitment_slots = CommitmentSlots {
+            slot: current_slot,
+            ..CommitmentSlots::default()
+        };
         subscriptions.notify_subscribers(commitment_slots);
         Ok(())
     }
@@ -1018,8 +1020,10 @@ mod tests {
             .unwrap()
             .process_transaction(&tx)
             .unwrap();
-        let mut commitment_slots = CommitmentSlots::default();
-        commitment_slots.slot = 1;
+        let commitment_slots = CommitmentSlots {
+            slot: 1,
+            ..CommitmentSlots::default()
+        };
         rpc.subscriptions.notify_subscribers(commitment_slots);
 
         let commitment_slots = CommitmentSlots {

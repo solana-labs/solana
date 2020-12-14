@@ -322,7 +322,7 @@ mod tests {
         LeaderScheduleCache::retain_latest(&mut cached_schedules, &mut order, MAX_SCHEDULES);
         assert_eq!(cached_schedules.len(), MAX_SCHEDULES);
         let mut keys: Vec<_> = cached_schedules.keys().cloned().collect();
-        keys.sort();
+        keys.sort_unstable();
         let expected: Vec<_> = (1..=MAX_SCHEDULES as u64).collect();
         let expected_order: VecDeque<_> = (1..=MAX_SCHEDULES as u64).collect();
         assert_eq!(expected, keys);

@@ -284,8 +284,7 @@ fn test_rpc_subscriptions() {
                 }
             }
             Err(_err) => {
-                assert!(
-                    false,
+                panic!(
                     "recv_timeout, {}/{} signatures remaining",
                     signature_set.len(),
                     transactions.len()
@@ -304,8 +303,7 @@ fn test_rpc_subscriptions() {
                 account_notifications -= 1;
             }
             Err(_err) => {
-                assert!(
-                    false,
+                panic!(
                     "recv_timeout, {}/{} accounts remaining",
                     account_notifications,
                     transactions.len()

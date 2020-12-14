@@ -22,15 +22,17 @@ fn test_exchange_local_cluster() {
 
     const NUM_NODES: usize = 1;
 
-    let mut config = Config::default();
-    config.identity = Keypair::new();
-    config.duration = Duration::from_secs(1);
-    config.fund_amount = 100_000;
-    config.threads = 1;
-    config.transfer_delay = 20; // 15
-    config.batch_size = 100; // 1000;
-    config.chunk_size = 10; // 200;
-    config.account_groups = 1; // 10;
+    let config = Config {
+        identity: Keypair::new(),
+        duration: Duration::from_secs(1),
+        fund_amount: 100_000,
+        threads: 1,
+        transfer_delay: 20, // 15
+        batch_size: 100,    // 1000
+        chunk_size: 10,     // 200
+        account_groups: 1,  // 10
+        ..Config::default()
+    };
     let Config {
         fund_amount,
         batch_size,
@@ -89,15 +91,18 @@ fn test_exchange_bank_client() {
     bank.add_builtin("exchange_program", id(), process_instruction);
     let clients = vec![BankClient::new(bank)];
 
-    let mut config = Config::default();
-    config.identity = identity;
-    config.duration = Duration::from_secs(1);
-    config.fund_amount = 100_000;
-    config.threads = 1;
-    config.transfer_delay = 20; // 0;
-    config.batch_size = 100; // 1500;
-    config.chunk_size = 10; // 1500;
-    config.account_groups = 1; // 50;
-
-    do_bench_exchange(clients, config);
+    do_bench_exchange(
+        clients,
+        Config {
+            identity,
+            duration: Duration::from_secs(1),
+            fund_amount: 100_000,
+            threads: 1,
+            transfer_delay: 20, // 0;
+            batch_size: 100,    // 1500;
+            chunk_size: 10,     // 1500;
+            account_groups: 1,  // 50;
+            ..Config::default()
+        },
+    );
 }

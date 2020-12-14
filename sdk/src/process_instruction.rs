@@ -282,7 +282,7 @@ pub struct MockInvokeContext {
     pub bpf_compute_budget: BpfComputeBudget,
     pub compute_meter: MockComputeMeter,
     pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
-    invoke_depth: usize,
+    pub invoke_depth: usize,
 }
 impl Default for MockInvokeContext {
     fn default() -> Self {

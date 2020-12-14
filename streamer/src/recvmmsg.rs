@@ -37,7 +37,7 @@ pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usiz
 #[cfg(target_os = "linux")]
 pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize, usize)> {
     use libc::{
-        c_void, iovec, mmsghdr, recvmmsg, sockaddr_in, socklen_t, time_t, timespec, MSG_WAITFORONE,
+        c_void, iovec, mmsghdr, recvmmsg, sockaddr_in, socklen_t, timespec, MSG_WAITFORONE,
     };
     use nix::sys::socket::InetAddr;
     use std::mem;
@@ -62,7 +62,7 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
         hdrs[i].msg_hdr.msg_iovlen = 1;
     }
     let mut ts = timespec {
-        tv_sec: 1 as time_t,
+        tv_sec: 1,
         tv_nsec: 0,
     };
 

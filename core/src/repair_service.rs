@@ -736,7 +736,7 @@ mod test {
             let num_slots = 2;
 
             // Create some shreds
-            let (mut shreds, _) = make_many_slot_entries(0, num_slots as u64, 150 as u64);
+            let (mut shreds, _) = make_many_slot_entries(0, num_slots as u64, 150);
             let num_shreds = shreds.len() as u64;
             let num_shreds_per_slot = num_shreds / num_slots;
 
@@ -852,9 +852,10 @@ mod test {
             // sides of the range)
             for start in 0..slots.len() {
                 for end in start..slots.len() {
-                    let mut repair_slot_range = RepairSlotRange::default();
-                    repair_slot_range.start = slots[start];
-                    repair_slot_range.end = slots[end];
+                    let repair_slot_range = RepairSlotRange {
+                        start: slots[start],
+                        end: slots[end],
+                    };
                     let expected: Vec<RepairType> = (repair_slot_range.start
                         ..=repair_slot_range.end)
                         .map(|slot_index| {
@@ -907,9 +908,7 @@ mod test {
                 RepairType::HighestShred(end, 0),
             ];
 
-            let mut repair_slot_range = RepairSlotRange::default();
-            repair_slot_range.start = 2;
-            repair_slot_range.end = end;
+            let repair_slot_range = RepairSlotRange { start: 2, end };
 
             assert_eq!(
                 RepairService::generate_repairs_in_range(

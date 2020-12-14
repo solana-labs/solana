@@ -125,6 +125,7 @@ impl ClusterSlotsService {
         while let Ok(mut more) = completed_slots_receiver.try_recv() {
             slots.append(&mut more);
         }
+        #[allow(clippy::stable_sort_primitive)]
         slots.sort();
         if !slots.is_empty() {
             cluster_info.push_epoch_slots(&slots);
@@ -163,7 +164,7 @@ impl ClusterSlotsService {
         while let Ok(mut more) = completed_slots_receiver.try_recv() {
             slots.append(&mut more);
         }
-        slots.sort();
+        slots.sort_unstable();
         slots.dedup();
         if !slots.is_empty() {
             cluster_info.push_epoch_slots(&slots);

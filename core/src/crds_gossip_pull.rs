@@ -337,10 +337,7 @@ impl CrdsGossipPull {
         for r in responses {
             let owner = r.label().pubkey();
             // Check if the crds value is older than the msg_timeout
-            if now
-                > r.wallclock()
-                    .checked_add(self.msg_timeout)
-                    .unwrap_or_else(|| 0)
+            if now > r.wallclock().checked_add(self.msg_timeout).unwrap_or(0)
                 || now + self.msg_timeout < r.wallclock()
             {
                 match &r.label() {
@@ -350,7 +347,7 @@ impl CrdsGossipPull {
                         let timeout = *timeouts
                             .get(&owner)
                             .unwrap_or_else(|| timeouts.get(&Pubkey::default()).unwrap());
-                        if now > r.wallclock().checked_add(timeout).unwrap_or_else(|| 0)
+                        if now > r.wallclock().checked_add(timeout).unwrap_or(0)
                             || now + timeout < r.wallclock()
                         {
                             stats.timeout_count += 1;

@@ -973,7 +973,7 @@ impl RpcSubscriptions {
     }
 
     pub fn notify_roots(&self, mut rooted_slots: Vec<Slot>) {
-        rooted_slots.sort();
+        rooted_slots.sort_unstable();
         rooted_slots.into_iter().for_each(|root| {
             self.enqueue_notification(NotificationEntry::Root(root));
         });
@@ -1359,8 +1359,8 @@ pub(crate) mod tests {
         let (create_sub, _id_receiver, create_recv) = Subscriber::new_test("accountNotification");
         let (close_sub, _id_receiver, close_recv) = Subscriber::new_test("accountNotification");
 
-        let create_sub_id = SubscriptionId::Number(0 as u64);
-        let close_sub_id = SubscriptionId::Number(1 as u64);
+        let create_sub_id = SubscriptionId::Number(0);
+        let close_sub_id = SubscriptionId::Number(1);
 
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions = RpcSubscriptions::new(
@@ -1404,8 +1404,10 @@ pub(crate) mod tests {
             .unwrap()
             .process_transaction(&tx)
             .unwrap();
-        let mut commitment_slots = CommitmentSlots::default();
-        commitment_slots.slot = 1;
+        let commitment_slots = CommitmentSlots {
+            slot: 1,
+            ..CommitmentSlots::default()
+        };
         subscriptions.notify_subscribers(commitment_slots);
         let (response, _) = robust_poll_or_panic(create_recv);
         let expected = json!({
@@ -1513,7 +1515,7 @@ pub(crate) mod tests {
 
         let (subscriber, _id_receiver, transport_receiver) =
             Subscriber::new_test("programNotification");
-        let sub_id = SubscriptionId::Number(0 as u64);
+        let sub_id = SubscriptionId::Number(0);
         let exit = Arc::new(AtomicBool::new(false));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
@@ -1659,7 +1661,7 @@ pub(crate) mod tests {
                 commitment: Some(CommitmentConfig::recent()),
                 enable_received_notification: Some(false),
             }),
-            SubscriptionId::Number(1 as u64),
+            SubscriptionId::Number(1),
             past_bank_sub1,
         );
         subscriptions.add_signature_subscription(
@@ -1668,7 +1670,7 @@ pub(crate) mod tests {
                 commitment: Some(CommitmentConfig::root()),
                 enable_received_notification: Some(false),
             }),
-            SubscriptionId::Number(2 as u64),
+            SubscriptionId::Number(2),
             past_bank_sub2,
         );
         subscriptions.add_signature_subscription(
@@ -1677,7 +1679,7 @@ pub(crate) mod tests {
                 commitment: Some(CommitmentConfig::recent()),
                 enable_received_notification: Some(false),
             }),
-            SubscriptionId::Number(3 as u64),
+            SubscriptionId::Number(3),
             processed_sub,
         );
         subscriptions.add_signature_subscription(
@@ -1686,7 +1688,7 @@ pub(crate) mod tests {
                 commitment: Some(CommitmentConfig::recent()),
                 enable_received_notification: Some(false),
             }),
-            SubscriptionId::Number(4 as u64),
+            SubscriptionId::Number(4),
             Subscriber::new_test("signatureNotification").0,
         );
         // Add a subscription that gets `received` notifications
@@ -1696,7 +1698,7 @@ pub(crate) mod tests {
                 commitment: Some(CommitmentConfig::recent()),
                 enable_received_notification: Some(true),
             }),
-            SubscriptionId::Number(5 as u64),
+            SubscriptionId::Number(5),
             processed_sub3,
         );
 
@@ -1789,7 +1791,7 @@ pub(crate) mod tests {
     fn test_check_slot_subscribe() {
         let (subscriber, _id_receiver, transport_receiver) =
             Subscriber::new_test("slotNotification");
-        let sub_id = SubscriptionId::Number(0 as u64);
+        let sub_id = SubscriptionId::Number(0);
         let exit = Arc::new(AtomicBool::new(false));
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
@@ -1840,7 +1842,7 @@ pub(crate) mod tests {
     fn test_check_root_subscribe() {
         let (subscriber, _id_receiver, mut transport_receiver) =
             Subscriber::new_test("rootNotification");
-        let sub_id = SubscriptionId::Number(0 as u64);
+        let sub_id = SubscriptionId::Number(0);
         let exit = Arc::new(AtomicBool::new(false));
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new(&genesis_config);
@@ -1976,7 +1978,7 @@ pub(crate) mod tests {
             ))),
             optimistically_confirmed_bank.clone(),
         ));
-        let sub_id0 = SubscriptionId::Number(0 as u64);
+        let sub_id0 = SubscriptionId::Number(0);
         subscriptions.add_account_subscription(
             alice.pubkey(),
             Some(RpcAccountInfoConfig {
@@ -2057,7 +2059,7 @@ pub(crate) mod tests {
         assert_eq!(serde_json::to_string(&expected).unwrap(), response);
         subscriptions.remove_account_subscription(&sub_id0);
 
-        let sub_id1 = SubscriptionId::Number(1 as u64);
+        let sub_id1 = SubscriptionId::Number(1);
         subscriptions.add_account_subscription(
             alice.pubkey(),
             Some(RpcAccountInfoConfig {

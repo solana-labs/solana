@@ -1228,8 +1228,10 @@ mod tests {
                 init_ticks + bank.ticks_per_slot()
             );
 
-            let mut parent_meta = SlotMeta::default();
-            parent_meta.received = 1;
+            let parent_meta = SlotMeta {
+                received: 1,
+                ..SlotMeta::default()
+            };
             poh_recorder
                 .blockstore
                 .put_meta_bytes(0, &serialize(&parent_meta).unwrap())

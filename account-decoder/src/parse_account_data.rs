@@ -81,7 +81,7 @@ pub fn parse_account_data(
 ) -> Result<ParsedAccount, ParseAccountError> {
     let program_name = PARSABLE_PROGRAM_IDS
         .get(program_id)
-        .ok_or_else(|| ParseAccountError::ProgramNotParsable)?;
+        .ok_or(ParseAccountError::ProgramNotParsable)?;
     let additional_data = additional_data.unwrap_or_default();
     let parsed_json = match program_name {
         ParsableAccount::Config => serde_json::to_value(parse_config(data, pubkey)?)?,

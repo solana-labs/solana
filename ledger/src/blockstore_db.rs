@@ -360,11 +360,7 @@ impl Rocks {
         Ok(())
     }
 
-    fn iterator_cf<C>(
-        &self,
-        cf: &ColumnFamily,
-        iterator_mode: IteratorMode<C::Index>,
-    ) -> Result<DBIterator>
+    fn iterator_cf<C>(&self, cf: &ColumnFamily, iterator_mode: IteratorMode<C::Index>) -> DBIterator
     where
         C: Column,
     {
@@ -377,18 +373,15 @@ impl Rocks {
             IteratorMode::Start => RocksIteratorMode::Start,
             IteratorMode::End => RocksIteratorMode::End,
         };
-        let iter = self.0.iterator_cf(cf, iterator_mode);
-        Ok(iter)
+        self.0.iterator_cf(cf, iterator_mode)
     }
 
-    fn raw_iterator_cf(&self, cf: &ColumnFamily) -> Result<DBRawIterator> {
-        let raw_iter = self.0.raw_iterator_cf(cf);
-
-        Ok(raw_iter)
+    fn raw_iterator_cf(&self, cf: &ColumnFamily) -> DBRawIterator {
+        self.0.raw_iterator_cf(cf)
     }
 
-    fn batch(&self) -> Result<RWriteBatch> {
-        Ok(RWriteBatch::default())
+    fn batch(&self) -> RWriteBatch {
+        RWriteBatch::default()
     }
 
     fn write(&self, batch: RWriteBatch) -> Result<()> {
@@ -766,15 +759,15 @@ impl Database {
         }
     }
 
-    pub fn iter<'a, C>(
-        &'a self,
+    pub fn iter<C>(
+        &self,
         iterator_mode: IteratorMode<C::Index>,
-    ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)> + 'a>
+    ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)> + '_>
     where
         C: Column + ColumnName,
     {
         let cf = self.cf_handle::<C>();
-        let iter = self.backend.iterator_cf::<C>(cf, iterator_mode)?;
+        let iter = self.backend.iterator_cf::<C>(cf, iterator_mode);
         Ok(iter.map(|(key, value)| (C::index(&key), value)))
     }
 
@@ -798,11 +791,11 @@ impl Database {
 
     #[inline]
     pub fn raw_iterator_cf(&self, cf: &ColumnFamily) -> Result<DBRawIterator> {
-        self.backend.raw_iterator_cf(cf)
+        Ok(self.backend.raw_iterator_cf(cf))
     }
 
     pub fn batch(&self) -> Result<WriteBatch> {
-        let write_batch = self.backend.batch()?;
+        let write_batch = self.backend.batch();
         let map = self
             .backend
             .columns()
@@ -845,12 +838,12 @@ where
         self.backend.get_cf(self.handle(), &C::key(key))
     }
 
-    pub fn iter<'a>(
-        &'a self,
+    pub fn iter(
+        &self,
         iterator_mode: IteratorMode<C::Index>,
-    ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)> + 'a> {
+    ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)> + '_> {
         let cf = self.handle();
-        let iter = self.backend.iterator_cf::<C>(cf, iterator_mode)?;
+        let iter = self.backend.iterator_cf::<C>(cf, iterator_mode);
         Ok(iter.map(|(key, value)| (C::index(&key), value)))
     }
 
@@ -906,7 +899,7 @@ where
 
     #[cfg(test)]
     pub fn is_empty(&self) -> Result<bool> {
-        let mut iter = self.backend.raw_iterator_cf(self.handle())?;
+        let mut iter = self.backend.raw_iterator_cf(self.handle());
         iter.seek_to_first();
         Ok(!iter.valid())
     }

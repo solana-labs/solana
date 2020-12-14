@@ -196,7 +196,7 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
 /// * `matches` - command line arguments parsed by clap
 /// # Panics
 /// Panics if there is trouble parsing any of the arguments
-pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
+pub fn extract_args(matches: &ArgMatches) -> Config {
     let mut args = Config::default();
 
     if let Some(addr) = matches.value_of("entrypoint") {

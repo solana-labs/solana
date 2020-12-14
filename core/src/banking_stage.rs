@@ -1171,8 +1171,10 @@ mod tests {
                 Blockstore::open(&ledger_path)
                     .expect("Expected to be able to open database ledger"),
             );
-            let mut poh_config = PohConfig::default();
-            poh_config.target_tick_count = Some(bank.max_tick_height() + num_extra_ticks);
+            let poh_config = PohConfig {
+                target_tick_count: Some(bank.max_tick_height() + num_extra_ticks),
+                ..PohConfig::default()
+            };
             let (exit, poh_recorder, poh_service, entry_receiver) =
                 create_test_recorder(&bank, &blockstore, Some(poh_config));
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
@@ -1236,9 +1238,12 @@ mod tests {
                 Blockstore::open(&ledger_path)
                     .expect("Expected to be able to open database ledger"),
             );
-            let mut poh_config = PohConfig::default();
-            // limit tick count to avoid clearing working_bank at PohRecord then PohRecorderError(MaxHeightReached) at BankingStage
-            poh_config.target_tick_count = Some(bank.max_tick_height() - 1);
+            let poh_config = PohConfig {
+                // limit tick count to avoid clearing working_bank at PohRecord then
+                // PohRecorderError(MaxHeightReached) at BankingStage
+                target_tick_count: Some(bank.max_tick_height() - 1),
+                ..PohConfig::default()
+            };
             let (exit, poh_recorder, poh_service, entry_receiver) =
                 create_test_recorder(&bank, &blockstore, Some(poh_config));
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
@@ -1381,9 +1386,12 @@ mod tests {
                     Blockstore::open(&ledger_path)
                         .expect("Expected to be able to open database ledger"),
                 );
-                let mut poh_config = PohConfig::default();
-                // limit tick count to avoid clearing working_bank at PohRecord then PohRecorderError(MaxHeightReached) at BankingStage
-                poh_config.target_tick_count = Some(bank.max_tick_height() - 1);
+                let poh_config = PohConfig {
+                    // limit tick count to avoid clearing working_bank at
+                    // PohRecord then PohRecorderError(MaxHeightReached) at BankingStage
+                    target_tick_count: Some(bank.max_tick_height() - 1),
+                    ..PohConfig::default()
+                };
                 let (exit, poh_recorder, poh_service, entry_receiver) =
                     create_test_recorder(&bank, &blockstore, Some(poh_config));
                 let cluster_info =
@@ -1973,7 +1981,7 @@ mod tests {
 
             assert_eq!(processed_transactions_count, 0,);
 
-            retryable_txs.sort();
+            retryable_txs.sort_unstable();
             let expected: Vec<usize> = (0..transactions.len()).collect();
             assert_eq!(retryable_txs, expected);
         }

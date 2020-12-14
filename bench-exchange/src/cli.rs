@@ -163,7 +163,8 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
         )
 }
 
-pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
+#[allow(clippy::field_reassign_with_default)]
+pub fn extract_args(matches: &ArgMatches) -> Config {
     let mut args = Config::default();
 
     args.entrypoint_addr = solana_net_utils::parse_host_port(

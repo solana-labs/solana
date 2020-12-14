@@ -397,7 +397,7 @@ impl AppendVec {
         self.path.clone()
     }
 
-    pub fn accounts<'a>(&'a self, mut start: usize) -> Vec<StoredAccount<'a>> {
+    pub fn accounts(&self, mut start: usize) -> Vec<StoredAccount> {
         let mut accounts = vec![];
         while let Some((account, next)) = self.get_account(start) {
             accounts.push(account);
@@ -685,7 +685,7 @@ pub mod tests {
 
         let pubkey = solana_sdk::pubkey::new_rand();
         let owner = Pubkey::default();
-        let data_len = 3 as u64;
+        let data_len = 3_u64;
         let mut account = Account::new(0, data_len as usize, &owner);
         account.data = b"abc".to_vec();
         let stored_meta = StoredMeta {

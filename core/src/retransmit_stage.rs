@@ -1,4 +1,5 @@
 //! The `retransmit_stage` retransmits shreds between validators
+#![allow(clippy::rc_buffer)]
 
 use crate::shred_fetch_stage::ShredFetchStage;
 use crate::shred_fetch_stage::ShredFetchStats;

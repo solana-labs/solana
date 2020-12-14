@@ -4511,8 +4511,10 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
-        let mut config = JsonRpcConfig::default();
-        config.enable_validator_exit = true;
+        let config = JsonRpcConfig {
+            enable_validator_exit: true,
+            ..JsonRpcConfig::default()
+        };
         let bank_forks = new_bank_forks().0;
         let cluster_info = Arc::new(ClusterInfo::default());
         let tpu_address = cluster_info.my_contact_info().tpu;
@@ -4601,8 +4603,10 @@ pub mod tests {
             CommitmentSlots::new_from_slot(bank_forks.read().unwrap().highest_slot()),
         )));
 
-        let mut config = JsonRpcConfig::default();
-        config.enable_validator_exit = true;
+        let config = JsonRpcConfig {
+            enable_validator_exit: true,
+            ..JsonRpcConfig::default()
+        };
         let cluster_info = Arc::new(ClusterInfo::default());
         let tpu_address = cluster_info.my_contact_info().tpu;
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(

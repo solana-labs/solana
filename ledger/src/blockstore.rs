@@ -441,10 +441,8 @@ impl Blockstore {
     }
 
     pub fn is_full(&self, slot: Slot) -> bool {
-        if let Ok(meta) = self.meta_cf.get(slot) {
-            if let Some(meta) = meta {
-                return meta.is_full();
-            }
+        if let Ok(Some(meta)) = self.meta_cf.get(slot) {
+            return meta.is_full();
         }
         false
     }
@@ -467,10 +465,10 @@ impl Blockstore {
             .unwrap_or(0)
     }
 
-    pub fn slot_meta_iterator<'a>(
-        &'a self,
+    pub fn slot_meta_iterator(
+        &self,
         slot: Slot,
-    ) -> Result<impl Iterator<Item = (Slot, SlotMeta)> + 'a> {
+    ) -> Result<impl Iterator<Item = (Slot, SlotMeta)> + '_> {
         let meta_iter = self
             .db
             .iter::<cf::SlotMeta>(IteratorMode::From(slot, IteratorDirection::Forward))?;
@@ -484,21 +482,18 @@ impl Blockstore {
     }
 
     #[allow(dead_code)]
-    pub fn live_slots_iterator<'a>(
-        &'a self,
-        root: Slot,
-    ) -> impl Iterator<Item = (Slot, SlotMeta)> + 'a {
+    pub fn live_slots_iterator(&self, root: Slot) -> impl Iterator<Item = (Slot, SlotMeta)> + '_ {
         let root_forks = NextSlotsIterator::new(root, self);
 
         let orphans_iter = self.orphans_iterator(root + 1).unwrap();
         root_forks.chain(orphans_iter.flat_map(move |orphan| NextSlotsIterator::new(orphan, self)))
     }
 
-    pub fn slot_data_iterator<'a>(
-        &'a self,
+    pub fn slot_data_iterator(
+        &self,
         slot: Slot,
         index: u64,
-    ) -> Result<impl Iterator<Item = ((u64, u64), Box<[u8]>)> + 'a> {
+    ) -> Result<impl Iterator<Item = ((u64, u64), Box<[u8]>)> + '_> {
         let slot_iterator = self.db.iter::<cf::ShredData>(IteratorMode::From(
             (slot, index),
             IteratorDirection::Forward,
@@ -506,11 +501,11 @@ impl Blockstore {
         Ok(slot_iterator.take_while(move |((shred_slot, _), _)| *shred_slot == slot))
     }
 
-    pub fn slot_coding_iterator<'a>(
-        &'a self,
+    pub fn slot_coding_iterator(
+        &self,
         slot: Slot,
         index: u64,
-    ) -> Result<impl Iterator<Item = ((u64, u64), Box<[u8]>)> + 'a> {
+    ) -> Result<impl Iterator<Item = ((u64, u64), Box<[u8]>)> + '_> {
         let slot_iterator = self.db.iter::<cf::ShredCode>(IteratorMode::From(
             (slot, index),
             IteratorDirection::Forward,
@@ -518,10 +513,7 @@ impl Blockstore {
         Ok(slot_iterator.take_while(move |((shred_slot, _), _)| *shred_slot == slot))
     }
 
-    pub fn rooted_slot_iterator<'a>(
-        &'a self,
-        slot: Slot,
-    ) -> Result<impl Iterator<Item = u64> + 'a> {
+    pub fn rooted_slot_iterator(&self, slot: Slot) -> Result<impl Iterator<Item = u64> + '_> {
         let slot_iterator = self
             .db
             .iter::<cf::Root>(IteratorMode::From(slot, IteratorDirection::Forward))?;
@@ -929,7 +921,7 @@ impl Blockstore {
             &self.completed_slots_senders,
             should_signal,
             newly_completed_slots,
-        )?;
+        );
 
         total_start.stop();
 
@@ -1690,7 +1682,7 @@ impl Blockstore {
             .map(|(iter_slot, _)| iter_slot)
             .take(timestamp_sample_range)
             .collect();
-        timestamp_slots.sort();
+        timestamp_slots.sort_unstable();
         get_slots.stop();
         datapoint_info!(
             "blockstore-get-timestamp-slots",
@@ -2746,17 +2738,14 @@ impl Blockstore {
             .is_some()
     }
 
-    pub fn orphans_iterator<'a>(&'a self, slot: Slot) -> Result<impl Iterator<Item = u64> + 'a> {
+    pub fn orphans_iterator(&self, slot: Slot) -> Result<impl Iterator<Item = u64> + '_> {
         let orphans_iter = self
             .db
             .iter::<cf::Orphans>(IteratorMode::From(slot, IteratorDirection::Forward))?;
         Ok(orphans_iter.map(|(slot, _)| slot))
     }
 
-    pub fn dead_slots_iterator<'a>(
-        &'a self,
-        slot: Slot,
-    ) -> Result<impl Iterator<Item = Slot> + 'a> {
+    pub fn dead_slots_iterator(&self, slot: Slot) -> Result<impl Iterator<Item = Slot> + '_> {
         let dead_slots_iterator = self
             .db
             .iter::<cf::DeadSlots>(IteratorMode::From(slot, IteratorDirection::Forward))?;
@@ -2981,7 +2970,7 @@ fn send_signals(
     completed_slots_senders: &[SyncSender<Vec<u64>>],
     should_signal: bool,
     newly_completed_slots: Vec<u64>,
-) -> Result<()> {
+) {
     if should_signal {
         for signal in new_shreds_signals {
             let _ = signal.try_send(true);
@@ -3009,8 +2998,6 @@ fn send_signals(
             }
         }
     }
-
-    Ok(())
 }
 
 fn commit_slot_meta_working_set(
@@ -3051,7 +3038,7 @@ fn find_slot_meta_else_create<'a>(
     chained_slots: &'a mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
     slot_index: u64,
 ) -> Result<Rc<RefCell<SlotMeta>>> {
-    let result = find_slot_meta_in_cached_state(working_set, chained_slots, slot_index)?;
+    let result = find_slot_meta_in_cached_state(working_set, chained_slots, slot_index);
     if let Some(slot) = result {
         Ok(slot)
     } else {
@@ -3061,10 +3048,10 @@ fn find_slot_meta_else_create<'a>(
 
 // Search the database for that slot metadata. If still no luck, then
 // create a dummy orphan slot in the database
-fn find_slot_meta_in_db_else_create<'a>(
+fn find_slot_meta_in_db_else_create(
     db: &Database,
     slot: Slot,
-    insert_map: &'a mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
+    insert_map: &mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
 ) -> Result<Rc<RefCell<SlotMeta>>> {
     if let Some(slot_meta) = db.column::<cf::SlotMeta>().get(slot)? {
         insert_map.insert(slot, Rc::new(RefCell::new(slot_meta)));
@@ -3083,13 +3070,13 @@ fn find_slot_meta_in_cached_state<'a>(
     working_set: &'a HashMap<u64, SlotMetaWorkingSetEntry>,
     chained_slots: &'a HashMap<u64, Rc<RefCell<SlotMeta>>>,
     slot: Slot,
-) -> Result<Option<Rc<RefCell<SlotMeta>>>> {
+) -> Option<Rc<RefCell<SlotMeta>>> {
     if let Some(entry) = working_set.get(&slot) {
-        Ok(Some(entry.new_slot_meta.clone()))
+        Some(entry.new_slot_meta.clone())
     } else if let Some(entry) = chained_slots.get(&slot) {
-        Ok(Some(entry.clone()))
+        Some(entry.clone())
     } else {
-        Ok(None)
+        None
     }
 }
 
@@ -3596,7 +3583,7 @@ pub mod tests {
     use solana_storage_proto::convert::generated;
     use solana_transaction_status::{InnerInstructions, Reward, Rewards};
     use solana_vote_program::{vote_instruction, vote_state::Vote};
-    use std::{iter::FromIterator, time::Duration};
+    use std::time::Duration;
 
     // used for tests only
     pub(crate) fn make_slot_entries_with_transactions(num_entries: u64) -> Vec<Entry> {
@@ -4062,7 +4049,7 @@ pub mod tests {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
             // Write entries
-            let num_slots = 5 as u64;
+            let num_slots = 5_u64;
             let mut index = 0;
             for slot in 0..num_slots {
                 let entries = create_ticks(slot + 1, 0, Hash::default());
@@ -4094,8 +4081,8 @@ pub mod tests {
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
-            let num_slots = 5 as u64;
-            let shreds_per_slot = 5 as u64;
+            let num_slots = 5_u64;
+            let shreds_per_slot = 5_u64;
             let entry_serialized_size =
                 bincode::serialized_size(&create_ticks(1, 0, Hash::default())).unwrap();
             let entries_per_slot =
@@ -4437,9 +4424,9 @@ pub mod tests {
         all_shreds.shuffle(&mut thread_rng());
         ledger.insert_shreds(all_shreds, None, false).unwrap();
         let mut result = recvr.try_recv().unwrap();
-        result.sort();
+        result.sort_unstable();
         slots.push(disconnected_slot);
-        slots.sort();
+        slots.sort_unstable();
         assert_eq!(result, slots);
     }
 
@@ -4799,23 +4786,22 @@ pub mod tests {
             blockstore.meta_cf.put(0, &meta0).unwrap();
 
             // Slot exists, chains to nothing
-            let expected: HashMap<u64, Vec<u64>> =
-                HashMap::from_iter(vec![(0, vec![])].into_iter());
+            let expected: HashMap<u64, Vec<u64>> = vec![(0, vec![])].into_iter().collect();
             assert_eq!(blockstore.get_slots_since(&[0]).unwrap(), expected);
             meta0.next_slots = vec![1, 2];
             blockstore.meta_cf.put(0, &meta0).unwrap();
 
             // Slot exists, chains to some other slots
-            let expected: HashMap<u64, Vec<u64>> =
-                HashMap::from_iter(vec![(0, vec![1, 2])].into_iter());
+            let expected: HashMap<u64, Vec<u64>> = vec![(0, vec![1, 2])].into_iter().collect();
             assert_eq!(blockstore.get_slots_since(&[0]).unwrap(), expected);
             assert_eq!(blockstore.get_slots_since(&[0, 1]).unwrap(), expected);
 
             let mut meta3 = SlotMeta::new(3, 1);
             meta3.next_slots = vec![10, 5];
             blockstore.meta_cf.put(3, &meta3).unwrap();
-            let expected: HashMap<u64, Vec<u64>> =
-                HashMap::from_iter(vec![(0, vec![1, 2]), (3, vec![10, 5])].into_iter());
+            let expected: HashMap<u64, Vec<u64>> = vec![(0, vec![1, 2]), (3, vec![10, 5])]
+                .into_iter()
+                .collect();
             assert_eq!(blockstore.get_slots_since(&[0, 1, 3]).unwrap(), expected);
         }
 
@@ -4902,7 +4888,7 @@ pub mod tests {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
             // Create shreds and entries
-            let num_entries = 20 as u64;
+            let num_entries = 20_u64;
             let mut entries = vec![];
             let mut shreds = vec![];
             let mut num_shreds_per_slot = 0;
@@ -5807,8 +5793,10 @@ pub mod tests {
         ledger.insert_shreds(more_shreds, None, false).unwrap();
         ledger.set_roots(&[slot - 1, slot, slot + 1]).unwrap();
 
-        let mut parent_meta = SlotMeta::default();
-        parent_meta.parent_slot = std::u64::MAX;
+        let parent_meta = SlotMeta {
+            parent_slot: std::u64::MAX,
+            ..SlotMeta::default()
+        };
         ledger
             .put_meta_bytes(slot - 1, &serialize(&parent_meta).unwrap())
             .unwrap();

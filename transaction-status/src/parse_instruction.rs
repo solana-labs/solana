@@ -82,7 +82,7 @@ pub fn parse(
 ) -> Result<ParsedInstruction, ParseInstructionError> {
     let program_name = PARSABLE_PROGRAM_IDS
         .get(program_id)
-        .ok_or_else(|| ParseInstructionError::ProgramNotParsable)?;
+        .ok_or(ParseInstructionError::ProgramNotParsable)?;
     let parsed_json = match program_name {
         ParsableProgram::SplMemo => parse_memo(instruction),
         ParsableProgram::SplToken => serde_json::to_value(parse_token(instruction, account_keys)?)?,

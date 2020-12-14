@@ -85,7 +85,7 @@ impl PartialEq for Packet {
     fn eq(&self, other: &Packet) -> bool {
         let self_data: &[u8] = self.data.as_ref();
         let other_data: &[u8] = other.data.as_ref();
-        self.meta == other.meta && self_data[..self.meta.size] == other_data[..other.meta.size]
+        self.meta == other.meta && self_data[..self.meta.size] == other_data[..self.meta.size]
     }
 }
 

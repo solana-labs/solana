@@ -11,7 +11,7 @@ where
     let sorted = BinaryHeap::from_iter(recent_blockhash_iter);
     let sorted_iter = IntoIterSorted::new(sorted);
     let recent_blockhash_iter = sorted_iter.take(MAX_ENTRIES);
-    let recent_blockhashes = RecentBlockhashes::from_iter(recent_blockhash_iter);
+    let recent_blockhashes: RecentBlockhashes = recent_blockhash_iter.collect();
     to_account(&recent_blockhashes, account)
 }
 

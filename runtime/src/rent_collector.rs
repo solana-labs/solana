@@ -127,9 +127,11 @@ mod tests {
         let new_epoch = 3;
 
         let (mut created_account, mut existing_account) = {
-            let mut account = Account::default();
-            account.lamports = old_lamports;
-            account.rent_epoch = old_epoch;
+            let account = Account {
+                lamports: old_lamports,
+                rent_epoch: old_epoch,
+                ..Account::default()
+            };
 
             (account.clone(), account)
         };

@@ -832,6 +832,7 @@ pub struct Bank {
     bpf_compute_budget: Option<BpfComputeBudget>,
 
     /// Builtin programs activated dynamically by feature
+    #[allow(clippy::rc_buffer)]
     feature_builtins: Arc<Vec<(Builtin, Pubkey, ActivationType)>>,
 
     /// Last time when the cluster info vote listener has synced with this bank
@@ -887,9 +888,9 @@ impl Bank {
         additional_builtins: Option<&Builtins>,
     ) -> Self {
         let mut bank = Self::default();
+        bank.ancestors.insert(bank.slot(), 0);
         bank.transaction_debug_keys = debug_keys;
         bank.cluster_type = Some(genesis_config.cluster_type);
-        bank.ancestors.insert(bank.slot(), 0);
 
         bank.rc.accounts = Arc::new(Accounts::new(paths, &genesis_config.cluster_type));
         bank.process_genesis_config(genesis_config);
@@ -1257,6 +1258,7 @@ impl Bank {
         }
 
         let mut ancestors: Vec<_> = roots.into_iter().collect();
+        #[allow(clippy::stable_sort_primitive)]
         ancestors.sort();
         ancestors
     }
@@ -4940,13 +4942,13 @@ pub(crate) mod tests {
         impl Bank {
             fn epoch_stake_keys(&self) -> Vec<Epoch> {
                 let mut keys: Vec<Epoch> = self.epoch_stakes.keys().copied().collect();
-                keys.sort();
+                keys.sort_unstable();
                 keys
             }
 
             fn epoch_stake_key_info(&self) -> (Epoch, Epoch, usize) {
                 let mut keys: Vec<Epoch> = self.epoch_stakes.keys().copied().collect();
-                keys.sort();
+                keys.sort_unstable();
                 (*keys.first().unwrap(), *keys.last().unwrap(), keys.len())
             }
         }
@@ -9521,6 +9523,7 @@ pub(crate) mod tests {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let mut bank = Bank::new(&genesis_config);
 
+        #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
             _program_id: &Pubkey,
             _keyed_accounts: &[KeyedAccount],
@@ -9704,6 +9707,7 @@ pub(crate) mod tests {
         assert_eq!(result, Err(TransactionError::SanitizeFailure));
     }
 
+    #[allow(clippy::unnecessary_wraps)]
     fn mock_ok_vote_processor(
         _pubkey: &Pubkey,
         _ka: &[KeyedAccount],
@@ -10035,7 +10039,7 @@ pub(crate) mod tests {
         let mut consumed_budgets = (0..3)
             .map(|_| bank.process_stale_slot_with_budget(0, force_to_return_alive_account))
             .collect::<Vec<_>>();
-        consumed_budgets.sort();
+        consumed_budgets.sort_unstable();
         // consumed_budgets represents the count of alive accounts in the three slots 0,1,2
         assert_eq!(consumed_budgets, vec![0, 1, 9]);
     }
@@ -10136,6 +10140,7 @@ pub(crate) mod tests {
     fn test_add_builtin_no_overwrite() {
         let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
 
+        #[allow(clippy::unnecessary_wraps)]
         fn mock_ix_processor(
             _pubkey: &Pubkey,
             _ka: &[KeyedAccount],
@@ -10181,6 +10186,7 @@ pub(crate) mod tests {
     fn test_add_builtin_loader_no_overwrite() {
         let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
 
+        #[allow(clippy::unnecessary_wraps)]
         fn mock_ix_processor(
             _pubkey: &Pubkey,
             _ka: &[KeyedAccount],

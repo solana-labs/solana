@@ -1,4 +1,5 @@
 //! A stage to broadcast data from a leader node to validators
+#![allow(clippy::rc_buffer)]
 use self::{
     broadcast_fake_shreds_run::BroadcastFakeShredsRun, broadcast_metrics::*,
     fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,
@@ -518,8 +519,10 @@ pub mod test {
 
     #[test]
     fn test_num_live_peers() {
-        let mut ci = ContactInfo::default();
-        ci.wallclock = std::u64::MAX;
+        let mut ci = ContactInfo {
+            wallclock: std::u64::MAX,
+            ..ContactInfo::default()
+        };
         assert_eq!(num_live_peers(&[ci.clone()]), 1);
         ci.wallclock = timestamp() - 1;
         assert_eq!(num_live_peers(&[ci.clone()]), 2);

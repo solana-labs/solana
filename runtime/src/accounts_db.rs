@@ -44,7 +44,6 @@ use std::{
     collections::{HashMap, HashSet},
     convert::TryInto,
     io::{Error as IOError, Result as IOResult},
-    iter::FromIterator,
     ops::RangeBounds,
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
@@ -901,10 +900,7 @@ impl AccountsDB {
         let pubkey_to_slot_set: Vec<_> = purges
             .into_iter()
             .map(|(key, (slots_list, _ref_count))| {
-                (
-                    key,
-                    HashSet::from_iter(slots_list.into_iter().map(|(slot, _)| slot)),
-                )
+                (key, slots_list.into_iter().map(|(slot, _)| slot).collect())
             })
             .collect();
 
@@ -2875,6 +2871,7 @@ impl AccountsDB {
 
     pub fn generate_index(&self) {
         let mut slots = self.storage.all_slots();
+        #[allow(clippy::stable_sort_primitive)]
         slots.sort();
 
         let mut last_log_update = Instant::now();
@@ -2982,6 +2979,7 @@ impl AccountsDB {
 
     fn print_index(&self, label: &str) {
         let mut roots: Vec<_> = self.accounts_index.all_roots();
+        #[allow(clippy::stable_sort_primitive)]
         roots.sort();
         info!("{}: accounts_index roots: {:?}", label, roots,);
         for (pubkey, account_entry) in self.accounts_index.account_maps.read().unwrap().iter() {
@@ -2995,12 +2993,14 @@ impl AccountsDB {
 
     fn print_count_and_status(&self, label: &str) {
         let mut slots: Vec<_> = self.storage.all_slots();
+        #[allow(clippy::stable_sort_primitive)]
         slots.sort();
         info!("{}: count_and status for {} slots:", label, slots.len());
         for slot in &slots {
             let slot_stores = self.storage.get_slot_stores(*slot).unwrap();
             let r_slot_stores = slot_stores.read().unwrap();
             let mut ids: Vec<_> = r_slot_stores.keys().cloned().collect();
+            #[allow(clippy::stable_sort_primitive)]
             ids.sort();
             for id in &ids {
                 let entry = r_slot_stores.get(id).unwrap();
@@ -3033,7 +3033,7 @@ pub mod tests {
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
     use solana_sdk::{account::Account, hash::HASH_BYTES};
-    use std::{fs, str::FromStr};
+    use std::{fs, iter::FromIterator, str::FromStr};
 
     fn linear_ancestors(end_slot: u64) -> Ancestors {
         let mut ancestors: Ancestors = vec![(0, 0)].into_iter().collect();
@@ -3155,8 +3155,10 @@ pub mod tests {
             let idx = thread_rng().gen_range(0, 99);
             let ancestors = vec![(0, 0)].into_iter().collect();
             let account = db.load_slow(&ancestors, &pubkeys[idx]).unwrap();
-            let mut default_account = Account::default();
-            default_account.lamports = (idx + 1) as u64;
+            let default_account = Account {
+                lamports: (idx + 1) as u64,
+                ..Account::default()
+            };
             assert_eq!((default_account, 0), account);
         }
 
@@ -3169,8 +3171,10 @@ pub mod tests {
             let account0 = db.load_slow(&ancestors, &pubkeys[idx]).unwrap();
             let ancestors = vec![(1, 1)].into_iter().collect();
             let account1 = db.load_slow(&ancestors, &pubkeys[idx]).unwrap();
-            let mut default_account = Account::default();
-            default_account.lamports = (idx + 1) as u64;
+            let default_account = Account {
+                lamports: (idx + 1) as u64,
+                ..Account::default()
+            };
             assert_eq!(&default_account, &account0.0);
             assert_eq!(&default_account, &account1.0);
         }
@@ -3361,8 +3365,10 @@ pub mod tests {
                     let ancestors = vec![(slot, 0)].into_iter().collect();
                     assert!(accounts.load_slow(&ancestors, &pubkeys[idx]).is_none());
                 } else {
-                    let mut default_account = Account::default();
-                    default_account.lamports = account.lamports;
+                    let default_account = Account {
+                        lamports: account.lamports,
+                        ..Account::default()
+                    };
                     assert_eq!(default_account, account);
                 }
             }
@@ -3443,8 +3449,10 @@ pub mod tests {
         create_account(&db, &mut pubkeys, 0, 1, 0, 0);
         let ancestors = vec![(0, 0)].into_iter().collect();
         let account = db.load_slow(&ancestors, &pubkeys[0]).unwrap();
-        let mut default_account = Account::default();
-        default_account.lamports = 1;
+        let default_account = Account {
+            lamports: 1,
+            ..Account::default()
+        };
         assert_eq!((default_account, 0), account);
     }
 
@@ -4434,7 +4442,7 @@ pub mod tests {
 
         db.print_accounts_stats("pre");
 
-        let slots: HashSet<Slot> = HashSet::from_iter(vec![1].into_iter());
+        let slots: HashSet<Slot> = vec![1].into_iter().collect();
         let purge_keys = vec![(key1, slots)];
         let (_reclaims, dead_keys) = db.purge_keys_exact(purge_keys);
 
@@ -5242,7 +5250,7 @@ pub mod tests {
 
         accounts.reset_uncleaned_roots();
         let mut actual_slots = accounts.shrink_candidate_slots.lock().unwrap().clone();
-        actual_slots.sort();
+        actual_slots.sort_unstable();
         assert_eq!(actual_slots, vec![0, 1, 2]);
 
         accounts.accounts_index.clear_roots();
@@ -5435,7 +5443,7 @@ pub mod tests {
         store_counts.insert(3, (1, HashSet::from_iter(vec![key2])));
         AccountsDB::calc_delete_dependencies(&purges, &mut store_counts);
         let mut stores: Vec<_> = store_counts.keys().cloned().collect();
-        stores.sort();
+        stores.sort_unstable();
         for store in &stores {
             info!(
                 "store: {:?} : {:?}",

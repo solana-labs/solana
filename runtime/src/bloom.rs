@@ -254,8 +254,8 @@ mod test {
     fn test_random() {
         let mut b1: Bloom<Hash> = Bloom::random(10, 0.1, 100);
         let mut b2: Bloom<Hash> = Bloom::random(10, 0.1, 100);
-        b1.keys.sort();
-        b2.keys.sort();
+        b1.keys.sort_unstable();
+        b2.keys.sort_unstable();
         assert_ne!(b1.keys, b2.keys);
     }
     // Bloom filter math in python

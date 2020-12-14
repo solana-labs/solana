@@ -130,9 +130,11 @@ mod test {
         let mut vote_account_data: Vec<u8> = vec![0; VoteState::size_of()];
         let versioned = VoteStateVersions::Current(Box::new(vote_state));
         VoteState::serialize(&versioned, &mut vote_account_data).unwrap();
-        let mut expected_vote_state = UiVoteState::default();
-        expected_vote_state.node_pubkey = Pubkey::default().to_string();
-        expected_vote_state.authorized_withdrawer = Pubkey::default().to_string();
+        let expected_vote_state = UiVoteState {
+            node_pubkey: Pubkey::default().to_string(),
+            authorized_withdrawer: Pubkey::default().to_string(),
+            ..UiVoteState::default()
+        };
         assert_eq!(
             parse_vote(&vote_account_data).unwrap(),
             VoteAccountType::Vote(expected_vote_state)

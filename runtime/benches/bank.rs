@@ -30,6 +30,7 @@ const NOOP_PROGRAM_ID: [u8; 32] = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
 ];
 
+#[allow(clippy::unnecessary_wraps)]
 fn process_instruction(
     _program_id: &Pubkey,
     _keyed_accounts: &[KeyedAccount],

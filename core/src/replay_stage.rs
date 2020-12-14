@@ -455,7 +455,7 @@ impl ReplayStage {
                             &mut heaviest_subtree_fork_choice,
                             &cache_block_time_sender,
                             &bank_notification_sender,
-                        )?;
+                        );
                     };
                     voting_time.stop();
 
@@ -1047,7 +1047,7 @@ impl ReplayStage {
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         cache_block_time_sender: &Option<CacheBlockTimeSender>,
         bank_notification_sender: &Option<BankNotificationSender>,
-    ) -> Result<()> {
+    ) {
         if bank.is_empty() {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
         }
@@ -1130,7 +1130,6 @@ impl ReplayStage {
             tower_index,
             switch_fork_decision,
         );
-        Ok(())
     }
 
     fn push_vote(

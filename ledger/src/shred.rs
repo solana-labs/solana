@@ -500,6 +500,7 @@ impl Shredder {
         reference_tick: u8,
         version: u16,
     ) -> Result<Self> {
+        #[allow(clippy::manual_range_contains)]
         if fec_rate > 1.0 || fec_rate < 0.0 {
             Err(ShredError::InvalidFecRate(fec_rate))
         } else if slot < parent_slot || slot - parent_slot > u64::from(std::u16::MAX) {

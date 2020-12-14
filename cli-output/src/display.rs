@@ -27,7 +27,7 @@ pub fn build_balance_message(lamports: u64, use_lamports_unit: bool, show_unit: 
 
 // Pretty print a "name value"
 pub fn println_name_value(name: &str, value: &str) {
-    let styled_value = if value == "" {
+    let styled_value = if value.is_empty() {
         style("(not set)").italic()
     } else {
         style(value)
@@ -36,7 +36,7 @@ pub fn println_name_value(name: &str, value: &str) {
 }
 
 pub fn writeln_name_value(f: &mut fmt::Formatter, name: &str, value: &str) -> fmt::Result {
-    let styled_value = if value == "" {
+    let styled_value = if value.is_empty() {
         style("(not set)").italic()
     } else {
         style(value)

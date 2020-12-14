@@ -33,8 +33,6 @@ fn bench_get_offsets(bencher: &mut Bencher) {
     let recycler = Recycler::default();
     // verify packets
     bencher.iter(|| {
-        let ans = sigverify::generate_offsets(&batches, &recycler);
-        assert!(ans.is_ok());
-        let _ans = ans.unwrap();
+        let _ans = sigverify::generate_offsets(&batches, &recycler);
     })
 }

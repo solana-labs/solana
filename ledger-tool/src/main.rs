@@ -70,30 +70,23 @@ enum LedgerOutputMethod {
     Json,
 }
 
-fn output_slot_rewards(
-    blockstore: &Blockstore,
-    slot: Slot,
-    method: &LedgerOutputMethod,
-) -> Result<(), String> {
+fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutputMethod) {
     // Note: rewards are not output in JSON yet
     if *method == LedgerOutputMethod::Print {
-        if let Ok(rewards) = blockstore.read_rewards(slot) {
-            if let Some(rewards) = rewards {
-                if !rewards.is_empty() {
-                    println!("  Rewards:");
-                    for reward in rewards {
-                        println!(
-                            "    Account {}: {}{} SOL",
-                            reward.pubkey,
-                            if reward.lamports < 0 { '-' } else { ' ' },
-                            lamports_to_sol(reward.lamports.abs().try_into().unwrap())
-                        );
-                    }
+        if let Ok(Some(rewards)) = blockstore.read_rewards(slot) {
+            if !rewards.is_empty() {
+                println!("  Rewards:");
+                for reward in rewards {
+                    println!(
+                        "    Account {}: {}{} SOL",
+                        reward.pubkey,
+                        if reward.lamports < 0 { '-' } else { ' ' },
+                        lamports_to_sol(reward.lamports.abs().try_into().unwrap())
+                    );
                 }
             }
         }
     }
-    Ok(())
 }
 
 fn output_entry(
@@ -181,7 +174,7 @@ fn output_slot(
             output_entry(blockstore, method, slot, entry_index, entry);
         }
 
-        output_slot_rewards(blockstore, slot, method)?;
+        output_slot_rewards(blockstore, slot, method);
     } else if verbose_level >= 1 {
         let mut transactions = 0;
         let mut hashes = 0;
@@ -526,7 +519,7 @@ fn analyze_column<
     db: &Database,
     name: &str,
     key_size: usize,
-) -> Result<(), String> {
+) {
     let mut key_tot: u64 = 0;
     let mut val_hist = histogram::Histogram::new();
     let mut val_tot: u64 = 0;
@@ -587,38 +580,34 @@ fn analyze_column<
     };
 
     println!("{}", serde_json::to_string_pretty(&json_result).unwrap());
-
-    Ok(())
 }
 
-fn analyze_storage(database: &Database) -> Result<(), String> {
+fn analyze_storage(database: &Database) {
     use blockstore_db::columns::*;
-    analyze_column::<SlotMeta>(database, "SlotMeta", SlotMeta::key_size())?;
-    analyze_column::<Orphans>(database, "Orphans", Orphans::key_size())?;
-    analyze_column::<DeadSlots>(database, "DeadSlots", DeadSlots::key_size())?;
-    analyze_column::<ErasureMeta>(database, "ErasureMeta", ErasureMeta::key_size())?;
-    analyze_column::<Root>(database, "Root", Root::key_size())?;
-    analyze_column::<Index>(database, "Index", Index::key_size())?;
-    analyze_column::<ShredData>(database, "ShredData", ShredData::key_size())?;
-    analyze_column::<ShredCode>(database, "ShredCode", ShredCode::key_size())?;
+    analyze_column::<SlotMeta>(database, "SlotMeta", SlotMeta::key_size());
+    analyze_column::<Orphans>(database, "Orphans", Orphans::key_size());
+    analyze_column::<DeadSlots>(database, "DeadSlots", DeadSlots::key_size());
+    analyze_column::<ErasureMeta>(database, "ErasureMeta", ErasureMeta::key_size());
+    analyze_column::<Root>(database, "Root", Root::key_size());
+    analyze_column::<Index>(database, "Index", Index::key_size());
+    analyze_column::<ShredData>(database, "ShredData", ShredData::key_size());
+    analyze_column::<ShredCode>(database, "ShredCode", ShredCode::key_size());
     analyze_column::<TransactionStatus>(
         database,
         "TransactionStatus",
         TransactionStatus::key_size(),
-    )?;
+    );
     analyze_column::<TransactionStatus>(
         database,
         "TransactionStatusIndex",
         TransactionStatusIndex::key_size(),
-    )?;
+    );
     analyze_column::<AddressSignatures>(
         database,
         "AddressSignatures",
         AddressSignatures::key_size(),
-    )?;
-    analyze_column::<Rewards>(database, "Rewards", Rewards::key_size())?;
-
-    Ok(())
+    );
+    analyze_column::<Rewards>(database, "Rewards", Rewards::key_size());
 }
 
 fn open_blockstore(
@@ -2757,7 +2746,7 @@ fn main() {
                         println!("Ledger is empty");
                     } else {
                         let first = slots.first().unwrap();
-                        let last = slots.last().unwrap_or_else(|| first);
+                        let last = slots.last().unwrap_or(first);
                         if first != last {
                             println!("Ledger has data for slots {:?} to {:?}", first, last);
                             if all {
@@ -2775,18 +2764,11 @@ fn main() {
             }
         }
         ("analyze-storage", _) => {
-            match analyze_storage(&open_database(
+            analyze_storage(&open_database(
                 &ledger_path,
                 AccessType::TryPrimaryThenSecondary,
-            )) {
-                Ok(()) => {
-                    println!("Ok.");
-                }
-                Err(err) => {
-                    eprintln!("Unable to read the Ledger: {:?}", err);
-                    exit(1);
-                }
-            }
+            ));
+            println!("Ok.");
         }
         ("", _) => {
             eprintln!("{}", matches.usage());

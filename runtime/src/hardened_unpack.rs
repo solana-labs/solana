@@ -255,6 +255,7 @@ fn unpack_genesis<A: Read, P: AsRef<Path>>(
 
 fn is_valid_genesis_archive_entry(parts: &[&str], kind: tar::EntryType) -> bool {
     trace!("validating: {:?} {:?}", parts, kind);
+    #[allow(clippy::match_like_matches_macro)]
     match (parts, kind) {
         (["genesis.bin"], GNUSparse) => true,
         (["genesis.bin"], Regular) => true,

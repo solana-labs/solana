@@ -272,16 +272,18 @@ impl VoteState {
     }
 
     fn get_max_sized_vote_state() -> VoteState {
-        let mut vote_state = Self::default();
-        vote_state.votes = VecDeque::from(vec![Lockout::default(); MAX_LOCKOUT_HISTORY]);
-        vote_state.root_slot = Some(std::u64::MAX);
-        vote_state.epoch_credits = vec![(0, 0, 0); MAX_EPOCH_CREDITS_HISTORY];
         let mut authorized_voters = AuthorizedVoters::default();
         for i in 0..=MAX_LEADER_SCHEDULE_EPOCH_OFFSET {
             authorized_voters.insert(i, solana_sdk::pubkey::new_rand());
         }
-        vote_state.authorized_voters = authorized_voters;
-        vote_state
+
+        VoteState {
+            votes: VecDeque::from(vec![Lockout::default(); MAX_LOCKOUT_HISTORY]),
+            root_slot: Some(std::u64::MAX),
+            epoch_credits: vec![(0, 0, 0); MAX_EPOCH_CREDITS_HISTORY],
+            authorized_voters,
+            ..Self::default()
+        }
     }
 
     fn check_slots_are_valid(
@@ -463,10 +465,7 @@ impl VoteState {
     where
         F: Fn(Pubkey) -> Result<(), InstructionError>,
     {
-        let epoch_authorized_voter = self.get_and_update_authorized_voter(current_epoch).expect(
-            "the clock epoch is monotonically increasing, so authorized voter must be known",
-        );
-
+        let epoch_authorized_voter = self.get_and_update_authorized_voter(current_epoch);
         verify(epoch_authorized_voter)?;
 
         // The offset in slots `n` on which the target_epoch
@@ -514,17 +513,16 @@ impl VoteState {
         Ok(())
     }
 
-    fn get_and_update_authorized_voter(&mut self, current_epoch: Epoch) -> Option<Pubkey> {
+    fn get_and_update_authorized_voter(&mut self, current_epoch: Epoch) -> Pubkey {
         let pubkey = self
             .authorized_voters
             .get_and_cache_authorized_voter_for_epoch(current_epoch)
             .expect(
-                "Internal functions should
-        only call this will monotonically increasing current_epoch",
+                "Internal functions should only call this will monotonically increasing current_epoch",
             );
         self.authorized_voters
             .purge_authorized_voters(current_epoch);
-        Some(pubkey)
+        pubkey
     }
 
     fn pop_expired_votes(&mut self, slot: Slot) {
@@ -702,9 +700,7 @@ pub fn process_vote<S: std::hash::BuildHasher>(
     }
 
     let mut vote_state = versioned.convert_to_current();
-    let authorized_voter = vote_state
-        .get_and_update_authorized_voter(clock.epoch)
-        .expect("the clock epoch is monotonically increasing, so authorized voter must be known");
+    let authorized_voter = vote_state.get_and_update_authorized_voter(clock.epoch);
     verify_authorized_signer(&authorized_voter, signers)?;
 
     vote_state.process_vote(vote, slot_hashes, clock.epoch)?;
@@ -712,7 +708,7 @@ pub fn process_vote<S: std::hash::BuildHasher>(
         vote.slots
             .iter()
             .max()
-            .ok_or_else(|| VoteError::EmptySlots)
+            .ok_or(VoteError::EmptySlots)
             .and_then(|slot| vote_state.process_timestamp(*slot, timestamp))?;
     }
     vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
@@ -1571,8 +1567,10 @@ mod tests {
 
         assert_eq!(vote_state.commission_split(1), (0, 1, false));
 
-        let mut vote_state = VoteState::default();
-        vote_state.commission = std::u8::MAX;
+        let mut vote_state = VoteState {
+            commission: std::u8::MAX,
+            ..VoteState::default()
+        };
         assert_eq!(vote_state.commission_split(1), (1, 0, false));
 
         vote_state.commission = 99;
@@ -1726,8 +1724,10 @@ mod tests {
     #[test]
     fn test_vote_process_timestamp() {
         let (slot, timestamp) = (15, 1_575_412_285);
-        let mut vote_state = VoteState::default();
-        vote_state.last_timestamp = BlockTimestamp { slot, timestamp };
+        let mut vote_state = VoteState {
+            last_timestamp: BlockTimestamp { slot, timestamp },
+            ..VoteState::default()
+        };
 
         assert_eq!(
             vote_state.process_timestamp(slot - 1, timestamp + 1),
@@ -1791,14 +1791,14 @@ mod tests {
         // If no new authorized voter was set, the same authorized voter
         // is locked into the next epoch
         assert_eq!(
-            vote_state.get_and_update_authorized_voter(1).unwrap(),
+            vote_state.get_and_update_authorized_voter(1),
             original_voter
         );
 
         // Try to get the authorized voter for epoch 5, implies
         // the authorized voter for epochs 1-4 were unchanged
         assert_eq!(
-            vote_state.get_and_update_authorized_voter(5).unwrap(),
+            vote_state.get_and_update_authorized_voter(5),
             original_voter
         );
 
@@ -1820,7 +1820,7 @@ mod tests {
 
         // Try to get the authorized voter for epoch 6, unchanged
         assert_eq!(
-            vote_state.get_and_update_authorized_voter(6).unwrap(),
+            vote_state.get_and_update_authorized_voter(6),
             original_voter
         );
 
@@ -1828,7 +1828,7 @@ mod tests {
         // be the new authorized voter
         for i in 7..10 {
             assert_eq!(
-                vote_state.get_and_update_authorized_voter(i).unwrap(),
+                vote_state.get_and_update_authorized_voter(i),
                 new_authorized_voter
             );
         }
@@ -1904,31 +1904,22 @@ mod tests {
         // voters is correct
         for i in 9..epoch_offset {
             assert_eq!(
-                vote_state.get_and_update_authorized_voter(i).unwrap(),
+                vote_state.get_and_update_authorized_voter(i),
                 original_voter
             );
         }
         for i in epoch_offset..3 + epoch_offset {
-            assert_eq!(
-                vote_state.get_and_update_authorized_voter(i).unwrap(),
-                new_voter
-            );
+            assert_eq!(vote_state.get_and_update_authorized_voter(i), new_voter);
         }
         for i in 3 + epoch_offset..6 + epoch_offset {
-            assert_eq!(
-                vote_state.get_and_update_authorized_voter(i).unwrap(),
-                new_voter2
-            );
+            assert_eq!(vote_state.get_and_update_authorized_voter(i), new_voter2);
         }
         for i in 6 + epoch_offset..9 + epoch_offset {
-            assert_eq!(
-                vote_state.get_and_update_authorized_voter(i).unwrap(),
-                new_voter3
-            );
+            assert_eq!(vote_state.get_and_update_authorized_voter(i), new_voter3);
         }
         for i in 9 + epoch_offset..=10 + epoch_offset {
             assert_eq!(
-                vote_state.get_and_update_authorized_voter(i).unwrap(),
+                vote_state.get_and_update_authorized_voter(i),
                 original_voter
             );
         }

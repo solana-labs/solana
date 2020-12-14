@@ -27,7 +27,6 @@ use std::{
     collections::{HashMap, HashSet},
     error,
     fs::File,
-    iter::FromIterator,
     path::PathBuf,
     process,
     str::FromStr,
@@ -296,7 +295,7 @@ fn classify_block_producers(
     };
 
     let confirmed_blocks = rpc_client.get_confirmed_blocks(first_slot, Some(last_slot_in_epoch))?;
-    let confirmed_blocks: HashSet<Slot> = HashSet::from_iter(confirmed_blocks.into_iter());
+    let confirmed_blocks: HashSet<Slot> = confirmed_blocks.into_iter().collect();
 
     let mut poor_block_producers = HashSet::new();
     let mut quality_block_producers = HashSet::new();

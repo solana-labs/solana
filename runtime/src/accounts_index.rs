@@ -196,12 +196,8 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         AccountsIndexIterator::new(&self.account_maps, range)
     }
 
-    fn do_checked_scan_accounts<'a, F, R>(
-        &'a self,
-        ancestors: &Ancestors,
-        func: F,
-        range: Option<R>,
-    ) where
+    fn do_checked_scan_accounts<F, R>(&self, ancestors: &Ancestors, func: F, range: Option<R>)
+    where
         F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey>,
     {
@@ -349,12 +345,8 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         }
     }
 
-    fn do_unchecked_scan_accounts<'a, F, R>(
-        &'a self,
-        ancestors: &Ancestors,
-        func: F,
-        range: Option<R>,
-    ) where
+    fn do_unchecked_scan_accounts<F, R>(&self, ancestors: &Ancestors, func: F, range: Option<R>)
+    where
         F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey>,
     {
@@ -364,8 +356,8 @@ impl<T: 'static + Clone> AccountsIndex<T> {
     // Scan accounts and return latest version of each account that is either:
     // 1) rooted or
     // 2) present in ancestors
-    fn do_scan_accounts<'a, F, R>(
-        &'a self,
+    fn do_scan_accounts<F, R>(
+        &self,
         ancestors: &Ancestors,
         mut func: F,
         range: Option<R>,
@@ -922,7 +914,7 @@ mod tests {
         run_test_range_indexes(
             &index,
             &pubkeys,
-            Some(ITER_BATCH_SIZE - 1 as usize),
+            Some(ITER_BATCH_SIZE - 1_usize),
             Some(2 * ITER_BATCH_SIZE as usize + 1),
         );
     }

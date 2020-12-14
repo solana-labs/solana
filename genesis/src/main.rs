@@ -443,11 +443,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     );
     fee_rate_governor.burn_percent = value_t_or_exit!(matches, "fee_burn_percentage", u8);
 
-    let mut poh_config = PohConfig::default();
-    poh_config.target_tick_duration = if matches.is_present("target_tick_duration") {
-        Duration::from_micros(value_t_or_exit!(matches, "target_tick_duration", u64))
-    } else {
-        Duration::from_micros(default_target_tick_duration)
+    let mut poh_config = PohConfig {
+        target_tick_duration: if matches.is_present("target_tick_duration") {
+            Duration::from_micros(value_t_or_exit!(matches, "target_tick_duration", u64))
+        } else {
+            Duration::from_micros(default_target_tick_duration)
+        },
+        ..PohConfig::default()
     };
 
     let cluster_type = cluster_type_of(&matches, "cluster_type").unwrap();
@@ -663,7 +665,7 @@ mod tests {
             solana_sdk::pubkey::new_rand().to_string(),
             Base64Account {
                 owner: solana_sdk::pubkey::new_rand().to_string(),
-                balance: 2 as u64,
+                balance: 2,
                 executable: false,
                 data: String::from("aGVsbG8="),
             },
@@ -672,7 +674,7 @@ mod tests {
             solana_sdk::pubkey::new_rand().to_string(),
             Base64Account {
                 owner: solana_sdk::pubkey::new_rand().to_string(),
-                balance: 1 as u64,
+                balance: 1,
                 executable: true,
                 data: String::from("aGVsbG8gd29ybGQ="),
             },
@@ -681,7 +683,7 @@ mod tests {
             solana_sdk::pubkey::new_rand().to_string(),
             Base64Account {
                 owner: solana_sdk::pubkey::new_rand().to_string(),
-                balance: 3 as u64,
+                balance: 3,
                 executable: true,
                 data: String::from("bWUgaGVsbG8gdG8gd29ybGQ="),
             },
@@ -736,7 +738,7 @@ mod tests {
             solana_sdk::pubkey::new_rand().to_string(),
             Base64Account {
                 owner: solana_sdk::pubkey::new_rand().to_string(),
-                balance: 6 as u64,
+                balance: 6,
                 executable: true,
                 data: String::from("eW91IGFyZQ=="),
             },
@@ -745,7 +747,7 @@ mod tests {
             solana_sdk::pubkey::new_rand().to_string(),
             Base64Account {
                 owner: solana_sdk::pubkey::new_rand().to_string(),
-                balance: 5 as u64,
+                balance: 5,
                 executable: false,
                 data: String::from("bWV0YSBzdHJpbmc="),
             },
@@ -754,7 +756,7 @@ mod tests {
             solana_sdk::pubkey::new_rand().to_string(),
             Base64Account {
                 owner: solana_sdk::pubkey::new_rand().to_string(),
-                balance: 10 as u64,
+                balance: 10,
                 executable: false,
                 data: String::from("YmFzZTY0IHN0cmluZw=="),
             },
@@ -819,7 +821,7 @@ mod tests {
             serde_json::to_string(&account_keypairs[0].to_bytes().to_vec()).unwrap(),
             Base64Account {
                 owner: solana_sdk::pubkey::new_rand().to_string(),
-                balance: 20 as u64,
+                balance: 20,
                 executable: true,
                 data: String::from("Y2F0IGRvZw=="),
             },
@@ -828,7 +830,7 @@ mod tests {
             serde_json::to_string(&account_keypairs[1].to_bytes().to_vec()).unwrap(),
             Base64Account {
                 owner: solana_sdk::pubkey::new_rand().to_string(),
-                balance: 15 as u64,
+                balance: 15,
                 executable: false,
                 data: String::from("bW9ua2V5IGVsZXBoYW50"),
             },
@@ -837,7 +839,7 @@ mod tests {
             serde_json::to_string(&account_keypairs[2].to_bytes().to_vec()).unwrap(),
             Base64Account {
                 owner: solana_sdk::pubkey::new_rand().to_string(),
-                balance: 30 as u64,
+                balance: 30,
                 executable: true,
                 data: String::from("Y29tYSBtb2Nh"),
             },

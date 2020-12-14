@@ -422,7 +422,7 @@ impl MessageProcessor {
         instruction: &'a CompiledInstruction,
         executable_accounts: &'a [(Pubkey, RefCell<Account>)],
         accounts: &'a [Rc<RefCell<Account>>],
-    ) -> Result<Vec<KeyedAccount<'a>>, InstructionError> {
+    ) -> Vec<KeyedAccount<'a>> {
         let mut keyed_accounts = create_keyed_readonly_accounts(&executable_accounts);
         let mut keyed_accounts2: Vec<_> = instruction
             .accounts
@@ -440,7 +440,7 @@ impl MessageProcessor {
             })
             .collect();
         keyed_accounts.append(&mut keyed_accounts2);
-        Ok(keyed_accounts)
+        keyed_accounts
     }
 
     /// Process an instruction
@@ -604,7 +604,7 @@ impl MessageProcessor {
 
             // Construct keyed accounts
             let keyed_accounts =
-                Self::create_keyed_accounts(message, instruction, executable_accounts, accounts)?;
+                Self::create_keyed_accounts(message, instruction, executable_accounts, accounts);
 
             // Invoke callee
             invoke_context.push(instruction.program_id(&message.account_keys))?;
@@ -794,7 +794,7 @@ impl MessageProcessor {
             feature_set,
         );
         let keyed_accounts =
-            Self::create_keyed_accounts(message, instruction, executable_accounts, accounts)?;
+            Self::create_keyed_accounts(message, instruction, executable_accounts, accounts);
         self.process_instruction(&keyed_accounts, &instruction.data, &mut invoke_context)?;
         Self::verify(
             message,
@@ -854,7 +854,6 @@ mod tests {
         message::Message,
         native_loader::create_loadable_account,
     };
-    use std::iter::FromIterator;
 
     #[test]
     fn test_invoke_context() {
@@ -920,8 +919,7 @@ mod tests {
 
             // modify account owned by the program
             accounts[owned_index].borrow_mut().data[0] = (MAX_DEPTH + owned_index) as u8;
-            let mut these_accounts =
-                Vec::from_iter(accounts[not_owned_index..owned_index + 1].iter().cloned());
+            let mut these_accounts = accounts[not_owned_index..owned_index + 1].to_vec();
             these_accounts.push(Rc::new(RefCell::new(Account::new(
                 1,
                 1,
@@ -1805,6 +1803,7 @@ mod tests {
     #[test]
     fn test_debug() {
         let mut message_processor = MessageProcessor::default();
+        #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
             _program_id: &Pubkey,
             _keyed_accounts: &[KeyedAccount],
@@ -1813,6 +1812,7 @@ mod tests {
         ) -> Result<(), InstructionError> {
             Ok(())
         }
+        #[allow(clippy::unnecessary_wraps)]
         fn mock_ix_processor(
             _pubkey: &Pubkey,
             _ka: &[KeyedAccount],

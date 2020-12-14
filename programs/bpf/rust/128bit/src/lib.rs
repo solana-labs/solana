@@ -19,7 +19,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     assert_eq!(z, 340_282_366_920_938_463_463_374_607_431_768_211_454);
 
     assert_eq!(u128::from(1u32.to_le()), 1);
-    assert_eq!(u128::from(1u32.to_be()), 0x1_000_000);
+    assert_eq!(u128::from(1u32.to_be()), 0x0100_0000);
 
     assert_eq!(solana_bpf_rust_128bit_dep::uadd(10, 20), 30u128);
     assert_eq!(solana_bpf_rust_128bit_dep::usubtract(30, 20), 10u128);
