@@ -129,20 +129,20 @@ all_test_steps() {
   wait_step
 
   # Coverage...
-  if affects \
-             .rs$ \
-             Cargo.lock$ \
-             Cargo.toml$ \
-             ^ci/rust-version.sh \
-             ^ci/test-coverage.sh \
-             ^scripts/coverage.sh \
-      ; then
-    command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 30
-    wait_step
-  else
-    annotate --style info --context test-coverage \
-      "Coverage skipped as no .rs files were modified"
-  fi
+  #if affects \
+  #           .rs$ \
+  #           Cargo.lock$ \
+  #           Cargo.toml$ \
+  #           ^ci/rust-version.sh \
+  #           ^ci/test-coverage.sh \
+  #           ^scripts/coverage.sh \
+  #    ; then
+  #  command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 30
+  #  wait_step
+  #else
+  #  annotate --style info --context test-coverage \
+  #    "Coverage skipped as no .rs files were modified"
+  #fi
 
   # Full test suite
   command_step stable ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-stable.sh" 60
