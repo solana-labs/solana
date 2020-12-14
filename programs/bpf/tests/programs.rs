@@ -14,7 +14,10 @@ use solana_runtime::{
     bank::Bank,
     bank_client::BankClient,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
-    loader_utils::load_program,
+    loader_utils::{
+        load_buffer_account, load_program, load_upgradeable_program, set_upgrade_authority,
+        upgrade_program,
+    },
 };
 use solana_sdk::{
     account::Account,
@@ -92,6 +95,44 @@ fn write_bpf_program(
 
         offset += chunk_size as u32;
     }
+}
+
+fn load_upgradeable_bpf_program(
+    bank_client: &BankClient,
+    payer_keypair: &Keypair,
+    name: &str,
+) -> (Pubkey, Keypair) {
+    let path = create_bpf_path(name);
+    let mut file = File::open(&path).unwrap_or_else(|err| {
+        panic!("Failed to open {}: {}", path.display(), err);
+    });
+    let mut elf = Vec::new();
+    file.read_to_end(&mut elf).unwrap();
+    load_upgradeable_program(bank_client, payer_keypair, elf)
+}
+
+fn upgrade_bpf_program(
+    bank_client: &BankClient,
+    payer_keypair: &Keypair,
+    executable_pubkey: &Pubkey,
+    authority_keypair: &Keypair,
+    name: &str,
+) {
+    let path = create_bpf_path(name);
+    let mut file = File::open(&path).unwrap_or_else(|err| {
+        panic!("Failed to open {}: {}", path.display(), err);
+    });
+    let mut elf = Vec::new();
+    file.read_to_end(&mut elf).unwrap();
+    let buffer_pubkey = load_buffer_account(bank_client, payer_keypair, &elf);
+    upgrade_program(
+        bank_client,
+        payer_keypair,
+        executable_pubkey,
+        &buffer_pubkey,
+        &authority_keypair,
+        &payer_keypair.pubkey(),
+    )
 }
 
 fn run_program(
@@ -1381,4 +1422,80 @@ fn test_program_bpf_test_use_latest_executor2() {
     assert!(bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
         .is_ok());
+}
+
+#[cfg(feature = "bpf_rust")]
+#[test]
+fn test_program_bpf_upgrade() {
+    solana_logger::setup();
+
+    let mut nonce = 0;
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
+    bank.add_builtin(&name, id, entrypoint);
+    let bank_client = BankClient::new(bank);
+
+    // deploy upgrade program
+    let (program_id, authority_keypair) =
+        load_upgradeable_bpf_program(&bank_client, &mint_keypair, "solana_bpf_rust_upgradeable");
+
+    // call upgrade program
+    nonce += 1;
+    let instruction = Instruction::new(program_id, &[nonce], vec![]);
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::InstructionError(0, InstructionError::Custom(42))
+    );
+
+    // upgrade program
+    upgrade_bpf_program(
+        &bank_client,
+        &mint_keypair,
+        &program_id,
+        &authority_keypair,
+        "solana_bpf_rust_upgraded",
+    );
+
+    // call upgraded program
+    nonce += 1;
+    let instruction = Instruction::new(program_id, &[nonce], vec![]);
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::InstructionError(0, InstructionError::Custom(43))
+    );
+
+    // upgrade back to the original program
+    let new_authority_keypair = Keypair::new();
+    set_upgrade_authority(
+        &bank_client,
+        &mint_keypair,
+        &program_id,
+        &authority_keypair,
+        Some(&new_authority_keypair.pubkey()),
+    );
+
+    // upgrade back to the original program
+    upgrade_bpf_program(
+        &bank_client,
+        &mint_keypair,
+        &program_id,
+        &new_authority_keypair,
+        "solana_bpf_rust_upgradeable",
+    );
+
+    // call original program
+    nonce += 1;
+    let instruction = Instruction::new(program_id, &[nonce], vec![]);
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::InstructionError(0, InstructionError::Custom(42))
+    );
 }

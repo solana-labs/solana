@@ -590,6 +590,74 @@ impl MessageProcessor {
         Ok((message, id, index))
     }
 
+    /// Entrypoint for a cross-program invocation from a native program
+    pub fn native_invoke(
+        invoke_context: &mut dyn InvokeContext,
+        instruction: Instruction,
+        keyed_accounts: &[&KeyedAccount],
+        signers_seeds: &[&[&[u8]]],
+    ) -> Result<(), InstructionError> {
+        let caller_program_id = invoke_context.get_caller()?;
+
+        // Translate and verify caller's data
+
+        let signers = signers_seeds
+            .iter()
+            .map(|seeds| Pubkey::create_program_address(&seeds, caller_program_id))
+            .collect::<Result<Vec<_>, solana_sdk::pubkey::PubkeyError>>()?;
+        let (message, callee_program_id, callee_program_id_index) =
+            Self::create_message(&instruction, &keyed_accounts, &signers)?;
+        let mut accounts = vec![];
+        let mut account_refs = vec![];
+        'root: for account_key in message.account_keys.iter() {
+            for keyed_account in keyed_accounts {
+                if account_key == keyed_account.unsigned_key() {
+                    accounts.push(Rc::new(keyed_account.account.clone()));
+                    account_refs.push(keyed_account);
+                    continue 'root;
+                }
+            }
+            return Err(InstructionError::MissingAccount);
+        }
+
+        // Process instruction
+
+        invoke_context.record_instruction(&instruction);
+        let program_account = (**accounts
+            .get(callee_program_id_index)
+            .ok_or(InstructionError::MissingAccount)?)
+        .clone();
+        if !program_account.borrow().executable {
+            return Err(InstructionError::AccountNotExecutable);
+        }
+        let executable_accounts = vec![(callee_program_id, program_account)];
+
+        MessageProcessor::process_cross_program_instruction(
+            &message,
+            &executable_accounts,
+            &accounts,
+            invoke_context,
+        )?;
+
+        // Copy results back to caller
+
+        for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
+            let account = account.borrow();
+            if message.is_writable(i) && !account.executable {
+                account_ref.try_account_ref_mut()?.lamports = account.lamports;
+                account_ref.try_account_ref_mut()?.owner = account.owner;
+                if account_ref.data_len()? != account.data.len() && account_ref.data_len()? != 0 {
+                    // Only support for `CreateAccount` at this time.
+                    // Need a way to limit total realloc size across multiple CPI calls
+                    return Err(InstructionError::InvalidRealloc);
+                }
+                account_ref.try_account_ref_mut()?.data = account.data.clone();
+            }
+        }
+
+        Ok(())
+    }
+
     /// Process a cross-program instruction
     /// This method calls the instruction's program entrypoint function
     pub fn process_cross_program_instruction(

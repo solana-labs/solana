@@ -42,7 +42,9 @@ use solana_faucet::faucet_mock::request_airdrop_transaction;
 use solana_rbpf::vm::{Config, Executable};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
+    account::Account,
     bpf_loader, bpf_loader_deprecated,
+    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::{Epoch, Slot},
     commitment_config::CommitmentConfig,
     decode_error::DecodeError,
@@ -185,11 +187,25 @@ pub enum CliCommand {
         lamports: u64,
     },
     // Program Deployment
-    Deploy {
+    ProgramDeploy {
         program_location: String,
-        address: Option<SignerIndex>,
+        buffer: Option<SignerIndex>,
         use_deprecated_loader: bool,
+        use_upgradeable_loader: bool,
+        upgrade_authority: Option<Pubkey>,
+        max_len: Option<usize>,
         allow_excessive_balance: bool,
+    },
+    ProgramUpgrade {
+        program_location: String,
+        program: Pubkey,
+        upgrade_authority: SignerIndex,
+        buffer: Option<SignerIndex>,
+    },
+    SetProgramUpgradeAuthority {
+        program: Pubkey,
+        upgrade_authority: SignerIndex,
+        new_upgrade_authority: Option<Pubkey>,
     },
     // Stake Commands
     CreateStakeAccount {
@@ -616,20 +632,74 @@ pub fn parse_command(
             parse_withdraw_from_nonce_account(matches, default_signer, wallet_manager)
         }
         // Program Deployment
-        ("deploy", Some(matches)) => {
-            let (address_signer, _address) = signer_of(matches, "address_signer", wallet_manager)?;
+        ("program-deploy", Some(matches)) => {
             let mut signers = vec![default_signer.signer_from_path(matches, wallet_manager)?];
-            let address = address_signer.map(|signer| {
+            let (buffer_signer, _address) = signer_of(matches, "buffer_signer", wallet_manager)?;
+            let buffer = buffer_signer.map(|signer| {
                 signers.push(signer);
                 1
             });
 
+            let upgrade_authority = pubkey_of(matches, "upgrade_authority");
+            let max_len = value_of(matches, "max_len");
+
             Ok(CliCommandInfo {
-                command: CliCommand::Deploy {
+                command: CliCommand::ProgramDeploy {
                     program_location: matches.value_of("program_location").unwrap().to_string(),
-                    address,
+                    buffer,
                     use_deprecated_loader: matches.is_present("use_deprecated_loader"),
+                    use_upgradeable_loader: matches.is_present("use_upgradeable_loader"),
+                    upgrade_authority,
+                    max_len,
                     allow_excessive_balance: matches.is_present("allow_excessive_balance"),
+                },
+                signers,
+            })
+        }
+        ("program-upgrade", Some(matches)) => {
+            let mut signers = vec![default_signer.signer_from_path(matches, wallet_manager)?];
+            let (upgrade_authority_signer, _address) =
+                signer_of(matches, "upgrade_authority", wallet_manager)?;
+            let upgrade_authority = upgrade_authority_signer
+                .map(|signer| {
+                    signers.push(signer);
+                    1
+                })
+                .unwrap();
+            let (buffer_signer, _address) = signer_of(matches, "buffer_signer", wallet_manager)?;
+            let buffer = buffer_signer.map(|signer| {
+                signers.push(signer);
+                2
+            });
+            let program = pubkey_of(matches, "program_id").unwrap();
+
+            Ok(CliCommandInfo {
+                command: CliCommand::ProgramUpgrade {
+                    program_location: matches.value_of("program_location").unwrap().to_string(),
+                    program,
+                    upgrade_authority,
+                    buffer,
+                },
+                signers,
+            })
+        }
+        ("program-set-upgrade-authority", Some(matches)) => {
+            let mut signers = vec![default_signer.signer_from_path(matches, wallet_manager)?];
+            let (upgrade_authority_signer, _address) =
+                signer_of(matches, "upgrade_authority", wallet_manager)?;
+            let upgrade_authority = upgrade_authority_signer
+                .map(|signer| {
+                    signers.push(signer);
+                    1
+                })
+                .unwrap();
+            let program = pubkey_of(matches, "program_id").unwrap();
+            let new_upgrade_authority = pubkey_of(matches, "new_upgrade_authority");
+            Ok(CliCommandInfo {
+                command: CliCommand::SetProgramUpgradeAuthority {
+                    program,
+                    upgrade_authority,
+                    new_upgrade_authority,
                 },
                 signers,
             })
@@ -1170,63 +1240,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
     }
 }
 
-fn process_deploy(
-    rpc_client: &RpcClient,
-    config: &CliConfig,
-    program_location: &str,
-    address: Option<SignerIndex>,
-    use_deprecated_loader: bool,
-    allow_excessive_balance: bool,
-) -> ProcessResult {
-    const WORDS: usize = 12;
-    // Create ephemeral keypair to use for program address, if not provided
-    let mnemonic = Mnemonic::new(MnemonicType::for_word_count(WORDS)?, Language::English);
-    let seed = Seed::new(&mnemonic, "");
-    let new_keypair = keypair_from_seed(seed.as_bytes())?;
-
-    let result = do_process_deploy(
-        rpc_client,
-        config,
-        program_location,
-        address,
-        use_deprecated_loader,
-        allow_excessive_balance,
-        new_keypair,
-    );
-
-    if result.is_err() && address.is_none() {
-        let phrase: &str = mnemonic.phrase();
-        let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
-        eprintln!(
-            "{}\nTo reuse this address, recover the ephemeral keypair file with",
-            divider
-        );
-        eprintln!(
-            "`solana-keygen recover` and the following {}-word seed phrase,",
-            WORDS
-        );
-        eprintln!(
-            "then pass it as the [PROGRAM_ADDRESS_SIGNER] argument to `solana deploy ...`\n{}\n{}\n{}",
-            divider, phrase, divider
-        );
-    }
-    result
-}
-
-fn do_process_deploy(
-    rpc_client: &RpcClient,
-    config: &CliConfig,
-    program_location: &str,
-    address: Option<SignerIndex>,
-    use_deprecated_loader: bool,
-    allow_excessive_balance: bool,
-    new_keypair: Keypair,
-) -> ProcessResult {
-    let program_id = if let Some(i) = address {
-        config.signers[i]
-    } else {
-        &new_keypair
-    };
+fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let mut file = File::open(program_location).map_err(|err| {
         CliError::DynamicProgramError(format!("Unable to open program file: {}", err))
     })?;
@@ -1235,6 +1249,7 @@ fn do_process_deploy(
         CliError::DynamicProgramError(format!("Unable to read program file: {}", err))
     })?;
 
+    // Verify the program
     Executable::<BPFError, ThisInstructionMeter>::from_elf(
         &program_data,
         Some(|x| bpf_verifier::check(x, false)),
@@ -1242,70 +1257,287 @@ fn do_process_deploy(
     )
     .map_err(|err| CliError::DynamicProgramError(format!("ELF error: {}", err)))?;
 
-    let loader_id = if use_deprecated_loader {
-        bpf_loader_deprecated::id()
+    Ok(program_data)
+}
+
+fn complete_partial_program_init(
+    loader_id: &Pubkey,
+    payer_pubkey: &Pubkey,
+    elf_pubkey: &Pubkey,
+    account: &Account,
+    account_data_len: usize,
+    minimum_balance: u64,
+    allow_excessive_balance: bool,
+) -> Result<(Vec<Instruction>, u64), Box<dyn std::error::Error>> {
+    let mut instructions: Vec<Instruction> = vec![];
+    let mut balance_needed = 0;
+    if account.executable {
+        return Err(CliError::DynamicProgramError(
+            "Buffer account is already executable".to_string(),
+        )
+        .into());
+    }
+    if account.owner != *loader_id && !system_program::check_id(&account.owner) {
+        return Err(CliError::DynamicProgramError(
+            "Buffer account is already owned by another account".to_string(),
+        )
+        .into());
+    }
+
+    if account.data.is_empty() && system_program::check_id(&account.owner) {
+        instructions.push(system_instruction::allocate(
+            elf_pubkey,
+            account_data_len as u64,
+        ));
+        if account.owner != *loader_id {
+            instructions.push(system_instruction::assign(elf_pubkey, &loader_id));
+        }
+    }
+    if account.lamports < minimum_balance {
+        let balance = minimum_balance - account.lamports;
+        instructions.push(system_instruction::transfer(
+            payer_pubkey,
+            elf_pubkey,
+            balance,
+        ));
+        balance_needed = balance;
+    } else if account.lamports > minimum_balance
+        && system_program::check_id(&account.owner)
+        && !allow_excessive_balance
+    {
+        return Err(CliError::DynamicProgramError(format!(
+            "Buffer account has a balance: {:?}; it may already be in use",
+            Sol(account.lamports)
+        ))
+        .into());
+    }
+    Ok((instructions, balance_needed))
+}
+
+fn check_payer(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    balance_needed: u64,
+    messages: &[&Message],
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (_, fee_calculator, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
+
+    // Does the payer have enough?
+    check_account_for_spend_multiple_fees_with_commitment(
+        rpc_client,
+        &config.signers[0].pubkey(),
+        balance_needed,
+        &fee_calculator,
+        messages,
+        config.commitment,
+    )?;
+    Ok(())
+}
+
+fn send_deploy_messages(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    initial_message: &Option<Message>,
+    write_messages: &[Message],
+    final_message: &Message,
+    buffer_signer: &dyn Signer,
+    program_signer: &dyn Signer,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(message) = initial_message {
+        trace!("Preparing the required accounts");
+
+        let (blockhash, _, _) = rpc_client
+            .get_recent_blockhash_with_commitment(config.commitment)?
+            .value;
+
+        let mut initial_transaction = Transaction::new_unsigned(message.clone());
+        // Most of the initial_transaction combinations require both the fee-payer and new program
+        // account to sign the transaction. One (transfer) only requires the fee-payer signature.
+        // This check is to ensure signing does not fail on a KeypairPubkeyMismatch error from an
+        // extraneous signature.
+        if message.header.num_required_signatures == 2 {
+            initial_transaction.try_sign(&[config.signers[0], buffer_signer], blockhash)?;
+        } else {
+            initial_transaction.try_sign(&[config.signers[0]], blockhash)?;
+        }
+        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+            &initial_transaction,
+            config.commitment,
+            config.send_transaction_config,
+        );
+        log_instruction_custom_error::<SystemError>(result, &config).map_err(|err| {
+            CliError::DynamicProgramError(format!("Account allocation failed: {}", err))
+        })?;
+    }
+
+    trace!("Writing program data");
+    let (blockhash, _, last_valid_slot) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
+    let mut write_transactions = vec![];
+    for message in write_messages.iter() {
+        let mut tx = Transaction::new_unsigned(message.clone());
+        tx.try_sign(&[config.signers[0], buffer_signer], blockhash)?;
+        write_transactions.push(tx);
+    }
+    send_and_confirm_transactions_with_spinner(
+        &rpc_client,
+        write_transactions,
+        &[config.signers[0], buffer_signer],
+        config.commitment,
+        last_valid_slot,
+    )
+    .map_err(|err| {
+        CliError::DynamicProgramError(format!("Data writes to account failed: {}", err))
+    })?;
+
+    trace!("Deploying program account");
+    let (blockhash, _, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
+
+    let mut final_tx = Transaction::new_unsigned(final_message.clone());
+    final_tx.try_sign(&[config.signers[0], program_signer], blockhash)?;
+    rpc_client
+        .send_and_confirm_transaction_with_spinner_and_config(
+            &final_tx,
+            config.commitment,
+            RpcSendTransactionConfig {
+                skip_preflight: true,
+                ..RpcSendTransactionConfig::default()
+            },
+        )
+        .map_err(|e| {
+            CliError::DynamicProgramError(format!("Deploying program account failed: {}", e))
+        })?;
+    Ok(())
+}
+
+fn process_program_deploy(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    program_location: &str,
+    buffer: Option<SignerIndex>,
+    use_deprecated_loader: bool,
+    use_upgradeable_loader: bool,
+    upgrade_authority: Option<Pubkey>,
+    max_len: Option<usize>,
+    allow_excessive_balance: bool,
+) -> ProcessResult {
+    // Create ephemeral keypair to use for Buffer account, if not provided
+    let (words, mnemonic, new_keypair) = create_ephemeral_keypair()?;
+    let result = do_process_program_deploy(
+        rpc_client,
+        config,
+        program_location,
+        buffer,
+        use_deprecated_loader,
+        use_upgradeable_loader,
+        upgrade_authority,
+        max_len,
+        allow_excessive_balance,
+        new_keypair,
+    );
+    if result.is_err() && buffer.is_none() {
+        report_ephemeral_mnemonic(words, mnemonic);
+    }
+    result
+}
+
+#[allow(clippy::too_many_arguments)]
+fn do_process_program_deploy(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    program_location: &str,
+    buffer: Option<SignerIndex>,
+    use_deprecated_loader: bool,
+    use_upgradeable_loader: bool,
+    upgrade_authority: Option<Pubkey>,
+    max_len: Option<usize>,
+    allow_excessive_balance: bool,
+    new_keypair: Keypair,
+) -> ProcessResult {
+    let buffer_signer = if let Some(i) = buffer {
+        config.signers[i]
     } else {
-        bpf_loader::id()
+        &new_keypair
+    };
+    let program_keypair = Keypair::new();
+
+    let program_data = read_and_verify_elf(program_location)?;
+
+    // Determine which loader
+    let (loader_id, program_signer, data_len, minimum_balance) = if use_deprecated_loader {
+        (
+            bpf_loader_deprecated::id(),
+            buffer_signer,
+            program_data.len(),
+            rpc_client.get_minimum_balance_for_rent_exemption(program_data.len())?,
+        )
+    } else if use_upgradeable_loader {
+        let data_len = if let Some(len) = max_len {
+            len
+        } else {
+            program_data.len() * 2
+        };
+        (
+            bpf_loader_upgradeable::id(),
+            &program_keypair as &dyn Signer,
+            data_len,
+            rpc_client.get_minimum_balance_for_rent_exemption(
+                UpgradeableLoaderState::programdata_len(data_len)?,
+            )?,
+        )
+    } else {
+        (
+            bpf_loader::id(),
+            buffer_signer,
+            program_data.len(),
+            rpc_client.get_minimum_balance_for_rent_exemption(program_data.len())?,
+        )
     };
 
-    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(program_data.len())?;
-    let signers = [config.signers[0], program_id];
+    // Build messages to calculate fees
+    let mut messages: Vec<&Message> = Vec::new();
 
-    // Check program account to see if partial initialization has occurred
+    // Check Buffer account to see if partial initialization has occurred
     let (initial_instructions, balance_needed) = if let Some(account) = rpc_client
-        .get_account_with_commitment(&program_id.pubkey(), config.commitment)?
+        .get_account_with_commitment(&buffer_signer.pubkey(), config.commitment)?
         .value
     {
-        let mut instructions: Vec<Instruction> = vec![];
-        let mut balance_needed = 0;
-        if account.executable {
-            return Err(CliError::DynamicProgramError(
-                "Program account is already executable".to_string(),
-            )
-            .into());
-        }
-        if account.owner != loader_id && !system_program::check_id(&account.owner) {
-            return Err(CliError::DynamicProgramError(
-                "Program account is already owned by another account".to_string(),
-            )
-            .into());
-        }
-
-        if account.data.is_empty() && system_program::check_id(&account.owner) {
-            instructions.push(system_instruction::allocate(
-                &program_id.pubkey(),
-                program_data.len() as u64,
-            ));
-            if account.owner != loader_id {
-                instructions.push(system_instruction::assign(&program_id.pubkey(), &loader_id));
-            }
-        }
-        if account.lamports < minimum_balance {
-            let balance = minimum_balance - account.lamports;
-            instructions.push(system_instruction::transfer(
+        let account_data_len = if loader_id == bpf_loader_upgradeable::id() {
+            UpgradeableLoaderState::buffer_len(data_len)?
+        } else {
+            data_len
+        };
+        complete_partial_program_init(
+            &loader_id,
+            &config.signers[0].pubkey(),
+            &buffer_signer.pubkey(),
+            &account,
+            account_data_len,
+            minimum_balance,
+            allow_excessive_balance,
+        )?
+    } else if loader_id == bpf_loader_upgradeable::id() {
+        (
+            bpf_loader_upgradeable::create_buffer(
                 &config.signers[0].pubkey(),
-                &program_id.pubkey(),
-                balance,
-            ));
-            balance_needed = balance;
-        } else if account.lamports > minimum_balance
-            && system_program::check_id(&account.owner)
-            && !allow_excessive_balance
-        {
-            return Err(CliError::DynamicProgramError(format!(
-                "Program account has a balance: {:?}; it may already be in use",
-                Sol(account.lamports)
-            ))
-            .into());
-        }
-        (instructions, balance_needed)
+                &buffer_signer.pubkey(),
+                minimum_balance,
+                data_len,
+            )?,
+            minimum_balance,
+        )
     } else {
         (
             vec![system_instruction::create_account(
                 &config.signers[0].pubkey(),
-                &program_id.pubkey(),
+                &buffer_signer.pubkey(),
                 minimum_balance,
-                program_data.len() as u64,
+                data_len as u64,
                 &loader_id,
             )],
             minimum_balance,
@@ -1319,23 +1551,28 @@ fn do_process_deploy(
     } else {
         None
     };
-
-    // Build transactions to calculate fees
-    let mut messages: Vec<&Message> = Vec::new();
-
     if let Some(message) = &initial_message {
         messages.push(message);
     }
 
+    // Create and add write messages
     let mut write_messages = vec![];
     for (chunk, i) in program_data.chunks(DATA_CHUNK_SIZE).zip(0..) {
-        let instruction = loader_instruction::write(
-            &program_id.pubkey(),
-            &loader_id,
-            (i * DATA_CHUNK_SIZE) as u32,
-            chunk.to_vec(),
-        );
-        let message = Message::new(&[instruction], Some(&signers[0].pubkey()));
+        let instruction = if loader_id == bpf_loader_upgradeable::id() {
+            bpf_loader_upgradeable::write(
+                &buffer_signer.pubkey(),
+                (i * DATA_CHUNK_SIZE) as u32,
+                chunk.to_vec(),
+            )
+        } else {
+            loader_instruction::write(
+                &buffer_signer.pubkey(),
+                &loader_id,
+                (i * DATA_CHUNK_SIZE) as u32,
+                chunk.to_vec(),
+            )
+        };
+        let message = Message::new(&[instruction], Some(&config.signers[0].pubkey()));
         write_messages.push(message);
     }
     let mut write_message_refs = vec![];
@@ -1344,80 +1581,237 @@ fn do_process_deploy(
     }
     messages.append(&mut write_message_refs);
 
-    let instruction = loader_instruction::finalize(&program_id.pubkey(), &loader_id);
-    let finalize_message = Message::new(&[instruction], Some(&signers[0].pubkey()));
-    messages.push(&finalize_message);
+    // Create and add final message
+    let final_message = if loader_id == bpf_loader_upgradeable::id() {
+        Message::new(
+            &bpf_loader_upgradeable::deploy_with_max_program_len(
+                &config.signers[0].pubkey(),
+                &program_signer.pubkey(),
+                &buffer_signer.pubkey(),
+                upgrade_authority.as_ref(),
+                rpc_client.get_minimum_balance_for_rent_exemption(
+                    UpgradeableLoaderState::program_len()?,
+                )?,
+                data_len,
+            )?,
+            Some(&config.signers[0].pubkey()),
+        )
+    } else {
+        Message::new(
+            &[loader_instruction::finalize(
+                &buffer_signer.pubkey(),
+                &loader_id,
+            )],
+            Some(&config.signers[0].pubkey()),
+        )
+    };
+    messages.push(&final_message);
 
-    let (blockhash, fee_calculator, _) = rpc_client
-        .get_recent_blockhash_with_commitment(config.commitment)?
-        .value;
-
-    check_account_for_spend_multiple_fees_with_commitment(
+    check_payer(rpc_client, config, balance_needed, &messages)?;
+    send_deploy_messages(
         rpc_client,
-        &config.signers[0].pubkey(),
-        balance_needed,
-        &fee_calculator,
-        &messages,
-        config.commitment,
+        config,
+        &initial_message,
+        &write_messages,
+        &final_message,
+        buffer_signer,
+        program_signer,
     )?;
 
-    if let Some(message) = initial_message {
-        trace!("Creating or modifying program account");
-        let num_required_signatures = message.header.num_required_signatures;
+    Ok(json!({
+        "programId": format!("{}", program_signer.pubkey()),
+    })
+    .to_string())
+}
 
-        let mut initial_transaction = Transaction::new_unsigned(message);
-        // Most of the initial_transaction combinations require both the fee-payer and new program
-        // account to sign the transaction. One (transfer) only requires the fee-payer signature.
-        // This check is to ensure signing does not fail on a KeypairPubkeyMismatch error from an
-        // extraneous signature.
-        if num_required_signatures == 2 {
-            initial_transaction.try_sign(&signers, blockhash)?;
-        } else {
-            initial_transaction.try_sign(&[signers[0]], blockhash)?;
-        }
-        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-            &initial_transaction,
-            config.commitment,
-            config.send_transaction_config,
+fn create_ephemeral_keypair(
+) -> Result<(usize, bip39::Mnemonic, Keypair), Box<dyn std::error::Error>> {
+    const WORDS: usize = 12;
+    let mnemonic = Mnemonic::new(MnemonicType::for_word_count(WORDS)?, Language::English);
+    let seed = Seed::new(&mnemonic, "");
+    let new_keypair = keypair_from_seed(seed.as_bytes())?;
+
+    Ok((WORDS, mnemonic, new_keypair))
+}
+
+fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
+    let phrase: &str = mnemonic.phrase();
+    let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
+    eprintln!(
+        "{}\nTo resume a failed upgrade, recover the ephemeral keypair file with",
+        divider
+    );
+    eprintln!(
+        "`solana-keygen recover` and the following {}-word seed phrase,",
+        words
+    );
+    eprintln!(
+        "then pass it as the [BUFFER_SIGNER] argument to `solana upgrade ...`\n{}\n{}\n{}",
+        divider, phrase, divider
+    );
+}
+
+fn process_program_upgrade(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    program_location: &str,
+    program: Pubkey,
+    upgrade_authority: SignerIndex,
+    buffer: Option<SignerIndex>,
+) -> ProcessResult {
+    // Create ephemeral keypair to use for Buffer account, if not provided
+    let (words, mnemonic, new_keypair) = create_ephemeral_keypair()?;
+    let result = do_process_program_upgrade(
+        rpc_client,
+        config,
+        program_location,
+        program,
+        upgrade_authority,
+        buffer,
+        new_keypair,
+    );
+    if result.is_err() && buffer.is_none() {
+        report_ephemeral_mnemonic(words, mnemonic);
+    }
+    result
+}
+
+fn do_process_program_upgrade(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    program_location: &str,
+    program: Pubkey,
+    upgrade_authority: SignerIndex,
+    buffer: Option<SignerIndex>,
+    new_keypair: Keypair,
+) -> ProcessResult {
+    let buffer_signer = if let Some(i) = buffer {
+        config.signers[i]
+    } else {
+        &new_keypair
+    };
+    let upgrade_authority = config.signers[upgrade_authority];
+
+    let program_data = read_and_verify_elf(program_location)?;
+
+    let loader_id = bpf_loader_upgradeable::id();
+    let data_len = program_data.len();
+    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(
+        UpgradeableLoaderState::programdata_len(data_len)?,
+    )?;
+
+    // Build messages to calculate fees
+    let mut messages: Vec<&Message> = Vec::new();
+
+    // Check Buffer account to see if partial initialization has occurred
+    let (initial_instructions, balance_needed) = if let Some(account) = rpc_client
+        .get_account_with_commitment(&buffer_signer.pubkey(), config.commitment)?
+        .value
+    {
+        complete_partial_program_init(
+            &loader_id,
+            &config.signers[0].pubkey(),
+            &buffer_signer.pubkey(),
+            &account,
+            UpgradeableLoaderState::buffer_len(data_len)?,
+            minimum_balance,
+            true,
+        )?
+    } else {
+        (
+            bpf_loader_upgradeable::create_buffer(
+                &config.signers[0].pubkey(),
+                &buffer_signer.pubkey(),
+                minimum_balance,
+                data_len,
+            )?,
+            minimum_balance,
+        )
+    };
+    let initial_message = if !initial_instructions.is_empty() {
+        Some(Message::new(
+            &initial_instructions,
+            Some(&config.signers[0].pubkey()),
+        ))
+    } else {
+        None
+    };
+    if let Some(message) = &initial_message {
+        messages.push(message);
+    }
+
+    // Create and add write messages
+    let mut write_messages = vec![];
+    for (chunk, i) in program_data.chunks(DATA_CHUNK_SIZE).zip(0..) {
+        let instruction = bpf_loader_upgradeable::write(
+            &buffer_signer.pubkey(),
+            (i * DATA_CHUNK_SIZE) as u32,
+            chunk.to_vec(),
         );
-        log_instruction_custom_error::<SystemError>(result, &config).map_err(|err| {
-            CliError::DynamicProgramError(format!("Program account allocation failed: {}", err))
-        })?;
+        let message = Message::new(&[instruction], Some(&config.signers[0].pubkey()));
+        write_messages.push(message);
     }
-
-    let (blockhash, _, last_valid_slot) = rpc_client
-        .get_recent_blockhash_with_commitment(config.commitment)?
-        .value;
-
-    let mut write_transactions = vec![];
-    for message in write_messages.into_iter() {
-        let mut tx = Transaction::new_unsigned(message);
-        tx.try_sign(&signers, blockhash)?;
-        write_transactions.push(tx);
+    let mut write_message_refs = vec![];
+    for message in write_messages.iter() {
+        write_message_refs.push(message);
     }
+    messages.append(&mut write_message_refs);
 
-    trace!("Writing program data");
-    send_and_confirm_transactions_with_spinner(
-        &rpc_client,
-        write_transactions,
-        &signers,
-        config.commitment,
-        last_valid_slot,
-    )
-    .map_err(|err| {
-        CliError::DynamicProgramError(format!("Data writes to program account failed: {}", err))
-    })?;
+    // Create and add final message
+    let final_message = Message::new(
+        &[bpf_loader_upgradeable::upgrade(
+            &program,
+            &buffer_signer.pubkey(),
+            &upgrade_authority.pubkey(),
+            &config.signers[0].pubkey(),
+        )],
+        Some(&config.signers[0].pubkey()),
+    );
+    messages.push(&final_message);
 
+    check_payer(rpc_client, config, balance_needed, &messages)?;
+    send_deploy_messages(
+        rpc_client,
+        config,
+        &initial_message,
+        &write_messages,
+        &final_message,
+        buffer_signer,
+        upgrade_authority,
+    )?;
+
+    Ok(json!({
+        "programId": format!("{}", program),
+    })
+    .to_string())
+}
+
+fn process_set_program_upgrade_authority(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    program: Pubkey,
+    upgrade_authority: SignerIndex,
+    new_upgrade_authority: Option<Pubkey>,
+) -> ProcessResult {
+    let upgrade_authority_signer = config.signers[upgrade_authority];
+
+    trace!("Set a new program upgrade authority");
     let (blockhash, _, _) = rpc_client
         .get_recent_blockhash_with_commitment(config.commitment)?
         .value;
-    let mut finalize_tx = Transaction::new_unsigned(finalize_message);
-    finalize_tx.try_sign(&signers, blockhash)?;
 
-    trace!("Finalizing program account");
+    let mut tx = Transaction::new_unsigned(Message::new(
+        &[bpf_loader_upgradeable::set_authority(
+            &program,
+            &upgrade_authority_signer.pubkey(),
+            new_upgrade_authority.as_ref(),
+        )],
+        Some(&config.signers[0].pubkey()),
+    ));
+    tx.try_sign(&[config.signers[0], upgrade_authority_signer], blockhash)?;
     rpc_client
         .send_and_confirm_transaction_with_spinner_and_config(
-            &finalize_tx,
+            &tx,
             config.commitment,
             RpcSendTransactionConfig {
                 skip_preflight: true,
@@ -1425,13 +1819,19 @@ fn do_process_deploy(
             },
         )
         .map_err(|e| {
-            CliError::DynamicProgramError(format!("Finalizing program account failed: {}", e))
+            CliError::DynamicProgramError(format!("Setting upgrade authority failed: {}", e))
         })?;
 
-    Ok(json!({
-        "programId": format!("{}", program_id.pubkey()),
-    })
-    .to_string())
+    match new_upgrade_authority {
+        Some(address) => Ok(json!({
+            "UpgradeAuthority": format!("{:?}", address),
+        })
+        .to_string()),
+        None => Ok(json!({
+            "UpgradeAuthority": "None",
+        })
+        .to_string()),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1690,18 +2090,52 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Program Deployment
 
         // Deploy a custom program to the chain
-        CliCommand::Deploy {
+        CliCommand::ProgramDeploy {
             program_location,
-            address,
+            buffer,
             use_deprecated_loader,
+            use_upgradeable_loader,
+            upgrade_authority,
+            max_len,
             allow_excessive_balance,
-        } => process_deploy(
+        } => process_program_deploy(
             &rpc_client,
             config,
             program_location,
-            *address,
+            *buffer,
             *use_deprecated_loader,
+            *use_upgradeable_loader,
+            *upgrade_authority,
+            *max_len,
             *allow_excessive_balance,
+        ),
+
+        // Upgrade a deployed program on the chain
+        CliCommand::ProgramUpgrade {
+            program_location,
+            program,
+            upgrade_authority,
+            buffer,
+        } => process_program_upgrade(
+            &rpc_client,
+            config,
+            program_location,
+            *program,
+            *upgrade_authority,
+            *buffer,
+        ),
+
+        // Set a new program upgrade authority
+        CliCommand::SetProgramUpgradeAuthority {
+            program,
+            upgrade_authority,
+            new_upgrade_authority,
+        } => process_set_program_upgrade_authority(
+            &rpc_client,
+            config,
+            *program,
+            *upgrade_authority,
+            *new_upgrade_authority,
         ),
 
         // Stake Commands
@@ -2305,7 +2739,8 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
-            SubCommand::with_name("deploy")
+            SubCommand::with_name("program-deploy")
+                .visible_alias("deploy")
                 .about("Deploy a program")
                 .arg(
                     Arg::with_name("program_location")
@@ -2313,28 +2748,116 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .value_name("PROGRAM_FILEPATH")
                         .takes_value(true)
                         .required(true)
-                        .help("/path/to/program.o"),
+                        .help("/path/to/program.so"),
                 )
                 .arg(
-                    Arg::with_name("address_signer")
+                    Arg::with_name("buffer_signer")
                         .index(2)
-                        .value_name("PROGRAM_ADDRESS_SIGNER")
+                        .value_name("BUFFER_SIGNER")
                         .takes_value(true)
                         .validator(is_valid_signer)
-                        .help("The signer for the desired address of the program [default: new random address]")
+                        .help("The intermediate buffer account to write data to, can be used to resume a failed deploy [default: new random address]")
                 )
                 .arg(
                     Arg::with_name("use_deprecated_loader")
                         .long("use-deprecated-loader")
                         .takes_value(false)
                         .hidden(true) // Don't document this argument to discourage its use
+                        .conflicts_with("upgradeable")
                         .help("Use the deprecated BPF loader")
+                )
+                .arg(
+                    Arg::with_name("use_upgradeable_loader")
+                        .long("upgradeable")
+                        .help("Use the upgradeable loader with an optional upgrade authority")
+                )
+                .arg(
+                    Arg::with_name("upgrade_authority")
+                        .long("upgrade-authority")
+                        .value_name("UPGRADE_AUTHORITY_PUBKEY")
+                        .takes_value(true)
+                        .help("Address of the upgrade authority, if not specified the program will not upgradeable")
+                )
+                .arg(
+                    Arg::with_name("max_len")
+                        .long("max-len")
+                        .value_name("max_len")
+                        .takes_value(true)
+                        .required(false)
+                        .help("Maximum length of the upgradeable program, default's to twice the length of the original if not specified")
                 )
                 .arg(
                     Arg::with_name("allow_excessive_balance")
                         .long("allow-excessive-deploy-account-balance")
                         .takes_value(false)
                         .help("Use the designated program id, even if the account already holds a large balance of SOL")
+                )
+                .arg(commitment_arg_with_default("max")),
+        )
+        .subcommand(
+            SubCommand::with_name("program-upgrade")
+                .about("Upgrade a program")
+                .arg(
+                    Arg::with_name("program_id")
+                        .index(1)
+                        .value_name("PROGRAM_ADDRESS")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Public key of the program to upgrade")
+                )
+                .arg(
+                    Arg::with_name("upgrade_authority")
+                        .index(2)
+                        .value_name("AUTHORITY_SIGNER")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_signer)
+                        .help("Signer who has the authority to upgrade the program")
+                )
+                .arg(
+                    Arg::with_name("program_location")
+                        .index(3)
+                        .value_name("PROGRAM_FILEPATH")
+                        .takes_value(true)
+                        .required(true)
+                        .help("/path/to/program.so"),
+                )
+                .arg(
+                    Arg::with_name("buffer_signer")
+                        .index(4)
+                        .value_name("BUFFER_SIGNER")
+                        .takes_value(true)
+                        .validator(is_valid_signer)
+                        .help("The intermediate buffer account to write data to, can be used to resume a failed deploy [default: new random address]")
+                )
+                .arg(commitment_arg_with_default("max")),
+        )
+        .subcommand(
+            SubCommand::with_name("program-set-upgrade-authority")
+                .about("Set a new authority for an upgradeable program")
+                .arg(
+                    Arg::with_name("program_id")
+                        .index(1)
+                        .value_name("PROGRAM_ADDRESS")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Public key of the program to upgrade")
+                )
+                .arg(
+                    Arg::with_name("upgrade_authority")
+                    .index(2)
+                        .value_name("AUTHORITY_SIGNER")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_signer)
+                        .help("Signer who has the authority to upgrade the program")
+                )
+                .arg(
+                    Arg::with_name("new_upgrade_authority")
+                        .long("new-upgrade-authority")
+                        .value_name("NEW_UPGRADE_AUTHORITY_PUBKEY")
+                        .takes_value(true)
+                        .help("Address of the upgrade authority, if not specified the program will not upgradeable")
                 )
                 .arg(commitment_arg_with_default("max")),
         )
@@ -2693,18 +3216,22 @@ mod tests {
         );
 
         // Test Deploy Subcommand
-        let test_deploy =
-            test_commands
-                .clone()
-                .get_matches_from(vec!["test", "deploy", "/Users/test/program.o"]);
+        let test_deploy = test_commands.clone().get_matches_from(vec![
+            "test",
+            "deploy",
+            "/Users/test/program.so",
+        ]);
         assert_eq!(
             parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::Deploy {
-                    program_location: "/Users/test/program.o".to_string(),
-                    address: None,
+                command: CliCommand::ProgramDeploy {
+                    program_location: "/Users/test/program.so".to_string(),
+                    buffer: None,
                     use_deprecated_loader: false,
+                    use_upgradeable_loader: false,
                     allow_excessive_balance: false,
+                    upgrade_authority: None,
+                    max_len: None,
                 },
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -2716,21 +3243,161 @@ mod tests {
         let test_deploy = test_commands.clone().get_matches_from(vec![
             "test",
             "deploy",
-            "/Users/test/program.o",
+            "/Users/test/program.so",
             &custom_address_file,
         ]);
         assert_eq!(
             parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::Deploy {
-                    program_location: "/Users/test/program.o".to_string(),
-                    address: Some(1),
+                command: CliCommand::ProgramDeploy {
+                    program_location: "/Users/test/program.so".to_string(),
+                    buffer: Some(1),
                     use_deprecated_loader: false,
+                    use_upgradeable_loader: false,
                     allow_excessive_balance: false,
+                    upgrade_authority: None,
+                    max_len: None,
                 },
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
                     read_keypair_file(&custom_address_file).unwrap().into(),
+                ],
+            }
+        );
+
+        let custom_address = Keypair::new();
+        let custom_address_file = make_tmp_path("custom_address_file");
+        write_keypair_file(&custom_address, &custom_address_file).unwrap();
+        let test_deploy = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program-deploy",
+            "/Users/test/program.so",
+            &custom_address_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::ProgramDeploy {
+                    program_location: "/Users/test/program.so".to_string(),
+                    buffer: Some(1),
+                    use_deprecated_loader: false,
+                    use_upgradeable_loader: false,
+                    allow_excessive_balance: false,
+                    upgrade_authority: None,
+                    max_len: None,
+                },
+                signers: vec![
+                    read_keypair_file(&keypair_file).unwrap().into(),
+                    read_keypair_file(&custom_address_file).unwrap().into(),
+                ],
+            }
+        );
+
+        let upgrade_authority = Pubkey::new_unique();
+        let test_deploy = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program-deploy",
+            "/Users/test/program.so",
+            "--upgradeable",
+            "--upgrade-authority",
+            &upgrade_authority.to_string(),
+            "--max-len",
+            "42",
+        ]);
+        assert_eq!(
+            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::ProgramDeploy {
+                    program_location: "/Users/test/program.so".to_string(),
+                    buffer: None,
+                    use_deprecated_loader: false,
+                    use_upgradeable_loader: true,
+                    allow_excessive_balance: false,
+                    upgrade_authority: Some(upgrade_authority),
+                    max_len: Some(42),
+                },
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+            }
+        );
+
+        // Test Upgrade Subcommand
+        let program_pubkey = Pubkey::new_unique();
+        let upgrade_address = Keypair::new();
+        let upgrade_address_file = make_tmp_path("upgrade_address_file");
+        write_keypair_file(&upgrade_address, &upgrade_address_file).unwrap();
+        let test = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program-upgrade",
+            &program_pubkey.to_string(),
+            &upgrade_address_file,
+            "/Users/test/program.so",
+        ]);
+        assert_eq!(
+            parse_command(&test, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::ProgramUpgrade {
+                    program_location: "/Users/test/program.so".to_string(),
+                    program: program_pubkey,
+                    buffer: None,
+                    upgrade_authority: 1,
+                },
+                signers: vec![
+                    read_keypair_file(&keypair_file).unwrap().into(),
+                    read_keypair_file(&upgrade_address_file).unwrap().into()
+                ],
+            }
+        );
+
+        // Test SetProgramUpgradeAuthority Subcommand
+        let new_upgrade_authority = Pubkey::new_unique();
+        let program_pubkey = Pubkey::new_unique();
+        let authority_address = Keypair::new();
+        let authority_address_file = make_tmp_path("authority_address_file");
+        write_keypair_file(&authority_address, &authority_address_file).unwrap();
+        let test = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program-set-upgrade-authority",
+            &program_pubkey.to_string(),
+            &authority_address_file,
+            "--new-upgrade-authority",
+            &new_upgrade_authority.to_string(),
+        ]);
+        assert_eq!(
+            parse_command(&test, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::SetProgramUpgradeAuthority {
+                    program: program_pubkey,
+                    upgrade_authority: 1,
+                    new_upgrade_authority: Some(new_upgrade_authority),
+                },
+                signers: vec![
+                    read_keypair_file(&keypair_file).unwrap().into(),
+                    read_keypair_file(&authority_address_file).unwrap().into()
+                ],
+            }
+        );
+
+        let program_pubkey = Pubkey::new_unique();
+        let authority_address = Keypair::new();
+        let authority_address_file = make_tmp_path("authority_address_file");
+        write_keypair_file(&authority_address, &authority_address_file).unwrap();
+        let test = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program-set-upgrade-authority",
+            &program_pubkey.to_string(),
+            &authority_address_file,
+        ]);
+        assert_eq!(
+            parse_command(&test, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::SetProgramUpgradeAuthority {
+                    program: program_pubkey,
+                    upgrade_authority: 1,
+                    new_upgrade_authority: None,
+                },
+                signers: vec![
+                    read_keypair_file(&keypair_file).unwrap().into(),
+                    read_keypair_file(&authority_address_file).unwrap().into()
                 ],
             }
         );
@@ -3038,11 +3705,14 @@ mod tests {
         let default_keypair = Keypair::new();
         config.signers = vec![&default_keypair];
 
-        config.command = CliCommand::Deploy {
+        config.command = CliCommand::ProgramDeploy {
             program_location: pathbuf.to_str().unwrap().to_string(),
-            address: None,
+            buffer: None,
             use_deprecated_loader: false,
+            use_upgradeable_loader: false,
             allow_excessive_balance: false,
+            upgrade_authority: None,
+            max_len: None,
         };
         let result = process_command(&config);
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
@@ -3057,13 +3727,190 @@ mod tests {
         assert!(program_id.parse::<Pubkey>().is_ok());
 
         // Failure case
-        config.command = CliCommand::Deploy {
+        config.command = CliCommand::ProgramDeploy {
             program_location: "bad/file/location.so".to_string(),
-            address: None,
+            buffer: None,
             use_deprecated_loader: false,
+            use_upgradeable_loader: false,
             allow_excessive_balance: false,
+            upgrade_authority: None,
+            max_len: None,
         };
         assert!(process_command(&config).is_err());
+    }
+
+    #[test]
+    fn test_cli_deploy_upgradeable() {
+        solana_logger::setup();
+
+        let upgrade_authority = Pubkey::new_unique();
+        let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        pathbuf.push("tests");
+        pathbuf.push("fixtures");
+        pathbuf.push("noop");
+        pathbuf.set_extension("so");
+
+        // Success case
+        let mut config = CliConfig::default();
+        let account_info_response = json!(Response {
+            context: RpcResponseContext { slot: 1 },
+            value: Value::Null,
+        });
+        let mut mocks = HashMap::new();
+        mocks.insert(RpcRequest::GetAccountInfo, account_info_response);
+        let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
+
+        config.rpc_client = Some(rpc_client);
+        let default_keypair = Keypair::new();
+        config.signers = vec![&default_keypair];
+
+        config.command = CliCommand::ProgramDeploy {
+            program_location: pathbuf.to_str().unwrap().to_string(),
+            buffer: None,
+            use_deprecated_loader: false,
+            use_upgradeable_loader: true,
+            allow_excessive_balance: false,
+            upgrade_authority: Some(upgrade_authority),
+            max_len: None,
+        };
+        let result = process_command(&config);
+        let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
+        let program_id = json
+            .as_object()
+            .unwrap()
+            .get("programId")
+            .unwrap()
+            .as_str()
+            .unwrap();
+
+        assert!(program_id.parse::<Pubkey>().is_ok());
+
+        // Failure case
+        config.command = CliCommand::ProgramDeploy {
+            program_location: "bad/file/location.so".to_string(),
+            buffer: None,
+            use_deprecated_loader: false,
+            use_upgradeable_loader: true,
+            allow_excessive_balance: false,
+            upgrade_authority: Some(upgrade_authority),
+            max_len: None,
+        };
+        assert!(process_command(&config).is_err());
+    }
+
+    #[test]
+    fn test_cli_upgrade() {
+        solana_logger::setup();
+
+        let upgrade_authority = Keypair::new();
+        let program = Pubkey::new_unique();
+        let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        pathbuf.push("tests");
+        pathbuf.push("fixtures");
+        pathbuf.push("noop");
+        pathbuf.set_extension("so");
+
+        // Success case
+        let mut config = CliConfig::default();
+        let account_info_response = json!(Response {
+            context: RpcResponseContext { slot: 1 },
+            value: Value::Null,
+        });
+        let mut mocks = HashMap::new();
+        mocks.insert(RpcRequest::GetAccountInfo, account_info_response);
+        let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
+
+        config.rpc_client = Some(rpc_client);
+        let default_keypair = Keypair::new();
+        config.signers = vec![&default_keypair, &upgrade_authority];
+
+        config.command = CliCommand::ProgramUpgrade {
+            program_location: pathbuf.to_str().unwrap().to_string(),
+            program,
+            buffer: None,
+            upgrade_authority: 1,
+        };
+        let result = process_command(&config);
+        let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
+        let program_id = json
+            .as_object()
+            .unwrap()
+            .get("programId")
+            .unwrap()
+            .as_str()
+            .unwrap();
+
+        assert!(program_id.parse::<Pubkey>().is_ok());
+
+        // Failure case
+        config.command = CliCommand::ProgramUpgrade {
+            program_location: "bad/file/location.so".to_string(),
+            program,
+            buffer: None,
+            upgrade_authority: 1,
+        };
+        assert!(process_command(&config).is_err());
+    }
+
+    #[test]
+    fn test_cli_set_upgrade_authority() {
+        solana_logger::setup();
+
+        let program = Pubkey::new_unique();
+        let upgrade_authority = Keypair::new();
+        let new_upgrade_authority = Pubkey::new_unique();
+        let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        pathbuf.push("tests");
+        pathbuf.push("fixtures");
+        pathbuf.push("noop");
+        pathbuf.set_extension("so");
+
+        // Success case
+        let mut config = CliConfig::default();
+        let account_info_response = json!(Response {
+            context: RpcResponseContext { slot: 1 },
+            value: Value::Null,
+        });
+        let mut mocks = HashMap::new();
+        mocks.insert(RpcRequest::GetAccountInfo, account_info_response);
+        let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
+
+        config.rpc_client = Some(rpc_client);
+        let default_keypair = Keypair::new();
+        config.signers = vec![&default_keypair, &upgrade_authority];
+
+        config.command = CliCommand::SetProgramUpgradeAuthority {
+            program,
+            upgrade_authority: 1,
+            new_upgrade_authority: Some(new_upgrade_authority),
+        };
+        let result = process_command(&config);
+        let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
+        println!("json {:?}", json);
+        let program_id = json
+            .as_object()
+            .unwrap()
+            .get("UpgradeAuthority")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert!(program_id.parse::<Pubkey>().is_ok());
+
+        config.command = CliCommand::SetProgramUpgradeAuthority {
+            program,
+            upgrade_authority: 1,
+            new_upgrade_authority: None,
+        };
+        let result = process_command(&config);
+        let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
+        let program_id = json
+            .as_object()
+            .unwrap()
+            .get("UpgradeAuthority")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert_eq!(program_id, "None");
     }
 
     #[test]
