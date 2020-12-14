@@ -58,7 +58,7 @@ A gossip network connecting all [nodes](terminology.md#node) of a [cluster](term
 
 ## cooldown period
 
-Some number of epochs after stake has been deactivated while it progressively becomes available for withdrawal. During this period, the stake is considered to be "deactivating". More info about: [warmup and cooldown](implemented-proposals/staking-rewards.md#stake-warmup-cooldown-withdrawal)
+Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake) has been deactivated while it progressively becomes available for withdrawal. During this period, the stake is considered to be "deactivating". More info about: [warmup and cooldown](implemented-proposals/staking-rewards.md#stake-warmup-cooldown-withdrawal)
 
 ## credit
 
@@ -96,7 +96,7 @@ The fee account in the transaction is the account pays for the cost of including
 
 ## finality
 
-When nodes representing 2/3rd of the stake have a common [root](terminology.md#root).
+When nodes representing 2/3rd of the [stake](terminology.md#stake) have a common [root](terminology.md#root).
 
 ## fork
 
@@ -120,7 +120,7 @@ An increase in token supply over time used to fund rewards for validation and to
 
 ## instruction
 
-The smallest unit of a [program](terminology.md#program) that a [client](terminology.md#client) can include in a [transaction](terminology.md#instruction).
+The smallest unit of a [program](terminology.md#program) that a [client](terminology.md#client) can include in a [transaction](terminology.md#transaction).
 
 ## keypair
 
@@ -144,7 +144,7 @@ A list of [entries](terminology.md#entry) containing [transactions](terminology.
 
 ## ledger vote
 
-A [hash](terminology.md#hash) of the [validator's state](terminology.md#bank-state) at a given [tick height](terminology.md#tick-height). It comprises a validator's affirmation that a [block](terminology.md#block) it has received has been verified, as well as a promise not to vote for a conflicting [block](terminology.md#block) \(i.e. [fork](terminology.md#fork)\) for a specific amount of time, the [lockout](terminology.md#lockout) period.
+A [hash](terminology.md#hash) of the [validator's state](terminology.md#bank-state) at a given [tick height](terminology.md#tick-height). It comprises a [validator's](terminology.md#validator) affirmation that a [block](terminology.md#block) it has received has been verified, as well as a promise not to vote for a conflicting [block](terminology.md#block) \(i.e. [fork](terminology.md#fork)\) for a specific amount of time, the [lockout](terminology.md#lockout) period.
 
 ## light client
 
@@ -176,7 +176,7 @@ See [Proof of History](terminology.md#proof-of-history).
 
 ## point
 
-A weighted [credit](terminology.md#credit) in a rewards regime. In the validator [rewards regime](cluster/stake-delegation-and-rewards.md), the number of points owed to a stake during redemption is the product of the [vote credits](terminology.md#vote-credit) earned and the number of lamports staked.
+A weighted [credit](terminology.md#credit) in a rewards regime. In the [validator](terminology.md#validator) [rewards regime](cluster/stake-delegation-and-rewards.md), the number of points owed to a [stake](terminology.md#stake) during redemption is the product of the [vote credits](terminology.md#vote-credit) earned and the number of lamports staked.
 
 ## private key
 
@@ -200,7 +200,7 @@ The public key of a [keypair](terminology.md#keypair).
 
 ## root
 
-A [block](terminology.md#block) or [slot](terminology.md#slot) that has reached maximum [lockout](terminology.md#lockout) on a validator. The root is the highest block that is an ancestor of all active forks on a validator. All ancestor blocks of a root are also transitively a root. Blocks that are not an ancestor and not a descendant of the root are excluded from consideration for consensus and can be discarded.
+A [block](terminology.md#block) or [slot](terminology.md#slot) that has reached maximum [lockout](terminology.md#lockout) on a [validator](terminology.md#validator). The root is the highest block that is an ancestor of all active forks on a validator. All ancestor blocks of a root are also transitively a root. Blocks that are not an ancestor and not a descendant of the root are excluded from consideration for consensus and can be discarded.
 
 ## runtime
 
@@ -288,7 +288,7 @@ See [ledger vote](terminology.md#ledger-vote).
 
 ## vote credit
 
-A reward tally for validators. A vote credit is awarded to a validator in its vote account when the validator reaches a [root](terminology.md#root).
+A reward tally for [validators](terminology.md#validator). A vote credit is awarded to a validator in its vote account when the validator reaches a [root](terminology.md#root).
 
 ## wallet
 
@@ -296,4 +296,4 @@ A collection of [keypairs](terminology.md#keypair).
 
 ## warmup period
 
-Some number of epochs after stake has been delegated while it progressively becomes effective. During this period, the stake is considered to be "activating". More info about: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
+Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake) has been delegated while it progressively becomes effective. During this period, the stake is considered to be "activating". More info about: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
