@@ -110,12 +110,17 @@ pub mod bpf_loader_upgradeable_program {
     solana_sdk::declare_id!("FbhK8HN9qvNHvJcoFVHAEUCNkagHvu7DTWzdnLuVQ5u4");
 }
 
+<<<<<<< HEAD
 pub mod max_cpi_instruction_size_ipv6_mtu {
     solana_sdk::declare_id!("5WLtuUJA5VVA1Cc28qULPfGs8anhoBev8uNqaaXeasnf");
 }
 
 pub mod limit_cpi_loader_invoke {
     solana_sdk::declare_id!("xGbcW7EEC7zMRJ6LaJCob65EJxKryWjwM4rv8f57SRM");
+=======
+pub mod try_find_program_address_syscall_enabled {
+    solana_sdk::declare_id!("EMsMNadQNhCYDyGpYH5Tx6dGHxiUqKHk782PU5XaWfmi");
+>>>>>>> ab98c1f2d... Add try_find_program_address syscall (#14118)
 }
 
 lazy_static! {
@@ -147,8 +152,12 @@ lazy_static! {
         (simple_capitalization::id(), "simple capitalization"),
         (stake_program_v3::id(), "solana_stake_program v3"),
         (bpf_loader_upgradeable_program::id(), "upgradeable bpf loader"),
+<<<<<<< HEAD
         (max_cpi_instruction_size_ipv6_mtu::id(), "Max cross-program invocation size 1280"),
         (limit_cpi_loader_invoke::id(), "Loader not authorized via CPI"),
+=======
+        (try_find_program_address_syscall_enabled::id(), "add try_find_program_address syscall"),
+>>>>>>> ab98c1f2d... Add try_find_program_address syscall (#14118)
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
