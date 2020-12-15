@@ -2558,10 +2558,10 @@ pub(crate) mod tests {
 
     #[test]
     fn test_replay_commitment_cache() {
-        fn leader_vote(bank: &Arc<Bank>, pubkey: &Pubkey) {
+        fn leader_vote(vote_slot: Slot, bank: &Arc<Bank>, pubkey: &Pubkey) {
             let mut leader_vote_account = bank.get_account(&pubkey).unwrap();
             let mut vote_state = VoteState::from(&leader_vote_account).unwrap();
-            vote_state.process_slot_vote_unchecked(bank.slot());
+            vote_state.process_slot_vote_unchecked(vote_slot);
             let versioned = VoteStateVersions::Current(Box::new(vote_state));
             VoteState::to(&versioned, &mut leader_vote_account).unwrap();
             bank.store_account(&pubkey, &leader_vote_account);
@@ -2581,10 +2581,7 @@ pub(crate) mod tests {
         }
         bank0.freeze();
         let arc_bank0 = Arc::new(bank0);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
-            &[arc_bank0.clone()],
-            0,
-        )));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[arc_bank0], 0)));
 
         let exit = Arc::new(AtomicBool::new(false));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
@@ -2608,44 +2605,33 @@ pub(crate) mod tests {
             .get_block_commitment(1)
             .is_none());
 
-        let bank1 = Bank::new_from_parent(&arc_bank0, &Pubkey::default(), arc_bank0.slot() + 1);
-        let _res = bank1.transfer(
-            10,
-            &genesis_config_info.mint_keypair,
-            &solana_sdk::pubkey::new_rand(),
-        );
-        for _ in 0..genesis_config.ticks_per_slot {
-            bank1.register_tick(&Hash::default());
+        for i in 1..=3 {
+            let prev_bank = bank_forks.read().unwrap().get(i - 1).unwrap().clone();
+            let bank = Bank::new_from_parent(&prev_bank, &Pubkey::default(), prev_bank.slot() + 1);
+            let _res = bank.transfer(
+                10,
+                &genesis_config_info.mint_keypair,
+                &solana_sdk::pubkey::new_rand(),
+            );
+            for _ in 0..genesis_config.ticks_per_slot {
+                bank.register_tick(&Hash::default());
+            }
+            bank_forks.write().unwrap().insert(bank);
+            let arc_bank = bank_forks.read().unwrap().get(i).unwrap().clone();
+            leader_vote(i - 1, &arc_bank, &leader_voting_pubkey);
+            ReplayStage::update_commitment_cache(
+                arc_bank.clone(),
+                0,
+                leader_lamports,
+                &lockouts_sender,
+            );
+            arc_bank.freeze();
         }
-        bank1.freeze();
-        bank_forks.write().unwrap().insert(bank1);
-        let arc_bank1 = bank_forks.read().unwrap().get(1).unwrap().clone();
-        leader_vote(&arc_bank1, &leader_voting_pubkey);
-        ReplayStage::update_commitment_cache(
-            arc_bank1.clone(),
-            0,
-            leader_lamports,
-            &lockouts_sender,
-        );
 
-        let bank2 = Bank::new_from_parent(&arc_bank1, &Pubkey::default(), arc_bank1.slot() + 1);
-        let _res = bank2.transfer(
-            10,
-            &genesis_config_info.mint_keypair,
-            &solana_sdk::pubkey::new_rand(),
-        );
-        for _ in 0..genesis_config.ticks_per_slot {
-            bank2.register_tick(&Hash::default());
-        }
-        bank2.freeze();
-        bank_forks.write().unwrap().insert(bank2);
-        let arc_bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
-        leader_vote(&arc_bank2, &leader_voting_pubkey);
-        ReplayStage::update_commitment_cache(arc_bank2, 0, leader_lamports, &lockouts_sender);
         thread::sleep(Duration::from_millis(200));
 
         let mut expected0 = BlockCommitment::default();
-        expected0.increase_confirmation_stake(2, leader_lamports);
+        expected0.increase_confirmation_stake(3, leader_lamports);
         assert_eq!(
             block_commitment_cache
                 .read()
