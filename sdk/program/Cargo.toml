@@ -1,6 +1,6 @@
 [package]
 name = "solana-program"
-version = "1.5.0"
+version = "1.6.0"
 description = "Solana Program"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -23,15 +23,15 @@ serde = "1.0.112"
 serde_bytes = "0.11"
 serde_derive = "1.0.103"
 sha2 = "0.8.2"
-solana-frozen-abi = { path = "../../frozen-abi", version = "1.5.0" }
-solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "1.5.0" }
-solana-sdk-macro = { path = "../macro", version = "1.5.0" }
+solana-frozen-abi = { path = "../../frozen-abi", version = "1.6.0" }
+solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "1.6.0" }
+solana-sdk-macro = { path = "../macro", version = "1.6.0" }
 thiserror = "1.0"
 
 [target.'cfg(not(target_arch = "bpf"))'.dependencies]
 curve25519-dalek = { version = "2.1.0" }
 rand = "0.7.0"
-solana-logger = { path = "../../logger", version = "1.5.0" }
+solana-logger = { path = "../../logger", version = "1.6.0" }
 
 [dev-dependencies]
 assert_matches = "1.3.0"
