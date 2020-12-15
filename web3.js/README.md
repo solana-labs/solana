@@ -46,15 +46,11 @@ $ npm install --save @solana/web3.js
 <script src="https://github.com/solana-labs/solana-web3.js/releases/download/v0.0.6/solanaWeb3.min.js"></script>
 ```
 
-### BPF program development
-The Solana BPF SDK is located in the `bpf-sdk/` subdirectory if you installed
-solana-web3.js from npmjs.com.
 
-From a git clone, run `npm run bpf-sdk:install` to fetch the latest BPF SDK.
-
-Additionally Rust must be installed to build Rust BPF programs such as
-`examples/bpf-rust-noop/`.  See https://www.rust-lang.org/install.html for
-installation details.
+### Development Environment Setup
+To build and run tests:
+1. Install Rust from https://rustup.rs/
+2. Install the latest Solana release from https://docs.solana.com/cli/install-solana-cli-tools
 
 ## Usage
 
@@ -74,31 +70,6 @@ console.log(solanaWeb3);
 ```js
 // `solanaWeb3` is provided in the global namespace by the `solanaWeb3.min.js` script bundle.
 console.log(solanaWeb3);
-```
-
-## Local Network
-The `solana-localnet` program is provided to easily start a test Solana cluster
-locally on your machine.  Docker must be installed.  The JSON RPC endpoint of
-the local cluster is `http://localhost:8899`.
-
-To start, first fetch the latest Docker image by running:
-```bash
-$ npx solana-localnet update
-```
-
-Then run the following command to start the cluster
-```bash
-$ npx solana-localnet up
-```
-
-While the cluster is running logs are available with:
-```bash
-$ npx solana-localnet logs -f
-```
-
-Stop the cluster with:
-```bash
-$ npx solana-localnet down
 ```
 
 ## Flow
@@ -127,3 +98,46 @@ and [npmjs.com](https://www.npmjs.com/package/@solana/web3.js)
 Each Github release features a tarball containing API documentation and a
 minified version of the module suitable for direct use in a browser environment
 (&lt;script&gt; tag)
+
+## Deprecated
+
+### Local Network
+
+**Please use `solana-test-validator` from the latest Solana release instead of the information in this section**
+
+The `solana-localnet` program is provided to easily start a test Solana cluster
+locally on your machine.  Docker must be installed.  The JSON RPC endpoint of
+the local cluster is `http://localhost:8899`.
+
+To start, first fetch the latest Docker image by running:
+```bash
+$ npx solana-localnet update
+```
+
+Then run the following command to start the cluster
+```bash
+$ npx solana-localnet up
+```
+
+While the cluster is running logs are available with:
+```bash
+$ npx solana-localnet logs -f
+```
+
+Stop the cluster with:
+```bash
+$ npx solana-localnet down
+```
+
+### BPF program development
+
+**Please use `cargo build-bpf` from the latest Solana release instead of the information in this section**
+
+The Solana BPF SDK is located in the `bpf-sdk/` subdirectory if you installed
+solana-web3.js from npmjs.com.
+
+From a git clone, run `npm run bpf-sdk:install` to fetch the latest BPF SDK.
+
+Additionally Rust must be installed to build Rust BPF programs such as
+`examples/bpf-rust-noop/`.  See https://www.rust-lang.org/install.html for
+installation details.
