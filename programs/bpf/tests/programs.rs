@@ -846,7 +846,7 @@ fn test_program_bpf_invoke() {
         assert_eq!(invoked_programs, vec![]);
         assert_eq!(
             result.unwrap_err(),
-            TransactionError::InstructionError(0, InstructionError::Custom(194969602))
+            TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
         );
 
         // Check final state
@@ -974,7 +974,7 @@ fn test_program_bpf_ro_modify() {
     let result = bank_client.send_and_confirm_message(&[&mint_keypair, &test_keypair], message);
     assert_eq!(
         result.unwrap_err().unwrap(),
-        TransactionError::InstructionError(0, InstructionError::Custom(0xb9f0002))
+        TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
     );
 
     let instruction = Instruction::new(program_pubkey, &[3_u8], account_metas.clone());
@@ -982,7 +982,7 @@ fn test_program_bpf_ro_modify() {
     let result = bank_client.send_and_confirm_message(&[&mint_keypair, &test_keypair], message);
     assert_eq!(
         result.unwrap_err().unwrap(),
-        TransactionError::InstructionError(0, InstructionError::Custom(0xb9f0002))
+        TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
     );
 
     let instruction = Instruction::new(program_pubkey, &[4_u8], account_metas.clone());
@@ -990,7 +990,7 @@ fn test_program_bpf_ro_modify() {
     let result = bank_client.send_and_confirm_message(&[&mint_keypair, &test_keypair], message);
     assert_eq!(
         result.unwrap_err().unwrap(),
-        TransactionError::InstructionError(0, InstructionError::Custom(0xb9f0002))
+        TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
     );
 }
 

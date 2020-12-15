@@ -11,7 +11,6 @@ use crate::{
     serialization::{deserialize_parameters, serialize_parameters},
     syscalls::SyscallError,
 };
-use num_derive::{FromPrimitive, ToPrimitive};
 use solana_rbpf::{
     error::{EbpfError, UserDefinedError},
     memory_region::MemoryRegion,
@@ -23,7 +22,6 @@ use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
-    decode_error::DecodeError,
     entrypoint::SUCCESS,
     feature_set::bpf_compute_budget_balancing,
     instruction::InstructionError,
@@ -45,6 +43,7 @@ solana_sdk::declare_builtin!(
     solana_bpf_loader_program::process_instruction
 );
 
+<<<<<<< HEAD
 /// Errors returned by the BPFLoader if the VM fails to run the program
 #[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum BPFLoaderError {
@@ -59,6 +58,8 @@ impl<E> DecodeError<E> for BPFLoaderError {
     }
 }
 
+=======
+>>>>>>> d513b0c4c... Add Program loader/environment instruction errors (#14120)
 /// Errors returned by functions the BPF Loader registers with the VM
 #[derive(Debug, Error, PartialEq)]
 pub enum BPFError {
@@ -101,9 +102,27 @@ pub fn create_and_cache_executor(
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<Arc<BPFExecutor>, InstructionError> {
+<<<<<<< HEAD
     let executable = EbpfVm::create_executable_from_elf(data, None)
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
     let (_, elf_bytes) = executable
+=======
+    let logger = invoke_context.get_logger();
+
+    let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
+    let mut program = Executable::<BPFError, ThisInstructionMeter>::from_elf(
+        data,
+        None,
+        Config {
+            max_call_depth: bpf_compute_budget.max_call_depth,
+            stack_frame_size: bpf_compute_budget.stack_frame_size,
+            enable_instruction_meter: true,
+            enable_instruction_tracing: false,
+        },
+    )
+    .map_err(|e| map_ebpf_error(invoke_context, e))?;
+    let (_, elf_bytes) = program
+>>>>>>> d513b0c4c... Add Program loader/environment instruction errors (#14120)
         .get_text_bytes()
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
     bpf_verifier::check(
@@ -111,7 +130,22 @@ pub fn create_and_cache_executor(
         !invoke_context.is_feature_active(&bpf_compute_budget_balancing::id()),
     )
     .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e)))?;
+<<<<<<< HEAD
     let executor = Arc::new(BPFExecutor { executable });
+=======
+    let syscall_registry = syscalls::register_syscalls(invoke_context).map_err(|e| {
+        log!(logger, "Failed to register syscalls: {}", e);
+        InstructionError::ProgramEnvironmentSetupFailure
+    })?;
+    program.set_syscall_registry(syscall_registry);
+    if use_jit {
+        if let Err(err) = program.jit_compile() {
+            log!(logger, "Failed to compile program {:?}", err);
+            return Err(InstructionError::ProgramFailedToCompile);
+        }
+    }
+    let executor = Arc::new(BPFExecutor { program });
+>>>>>>> d513b0c4c... Add Program loader/environment instruction errors (#14120)
     invoke_context.add_executor(key, executor.clone());
     Ok(executor)
 }
@@ -603,7 +637,7 @@ impl Executor for BPFExecutor {
                 Ok(info) => info,
                 Err(e) => {
                     log!(logger, "Failed to create BPF VM: {}", e);
-                    return Err(BPFLoaderError::VirtualMachineCreationFailed.into());
+                    return Err(InstructionError::ProgramEnvironmentSetupFailure);
                 }
             };
 
@@ -643,7 +677,10 @@ impl Executor for BPFExecutor {
                         EbpfError::UserError(BPFError::SyscallError(
                             SyscallError::InstructionError(error),
                         )) => error,
-                        _ => BPFLoaderError::VirtualMachineFailedToRunProgram.into(),
+                        err => {
+                            log!(logger, "Program failed to complete: {:?}", err);
+                            InstructionError::ProgramFailedToComplete
+                        }
                     };
 
                     stable_log::program_failure(&logger, program.unsigned_key(), &error);
@@ -925,7 +962,7 @@ mod tests {
             Arc::new(FeatureSet::default()),
         );
         assert_eq!(
-            Err(InstructionError::Custom(194969602)),
+            Err(InstructionError::ProgramFailedToComplete),
             process_instruction(&bpf_loader::id(), &keyed_accounts, &[], &mut invoke_context)
         );
 
