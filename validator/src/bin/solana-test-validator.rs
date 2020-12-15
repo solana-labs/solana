@@ -188,19 +188,28 @@ fn main() {
         }
     }
 
+    if !ledger_path.exists() {
+        fs::create_dir(&ledger_path).unwrap_or_else(|err| {
+            eprintln!(
+                "Error: Unable to create directory {}: {}",
+                ledger_path.display(),
+                err
+            );
+            exit(1);
+        })
+    }
+
+    let mut ledger_fd_lock = fd_lock::FdLock::new(std::fs::File::open(&ledger_path).unwrap());
+    let _ledger_lock = ledger_fd_lock.try_lock().unwrap_or_else(|_| {
+        eprintln!(
+            "Error: Unable to lock {} directory. Check if another solana-test-validator is running",
+            ledger_path.display()
+        );
+        exit(1);
+    });
+
     let validator_log_symlink = ledger_path.join("validator.log");
     let logfile = if output != Output::Log {
-        if !ledger_path.exists() {
-            fs::create_dir(&ledger_path).unwrap_or_else(|err| {
-                eprintln!(
-                    "Error: Unable to create directory {}: {}",
-                    ledger_path.display(),
-                    err
-                );
-                exit(1);
-            })
-        }
-
         let validator_log_with_timestamp = format!(
             "validator-{}.log",
             SystemTime::now()
