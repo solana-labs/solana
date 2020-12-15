@@ -3,5 +3,5 @@ set -ex
 
 cd "$(dirname "$0")"
 
-../../../examples/bpf-rust-noop/do.sh build
-cp ../../../examples/bpf-rust-noop/target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so .
+cargo build-bpf --manifest-path=../../../examples/bpf-rust-noop/Cargo.toml
+cp ../../../examples/bpf-rust-noop/target/deploy/solana_bpf_rust_noop.so .

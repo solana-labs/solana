@@ -1388,8 +1388,8 @@ test('get supply', async () => {
   const supply = (await connection.getSupply()).value;
   expect(supply.total).toBeGreaterThan(0);
   expect(supply.circulating).toBeGreaterThan(0);
-  expect(supply.nonCirculating).toBeGreaterThan(0);
-  expect(supply.nonCirculatingAccounts.length).toBeGreaterThan(0);
+  expect(supply.nonCirculating).toBeGreaterThanOrEqual(0);
+  expect(supply.nonCirculatingAccounts.length).toBeGreaterThanOrEqual(0);
 });
 
 test('get performance samples', async () => {
