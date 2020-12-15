@@ -39,13 +39,5 @@ url = "2.1.1"
 winapi = "0.3.8"
 winreg = "0.7"
 
-[[bin]]
-name = "solana-install"
-path = "src/main-install.rs"
-
-[[bin]]
-name = "solana-install-init"
-path = "src/main-install-init.rs"
-
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
