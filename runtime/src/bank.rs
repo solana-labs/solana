@@ -867,6 +867,8 @@ pub struct Bank {
     pub feature_set: Arc<FeatureSet>,
 
     pub drop_callback: RwLock<OptionalDropCallback>,
+
+    pub freeze_started: AtomicBool,
 }
 
 impl Default for BlockhashQueue {
@@ -1022,6 +1024,7 @@ impl Bank {
                     .as_ref()
                     .map(|drop_callback| drop_callback.clone_box()),
             )),
+            freeze_started: AtomicBool::new(false),
         };
 
         datapoint_info!(
@@ -1145,6 +1148,7 @@ impl Bank {
             transaction_log_collector: new(),
             feature_set: new(),
             drop_callback: RwLock::new(OptionalDropCallback(None)),
+            freeze_started: AtomicBool::new(fields.hash != Hash::default()),
         };
         bank.finish_init(genesis_config, additional_builtins);
 
@@ -1246,6 +1250,10 @@ impl Bank {
 
     pub fn is_frozen(&self) -> bool {
         *self.hash.read().unwrap() != Hash::default()
+    }
+
+    pub fn freeze_started(&self) -> bool {
+        self.freeze_started.load(Relaxed)
     }
 
     pub fn status_cache_ancestors(&self) -> Vec<u64> {
@@ -1941,6 +1949,17 @@ impl Bank {
     }
 
     pub fn freeze(&self) {
+        // This lock prevents any new commits from BankingStage
+        // `process_and_record_transactions_locked()` from coming
+        // in after the last tick is observed. This is because in
+        // BankingStage, any transaction successfully recorded in
+        // `record_transactions()` is recorded after this `hash` lock
+        // is grabbed. At the time of the successful record,
+        // this means the PoH has not yet reached the last tick,
+        // so this means freeze() hasn't been called yet. And because
+        // BankingStage doesn't release this hash lock until both
+        // record and commit are finished, those transactions will be
+        // committed before this write lock can be obtained here.
         let mut hash = self.hash.write().unwrap();
 
         if *hash == Hash::default() {
@@ -1952,6 +1971,7 @@ impl Bank {
             self.run_incinerator();
 
             // freeze is a one-way trip, idempotent
+            self.freeze_started.store(true, Relaxed);
             *hash = self.hash_internal_state();
         }
     }
@@ -2145,7 +2165,7 @@ impl Bank {
         }
 
         assert!(
-            !self.is_frozen(),
+            !self.freeze_started(),
             "Can't change frozen bank by adding not-existing new native program ({}, {}). \
             Maybe, inconsistent program activation is detected on snapshot restore?",
             name,
@@ -2272,22 +2292,24 @@ impl Bank {
     /// bank will reject transactions using that `hash`.
     pub fn register_tick(&self, hash: &Hash) {
         assert!(
-            !self.is_frozen(),
-            "register_tick() working on a frozen bank!"
+            !self.freeze_started(),
+            "register_tick() working on a bank that is already frozen or is undergoing freezing!"
         );
 
         inc_new_counter_debug!("bank-register_tick-registered", 1);
-        // Grab blockhash lock before incrementing tick height so that replay stage does
-        // not attempt to freeze after observing the last tick and before blockhash is
-        // updated
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
-        let current_tick_height = self.tick_height.fetch_add(1, Relaxed) as u64;
-        if self.is_block_boundary(current_tick_height + 1) {
+        if self.is_block_boundary(self.tick_height.load(Relaxed) + 1) {
             w_blockhash_queue.register_hash(hash, &self.fee_calculator);
             if self.fix_recent_blockhashes_sysvar_delay() {
                 self.update_recent_blockhashes_locked(&w_blockhash_queue);
             }
         }
+        // ReplayStage will start computing the accounts delta hash when it
+        // detects the tick height has reached the boundary, so the system
+        // needs to guarantee all account updates for the slot have been
+        // committed before this tick height is incremented (like the blockhash
+        // sysvar above)
+        self.tick_height.fetch_add(1, Relaxed);
     }
 
     pub fn is_complete(&self) -> bool {
@@ -3053,8 +3075,8 @@ impl Bank {
         signature_count: u64,
     ) -> TransactionResults {
         assert!(
-            !self.is_frozen(),
-            "commit_transactions() working on a frozen bank!"
+            !self.freeze_started(),
+            "commit_transactions() working on a bank that is already frozen or is undergoing freezing!"
         );
 
         self.increment_transaction_count(tx_count);
@@ -3768,6 +3790,7 @@ impl Bank {
     }
 
     pub fn store_account(&self, pubkey: &Pubkey, account: &Account) {
+        assert!(!self.freeze_started());
         self.rc.accounts.store_slow(self.slot(), pubkey, account);
 
         if Stakes::is_stake(account) {
