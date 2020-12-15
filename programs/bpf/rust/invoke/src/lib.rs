@@ -259,6 +259,19 @@ fn process_instruction(
                 );
             }
 
+            msg!("Test try_find_program_address");
+            {
+                let (address, bump_seed) =
+                    Pubkey::try_find_program_address(&[b"You pass butter"], program_id).unwrap();
+                assert_eq!(&address, accounts[DERIVED_KEY1_INDEX].key);
+                assert_eq!(bump_seed, bump_seed1);
+                assert_eq!(
+                    Pubkey::create_program_address(&[b"You pass butter"], &Pubkey::default())
+                        .unwrap_err(),
+                    PubkeyError::InvalidSeeds
+                );
+            }
+
             msg!("Test derived signers");
             {
                 assert!(!accounts[DERIVED_KEY1_INDEX].is_signer);

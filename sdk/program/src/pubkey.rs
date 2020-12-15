@@ -194,31 +194,66 @@ impl Pubkey {
         }
     }
 
-    /// Find a valid program address and its corresponding bump seed which must be passed
-    /// as an additional seed when calling `invoke_signed`.
+    /// Find a valid program address and its corresponding bump seed which must
+    /// be passed as an additional seed when calling `invoke_signed`.
     ///
-    /// Panics in the very unlikely event that the additional seed could not be found.
+    /// Panics in the very unlikely event that the additional seed could not be
+    /// found.
     pub fn find_program_address(seeds: &[&[u8]], program_id: &Pubkey) -> (Pubkey, u8) {
         Self::try_find_program_address(seeds, program_id)
             .unwrap_or_else(|| panic!("Unable to find a viable program address bump seed"))
     }
 
-    /// Find a valid program address and its corresponding bump seed which must be passed
-    /// as an additional seed when calling `invoke_signed`
+    /// Find a valid program address and its corresponding bump seed which must
+    /// be passed as an additional seed when calling `invoke_signed`
     #[allow(clippy::same_item_push)]
     pub fn try_find_program_address(seeds: &[&[u8]], program_id: &Pubkey) -> Option<(Pubkey, u8)> {
-        let mut bump_seed = [std::u8::MAX];
-        for _ in 0..std::u8::MAX {
-            {
-                let mut seeds_with_bump = seeds.to_vec();
-                seeds_with_bump.push(&bump_seed);
-                if let Ok(address) = Self::create_program_address(&seeds_with_bump, program_id) {
-                    return Some((address, bump_seed[0]));
+        // Perform the calculation inline, calling this from within a program is
+        // not supported
+        #[cfg(not(target_arch = "bpf"))]
+        {
+            let mut bump_seed = [std::u8::MAX];
+            for _ in 0..std::u8::MAX {
+                {
+                    let mut seeds_with_bump = seeds.to_vec();
+                    seeds_with_bump.push(&bump_seed);
+                    if let Ok(address) = Self::create_program_address(&seeds_with_bump, program_id)
+                    {
+                        return Some((address, bump_seed[0]));
+                    }
                 }
+                bump_seed[0] -= 1;
             }
-            bump_seed[0] -= 1;
+            None
         }
-        None
+        // Call via a system call to perform the calculation
+        #[cfg(target_arch = "bpf")]
+        {
+            extern "C" {
+                fn sol_try_find_program_address(
+                    seeds_addr: *const u8,
+                    seeds_len: u64,
+                    program_id_addr: *const u8,
+                    address_bytes_addr: *const u8,
+                    bump_seed_addr: *const u8,
+                ) -> u64;
+            };
+            let mut bytes = [0; 32];
+            let mut bump_seed = std::u8::MAX;
+            let result = unsafe {
+                sol_try_find_program_address(
+                    seeds as *const _ as *const u8,
+                    seeds.len() as u64,
+                    program_id as *const _ as *const u8,
+                    &mut bytes as *mut _ as *mut u8,
+                    &mut bump_seed as *mut _ as *mut u8,
+                )
+            };
+            match result {
+                crate::entrypoint::SUCCESS => Some((Pubkey::new(&bytes), bump_seed)),
+                _ => None,
+            }
+        }
     }
 
     pub fn to_bytes(self) -> [u8; 32] {
