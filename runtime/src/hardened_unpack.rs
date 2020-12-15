@@ -1,6 +1,5 @@
 use bzip2::bufread::BzDecoder;
 use log::*;
-use regex::Regex;
 use solana_sdk::genesis_config::GenesisConfig;
 use std::{
     fs::{self, File},
@@ -167,24 +166,49 @@ pub fn unpack_snapshot<A: Read, P: AsRef<Path>>(
     )
 }
 
-fn is_valid_snapshot_archive_entry(parts: &[&str], kind: tar::EntryType) -> bool {
-    let like_storage = Regex::new(r"^\d+\.\d+$").unwrap();
-    let like_slot = Regex::new(r"^\d+$").unwrap();
+fn all_digits(v: &str) -> bool {
+    if v.is_empty() {
+        return false;
+    }
+    for x in v.chars() {
+        if !x.is_numeric() {
+            return false;
+        }
+    }
+    true
+}
 
-    trace!("validating: {:?} {:?}", parts, kind);
+fn like_storage(v: &str) -> bool {
+    let mut periods = 0;
+    let mut saw_numbers = false;
+    for x in v.chars() {
+        if !x.is_numeric() {
+            if x == '.' {
+                if periods > 0 || !saw_numbers {
+                    return false;
+                }
+                saw_numbers = false;
+                periods += 1;
+            } else {
+                return false;
+            }
+        } else {
+            saw_numbers = true;
+        }
+    }
+    saw_numbers && periods == 1
+}
+
+fn is_valid_snapshot_archive_entry(parts: &[&str], kind: tar::EntryType) -> bool {
     match (parts, kind) {
         (["version"], Regular) => true,
         (["accounts"], Directory) => true,
-        (["accounts", file], GNUSparse) if like_storage.is_match(file) => true,
-        (["accounts", file], Regular) if like_storage.is_match(file) => true,
+        (["accounts", file], GNUSparse) if like_storage(file) => true,
+        (["accounts", file], Regular) if like_storage(file) => true,
         (["snapshots"], Directory) => true,
         (["snapshots", "status_cache"], Regular) => true,
-        (["snapshots", dir, file], Regular)
-            if like_slot.is_match(dir) && like_slot.is_match(file) =>
-        {
-            true
-        }
-        (["snapshots", dir], Directory) if like_slot.is_match(dir) => true,
+        (["snapshots", dir, file], Regular) if all_digits(dir) && all_digits(file) => true,
+        (["snapshots", dir], Directory) if all_digits(dir) => true,
         _ => false,
     }
 }
@@ -275,11 +299,11 @@ mod tests {
     #[test]
     fn test_archive_is_valid_entry() {
         assert!(is_valid_snapshot_archive_entry(
-            &["accounts", "0.0"],
-            tar::EntryType::Regular
-        ));
-        assert!(is_valid_snapshot_archive_entry(
             &["snapshots"],
+            tar::EntryType::Directory
+        ));
+        assert!(!is_valid_snapshot_archive_entry(
+            &["snapshots", ""],
             tar::EntryType::Directory
         ));
         assert!(is_valid_snapshot_archive_entry(
@@ -298,11 +322,11 @@ mod tests {
             &["accounts"],
             tar::EntryType::Directory
         ));
-
         assert!(!is_valid_snapshot_archive_entry(
-            &["accounts", "0x0"],
+            &["accounts", ""],
             tar::EntryType::Regular
         ));
+
         assert!(!is_valid_snapshot_archive_entry(
             &["snapshots"],
             tar::EntryType::Regular
@@ -321,6 +345,44 @@ mod tests {
         ));
         assert!(!is_valid_snapshot_archive_entry(
             &["aaaa"],
+            tar::EntryType::Regular
+        ));
+    }
+
+    #[test]
+    fn test_valid_snapshot_accounts() {
+        solana_logger::setup();
+        assert!(is_valid_snapshot_archive_entry(
+            &["accounts", "0.0"],
+            tar::EntryType::Regular
+        ));
+        assert!(is_valid_snapshot_archive_entry(
+            &["accounts", "01829.077"],
+            tar::EntryType::Regular
+        ));
+
+        assert!(!is_valid_snapshot_archive_entry(
+            &["accounts", "1.2.34"],
+            tar::EntryType::Regular
+        ));
+        assert!(!is_valid_snapshot_archive_entry(
+            &["accounts", "12."],
+            tar::EntryType::Regular
+        ));
+        assert!(!is_valid_snapshot_archive_entry(
+            &["accounts", ".12"],
+            tar::EntryType::Regular
+        ));
+        assert!(!is_valid_snapshot_archive_entry(
+            &["accounts", "0x0"],
+            tar::EntryType::Regular
+        ));
+        assert!(!is_valid_snapshot_archive_entry(
+            &["accounts", "abc"],
+            tar::EntryType::Regular
+        ));
+        assert!(!is_valid_snapshot_archive_entry(
+            &["accounts", "232323"],
             tar::EntryType::Regular
         ));
     }
