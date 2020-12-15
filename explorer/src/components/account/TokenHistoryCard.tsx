@@ -95,20 +95,25 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
   const [showDropdown, setDropdown] = React.useState(false);
   const filter = useQueryFilter();
 
+  const filteredTokens = React.useMemo(() => tokens.filter((token) => {
+    if (filter === ALL_TOKENS) {
+      return true;
+    }
+    return token.info.mint.toBase58() === filter;
+  }), [tokens, filter]);
+
   const fetchHistories = React.useCallback(
     (refresh?: boolean) => {
-      tokens.forEach((token) => {
-        if (filter === ALL_TOKENS || token.info.mint.toBase58() === filter) {
-          fetchAccountHistory(token.pubkey, refresh);
-        }
+      filteredTokens.forEach((token) => {
+        fetchAccountHistory(token.pubkey, refresh);
       });
     },
-    [tokens, fetchAccountHistory, filter]
+    [filteredTokens, fetchAccountHistory]
   );
 
   // Fetch histories on load
   React.useEffect(() => {
-    tokens.forEach((token) => {
+    filteredTokens.forEach((token) => {
       const address = token.pubkey.toBase58();
       if (!accountHistories[address]) {
         fetchAccountHistory(token.pubkey, true);
@@ -116,35 +121,21 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const allFoundOldest = tokens.every((token) => {
+  const allFoundOldest = filteredTokens.every((token) => {
     const history = accountHistories[token.pubkey.toBase58()];
     return history?.data?.foundOldest === true;
   });
 
-  const allFetchedSome = tokens.every((token) => {
+  const allFetchedSome = filteredTokens.every((token) => {
     const history = accountHistories[token.pubkey.toBase58()];
     return history?.data !== undefined;
   });
 
-  const filteredFoundOldest = React.useMemo(() => {
-    if (filter === ALL_TOKENS) {
-      return allFoundOldest;
-    }
-    const token = tokens.find((token) => {
-      return token.info.mint.toBase58() === filter;
-    });
-    if (token) {
-      const history = accountHistories[token.pubkey.toBase58()];
-      return history?.data?.foundOldest === true;
-    }
-    return false;
-  }, [allFoundOldest, filter, accountHistories, tokens]);
-
   // Find the oldest slot which we know we have the full history for
-  let oldestSlot: number | undefined = filteredFoundOldest ? 0 : undefined;
+  let oldestSlot: number | undefined = allFoundOldest ? 0 : undefined;
 
-  if (!filteredFoundOldest && allFetchedSome) {
-    tokens.forEach((token) => {
+  if (!allFoundOldest && allFetchedSome) {
+    filteredTokens.forEach((token) => {
       const history = accountHistories[token.pubkey.toBase58()];
       if (history?.data?.foundOldest === false) {
         const earliest =
@@ -155,18 +146,18 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
     });
   }
 
-  const fetching = tokens.some((token) => {
+  const fetching = filteredTokens.some((token) => {
     const history = accountHistories[token.pubkey.toBase58()];
     return history?.status === FetchStatus.Fetching;
   });
 
-  const failed = tokens.some((token) => {
+  const failed = filteredTokens.some((token) => {
     const history = accountHistories[token.pubkey.toBase58()];
     return history?.status === FetchStatus.FetchFailed;
   });
 
   const sigSet = new Set();
-  const mintAndTxs = tokens
+  const mintAndTxs = filteredTokens
     .map((token) => ({
       mint: token.info.mint,
       history: accountHistories[token.pubkey.toBase58()],
@@ -189,24 +180,13 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
       return oldestSlot !== undefined && tx.slot >= oldestSlot;
     });
 
-  const filtered = React.useMemo(
-    () =>
-      mintAndTxs.filter(({ mint }) => {
-        if (filter === ALL_TOKENS) {
-          return true;
-        }
-        return mint.toBase58() === filter;
-      }),
-    [filter, mintAndTxs]
-  );
-
   React.useEffect(() => {
-    if (!fetching && filtered.length < 1 && !filteredFoundOldest) {
+    if (!fetching && mintAndTxs.length < 1 && !allFoundOldest) {
       fetchHistories();
     }
-  }, [fetching, filtered, filteredFoundOldest, fetchHistories]);
+  }, [fetching, mintAndTxs, allFoundOldest, fetchHistories]);
 
-  if (filtered.length === 0) {
+  if (mintAndTxs.length === 0) {
     if (fetching) {
       return <LoadingCard message="Loading history" />;
     } else if (failed) {
@@ -226,7 +206,7 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
     );
   }
 
-  filtered.sort((a, b) => {
+  mintAndTxs.sort((a, b) => {
     if (a.tx.slot > b.tx.slot) return -1;
     if (a.tx.slot < b.tx.slot) return 1;
     return 0;
@@ -273,7 +253,7 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
             </tr>
           </thead>
           <tbody className="list">
-            {filtered.map(({ mint, tx }) => (
+            {mintAndTxs.map(({ mint, tx }) => (
               <TokenTransactionRow
                 key={tx.signature}
                 mint={mint}
@@ -286,7 +266,7 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
       </div>
 
       <div className="card-footer">
-        {filteredFoundOldest ? (
+        {allFoundOldest ? (
           <div className="text-muted text-center">Fetched full history</div>
         ) : (
           <button
