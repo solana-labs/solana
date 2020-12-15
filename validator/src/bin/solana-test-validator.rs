@@ -1,6 +1,7 @@
 use {
     clap::{value_t_or_exit, App, Arg},
     console::style,
+    fd_lock::FdLock,
     indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle},
     solana_clap_utils::{input_parsers::pubkey_of, input_validators::is_pubkey},
     solana_client::{client_error, rpc_client::RpcClient},
@@ -18,9 +19,9 @@ use {
     },
     solana_validator::{start_logger, test_validator::*},
     std::{
-        fs,
+        fs, io,
         net::{IpAddr, Ipv4Addr, SocketAddr},
-        path::PathBuf,
+        path::{Path, PathBuf},
         process::exit,
         sync::mpsc::channel,
         thread,
@@ -91,6 +92,16 @@ fn main() {
                 .help("Use DIR as ledger location"),
         )
         .arg(
+            Arg::with_name("reset")
+                .short("r")
+                .long("reset")
+                .takes_value(false)
+                .help(
+                    "Reset the ledger to genesis if it exists. \
+                       By default the validator will resume an existing ledger (if present)",
+                ),
+        )
+        .arg(
             Arg::with_name("quiet")
                 .short("q")
                 .long("quiet")
@@ -144,6 +155,7 @@ fn main() {
     });
 
     let ledger_path = value_t_or_exit!(matches, "ledger_path", PathBuf);
+    let reset_ledger = matches.is_present("reset");
     let output = if matches.is_present("quiet") {
         Output::None
     } else if matches.is_present("log") {
@@ -196,10 +208,10 @@ fn main() {
                 err
             );
             exit(1);
-        })
+        });
     }
 
-    let mut ledger_fd_lock = fd_lock::FdLock::new(std::fs::File::open(&ledger_path).unwrap());
+    let mut ledger_fd_lock = FdLock::new(fs::File::open(&ledger_path).unwrap());
     let _ledger_lock = ledger_fd_lock.try_lock().unwrap_or_else(|_| {
         eprintln!(
             "Error: Unable to lock {} directory. Check if another solana-test-validator is running",
@@ -207,6 +219,13 @@ fn main() {
         );
         exit(1);
     });
+
+    if reset_ledger {
+        remove_directory_contents(&ledger_path).unwrap_or_else(|err| {
+            eprintln!("Error: Unable to remove {}: {}", ledger_path.display(), err);
+            exit(1);
+        })
+    }
 
     let validator_log_symlink = ledger_path.join("validator.log");
     let logfile = if output != Output::Log {
@@ -338,4 +357,17 @@ fn main() {
     }
 
     std::thread::park();
+}
+
+fn remove_directory_contents(ledger_path: &Path) -> Result<(), io::Error> {
+    for entry in fs::read_dir(&ledger_path)? {
+        let entry = entry?;
+        println!("emove {}:", entry.path().display());
+        if entry.metadata()?.is_file() {
+            fs::remove_file(&entry.path())?
+        } else {
+            fs::remove_dir_all(&entry.path())?
+        }
+    }
+    Ok(())
 }
