@@ -17,7 +17,7 @@ use thiserror::Error;
 
 const DUPLICATE_SHRED_HEADER_SIZE: usize = 63;
 
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, AbiExample, Deserialize, Serialize)]
 pub struct DuplicateShred {
     pub(crate) from: Pubkey,
     pub(crate) wallclock: u64,
