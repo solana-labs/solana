@@ -557,25 +557,6 @@ impl CrdsValue {
         }
     }
 
-    /// Return all the possible labels for a record identified by Pubkey.
-    /// Excludes NodeInstance, which is pushed priodically, and does not need
-    /// to update its local-timestmap.
-    pub fn record_labels(key: Pubkey) -> impl Iterator<Item = CrdsValueLabel> {
-        const CRDS_VALUE_LABEL_STUBS: [fn(Pubkey) -> CrdsValueLabel; 6] = [
-            CrdsValueLabel::ContactInfo,
-            CrdsValueLabel::LowestSlot,
-            CrdsValueLabel::SnapshotHashes,
-            CrdsValueLabel::AccountsHashes,
-            CrdsValueLabel::LegacyVersion,
-            CrdsValueLabel::Version,
-        ];
-        CRDS_VALUE_LABEL_STUBS
-            .iter()
-            .map(move |f| (f)(key))
-            .chain((0..MAX_VOTES).map(move |ix| CrdsValueLabel::Vote(ix, key)))
-            .chain((0..MAX_EPOCH_SLOTS).map(move |ix| CrdsValueLabel::EpochSlots(ix, key)))
-    }
-
     /// Returns the size (in bytes) of a CrdsValue
     pub fn size(&self) -> u64 {
         serialized_size(&self).expect("unable to serialize contact info")
@@ -653,27 +634,6 @@ mod test {
     use std::cmp::Ordering;
     use std::iter::repeat_with;
 
-    #[test]
-    fn test_labels() {
-        let mut hits = [false; 6 + MAX_VOTES as usize + MAX_EPOCH_SLOTS as usize];
-        // this method should cover all the possible labels
-        for v in CrdsValue::record_labels(Pubkey::default()) {
-            match &v {
-                CrdsValueLabel::ContactInfo(_) => hits[0] = true,
-                CrdsValueLabel::LowestSlot(_) => hits[1] = true,
-                CrdsValueLabel::SnapshotHashes(_) => hits[2] = true,
-                CrdsValueLabel::AccountsHashes(_) => hits[3] = true,
-                CrdsValueLabel::LegacyVersion(_) => hits[4] = true,
-                CrdsValueLabel::Version(_) => hits[5] = true,
-                CrdsValueLabel::NodeInstance(_, _) => panic!("NodeInstance!?"),
-                CrdsValueLabel::Vote(ix, _) => hits[*ix as usize + 6] = true,
-                CrdsValueLabel::EpochSlots(ix, _) => {
-                    hits[*ix as usize + MAX_VOTES as usize + 6] = true
-                }
-            }
-        }
-        assert!(hits.iter().all(|x| *x));
-    }
     #[test]
     fn test_keys_and_values() {
         let v = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
