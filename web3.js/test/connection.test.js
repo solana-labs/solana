@@ -999,6 +999,117 @@ test('get confirmed transaction', async () => {
   expect(nullResponse).toBeNull();
 });
 
+test('get parsed confirmed transaction coerces public keys of inner instructions', async () => {
+  if (!mockRpcEnabled) {
+    return;
+  }
+
+  const connection = new Connection(url);
+
+  const confirmedTransaction: TransactionSignature =
+    '4ADvAUQYxkh4qWKYE9QLW8gCLomGG94QchDLG4quvpBz1WqARYvzWQDDitKduAKspuy1DjcbnaDAnCAfnKpJYs48';
+
+  function getMockData(inner) {
+    return {
+      error: null,
+      result: {
+        slot: 353050305,
+        transaction: {
+          message: {
+            accountKeys: [
+              {
+                pubkey: 'va12u4o9DipLEB2z4fuoHszroq1U9NcAB9aooFDPJSf',
+                signer: true,
+                writable: true,
+              },
+            ],
+            instructions: [
+              {
+                accounts: ['va12u4o9DipLEB2z4fuoHszroq1U9NcAB9aooFDPJSf'],
+                data:
+                  '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+              },
+            ],
+            recentBlockhash: 'GeyAFFRY3WGpmam2hbgrKw4rbU2RKzfVLm5QLSeZwTZE',
+          },
+          signatures: [
+            'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt',
+            '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG',
+          ],
+        },
+        meta: {
+          fee: 10000,
+          postBalances: [499260347380, 15298080, 1, 1, 1],
+          preBalances: [499260357380, 15298080, 1, 1, 1],
+          innerInstructions: [
+            {
+              index: 0,
+              instructions: [inner],
+            },
+          ],
+          status: {Ok: null},
+          err: null,
+        },
+      },
+    };
+  }
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getConfirmedTransaction',
+      params: [confirmedTransaction, 'jsonParsed'],
+    },
+    getMockData({
+      parsed: {},
+      program: 'spl-token',
+      programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+    }),
+  ]);
+
+  const result = await connection.getParsedConfirmedTransaction(
+    confirmedTransaction,
+  );
+
+  if (
+    result !== null &&
+    result.meta &&
+    result.meta.innerInstructions !== undefined &&
+    result.meta.innerInstructions.length > 0
+  ) {
+    expect(
+      result.meta.innerInstructions[0].instructions[0].programId,
+    ).toBeInstanceOf(PublicKey);
+  }
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getConfirmedTransaction',
+      params: [confirmedTransaction, 'jsonParsed'],
+    },
+    getMockData({
+      accounts: [
+        'EeJqWk5pczNjsqqY3jia9xfFNG1dD68te4s8gsdCuEk7',
+        '6tVrjJhFm5SAvvdh6tysjotQurCSELpxuW3JaAAYeC1m',
+      ],
+      data: 'ai3535',
+      programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+    }),
+  ]);
+
+  //$FlowFixMe
+  const result2 = await connection.getParsedConfirmedTransaction(
+    confirmedTransaction,
+  );
+
+  let instruction = result2.meta.innerInstructions[0].instructions[0];
+  expect(instruction.programId).toBeInstanceOf(PublicKey);
+  expect(instruction.accounts[0]).toBeInstanceOf(PublicKey);
+  expect(instruction.accounts[1]).toBeInstanceOf(PublicKey);
+});
+
 test('get confirmed block', async () => {
   const connection = new Connection(url);
 
