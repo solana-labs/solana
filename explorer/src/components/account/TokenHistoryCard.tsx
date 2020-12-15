@@ -98,10 +98,12 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
   const fetchHistories = React.useCallback(
     (refresh?: boolean) => {
       tokens.forEach((token) => {
-        fetchAccountHistory(token.pubkey, refresh);
+        if (filter === ALL_TOKENS || token.info.mint.toBase58() === filter) {
+          fetchAccountHistory(token.pubkey, refresh);
+        }
       });
     },
-    [tokens, fetchAccountHistory]
+    [tokens, fetchAccountHistory, filter]
   );
 
   // Fetch histories on load
@@ -124,9 +126,24 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
     return history?.data !== undefined;
   });
 
+  const filteredFoundOldest = React.useMemo(() => {
+    if (filter === ALL_TOKENS) {
+      return allFoundOldest;
+    }
+    const token = tokens.find((token) => {
+      return token.info.mint.toBase58() === filter;
+    });
+    if (token) {
+      const history = accountHistories[token.pubkey.toBase58()];
+      return history?.data?.foundOldest === true;
+    }
+    return false;
+  }, [allFoundOldest, filter, accountHistories, tokens]);
+
   // Find the oldest slot which we know we have the full history for
-  let oldestSlot: number | undefined = allFoundOldest ? 0 : undefined;
-  if (!allFoundOldest && allFetchedSome) {
+  let oldestSlot: number | undefined = filteredFoundOldest ? 0 : undefined;
+
+  if (!filteredFoundOldest && allFetchedSome) {
     tokens.forEach((token) => {
       const history = accountHistories[token.pubkey.toBase58()];
       if (history?.data?.foundOldest === false) {
@@ -184,10 +201,10 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
   );
 
   React.useEffect(() => {
-    if (!fetching && filtered.length < 1 && !allFoundOldest) {
+    if (!fetching && filtered.length < 1 && !filteredFoundOldest) {
       fetchHistories();
     }
-  }, [fetching, filtered, allFoundOldest, fetchHistories]);
+  }, [fetching, filtered, filteredFoundOldest, fetchHistories]);
 
   if (filtered.length === 0) {
     if (fetching) {
@@ -269,7 +286,7 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
       </div>
 
       <div className="card-footer">
-        {allFoundOldest ? (
+        {filteredFoundOldest ? (
           <div className="text-muted text-center">Fetched full history</div>
         ) : (
           <button
@@ -297,7 +314,7 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
 
   const buildLocation = (location: Location, filter: string) => {
     const params = new URLSearchParams(location.search);
-    if (filter === "") {
+    if (filter === ALL_TOKENS) {
       params.delete("filter");
     } else {
       params.set("filter", filter);
@@ -325,7 +342,7 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
         type="button"
         onClick={toggle}
       >
-        {filter === "" ? "All Tokens" : nameLookup[filter]}
+        {filter === ALL_TOKENS ? "All Tokens" : nameLookup[filter]}
       </button>
       <div
         className={`token-filter dropdown-menu-right dropdown-menu${
