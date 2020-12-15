@@ -119,7 +119,7 @@ pub fn create_and_cache_executor(
     if use_jit {
         if let Err(err) = program.jit_compile() {
             log!(logger, "Failed to compile program {:?}", err);
-            return Err(InstructionError::ProgramFailedToCompile.into());
+            return Err(InstructionError::ProgramFailedToCompile);
         }
     }
     let executor = Arc::new(BPFExecutor { program });
@@ -671,7 +671,7 @@ impl Executor for BPFExecutor {
                 Ok(info) => info,
                 Err(e) => {
                     log!(logger, "Failed to create BPF VM: {}", e);
-                    return Err(InstructionError::ProgramEnvironmentSetupFailure.into());
+                    return Err(InstructionError::ProgramEnvironmentSetupFailure);
                 }
             };
 
@@ -712,7 +712,7 @@ impl Executor for BPFExecutor {
                         )) => error,
                         err => {
                             log!(logger, "Program failed to complete: {:?}", err);
-                            InstructionError::ProgramFailedToComplete.into()
+                            InstructionError::ProgramFailedToComplete
                         }
                     };
 
