@@ -1,5 +1,6 @@
 //! The `shred` module defines data structures and methods to pull MTU sized data frames from the network.
 use crate::{
+    blockstore::MAX_DATA_SHREDS_PER_SLOT,
     entry::{create_ticks, Entry},
     erasure::Session,
 };
@@ -12,7 +13,7 @@ use rayon::{
 };
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
-use solana_perf::packet::Packet;
+use solana_perf::packet::{limited_deserialize, Packet};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
     clock::Slot,
@@ -307,6 +308,27 @@ impl Shred {
         };
 
         Ok(shred)
+    }
+
+    pub fn new_empty_coding(
+        slot: Slot,
+        index: u32,
+        fec_set_index: u32,
+        num_data: usize,
+        num_code: usize,
+        position: usize,
+        version: u16,
+    ) -> Self {
+        let (header, coding_header) = Shredder::new_coding_shred_header(
+            slot,
+            index,
+            fec_set_index,
+            num_data,
+            num_code,
+            position,
+            version,
+        );
+        Shred::new_empty_from_header(header, DataShredHeader::default(), coding_header)
     }
 
     pub fn new_empty_from_header(
@@ -699,7 +721,7 @@ impl Shredder {
             // Create empty coding shreds, with correctly populated headers
             let mut coding_shreds = Vec::with_capacity(num_coding);
             (0..num_coding).for_each(|i| {
-                let (header, coding_header) = Self::new_coding_shred_header(
+                let shred = Shred::new_empty_coding(
                     slot,
                     start_index + i as u32,
                     start_index,
@@ -708,8 +730,6 @@ impl Shredder {
                     i,
                     version,
                 );
-                let shred =
-                    Shred::new_empty_from_header(header, DataShredHeader::default(), coding_header);
                 coding_shreds.push(shred.payload);
             });
 
@@ -730,7 +750,7 @@ impl Shredder {
                 .into_iter()
                 .enumerate()
                 .map(|(i, payload)| {
-                    let (common_header, coding_header) = Self::new_coding_shred_header(
+                    let mut shred = Shred::new_empty_coding(
                         slot,
                         start_index + i as u32,
                         start_index,
@@ -739,12 +759,8 @@ impl Shredder {
                         i,
                         version,
                     );
-                    Shred {
-                        common_header,
-                        data_header: DataShredHeader::default(),
-                        coding_header,
-                        payload,
-                    }
+                    shred.payload = payload;
+                    shred
                 })
                 .collect()
         } else {
@@ -961,6 +977,71 @@ impl Shredder {
 
         Ok(())
     }
+}
+
+#[derive(Default, Debug, Eq, PartialEq)]
+pub struct ShredFetchStats {
+    pub index_overrun: usize,
+    pub shred_count: usize,
+    pub index_bad_deserialize: usize,
+    pub index_out_of_bounds: usize,
+    pub slot_bad_deserialize: usize,
+    pub duplicate_shred: usize,
+    pub slot_out_of_range: usize,
+    pub bad_shred_type: usize,
+}
+
+// Get slot, index, and type from a packet with partial deserialize
+pub fn get_shred_slot_index_type(
+    p: &Packet,
+    stats: &mut ShredFetchStats,
+) -> Option<(Slot, u32, bool)> {
+    let index_start = OFFSET_OF_SHRED_INDEX;
+    let index_end = index_start + SIZE_OF_SHRED_INDEX;
+    let slot_start = OFFSET_OF_SHRED_SLOT;
+    let slot_end = slot_start + SIZE_OF_SHRED_SLOT;
+
+    debug_assert!(index_end > slot_end);
+    debug_assert!(index_end > OFFSET_OF_SHRED_TYPE);
+
+    if index_end > p.meta.size {
+        stats.index_overrun += 1;
+        return None;
+    }
+
+    let index;
+    match limited_deserialize::<u32>(&p.data[index_start..index_end]) {
+        Ok(x) => index = x,
+        Err(_e) => {
+            stats.index_bad_deserialize += 1;
+            return None;
+        }
+    }
+
+    if index >= MAX_DATA_SHREDS_PER_SLOT as u32 {
+        stats.index_out_of_bounds += 1;
+        return None;
+    }
+
+    let slot;
+    match limited_deserialize::<Slot>(&p.data[slot_start..slot_end]) {
+        Ok(x) => {
+            slot = x;
+        }
+        Err(_e) => {
+            stats.slot_bad_deserialize += 1;
+            return None;
+        }
+    }
+
+    let shred_type = p.data[OFFSET_OF_SHRED_TYPE];
+    if shred_type == DATA_SHRED || shred_type == CODING_SHRED {
+        return Some((slot, index, shred_type == DATA_SHRED));
+    } else {
+        stats.bad_shred_type += 1;
+    }
+
+    None
 }
 
 pub fn max_ticks_per_n_shreds(num_shreds: u64, shred_data_size: Option<usize>) -> u64 {
@@ -1706,5 +1787,61 @@ pub mod tests {
                 parent_offset: 1000
             })
         );
+    }
+
+    #[test]
+    fn test_shred_offsets() {
+        solana_logger::setup();
+        let mut packet = Packet::default();
+        let shred = Shred::new_from_data(1, 3, 0, None, true, true, 0, 0, 0);
+        shred.copy_to_packet(&mut packet);
+        let mut stats = ShredFetchStats::default();
+        let ret = get_shred_slot_index_type(&packet, &mut stats);
+        assert_eq!(Some((1, 3, true)), ret);
+        assert_eq!(stats, ShredFetchStats::default());
+
+        packet.meta.size = OFFSET_OF_SHRED_TYPE;
+        assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
+        assert_eq!(stats.index_overrun, 1);
+
+        packet.meta.size = OFFSET_OF_SHRED_INDEX;
+        assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
+        assert_eq!(stats.index_overrun, 2);
+
+        packet.meta.size = OFFSET_OF_SHRED_INDEX + 1;
+        assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
+        assert_eq!(stats.index_overrun, 3);
+
+        packet.meta.size = OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX - 1;
+        assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
+        assert_eq!(stats.index_overrun, 4);
+
+        packet.meta.size = OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX;
+        assert_eq!(
+            Some((1, 3, true)),
+            get_shred_slot_index_type(&packet, &mut stats)
+        );
+        assert_eq!(stats.index_overrun, 4);
+
+        let shred = Shred::new_empty_coding(8, 2, 10, 30, 4, 7, 200);
+        shred.copy_to_packet(&mut packet);
+        assert_eq!(
+            Some((8, 2, false)),
+            get_shred_slot_index_type(&packet, &mut stats)
+        );
+
+        let shred = Shred::new_from_data(1, std::u32::MAX - 10, 0, None, true, true, 0, 0, 0);
+        shred.copy_to_packet(&mut packet);
+        assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
+        assert_eq!(1, stats.index_out_of_bounds);
+
+        let (mut header, coding_header) =
+            Shredder::new_coding_shred_header(8, 2, 10, 30, 4, 7, 200);
+        header.shred_type = ShredType(u8::MAX);
+        let shred = Shred::new_empty_from_header(header, DataShredHeader::default(), coding_header);
+        shred.copy_to_packet(&mut packet);
+
+        assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
+        assert_eq!(1, stats.bad_shred_type);
     }
 }
