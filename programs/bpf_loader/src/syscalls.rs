@@ -783,20 +783,12 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                         )?;
                         let vm_data_addr = data.as_ptr() as u64;
                         (
-<<<<<<< HEAD
                             translate_slice_mut!(
                                 u8,
-                                data.as_ptr(),
+                                vm_data_addr,
                                 data.len(),
                                 rw_regions,
                                 self.loader_id
-=======
-                            translate_slice_mut::<u8>(
-                                memory_mapping,
-                                vm_data_addr,
-                                data.len() as u64,
-                                self.loader_id,
->>>>>>> 025f886e1... check for resize access violations (#14142)
                             )?,
                             vm_data_addr,
                             ref_to_len_in_vm,
@@ -1044,16 +1036,10 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                         rw_regions,
                         self.loader_id
                     )?;
-<<<<<<< HEAD
+                    let vm_data_addr = account_info.data_addr;
                     let data = translate_slice_mut!(
                         u8,
-                        account_info.data_addr,
-=======
-                    let vm_data_addr = account_info.data_addr;
-                    let data = translate_slice_mut::<u8>(
-                        memory_mapping,
                         vm_data_addr,
->>>>>>> 025f886e1... check for resize access violations (#14142)
                         account_info.data_len,
                         rw_regions,
                         self.loader_id
@@ -1264,11 +1250,11 @@ fn call<'a>(
                         SyscallError::InstructionError(InstructionError::InvalidRealloc).into(),
                     );
                 }
-                let _ = translate(
-                    memory_mapping,
-                    AccessType::Store,
+                let _ = translate!(
                     account_ref.vm_data_addr,
                     account.data.len() as u64,
+                    rw_regions,
+                    self.loader_id
                 )?;
                 *account_ref.ref_to_len_in_vm = account.data.len() as u64;
                 *account_ref.serialized_len_ptr = account.data.len() as u64;

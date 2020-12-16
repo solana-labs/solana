@@ -854,7 +854,7 @@ fn test_program_bpf_invoke() {
         assert_eq!(invoked_programs, vec![solana_sdk::system_program::id()]);
         assert_eq!(
             result.unwrap_err(),
-            TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
+            TransactionError::InstructionError(0, InstructionError::Custom(194969602))
         );
     }
 
