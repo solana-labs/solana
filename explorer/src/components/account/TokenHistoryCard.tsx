@@ -95,12 +95,16 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
   const [showDropdown, setDropdown] = React.useState(false);
   const filter = useQueryFilter();
 
-  const filteredTokens = React.useMemo(() => tokens.filter((token) => {
-    if (filter === ALL_TOKENS) {
-      return true;
-    }
-    return token.info.mint.toBase58() === filter;
-  }), [tokens, filter]);
+  const filteredTokens = React.useMemo(
+    () =>
+      tokens.filter((token) => {
+        if (filter === ALL_TOKENS) {
+          return true;
+        }
+        return token.info.mint.toBase58() === filter;
+      }),
+    [tokens, filter]
+  );
 
   const fetchHistories = React.useCallback(
     (refresh?: boolean) => {
