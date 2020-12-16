@@ -41,6 +41,7 @@ pub mod ledger_cleanup_service;
 pub mod non_circulating_supply;
 pub mod optimistic_confirmation_verifier;
 pub mod optimistically_confirmed_bank_tracker;
+pub mod packet_hasher;
 pub mod ping_pong;
 pub mod poh_recorder;
 pub mod poh_service;
