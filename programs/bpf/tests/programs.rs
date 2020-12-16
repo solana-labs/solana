@@ -565,6 +565,7 @@ fn test_program_bpf_invoke() {
     const TEST_EMPTY_ACCOUNTS_SLICE: u8 = 5;
     const TEST_CAP_SEEDS: u8 = 6;
     const TEST_CAP_SIGNERS: u8 = 7;
+    const TEST_ALLOC_ACCESS_VIOLATION: u8 = 8;
 
     #[allow(dead_code)]
     #[derive(Debug)]
@@ -905,6 +906,42 @@ fn test_program_bpf_invoke() {
         for i in 0..20 {
             assert_eq!(i as u8, account.data[i]);
         }
+
+        // Attempt to realloc into unauthorized address space
+        let account = Account::new(84, 0, &solana_sdk::system_program::id());
+        bank.store_account(&from_keypair.pubkey(), &account);
+        bank.store_account(&derived_key1, &Account::default());
+        let instruction = Instruction::new(
+            invoke_program_id,
+            &[
+                TEST_ALLOC_ACCESS_VIOLATION,
+                bump_seed1,
+                bump_seed2,
+                bump_seed3,
+            ],
+            account_metas.clone(),
+        );
+        let message = Message::new(&[instruction], Some(&mint_pubkey));
+        let tx = Transaction::new(
+            &[
+                &mint_keypair,
+                &argument_keypair,
+                &invoked_argument_keypair,
+                &from_keypair,
+            ],
+            message.clone(),
+            bank.last_blockhash(),
+        );
+        let (result, inner_instructions) = process_transaction_and_record_inner(&bank, tx);
+        let invoked_programs: Vec<Pubkey> = inner_instructions[0]
+            .iter()
+            .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
+            .collect();
+        assert_eq!(invoked_programs, vec![solana_sdk::system_program::id()]);
+        assert_eq!(
+            result.unwrap_err(),
+            TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
+        );
     }
 
     // Check for program id spoofing

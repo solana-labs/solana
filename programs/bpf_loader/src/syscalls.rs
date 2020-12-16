@@ -827,6 +827,7 @@ struct AccountReferences<'a> {
     lamports: &'a mut u64,
     owner: &'a mut Pubkey,
     data: &'a mut [u8],
+    vm_data_addr: u64,
     ref_to_len_in_vm: &'a mut u64,
     serialized_len_ptr: &'a mut u64,
 }
@@ -941,7 +942,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                         account_info.owner as *const _ as u64,
                         self.loader_id,
                     )?;
-                    let (data, ref_to_len_in_vm, serialized_len_ptr) = {
+                    let (data, vm_data_addr, ref_to_len_in_vm, serialized_len_ptr) = {
                         // Double translate data out of RefCell
                         let data = *translate_type::<&[u8]>(
                             memory_mapping,
@@ -961,13 +962,15 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                             ref_of_len_in_input_buffer as *const _ as u64,
                             self.loader_id,
                         )?;
+                        let vm_data_addr = data.as_ptr() as u64;
                         (
                             translate_slice_mut::<u8>(
                                 memory_mapping,
-                                data.as_ptr() as u64,
+                                vm_data_addr,
                                 data.len() as u64,
                                 self.loader_id,
                             )?,
+                            vm_data_addr,
                             ref_to_len_in_vm,
                             serialized_len_ptr,
                         )
@@ -984,6 +987,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                         lamports,
                         owner,
                         data,
+                        vm_data_addr,
                         ref_to_len_in_vm,
                         serialized_len_ptr,
                     });
@@ -1206,9 +1210,10 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                         account_info.owner_addr,
                         self.loader_id,
                     )?;
+                    let vm_data_addr = account_info.data_addr;
                     let data = translate_slice_mut::<u8>(
                         memory_mapping,
-                        account_info.data_addr,
+                        vm_data_addr,
                         account_info.data_len,
                         self.loader_id,
                     )?;
@@ -1243,6 +1248,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                         lamports,
                         owner,
                         data,
+                        vm_data_addr,
                         ref_to_len_in_vm,
                         serialized_len_ptr,
                     });
@@ -1408,8 +1414,6 @@ fn call<'a>(
             *account_ref.lamports = account.lamports;
             *account_ref.owner = account.owner;
             if account_ref.data.len() != account.data.len() {
-                *account_ref.ref_to_len_in_vm = account.data.len() as u64;
-                *account_ref.serialized_len_ptr = account.data.len() as u64;
                 if !account_ref.data.is_empty() {
                     // Only support for `CreateAccount` at this time.
                     // Need a way to limit total realloc size across multiple CPI calls
@@ -1422,6 +1426,14 @@ fn call<'a>(
                         SyscallError::InstructionError(InstructionError::InvalidRealloc).into(),
                     );
                 }
+                let _ = translate(
+                    memory_mapping,
+                    AccessType::Store,
+                    account_ref.vm_data_addr,
+                    account.data.len() as u64,
+                )?;
+                *account_ref.ref_to_len_in_vm = account.data.len() as u64;
+                *account_ref.serialized_len_ptr = account.data.len() as u64;
             }
             account_ref
                 .data

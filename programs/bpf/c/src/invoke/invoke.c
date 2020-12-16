@@ -11,6 +11,7 @@ static const uint8_t TEST_PPROGRAM_NOT_EXECUTABLE = 4;
 static const uint8_t TEST_EMPTY_ACCOUNTS_SLICE = 5;
 static const uint8_t TEST_CAP_SEEDS = 6;
 static const uint8_t TEST_CAP_SIGNERS = 7;
+static const uint8_t TEST_ALLOC_ACCESS_VIOLATION = 8;
 
 static const int MINT_INDEX = 0;
 static const int ARGUMENT_INDEX = 1;
@@ -297,6 +298,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
                                         data, SOL_ARRAY_SIZE(data)};
 
     sol_assert(SUCCESS == sol_invoke(&instruction, 0, 0));
+    break;
   }
   case TEST_CAP_SEEDS: {
     sol_log("Test cap seeds");
@@ -321,6 +323,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_assert(SUCCESS == sol_invoke_signed(
                               &instruction, accounts, SOL_ARRAY_SIZE(accounts),
                               signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
+    break;
   }
   case TEST_CAP_SIGNERS: {
     sol_log("Test cap signers");
@@ -360,6 +363,46 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_assert(SUCCESS == sol_invoke_signed(
                               &instruction, accounts, SOL_ARRAY_SIZE(accounts),
                               signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
+    break;
+  }
+  case TEST_ALLOC_ACCESS_VIOLATION: {
+    sol_log("Test resize violation");
+    SolAccountMeta arguments[] = {
+        {accounts[FROM_INDEX].key, true, true},
+        {accounts[DERIVED_KEY1_INDEX].key, true, true}};
+    uint8_t data[4 + 8 + 8 + 32];
+    *(uint64_t *)(data + 4) = 42;
+    *(uint64_t *)(data + 4 + 8) = MAX_PERMITTED_DATA_INCREASE;
+    sol_memcpy(data + 4 + 8 + 8, params.program_id, SIZE_PUBKEY);
+    const SolInstruction instruction = {accounts[SYSTEM_PROGRAM_INDEX].key,
+                                        arguments, SOL_ARRAY_SIZE(arguments),
+                                        data, SOL_ARRAY_SIZE(data)};
+    uint8_t seed1[] = {'Y', 'o', 'u', ' ', 'p', 'a', 's', 's',
+                       ' ', 'b', 'u', 't', 't', 'e', 'r'};
+    const SolSignerSeed seeds1[] = {{seed1, SOL_ARRAY_SIZE(seed1)},
+                                    {&bump_seed1, 1}};
+    const SolSignerSeeds signers_seeds[] = {{seeds1, SOL_ARRAY_SIZE(seeds1)}};
+
+    SolAccountInfo derived_account = {
+        .key = accounts[DERIVED_KEY1_INDEX].key,
+        .lamports = accounts[DERIVED_KEY1_INDEX].lamports,
+        .data_len = accounts[DERIVED_KEY1_INDEX].data_len,
+        // Point to top edge of heap, attempt to allocate into unprivileged
+        // memory
+        .data = (uint8_t *)0x300007ff8,
+        .owner = accounts[DERIVED_KEY1_INDEX].owner,
+        .rent_epoch = accounts[DERIVED_KEY1_INDEX].rent_epoch,
+        .is_signer = accounts[DERIVED_KEY1_INDEX].is_signer,
+        .is_writable = accounts[DERIVED_KEY1_INDEX].is_writable,
+        .executable = accounts[DERIVED_KEY1_INDEX].executable,
+    };
+    const SolAccountInfo invoke_accounts[] = {
+        accounts[FROM_INDEX], accounts[SYSTEM_PROGRAM_INDEX], derived_account};
+    sol_assert(SUCCESS ==
+               sol_invoke_signed(&instruction,
+                                 (const SolAccountInfo *)invoke_accounts, 3,
+                                 signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
+    break;
   }
   default:
     sol_panic();
