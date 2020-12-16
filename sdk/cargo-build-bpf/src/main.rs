@@ -1,13 +1,16 @@
-use clap::{
-    crate_description, crate_name, crate_version, value_t, value_t_or_exit, values_t, App, Arg,
-};
-use std::{
-    env,
-    ffi::OsStr,
-    fs,
-    path::{Path, PathBuf},
-    process::exit,
-    process::Command,
+use {
+    clap::{
+        crate_description, crate_name, crate_version, value_t, value_t_or_exit, values_t, App, Arg,
+    },
+    solana_sdk::signature::{write_keypair_file, Keypair},
+    std::{
+        env,
+        ffi::OsStr,
+        fs,
+        path::{Path, PathBuf},
+        process::exit,
+        process::Command,
+    },
 };
 
 struct Config {
@@ -166,6 +169,7 @@ fn build_bpf_package(
         let program_unstripped_so = target_build_directory.join(&format!("{}.so", program_name));
         let program_dump = bpf_out_dir.join(&format!("{}-dump.txt", program_name));
         let program_so = bpf_out_dir.join(&format!("{}.so", program_name));
+        let program_keypair = bpf_out_dir.join(&format!("{}-keypair.json", program_name));
 
         fn file_older_or_missing(prerequisite_file: &Path, target_file: &Path) -> bool {
             let prerequisite_metadata = fs::metadata(prerequisite_file).unwrap_or_else(|err| {
@@ -184,6 +188,17 @@ fn build_bpf_package(
             } else {
                 true
             }
+        }
+
+        if !program_keypair.exists() {
+            write_keypair_file(&Keypair::new(), &program_keypair).unwrap_or_else(|err| {
+                eprintln!(
+                    "Unable to get create {}: {}",
+                    program_keypair.display(),
+                    err
+                );
+                exit(1);
+            });
         }
 
         if file_older_or_missing(&program_unstripped_so, &program_so) {

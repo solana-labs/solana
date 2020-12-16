@@ -3792,6 +3792,7 @@ version = "1.4.18"
 dependencies = [
  "cargo_metadata",
  "clap",
+ "solana-sdk",
 ]
 
 [[package]]
