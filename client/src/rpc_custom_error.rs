@@ -10,6 +10,7 @@ pub const JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE: i64 
 pub const JSON_RPC_SERVER_ERROR_BLOCK_NOT_AVAILABLE: i64 = -32004;
 pub const JSON_RPC_SERVER_ERROR_NODE_UNHEALTHLY: i64 = -32005;
 pub const JSON_RPC_SERVER_ERROR_TRANSACTION_PRECOMPILE_VERIFICATION_FAILURE: i64 = -32006;
+pub const JSON_RPC_SERVER_ERROR_SLOT_SKIPPED: i64 = -32007;
 
 pub enum RpcCustomError {
     BlockCleanedUp {
@@ -26,6 +27,9 @@ pub enum RpcCustomError {
     },
     RpcNodeUnhealthy,
     TransactionPrecompileVerificationFailure(solana_sdk::transaction::TransactionError),
+    SlotSkipped {
+        slot: Slot,
+    },
 }
 
 impl From<RpcCustomError> for Error {
@@ -71,6 +75,14 @@ impl From<RpcCustomError> for Error {
                     JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE,
                 ),
                 message: format!("Transaction precompile verification failure {:?}", e),
+                data: None,
+            },
+            RpcCustomError::SlotSkipped { slot } => Self {
+                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_SLOT_SKIPPED),
+                message: format!(
+                    "Slot {} was skipped, or missing due to ledger jump to recent snapshot",
+                    slot
+                ),
                 data: None,
             },
         }
