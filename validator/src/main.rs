@@ -7,7 +7,8 @@ use rand::{thread_rng, Rng};
 use solana_clap_utils::{
     input_parsers::{keypair_of, keypairs_of, pubkey_of},
     input_validators::{
-        is_keypair_or_ask_keyword, is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot,
+        is_keypair_or_ask_keyword, is_parsable, is_pubkey, is_pubkey_or_keypair, is_shred_version,
+        is_slot,
     },
     keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
 };
@@ -1134,6 +1135,7 @@ pub fn main() {
                 .long("expected-shred-version")
                 .value_name("VERSION")
                 .takes_value(true)
+                .validator(is_shred_version)
                 .help("Require the shred version be this value"),
         )
         .arg(
