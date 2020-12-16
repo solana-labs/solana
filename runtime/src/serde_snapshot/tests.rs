@@ -261,7 +261,8 @@ mod test_bank_serialize {
 
     // These some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "C6qPDvbWwEp88kjDvifaEQv6b7karCRK4mtEgDNgiZmK")]
+    // for < rust 1.46: #[frozen_abi(digest = "C6qPDvbWwEp88kjDvifaEQv6b7karCRK4mtEgDNgiZmK")]
+    #[frozen_abi(digest = "3vr9BRtnBahqiYWsKxhRcEmUpyYehduAFdKNPsXsV3Dy")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperFuture {
         #[serde(serialize_with = "wrapper_future")]
