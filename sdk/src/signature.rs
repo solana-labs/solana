@@ -333,9 +333,8 @@ pub fn read_keypair<R: Read>(reader: &mut R) -> Result<Keypair, Box<dyn error::E
     Ok(Keypair(dalek_keypair))
 }
 
-pub fn read_keypair_file(path: &str) -> Result<Keypair, Box<dyn error::Error>> {
-    assert!(path != "-");
-    let mut file = File::open(path.to_string())?;
+pub fn read_keypair_file<F: AsRef<Path>>(path: F) -> Result<Keypair, Box<dyn error::Error>> {
+    let mut file = File::open(path.as_ref())?;
     read_keypair(&mut file)
 }
 
@@ -349,12 +348,13 @@ pub fn write_keypair<W: Write>(
     Ok(serialized)
 }
 
-pub fn write_keypair_file(
+pub fn write_keypair_file<F: AsRef<Path>>(
     keypair: &Keypair,
-    outfile: &str,
+    outfile: F,
 ) -> Result<String, Box<dyn error::Error>> {
-    assert!(outfile != "-");
-    if let Some(outdir) = Path::new(outfile).parent() {
+    let outfile = outfile.as_ref();
+
+    if let Some(outdir) = outfile.parent() {
         fs::create_dir_all(outdir)?;
     }
 
