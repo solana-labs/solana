@@ -362,7 +362,6 @@ fn main() {
 fn remove_directory_contents(ledger_path: &Path) -> Result<(), io::Error> {
     for entry in fs::read_dir(&ledger_path)? {
         let entry = entry?;
-        println!("emove {}:", entry.path().display());
         if entry.metadata()?.is_file() {
             fs::remove_file(&entry.path())?
         } else {
