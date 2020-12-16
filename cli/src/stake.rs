@@ -1662,13 +1662,13 @@ pub(crate) fn fetch_epoch_rewards(
                 .find(|reward| reward.pubkey == address.to_string())
             {
                 if reward.post_balance > reward.lamports.try_into().unwrap_or(0) {
-                    let percent_change = reward.lamports.abs() as f64
+                    let rate_change = reward.lamports.abs() as f64
                         / (reward.post_balance as f64 - reward.lamports as f64);
 
                     let apr = wallclock_epoch_duration.map(|wallclock_epoch_duration| {
                         let wallclock_epochs_per_year =
                             (SECONDS_PER_DAY * 356) as f64 / wallclock_epoch_duration;
-                        percent_change * wallclock_epochs_per_year
+                        rate_change * wallclock_epochs_per_year
                     });
 
                     all_epoch_rewards.push(CliEpochReward {
@@ -1676,8 +1676,8 @@ pub(crate) fn fetch_epoch_rewards(
                         effective_slot,
                         amount: reward.lamports.abs() as u64,
                         post_balance: reward.post_balance,
-                        percent_change,
-                        apr,
+                        percent_change: rate_change * 100.0,
+                        apr: apr.map(|r| r * 100.0),
                     });
                 }
             }
