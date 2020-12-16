@@ -800,8 +800,9 @@ pub fn process_get_block(
                     format!(
                         "◎{:<19.9}  {:>13.9}%",
                         lamports_to_sol(reward.post_balance),
-                        reward.lamports.abs() as f64
-                            / (reward.post_balance as f64 - reward.lamports as f64)
+                        (reward.lamports.abs() as f64
+                            / (reward.post_balance as f64 - reward.lamports as f64))
+                            * 100.0
                     )
                 }
             );
