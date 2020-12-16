@@ -1,6 +1,6 @@
 [package]
 name = "solana-net-utils"
-version = "1.4.17"
+version = "1.4.18"
 description = "Solana Network Utilities"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -18,9 +18,9 @@ rand = "0.7.0"
 serde = "1.0.112"
 serde_derive = "1.0.103"
 socket2 = "0.3.17"
-solana-clap-utils = { path = "../clap-utils", version = "1.4.17" }
-solana-logger = { path = "../logger", version = "1.4.17" }
-solana-version = { path = "../version", version = "1.4.17" }
+solana-clap-utils = { path = "../clap-utils", version = "1.4.18" }
+solana-logger = { path = "../logger", version = "1.4.18" }
+solana-version = { path = "../version", version = "1.4.18" }
 tokio = "0.1"
 url = "2.1.1"
 
