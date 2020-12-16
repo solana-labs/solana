@@ -8,16 +8,18 @@ It would be awesome if we had the ability to attatch a debugger to BPF, ideally 
 
 ## Proposed Solution
 
-I spent a little over a day poking around in GDB's source repo (git://sourceware.org/git/binutils-gdb.git) to get a handle on what this would entail and I think I have a pretty good idea of what it will take at a high level. However I don't have any experience hacking GDB internals like this, I've just used it a lot. So if anyone has better ideas and/or other opinions about how this should be done, please share.
+Implement a remote target for GDB, where the debugger and the VM communicate using any of the communication channels supported by GDB. The VM itself would have an additional module acts in a similar manner to a GDB server. This feature should be conditionally-compled in a way that eliminates any performance impact on the VM when the debugger is not being used.
 
-1. Add an interface to the eBPF VM that exposes `ptrace`-like functionality that GDB can use to do the thing listed below. This could be done by extending the already-extant [`Tracer`](https://github.com/solana-labs/rbpf/blob/126b0c84cea9005fd684fefe587fc7edde1aa5eb/src/vm.rs#L265) struct or creating a new one, along with some conditionally compiled code in the VM itself for starting / stopping / continuing the [main execution loop](https://github.com/solana-labs/rbpf/blob/126b0c84cea9005fd684fefe587fc7edde1aa5eb/src/vm.rs#L608).
+Using a remote is much less involved than trying to implement a gdb architecture definition, which requires lot of details that our rBPF VM doesn't care or know about. It also has the advantage that it keeps the debugger maximally isolated from the VM, which should make it much easier to minimize the performance impact when the debugger isn't attached. Depending on how this is setup, this would also give the user the ability to debug a VM instance running on a remote machine without doing anything differently from debugging a standalone VM instance running on the same machine.
+
+## Implementation
+
+1. Add an interface to the eBPF VM that exposes `ptrace`-like functionality that GDB can use to do things that GDB needs to do, including those listed below. This could be done by extending the already-extant [`Tracer`](https://github.com/solana-labs/rbpf/blob/126b0c84cea9005fd684fefe587fc7edde1aa5eb/src/vm.rs#L265) struct or creating a new one, along with some conditionally compiled code in the VM itself for starting / stopping / continuing the [main execution loop](https://github.com/solana-labs/rbpf/blob/126b0c84cea9005fd684fefe587fc7edde1aa5eb/src/vm.rs#L608).
 
    - inspecting register state and program memory
-   - software breakpoints
+   - software breakpoints/interrupts
    - single-step
    - stack frame unwinding
    - prologue inspection/skipping
 
-2. Implement gdb's "target-dependent" `gdbarch` interface using the provided interfaces. A few months ago [someone added very minimial definitons for eBPF to GDB](https://sourceware.org/git/?p=binutils-gdb.git;a=commitdiff;h=39791af2a2191a2f7765d7809ecedcd0442138bf), including basic stuff like register names, instruction format / size, word length, integer formats, etc, so we'd be able to build off of what's already written there.
-
-This approach has the advantage that it keeps the debugger somewhat isolated from the VM (I'm pretty sure at least), so in theory it should be easy to change debugging behavior without messing too much with the VM itself.
+2. [Implement a remote GDB stub](http://davis.lbl.gov/Manuals/GDB/gdb_17.html#SEC140) using interface from 1 via FFI and implements GDB's remote debugging protocol using code that's already been written by previous stub implementations. The protocol can use TCP/IP, pipes (stdin/stdout), Unix domain socket, or even a serial bus if someone's trying to port the solana client to something wacky like a PS4. Normally this is implemented as a stub in C that redirects interrupt handlers to a method that sends packets to the debugger, but since the VM is entirely in software we can skip that and just recv/send packets in the VM itself whenever we reach a software breakpoint or other exceptions.
