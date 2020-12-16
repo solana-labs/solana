@@ -265,4 +265,11 @@ const MAINNET_TOKENS: { [key: string]: TokenDetails } = {
     icon: "/tokens/fida.svg",
     website: "https://bonfida.com",
   },
+  kinXdEcpDQeHPEuQnqmUgtYykqKGVFq6CeVX5iAHJq6: {
+    symbol: "KIN",
+    name: "KIN",
+    logo: "/tokens/kin.svg",
+    icon: "/tokens/kin.svg",
+    website: "https://kin.org",
+  },
 };
