@@ -636,6 +636,7 @@ struct AccountReferences<'a> {
     lamports: &'a mut u64,
     owner: &'a mut Pubkey,
     data: &'a mut [u8],
+    vm_data_addr: u64,
     ref_to_len_in_vm: &'a mut u64,
     serialized_len_ptr: &'a mut u64,
 }
@@ -758,7 +759,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                         rw_regions,
                         self.loader_id
                     )?;
-                    let (data, ref_to_len_in_vm, serialized_len_ptr) = {
+                    let (data, vm_data_addr, ref_to_len_in_vm, serialized_len_ptr) = {
                         // Double translate data out of RefCell
                         let data = *translate_type!(
                             &[u8],
@@ -780,14 +781,24 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                             rw_regions,
                             self.loader_id
                         )?;
+                        let vm_data_addr = data.as_ptr() as u64;
                         (
+<<<<<<< HEAD
                             translate_slice_mut!(
                                 u8,
                                 data.as_ptr(),
                                 data.len(),
                                 rw_regions,
                                 self.loader_id
+=======
+                            translate_slice_mut::<u8>(
+                                memory_mapping,
+                                vm_data_addr,
+                                data.len() as u64,
+                                self.loader_id,
+>>>>>>> 025f886e1... check for resize access violations (#14142)
                             )?,
+                            vm_data_addr,
                             ref_to_len_in_vm,
                             serialized_len_ptr,
                         )
@@ -804,6 +815,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                         lamports,
                         owner,
                         data,
+                        vm_data_addr,
                         ref_to_len_in_vm,
                         serialized_len_ptr,
                     });
@@ -1032,9 +1044,16 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                         rw_regions,
                         self.loader_id
                     )?;
+<<<<<<< HEAD
                     let data = translate_slice_mut!(
                         u8,
                         account_info.data_addr,
+=======
+                    let vm_data_addr = account_info.data_addr;
+                    let data = translate_slice_mut::<u8>(
+                        memory_mapping,
+                        vm_data_addr,
+>>>>>>> 025f886e1... check for resize access violations (#14142)
                         account_info.data_len,
                         rw_regions,
                         self.loader_id
@@ -1067,6 +1086,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                         lamports,
                         owner,
                         data,
+                        vm_data_addr,
                         ref_to_len_in_vm,
                         serialized_len_ptr,
                     });
@@ -1232,8 +1252,6 @@ fn call<'a>(
             *account_ref.lamports = account.lamports;
             *account_ref.owner = account.owner;
             if account_ref.data.len() != account.data.len() {
-                *account_ref.ref_to_len_in_vm = account.data.len() as u64;
-                *account_ref.serialized_len_ptr = account.data.len() as u64;
                 if !account_ref.data.is_empty() {
                     // Only support for `CreateAccount` at this time.
                     // Need a way to limit total realloc size across multiple CPI calls
@@ -1246,6 +1264,14 @@ fn call<'a>(
                         SyscallError::InstructionError(InstructionError::InvalidRealloc).into(),
                     );
                 }
+                let _ = translate(
+                    memory_mapping,
+                    AccessType::Store,
+                    account_ref.vm_data_addr,
+                    account.data.len() as u64,
+                )?;
+                *account_ref.ref_to_len_in_vm = account.data.len() as u64;
+                *account_ref.serialized_len_ptr = account.data.len() as u64;
             }
             account_ref
                 .data
