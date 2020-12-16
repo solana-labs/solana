@@ -1189,28 +1189,32 @@ const ConfirmedTransactionMetaResult = struct.union([
     postBalances: struct.array(['number']),
     logMessages: struct.union([struct.array(['string']), 'null', 'undefined']),
     preTokenBalances: struct.union([
-      struct.pick({
-        arrayIndex: 'number',
-        mint: 'string',
-        uiTokenAmount: struct.pick({
-          amount: 'string',
-          decimals: 'number',
-          uiAmount: 'number',
+      struct.array([
+        struct.pick({
+          accountIndex: 'number',
+          mint: 'string',
+          uiTokenAmount: struct.pick({
+            amount: 'string',
+            decimals: 'number',
+            uiAmount: 'number',
+          }),
         }),
-      }),
+      ]),
       'null',
       'undefined',
     ]),
     postTokenBalances: struct.union([
-      struct.pick({
-        arrayIndex: 'number',
-        mint: 'string',
-        uiTokenAmount: struct.pick({
-          amount: 'string',
-          decimals: 'number',
-          uiAmount: 'number',
+      struct.array([
+        struct.pick({
+          accountIndex: 'number',
+          mint: 'string',
+          uiTokenAmount: struct.pick({
+            amount: 'string',
+            decimals: 'number',
+            uiAmount: 'number',
+          }),
         }),
-      }),
+      ]),
       'null',
       'undefined',
     ]),
@@ -1251,28 +1255,32 @@ const ParsedConfirmedTransactionMetaResult = struct.union([
     postBalances: struct.array(['number']),
     logMessages: struct.union([struct.array(['string']), 'null', 'undefined']),
     preTokenBalances: struct.union([
-      struct.pick({
-        arrayIndex: 'number',
-        mint: 'string',
-        uiTokenAmount: struct.pick({
-          amount: 'string',
-          decimals: 'number',
-          uiAmount: 'number',
+      struct.array([
+        struct.pick({
+          accountIndex: 'number',
+          mint: 'string',
+          uiTokenAmount: struct.pick({
+            amount: 'string',
+            decimals: 'number',
+            uiAmount: 'number',
+          }),
         }),
-      }),
+      ]),
       'null',
       'undefined',
     ]),
     postTokenBalances: struct.union([
-      struct.pick({
-        arrayIndex: 'number',
-        mint: 'string',
-        uiTokenAmount: struct.pick({
-          amount: 'string',
-          decimals: 'number',
-          uiAmount: 'number',
+      struct.array([
+        struct.pick({
+          accountIndex: 'number',
+          mint: 'string',
+          uiTokenAmount: struct.pick({
+            amount: 'string',
+            decimals: 'number',
+            uiAmount: 'number',
+          }),
         }),
-      }),
+      ]),
       'null',
       'undefined',
     ]),
