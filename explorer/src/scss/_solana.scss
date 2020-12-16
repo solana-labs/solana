@@ -321,3 +321,8 @@ div.inner-cards {
     content:'';
   }
 }
+
+.dropdown-menu.token-filter {
+  max-height: 20rem;
+  overflow-y: auto;
+}
