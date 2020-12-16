@@ -219,6 +219,7 @@ where
     {
         return Err(Error::ShredTypeMismatch);
     }
+    // TODO: Also verify shred signatures!
     Ok((shred1, shred2))
 }
 
@@ -247,6 +248,10 @@ impl From<&DuplicateShred> for DuplicateShredIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::Rng;
+    use solana_ledger::{entry::Entry, shred::Shredder};
+    use solana_sdk::{hash, signature::Keypair, system_transaction};
+    use std::sync::Arc;
 
     #[test]
     fn test_duplicate_shred_header_size() {
@@ -268,5 +273,66 @@ mod tests {
             bincode::serialized_size(&dup).unwrap(),
             DUPLICATE_SHRED_HEADER_SIZE as u64
         );
+    }
+
+    fn new_rand_shred<R: Rng>(rng: &mut R, next_shred_index: u32, shredder: &Shredder) -> Shred {
+        let entries: Vec<_> = std::iter::repeat_with(|| {
+            let tx = system_transaction::transfer(
+                &Keypair::new(),       // from
+                &Pubkey::new_unique(), // to
+                rng.gen(),             // lamports
+                hash::new_rand(rng),   // recent blockhash
+            );
+            Entry::new(
+                &hash::new_rand(rng), // prev_hash
+                1,                    // num_hashes,
+                vec![tx],             // transactions
+            )
+        })
+        .take(5)
+        .collect();
+        let (mut data_shreds, _coding_shreds, _last_shred_index) = shredder.entries_to_shreds(
+            &entries,
+            true, // is_last_in_slot
+            next_shred_index,
+        );
+        data_shreds.swap_remove(0)
+    }
+
+    #[test]
+    fn test_duplicate_shred_round_trip() {
+        let mut rng = rand::thread_rng();
+        let keypair = Arc::new(Keypair::new());
+        let (slot, parent_slot, fec_rate, reference_tick, version) =
+            (53084024, 53084023, 0.0, 0, 0);
+        let shredder = Shredder::new(
+            slot,
+            parent_slot,
+            fec_rate,
+            keypair,
+            reference_tick,
+            version,
+        )
+        .unwrap();
+        let next_shred_index = rng.gen();
+        let shred1 = new_rand_shred(&mut rng, next_shred_index, &shredder);
+        let shred2 = new_rand_shred(&mut rng, next_shred_index, &shredder);
+        let proof = DuplicateSlotProof {
+            shred1: shred1.payload.clone(),
+            shred2: shred2.payload.clone(),
+        };
+        let chunks: Vec<_> = from_duplicate_slot_proof(
+            &proof,
+            Pubkey::new_unique(), // self_pubkey
+            rng.gen(),            // wallclock
+            512,                  // max_size
+            Ok,                   // encoder
+        )
+        .unwrap()
+        .collect();
+        assert!(chunks.len() > 4);
+        let (shred3, shred4) = into_shreds(chunks, Ok).unwrap();
+        assert_eq!(shred1, shred3);
+        assert_eq!(shred2, shred4);
     }
 }
