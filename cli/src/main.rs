@@ -206,7 +206,10 @@ pub fn parse_args<'a>(
             verbose,
             output_format,
             commitment,
-            send_transaction_config: RpcSendTransactionConfig::default(),
+            send_transaction_config: RpcSendTransactionConfig {
+                preflight_commitment: Some(commitment.commitment),
+                ..RpcSendTransactionConfig::default()
+            },
             address_labels,
         },
         signers,
