@@ -10,7 +10,7 @@ homepage = "https://solana.com/"
 publish = false
 
 [dependencies]
-byte-unit = "4.0.8"
+byte-unit = "4.0.9"
 clap = "2.33.1"
 serde = "1.0.112"
 serde_json = "1.0.56"
