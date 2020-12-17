@@ -35,7 +35,7 @@ use solana_sdk::{
     account::from_account,
     account_utils::StateMut,
     clock::{self, Clock, Slot},
-    commitment_config::CommitmentConfig,
+    commitment_config::{CommitmentConfig, CommitmentLevel},
     epoch_schedule::Epoch,
     hash::Hash,
     message::Message,
@@ -239,6 +239,28 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .default_value("15")
                         .help("Wait up to timeout seconds for transaction confirmation"),
                 )
+                .arg(
+                    Arg::with_name("use_nonce")
+                        .long("use-nonce")
+                        .takes_value(false)
+                        .help("Use nonced transaction by preparing nonce accounts upfront"),
+                )
+                .arg(
+                    Arg::with_name("resubmit_interval")
+                        .long("resubmit-interval")
+                        .value_name("SECONDS")
+                        .takes_value(true)
+                        .default_value("120")
+                        .help("Wait interval seconds before resubmitting same transaction while confirming"),
+                )
+                .arg(
+                    Arg::with_name("blockhash_interval")
+                        .long("blockhash-interval")
+                        .value_name("SECONDS")
+                        .takes_value(true)
+                        .default_value("60")
+                        .help("Renew recent_blockhash before sending new transaction at this interval"),
+                )
                 .arg(blockhash_arg())
                 .arg(commitment_arg()),
         )
@@ -397,6 +419,9 @@ pub fn parse_cluster_ping(
     let timeout = Duration::from_secs(value_t_or_exit!(matches, "timeout", u64));
     let blockhash = value_of(matches, BLOCKHASH_ARG.name);
     let print_timestamp = matches.is_present("print_timestamp");
+    let use_nonce = matches.is_present("use_nonce");
+    let resubmit_interval = Duration::from_secs(value_t_or_exit!(matches, "resubmit_interval", u64));
+    let blockhash_interval = Duration::from_secs(value_t_or_exit!(matches, "blockhash_interval", u64));
     Ok(CliCommandInfo {
         command: CliCommand::Ping {
             lamports,
@@ -405,6 +430,9 @@ pub fn parse_cluster_ping(
             timeout,
             blockhash,
             print_timestamp,
+            use_nonce,
+            resubmit_interval,
+            blockhash_interval,
         },
         signers: vec![default_signer.signer_from_path(matches, wallet_manager)?],
     })
@@ -1077,10 +1105,73 @@ pub fn process_ping(
     timeout: &Duration,
     fixed_blockhash: &Option<Hash>,
     print_timestamp: bool,
+    use_nonce: bool,
+    resubmit_interval: &Duration,
+    blockhash_interval: &Duration,
 ) -> ProcessResult {
     println_name_value("Source Account:", &config.signers[0].pubkey().to_string());
     println!();
 
+    let commitment_for_confirm = match config.commitment.commitment {
+        CommitmentLevel::Root => CommitmentConfig::max(),
+        _ => CommitmentConfig::recent(),
+    };
+
+    let nonce_context = if use_nonce {
+        use solana_sdk::signature::Signer;
+        let nonce_authority = config.signers[0].pubkey();
+        let mut all_nonce_configs = vec![];
+        for i in 0..(count.unwrap() / 5) {
+            let nonce_commitment = CommitmentConfig::root();
+            let nonce_lamports = rpc_client.get_minimum_balance_for_rent_exemption(solana_sdk::nonce::State::size())?;
+            let mut nonce_keypairs = vec![];
+            for _ in 0..5 {
+                nonce_keypairs.push(solana_sdk::signature::Keypair::new());
+            }
+            let mut ixs = vec![];
+            nonce_keypairs.iter().for_each(|nonce_keypair| ixs.extend(solana_sdk::system_instruction::create_nonce_account(
+                &config.signers[0].pubkey(),
+                &nonce_keypair.pubkey(),
+                &nonce_authority,
+                nonce_lamports,
+            )));
+            let nonce_message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
+            let (recent_blockhash, _fee_calculator, _) = rpc_client
+                .get_recent_blockhash_with_commitment(nonce_commitment)?
+                .value;
+            let mut tx = Transaction::new_unsigned(nonce_message);
+            let mut signers_with_nonce = config.signers.clone();
+            for k in &nonce_keypairs {
+                signers_with_nonce.push(k);
+            }
+            tx.try_sign(&signers_with_nonce, recent_blockhash)?;
+            let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+                &tx,
+                nonce_commitment,
+                config.send_transaction_config,
+            );
+            println!("Created {}-th packed nonce creation tx...", i);
+            crate::cli::log_instruction_custom_error::<solana_sdk::system_instruction::SystemError>(result, &config)?;
+            let nonce_configs = nonce_keypairs.iter().map(|nonce_keypair| {
+            let nonce_account = solana_client::nonce_utils::get_account_with_commitment(
+                rpc_client,
+                &nonce_keypair.pubkey(),
+                nonce_commitment,
+            ).unwrap();
+            let nonce_state = solana_client::nonce_utils::state_from_account(&nonce_account).unwrap();
+            if let solana_sdk::nonce::State::Initialized(state) = nonce_state {
+                (nonce_keypair.pubkey(), state.blockhash)
+            } else {
+                panic!("aa");
+            }
+            }).collect::<Vec<_>>();
+            all_nonce_configs.extend(nonce_configs)
+        }
+        Some((nonce_authority, all_nonce_configs))
+    } else {
+        None
+    };
+            
     let (signal_sender, signal_receiver) = std::sync::mpsc::channel();
     ctrlc::set_handler(move || {
         let _ = signal_sender.send(());
@@ -1108,7 +1199,7 @@ pub fn process_ping(
     }
     'mainloop: for seq in 0..count.unwrap_or(std::u64::MAX) {
         let now = Instant::now();
-        if fixed_blockhash.is_none() && now.duration_since(blockhash_acquired).as_secs() > 60 {
+        if fixed_blockhash.is_none() && !use_nonce && now.duration_since(blockhash_acquired) > *blockhash_interval {
             // Fetch a new blockhash every minute
             let (new_blockhash, new_fee_calculator) = rpc_client.get_new_blockhash(&blockhash)?;
             blockhash = new_blockhash;
@@ -1125,7 +1216,12 @@ pub fn process_ping(
 
         let build_message = |lamports| {
             let ix = system_instruction::transfer(&config.signers[0].pubkey(), &to, lamports);
-            Message::new(&[ix], Some(&config.signers[0].pubkey()))
+            if let Some((authority, configs)) = &nonce_context {
+                blockhash = configs[seq as usize].1;
+                Message::new_with_nonce(vec![ix], Some(&config.signers[0].pubkey()), &configs[seq as usize].0.clone(), &authority)
+            } else {
+                Message::new(&[ix], Some(&config.signers[0].pubkey()))
+            }
         };
         let (message, _) = resolve_spend_tx_and_check_account_balance(
             rpc_client,
@@ -1151,70 +1247,98 @@ pub fn process_ping(
             }
         };
 
-        match rpc_client.send_transaction(&tx) {
-            Ok(signature) => {
-                let transaction_sent = Instant::now();
-                loop {
-                    let signature_status = rpc_client
-                        .get_signature_status_with_commitment(&signature, config.commitment)?;
-                    let elapsed_time = Instant::now().duration_since(transaction_sent);
-                    if let Some(transaction_status) = signature_status {
-                        match transaction_status {
-                            Ok(()) => {
-                                let elapsed_time_millis = elapsed_time.as_millis() as u64;
-                                confirmation_time.push_back(elapsed_time_millis);
-                                println!(
-                                    "{}{}{} lamport(s) transferred: seq={:<3} time={:>4}ms signature={}",
-                                    timestamp(),
-                                    CHECK_MARK, lamports, seq, elapsed_time_millis, signature
-                                );
-                                confirmed_count += 1;
+        let mut transaction_sent = Instant::now();
+        let mut transaction_retried = transaction_sent;
+        let mut resubmit_count = 0;
+        let mut signature = None;
+        'send_loop: loop {
+            match rpc_client.send_transaction(&tx) {
+                Ok(sig) => signature = Some(sig),
+                Err(err) if signature == None => {
+                    println!(
+                        "{}{}Submit failed:            seq={:<3} error={:?}",
+                        timestamp(),
+                        CROSS_MARK,
+                        seq,
+                        err
+                    );
+                    break;
+                },
+                Err(err) => {
+                    println!(
+                        "{}{}Resubmit({:>2}) failed:      seq={:<3} error={:?}",
+                        timestamp(),
+                        CROSS_MARK,
+                        resubmit_count,
+                        seq,
+                        err
+                    );
+                },
+            }
+            if let Some(signature) = signature {
+                    'wait_loop: loop {
+                        let signature_status = rpc_client
+                            .get_signature_status_with_commitment(&signature, commitment_for_confirm)?;
+                        let elapsed_time = Instant::now().duration_since(transaction_sent);
+                        if let Some(transaction_status) = signature_status {
+                            match transaction_status {
+                                Ok(()) => {
+                                    let elapsed_time_millis = elapsed_time.as_millis() as u64;
+                                    confirmation_time.push_back(elapsed_time_millis);
+                                    println!(
+                                        "{}{}{} lamport(s) transferred: seq={:<3} time={:>4}ms signature={}{}",
+                                        timestamp(),
+                                        CHECK_MARK, lamports, seq, elapsed_time_millis, signature,
+                                        if resubmit_count > 0 {
+                                            format!(" resubmitted={}", resubmit_count)
+                                        } else {
+                                            format!("")
+                                        }
+                                    );
+                                    confirmed_count += 1;
+                                }
+                                Err(err) => {
+                                    println!(
+                                        "{}{}Transaction failed:    seq={:<3} error={:?} signature={}",
+                                        timestamp(),
+                                        CROSS_MARK,
+                                        seq,
+                                        err,
+                                        signature
+                                    );
+                                }
                             }
-                            Err(err) => {
-                                println!(
-                                    "{}{}Transaction failed:    seq={:<3} error={:?} signature={}",
-                                    timestamp(),
-                                    CROSS_MARK,
-                                    seq,
-                                    err,
-                                    signature
-                                );
-                            }
+                            break 'send_loop;
                         }
-                        break;
-                    }
 
-                    if elapsed_time >= *timeout {
-                        println!(
-                            "{}{}Confirmation timeout:  seq={:<3}             signature={}",
-                            timestamp(),
-                            CROSS_MARK,
-                            seq,
-                            signature
-                        );
-                        break;
-                    }
+                        let elapsed_retry_time = Instant::now().duration_since(transaction_retried);
+                        if elapsed_retry_time > *resubmit_interval {
+                            transaction_retried = Instant::now();
+                            resubmit_count += 1;
+                            break 'wait_loop;
+                        }
+                        if elapsed_time >= *timeout {
+                            println!(
+                                "{}{}Confirmation timeout:     seq={:<3}             signature={}",
+                                timestamp(),
+                                CROSS_MARK,
+                                seq,
+                                signature
+                            );
+                            break 'send_loop;
+                        }
 
-                    // Sleep for half a slot
-                    if signal_receiver
-                        .recv_timeout(Duration::from_millis(
-                            500 * clock::DEFAULT_TICKS_PER_SLOT / clock::DEFAULT_TICKS_PER_SECOND,
-                        ))
-                        .is_ok()
-                    {
-                        break 'mainloop;
+                        // Sleep for half a slot
+                        if signal_receiver
+                            .recv_timeout(Duration::from_millis(
+                                500 * clock::DEFAULT_TICKS_PER_SLOT / clock::DEFAULT_TICKS_PER_SECOND,
+                            ))
+                            .is_ok()
+                        {
+                            break 'mainloop;
+                        }
                     }
                 }
-            }
-            Err(err) => {
-                println!(
-                    "{}{}Submit failed:         seq={:<3} error={:?}",
-                    timestamp(),
-                    CROSS_MARK,
-                    seq,
-                    err
-                );
-            }
         }
         submit_count += 1;
 

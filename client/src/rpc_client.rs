@@ -1306,6 +1306,13 @@ impl RpcClient {
         commitment: CommitmentConfig,
         config: RpcSendTransactionConfig,
     ) -> ClientResult<Signature> {
+        let mut  now = Instant::now();
+        let mut retry_count = 0;
+        let retry_message = |count| {
+            if count == 0 { format!("")  } else { format!(" ({} client-side retries)", count)}
+        };
+        // abort on recent_blockhash expiration
+        'retry: loop {
         let desired_confirmations = match commitment.commitment {
             CommitmentLevel::Max | CommitmentLevel::Root => MAX_LOCKOUT_HISTORY + 1,
             _ => 1,
@@ -1315,8 +1322,9 @@ impl RpcClient {
         let progress_bar = new_spinner_progress_bar();
 
         progress_bar.set_message(&format!(
-            "[{}/{}] Finalizing transaction {}",
+            "[{}/{}] Finalizing transaction {}{}",
             confirmations, desired_confirmations, transaction.signatures[0],
+            retry_message(retry_count),
         ));
         let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
             self.get_recent_blockhash_with_commitment(CommitmentConfig::recent())?
@@ -1345,6 +1353,12 @@ impl RpcClient {
                 break (signature, status);
             }
 
+            if now.elapsed().as_secs() >= 5 {
+                now = Instant::now();
+                retry_count += 1;
+                continue 'retry;
+            } 
+
             if cfg!(not(test)) {
                 sleep(Duration::from_millis(500));
             }
@@ -1362,7 +1376,6 @@ impl RpcClient {
             )
             .into());
         }
-        let now = Instant::now();
         loop {
             match commitment.commitment {
                 CommitmentLevel::Max | CommitmentLevel::Root =>
@@ -1370,7 +1383,7 @@ impl RpcClient {
                 // Failed transactions have already been eliminated, `is_some` check is sufficient
                 {
                     if self.get_signature_status(&signature)?.is_some() {
-                        progress_bar.set_message("Transaction confirmed");
+                        progress_bar.set_message(&format!("Transaction confirmed{}", retry_message(retry_count)));
                         progress_bar.finish_and_clear();
                         return Ok(signature);
                     }
@@ -1378,22 +1391,24 @@ impl RpcClient {
                 _ => {
                     // Return when one confirmation has been reached
                     if confirmations >= desired_confirmations {
-                        progress_bar.set_message("Transaction reached commitment");
+                        progress_bar.set_message(&format!("Transaction reached commitment{}", retry_message(retry_count)));
                         progress_bar.finish_and_clear();
                         return Ok(signature);
                     }
                 }
             }
             progress_bar.set_message(&format!(
-                "[{}/{}] Finalizing transaction {}",
+                "[{}/{}] Finalizing transaction {}{}",
                 confirmations + 1,
                 desired_confirmations,
                 signature,
+                retry_message(retry_count),
             ));
             sleep(Duration::from_millis(500));
             confirmations = self
                 .get_num_blocks_since_signature_confirmation(&signature)
                 .unwrap_or(confirmations);
+            // nonce check
             if now.elapsed().as_secs() >= MAX_HASH_AGE_IN_SECONDS as u64 {
                 return Err(
                     RpcError::ForUser("transaction not finalized. \
@@ -1402,6 +1417,7 @@ impl RpcClient {
                 );
             }
         }
+    }
     }
 
     pub fn validator_exit(&self) -> ClientResult<bool> {

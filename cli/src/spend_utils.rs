@@ -53,7 +53,7 @@ pub fn resolve_spend_tx_and_check_account_balance<F>(
     commitment: CommitmentConfig,
 ) -> Result<(Message, u64), CliError>
 where
-    F: Fn(u64) -> Message,
+    F: FnMut(u64) -> Message,
 {
     resolve_spend_tx_and_check_account_balances(
         rpc_client,
@@ -78,7 +78,7 @@ pub fn resolve_spend_tx_and_check_account_balances<F>(
     commitment: CommitmentConfig,
 ) -> Result<(Message, u64), CliError>
 where
-    F: Fn(u64) -> Message,
+    F: FnMut(u64) -> Message,
 {
     if sign_only {
         let (message, SpendAndFee { spend, fee: _ }) = resolve_spend_message(
@@ -128,10 +128,10 @@ fn resolve_spend_message<F>(
     from_balance: u64,
     from_pubkey: &Pubkey,
     fee_pubkey: &Pubkey,
-    build_message: F,
+    mut build_message: F,
 ) -> (Message, SpendAndFee)
 where
-    F: Fn(u64) -> Message,
+    F: FnMut(u64) -> Message,
 {
     match amount {
         SpendAmount::Some(lamports) => {
