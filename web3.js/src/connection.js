@@ -276,6 +276,7 @@ const GetInflationGovernorResult = struct({
  * @property {number} slotsInEpoch
  * @property {number} absoluteSlot
  * @property {number} blockHeight
+ * @property {number} transactionCount
  */
 type EpochInfo = {
   epoch: number,
@@ -283,6 +284,7 @@ type EpochInfo = {
   slotsInEpoch: number,
   absoluteSlot: number,
   blockHeight: number | null,
+  transactionCount: number | null,
 };
 
 const GetEpochInfoResult = struct({
@@ -291,6 +293,7 @@ const GetEpochInfoResult = struct({
   slotsInEpoch: 'number',
   absoluteSlot: 'number',
   blockHeight: 'number?',
+  transactionCount: 'number?',
 });
 
 /**
