@@ -254,6 +254,9 @@ mod tests {
                 0,
                 100,
             );
+            // sleep for 1ms to create a newer timestmap for gossip entry
+            // otherwise the timestamp won't be newer.
+            std::thread::sleep(Duration::from_millis(1));
         }
         cluster_info.flush_push_queue();
         let cluster_hashes = cluster_info
