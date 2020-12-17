@@ -228,7 +228,7 @@ fn process_instruction_common(
     let account_iter = &mut keyed_accounts.iter();
     let first_account = next_keyed_account(account_iter)?;
     if first_account.executable()? {
-        let (program, offset) = if bpf_loader_upgradeable::check_id(program_id) {
+        let (program, keyed_accounts, offset) = if bpf_loader_upgradeable::check_id(program_id) {
             if let UpgradeableLoaderState::Program {
                 programdata_address,
             } = first_account.state()?
@@ -240,6 +240,7 @@ fn process_instruction_common(
                 }
                 (
                     programdata,
+                    &keyed_accounts[1..],
                     UpgradeableLoaderState::programdata_data_offset()?,
                 )
             } else {
@@ -247,7 +248,7 @@ fn process_instruction_common(
                 return Err(InstructionError::InvalidAccountData);
             }
         } else {
-            (first_account, 0)
+            (first_account, keyed_accounts, 0)
         };
 
         if program.owner()? != *program_id {
@@ -341,8 +342,11 @@ fn process_loader_upgradeable_instruction(
                 log!(logger, "Program account already initialized");
                 return Err(InstructionError::AccountAlreadyInitialized);
             }
-
-            if program.lamports()? < rent.minimum_balance(UpgradeableLoaderState::program_len()?) {
+            if program.data_len()? < UpgradeableLoaderState::program_len()? {
+                log!(logger, "Program account too small");
+                return Err(InstructionError::AccountDataTooSmall);
+            }
+            if program.lamports()? < rent.minimum_balance(program.data_len()?) {
                 log!(logger, "Program account not rent-exempt");
                 return Err(InstructionError::ExecutableAccountNotRentExempt);
             }
@@ -506,7 +510,8 @@ fn process_loader_upgradeable_instruction(
                 use_jit,
             )?;
 
-            // Update the ProgramData account and record the upgraded data
+            // Update the ProgramData account, record the upgraded data, and zero
+            // the rest
 
             programdata.set_state(&UpgradeableLoaderState::ProgramData {
                 slot: clock.slot,
@@ -515,6 +520,11 @@ fn process_loader_upgradeable_instruction(
             programdata.try_account_ref_mut()?.data
                 [programdata_data_offset..programdata_data_offset + buffer_data_len]
                 .copy_from_slice(&buffer.try_account_ref()?.data[buffer_data_offset..]);
+            for i in &mut programdata.try_account_ref_mut()?.data
+                [programdata_data_offset + buffer_data_len..]
+            {
+                *i = 0
+            }
 
             // Fund ProgramData to rent-exemption, spill the rest
 
@@ -1535,6 +1545,66 @@ mod tests {
         );
         assert_eq!(
             TransactionError::InstructionError(1, InstructionError::ExecutableAccountNotRentExempt),
+            bank_client
+                .send_and_confirm_message(&[&mint_keypair, &program_keypair], message)
+                .unwrap_err()
+                .unwrap()
+        );
+
+        // Test program account not rent exempt because data is larger than needed
+        bank.clear_signatures();
+        bank.store_account(&buffer_address, &buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &Account::default());
+        bank.store_account(&programdata_address, &Account::default());
+        let mut instructions = bpf_loader_upgradeable::deploy_with_max_program_len(
+            &mint_keypair.pubkey(),
+            &program_keypair.pubkey(),
+            &buffer_address,
+            None,
+            min_program_balance,
+            elf.len(),
+        )
+        .unwrap();
+        instructions[0] = system_instruction::create_account(
+            &mint_keypair.pubkey(),
+            &program_keypair.pubkey(),
+            min_program_balance,
+            UpgradeableLoaderState::program_len().unwrap() as u64 + 1,
+            &id(),
+        );
+        let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
+        assert_eq!(
+            TransactionError::InstructionError(1, InstructionError::ExecutableAccountNotRentExempt),
+            bank_client
+                .send_and_confirm_message(&[&mint_keypair, &program_keypair], message)
+                .unwrap_err()
+                .unwrap()
+        );
+
+        // Test program account too small
+        bank.clear_signatures();
+        bank.store_account(&buffer_address, &buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &Account::default());
+        bank.store_account(&programdata_address, &Account::default());
+        let mut instructions = bpf_loader_upgradeable::deploy_with_max_program_len(
+            &mint_keypair.pubkey(),
+            &program_keypair.pubkey(),
+            &buffer_address,
+            None,
+            min_program_balance,
+            elf.len(),
+        )
+        .unwrap();
+        instructions[0] = system_instruction::create_account(
+            &mint_keypair.pubkey(),
+            &program_keypair.pubkey(),
+            min_program_balance,
+            UpgradeableLoaderState::program_len().unwrap() as u64 - 1,
+            &id(),
+        );
+        let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
+        assert_eq!(
+            TransactionError::InstructionError(1, InstructionError::AccountDataTooSmall),
             bank_client
                 .send_and_confirm_message(&[&mint_keypair, &program_keypair], message)
                 .unwrap_err()
