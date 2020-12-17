@@ -346,6 +346,7 @@ impl TestValidator {
                 compression: CompressionType::NoCompression,
                 snapshot_version: SnapshotVersion::default(),
             }),
+            enforce_ulimit_nofile: false,
             ..ValidatorConfig::default()
         };
 
