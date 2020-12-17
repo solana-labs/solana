@@ -8,9 +8,10 @@ use solana_program::{
 entrypoint!(process_instruction);
 fn process_instruction(
     _program_id: &Pubkey,
-    _accounts: &[AccountInfo],
+    accounts: &[AccountInfo],
     _instruction_data: &[u8],
 ) -> ProgramResult {
     msg!("Upgraded program");
+    assert_eq!(accounts.len(), 2);
     Err(43.into())
 }
