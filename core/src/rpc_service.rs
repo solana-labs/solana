@@ -251,6 +251,8 @@ impl JsonRpcService {
         trusted_validators: Option<HashSet<Pubkey>>,
         override_health_check: Arc<AtomicBool>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
+        send_transaction_retry_ms: u64,
+        send_transaction_leader_forward_count: u64,
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
@@ -323,6 +325,8 @@ impl JsonRpcService {
             &bank_forks,
             leader_info,
             receiver,
+            send_transaction_retry_ms,
+            send_transaction_leader_forward_count,
         ));
 
         #[cfg(test)]
@@ -456,6 +460,8 @@ mod tests {
             None,
             Arc::new(AtomicBool::new(false)),
             optimistically_confirmed_bank,
+            1000,
+            1,
         );
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");

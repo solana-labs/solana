@@ -106,6 +106,8 @@ pub struct ValidatorConfig {
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub contact_debug_interval: u64,
     pub bpf_jit: bool,
+    pub send_transaction_retry_ms: u64,
+    pub send_transaction_leader_forward_count: u64,
 }
 
 impl Default for ValidatorConfig {
@@ -144,6 +146,8 @@ impl Default for ValidatorConfig {
             debug_keys: None,
             contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL,
             bpf_jit: false,
+            send_transaction_retry_ms: 2000,
+            send_transaction_leader_forward_count: 2,
         }
     }
 }
@@ -433,6 +437,8 @@ impl Validator {
                         config.trusted_validators.clone(),
                         rpc_override_health_check.clone(),
                         optimistically_confirmed_bank.clone(),
+                        config.send_transaction_retry_ms,
+                        config.send_transaction_leader_forward_count,
                     ),
                     pubsub_service: PubSubService::new(
                         config.pubsub_config.clone(),
