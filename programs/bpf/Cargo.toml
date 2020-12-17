@@ -24,6 +24,7 @@ byteorder = "1.3.2"
 elf = "0.0.10"
 miow = "0.2.2"
 net2 = "0.2.37"
+socket2 = "0.3.17"
 solana-bpf-loader-program = { path = "../bpf_loader", version = "1.4.18" }
 solana-logger = { path = "../../logger", version = "1.4.18" }
 solana-measure = { path = "../../measure", version = "1.4.18" }
