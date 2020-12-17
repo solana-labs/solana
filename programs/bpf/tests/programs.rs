@@ -1483,7 +1483,14 @@ fn test_program_bpf_upgrade() {
 
     // call upgrade program
     nonce += 1;
-    let instruction = Instruction::new(program_id, &[nonce], vec![]);
+    let instruction = Instruction::new(
+        program_id,
+        &[nonce],
+        vec![
+            AccountMeta::new(clock::id(), false),
+            AccountMeta::new(fees::id(), false),
+        ],
+    );
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -1501,7 +1508,14 @@ fn test_program_bpf_upgrade() {
 
     // call upgraded program
     nonce += 1;
-    let instruction = Instruction::new(program_id, &[nonce], vec![]);
+    let instruction = Instruction::new(
+        program_id,
+        &[nonce],
+        vec![
+            AccountMeta::new(clock::id(), false),
+            AccountMeta::new(fees::id(), false),
+        ],
+    );
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -1529,7 +1543,14 @@ fn test_program_bpf_upgrade() {
 
     // call original program
     nonce += 1;
-    let instruction = Instruction::new(program_id, &[nonce], vec![]);
+    let instruction = Instruction::new(
+        program_id,
+        &[nonce],
+        vec![
+            AccountMeta::new(clock::id(), false),
+            AccountMeta::new(fees::id(), false),
+        ],
+    );
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
     assert_eq!(
         result.unwrap_err().unwrap(),
