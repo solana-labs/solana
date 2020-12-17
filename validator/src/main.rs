@@ -1402,6 +1402,12 @@ pub fn main() {
                     "Mode to recovery the ledger db write ahead log."
                 ),
         )
+        .arg(
+            Arg::with_name("bpf_jit")
+                .long("bpf-jit")
+                .takes_value(false)
+                .hidden(true) // Don't document this argument. It's a stub for v1.5 forward compatibility
+        )
         .get_matches();
 
     let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(Keypair::new));
