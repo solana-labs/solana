@@ -65,6 +65,7 @@ impl RpcSender for MockSender {
                 slots_in_epoch: 32,
                 absolute_slot: 34,
                 block_height: 34,
+                transaction_count: Some(123),
             })?,
             RpcRequest::GetFeeCalculatorForBlockhash => {
                 let value = if self.url == "blockhash_expired" {
