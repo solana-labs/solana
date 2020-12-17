@@ -21,7 +21,9 @@ use solana_runtime::{
 };
 use solana_sdk::{
     account::Account,
+    account_utils::StateMut,
     bpf_loader, bpf_loader_deprecated,
+    bpf_loader_upgradeable::UpgradeableLoaderState,
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, MAX_PROCESSING_AGE},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
@@ -1549,6 +1551,61 @@ fn test_program_bpf_upgrade() {
         vec![
             AccountMeta::new(clock::id(), false),
             AccountMeta::new(fees::id(), false),
+        ],
+    );
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::InstructionError(0, InstructionError::Custom(42))
+    );
+}
+
+#[cfg(feature = "bpf_rust")]
+#[test]
+fn test_program_bpf_invoke_upgradeable() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, id, entrypoint);
+    let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
+    bank.add_builtin(&name, id, entrypoint);
+    let bank_client = BankClient::new(bank);
+    let invoke_and_return = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_invoke_and_return",
+    );
+
+    // deploy upgrade program
+    let (program_id, _) =
+        load_upgradeable_bpf_program(&bank_client, &mint_keypair, "solana_bpf_rust_upgradeable");
+
+    let data = bank_client.get_account(&program_id).unwrap().unwrap();
+    let programdata_address = if let UpgradeableLoaderState::Program {
+        programdata_address,
+    } = data.state().unwrap()
+    {
+        programdata_address
+    } else {
+        panic!("Not a program");
+    };
+
+    // call invoker program to invoke the upgradeable program
+    let instruction = Instruction::new(
+        invoke_and_return,
+        &[0],
+        vec![
+            AccountMeta::new(program_id, false),
+            AccountMeta::new(clock::id(), false),
+            AccountMeta::new(fees::id(), false),
+            AccountMeta::new(programdata_address, false),
         ],
     );
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
