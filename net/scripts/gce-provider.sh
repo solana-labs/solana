@@ -162,7 +162,7 @@ cloud_CreateInstances() {
   declare optionalBootDiskSize="$7"
   declare optionalStartupScript="$8"
   declare optionalAddress="$9"
-  declare optionalBootDiskType="${10}"
+  declare optionalBootDiskType="${10:-pd-ssd}"
   declare optionalAdditionalDiskSize="${11}"
   declare optionalPreemptible="${12}"
   #declare sshPrivateKey="${13}"  # unused
