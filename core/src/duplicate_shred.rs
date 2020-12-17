@@ -12,10 +12,15 @@ use solana_sdk::{
 use std::{
     collections::{hash_map::Entry, HashMap},
     convert::TryFrom,
+    num::TryFromIntError,
 };
 use thiserror::Error;
 
 const DUPLICATE_SHRED_HEADER_SIZE: usize = 63;
+
+/// Function returning leader at a given slot.
+pub trait LeaderScheduleFn: FnOnce(Slot) -> Option<Pubkey> {}
+impl<F> LeaderScheduleFn for F where F: FnOnce(Slot) -> Option<Pubkey> {}
 
 #[derive(Clone, Debug, PartialEq, AbiExample, Deserialize, Serialize)]
 pub struct DuplicateShred {
@@ -54,6 +59,8 @@ pub enum Error {
     InvalidDuplicateShreds,
     #[error("invalid duplicate slot proof")]
     InvalidDuplicateSlotProof,
+    #[error("invalid signature")]
+    InvalidSignature,
     #[error("invalid size limit")]
     InvalidSizeLimit,
     #[error("invalid shred")]
@@ -70,12 +77,20 @@ pub enum Error {
     ShredTypeMismatch,
     #[error("slot mismatch")]
     SlotMismatch,
-    #[error("value out of bounds")]
-    ValueOutOfBounds,
+    #[error("type conversion error")]
+    TryFromIntError(#[from] TryFromIntError),
+    #[error("unknown slot leader")]
+    UnknownSlotLeader,
 }
 
-// Verifies that the two shreds can indicate duplicate proof.
-fn check_shreds(shred1: &Shred, shred2: &Shred) -> Result<(), Error> {
+// Asserts that the two shreds can indicate duplicate proof for
+// the same triplet of (slot, shred-index, and shred-type_), and
+// that they have valid signatures from the slot leader.
+fn check_shreds(
+    leader: impl LeaderScheduleFn,
+    shred1: &Shred,
+    shred2: &Shred,
+) -> Result<(), Error> {
     if shred1.slot() != shred2.slot() {
         Err(Error::SlotMismatch)
     } else if shred1.index() != shred2.index() {
@@ -85,28 +100,31 @@ fn check_shreds(shred1: &Shred, shred2: &Shred) -> Result<(), Error> {
     } else if shred1.payload == shred2.payload {
         Err(Error::InvalidDuplicateShreds)
     } else {
-        Ok(())
+        let slot_leader = leader(shred1.slot()).ok_or(Error::UnknownSlotLeader)?;
+        if !shred1.verify(&slot_leader) || !shred2.verify(&slot_leader) {
+            Err(Error::InvalidSignature)
+        } else {
+            Ok(())
+        }
     }
 }
 
 /// Splits a DuplicateSlotProof into DuplicateShred
 /// chunks with a size limit on each chunk.
-pub fn from_duplicate_slot_proof<F>(
+pub fn from_duplicate_slot_proof(
     proof: &DuplicateSlotProof,
-    self_pubkey: Pubkey,
+    self_pubkey: Pubkey, // Pubkey of my node broadcasting crds value.
+    leader: impl LeaderScheduleFn,
     wallclock: u64,
     max_size: usize, // Maximum serialized size of each DuplicateShred.
-    encoder: F,
-) -> Result<impl Iterator<Item = DuplicateShred>, Error>
-where
-    F: FnOnce(Vec<u8>) -> Result<Vec<u8>, std::io::Error>,
-{
+    encoder: impl FnOnce(Vec<u8>) -> Result<Vec<u8>, std::io::Error>,
+) -> Result<impl Iterator<Item = DuplicateShred>, Error> {
     if proof.shred1 == proof.shred2 {
         return Err(Error::InvalidDuplicateSlotProof);
     }
     let shred1 = Shred::new_from_serialized_shred(proof.shred1.clone())?;
     let shred2 = Shred::new_from_serialized_shred(proof.shred2.clone())?;
-    check_shreds(&shred1, &shred2)?;
+    check_shreds(leader, &shred1, &shred2)?;
     let (slot, shred_index, shred_type) = (
         shred1.slot(),
         shred1.index(),
@@ -120,7 +138,7 @@ where
         return Err(Error::InvalidSizeLimit);
     };
     let chunks: Vec<_> = data.chunks(chunk_size).map(Vec::from).collect();
-    let num_chunks = u8::try_from(chunks.len()).map_err(|_| Error::ValueOutOfBounds)?;
+    let num_chunks = u8::try_from(chunks.len())?;
     let chunks = chunks
         .into_iter()
         .enumerate()
@@ -163,11 +181,11 @@ fn check_chunk(
 }
 
 /// Reconstructs the duplicate shreds from chunks of DuplicateShred.
-pub fn into_shreds<F, I>(chunks: I, decoder: F) -> Result<(Shred, Shred), Error>
-where
-    I: IntoIterator<Item = DuplicateShred>,
-    F: FnOnce(Vec<u8>) -> Result<Vec<u8>, std::io::Error>,
-{
+pub fn into_shreds(
+    chunks: impl IntoIterator<Item = DuplicateShred>,
+    leader: impl LeaderScheduleFn,
+    decoder: impl FnOnce(Vec<u8>) -> Result<Vec<u8>, std::io::Error>,
+) -> Result<(Shred, Shred), Error> {
     let mut chunks = chunks.into_iter();
     let DuplicateShred {
         slot,
@@ -181,6 +199,7 @@ where
         None => return Err(Error::InvalidDuplicateShreds),
         Some(chunk) => chunk,
     };
+    let slot_leader = leader(slot).ok_or(Error::UnknownSlotLeader)?;
     let check_chunk = check_chunk(slot, shred_index, shred_type, num_chunks);
     let mut data = HashMap::new();
     data.insert(chunk_index, chunk);
@@ -209,18 +228,20 @@ where
     let shred1 = Shred::new_from_serialized_shred(proof.shred1)?;
     let shred2 = Shred::new_from_serialized_shred(proof.shred2)?;
     if shred1.slot() != slot || shred2.slot() != slot {
-        return Err(Error::SlotMismatch);
-    }
-    if shred1.index() != shred_index || shred2.index() != shred_index {
-        return Err(Error::ShredIndexMismatch);
-    }
-    if shred1.common_header.shred_type != shred_type
+        Err(Error::SlotMismatch)
+    } else if shred1.index() != shred_index || shred2.index() != shred_index {
+        Err(Error::ShredIndexMismatch)
+    } else if shred1.common_header.shred_type != shred_type
         || shred2.common_header.shred_type != shred_type
     {
-        return Err(Error::ShredTypeMismatch);
+        Err(Error::ShredTypeMismatch)
+    } else if shred1.payload == shred2.payload {
+        Err(Error::InvalidDuplicateShreds)
+    } else if !shred1.verify(&slot_leader) || !shred2.verify(&slot_leader) {
+        Err(Error::InvalidSignature)
+    } else {
+        Ok((shred1, shred2))
     }
-    // TODO: Also verify shred signatures!
-    Ok((shred1, shred2))
 }
 
 impl Sanitize for DuplicateShred {
@@ -250,7 +271,7 @@ mod tests {
     use super::*;
     use rand::Rng;
     use solana_ledger::{entry::Entry, shred::Shredder};
-    use solana_sdk::{hash, signature::Keypair, system_transaction};
+    use solana_sdk::{hash, signature::Keypair, signature::Signer, system_transaction};
     use std::sync::Arc;
 
     #[test]
@@ -302,14 +323,14 @@ mod tests {
     #[test]
     fn test_duplicate_shred_round_trip() {
         let mut rng = rand::thread_rng();
-        let keypair = Arc::new(Keypair::new());
+        let leader = Arc::new(Keypair::new());
         let (slot, parent_slot, fec_rate, reference_tick, version) =
             (53084024, 53084023, 0.0, 0, 0);
         let shredder = Shredder::new(
             slot,
             parent_slot,
             fec_rate,
-            keypair,
+            leader.clone(),
             reference_tick,
             version,
         )
@@ -317,6 +338,13 @@ mod tests {
         let next_shred_index = rng.gen();
         let shred1 = new_rand_shred(&mut rng, next_shred_index, &shredder);
         let shred2 = new_rand_shred(&mut rng, next_shred_index, &shredder);
+        let leader = |s| {
+            if s == slot {
+                Some(leader.pubkey())
+            } else {
+                None
+            }
+        };
         let proof = DuplicateSlotProof {
             shred1: shred1.payload.clone(),
             shred2: shred2.payload.clone(),
@@ -324,14 +352,15 @@ mod tests {
         let chunks: Vec<_> = from_duplicate_slot_proof(
             &proof,
             Pubkey::new_unique(), // self_pubkey
-            rng.gen(),            // wallclock
-            512,                  // max_size
-            Ok,                   // encoder
+            leader,
+            rng.gen(), // wallclock
+            512,       // max_size
+            Ok,        // encoder
         )
         .unwrap()
         .collect();
         assert!(chunks.len() > 4);
-        let (shred3, shred4) = into_shreds(chunks, Ok).unwrap();
+        let (shred3, shred4) = into_shreds(chunks, leader, Ok).unwrap();
         assert_eq!(shred1, shred3);
         assert_eq!(shred2, shred4);
     }
