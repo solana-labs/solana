@@ -5,7 +5,7 @@ use solana_sdk::{
     account::Account, clock::Epoch, pubkey::Pubkey, sysvar::stake_history::StakeHistory,
 };
 use solana_stake_program::stake_state::{new_stake_history_entry, Delegation, StakeState};
-use std::{borrow::Borrow, collections::HashMap, iter::FromIterator};
+use std::{borrow::Borrow, collections::HashMap};
 
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
 pub struct Stakes {
@@ -49,18 +49,19 @@ impl Stakes {
             );
 
             // refresh the stake distribution of vote accounts for the next epoch, using new stake history
-            let vote_accounts_for_next_epoch =
-                VoteAccounts::from_iter(self.vote_accounts.iter().map(
-                    |(pubkey, (_ /*stake*/, account))| {
-                        let stake = self.calculate_stake(
-                            pubkey,
-                            next_epoch,
-                            Some(&stake_history_upto_prev_epoch),
-                            fix_stake_deactivate,
-                        );
-                        (*pubkey, (stake, account.clone()))
-                    },
-                ));
+            let vote_accounts_for_next_epoch = self
+                .vote_accounts
+                .iter()
+                .map(|(pubkey, (_ /*stake*/, account))| {
+                    let stake = self.calculate_stake(
+                        pubkey,
+                        next_epoch,
+                        Some(&stake_history_upto_prev_epoch),
+                        fix_stake_deactivate,
+                    );
+                    (*pubkey, (stake, account.clone()))
+                })
+                .collect();
 
             Stakes {
                 stake_delegations: self.stake_delegations.clone(),

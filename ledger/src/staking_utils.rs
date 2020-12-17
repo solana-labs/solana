@@ -85,7 +85,6 @@ pub(crate) mod tests {
         vote_instruction,
         vote_state::{VoteInit, VoteState, VoteStateVersions},
     };
-    use std::iter::FromIterator;
     use std::sync::Arc;
 
     fn new_from_parent(parent: &Arc<Bank>, slot: Slot) -> Bank {
@@ -319,7 +318,7 @@ pub(crate) mod tests {
             let vote_pubkey = Pubkey::new_unique();
             (vote_pubkey, (stake, ArcVoteAccount::from(account)))
         });
-        let result = VoteAccounts::from_iter(vote_accounts).staked_nodes();
+        let result = vote_accounts.collect::<VoteAccounts>().staked_nodes();
         assert_eq!(result.len(), 2);
         assert_eq!(result[&node1], 3);
         assert_eq!(result[&node2], 5);
