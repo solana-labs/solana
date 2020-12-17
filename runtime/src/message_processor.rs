@@ -6,6 +6,8 @@ use log::*;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     account::Account,
+    account_utils::StateMut,
+    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Epoch,
     feature_set::{instructions_sysvar_enabled, FeatureSet},
     instruction::{CompiledInstruction, Instruction, InstructionError},
@@ -310,6 +312,21 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
         self.feature_set.is_active(feature_id)
     }
+    fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
+        self.pre_accounts.iter().find_map(|pre| {
+            if pre.key == *pubkey {
+                Some(Account {
+                    lamports: pre.lamports,
+                    data: pre.data.clone(),
+                    owner: pre.owner,
+                    executable: pre.is_executable,
+                    rent_epoch: pre.rent_epoch,
+                })
+            } else {
+                None
+            }
+        })
+    }
 }
 pub struct ThisLogger {
     log_collector: Option<Rc<LogCollector>>,
@@ -541,7 +558,7 @@ impl MessageProcessor {
         instruction: &Instruction,
         keyed_accounts: &[&KeyedAccount],
         signers: &[Pubkey],
-    ) -> Result<(Message, Pubkey, usize), InstructionError> {
+    ) -> Result<(Message, Pubkey), InstructionError> {
         // Check for privilege escalation
         for account in instruction.accounts.iter() {
             let keyed_account = keyed_accounts
@@ -584,10 +601,7 @@ impl MessageProcessor {
         let id = *message
             .program_id(0)
             .ok_or(InstructionError::MissingAccount)?;
-        let index = message
-            .program_index(0)
-            .ok_or(InstructionError::MissingAccount)?;
-        Ok((message, id, index))
+        Ok((message, id))
     }
 
     /// Entrypoint for a cross-program invocation from a native program
@@ -605,7 +619,7 @@ impl MessageProcessor {
             .iter()
             .map(|seeds| Pubkey::create_program_address(&seeds, caller_program_id))
             .collect::<Result<Vec<_>, solana_sdk::pubkey::PubkeyError>>()?;
-        let (message, callee_program_id, callee_program_id_index) =
+        let (message, callee_program_id) =
             Self::create_message(&instruction, &keyed_accounts, &signers)?;
         let mut accounts = vec![];
         let mut account_refs = vec![];
@@ -623,14 +637,33 @@ impl MessageProcessor {
         // Process instruction
 
         invoke_context.record_instruction(&instruction);
-        let program_account = (**accounts
-            .get(callee_program_id_index)
-            .ok_or(InstructionError::MissingAccount)?)
-        .clone();
-        if !program_account.borrow().executable {
+
+        let program_account = invoke_context
+            .get_account(&callee_program_id)
+            .ok_or(InstructionError::MissingAccount)?;
+        if !program_account.executable {
             return Err(InstructionError::AccountNotExecutable);
         }
-        let executable_accounts = vec![(callee_program_id, program_account)];
+        let programdata_executable = if program_account.owner == bpf_loader_upgradeable::id() {
+            if let UpgradeableLoaderState::Program {
+                programdata_address,
+            } = program_account.state()?
+            {
+                if let Some(account) = invoke_context.get_account(&programdata_address) {
+                    Some((programdata_address, RefCell::new(account)))
+                } else {
+                    return Err(InstructionError::MissingAccount);
+                }
+            } else {
+                return Err(InstructionError::MissingAccount);
+            }
+        } else {
+            None
+        };
+        let mut executable_accounts = vec![(callee_program_id, RefCell::new(program_account))];
+        if let Some(programdata) = programdata_executable {
+            executable_accounts.push(programdata);
+        }
 
         MessageProcessor::process_cross_program_instruction(
             &message,
