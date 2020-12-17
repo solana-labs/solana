@@ -39,7 +39,6 @@ use itertools::Itertools;
 use rayon::prelude::*;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use serde::ser::Serialize;
-use solana_ledger::staking_utils;
 use solana_measure::measure::Measure;
 use solana_measure::thread_mem_usage;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
@@ -1834,7 +1833,7 @@ impl ClusterInfo {
 
                     let stakes: HashMap<_, _> = match bank_forks {
                         Some(ref bank_forks) => {
-                            staking_utils::staked_nodes(&bank_forks.read().unwrap().working_bank())
+                            bank_forks.read().unwrap().working_bank().staked_nodes()
                         }
                         None => HashMap::new(),
                     };
@@ -2492,7 +2491,7 @@ impl ClusterInfo {
                 let epoch = bank.epoch();
                 let epoch_schedule = bank.epoch_schedule();
                 epoch_time_ms = epoch_schedule.get_slots_in_epoch(epoch) * DEFAULT_MS_PER_SLOT;
-                staking_utils::staked_nodes(&bank)
+                bank.staked_nodes()
             }
             None => {
                 inc_new_counter_info!("cluster_info-purge-no_working_bank", 1);

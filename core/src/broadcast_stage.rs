@@ -17,7 +17,7 @@ use crossbeam_channel::{
     Receiver as CrossbeamReceiver, RecvTimeoutError as CrossbeamRecvTimeoutError,
     Sender as CrossbeamSender,
 };
-use solana_ledger::{blockstore::Blockstore, shred::Shred, staking_utils};
+use solana_ledger::{blockstore::Blockstore, shred::Shred};
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
 use solana_runtime::bank::Bank;
@@ -306,7 +306,7 @@ impl BroadcastStage {
 
         for (_, bank) in retransmit_slots.iter() {
             let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
-            let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
+            let stakes = bank.epoch_staked_nodes(bank_epoch);
             let stakes = stakes.map(Arc::new);
             let data_shreds = Arc::new(
                 blockstore
