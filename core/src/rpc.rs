@@ -237,7 +237,7 @@ impl JsonRpcRequestProcessor {
         let cluster_info = Arc::new(ClusterInfo::default());
         let tpu_address = cluster_info.my_contact_info().tpu;
         let (sender, receiver) = channel();
-        SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
+        SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
 
         Self {
             config: JsonRpcConfig::default(),
@@ -2322,8 +2322,13 @@ impl RpcSol for RpcSolImpl {
         let config = config.unwrap_or_default();
         let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base58);
         let (wire_transaction, transaction) = deserialize_transaction(data, encoding)?;
-        let bank = &*meta.bank(None);
-        let last_valid_slot = bank
+
+        let preflight_commitment = config
+            .preflight_commitment
+            .map(|commitment| CommitmentConfig { commitment });
+        let preflight_bank = &*meta.bank(preflight_commitment);
+
+        let last_valid_slot = preflight_bank
             .get_blockhash_last_valid_slot(&transaction.message.recent_blockhash)
             .unwrap_or(0);
 
@@ -2335,11 +2340,6 @@ impl RpcSol for RpcSolImpl {
             if meta.health.check() != RpcHealthStatus::Ok {
                 return Err(RpcCustomError::RpcNodeUnhealthy.into());
             }
-
-            let preflight_commitment = config
-                .preflight_commitment
-                .map(|commitment| CommitmentConfig { commitment });
-            let preflight_bank = &*meta.bank(preflight_commitment);
             if let (Err(err), logs) = preflight_bank.simulate_transaction(transaction.clone()) {
                 return Err(RpcCustomError::SendTransactionPreflightFailure {
                     message: format!("Transaction simulation failed: {}", err),
@@ -2906,7 +2906,7 @@ pub mod tests {
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
-        SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
+        SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
 
         cluster_info.insert_info(ContactInfo::new_with_pubkey_socketaddr(
             &leader_pubkey,
@@ -4306,7 +4306,7 @@ pub mod tests {
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
-        SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
+        SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
 
         let mut bad_transaction = system_transaction::transfer(
             &mint_keypair,
@@ -4502,7 +4502,7 @@ pub mod tests {
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
-        SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
+        SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
         assert_eq!(request_processor.validator_exit(), false);
         assert_eq!(exit.load(Ordering::Relaxed), false);
     }
@@ -4534,7 +4534,7 @@ pub mod tests {
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
-        SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
+        SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
         assert_eq!(request_processor.validator_exit(), true);
         assert_eq!(exit.load(Ordering::Relaxed), true);
     }
@@ -4625,7 +4625,7 @@ pub mod tests {
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
-        SendTransactionService::new(tpu_address, &bank_forks, None, receiver);
+        SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
         assert_eq!(
             request_processor.get_block_commitment(0),
             RpcBlockCommitment {
