@@ -174,10 +174,10 @@ cloud_CreateInstances() {
     # the stock Ubuntu 18.04 image and programmatically install CUDA after the
     # instance boots
     #
-    imageName="ubuntu-1804-bionic-v20181029-with-cuda-10-and-cuda-9-2 --image-project principal-lane-200702"
+    imageName="ubuntu-2004-focal-v20201211-with-cuda-10-2 --image-project principal-lane-200702"
   else
-    # Upstream Ubuntu 18.04 LTS image
-    imageName="ubuntu-1804-bionic-v20190813a --image-project ubuntu-os-cloud"
+    # Upstream Ubuntu 20.04 LTS image
+    imageName="ubuntu-2004-focal-v20201201 --image-project ubuntu-os-cloud"
   fi
 
   declare -a nodes
