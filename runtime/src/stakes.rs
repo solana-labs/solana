@@ -1,16 +1,16 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
-use crate::vote_account::ArcVoteAccount;
+use crate::vote_account::{ArcVoteAccount, VoteAccounts};
 use solana_sdk::{
     account::Account, clock::Epoch, pubkey::Pubkey, sysvar::stake_history::StakeHistory,
 };
 use solana_stake_program::stake_state::{new_stake_history_entry, Delegation, StakeState};
-use std::collections::HashMap;
+use std::{borrow::Borrow, collections::HashMap};
 
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
 pub struct Stakes {
     /// vote accounts
-    vote_accounts: HashMap<Pubkey, (u64, ArcVoteAccount)>,
+    vote_accounts: VoteAccounts,
 
     /// stake_delegations
     stake_delegations: HashMap<Pubkey, Delegation>,
@@ -52,19 +52,14 @@ impl Stakes {
             let vote_accounts_for_next_epoch = self
                 .vote_accounts
                 .iter()
-                .map(|(pubkey, (_stake, account))| {
-                    (
-                        *pubkey,
-                        (
-                            self.calculate_stake(
-                                pubkey,
-                                next_epoch,
-                                Some(&stake_history_upto_prev_epoch),
-                                fix_stake_deactivate,
-                            ),
-                            account.clone(),
-                        ),
-                    )
+                .map(|(pubkey, (_ /*stake*/, account))| {
+                    let stake = self.calculate_stake(
+                        pubkey,
+                        next_epoch,
+                        Some(&stake_history_upto_prev_epoch),
+                        fix_stake_deactivate,
+                    );
+                    (*pubkey, (stake, account.clone()))
                 })
                 .collect();
 
@@ -179,14 +174,10 @@ impl Stakes {
             // if adjustments need to be made...
             if stake != old_stake {
                 if let Some((voter_pubkey, stake)) = old_stake {
-                    self.vote_accounts
-                        .entry(voter_pubkey)
-                        .and_modify(|e| e.0 -= stake);
+                    self.vote_accounts.sub_stake(&voter_pubkey, stake);
                 }
                 if let Some((voter_pubkey, stake)) = stake {
-                    self.vote_accounts
-                        .entry(voter_pubkey)
-                        .and_modify(|e| e.0 += stake);
+                    self.vote_accounts.add_stake(&voter_pubkey, stake);
                 }
             }
 
@@ -209,11 +200,15 @@ impl Stakes {
     }
 
     pub fn vote_accounts(&self) -> &HashMap<Pubkey, (u64, ArcVoteAccount)> {
-        &self.vote_accounts
+        self.vote_accounts.borrow()
     }
 
     pub fn stake_delegations(&self) -> &HashMap<Pubkey, Delegation> {
         &self.stake_delegations
+    }
+
+    pub fn staked_nodes(&self) -> HashMap<Pubkey, u64> {
+        self.vote_accounts.staked_nodes()
     }
 
     pub fn highest_staked_node(&self) -> Option<Pubkey> {

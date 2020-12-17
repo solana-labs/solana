@@ -213,7 +213,7 @@ impl StandardBroadcastRun {
 
         let mut get_leader_schedule_time = Measure::start("broadcast_get_leader_schedule");
         let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
-        let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
+        let stakes = bank.epoch_staked_nodes(bank_epoch);
         let stakes = stakes.map(Arc::new);
 
         // Broadcast the last shred of the interrupted slot if necessary
