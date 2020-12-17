@@ -4,9 +4,11 @@ set -ex
 [[ $(uname) = Linux ]] || exit 1
 [[ $USER = root ]] || exit 1
 
-apt-get update
-add-apt-repository --yes ppa:certbot/certbot
-apt-get --assume-yes install certbot
+snap install core
+snap refresh core
+
+snap install --classic certbot
+ln -sf /snap/bin/certbot /usr/bin/certbot
 
 cat > /certbot-restore.sh <<'EOF'
 #!/usr/bin/env bash
