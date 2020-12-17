@@ -1576,17 +1576,12 @@ pub fn main() {
         wal_recovery_mode,
         poh_verify: !matches.is_present("skip_poh_verify"),
         debug_keys,
-<<<<<<< HEAD
-=======
-        contact_debug_interval,
-        bpf_jit: matches.is_present("bpf_jit"),
         send_transaction_retry_ms: value_t_or_exit!(matches, "rpc_send_transaction_retry_ms", u64),
         send_transaction_leader_forward_count: value_t_or_exit!(
             matches,
             "rpc_send_transaction_leader_forward_count",
             u64
         ),
->>>>>>> da7d1e230... Improved Transaction Forwarding (#13944)
         ..ValidatorConfig::default()
     };
 
