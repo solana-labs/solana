@@ -341,7 +341,7 @@ pub mod tests {
             ledger_signal_receiver,
             completed_slots_receiver,
             ..
-        } = Blockstore::open_with_signal(&blockstore_path, None)
+        } = Blockstore::open_with_signal(&blockstore_path, None, true)
             .expect("Expected to successfully open ledger");
         let blockstore = Arc::new(blockstore);
         let bank = bank_forks.working_bank();
