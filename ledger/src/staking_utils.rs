@@ -1,9 +1,9 @@
-use solana_runtime::{bank::Bank, vote_account::ArcVoteAccount};
+use solana_runtime::bank::Bank;
 use solana_sdk::{
     clock::{Epoch, Slot},
     pubkey::Pubkey,
 };
-use std::{borrow::Borrow, collections::HashMap};
+use std::collections::HashMap;
 
 /// Looks through vote accounts, and finds the latest slot that has achieved
 /// supermajority lockout
@@ -22,36 +22,6 @@ pub fn vote_account_stakes(bank: &Bank) -> HashMap<Pubkey, u64> {
         .into_iter()
         .map(|(id, (stake, _))| (id, stake))
         .collect()
-}
-
-/// Collect the staked nodes, as named by staked vote accounts from the given bank
-pub fn staked_nodes(bank: &Bank) -> HashMap<Pubkey, u64> {
-    to_staked_nodes(bank.vote_accounts())
-}
-
-/// At the specified epoch, collect the delegate account balance and vote states for delegates
-/// that have non-zero balance in any of their managed staking accounts
-pub fn staked_nodes_at_epoch(bank: &Bank, epoch: Epoch) -> Option<HashMap<Pubkey, u64>> {
-    bank.epoch_vote_accounts(epoch).map(to_staked_nodes)
-}
-
-fn to_staked_nodes<I, K, V>(
-    vote_accounts: I,
-) -> HashMap<Pubkey /*VoteState.node_pubkey*/, u64 /*stake*/>
-where
-    I: IntoIterator<Item = (K /*vote pubkey*/, V)>,
-    V: Borrow<(u64 /*stake*/, ArcVoteAccount)>,
-{
-    let mut out: HashMap<Pubkey, u64> = HashMap::new();
-    for (_ /*vote pubkey*/, stake_vote_account) in vote_accounts {
-        let (stake, vote_account) = stake_vote_account.borrow();
-        if let Ok(vote_state) = vote_account.vote_state().as_ref() {
-            out.entry(vote_state.node_pubkey)
-                .and_modify(|s| *s += *stake)
-                .or_insert(*stake);
-        }
-    }
-    out
 }
 
 fn epoch_stakes_and_lockouts(bank: &Bank, epoch: Epoch) -> Vec<(u64, Option<u64>)> {
@@ -96,6 +66,7 @@ pub(crate) mod tests {
         bootstrap_validator_stake_lamports, create_genesis_config, GenesisConfigInfo,
     };
     use rand::Rng;
+    use solana_runtime::vote_account::{ArcVoteAccount, VoteAccounts};
     use solana_sdk::{
         account::{from_account, Account},
         clock::Clock,
@@ -347,7 +318,7 @@ pub(crate) mod tests {
             let vote_pubkey = Pubkey::new_unique();
             (vote_pubkey, (stake, ArcVoteAccount::from(account)))
         });
-        let result = to_staked_nodes(vote_accounts);
+        let result = vote_accounts.collect::<VoteAccounts>().staked_nodes();
         assert_eq!(result.len(), 2);
         assert_eq!(result[&node1], 3);
         assert_eq!(result[&node2], 5);
