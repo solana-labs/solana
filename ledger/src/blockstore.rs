@@ -253,26 +253,33 @@ impl Blockstore {
 
     /// Opens a Ledger in directory, provides "infinite" window of shreds
     pub fn open(ledger_path: &Path) -> Result<Blockstore> {
-        Self::do_open(ledger_path, AccessType::PrimaryOnly, None)
+        Self::do_open(ledger_path, AccessType::PrimaryOnly, None, true)
     }
 
     pub fn open_with_access_type(
         ledger_path: &Path,
         access_type: AccessType,
         recovery_mode: Option<BlockstoreRecoveryMode>,
+        enforce_ulimit_nofile: bool,
     ) -> Result<Blockstore> {
-        Self::do_open(ledger_path, access_type, recovery_mode)
+        Self::do_open(
+            ledger_path,
+            access_type,
+            recovery_mode,
+            enforce_ulimit_nofile,
+        )
     }
 
     fn do_open(
         ledger_path: &Path,
         access_type: AccessType,
         recovery_mode: Option<BlockstoreRecoveryMode>,
+        enforce_ulimit_nofile: bool,
     ) -> Result<Blockstore> {
         fs::create_dir_all(&ledger_path)?;
         let blockstore_path = ledger_path.join(BLOCKSTORE_DIRECTORY);
 
-        adjust_ulimit_nofile()?;
+        adjust_ulimit_nofile(enforce_ulimit_nofile)?;
 
         // Open the database
         let mut measure = Measure::start("open");
@@ -363,9 +370,14 @@ impl Blockstore {
     pub fn open_with_signal(
         ledger_path: &Path,
         recovery_mode: Option<BlockstoreRecoveryMode>,
+        enforce_ulimit_nofile: bool,
     ) -> Result<BlockstoreSignals> {
-        let mut blockstore =
-            Self::open_with_access_type(ledger_path, AccessType::PrimaryOnly, recovery_mode)?;
+        let mut blockstore = Self::open_with_access_type(
+            ledger_path,
+            AccessType::PrimaryOnly,
+            recovery_mode,
+            enforce_ulimit_nofile,
+        )?;
         let (ledger_signal_sender, ledger_signal_receiver) = sync_channel(1);
         let (completed_slots_sender, completed_slots_receiver) =
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
@@ -3282,7 +3294,7 @@ pub fn create_new_ledger(
     genesis_config.write(&ledger_path)?;
 
     // Fill slot 0 with ticks that link back to the genesis_config to bootstrap the ledger.
-    let blockstore = Blockstore::open_with_access_type(ledger_path, access_type, None)?;
+    let blockstore = Blockstore::open_with_access_type(ledger_path, access_type, None, true)?;
     let ticks_per_slot = genesis_config.ticks_per_slot;
     let hashes_per_tick = genesis_config.poh_config.hashes_per_tick.unwrap_or(0);
     let entries = create_ticks(ticks_per_slot, hashes_per_tick, genesis_config.hash());
@@ -3526,12 +3538,12 @@ pub fn make_chaining_slot_entries(
 }
 
 #[cfg(not(unix))]
-fn adjust_ulimit_nofile() -> Result<()> {
+fn adjust_ulimit_nofile(_enforce_ulimit_nofile: bool) -> Result<()> {
     Ok(())
 }
 
 #[cfg(unix)]
-fn adjust_ulimit_nofile() -> Result<()> {
+fn adjust_ulimit_nofile(enforce_ulimit_nofile: bool) -> Result<()> {
     // Rocks DB likes to have many open files.  The default open file descriptor limit is
     // usually not enough
     let desired_nofile = 500000;
@@ -3562,7 +3574,9 @@ fn adjust_ulimit_nofile() -> Result<()> {
                     desired_nofile, desired_nofile,
                 );
             }
-            return Err(BlockstoreError::UnableToSetOpenFileDescriptorLimit);
+            if enforce_ulimit_nofile {
+                return Err(BlockstoreError::UnableToSetOpenFileDescriptorLimit);
+            }
         }
 
         nofile = get_nofile();
@@ -4223,7 +4237,7 @@ pub mod tests {
     fn test_data_set_completed_on_insert() {
         let ledger_path = get_tmp_ledger_path!();
         let BlockstoreSignals { blockstore, .. } =
-            Blockstore::open_with_signal(&ledger_path, None).unwrap();
+            Blockstore::open_with_signal(&ledger_path, None, true).unwrap();
 
         // Create enough entries to fill 2 shreds, only the later one is data complete
         let slot = 0;
@@ -4264,7 +4278,7 @@ pub mod tests {
             blockstore: ledger,
             ledger_signal_receiver: recvr,
             ..
-        } = Blockstore::open_with_signal(&ledger_path, None).unwrap();
+        } = Blockstore::open_with_signal(&ledger_path, None, true).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 50;
@@ -4348,7 +4362,7 @@ pub mod tests {
             blockstore: ledger,
             completed_slots_receiver: recvr,
             ..
-        } = Blockstore::open_with_signal(&ledger_path, None).unwrap();
+        } = Blockstore::open_with_signal(&ledger_path, None, true).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
@@ -4374,7 +4388,7 @@ pub mod tests {
             blockstore: ledger,
             completed_slots_receiver: recvr,
             ..
-        } = Blockstore::open_with_signal(&ledger_path, None).unwrap();
+        } = Blockstore::open_with_signal(&ledger_path, None, true).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
@@ -4418,7 +4432,7 @@ pub mod tests {
             blockstore: ledger,
             completed_slots_receiver: recvr,
             ..
-        } = Blockstore::open_with_signal(&ledger_path, None).unwrap();
+        } = Blockstore::open_with_signal(&ledger_path, None, true).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;

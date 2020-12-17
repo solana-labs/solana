@@ -86,6 +86,7 @@ pub struct ValidatorConfig {
     pub max_ledger_shreds: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
     pub enable_partition: Option<Arc<AtomicBool>>,
+    pub enforce_ulimit_nofile: bool,
     pub fixed_leader_schedule: Option<FixedSchedule>,
     pub wait_for_supermajority: Option<Slot>,
     pub new_hard_forks: Option<Vec<Slot>>,
@@ -123,6 +124,7 @@ impl Default for ValidatorConfig {
             snapshot_config: None,
             broadcast_stage_type: BroadcastStageType::Standard,
             enable_partition: None,
+            enforce_ulimit_nofile: true,
             fixed_leader_schedule: None,
             wait_for_supermajority: None,
             new_hard_forks: None,
@@ -300,6 +302,7 @@ impl Validator {
             ledger_path,
             config.poh_verify,
             &exit,
+            config.enforce_ulimit_nofile,
         );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
@@ -822,6 +825,7 @@ fn new_banks_from_ledger(
     ledger_path: &Path,
     poh_verify: bool,
     exit: &Arc<AtomicBool>,
+    enforce_ulimit_nofile: bool,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -859,8 +863,12 @@ fn new_banks_from_ledger(
         ledger_signal_receiver,
         completed_slots_receiver,
         ..
-    } = Blockstore::open_with_signal(ledger_path, config.wal_recovery_mode.clone())
-        .expect("Failed to open ledger database");
+    } = Blockstore::open_with_signal(
+        ledger_path,
+        config.wal_recovery_mode.clone(),
+        enforce_ulimit_nofile,
+    )
+    .expect("Failed to open ledger database");
     blockstore.set_no_compaction(config.no_rocksdb_compaction);
 
     let restored_tower = Tower::restore(ledger_path, &validator_identity);
