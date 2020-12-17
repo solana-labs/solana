@@ -1,6 +1,6 @@
 use crate::erasure::ErasureConfig;
 use serde::{Deserialize, Serialize};
-use solana_sdk::{clock::Slot, hash::Hash};
+use solana_sdk::clock::Slot;
 use std::{collections::BTreeSet, ops::RangeBounds};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
@@ -65,12 +65,6 @@ pub struct DuplicateSlotProof {
     pub shred1: Vec<u8>,
     #[serde(with = "serde_bytes")]
     pub shred2: Vec<u8>,
-}
-
-#[derive(Deserialize, Default, Serialize)]
-pub struct SlotConfirmationStatus {
-    pub is_dead: bool,
-    pub confirmed_blockhash: Option<Hash>,
 }
 
 #[derive(Debug, PartialEq)]

@@ -140,10 +140,6 @@ impl Blockstore {
                 .is_ok()
             & self
                 .db
-                .delete_range_cf::<cf::SlotConfirmationStatus>(&mut write_batch, from_slot, to_slot)
-                .is_ok()
-            & self
-                .db
                 .delete_range_cf::<cf::DuplicateSlots>(&mut write_batch, from_slot, to_slot)
                 .is_ok()
             & self
@@ -266,10 +262,6 @@ impl Blockstore {
                 .unwrap_or(false)
             && self
                 .perf_samples_cf
-                .compact_range(from_slot, to_slot)
-                .unwrap_or(false)
-            && self
-                .slot_confirmation_status_cf
                 .compact_range(from_slot, to_slot)
                 .unwrap_or(false);
         compact_timer.stop();
@@ -401,13 +393,6 @@ pub mod tests {
                 .unwrap_or(true)
             & blockstore
                 .db
-                .iter::<cf::SlotConfirmationStatus>(IteratorMode::Start)
-                .unwrap()
-                .next()
-                .map(|(slot, _)| slot >= min_slot)
-                .unwrap_or(true)
-            & blockstore
-                .db
                 .iter::<cf::DuplicateSlots>(IteratorMode::Start)
                 .unwrap()
                 .next()
@@ -455,13 +440,6 @@ pub mod tests {
             & blockstore
                 .db
                 .iter::<cf::Rewards>(IteratorMode::Start)
-                .unwrap()
-                .next()
-                .map(|(slot, _)| slot >= min_slot)
-                .unwrap_or(true)
-            & blockstore
-                .db
-                .iter::<cf::SlotConfirmationStatus>(IteratorMode::Start)
                 .unwrap()
                 .next()
                 .map(|(slot, _)| slot >= min_slot)
