@@ -241,6 +241,9 @@ impl fmt::Display for CliEpochInfo {
         )?;
         writeln_name_value(f, "Slot:", &self.epoch_info.absolute_slot.to_string())?;
         writeln_name_value(f, "Epoch:", &self.epoch_info.epoch.to_string())?;
+        if let Some(transaction_count) = &self.epoch_info.transaction_count {
+            writeln_name_value(f, "Transaction Count:", &transaction_count.to_string())?;
+        }
         let start_slot = self.epoch_info.absolute_slot - self.epoch_info.slot_index;
         let end_slot = start_slot + self.epoch_info.slots_in_epoch;
         writeln_name_value(

@@ -17,4 +17,7 @@ pub struct EpochInfo {
 
     /// The current block height
     pub block_height: u64,
+
+    /// Total number of transactions processed without error since genesis
+    pub transaction_count: Option<u64>,
 }
