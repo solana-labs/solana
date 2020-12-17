@@ -502,6 +502,7 @@ impl CliConfig<'_> {
     }
 
     pub fn recent_for_tests() -> Self {
+<<<<<<< HEAD
         let mut config = Self::default();
         config.commitment = CommitmentConfig::recent();
         config.send_transaction_config = RpcSendTransactionConfig {
@@ -509,6 +510,17 @@ impl CliConfig<'_> {
             ..RpcSendTransactionConfig::default()
         };
         config
+=======
+        Self {
+            commitment: CommitmentConfig::recent(),
+            send_transaction_config: RpcSendTransactionConfig {
+                skip_preflight: true,
+                preflight_commitment: Some(CommitmentConfig::recent().commitment),
+                ..RpcSendTransactionConfig::default()
+            },
+            ..Self::default()
+        }
+>>>>>>> da7d1e230... Improved Transaction Forwarding (#13944)
     }
 }
 
@@ -1415,6 +1427,7 @@ fn do_process_deploy(
             config.commitment,
             RpcSendTransactionConfig {
                 skip_preflight: true,
+                preflight_commitment: Some(config.commitment.commitment),
                 ..RpcSendTransactionConfig::default()
             },
         )
@@ -1494,6 +1507,400 @@ fn process_transfer(
         let result = if no_wait {
             rpc_client.send_transaction(&tx)
         } else {
+<<<<<<< HEAD
+=======
+            data_len
+        };
+        complete_partial_program_init(
+            &loader_id,
+            &config.signers[0].pubkey(),
+            &buffer_signer.pubkey(),
+            &account,
+            account_data_len,
+            minimum_balance,
+            allow_excessive_balance,
+        )?
+    } else if loader_id == bpf_loader_upgradeable::id() {
+        (
+            bpf_loader_upgradeable::create_buffer(
+                &config.signers[0].pubkey(),
+                &buffer_signer.pubkey(),
+                minimum_balance,
+                data_len,
+            )?,
+            minimum_balance,
+        )
+    } else {
+        (
+            vec![system_instruction::create_account(
+                &config.signers[0].pubkey(),
+                &buffer_signer.pubkey(),
+                minimum_balance,
+                data_len as u64,
+                &loader_id,
+            )],
+            minimum_balance,
+        )
+    };
+    let initial_message = if !initial_instructions.is_empty() {
+        Some(Message::new(
+            &initial_instructions,
+            Some(&config.signers[0].pubkey()),
+        ))
+    } else {
+        None
+    };
+    if let Some(message) = &initial_message {
+        messages.push(message);
+    }
+
+    // Create and add write messages
+    let mut write_messages = vec![];
+    for (chunk, i) in program_data.chunks(DATA_CHUNK_SIZE).zip(0..) {
+        let instruction = if loader_id == bpf_loader_upgradeable::id() {
+            bpf_loader_upgradeable::write(
+                &buffer_signer.pubkey(),
+                (i * DATA_CHUNK_SIZE) as u32,
+                chunk.to_vec(),
+            )
+        } else {
+            loader_instruction::write(
+                &buffer_signer.pubkey(),
+                &loader_id,
+                (i * DATA_CHUNK_SIZE) as u32,
+                chunk.to_vec(),
+            )
+        };
+        let message = Message::new(&[instruction], Some(&config.signers[0].pubkey()));
+        write_messages.push(message);
+    }
+    let mut write_message_refs = vec![];
+    for message in write_messages.iter() {
+        write_message_refs.push(message);
+    }
+    messages.append(&mut write_message_refs);
+
+    // Create and add final message
+    let final_message = if loader_id == bpf_loader_upgradeable::id() {
+        Message::new(
+            &bpf_loader_upgradeable::deploy_with_max_program_len(
+                &config.signers[0].pubkey(),
+                &program_signer.pubkey(),
+                &buffer_signer.pubkey(),
+                upgrade_authority.as_ref(),
+                rpc_client.get_minimum_balance_for_rent_exemption(
+                    UpgradeableLoaderState::program_len()?,
+                )?,
+                data_len,
+            )?,
+            Some(&config.signers[0].pubkey()),
+        )
+    } else {
+        Message::new(
+            &[loader_instruction::finalize(
+                &buffer_signer.pubkey(),
+                &loader_id,
+            )],
+            Some(&config.signers[0].pubkey()),
+        )
+    };
+    messages.push(&final_message);
+
+    check_payer(rpc_client, config, balance_needed, &messages)?;
+    send_deploy_messages(
+        rpc_client,
+        config,
+        &initial_message,
+        &write_messages,
+        &final_message,
+        buffer_signer,
+        program_signer,
+    )?;
+
+    Ok(json!({
+        "programId": format!("{}", program_signer.pubkey()),
+    })
+    .to_string())
+}
+
+fn create_ephemeral_keypair(
+) -> Result<(usize, bip39::Mnemonic, Keypair), Box<dyn std::error::Error>> {
+    const WORDS: usize = 12;
+    let mnemonic = Mnemonic::new(MnemonicType::for_word_count(WORDS)?, Language::English);
+    let seed = Seed::new(&mnemonic, "");
+    let new_keypair = keypair_from_seed(seed.as_bytes())?;
+
+    Ok((WORDS, mnemonic, new_keypair))
+}
+
+fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
+    let phrase: &str = mnemonic.phrase();
+    let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
+    eprintln!(
+        "{}\nTo resume a failed upgrade, recover the ephemeral keypair file with",
+        divider
+    );
+    eprintln!(
+        "`solana-keygen recover` and the following {}-word seed phrase,",
+        words
+    );
+    eprintln!(
+        "then pass it as the [BUFFER_SIGNER] argument to `solana upgrade ...`\n{}\n{}\n{}",
+        divider, phrase, divider
+    );
+}
+
+fn process_program_upgrade(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    program_location: &str,
+    program: Pubkey,
+    upgrade_authority: SignerIndex,
+    buffer: Option<SignerIndex>,
+) -> ProcessResult {
+    // Create ephemeral keypair to use for Buffer account, if not provided
+    let (words, mnemonic, new_keypair) = create_ephemeral_keypair()?;
+    let result = do_process_program_upgrade(
+        rpc_client,
+        config,
+        program_location,
+        program,
+        upgrade_authority,
+        buffer,
+        new_keypair,
+    );
+    if result.is_err() && buffer.is_none() {
+        report_ephemeral_mnemonic(words, mnemonic);
+    }
+    result
+}
+
+fn do_process_program_upgrade(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    program_location: &str,
+    program: Pubkey,
+    upgrade_authority: SignerIndex,
+    buffer: Option<SignerIndex>,
+    new_keypair: Keypair,
+) -> ProcessResult {
+    let buffer_signer = if let Some(i) = buffer {
+        config.signers[i]
+    } else {
+        &new_keypair
+    };
+    let upgrade_authority = config.signers[upgrade_authority];
+
+    let program_data = read_and_verify_elf(program_location)?;
+
+    let loader_id = bpf_loader_upgradeable::id();
+    let data_len = program_data.len();
+    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(
+        UpgradeableLoaderState::programdata_len(data_len)?,
+    )?;
+
+    // Build messages to calculate fees
+    let mut messages: Vec<&Message> = Vec::new();
+
+    // Check Buffer account to see if partial initialization has occurred
+    let (initial_instructions, balance_needed) = if let Some(account) = rpc_client
+        .get_account_with_commitment(&buffer_signer.pubkey(), config.commitment)?
+        .value
+    {
+        complete_partial_program_init(
+            &loader_id,
+            &config.signers[0].pubkey(),
+            &buffer_signer.pubkey(),
+            &account,
+            UpgradeableLoaderState::buffer_len(data_len)?,
+            minimum_balance,
+            true,
+        )?
+    } else {
+        (
+            bpf_loader_upgradeable::create_buffer(
+                &config.signers[0].pubkey(),
+                &buffer_signer.pubkey(),
+                minimum_balance,
+                data_len,
+            )?,
+            minimum_balance,
+        )
+    };
+    let initial_message = if !initial_instructions.is_empty() {
+        Some(Message::new(
+            &initial_instructions,
+            Some(&config.signers[0].pubkey()),
+        ))
+    } else {
+        None
+    };
+    if let Some(message) = &initial_message {
+        messages.push(message);
+    }
+
+    // Create and add write messages
+    let mut write_messages = vec![];
+    for (chunk, i) in program_data.chunks(DATA_CHUNK_SIZE).zip(0..) {
+        let instruction = bpf_loader_upgradeable::write(
+            &buffer_signer.pubkey(),
+            (i * DATA_CHUNK_SIZE) as u32,
+            chunk.to_vec(),
+        );
+        let message = Message::new(&[instruction], Some(&config.signers[0].pubkey()));
+        write_messages.push(message);
+    }
+    let mut write_message_refs = vec![];
+    for message in write_messages.iter() {
+        write_message_refs.push(message);
+    }
+    messages.append(&mut write_message_refs);
+
+    // Create and add final message
+    let final_message = Message::new(
+        &[bpf_loader_upgradeable::upgrade(
+            &program,
+            &buffer_signer.pubkey(),
+            &upgrade_authority.pubkey(),
+            &config.signers[0].pubkey(),
+        )],
+        Some(&config.signers[0].pubkey()),
+    );
+    messages.push(&final_message);
+
+    check_payer(rpc_client, config, balance_needed, &messages)?;
+    send_deploy_messages(
+        rpc_client,
+        config,
+        &initial_message,
+        &write_messages,
+        &final_message,
+        buffer_signer,
+        upgrade_authority,
+    )?;
+
+    Ok(json!({
+        "programId": format!("{}", program),
+    })
+    .to_string())
+}
+
+fn process_set_program_upgrade_authority(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    program: Pubkey,
+    upgrade_authority: SignerIndex,
+    new_upgrade_authority: Option<Pubkey>,
+) -> ProcessResult {
+    let upgrade_authority_signer = config.signers[upgrade_authority];
+
+    trace!("Set a new program upgrade authority");
+    let (blockhash, _, _) = rpc_client
+        .get_recent_blockhash_with_commitment(config.commitment)?
+        .value;
+
+    let mut tx = Transaction::new_unsigned(Message::new(
+        &[bpf_loader_upgradeable::set_authority(
+            &program,
+            &upgrade_authority_signer.pubkey(),
+            new_upgrade_authority.as_ref(),
+        )],
+        Some(&config.signers[0].pubkey()),
+    ));
+    tx.try_sign(&[config.signers[0], upgrade_authority_signer], blockhash)?;
+    rpc_client
+        .send_and_confirm_transaction_with_spinner_and_config(
+            &tx,
+            config.commitment,
+            RpcSendTransactionConfig {
+                skip_preflight: true,
+                preflight_commitment: Some(config.commitment.commitment),
+                ..RpcSendTransactionConfig::default()
+            },
+        )
+        .map_err(|e| {
+            CliError::DynamicProgramError(format!("Setting upgrade authority failed: {}", e))
+        })?;
+
+    match new_upgrade_authority {
+        Some(address) => Ok(json!({
+            "UpgradeAuthority": format!("{:?}", address),
+        })
+        .to_string()),
+        None => Ok(json!({
+            "UpgradeAuthority": "None",
+        })
+        .to_string()),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn process_transfer(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    amount: SpendAmount,
+    to: &Pubkey,
+    from: SignerIndex,
+    sign_only: bool,
+    no_wait: bool,
+    blockhash_query: &BlockhashQuery,
+    nonce_account: Option<&Pubkey>,
+    nonce_authority: SignerIndex,
+    fee_payer: SignerIndex,
+) -> ProcessResult {
+    let from = config.signers[from];
+
+    let (recent_blockhash, fee_calculator) =
+        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
+
+    let nonce_authority = config.signers[nonce_authority];
+    let fee_payer = config.signers[fee_payer];
+
+    let build_message = |lamports| {
+        let ixs = vec![system_instruction::transfer(&from.pubkey(), to, lamports)];
+
+        if let Some(nonce_account) = &nonce_account {
+            Message::new_with_nonce(
+                ixs,
+                Some(&fee_payer.pubkey()),
+                nonce_account,
+                &nonce_authority.pubkey(),
+            )
+        } else {
+            Message::new(&ixs, Some(&fee_payer.pubkey()))
+        }
+    };
+
+    let (message, _) = resolve_spend_tx_and_check_account_balances(
+        rpc_client,
+        sign_only,
+        amount,
+        &fee_calculator,
+        &from.pubkey(),
+        &fee_payer.pubkey(),
+        build_message,
+        config.commitment,
+    )?;
+    let mut tx = Transaction::new_unsigned(message);
+
+    if sign_only {
+        tx.try_partial_sign(&config.signers, recent_blockhash)?;
+        return_signers(&tx, &config.output_format)
+    } else {
+        if let Some(nonce_account) = &nonce_account {
+            let nonce_account = nonce_utils::get_account_with_commitment(
+                rpc_client,
+                nonce_account,
+                config.commitment,
+            )?;
+            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
+        }
+
+        tx.try_sign(&config.signers, recent_blockhash)?;
+        let result = if no_wait {
+            rpc_client.send_transaction(&tx)
+        } else {
+>>>>>>> da7d1e230... Improved Transaction Forwarding (#13944)
             rpc_client.send_and_confirm_transaction_with_spinner_and_config(
                 &tx,
                 config.commitment,

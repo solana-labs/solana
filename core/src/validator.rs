@@ -104,6 +104,13 @@ pub struct ValidatorConfig {
     pub cuda: bool,
     pub require_tower: bool,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
+<<<<<<< HEAD
+=======
+    pub contact_debug_interval: u64,
+    pub bpf_jit: bool,
+    pub send_transaction_retry_ms: u64,
+    pub send_transaction_leader_forward_count: u64,
+>>>>>>> da7d1e230... Improved Transaction Forwarding (#13944)
 }
 
 impl Default for ValidatorConfig {
@@ -139,6 +146,13 @@ impl Default for ValidatorConfig {
             cuda: false,
             require_tower: false,
             debug_keys: None,
+<<<<<<< HEAD
+=======
+            contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL,
+            bpf_jit: false,
+            send_transaction_retry_ms: 2000,
+            send_transaction_leader_forward_count: 2,
+>>>>>>> da7d1e230... Improved Transaction Forwarding (#13944)
         }
     }
 }
@@ -419,6 +433,8 @@ impl Validator {
                         config.trusted_validators.clone(),
                         rpc_override_health_check.clone(),
                         optimistically_confirmed_bank.clone(),
+                        config.send_transaction_retry_ms,
+                        config.send_transaction_leader_forward_count,
                     ),
                     pubsub_service: PubSubService::new(
                         config.pubsub_config.clone(),
