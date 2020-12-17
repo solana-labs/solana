@@ -4386,12 +4386,14 @@ impl Bank {
         let block_height = self.block_height();
         let (epoch, slot_index) = self.get_epoch_and_slot_index(absolute_slot);
         let slots_in_epoch = self.get_slots_in_epoch(epoch);
+        let transaction_count = Some(self.transaction_count());
         EpochInfo {
             epoch,
             slot_index,
             slots_in_epoch,
             absolute_slot,
             block_height,
+            transaction_count,
         }
     }
 
