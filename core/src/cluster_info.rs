@@ -107,6 +107,8 @@ const GOSSIP_PING_TOKEN_SIZE: usize = 32;
 const GOSSIP_PING_CACHE_CAPACITY: usize = 16384;
 const GOSSIP_PING_CACHE_TTL: Duration = Duration::from_secs(640);
 pub const DEFAULT_CONTACT_DEBUG_INTERVAL: u64 = 10_000;
+/// Minimum serialized size of a Protocol::PullResponse packet.
+const PULL_RESPONSE_MIN_SERIALIZED_SIZE: usize = 167;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -1973,7 +1975,7 @@ impl ClusterInfo {
         }
     }
 
-    fn update_data_budget(&self, num_staked: usize) {
+    fn update_data_budget(&self, num_staked: usize) -> usize {
         const INTERVAL_MS: u64 = 100;
         // allow 50kBps per staked validator, epoch slots + votes ~= 1.5kB/slot ~= 4kB/s
         const BYTES_PER_INTERVAL: usize = 5000;
@@ -1984,7 +1986,7 @@ impl ClusterInfo {
                 bytes + num_staked * BYTES_PER_INTERVAL,
                 MAX_BUDGET_MULTIPLE * num_staked * BYTES_PER_INTERVAL,
             )
-        });
+        })
     }
 
     // Returns a predicate checking if the pull request is from a valid
@@ -2045,7 +2047,8 @@ impl ClusterInfo {
         let callers = crds_value::filter_current(requests.iter().map(|r| &r.caller));
         self.time_gossip_write_lock("process_pull_reqs", &self.stats.process_pull_requests)
             .process_pull_requests(callers.cloned(), timestamp());
-        self.update_data_budget(stakes.len());
+        let output_size_limit =
+            self.update_data_budget(stakes.len()) / PULL_RESPONSE_MIN_SERIALIZED_SIZE;
         let mut packets = Packets::new_with_recycler(recycler.clone(), 64, "handle_pull_requests");
         let (caller_and_filters, addrs): (Vec<_>, Vec<_>) = {
             let mut rng = rand::thread_rng();
@@ -2065,7 +2068,7 @@ impl ClusterInfo {
                 "generate_pull_responses",
                 &self.stats.generate_pull_responses,
             )
-            .generate_pull_responses(&caller_and_filters, now);
+            .generate_pull_responses(&caller_and_filters, output_size_limit, now);
 
         let pull_responses: Vec<_> = pull_responses
             .into_iter()
@@ -3464,6 +3467,17 @@ mod tests {
             PUSH_MESSAGE_MAX_PAYLOAD_SIZE,
             PACKET_DATA_SIZE - serialized_size(&header).unwrap() as usize
         );
+    }
+
+    #[test]
+    fn test_pull_response_min_serialized_size() {
+        let mut rng = rand::thread_rng();
+        for _ in 0..100 {
+            let crds_values = vec![CrdsValue::new_rand(&mut rng, None)];
+            let pull_response = Protocol::PullResponse(Pubkey::new_unique(), crds_values);
+            let size = serialized_size(&pull_response).unwrap();
+            assert!(PULL_RESPONSE_MIN_SERIALIZED_SIZE as u64 <= size);
+        }
     }
 
     #[test]
