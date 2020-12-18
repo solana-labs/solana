@@ -772,7 +772,7 @@ impl JsonRpcRequestProcessor {
         {
             let result = self.blockstore.get_block_time(slot);
             self.check_blockstore_root(&result, slot)?;
-            if result.is_err() {
+            if result.is_err() || matches!(result, Ok(None)) {
                 if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                     return Ok(self
                         .runtime_handle
