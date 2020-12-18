@@ -3,7 +3,7 @@ use clap::{
     ArgMatches,
 };
 use log::*;
-use rand::{thread_rng, Rng};
+use rand::{seq::SliceRandom, thread_rng, Rng};
 use solana_clap_utils::{
     input_parsers::{keypair_of, keypairs_of, pubkey_of},
     input_validators::{
@@ -107,7 +107,7 @@ fn get_trusted_snapshot_hashes(
 
 fn start_gossip_node(
     identity_keypair: &Arc<Keypair>,
-    entrypoint_gossip: &SocketAddr,
+    cluster_entrypoints: &[ContactInfo],
     gossip_addr: &SocketAddr,
     gossip_socket: UdpSocket,
     expected_shred_version: Option<u16>,
@@ -121,7 +121,7 @@ fn start_gossip_node(
         ),
         identity_keypair.clone(),
     );
-    cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint_gossip));
+    cluster_info.set_entrypoints(cluster_entrypoints.to_vec());
     let cluster_info = Arc::new(cluster_info);
 
     let gossip_exit_flag = Arc::new(AtomicBool::new(false));
@@ -137,7 +137,7 @@ fn start_gossip_node(
 
 fn get_rpc_node(
     cluster_info: &ClusterInfo,
-    entrypoint_gossip: &SocketAddr,
+    cluster_entrypoints: &[ContactInfo],
     validator_config: &ValidatorConfig,
     blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
     snapshot_not_required: bool,
@@ -155,20 +155,19 @@ fn get_rpc_node(
             .expected_shred_version
             .unwrap_or_else(|| cluster_info.my_shred_version());
         if shred_version == 0 {
-            if let Some(entrypoint) =
-                cluster_info.lookup_contact_info_by_gossip_addr(entrypoint_gossip)
-            {
-                if entrypoint.shred_version == 0 {
-                    eprintln!(
-                        "Entrypoint shred version is zero.  Restart with --expected-shred-version"
-                    );
-                    exit(1);
-                }
+            let all_zero_shred_versions = cluster_entrypoints.iter().all(|cluster_entrypoint| {
+                cluster_info
+                    .lookup_contact_info_by_gossip_addr(&cluster_entrypoint.gossip)
+                    .map_or(false, |entrypoint| entrypoint.shred_version == 0)
+            });
+
+            if all_zero_shred_versions {
+                eprintln!(
+                    "Entrypoint shred version is zero.  Restart with --expected-shred-version"
+                );
+                exit(1);
             }
-            info!(
-                "Waiting to adopt entrypoint shred version, contact info for {:?} not found...",
-                entrypoint_gossip
-            );
+            info!("Waiting to adopt entrypoint shred version...");
             continue;
         }
 
@@ -481,7 +480,7 @@ fn verify_reachable_ports(
     node: &Node,
     cluster_entrypoint: &ContactInfo,
     validator_config: &ValidatorConfig,
-) {
+) -> bool {
     let mut udp_sockets = vec![&node.sockets.gossip, &node.sockets.repair];
 
     if ContactInfo::is_valid_address(&node.info.serve_repair) {
@@ -528,13 +527,11 @@ fn verify_reachable_ports(
         tcp_listeners.push((ip_echo.local_addr().unwrap().port(), ip_echo));
     }
 
-    if !solana_net_utils::verify_reachable_ports(
+    solana_net_utils::verify_reachable_ports(
         &cluster_entrypoint.gossip,
         tcp_listeners,
         &udp_sockets,
-    ) {
-        exit(1);
-    }
+    )
 }
 
 struct RpcBootstrapConfig {
@@ -564,7 +561,7 @@ fn rpc_bootstrap(
     ledger_path: &Path,
     vote_account: &Pubkey,
     authorized_voter_keypairs: &[Arc<Keypair>],
-    cluster_entrypoint: &ContactInfo,
+    cluster_entrypoints: &[ContactInfo],
     validator_config: &mut ValidatorConfig,
     bootstrap_config: RpcBootstrapConfig,
     no_port_check: bool,
@@ -572,7 +569,14 @@ fn rpc_bootstrap(
     maximum_local_snapshot_age: Slot,
 ) {
     if !no_port_check {
-        verify_reachable_ports(&node, cluster_entrypoint, &validator_config);
+        let mut order: Vec<_> = (0..cluster_entrypoints.len()).collect();
+        order.shuffle(&mut thread_rng());
+        if order
+            .into_iter()
+            .all(|i| !verify_reachable_ports(&node, &cluster_entrypoints[i], &validator_config))
+        {
+            exit(1);
+        }
     }
 
     if bootstrap_config.no_genesis_fetch && bootstrap_config.no_snapshot_fetch {
@@ -585,7 +589,7 @@ fn rpc_bootstrap(
         if gossip.is_none() {
             gossip = Some(start_gossip_node(
                 &identity_keypair,
-                &cluster_entrypoint.gossip,
+                &cluster_entrypoints,
                 &node.info.gossip,
                 node.sockets.gossip.try_clone().unwrap(),
                 validator_config.expected_shred_version,
@@ -595,7 +599,7 @@ fn rpc_bootstrap(
 
         let rpc_node_details = get_rpc_node(
             &gossip.as_ref().unwrap().0,
-            &cluster_entrypoint.gossip,
+            &cluster_entrypoints,
             &validator_config,
             &mut blacklisted_rpc_nodes,
             bootstrap_config.no_snapshot_fetch,
@@ -745,7 +749,7 @@ fn create_validator(
     ledger_path: &Path,
     vote_account: &Pubkey,
     authorized_voter_keypairs: Vec<Arc<Keypair>>,
-    cluster_entrypoint: Option<ContactInfo>,
+    cluster_entrypoints: Vec<ContactInfo>,
     mut validator_config: ValidatorConfig,
     rpc_bootstrap_config: RpcBootstrapConfig,
     no_port_check: bool,
@@ -759,14 +763,14 @@ fn create_validator(
     solana_ledger::entry::init_poh();
     solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(ledger_path);
 
-    if let Some(ref cluster_entrypoint) = cluster_entrypoint {
+    if !cluster_entrypoints.is_empty() {
         rpc_bootstrap(
             &node,
             &identity_keypair,
             &ledger_path,
             &vote_account,
             &authorized_voter_keypairs,
-            cluster_entrypoint,
+            &cluster_entrypoints,
             &mut validator_config,
             rpc_bootstrap_config,
             no_port_check,
@@ -781,7 +785,7 @@ fn create_validator(
         &ledger_path,
         &vote_account,
         authorized_voter_keypairs,
-        cluster_entrypoint.as_ref(),
+        cluster_entrypoints,
         &validator_config,
     )
 }
@@ -868,6 +872,7 @@ pub fn main() {
                 .long("entrypoint")
                 .value_name("HOST:PORT")
                 .takes_value(true)
+                .multiple(true)
                 .validator(solana_net_utils::is_host_port)
                 .help("Rendezvous with the cluster at this gossip entrypoint"),
         )
@@ -1669,12 +1674,18 @@ pub fn main() {
         validator_config.halt_on_trusted_validators_accounts_hash_mismatch = true;
     }
 
-    let entrypoint_addr = matches.value_of("entrypoint").map(|entrypoint| {
-        solana_net_utils::parse_host_port(entrypoint).unwrap_or_else(|e| {
-            eprintln!("failed to parse entrypoint address: {}", e);
-            exit(1);
+    let entrypoint_addrs = values_t!(matches, "entrypoint", String)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|entrypoint| {
+            solana_net_utils::parse_host_port(&entrypoint).unwrap_or_else(|e| {
+                eprintln!("failed to parse entrypoint address: {}", e);
+                exit(1);
+            })
         })
-    });
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
 
     let public_rpc_addr = matches.value_of("public_rpc_addr").map(|addr| {
         solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
@@ -1699,7 +1710,11 @@ pub fn main() {
     let use_progress_bar = logfile.is_none();
     let _logger_thread = start_logger(logfile);
 
-    let gossip_host = matches
+    info!("{} {}", crate_name!(), solana_version::version!());
+    info!("Starting validator with: {:#?}", std::env::args_os());
+
+    use std::net::IpAddr;
+    let gossip_host: IpAddr = matches
         .value_of("gossip_host")
         .map(|gossip_host| {
             solana_net_utils::parse_host(gossip_host).unwrap_or_else(|err| {
@@ -1708,12 +1723,30 @@ pub fn main() {
             })
         })
         .unwrap_or_else(|| {
-            if let Some(entrypoint_addr) = entrypoint_addr {
-                solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
-                    eprintln!(
-                        "Failed to contact cluster entrypoint {}: {}",
-                        entrypoint_addr, err
+            if !entrypoint_addrs.is_empty() {
+                let mut order: Vec<_> = (0..entrypoint_addrs.len()).collect();
+                order.shuffle(&mut thread_rng());
+
+                let gossip_host = order.into_iter().find_map(|i| {
+                    let entrypoint_addr = &entrypoint_addrs[i];
+                    info!(
+                        "Contacting {} to determine the validator's public IP address",
+                        entrypoint_addr
                     );
+                    solana_net_utils::get_public_ip_addr(entrypoint_addr).map_or_else(
+                        |err| {
+                            eprintln!(
+                                "Failed to contact cluster entrypoint {}: {}",
+                                entrypoint_addr, err
+                            );
+                            None
+                        },
+                        Some,
+                    )
+                });
+
+                gossip_host.unwrap_or_else(|| {
+                    eprintln!("Unable to determine the validator's public IP address");
                     exit(1);
                 })
             } else {
@@ -1733,9 +1766,10 @@ pub fn main() {
         }),
     );
 
-    let cluster_entrypoint = entrypoint_addr
-        .as_ref()
-        .map(ContactInfo::new_gossip_entry_point);
+    let cluster_entrypoints = entrypoint_addrs
+        .iter()
+        .map(ContactInfo::new_gossip_entry_point)
+        .collect::<Vec<_>>();
 
     let mut node = Node::new_with_external_ip(
         &identity_keypair.pubkey(),
@@ -1769,9 +1803,6 @@ pub fn main() {
         }
     }
 
-    info!("{} {}", crate_name!(), solana_version::version!());
-    info!("Starting validator with: {:#?}", std::env::args_os());
-
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
     solana_metrics::set_panic_hook("validator");
 
@@ -1781,7 +1812,7 @@ pub fn main() {
         &ledger_path,
         &vote_account,
         authorized_voter_keypairs,
-        cluster_entrypoint,
+        cluster_entrypoints,
         validator_config,
         rpc_bootstrap_config,
         no_port_check,

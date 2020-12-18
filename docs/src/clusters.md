@@ -119,7 +119,7 @@ Currently, rewards and inflation are disabled.
   - Note: If you are using a non-command-line wallet such as
     [Solflare](wallet-guide/solflare.md),
     the wallet will always be connecting to Mainnet Beta.
-- Gossip entrypoint for Mainnet Beta: `mainnet-beta.solana.com:8001`
+- Gossip entrypoint for Mainnet Beta: `entrypoint.mainnet-beta.solana.com:8001`
 - Metrics environment variable for Mainnet Beta:
 ```bash
 export SOLANA_METRICS_CONFIG="host=https://metrics.solana.com:8086,db=mainnet-beta,u=mainnet-beta_write,p=password"
@@ -147,7 +147,11 @@ $ solana-validator \
     --rpc-port 8899 \
     --private-rpc \
     --dynamic-port-range 8000-8010 \
-    --entrypoint mainnet-beta.solana.com:8001 \
+    --entrypoint entrypoint.mainnet-beta.solana.com:8001 \
+    --entrypoint entrypoint2.mainnet-beta.solana.com:8001 \
+    --entrypoint entrypoint3.mainnet-beta.solana.com:8001 \
+    --entrypoint entrypoint4.mainnet-beta.solana.com:8001 \
+    --entrypoint entrypoint5.mainnet-beta.solana.com:8001 \
     --expected-genesis-hash 5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d \
     --wal-recovery-mode skip_any_corrupted_record \
     --limit-ledger-size
