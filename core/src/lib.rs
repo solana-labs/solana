@@ -31,6 +31,7 @@ pub mod crds_gossip_push;
 pub mod crds_shards;
 pub mod crds_value;
 pub mod data_budget;
+pub mod duplicate_shred;
 pub mod epoch_slots;
 pub mod fetch_stage;
 pub mod fork_choice;
