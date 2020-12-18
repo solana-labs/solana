@@ -1140,6 +1140,7 @@ pub fn main() {
                 .long("expected-shred-version")
                 .value_name("VERSION")
                 .takes_value(true)
+                .validator(is_parsable::<u16>)
                 .help("Require the shred version be this value"),
         )
         .arg(
