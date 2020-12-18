@@ -458,7 +458,11 @@ fn network_run_pull(
                         let rsp = node
                             .lock()
                             .unwrap()
-                            .generate_pull_responses(&filters, now)
+                            .generate_pull_responses(
+                                &filters,
+                                /*output_size_limit=*/ usize::MAX,
+                                now,
+                            )
                             .into_iter()
                             .flatten()
                             .collect();
