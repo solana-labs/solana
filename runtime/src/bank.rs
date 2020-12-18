@@ -1322,6 +1322,7 @@ impl Bank {
             .feature_set
             .is_active(&feature_set::timestamp_correction::id())
         {
+            unix_timestamp = self.clock().unix_timestamp;
             let (estimate_type, epoch_start_timestamp) =
                 if let Some(timestamp_bounding_activation_slot) = self
                     .feature_set
@@ -1349,24 +1350,22 @@ impl Bank {
             if let Some(timestamp_estimate) =
                 self.get_timestamp_estimate(estimate_type, epoch_start_timestamp)
             {
-                if timestamp_estimate > unix_timestamp {
-                    unix_timestamp = timestamp_estimate;
-                    let ancestor_timestamp = self.clock().unix_timestamp;
-                    if self
-                        .feature_set
-                        .is_active(&feature_set::timestamp_bounding::id())
-                        && timestamp_estimate < ancestor_timestamp
-                    {
-                        unix_timestamp = ancestor_timestamp;
-                    }
-                    datapoint_info!(
-                        "bank-timestamp-correction",
-                        ("slot", self.slot(), i64),
-                        ("from_genesis", self.unix_timestamp_from_genesis(), i64),
-                        ("corrected", timestamp_estimate, i64),
-                        ("ancestor_timestamp", ancestor_timestamp, i64),
-                    );
+                unix_timestamp = timestamp_estimate;
+                let ancestor_timestamp = self.clock().unix_timestamp;
+                if self
+                    .feature_set
+                    .is_active(&feature_set::timestamp_bounding::id())
+                    && timestamp_estimate < ancestor_timestamp
+                {
+                    unix_timestamp = ancestor_timestamp;
                 }
+                datapoint_info!(
+                    "bank-timestamp-correction",
+                    ("slot", self.slot(), i64),
+                    ("from_genesis", self.unix_timestamp_from_genesis(), i64),
+                    ("corrected", timestamp_estimate, i64),
+                    ("ancestor_timestamp", ancestor_timestamp, i64),
+                );
             }
         }
         let epoch_start_timestamp = if self
