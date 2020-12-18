@@ -356,7 +356,7 @@ impl TestValidator {
             &ledger_path,
             &validator_vote_account.pubkey(),
             vec![Arc::new(validator_vote_account)],
-            None,
+            vec![],
             &validator_config,
         ));
 
