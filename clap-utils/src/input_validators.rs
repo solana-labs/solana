@@ -162,13 +162,6 @@ where
     is_parsable_generic::<u16, _>(port)
 }
 
-pub fn is_shred_version<T>(shred_version: T) -> Result<(), String>
-where
-    T: AsRef<str> + Display,
-{
-    is_parsable_generic::<u16, _>(shred_version)
-}
-
 pub fn is_valid_percentage<T>(percentage: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,
