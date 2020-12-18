@@ -1704,6 +1704,12 @@ pub mod test {
         assert!(decision
             .to_vote_instruction(vote.clone(), &Pubkey::default(), &Pubkey::default())
             .is_none());
+
+        decision = SwitchForkDecision::FailedSwitchDuplicateRollback(0);
+        assert!(decision
+            .to_vote_instruction(vote.clone(), &Pubkey::default(), &Pubkey::default())
+            .is_none());
+
         decision = SwitchForkDecision::SameFork;
         assert_eq!(
             decision.to_vote_instruction(vote.clone(), &Pubkey::default(), &Pubkey::default()),
@@ -1713,6 +1719,7 @@ pub mod test {
                 vote.clone(),
             ))
         );
+
         decision = SwitchForkDecision::SwitchProof(Hash::default());
         assert_eq!(
             decision.to_vote_instruction(vote.clone(), &Pubkey::default(), &Pubkey::default()),
@@ -1755,11 +1762,20 @@ pub mod test {
     }
 
     #[test]
-    fn test_switch_threshold() {
+    fn test_switch_threshold_duplicate_rollback() {
+        run_test_switch_threshold_duplicate_rollback(false);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_switch_threshold_duplicate_rollback_panic() {
+        run_test_switch_threshold_duplicate_rollback(true);
+    }
+
+    fn setup_switch_test(num_accounts: usize) -> (Arc<Bank>, VoteSimulator, u64) {
         // Init state
-        let mut vote_simulator = VoteSimulator::new(2);
-        let my_pubkey = vote_simulator.node_pubkeys[0];
-        let other_vote_account = vote_simulator.vote_pubkeys[1];
+        assert!(num_accounts > 1);
+        let mut vote_simulator = VoteSimulator::new(num_accounts);
         let bank0 = vote_simulator
             .bank_forks
             .read()
@@ -1790,6 +1806,81 @@ pub mod test {
         for (_, fork_progress) in vote_simulator.progress.iter_mut() {
             fork_progress.fork_stats.computed = true;
         }
+
+        (bank0, vote_simulator, total_stake)
+    }
+
+    fn run_test_switch_threshold_duplicate_rollback(should_panic: bool) {
+        let (bank0, mut vote_simulator, total_stake) = setup_switch_test(2);
+        let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
+        let descendants = vote_simulator
+            .bank_forks
+            .read()
+            .unwrap()
+            .descendants()
+            .clone();
+        let mut tower = Tower::new_with_key(&vote_simulator.node_pubkeys[0]);
+
+        // Last vote is 47
+        tower.record_vote(47, Hash::default());
+
+        // Trying to switch to an ancestor of last vote should only not panic
+        // if the current vote has a duplicate ancestor
+        let ancestor_of_voted_slot = 43;
+        let duplicate_ancestor1 = 44;
+        let duplicate_ancestor2 = 45;
+        vote_simulator.progress.set_unconfirmed_duplicate_slot(
+            duplicate_ancestor1,
+            &descendants.get(&duplicate_ancestor1).unwrap(),
+        );
+        vote_simulator.progress.set_unconfirmed_duplicate_slot(
+            duplicate_ancestor2,
+            &descendants.get(&duplicate_ancestor2).unwrap(),
+        );
+        assert_eq!(
+            tower.check_switch_threshold(
+                ancestor_of_voted_slot,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+            ),
+            SwitchForkDecision::FailedSwitchDuplicateRollback(duplicate_ancestor2)
+        );
+        let mut confirm_ancestors = vec![duplicate_ancestor1];
+        if should_panic {
+            // Adding the last duplicate ancestor will
+            // 1) Cause loop below to confirm last ancestor
+            // 2) Check switch threshold on a vote ancestor when there
+            // are no duplicates on that fork, which will cause a panic
+            confirm_ancestors.push(duplicate_ancestor2);
+        }
+        for (i, duplicate_ancestor) in confirm_ancestors.into_iter().enumerate() {
+            vote_simulator.progress.set_confirmed_duplicate_slot(
+                duplicate_ancestor,
+                &descendants.get(&duplicate_ancestor).unwrap(),
+            );
+            let res = tower.check_switch_threshold(
+                ancestor_of_voted_slot,
+                &ancestors,
+                &descendants,
+                &vote_simulator.progress,
+                total_stake,
+                bank0.epoch_vote_accounts(0).unwrap(),
+            );
+            if i == 0 {
+                assert_eq!(
+                    res,
+                    SwitchForkDecision::FailedSwitchDuplicateRollback(duplicate_ancestor2)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_switch_threshold() {
+        let (bank0, mut vote_simulator, total_stake) = setup_switch_test(2);
         let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
         let mut descendants = vote_simulator
             .bank_forks
@@ -1797,7 +1888,8 @@ pub mod test {
             .unwrap()
             .descendants()
             .clone();
-        let mut tower = Tower::new_with_key(&my_pubkey);
+        let mut tower = Tower::new_with_key(&vote_simulator.node_pubkeys[0]);
+        let other_vote_account = vote_simulator.vote_pubkeys[1];
 
         // Last vote is 47
         tower.record_vote(47, Hash::default());
