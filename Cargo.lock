@@ -4345,13 +4345,9 @@ dependencies = [
  "sha2",
  "solana-bpf-loader-program",
  "solana-budget-program",
-<<<<<<< HEAD
+ "solana-frozen-abi 1.5.0",
+ "solana-frozen-abi-macro 1.5.0",
  "solana-logger 1.5.0",
-=======
- "solana-frozen-abi 1.6.0",
- "solana-frozen-abi-macro 1.6.0",
- "solana-logger 1.6.0",
->>>>>>> 6a3797e16... adds crds-value for broadcasting duplicate shreds through gossip (#14133)
  "solana-measure",
  "solana-merkle-tree",
  "solana-metrics",
