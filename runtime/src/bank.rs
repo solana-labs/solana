@@ -1317,7 +1317,7 @@ impl Bank {
                     datapoint_info!(
                         "bank-timestamp-correction",
                         ("slot", self.slot(), i64),
-                        ("from_genesis", unix_timestamp, i64),
+                        ("from_genesis", self.unix_timestamp_from_genesis(), i64),
                         ("corrected", timestamp_estimate, i64),
                         ("ancestor_timestamp", ancestor_timestamp, i64),
                     );
