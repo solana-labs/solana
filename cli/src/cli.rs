@@ -506,6 +506,7 @@ impl CliConfig<'_> {
         config.commitment = CommitmentConfig::recent();
         config.send_transaction_config = RpcSendTransactionConfig {
             skip_preflight: true,
+            preflight_commitment: Some(CommitmentConfig::recent().commitment),
             ..RpcSendTransactionConfig::default()
         };
         config
@@ -1415,6 +1416,7 @@ fn do_process_deploy(
             config.commitment,
             RpcSendTransactionConfig {
                 skip_preflight: true,
+                preflight_commitment: Some(config.commitment.commitment),
                 ..RpcSendTransactionConfig::default()
             },
         )
