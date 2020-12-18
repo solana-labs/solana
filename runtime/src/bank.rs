@@ -1075,10 +1075,22 @@ impl Bank {
     /// * Adjusts the new bank's tick height to avoid having to run PoH for millions of slots
     /// * Freezes the new bank, assuming that the user will `Bank::new_from_parent` from this bank
     pub fn warp_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
+        let parent_timestamp = parent.clock().unix_timestamp;
         let mut new = Bank::new_from_parent(parent, collector_id, slot);
         new.apply_feature_activations(true);
         new.update_epoch_stakes(new.epoch_schedule().get_epoch(slot));
         new.tick_height.store(new.max_tick_height(), Relaxed);
+
+        let mut clock = new.clock();
+        clock.epoch_start_timestamp = parent_timestamp;
+        clock.unix_timestamp = parent_timestamp;
+        new.update_sysvar_account(&sysvar::clock::id(), |account| {
+            create_account(
+                &clock,
+                new.inherit_specially_retained_account_balance(account),
+            )
+        });
+
         new.freeze();
         new
     }
