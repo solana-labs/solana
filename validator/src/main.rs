@@ -798,6 +798,12 @@ pub fn main() {
         PubSubConfig::default().max_in_buffer_capacity.to_string();
     let default_rpc_pubsub_max_out_buffer_capacity =
         PubSubConfig::default().max_out_buffer_capacity.to_string();
+    let default_rpc_send_transaction_retry_ms = ValidatorConfig::default()
+        .send_transaction_retry_ms
+        .to_string();
+    let default_rpc_send_transaction_leader_forward_count = ValidatorConfig::default()
+        .send_transaction_leader_forward_count
+        .to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
@@ -1279,6 +1285,24 @@ pub fn main() {
                 .help("The maximum size in bytes to which the outgoing websocket buffer can grow."),
         )
         .arg(
+            Arg::with_name("rpc_send_transaction_retry_ms")
+                .long("rpc-send-retry-ms")
+                .value_name("MILLISECS")
+                .takes_value(true)
+                .validator(is_parsable::<u64>)
+                .default_value(&default_rpc_send_transaction_retry_ms)
+                .help("The rate at which transactions sent via rpc service are retried."),
+        )
+        .arg(
+            Arg::with_name("rpc_send_transaction_leader_forward_count")
+                .long("rpc-send-leader-count")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .validator(is_parsable::<u64>)
+                .default_value(&default_rpc_send_transaction_leader_forward_count)
+                .help("The number of upcoming leaders to which to forward transactions sent via rpc service."),
+        )
+        .arg(
             Arg::with_name("halt_on_trusted_validators_accounts_hash_mismatch")
                 .long("halt-on-trusted-validators-accounts-hash-mismatch")
                 .requires("trusted_validators")
@@ -1483,6 +1507,12 @@ pub fn main() {
         debug_keys,
         contact_debug_interval,
         bpf_jit: matches.is_present("bpf_jit"),
+        send_transaction_retry_ms: value_t_or_exit!(matches, "rpc_send_transaction_retry_ms", u64),
+        send_transaction_leader_forward_count: value_t_or_exit!(
+            matches,
+            "rpc_send_transaction_leader_forward_count",
+            u64
+        ),
         ..ValidatorConfig::default()
     };
 
