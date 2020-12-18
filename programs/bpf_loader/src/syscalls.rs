@@ -12,7 +12,9 @@ use solana_runtime::message_processor::MessageProcessor;
 use solana_sdk::{
     account::Account,
     account_info::AccountInfo,
+    account_utils::StateMut,
     bpf_loader_deprecated,
+    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     feature_set::{
         pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled, sha256_syscall_enabled,
@@ -1367,7 +1369,7 @@ fn call<'a>(
         .get_callers_keyed_accounts()
         .iter()
         .collect::<Vec<&KeyedAccount>>();
-    let (message, callee_program_id, callee_program_id_index) =
+    let (message, callee_program_id) =
         MessageProcessor::create_message(&instruction, &keyed_account_refs, &signers)
             .map_err(SyscallError::InstructionError)?;
     let (accounts, account_refs) = syscall.translate_accounts(
@@ -1380,17 +1382,40 @@ fn call<'a>(
     // Process instruction
 
     invoke_context.record_instruction(&instruction);
+
     let program_account =
-        (**accounts
-            .get(callee_program_id_index)
+        invoke_context
+            .get_account(&callee_program_id)
             .ok_or(SyscallError::InstructionError(
                 InstructionError::MissingAccount,
-            ))?)
-        .clone();
-    if !program_account.borrow().executable {
+            ))?;
+    if !program_account.executable {
         return Err(SyscallError::InstructionError(InstructionError::AccountNotExecutable).into());
     }
-    let executable_accounts = vec![(callee_program_id, program_account)];
+    let programdata_executable = if program_account.owner == bpf_loader_upgradeable::id() {
+        if let UpgradeableLoaderState::Program {
+            programdata_address,
+        } = program_account
+            .state()
+            .map_err(SyscallError::InstructionError)?
+        {
+            if let Some(account) = invoke_context.get_account(&programdata_address) {
+                Some((programdata_address, RefCell::new(account)))
+            } else {
+                return Err(
+                    SyscallError::InstructionError(InstructionError::MissingAccount).into(),
+                );
+            }
+        } else {
+            return Err(SyscallError::InstructionError(InstructionError::MissingAccount).into());
+        }
+    } else {
+        None
+    };
+    let mut executable_accounts = vec![(callee_program_id, RefCell::new(program_account))];
+    if let Some(programdata) = programdata_executable {
+        executable_accounts.push(programdata);
+    }
 
     #[allow(clippy::deref_addrof)]
     match MessageProcessor::process_cross_program_instruction(
