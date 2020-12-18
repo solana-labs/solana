@@ -267,6 +267,7 @@ impl Crds {
         now: u64,
         timeouts: &HashMap<Pubkey, u64>,
     ) -> Vec<CrdsValueLabel> {
+        // TODO: need custom logic for purging duplicate shreds.
         let default_timeout = *timeouts
             .get(&Pubkey::default())
             .expect("must have default timeout");

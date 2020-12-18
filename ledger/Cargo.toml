@@ -33,6 +33,8 @@ serde = "1.0.112"
 serde_bytes = "0.11.4"
 sha2 = "0.8.2"
 solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "1.6.0" }
+solana-frozen-abi = { path = "../frozen-abi", version = "1.6.0" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "1.6.0" }
 solana-transaction-status = { path = "../transaction-status", version = "1.6.0" }
 solana-logger = { path = "../logger", version = "1.6.0" }
 solana-measure = { path = "../measure", version = "1.6.0" }
@@ -62,6 +64,9 @@ features = ["lz4"]
 assert_matches = "1.3.0"
 matches = "0.1.6"
 solana-budget-program = { path = "../programs/budget", version = "1.6.0" }
+
+[build-dependencies]
+rustc_version = "0.2"
 
 [lib]
 crate-type = ["lib"]
