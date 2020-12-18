@@ -1301,12 +1301,13 @@ impl Bank {
                 } else {
                     (EstimateType::Unbounded, None)
                 };
+
+            let ancestor_timestamp = self.clock().unix_timestamp;
             if let Some(timestamp_estimate) =
                 self.get_timestamp_estimate(estimate_type, epoch_start_timestamp)
             {
                 if timestamp_estimate > unix_timestamp {
                     unix_timestamp = timestamp_estimate;
-                    let ancestor_timestamp = self.clock().unix_timestamp;
                     if self
                         .feature_set
                         .is_active(&feature_set::timestamp_bounding::id())
@@ -1314,15 +1315,15 @@ impl Bank {
                     {
                         unix_timestamp = ancestor_timestamp;
                     }
-                    datapoint_info!(
-                        "bank-timestamp-correction",
-                        ("slot", self.slot(), i64),
-                        ("from_genesis", self.unix_timestamp_from_genesis(), i64),
-                        ("corrected", timestamp_estimate, i64),
-                        ("ancestor_timestamp", ancestor_timestamp, i64),
-                    );
                 }
             }
+            datapoint_info!(
+                "bank-timestamp-correction",
+                ("slot", self.slot(), i64),
+                ("from_genesis", self.unix_timestamp_from_genesis(), i64),
+                ("corrected", unix_timestamp, i64),
+                ("ancestor_timestamp", ancestor_timestamp, i64),
+            );
         }
         let epoch_start_timestamp = if self
             .feature_set
