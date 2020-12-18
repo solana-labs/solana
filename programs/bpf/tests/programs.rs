@@ -11,7 +11,7 @@ use solana_bpf_loader_program::{
 };
 use solana_rbpf::vm::{Config, Executable, Tracer};
 use solana_runtime::{
-    bank::Bank,
+    bank::{Bank, ExecuteTimings},
     bank_client::BankClient,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::{
@@ -229,6 +229,7 @@ fn process_transaction_and_record_inner(
         false,
         true,
         false,
+        &mut ExecuteTimings::default(),
     );
     let inner_instructions = inner.swap_remove(0);
     let result = results

@@ -18,8 +18,8 @@ use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
     accounts_index::AccountIndex,
     bank::{
-        Bank, InnerInstructionsList, TransactionBalancesSet, TransactionExecutionResult,
-        TransactionLogMessages, TransactionResults,
+        Bank, ExecuteTimings, InnerInstructionsList, TransactionBalancesSet,
+        TransactionExecutionResult, TransactionLogMessages, TransactionResults,
     },
     bank_forks::BankForks,
     bank_utils,
@@ -106,6 +106,7 @@ fn execute_batch(
     bank: &Arc<Bank>,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
+    timings: &mut ExecuteTimings,
 ) -> Result<()> {
     let record_token_balances = transaction_status_sender.is_some();
 
@@ -124,6 +125,7 @@ fn execute_batch(
             transaction_status_sender.is_some(),
             transaction_status_sender.is_some(),
             transaction_status_sender.is_some(),
+            timings,
         );
 
     bank_utils::find_and_send_votes(batch.transactions(), &tx_results, replay_vote_sender);
@@ -167,22 +169,35 @@ fn execute_batches(
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
+    timings: &mut ExecuteTimings,
 ) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
-    let results: Vec<Result<()>> = PAR_THREAD_POOL.with(|thread_pool| {
-        thread_pool.borrow().install(|| {
-            batches
-                .into_par_iter()
-                .map_with(transaction_status_sender, |sender, batch| {
-                    let result = execute_batch(batch, bank, sender.clone(), replay_vote_sender);
-                    if let Some(entry_callback) = entry_callback {
-                        entry_callback(bank);
-                    }
-                    result
-                })
-                .collect()
-        })
-    });
+    let (results, new_timings): (Vec<Result<()>>, Vec<ExecuteTimings>) =
+        PAR_THREAD_POOL.with(|thread_pool| {
+            thread_pool.borrow().install(|| {
+                batches
+                    .into_par_iter()
+                    .map_with(transaction_status_sender, |sender, batch| {
+                        let mut timings = ExecuteTimings::default();
+                        let result = execute_batch(
+                            batch,
+                            bank,
+                            sender.clone(),
+                            replay_vote_sender,
+                            &mut timings,
+                        );
+                        if let Some(entry_callback) = entry_callback {
+                            entry_callback(bank);
+                        }
+                        (result, timings)
+                    })
+                    .unzip()
+            })
+        });
+
+    for timing in new_timings {
+        timings.accumulate(&timing);
+    }
 
     first_err(&results)
 }
@@ -206,6 +221,7 @@ pub fn process_entries(
         None,
         transaction_status_sender,
         replay_vote_sender,
+        &mut ExecuteTimings::default(),
     )
 }
 
@@ -216,6 +232,7 @@ fn process_entries_with_callback(
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
+    timings: &mut ExecuteTimings,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
@@ -233,6 +250,7 @@ fn process_entries_with_callback(
                     entry_callback,
                     transaction_status_sender.clone(),
                     replay_vote_sender,
+                    timings,
                 )?;
                 batches.clear();
                 for hash in &tick_hashes {
@@ -289,6 +307,7 @@ fn process_entries_with_callback(
                     entry_callback,
                     transaction_status_sender.clone(),
                     replay_vote_sender,
+                    timings,
                 )?;
                 batches.clear();
             }
@@ -300,6 +319,7 @@ fn process_entries_with_callback(
         entry_callback,
         transaction_status_sender,
         replay_vote_sender,
+        timings,
     )?;
     for hash in tick_hashes {
         bank.register_tick(&hash);
@@ -594,6 +614,7 @@ pub struct ConfirmationTiming {
     pub transaction_verify_elapsed: u64,
     pub fetch_elapsed: u64,
     pub fetch_fail_elapsed: u64,
+    pub execute_timings: ExecuteTimings,
 }
 
 impl Default for ConfirmationTiming {
@@ -605,6 +626,7 @@ impl Default for ConfirmationTiming {
             transaction_verify_elapsed: 0,
             fetch_elapsed: 0,
             fetch_fail_elapsed: 0,
+            execute_timings: ExecuteTimings::default(),
         }
     }
 }
@@ -700,6 +722,7 @@ pub fn confirm_slot(
     };
 
     let mut replay_elapsed = Measure::start("replay_elapsed");
+    let mut execute_timings = ExecuteTimings::default();
     let process_result = process_entries_with_callback(
         bank,
         &entries,
@@ -707,10 +730,13 @@ pub fn confirm_slot(
         entry_callback,
         transaction_status_sender,
         replay_vote_sender,
+        &mut execute_timings,
     )
     .map_err(BlockstoreProcessorError::from);
     replay_elapsed.stop();
     timing.replay_elapsed += replay_elapsed.as_us();
+
+    timing.execute_timings.accumulate(&execute_timings);
 
     if let Some(mut verifier) = verifier {
         let verified = verifier.finish_verify(&entries);
@@ -2891,7 +2917,16 @@ pub mod tests {
         let entry = next_entry(&new_blockhash, 1, vec![tx]);
         entries.push(entry);
 
-        process_entries_with_callback(&bank0, &entries, true, None, None, None).unwrap();
+        process_entries_with_callback(
+            &bank0,
+            &entries,
+            true,
+            None,
+            None,
+            None,
+            &mut ExecuteTimings::default(),
+        )
+        .unwrap();
         assert_eq!(bank0.get_balance(&keypair.pubkey()), 1)
     }
 
@@ -2984,6 +3019,7 @@ pub mod tests {
             false,
             false,
             false,
+            &mut ExecuteTimings::default(),
         );
         let (err, signature) = get_first_error(&batch, fee_collection_results).unwrap();
         // First error found should be for the 2nd transaction, due to iteration_order
