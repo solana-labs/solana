@@ -205,7 +205,7 @@ impl LocalCluster {
             &leader_ledger_path,
             &leader_vote_keypair.pubkey(),
             vec![leader_vote_keypair.clone()],
-            None,
+            vec![],
             &leader_config,
         );
 
@@ -348,7 +348,7 @@ impl LocalCluster {
             &ledger_path,
             &voting_keypair.pubkey(),
             vec![voting_keypair.clone()],
-            Some(&self.entry_point_info),
+            vec![self.entry_point_info.clone()],
             &config,
         );
 
@@ -660,7 +660,9 @@ impl Cluster for LocalCluster {
             &validator_info.ledger_path,
             &validator_info.voting_keypair.pubkey(),
             vec![validator_info.voting_keypair.clone()],
-            entry_point_info.as_ref(),
+            entry_point_info
+                .map(|entry_point_info| vec![entry_point_info])
+                .unwrap_or_default(),
             &cluster_validator_info.config,
         );
         cluster_validator_info.validator = Some(restarted_node);

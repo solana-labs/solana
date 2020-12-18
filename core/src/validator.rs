@@ -220,7 +220,7 @@ impl Validator {
         ledger_path: &Path,
         vote_account: &Pubkey,
         mut authorized_voter_keypairs: Vec<Arc<Keypair>>,
-        cluster_entrypoint: Option<&ContactInfo>,
+        cluster_entrypoints: Vec<ContactInfo>,
         config: &ValidatorConfig,
     ) -> Self {
         let id = identity_keypair.pubkey();
@@ -239,7 +239,9 @@ impl Validator {
         }
         report_target_features();
 
-        info!("entrypoint: {:?}", cluster_entrypoint);
+        for cluster_entrypoint in &cluster_entrypoints {
+            info!("entrypoint: {:?}", cluster_entrypoint);
+        }
 
         if solana_perf::perf_libs::api().is_some() {
             info!("Initializing sigverify, this could take a while...");
@@ -482,6 +484,7 @@ impl Validator {
             config.gossip_validators.clone(),
             &exit,
         );
+        cluster_info.set_entrypoints(cluster_entrypoints);
 
         let serve_repair = Arc::new(RwLock::new(ServeRepair::new(cluster_info.clone())));
         let serve_repair_service = ServeRepairService::new(
@@ -490,12 +493,6 @@ impl Validator {
             node.sockets.serve_repair,
             &exit,
         );
-
-        // Insert the entrypoint info, should only be None if this node
-        // is the bootstrap validator
-        if let Some(cluster_entrypoint) = cluster_entrypoint {
-            cluster_info.set_entrypoint(cluster_entrypoint.clone());
-        }
 
         let (snapshot_packager_service, snapshot_config_and_package_sender) =
             if let Some(snapshot_config) = config.snapshot_config.clone() {
@@ -1276,7 +1273,7 @@ mod tests {
             &validator_ledger_path,
             &voting_keypair.pubkey(),
             vec![voting_keypair.clone()],
-            Some(&leader_node.info),
+            vec![leader_node.info],
             &config,
         );
         validator.close();
@@ -1346,7 +1343,7 @@ mod tests {
                     &validator_ledger_path,
                     &vote_account_keypair.pubkey(),
                     vec![Arc::new(vote_account_keypair)],
-                    Some(&leader_node.info),
+                    vec![leader_node.info.clone()],
                     &config,
                 )
             })
