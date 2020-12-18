@@ -1,7 +1,10 @@
-use crate::cluster_info::MAX_SNAPSHOT_HASHES;
-use crate::contact_info::ContactInfo;
-use crate::deprecated;
-use crate::epoch_slots::EpochSlots;
+use crate::{
+    cluster_info::MAX_SNAPSHOT_HASHES,
+    contact_info::ContactInfo,
+    deprecated,
+    duplicate_shred::{DuplicateShred, DuplicateShredIndex},
+    epoch_slots::EpochSlots,
+};
 use bincode::{serialize, serialized_size};
 use rand::{CryptoRng, Rng};
 use solana_sdk::sanitize::{Sanitize, SanitizeError};
@@ -80,6 +83,7 @@ pub enum CrdsData {
     LegacyVersion(LegacyVersion),
     Version(Version),
     NodeInstance(NodeInstance),
+    DuplicateShred(DuplicateShred),
 }
 
 impl Sanitize for CrdsData {
@@ -109,6 +113,7 @@ impl Sanitize for CrdsData {
             CrdsData::LegacyVersion(version) => version.sanitize(),
             CrdsData::Version(version) => version.sanitize(),
             CrdsData::NodeInstance(node) => node.sanitize(),
+            CrdsData::DuplicateShred(shred) => shred.sanitize(),
         }
     }
 }
@@ -145,9 +150,7 @@ pub struct SnapshotHash {
 
 impl Sanitize for SnapshotHash {
     fn sanitize(&self) -> Result<(), SanitizeError> {
-        if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::ValueOutOfBounds);
-        }
+        sanitize_wallclock(self.wallclock)?;
         for (slot, _) in &self.hashes {
             if *slot >= MAX_SLOT {
                 return Err(SanitizeError::ValueOutOfBounds);
@@ -220,9 +223,7 @@ impl LowestSlot {
 
 impl Sanitize for LowestSlot {
     fn sanitize(&self) -> Result<(), SanitizeError> {
-        if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::ValueOutOfBounds);
-        }
+        sanitize_wallclock(self.wallclock)?;
         if self.lowest >= MAX_SLOT {
             return Err(SanitizeError::ValueOutOfBounds);
         }
@@ -248,9 +249,7 @@ pub struct Vote {
 
 impl Sanitize for Vote {
     fn sanitize(&self) -> Result<(), SanitizeError> {
-        if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::ValueOutOfBounds);
-        }
+        sanitize_wallclock(self.wallclock)?;
         self.from.sanitize()?;
         self.transaction.sanitize()
     }
@@ -275,9 +274,7 @@ pub struct LegacyVersion {
 
 impl Sanitize for LegacyVersion {
     fn sanitize(&self) -> Result<(), SanitizeError> {
-        if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::ValueOutOfBounds);
-        }
+        sanitize_wallclock(self.wallclock)?;
         self.from.sanitize()?;
         self.version.sanitize()
     }
@@ -292,9 +289,7 @@ pub struct Version {
 
 impl Sanitize for Version {
     fn sanitize(&self) -> Result<(), SanitizeError> {
-        if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::ValueOutOfBounds);
-        }
+        sanitize_wallclock(self.wallclock)?;
         self.from.sanitize()?;
         self.version.sanitize()
     }
@@ -370,9 +365,7 @@ impl NodeInstance {
 
 impl Sanitize for NodeInstance {
     fn sanitize(&self) -> Result<(), SanitizeError> {
-        if self.wallclock >= MAX_WALLCLOCK {
-            return Err(SanitizeError::ValueOutOfBounds);
-        }
+        sanitize_wallclock(self.wallclock)?;
         self.from.sanitize()
     }
 }
@@ -390,6 +383,7 @@ pub enum CrdsValueLabel {
     LegacyVersion(Pubkey),
     Version(Pubkey),
     NodeInstance(Pubkey, u64 /*token*/),
+    DuplicateShred(DuplicateShredIndex, Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -403,7 +397,8 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::AccountsHashes(_) => write!(f, "AccountsHashes({})", self.pubkey()),
             CrdsValueLabel::LegacyVersion(_) => write!(f, "LegacyVersion({})", self.pubkey()),
             CrdsValueLabel::Version(_) => write!(f, "Version({})", self.pubkey()),
-            CrdsValueLabel::NodeInstance(_, _) => write!(f, "NodeInstance({})", self.pubkey()),
+            CrdsValueLabel::NodeInstance(pk, token) => write!(f, "NodeInstance({}, {})", pk, token),
+            CrdsValueLabel::DuplicateShred(ix, pk) => write!(f, "DuplicateShred({:?}, {})", ix, pk),
         }
     }
 }
@@ -420,6 +415,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::LegacyVersion(p) => *p,
             CrdsValueLabel::Version(p) => *p,
             CrdsValueLabel::NodeInstance(p, _ /*token*/) => *p,
+            CrdsValueLabel::DuplicateShred(_, p) => *p,
         }
     }
 }
@@ -467,6 +463,7 @@ impl CrdsValue {
             CrdsData::LegacyVersion(version) => version.wallclock,
             CrdsData::Version(version) => version.wallclock,
             CrdsData::NodeInstance(node) => node.wallclock,
+            CrdsData::DuplicateShred(shred) => shred.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -480,6 +477,7 @@ impl CrdsValue {
             CrdsData::LegacyVersion(version) => version.from,
             CrdsData::Version(version) => version.from,
             CrdsData::NodeInstance(node) => node.from,
+            CrdsData::DuplicateShred(shred) => shred.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -492,7 +490,10 @@ impl CrdsValue {
             CrdsData::EpochSlots(ix, _) => CrdsValueLabel::EpochSlots(*ix, self.pubkey()),
             CrdsData::LegacyVersion(_) => CrdsValueLabel::LegacyVersion(self.pubkey()),
             CrdsData::Version(_) => CrdsValueLabel::Version(self.pubkey()),
-            CrdsData::NodeInstance(node) => CrdsValueLabel::NodeInstance(self.pubkey(), node.token),
+            CrdsData::NodeInstance(node) => CrdsValueLabel::NodeInstance(node.from, node.token),
+            CrdsData::DuplicateShred(shred) => {
+                CrdsValueLabel::DuplicateShred(DuplicateShredIndex::from(shred), shred.from)
+            }
         }
     }
     pub fn contact_info(&self) -> Option<&ContactInfo> {
@@ -621,6 +622,14 @@ where
         }
     }
     out.into_iter().map(|(_, (v, _))| v)
+}
+
+pub(crate) fn sanitize_wallclock(wallclock: u64) -> Result<(), SanitizeError> {
+    if wallclock >= MAX_WALLCLOCK {
+        Err(SanitizeError::ValueOutOfBounds)
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(test)]

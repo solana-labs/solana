@@ -4019,6 +4019,7 @@ dependencies = [
  "reqwest",
  "rustc_version",
  "serde",
+ "serde_bytes",
  "serde_derive",
  "serde_json",
  "serial_test",
@@ -4338,12 +4339,19 @@ dependencies = [
  "rayon",
  "reed-solomon-erasure",
  "rocksdb",
+ "rustc_version",
  "serde",
  "serde_bytes",
  "sha2",
  "solana-bpf-loader-program",
  "solana-budget-program",
+<<<<<<< HEAD
  "solana-logger 1.5.0",
+=======
+ "solana-frozen-abi 1.6.0",
+ "solana-frozen-abi-macro 1.6.0",
+ "solana-logger 1.6.0",
+>>>>>>> 6a3797e16... adds crds-value for broadcasting duplicate shreds through gossip (#14133)
  "solana-measure",
  "solana-merkle-tree",
  "solana-metrics",

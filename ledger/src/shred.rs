@@ -119,7 +119,7 @@ pub enum ShredError {
 
 pub type Result<T> = std::result::Result<T, ShredError>;
 
-#[derive(Serialize, Clone, Deserialize, PartialEq, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, AbiExample, Deserialize, Serialize)]
 pub struct ShredType(pub u8);
 impl Default for ShredType {
     fn default() -> Self {
