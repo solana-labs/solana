@@ -1369,7 +1369,7 @@ impl Bank {
                 ("ancestor_timestamp", ancestor_timestamp, i64),
             );
         }
-        let epoch_start_timestamp = if self
+        let mut epoch_start_timestamp = if self
             .feature_set
             .is_active(&feature_set::timestamp_bounding::id())
         {
@@ -1382,6 +1382,10 @@ impl Bank {
         } else {
             Self::get_unused_from_slot(self.slot, self.unused) as i64
         };
+        if self.slot == 0 {
+            unix_timestamp = self.unix_timestamp_from_genesis();
+            epoch_start_timestamp = self.unix_timestamp_from_genesis();
+        }
         let clock = sysvar::clock::Clock {
             slot: self.slot,
             epoch_start_timestamp,
@@ -11158,6 +11162,9 @@ pub(crate) mod tests {
             ..
         } = create_genesis_config_with_leader(5, &leader_pubkey, 3);
         let mut bank = Bank::new(&genesis_config);
+        // Advance past slot 0, which has special handling.
+        bank = new_from_parent(&Arc::new(bank));
+        bank = new_from_parent(&Arc::new(bank));
         assert_eq!(
             bank.clock().unix_timestamp,
             bank.unix_timestamp_from_genesis()
