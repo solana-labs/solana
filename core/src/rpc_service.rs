@@ -17,6 +17,7 @@ use jsonrpc_http_server::{
 };
 use regex::Regex;
 use solana_ledger::blockstore::Blockstore;
+use solana_metrics::inc_new_counter_info;
 use solana_runtime::{
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
@@ -61,7 +62,7 @@ impl RpcRequestMiddleware {
         Self {
             ledger_path,
             snapshot_archive_path_regex: Regex::new(
-                r"/snapshot-\d+-[[:alnum:]]+\.tar\.(bz2|zst|gz)$",
+                r"/snapshot-\d+-[[:alnum:]]+\.(tar|tar\.bz2|tar\.zst|tar\.gz)$",
             )
             .unwrap(),
             snapshot_config,
@@ -85,6 +86,7 @@ impl RpcRequestMiddleware {
             .unwrap()
     }
 
+    #[allow(dead_code)]
     fn internal_server_error() -> hyper::Response<hyper::Body> {
         hyper::Response::builder()
             .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
@@ -112,13 +114,18 @@ impl RpcRequestMiddleware {
         let stem = path.split_at(1).1; // Drop leading '/' from path
         let filename = {
             match path {
-                "/genesis.tar.bz2" => self.ledger_path.join(stem),
-                _ => self
-                    .snapshot_config
-                    .as_ref()
-                    .unwrap()
-                    .snapshot_package_output_path
-                    .join(stem),
+                "/genesis.tar.bz2" => {
+                    inc_new_counter_info!("rpc-get_genesis", 1);
+                    self.ledger_path.join(stem)
+                }
+                _ => {
+                    inc_new_counter_info!("rpc-get_snapshot", 1);
+                    self.snapshot_config
+                        .as_ref()
+                        .unwrap()
+                        .snapshot_package_output_path
+                        .join(stem)
+                }
             }
         };
 
@@ -129,10 +136,13 @@ impl RpcRequestMiddleware {
             response: Box::new(
                 tokio_fs_01::file::File::open(filename)
                     .and_then(|file| {
-                        let buf: Vec<u8> = Vec::new();
-                        tokio_io_01::io::read_to_end(file, buf)
-                            .and_then(|item| Ok(hyper::Response::new(item.1.into())))
-                            .or_else(|_| Ok(RpcRequestMiddleware::internal_server_error()))
+                        use tokio_codec_01::{BytesCodec, FramedRead};
+
+                        let stream = FramedRead::new(file, BytesCodec::new())
+                            .map(tokio_01_bytes::BytesMut::freeze);
+                        let body = hyper::Body::wrap_stream(stream);
+
+                        Ok(hyper::Response::new(body))
                     })
                     .or_else(|_| Ok(RpcRequestMiddleware::not_found())),
             ),
@@ -530,6 +540,13 @@ mod tests {
         assert!(rrm_with_snapshot_config.is_file_get_path(
             "/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
         ));
+        assert!(rrm_with_snapshot_config.is_file_get_path(
+            "/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.zst"
+        ));
+        assert!(rrm_with_snapshot_config
+            .is_file_get_path("/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.gz"));
+        assert!(rrm_with_snapshot_config
+            .is_file_get_path("/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"));
 
         assert!(!rrm.is_file_get_path(
             "/snapshot-notaslotnumber-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
