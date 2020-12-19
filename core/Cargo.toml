@@ -78,9 +78,15 @@ tempfile = "3.1.0"
 thiserror = "1.0"
 tokio = { version = "0.2", features = ["full"] }
 tokio_01 = { version = "0.1", package = "tokio" }
+tokio_01_bytes = { version = "0.4.7", package = "bytes" }
 tokio_fs_01 = { version = "0.1", package = "tokio-fs" }
 tokio_io_01 = { version = "0.1", package = "tokio-io" }
+<<<<<<< HEAD
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.5.0" }
+=======
+tokio_codec_01 = { version = "0.1", package = "tokio-codec" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.6.0" }
+>>>>>>> b3dc98856... Stream RPC snapshot downloads
 trees = "0.2.1"
 
 [dev-dependencies]
