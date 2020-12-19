@@ -447,7 +447,7 @@ impl Accounts {
             |stored_account: &StoredAccount,
              _id: AppendVecId,
              accum: &mut Vec<(Pubkey, u64, B)>| {
-                if let Some(val) = func(stored_account) {
+                if let Some(val) = func(&stored_account) {
                     accum.push((
                         stored_account.meta.pubkey,
                         std::u64::MAX - stored_account.meta.write_version,

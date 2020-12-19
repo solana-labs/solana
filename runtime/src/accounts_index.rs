@@ -1,5 +1,10 @@
+use crate::inline_spl_token_v2_0;
+use dashmap::{DashMap, DashSet};
 use ouroboros::self_referencing;
-use solana_sdk::{clock::Slot, pubkey::Pubkey};
+use solana_sdk::{
+    clock::Slot,
+    pubkey::{Pubkey, PUBKEY_BYTES},
+};
 use std::ops::{
     Bound,
     Bound::{Excluded, Included, Unbounded},
@@ -23,6 +28,12 @@ pub type RefCount = u64;
 pub type AccountMap<K, V> = BTreeMap<K, V>;
 
 type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
+type MintIndexEntry = DashSet<Pubkey>;
+
+enum ScanTypes<R: RangeBounds<Pubkey>> {
+    Standard(Option<R>),
+    Mint(Pubkey),
+}
 
 #[derive(Debug)]
 pub struct AccountMapEntryInner<T> {
@@ -182,8 +193,19 @@ impl<'a, T: 'static + Clone> Iterator for AccountsIndexIterator<'a, T> {
 }
 
 #[derive(Debug, Default)]
+pub struct MintIndex {
+    index: DashMap<Pubkey, MintIndexEntry>,
+    // Map from pubkey to the mint it's stored in, used for cleanup.
+    // Alternative is to store Option<Pubkey> in each AccountInfo in the
+    // AccountsIndex if something is an SPL account with a mint, but then
+    // every AccountInfo would have to allocate `Option<Pubkey>`
+    accounts_to_mints: DashMap<Pubkey, DashSet<Pubkey>>,
+}
+
+#[derive(Debug, Default)]
 pub struct AccountsIndex<T> {
     pub account_maps: RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
+    pub mint_index: MintIndex,
     roots_tracker: RwLock<RootsTracker>,
     ongoing_scan_roots: RwLock<BTreeMap<Slot, u64>>,
 }
@@ -196,8 +218,12 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         AccountsIndexIterator::new(&self.account_maps, range)
     }
 
-    fn do_checked_scan_accounts<F, R>(&self, ancestors: &Ancestors, func: F, range: Option<R>)
-    where
+    fn do_checked_scan_accounts<F, R>(
+        &self,
+        ancestors: &Ancestors,
+        func: F,
+        scan_type: ScanTypes<R>,
+    ) where
         F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey>,
     {
@@ -334,7 +360,15 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         so a potential newer max root at 3 will not clean up any of the ancestors > 1, so slot 4
         will not be cleaned in the middle of the scan either.
         */
-        self.do_scan_accounts(ancestors, func, range, Some(max_root));
+        match scan_type {
+            ScanTypes::Standard(range) => {
+                self.do_scan_accounts(ancestors, func, range, Some(max_root));
+            }
+            ScanTypes::Mint(mint_key) => {
+                self.do_scan_mint_accounts(ancestors, func, &mint_key, Some(max_root));
+            }
+        }
+
         {
             let mut ongoing_scan_roots = self.ongoing_scan_roots.write().unwrap();
             let count = ongoing_scan_roots.get_mut(&max_root).unwrap();
@@ -366,12 +400,51 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey>,
     {
+        // TODO: expand to use mint index to find the `pubkey_list` below more efficiently
+        // instead of scanning the entire range
         for pubkey_list in self.iter(range) {
             for (pubkey, list) in pubkey_list {
                 let list_r = &list.slot_list.read().unwrap();
                 if let Some(index) = self.latest_slot(Some(ancestors), &list_r, max_root) {
                     func(&pubkey, (&list_r[index].1, list_r[index].0));
                 }
+            }
+        }
+    }
+
+    fn do_scan_mint_accounts<F>(
+        &self,
+        ancestors: &Ancestors,
+        mut func: F,
+        mint_key: &Pubkey,
+        max_root: Option<Slot>,
+    ) where
+        F: FnMut(&Pubkey, (&T, Slot)),
+    {
+        let mint_keys: Vec<Pubkey> = {
+            let mint_keys = self.mint_index.index.get(mint_key);
+            if mint_keys.is_none() {
+                return;
+            }
+            let mint_keys = mint_keys.unwrap();
+            if mint_keys.is_empty() {
+                return;
+            }
+            mint_keys
+                .value()
+                .iter()
+                .map(|pubkey_ref| *pubkey_ref)
+                .collect()
+        };
+
+        for pubkey in mint_keys {
+            // Maybe these reads from the AccountsIndex can be batched everytime it
+            // grabs the read lock as well...
+            if let Some((list_r, index)) = self.get(&pubkey, Some(ancestors), max_root) {
+                func(
+                    &pubkey,
+                    (&list_r.slot_list()[index].1, list_r.slot_list()[index].0),
+                );
             }
         }
     }
@@ -421,10 +494,32 @@ impl<T: 'static + Clone> AccountsIndex<T> {
     pub fn handle_dead_keys(&self, dead_keys: &[Pubkey]) {
         if !dead_keys.is_empty() {
             for key in dead_keys.iter() {
-                let mut w_index = self.account_maps.write().unwrap();
-                if let btree_map::Entry::Occupied(index_entry) = w_index.entry(*key) {
-                    if index_entry.get().slot_list.read().unwrap().is_empty() {
-                        index_entry.remove();
+                {
+                    let mut w_index = self.account_maps.write().unwrap();
+                    if let btree_map::Entry::Occupied(index_entry) = w_index.entry(*key) {
+                        if index_entry.get().slot_list.read().unwrap().is_empty() {
+                            index_entry.remove();
+                            // Get all the mints this key was listed in
+                            let mint_keys: Option<Vec<Pubkey>> =
+                                self.mint_index.accounts_to_mints.get(key).map(|keys| {
+                                    keys.iter().map(|slot_ref| *slot_ref.key()).collect()
+                                });
+
+                            // Remove this key from those mints, should be safe to do because no
+                            // other thread can write to this index while we hold the `w_index`
+                            // lock above
+                            if let Some(account_to_mints) = mint_keys {
+                                for mint_key in account_to_mints {
+                                    if let Some(mint_keys) = self.mint_index.index.get(&mint_key) {
+                                        mint_keys.remove(key);
+                                    }
+                                    self.mint_index
+                                        .index
+                                        .remove_if(&mint_key, |_, mint_keys| mint_keys.is_empty());
+                                }
+                                self.mint_index.accounts_to_mints.remove(&key);
+                            }
+                        }
                     }
                 }
             }
@@ -432,11 +527,20 @@ impl<T: 'static + Clone> AccountsIndex<T> {
     }
 
     /// call func with every pubkey and index visible from a given set of ancestors
+    #[allow(dead_code)]
+    pub(crate) fn mint_scan_accounts<F>(&self, mint_key: Pubkey, ancestors: &Ancestors, func: F)
+    where
+        F: FnMut(&Pubkey, (&T, Slot)),
+    {
+        self.do_checked_scan_accounts(ancestors, func, ScanTypes::<Range<Pubkey>>::Mint(mint_key));
+    }
+
+    /// call func with every pubkey and index visible from a given set of ancestors
     pub(crate) fn scan_accounts<F>(&self, ancestors: &Ancestors, func: F)
     where
         F: FnMut(&Pubkey, (&T, Slot)),
     {
-        self.do_checked_scan_accounts(ancestors, func, None::<Range<Pubkey>>);
+        self.do_checked_scan_accounts(ancestors, func, ScanTypes::Standard(None::<Range<Pubkey>>));
     }
 
     pub(crate) fn unchecked_scan_accounts<F>(&self, ancestors: &Ancestors, func: F)
@@ -579,6 +683,46 @@ impl<T: 'static + Clone> AccountsIndex<T> {
             }
         }
         max_root
+    }
+
+    pub fn update_secondary_indexes(
+        &self,
+        pubkey: &Pubkey,
+        account_owner: &Pubkey,
+        account_data: &[u8],
+    ) {
+        if *account_owner == inline_spl_token_v2_0::id()
+            && account_data.len() == inline_spl_token_v2_0::state::Account::get_packed_len()
+        {
+            let mint_key = Pubkey::new(&account_data[..PUBKEY_BYTES]);
+            {
+                let mint_account_keys = self.mint_index.index.get(&mint_key).unwrap_or_else(|| {
+                    let res = self
+                        .mint_index
+                        .index
+                        .entry(mint_key)
+                        .or_insert(DashSet::new())
+                        .downgrade();
+                    datapoint_info!(
+                        "mint_index_len",
+                        ("mint_count", self.mint_index.index.len() as i64, i64),
+                    );
+                    res
+                });
+                mint_account_keys.insert(*pubkey);
+            }
+
+            {
+                let account_to_mint = self
+                    .mint_index
+                    .accounts_to_mints
+                    .entry(*pubkey)
+                    .or_default();
+                if account_to_mint.insert(mint_key) && account_to_mint.len() > 1 {
+                    datapoint_info!("key_multiple_mints", ("pubkey", pubkey.to_string(), String),);
+                }
+            }
+        }
     }
 
     // Updates the given pubkey at the given slot with the new account information.
@@ -1265,5 +1409,62 @@ mod tests {
         index.purge_older_root_entries(&mut slot_list, &mut reclaims, Some(7));
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
+    }
+
+    #[test]
+    fn test_mint_index() {
+        let index = AccountsIndex::<bool>::default();
+        let account_key = Pubkey::new_unique();
+        let mint_key = Pubkey::new_unique();
+        let mut correct_account_data =
+            vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
+        correct_account_data[..PUBKEY_BYTES].clone_from_slice(&(mint_key.clone().to_bytes()));
+
+        // Wrong program id
+        index.update_secondary_indexes(&account_key, &Pubkey::default(), &correct_account_data);
+        assert!(index.mint_index.index.is_empty());
+        assert!(index.mint_index.accounts_to_mints.is_empty());
+
+        // Wrong account data size
+        index.update_secondary_indexes(
+            &account_key,
+            &inline_spl_token_v2_0::id(),
+            &correct_account_data[1..],
+        );
+        assert!(index.mint_index.index.is_empty());
+        assert!(index.mint_index.accounts_to_mints.is_empty());
+
+        // Just right
+        index.update_secondary_indexes(
+            &account_key,
+            &inline_spl_token_v2_0::id(),
+            &correct_account_data,
+        );
+        assert!(index
+            .mint_index
+            .index
+            .get(&mint_key)
+            .unwrap()
+            .value()
+            .contains(&account_key));
+        assert!(index
+            .mint_index
+            .accounts_to_mints
+            .get(&account_key)
+            .unwrap()
+            .value()
+            .contains(&mint_key));
+
+        // Insert into index, simulate dead key
+        index.upsert(0, &account_key, true, &mut vec![]);
+        index
+            .get_account_write_entry(&account_key)
+            .unwrap()
+            .slot_list_mut(|slot_list| slot_list.clear());
+
+        // Everything should be deleted
+        index.handle_dead_keys(&[account_key]);
+        assert!(index.mint_index.index.is_empty());
+        assert!(index.mint_index.accounts_to_mints.is_empty());
     }
 }

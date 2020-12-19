@@ -1413,8 +1413,8 @@ impl AccountsDB {
                 .map(|storage| {
                     let accounts = storage.accounts.accounts(0);
                     let mut retval = B::default();
-                    accounts.iter().for_each(|stored_account| {
-                        scan_func(stored_account, storage.append_vec_id(), &mut retval)
+                    accounts.into_iter().for_each(|stored_account| {
+                        scan_func(&stored_account, storage.append_vec_id(), &mut retval)
                     });
                     retval
                 })
@@ -2512,6 +2512,11 @@ impl AccountsDB {
             let pubkey = pubkey_account.0;
             self.accounts_index
                 .upsert(slot, pubkey, info, &mut reclaims);
+            self.accounts_index.update_secondary_indexes(
+                pubkey,
+                &pubkey_account.1.owner,
+                &pubkey_account.1.data,
+            );
         }
         reclaims
     }
@@ -2950,15 +2955,20 @@ impl AccountsDB {
                         let entry = accum
                             .entry(stored_account.meta.pubkey)
                             .or_insert_with(Vec::new);
+                        self.accounts_index.update_secondary_indexes(
+                            &stored_account.meta.pubkey,
+                            &stored_account.account_meta.owner,
+                            &stored_account.data,
+                        );
                         entry.push((stored_account.meta.write_version, account_info));
                     },
                 );
 
             let mut accounts_map: HashMap<Pubkey, Vec<(u64, AccountInfo)>> = HashMap::new();
-            for accumulator_entry in accumulator.iter() {
+            for accumulator_entry in accumulator.into_iter() {
                 for (pubkey, storage_entry) in accumulator_entry {
-                    let entry = accounts_map.entry(*pubkey).or_insert_with(Vec::new);
-                    entry.extend(storage_entry.iter().cloned());
+                    let entry = accounts_map.entry(pubkey).or_insert_with(Vec::new);
+                    entry.extend(storage_entry.into_iter());
                 }
             }
 
@@ -2966,17 +2976,13 @@ impl AccountsDB {
             // be shielding other accounts. When they are then purged, the
             // original non-shielded account value will be visible when the account
             // is restored from the append-vec
-            if !accumulator.is_empty() {
+            if !accounts_map.is_empty() {
                 let mut _reclaims: Vec<(u64, AccountInfo)> = vec![];
-                for (pubkey, account_infos) in accounts_map.iter_mut() {
+                for (pubkey, mut account_infos) in accounts_map.into_iter() {
                     account_infos.sort_by(|a, b| a.0.cmp(&b.0));
                     for (_, account_info) in account_infos {
-                        self.accounts_index.upsert(
-                            *slot,
-                            pubkey,
-                            account_info.clone(),
-                            &mut _reclaims,
-                        );
+                        self.accounts_index
+                            .upsert(*slot, &pubkey, account_info, &mut _reclaims);
                     }
                 }
             }

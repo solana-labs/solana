@@ -12,6 +12,7 @@ use crate::{
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType},
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
+    inline_spl_token_v2_0,
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     message_processor::{Executors, MessageProcessor},
@@ -85,29 +86,6 @@ use std::{
     },
     time::Duration,
 };
-
-// Partial SPL Token v2.0.x declarations inlined to avoid an external dependency on the spl-token crate
-pub mod inline_spl_token_v2_0 {
-    solana_sdk::declare_id!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-    pub mod native_mint {
-        solana_sdk::declare_id!("So11111111111111111111111111111111111111112");
-
-        /*
-            Mint {
-                mint_authority: COption::None,
-                supply: 0,
-                decimals: 9,
-                is_initialized: true,
-                freeze_authority: COption::None,
-            }
-        */
-        pub const ACCOUNT_DATA: [u8; 82] = [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ];
-    }
-}
 
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
