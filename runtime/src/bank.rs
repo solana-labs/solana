@@ -1332,14 +1332,24 @@ impl Bank {
                     // needed for timestamp bounding, but isn't yet corrected for the activation slot
                     let epoch_start_timestamp = if self.slot() > timestamp_bounding_activation_slot
                     {
-                        let epoch = if let Some(epoch) = parent_epoch {
-                            epoch
+                        let warp_testnet_timestamp = self
+                            .feature_set
+                            .activated_slot(&feature_set::warp_testnet_timestamp::id());
+                        if warp_testnet_timestamp.is_some()
+                            && warp_testnet_timestamp.unwrap() == self.slot()
+                            && self.cluster_type() == ClusterType::Testnet
+                        {
+                            None
                         } else {
-                            self.epoch()
-                        };
-                        let first_slot_in_epoch =
-                            self.epoch_schedule.get_first_slot_in_epoch(epoch);
-                        Some((first_slot_in_epoch, self.clock().epoch_start_timestamp))
+                            let epoch = if let Some(epoch) = parent_epoch {
+                                epoch
+                            } else {
+                                self.epoch()
+                            };
+                            let first_slot_in_epoch =
+                                self.epoch_schedule.get_first_slot_in_epoch(epoch);
+                            Some((first_slot_in_epoch, self.clock().epoch_start_timestamp))
+                        }
                     } else {
                         None
                     };
