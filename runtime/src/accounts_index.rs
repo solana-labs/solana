@@ -718,13 +718,11 @@ impl<T: 'static + Clone> AccountsIndex<T> {
                     .accounts_to_mints
                     .get(&pubkey)
                     .unwrap_or_else(|| {
-                        let res = self
-                            .mint_index
-                            .index
+                        self.mint_index
+                            .accounts_to_mints
                             .entry(*pubkey)
                             .or_insert(DashSet::new())
-                            .downgrade();
-                        res
+                            .downgrade()
                     });
 
                 if account_to_mint.insert(mint_key) && account_to_mint.len() > 1 {
