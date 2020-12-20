@@ -110,6 +110,10 @@ pub mod try_find_program_address_syscall_enabled {
     solana_sdk::declare_id!("EMsMNadQNhCYDyGpYH5Tx6dGHxiUqKHk782PU5XaWfmi");
 }
 
+pub mod warp_testnet_timestamp {
+    solana_sdk::declare_id!("Bfqm7fGk5MBptqa2WHXWFLH7uJvq8hkJcAQPipy2bAMk");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -139,6 +143,7 @@ lazy_static! {
         (simple_capitalization::id(), "simple capitalization"),
         (bpf_loader_upgradeable_program::id(), "upgradeable bpf loader"),
         (try_find_program_address_syscall_enabled::id(), "add try_find_program_address syscall"),
+        (warp_testnet_timestamp::id(), "warp testnet timestamp to current #TODO"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
