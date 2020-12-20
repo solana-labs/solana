@@ -1335,8 +1335,7 @@ impl Bank {
                         let warp_testnet_timestamp = self
                             .feature_set
                             .activated_slot(&feature_set::warp_testnet_timestamp::id());
-                        if warp_testnet_timestamp.is_some()
-                            && warp_testnet_timestamp.unwrap() == self.slot()
+                        if warp_testnet_timestamp == Some(self.slot())
                             && self.cluster_type() == ClusterType::Testnet
                         {
                             None
