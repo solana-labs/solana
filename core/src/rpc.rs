@@ -52,7 +52,7 @@ use solana_sdk::{
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
     hash::Hash,
-    pubkey::Pubkey,
+    pubkey::{Pubkey, PUBKEY_BYTES},
     signature::Signature,
     stake_history::StakeHistory,
     system_instruction,
@@ -316,7 +316,13 @@ impl JsonRpcRequestProcessor {
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
         let data_slice_config = config.data_slice;
         check_slice_and_encoding(&encoding, data_slice_config.is_some())?;
-        let keyed_accounts = get_filtered_program_accounts(&bank, program_id, filters);
+        let keyed_accounts = {
+            if let Some(owner) = get_spl_token_owner_filter(program_id, &filters) {
+                get_filtered_spl_token_accounts_by_owner(&bank, &owner, filters)
+            } else {
+                get_filtered_program_accounts(&bank, program_id, filters)
+            }
+        };
         let result =
             if program_id == &spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
                 get_parsed_token_accounts(bank, keyed_accounts.into_iter()).collect()
@@ -1194,7 +1200,7 @@ impl JsonRpcRequestProcessor {
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
         let data_slice_config = config.data_slice;
         check_slice_and_encoding(&encoding, data_slice_config.is_some())?;
-        let (token_program_id, mint) = get_token_program_id_and_mint(&bank, token_account_filter)?;
+        let (_, mint) = get_token_program_id_and_mint(&bank, token_account_filter)?;
 
         let mut filters = vec![
             // Filter on Owner address
@@ -1432,6 +1438,34 @@ fn get_filtered_spl_token_accounts_by_mint(
             RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
         })
     })
+}
+
+fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> Option<Pubkey> {
+    if program_id != &spl_token_id_v2_0() {
+        return None;
+    }
+    let mut data_size_filter: Option<u64> = None;
+    let mut owner_key: Option<Pubkey> = None;
+    for filter in filters {
+        match filter {
+            RpcFilterType::DataSize(size) => data_size_filter = Some(*size),
+            RpcFilterType::Memcmp(Memcmp {
+                offset: PUBKEY_BYTES,
+                bytes: MemcmpEncodedBytes::Binary(bytes),
+                ..
+            }) => {
+                if let Ok(key) = Pubkey::from_str(bytes) {
+                    owner_key = Some(key)
+                }
+            }
+            _ => {}
+        }
+    }
+    if data_size_filter == Some(TokenAccount::get_packed_len() as u64) {
+        owner_key
+    } else {
+        None
+    }
 }
 
 pub(crate) fn get_parsed_token_account(
@@ -5802,6 +5836,54 @@ pub mod tests {
                 }
             })
         );
+    }
+
+    #[test]
+    fn test_get_spl_token_owner_filter() {
+        let owner = Pubkey::new_unique();
+        assert_eq!(
+            get_spl_token_owner_filter(
+                &Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
+                &[
+                    RpcFilterType::Memcmp(Memcmp {
+                        offset: 32,
+                        bytes: MemcmpEncodedBytes::Binary(owner.to_string()),
+                        encoding: None
+                    }),
+                    RpcFilterType::DataSize(165)
+                ],
+            )
+            .unwrap(),
+            owner
+        );
+
+        // Filtering on mint instead of owner
+        assert!(get_spl_token_owner_filter(
+            &Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
+            &[
+                RpcFilterType::Memcmp(Memcmp {
+                    offset: 0,
+                    bytes: MemcmpEncodedBytes::Binary(owner.to_string()),
+                    encoding: None
+                }),
+                RpcFilterType::DataSize(165)
+            ],
+        )
+        .is_none());
+
+        // Wrong program id
+        assert!(get_spl_token_owner_filter(
+            &Pubkey::new_unique(),
+            &[
+                RpcFilterType::Memcmp(Memcmp {
+                    offset: 32,
+                    bytes: MemcmpEncodedBytes::Binary(owner.to_string()),
+                    encoding: None
+                }),
+                RpcFilterType::DataSize(165)
+            ],
+        )
+        .is_none());
     }
 
     #[test]
