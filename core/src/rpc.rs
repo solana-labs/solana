@@ -39,6 +39,7 @@ use solana_metrics::inc_new_counter_info;
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::{
     accounts::AccountAddressFilter,
+    accounts_index::IndexKey,
     bank::Bank,
     bank_forks::BankForks,
     commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
@@ -1202,17 +1203,19 @@ impl JsonRpcRequestProcessor {
                 bytes: MemcmpEncodedBytes::Binary(owner.to_string()),
                 encoding: None,
             }),
-        ];
-        // Optional filter on Mint address, uses mint account index for scan
-        let keyed_accounts = if let Some(mint) = mint {
-            get_filtered_spl_token_accounts_by_mint(&bank, &mint, filters)
-        } else {
             // Filter on Token Account state
-            filters.push(RpcFilterType::DataSize(
-                TokenAccount::get_packed_len() as u64
-            ));
-            get_filtered_program_accounts(&bank, &token_program_id, filters)
-        };
+            RpcFilterType::DataSize(TokenAccount::get_packed_len() as u64),
+        ];
+        if let Some(mint) = mint {
+            // Optional filter on Mint address
+            filters.push(RpcFilterType::Memcmp(Memcmp {
+                offset: 0,
+                bytes: MemcmpEncodedBytes::Binary(mint.to_string()),
+                encoding: None,
+            }));
+        }
+
+        let keyed_accounts = get_filtered_spl_token_accounts_by_owner(&bank, owner, filters);
         let accounts = if encoding == UiAccountEncoding::JsonParsed {
             get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
         } else {
@@ -1403,13 +1406,27 @@ fn get_filtered_program_accounts(
     })
 }
 
+/// Get an iterator of spl-token accounts by owner address
+fn get_filtered_spl_token_accounts_by_owner(
+    bank: &Arc<Bank>,
+    owner_key: &Pubkey,
+    filters: Vec<RpcFilterType>,
+) -> Vec<(Pubkey, Account)> {
+    bank.get_filtered_indexed_accounts(&IndexKey::TokenOwner(*owner_key), |account| {
+        filters.iter().all(|filter_type| match filter_type {
+            RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
+            RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
+        })
+    })
+}
+
 /// Get an iterator of spl-token accounts by mint address
 fn get_filtered_spl_token_accounts_by_mint(
     bank: &Arc<Bank>,
     mint_key: &Pubkey,
     filters: Vec<RpcFilterType>,
 ) -> Vec<(Pubkey, Account)> {
-    bank.get_filtered_spl_token_accounts_by_mint(&mint_key, |account| {
+    bank.get_filtered_indexed_accounts(&IndexKey::Mint(*mint_key), |account| {
         filters.iter().all(|filter_type| match filter_type {
             RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
             RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),

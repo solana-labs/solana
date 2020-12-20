@@ -8,7 +8,7 @@ use crate::{
         TransactionLoadResult, TransactionLoaders,
     },
     accounts_db::{ErrorCounters, SnapshotStorages},
-    accounts_index::Ancestors,
+    accounts_index::{Ancestors, IndexKey},
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType},
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
@@ -289,6 +289,7 @@ pub struct BankRc {
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
+
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for BankRc {
     fn example() -> Self {
@@ -3973,14 +3974,14 @@ impl Bank {
             .load_by_program_with_filter(&self.ancestors, program_id, filter)
     }
 
-    pub fn get_filtered_spl_token_accounts_by_mint<F: Fn(&Account) -> bool>(
+    pub fn get_filtered_indexed_accounts<F: Fn(&Account) -> bool>(
         &self,
-        mint_key: &Pubkey,
+        index_key: &IndexKey,
         filter: F,
     ) -> Vec<(Pubkey, Account)> {
         self.rc
             .accounts
-            .load_by_mint_with_filter(&self.ancestors, mint_key, filter)
+            .load_by_index_key_with_filter(&self.ancestors, index_key, filter)
     }
 
     pub fn get_all_accounts_with_modified_slots(&self) -> Vec<(Pubkey, Account, Slot)> {
