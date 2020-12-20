@@ -3973,6 +3973,16 @@ impl Bank {
             .load_by_program_with_filter(&self.ancestors, program_id, filter)
     }
 
+    pub fn get_filtered_spl_token_accounts_by_mint<F: Fn(&Account) -> bool>(
+        &self,
+        mint_key: &Pubkey,
+        filter: F,
+    ) -> Vec<(Pubkey, Account)> {
+        self.rc
+            .accounts
+            .load_by_mint_with_filter(&self.ancestors, mint_key, filter)
+    }
+
     pub fn get_all_accounts_with_modified_slots(&self) -> Vec<(Pubkey, Account, Slot)> {
         self.rc.accounts.load_all(&self.ancestors)
     }

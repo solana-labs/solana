@@ -318,9 +318,10 @@ impl JsonRpcRequestProcessor {
         let keyed_accounts = get_filtered_program_accounts(&bank, program_id, filters);
         let result =
             if program_id == &spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
-                get_parsed_token_accounts(bank, keyed_accounts).collect()
+                get_parsed_token_accounts(bank, keyed_accounts.into_iter()).collect()
             } else {
                 keyed_accounts
+                    .into_iter()
                     .map(|(pubkey, account)| RpcKeyedAccount {
                         pubkey: pubkey.to_string(),
                         account: UiAccount::encode(
@@ -1155,18 +1156,9 @@ impl JsonRpcRequestProcessor {
                 "Invalid param: not a v2.0 Token mint".to_string(),
             ));
         }
-        let filters = vec![
-            // Filter on Mint address
-            RpcFilterType::Memcmp(Memcmp {
-                offset: 0,
-                bytes: MemcmpEncodedBytes::Binary(mint.to_string()),
-                encoding: None,
-            }),
-            // Filter on Token Account state
-            RpcFilterType::DataSize(TokenAccount::get_packed_len() as u64),
-        ];
         let mut token_balances: Vec<RpcTokenAccountBalance> =
-            get_filtered_program_accounts(&bank, &mint_owner, filters)
+            get_filtered_spl_token_accounts_by_mint(&bank, &mint, vec![])
+                .into_iter()
                 .map(|(address, account)| {
                     let amount = TokenAccount::unpack(&account.data)
                         .map(|account| account.amount)
@@ -1210,22 +1202,22 @@ impl JsonRpcRequestProcessor {
                 bytes: MemcmpEncodedBytes::Binary(owner.to_string()),
                 encoding: None,
             }),
-            // Filter on Token Account state
-            RpcFilterType::DataSize(TokenAccount::get_packed_len() as u64),
         ];
-        if let Some(mint) = mint {
-            // Optional filter on Mint address
-            filters.push(RpcFilterType::Memcmp(Memcmp {
-                offset: 0,
-                bytes: MemcmpEncodedBytes::Binary(mint.to_string()),
-                encoding: None,
-            }));
-        }
-        let keyed_accounts = get_filtered_program_accounts(&bank, &token_program_id, filters);
+        // Optional filter on Mint address, uses mint account index for scan
+        let keyed_accounts = if let Some(mint) = mint {
+            get_filtered_spl_token_accounts_by_mint(&bank, &mint, filters)
+        } else {
+            // Filter on Token Account state
+            filters.push(RpcFilterType::DataSize(
+                TokenAccount::get_packed_len() as u64
+            ));
+            get_filtered_program_accounts(&bank, &token_program_id, filters)
+        };
         let accounts = if encoding == UiAccountEncoding::JsonParsed {
-            get_parsed_token_accounts(bank.clone(), keyed_accounts).collect()
+            get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
         } else {
             keyed_accounts
+                .into_iter()
                 .map(|(pubkey, account)| RpcKeyedAccount {
                     pubkey: pubkey.to_string(),
                     account: UiAccount::encode(
@@ -1269,22 +1261,22 @@ impl JsonRpcRequestProcessor {
                 bytes: MemcmpEncodedBytes::Binary(delegate.to_string()),
                 encoding: None,
             }),
-            // Filter on Token Account state
-            RpcFilterType::DataSize(TokenAccount::get_packed_len() as u64),
         ];
-        if let Some(mint) = mint {
-            // Optional filter on Mint address
-            filters.push(RpcFilterType::Memcmp(Memcmp {
-                offset: 0,
-                bytes: MemcmpEncodedBytes::Binary(mint.to_string()),
-                encoding: None,
-            }));
-        }
-        let keyed_accounts = get_filtered_program_accounts(&bank, &token_program_id, filters);
+        // Optional filter on Mint address, uses mint account index for scan
+        let keyed_accounts = if let Some(mint) = mint {
+            get_filtered_spl_token_accounts_by_mint(&bank, &mint, filters)
+        } else {
+            // Filter on Token Account state
+            filters.push(RpcFilterType::DataSize(
+                TokenAccount::get_packed_len() as u64
+            ));
+            get_filtered_program_accounts(&bank, &token_program_id, filters)
+        };
         let accounts = if encoding == UiAccountEncoding::JsonParsed {
-            get_parsed_token_accounts(bank.clone(), keyed_accounts).collect()
+            get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
         } else {
             keyed_accounts
+                .into_iter()
                 .map(|(pubkey, account)| RpcKeyedAccount {
                     pubkey: pubkey.to_string(),
                     account: UiAccount::encode(
@@ -1402,14 +1394,27 @@ fn get_filtered_program_accounts(
     bank: &Arc<Bank>,
     program_id: &Pubkey,
     filters: Vec<RpcFilterType>,
-) -> impl Iterator<Item = (Pubkey, Account)> {
+) -> Vec<(Pubkey, Account)> {
     bank.get_filtered_program_accounts(&program_id, |account| {
         filters.iter().all(|filter_type| match filter_type {
             RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
             RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
         })
     })
-    .into_iter()
+}
+
+/// Get an iterator of spl-token accounts by mint address
+fn get_filtered_spl_token_accounts_by_mint(
+    bank: &Arc<Bank>,
+    mint_key: &Pubkey,
+    filters: Vec<RpcFilterType>,
+) -> Vec<(Pubkey, Account)> {
+    bank.get_filtered_spl_token_accounts_by_mint(&mint_key, |account| {
+        filters.iter().all(|filter_type| match filter_type {
+            RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
+            RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
+        })
+    })
 }
 
 pub(crate) fn get_parsed_token_account(

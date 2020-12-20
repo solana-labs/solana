@@ -1352,6 +1352,30 @@ impl AccountsDB {
         collector
     }
 
+    pub fn mint_scan_accounts<F, A>(
+        &self,
+        mint_key: Pubkey,
+        ancestors: &Ancestors,
+        scan_func: F,
+    ) -> A
+    where
+        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>),
+        A: Default,
+    {
+        let mut collector = A::default();
+        self.accounts_index.mint_scan_accounts(
+            mint_key,
+            ancestors,
+            |pubkey, (account_info, slot)| {
+                let account_slot = self
+                    .get_account_from_storage(slot, account_info)
+                    .map(|account| (pubkey, account, slot));
+                scan_func(&mut collector, account_slot)
+            },
+        );
+        collector
+    }
+
     pub fn unchecked_scan_accounts<F, A>(&self, ancestors: &Ancestors, scan_func: F) -> A
     where
         F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>),

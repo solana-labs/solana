@@ -608,6 +608,21 @@ impl Accounts {
         )
     }
 
+    pub fn load_by_mint_with_filter<F: Fn(&Account) -> bool>(
+        &self,
+        ancestors: &Ancestors,
+        mint_key: &Pubkey,
+        filter: F,
+    ) -> Vec<(Pubkey, Account)> {
+        self.accounts_db.mint_scan_accounts(
+            *mint_key,
+            ancestors,
+            |collector: &mut Vec<(Pubkey, Account)>, some_account_tuple| {
+                Self::load_while_filtering(collector, some_account_tuple, |account| filter(account))
+            },
+        )
+    }
+
     pub fn load_all(&self, ancestors: &Ancestors) -> Vec<(Pubkey, Account, Slot)> {
         self.accounts_db.scan_accounts(
             ancestors,
