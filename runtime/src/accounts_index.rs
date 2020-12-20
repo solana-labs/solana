@@ -716,8 +716,17 @@ impl<T: 'static + Clone> AccountsIndex<T> {
                 let account_to_mint = self
                     .mint_index
                     .accounts_to_mints
-                    .entry(*pubkey)
-                    .or_default();
+                    .get(&pubkey)
+                    .unwrap_or_else(|| {
+                        let res = self
+                            .mint_index
+                            .index
+                            .entry(*pubkey)
+                            .or_insert(DashSet::new())
+                            .downgrade();
+                        res
+                    });
+
                 if account_to_mint.insert(mint_key) && account_to_mint.len() > 1 {
                     datapoint_info!("key_multiple_mints", ("pubkey", pubkey.to_string(), String),);
                 }
