@@ -2432,6 +2432,10 @@ impl Bank {
         self.rc.accounts.accounts_db.remove_unrooted_slot(slot)
     }
 
+    pub fn set_shrink_paths(&self, paths: Vec<PathBuf>) {
+        self.rc.accounts.accounts_db.set_shrink_paths(paths);
+    }
+
     fn load_accounts(
         &self,
         txs: &[Transaction],
@@ -10100,12 +10104,11 @@ pub(crate) mod tests {
             22
         );
 
-        let mut consumed_budgets = (0..3)
+        let consumed_budgets: usize = (0..3)
             .map(|_| bank.process_stale_slot_with_budget(0, force_to_return_alive_account))
-            .collect::<Vec<_>>();
-        consumed_budgets.sort_unstable();
+            .sum();
         // consumed_budgets represents the count of alive accounts in the three slots 0,1,2
-        assert_eq!(consumed_budgets, vec![0, 1, 9]);
+        assert_eq!(consumed_budgets, 10);
     }
 
     #[test]

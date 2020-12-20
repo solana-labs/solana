@@ -1012,6 +1012,14 @@ pub fn main() {
                 .help("Comma separated persistent accounts location"),
         )
         .arg(
+            Arg::with_name("account_shrink_path")
+                .long("account-shrink-path")
+                .value_name("PATH")
+                .takes_value(true)
+                .multiple(true)
+                .help("Path to accounts shrink path which can hold a compacted account set."),
+        )
+        .arg(
             Arg::with_name("gossip_port")
                 .long("gossip-port")
                 .value_name("PORT")
@@ -1540,6 +1548,10 @@ pub fn main() {
         } else {
             vec![ledger_path.join("accounts")]
         };
+    let account_shrink_paths: Option<Vec<PathBuf>> =
+        values_t!(matches, "account_shrink_path", String)
+            .map(|shrink_paths| shrink_paths.into_iter().map(PathBuf::from).collect())
+            .ok();
 
     // Create and canonicalize account paths to avoid issues with symlink creation
     validator_config.account_paths = account_paths
@@ -1557,6 +1569,26 @@ pub fn main() {
             }
         })
         .collect();
+
+    validator_config.account_shrink_paths = account_shrink_paths.map(|paths| {
+        paths
+            .into_iter()
+            .map(|account_path| {
+                match fs::create_dir_all(&account_path)
+                    .and_then(|_| fs::canonicalize(&account_path))
+                {
+                    Ok(account_path) => account_path,
+                    Err(err) => {
+                        eprintln!(
+                            "Unable to access account path: {:?}, err: {:?}",
+                            account_path, err
+                        );
+                        exit(1);
+                    }
+                }
+            })
+            .collect()
+    });
 
     let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", u64);
     let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
