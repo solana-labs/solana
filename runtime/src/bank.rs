@@ -1075,10 +1075,22 @@ impl Bank {
     /// * Adjusts the new bank's tick height to avoid having to run PoH for millions of slots
     /// * Freezes the new bank, assuming that the user will `Bank::new_from_parent` from this bank
     pub fn warp_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
+        let parent_timestamp = parent.clock().unix_timestamp;
         let mut new = Bank::new_from_parent(parent, collector_id, slot);
         new.apply_feature_activations(true);
         new.update_epoch_stakes(new.epoch_schedule().get_epoch(slot));
         new.tick_height.store(new.max_tick_height(), Relaxed);
+
+        let mut clock = new.clock();
+        clock.epoch_start_timestamp = parent_timestamp;
+        clock.unix_timestamp = parent_timestamp;
+        new.update_sysvar_account(&sysvar::clock::id(), |account| {
+            create_account(
+                &clock,
+                new.inherit_specially_retained_account_balance(account),
+            )
+        });
+
         new.freeze();
         new
     }
@@ -1310,6 +1322,7 @@ impl Bank {
             .feature_set
             .is_active(&feature_set::timestamp_correction::id())
         {
+            unix_timestamp = self.clock().unix_timestamp;
             let (estimate_type, epoch_start_timestamp) =
                 if let Some(timestamp_bounding_activation_slot) = self
                     .feature_set
@@ -1319,14 +1332,23 @@ impl Bank {
                     // needed for timestamp bounding, but isn't yet corrected for the activation slot
                     let epoch_start_timestamp = if self.slot() > timestamp_bounding_activation_slot
                     {
-                        let epoch = if let Some(epoch) = parent_epoch {
-                            epoch
+                        let warp_testnet_timestamp = self
+                            .feature_set
+                            .activated_slot(&feature_set::warp_testnet_timestamp::id());
+                        if warp_testnet_timestamp == Some(self.slot())
+                            && self.cluster_type() == ClusterType::Testnet
+                        {
+                            None
                         } else {
-                            self.epoch()
-                        };
-                        let first_slot_in_epoch =
-                            self.epoch_schedule.get_first_slot_in_epoch(epoch);
-                        Some((first_slot_in_epoch, self.clock().epoch_start_timestamp))
+                            let epoch = if let Some(epoch) = parent_epoch {
+                                epoch
+                            } else {
+                                self.epoch()
+                            };
+                            let first_slot_in_epoch =
+                                self.epoch_schedule.get_first_slot_in_epoch(epoch);
+                            Some((first_slot_in_epoch, self.clock().epoch_start_timestamp))
+                        }
                     } else {
                         None
                     };
@@ -1334,30 +1356,29 @@ impl Bank {
                 } else {
                     (EstimateType::Unbounded, None)
                 };
+
+            let ancestor_timestamp = self.clock().unix_timestamp;
             if let Some(timestamp_estimate) =
                 self.get_timestamp_estimate(estimate_type, epoch_start_timestamp)
             {
-                if timestamp_estimate > unix_timestamp {
-                    unix_timestamp = timestamp_estimate;
-                    let ancestor_timestamp = self.clock().unix_timestamp;
-                    if self
-                        .feature_set
-                        .is_active(&feature_set::timestamp_bounding::id())
-                        && timestamp_estimate < ancestor_timestamp
-                    {
-                        unix_timestamp = ancestor_timestamp;
-                    }
-                    datapoint_info!(
-                        "bank-timestamp-correction",
-                        ("slot", self.slot(), i64),
-                        ("from_genesis", unix_timestamp, i64),
-                        ("corrected", timestamp_estimate, i64),
-                        ("ancestor_timestamp", ancestor_timestamp, i64),
-                    );
+                unix_timestamp = timestamp_estimate;
+                if self
+                    .feature_set
+                    .is_active(&feature_set::timestamp_bounding::id())
+                    && timestamp_estimate < ancestor_timestamp
+                {
+                    unix_timestamp = ancestor_timestamp;
                 }
             }
+            datapoint_info!(
+                "bank-timestamp-correction",
+                ("slot", self.slot(), i64),
+                ("from_genesis", self.unix_timestamp_from_genesis(), i64),
+                ("corrected", unix_timestamp, i64),
+                ("ancestor_timestamp", ancestor_timestamp, i64),
+            );
         }
-        let epoch_start_timestamp = if self
+        let mut epoch_start_timestamp = if self
             .feature_set
             .is_active(&feature_set::timestamp_bounding::id())
         {
@@ -1370,6 +1391,10 @@ impl Bank {
         } else {
             Self::get_unused_from_slot(self.slot, self.unused) as i64
         };
+        if self.slot == 0 {
+            unix_timestamp = self.unix_timestamp_from_genesis();
+            epoch_start_timestamp = self.unix_timestamp_from_genesis();
+        }
         let clock = sysvar::clock::Clock {
             slot: self.slot,
             epoch_start_timestamp,
@@ -11146,6 +11171,9 @@ pub(crate) mod tests {
             ..
         } = create_genesis_config_with_leader(5, &leader_pubkey, 3);
         let mut bank = Bank::new(&genesis_config);
+        // Advance past slot 0, which has special handling.
+        bank = new_from_parent(&Arc::new(bank));
+        bank = new_from_parent(&Arc::new(bank));
         assert_eq!(
             bank.clock().unix_timestamp,
             bank.unix_timestamp_from_genesis()
