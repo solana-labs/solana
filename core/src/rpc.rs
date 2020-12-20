@@ -1403,14 +1403,13 @@ fn get_filtered_program_accounts(
     program_id: &Pubkey,
     filters: Vec<RpcFilterType>,
 ) -> impl Iterator<Item = (Pubkey, Account)> {
-    bank.get_program_accounts(&program_id)
-        .into_iter()
-        .filter(move |(_, account)| {
-            filters.iter().all(|filter_type| match filter_type {
-                RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
-                RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
-            })
+    bank.get_filtered_program_accounts(&program_id, |account| {
+        filters.iter().all(|filter_type| match filter_type {
+            RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
+            RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
         })
+    })
+    .into_iter()
 }
 
 pub(crate) fn get_parsed_token_account(

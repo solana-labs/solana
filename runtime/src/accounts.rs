@@ -592,6 +592,22 @@ impl Accounts {
         )
     }
 
+    pub fn load_by_program_with_filter<F: Fn(&Account) -> bool>(
+        &self,
+        ancestors: &Ancestors,
+        program_id: &Pubkey,
+        filter: F,
+    ) -> Vec<(Pubkey, Account)> {
+        self.accounts_db.scan_accounts(
+            ancestors,
+            |collector: &mut Vec<(Pubkey, Account)>, some_account_tuple| {
+                Self::load_while_filtering(collector, some_account_tuple, |account| {
+                    account.owner == *program_id && filter(account)
+                })
+            },
+        )
+    }
+
     pub fn load_all(&self, ancestors: &Ancestors) -> Vec<(Pubkey, Account, Slot)> {
         self.accounts_db.scan_accounts(
             ancestors,
