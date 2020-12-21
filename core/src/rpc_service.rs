@@ -129,7 +129,11 @@ impl RpcRequestMiddleware {
             }
         };
 
-        info!("get {} -> {:?}", path, filename);
+        let file_length = std::fs::metadata(&filename)
+            .map(|m| m.len())
+            .unwrap_or(0)
+            .to_string();
+        info!("get {} -> {:?} ({} bytes)", path, filename, file_length);
 
         RequestMiddlewareAction::Respond {
             should_validate_hosts: true,
@@ -142,7 +146,10 @@ impl RpcRequestMiddleware {
                             .map(tokio_01_bytes::BytesMut::freeze);
                         let body = hyper::Body::wrap_stream(stream);
 
-                        Ok(hyper::Response::new(body))
+                        Ok(hyper::Response::builder()
+                            .header(hyper::header::CONTENT_LENGTH, file_length)
+                            .body(body)
+                            .unwrap())
                     })
                     .or_else(|_| Ok(RpcRequestMiddleware::not_found())),
             ),
