@@ -117,7 +117,9 @@ fn update_retransmit_stats(
 
     let now = timestamp();
     let last = stats.last_ts.load(Ordering::Relaxed);
-    if now - last > 2000 && stats.last_ts.compare_and_swap(last, now, Ordering::Relaxed) == last {
+    if now.saturating_sub(last) > 2000
+        && stats.last_ts.compare_and_swap(last, now, Ordering::Relaxed) == last
+    {
         datapoint_info!("retransmit-num_nodes", ("count", peers_len, i64));
         datapoint_info!(
             "retransmit-stage",
@@ -288,7 +290,8 @@ fn retransmit(
 
     let now = timestamp();
     let last = last_peer_update.load(Ordering::Relaxed);
-    if now - last > 1000 && last_peer_update.compare_and_swap(last, now, Ordering::Relaxed) == last
+    if now.saturating_sub(last) > 1000
+        && last_peer_update.compare_and_swap(last, now, Ordering::Relaxed) == last
     {
         drop(r_epoch_stakes_cache);
         let mut w_epoch_stakes_cache = epoch_stakes_cache.write().unwrap();
