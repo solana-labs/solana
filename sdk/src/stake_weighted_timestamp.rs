@@ -5,6 +5,7 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 use std::{
+    borrow::Borrow,
     collections::{BTreeMap, HashMap},
     time::Duration,
 };
@@ -18,14 +19,19 @@ pub enum EstimateType {
     Unbounded, // Deprecated.  Remove in the Solana v1.6.0 timeframe
 }
 
-pub fn calculate_stake_weighted_timestamp<T>(
-    unique_timestamps: &HashMap<Pubkey, (Slot, UnixTimestamp)>,
+pub fn calculate_stake_weighted_timestamp<I, K, V, T>(
+    unique_timestamps: I,
     stakes: &HashMap<Pubkey, (u64, T /*Account|ArcVoteAccount*/)>,
     slot: Slot,
     slot_duration: Duration,
     estimate_type: EstimateType,
     epoch_start_timestamp: Option<(Slot, UnixTimestamp)>,
-) -> Option<UnixTimestamp> {
+) -> Option<UnixTimestamp>
+where
+    I: IntoIterator<Item = (K, V)>,
+    K: Borrow<Pubkey>,
+    V: Borrow<(Slot, UnixTimestamp)>,
+{
     match estimate_type {
         EstimateType::Bounded => calculate_bounded_stake_weighted_timestamp(
             unique_timestamps,
@@ -43,17 +49,23 @@ pub fn calculate_stake_weighted_timestamp<T>(
     }
 }
 
-fn calculate_unbounded_stake_weighted_timestamp<T>(
-    unique_timestamps: &HashMap<Pubkey, (Slot, UnixTimestamp)>,
+fn calculate_unbounded_stake_weighted_timestamp<I, K, V, T>(
+    unique_timestamps: I,
     stakes: &HashMap<Pubkey, (u64, T /*Account|ArcVoteAccount*/)>,
     slot: Slot,
     slot_duration: Duration,
-) -> Option<UnixTimestamp> {
+) -> Option<UnixTimestamp>
+where
+    I: IntoIterator<Item = (K, V)>,
+    K: Borrow<Pubkey>,
+    V: Borrow<(Slot, UnixTimestamp)>,
+{
     let (stake_weighted_timestamps_sum, total_stake) = unique_timestamps
-        .iter()
-        .filter_map(|(vote_pubkey, (timestamp_slot, timestamp))| {
+        .into_iter()
+        .filter_map(|(vote_pubkey, slot_timestamp)| {
+            let (timestamp_slot, timestamp) = slot_timestamp.borrow();
             let offset = (slot - timestamp_slot) as u32 * slot_duration;
-            stakes.get(&vote_pubkey).map(|(stake, _account)| {
+            stakes.get(vote_pubkey.borrow()).map(|(stake, _account)| {
                 (
                     (*timestamp as u128 + offset.as_secs() as u128) * *stake as u128,
                     stake,
@@ -70,20 +82,26 @@ fn calculate_unbounded_stake_weighted_timestamp<T>(
     }
 }
 
-fn calculate_bounded_stake_weighted_timestamp<T>(
-    unique_timestamps: &HashMap<Pubkey, (Slot, UnixTimestamp)>,
+fn calculate_bounded_stake_weighted_timestamp<I, K, V, T>(
+    unique_timestamps: I,
     stakes: &HashMap<Pubkey, (u64, T /*Account|ArcVoteAccount*/)>,
     slot: Slot,
     slot_duration: Duration,
     epoch_start_timestamp: Option<(Slot, UnixTimestamp)>,
-) -> Option<UnixTimestamp> {
+) -> Option<UnixTimestamp>
+where
+    I: IntoIterator<Item = (K, V)>,
+    K: Borrow<Pubkey>,
+    V: Borrow<(Slot, UnixTimestamp)>,
+{
     let mut stake_per_timestamp: BTreeMap<UnixTimestamp, u128> = BTreeMap::new();
     let mut total_stake = 0;
-    for (vote_pubkey, (timestamp_slot, timestamp)) in unique_timestamps.iter() {
+    for (vote_pubkey, slot_timestamp) in unique_timestamps {
+        let (timestamp_slot, timestamp) = slot_timestamp.borrow();
         let offset = slot.saturating_sub(*timestamp_slot) as u32 * slot_duration;
         let estimate = timestamp + offset.as_secs() as i64;
         let stake = stakes
-            .get(&vote_pubkey)
+            .get(vote_pubkey.borrow())
             .map(|(stake, _account)| stake)
             .unwrap_or(&0);
         stake_per_timestamp
