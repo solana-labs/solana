@@ -1583,7 +1583,7 @@ pub mod test {
                 vote_state.process_slot_vote_unchecked(*slot);
             }
             VoteState::serialize(
-                &VoteStateVersions::Current(Box::new(vote_state)),
+                &VoteStateVersions::new_current(vote_state),
                 &mut account.data,
             )
             .expect("serialize state");
