@@ -8,6 +8,10 @@ pub enum VoteStateVersions {
 }
 
 impl VoteStateVersions {
+    pub fn new_current(vote_state: VoteState) -> Self {
+        Self::Current(Box::new(vote_state))
+    }
+
     pub fn convert_to_current(self) -> VoteState {
         match self {
             VoteStateVersions::V0_23_5(state) => {

@@ -2562,7 +2562,7 @@ pub(crate) mod tests {
             let mut leader_vote_account = bank.get_account(&pubkey).unwrap();
             let mut vote_state = VoteState::from(&leader_vote_account).unwrap();
             vote_state.process_slot_vote_unchecked(vote_slot);
-            let versioned = VoteStateVersions::Current(Box::new(vote_state));
+            let versioned = VoteStateVersions::new_current(vote_state);
             VoteState::to(&versioned, &mut leader_vote_account).unwrap();
             bank.store_account(&pubkey, &leader_vote_account);
         }
