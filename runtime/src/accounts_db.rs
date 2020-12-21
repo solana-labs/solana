@@ -430,6 +430,8 @@ pub struct AccountsDB {
     /// Set of storage paths to pick from
     pub(crate) paths: Vec<PathBuf>,
 
+    pub shrink_paths: RwLock<Option<Vec<PathBuf>>>,
+
     /// Directory of paths this accounts_db needs to hold/remove
     temp_paths: Option<Vec<TempDir>>,
 
@@ -511,6 +513,7 @@ impl Default for AccountsDB {
             shrink_candidate_slots: Mutex::new(Vec::new()),
             write_version: AtomicU64::new(0),
             paths: vec![],
+            shrink_paths: RwLock::new(None),
             temp_paths: None,
             file_size: DEFAULT_FILE_SIZE,
             thread_pool: rayon::ThreadPoolBuilder::new()
@@ -554,6 +557,15 @@ impl AccountsDB {
             }
         }
         new
+    }
+
+    pub fn set_shrink_paths(&self, paths: Vec<PathBuf>) {
+        assert!(!paths.is_empty());
+        let mut shrink_paths = self.shrink_paths.write().unwrap();
+        for path in &paths {
+            std::fs::create_dir_all(path).expect("Create directory failed.");
+        }
+        *shrink_paths = Some(paths);
     }
 
     pub fn file_size(&self) -> u64 {
@@ -989,11 +1001,28 @@ impl AccountsDB {
     }
 
     fn shrink_stale_slot(&self, candidates: &mut MutexGuard<Vec<Slot>>) -> usize {
-        if let Some(slot) = self.do_next_shrink_slot(candidates) {
-            self.do_shrink_stale_slot(slot)
-        } else {
-            0
+        let mut shrunken_account_total = 0;
+        let mut shrunk_slot_count = 0;
+        let start = Instant::now();
+        let num_roots = self.accounts_index.num_roots();
+        loop {
+            if let Some(slot) = self.do_next_shrink_slot(candidates) {
+                shrunken_account_total += self.do_shrink_stale_slot(slot);
+            } else {
+                return 0;
+            }
+            if start.elapsed().as_millis() > 100 || shrunk_slot_count > num_roots / 10 {
+                debug!(
+                    "do_shrink_stale_slot: {} {} {}us",
+                    shrunk_slot_count,
+                    candidates.len(),
+                    start.elapsed().as_micros()
+                );
+                break;
+            }
+            shrunk_slot_count += 1;
         }
+        shrunken_account_total
     }
 
     // Reads all accounts in given slot's AppendVecs and filter only to alive,
@@ -1028,14 +1057,15 @@ impl AccountsDB {
                 } else if !forced {
                     let sparse_by_count = (alive_count as f32 / stored_count as f32) <= 0.8;
                     let sparse_by_bytes = (written_bytes as f32 / total_bytes as f32) <= 0.8;
-                    let skip_shrink = !sparse_by_count && !sparse_by_bytes;
-                    info!(
-                        "shrink_stale_slot ({}): skip_shrink: {} count: {}/{} byte: {}/{}",
-                        slot, skip_shrink, alive_count, stored_count, written_bytes, total_bytes,
-                    );
-                    if skip_shrink {
+                    let not_sparse = !sparse_by_count && !sparse_by_bytes;
+                    let too_small_to_shrink = total_bytes <= PAGE_SIZE;
+                    if not_sparse || too_small_to_shrink {
                         return 0;
                     }
+                    info!(
+                        "shrink_stale_slot ({}): not_sparse: {} count: {}/{} byte: {}/{}",
+                        slot, not_sparse, alive_count, stored_count, written_bytes, total_bytes,
+                    );
                 }
                 for store in stores.values() {
                     let mut start = 0;
@@ -1124,7 +1154,14 @@ impl AccountsDB {
             find_alive_elapsed = start.as_us();
 
             let mut start = Measure::start("create_and_insert_store_elapsed");
-            let shrunken_store = self.create_and_insert_store(slot, aligned_total);
+            let shrunken_store = {
+                let maybe_shrink_paths = self.shrink_paths.read().unwrap();
+                if let Some(ref shrink_paths) = *maybe_shrink_paths {
+                    self.create_and_insert_store_with_paths(slot, aligned_total, shrink_paths)
+                } else {
+                    self.create_and_insert_store(slot, aligned_total)
+                }
+            };
             start.stop();
             create_and_insert_store_elapsed = start.as_us();
 
@@ -1469,9 +1506,17 @@ impl AccountsDB {
     }
 
     fn create_and_insert_store(&self, slot: Slot, size: u64) -> Arc<AccountStorageEntry> {
-        let path_index = thread_rng().gen_range(0, self.paths.len());
-        let store =
-            Arc::new(self.new_storage_entry(slot, &Path::new(&self.paths[path_index]), size));
+        self.create_and_insert_store_with_paths(slot, size, &self.paths)
+    }
+
+    fn create_and_insert_store_with_paths(
+        &self,
+        slot: Slot,
+        size: u64,
+        paths: &[PathBuf],
+    ) -> Arc<AccountStorageEntry> {
+        let path_index = thread_rng().gen_range(0, paths.len());
+        let store = Arc::new(self.new_storage_entry(slot, &Path::new(&paths[path_index]), size));
         let store_for_index = store.clone();
 
         let slot_storages: SlotStores = self.storage.get_slot_stores(slot).unwrap_or_else(||
