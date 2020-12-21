@@ -363,14 +363,7 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
     let metadata = fs::metadata(&archive_path)?;
     fs::rename(&archive_path, &snapshot_package.tar_output_file)?;
 
-    // Keep around at most three snapshot archives
-    let mut archives = get_snapshot_archives(snapshot_package.tar_output_file.parent().unwrap());
-    // Keep the oldest snapshot so we can always play the ledger from it.
-    archives.pop();
-    for old_archive in archives.into_iter().skip(2) {
-        fs::remove_file(old_archive.0)
-            .unwrap_or_else(|err| info!("Failed to remove old snapshot: {:}", err));
-    }
+    purge_old_snapshot_archives(snapshot_package.tar_output_file.parent().unwrap());
 
     timer.stop();
     info!(
@@ -744,6 +737,16 @@ pub fn get_highest_snapshot_archive_path<P: AsRef<Path>>(
 ) -> Option<(PathBuf, (Slot, Hash, CompressionType))> {
     let archives = get_snapshot_archives(snapshot_output_dir);
     archives.into_iter().next()
+}
+
+pub fn purge_old_snapshot_archives<P: AsRef<Path>>(snapshot_output_dir: P) {
+    let mut archives = get_snapshot_archives(snapshot_output_dir);
+    // Keep the oldest snapshot so we can always play the ledger from it.
+    archives.pop();
+    for old_archive in archives.into_iter().skip(2) {
+        fs::remove_file(old_archive.0)
+            .unwrap_or_else(|err| info!("Failed to remove old snapshot: {:}", err));
+    }
 }
 
 pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
