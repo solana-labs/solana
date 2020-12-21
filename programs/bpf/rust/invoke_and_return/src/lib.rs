@@ -2,8 +2,8 @@
 //! uses the instruction data provided and all the accounts
 
 use solana_program::{
-    account_info::AccountInfo, bpf_loader_upgradeable, entrypoint, entrypoint::ProgramResult,
-    instruction::AccountMeta, instruction::Instruction, program::invoke, pubkey::Pubkey,
+    account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, instruction::AccountMeta,
+    instruction::Instruction, program::invoke, pubkey::Pubkey,
 };
 
 entrypoint!(process_instruction);
@@ -15,13 +15,8 @@ fn process_instruction(
 ) -> ProgramResult {
     let to_call = accounts[0].key;
     let infos = accounts;
-    let last = if bpf_loader_upgradeable::check_id(accounts[0].owner) {
-        accounts.len() - 1
-    } else {
-        accounts.len()
-    };
     let instruction = Instruction {
-        accounts: accounts[1..last]
+        accounts: accounts[1..]
             .iter()
             .map(|acc| AccountMeta {
                 pubkey: *acc.key,
