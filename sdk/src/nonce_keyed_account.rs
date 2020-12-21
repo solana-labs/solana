@@ -90,6 +90,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                     if data.blockhash == recent_blockhashes[0].blockhash {
                         return Err(NonceError::NotExpired.into());
                     }
+                    self.set_state(&Versions::new_current(State::Uninitialized))?;
                 } else {
                     let min_balance = rent.minimum_balance(self.data_len()?);
                     if lamports + min_balance > self.lamports()? {
@@ -271,6 +272,11 @@ mod test {
                 );
                 // Account balance goes to `to`
                 assert_eq!(to_keyed.account.borrow().lamports, expect_to_lamports);
+                let state = AccountUtilsState::<Versions>::state(keyed_account)
+                    .unwrap()
+                    .convert_to_current();
+                // Empty balance deinitializes data
+                assert_eq!(state, State::Uninitialized);
             })
         })
     }
@@ -627,6 +633,10 @@ mod test {
                         &signers,
                     )
                     .unwrap();
+                let state = AccountUtilsState::<Versions>::state(nonce_keyed)
+                    .unwrap()
+                    .convert_to_current();
+                assert_eq!(state, State::Uninitialized);
                 assert_eq!(nonce_keyed.account.borrow().lamports, nonce_expect_lamports);
                 assert_eq!(to_keyed.account.borrow().lamports, to_expect_lamports);
             })

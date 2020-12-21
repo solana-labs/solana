@@ -236,6 +236,8 @@ impl Accounts {
                         })? {
                         SystemAccountKind::System => 0,
                         SystemAccountKind::Nonce => {
+                            // Should we ever allow a fees charge to zero a nonce account's
+                            // balance. The state MUST be set to uninitialized in that case
                             rent_collector.rent.minimum_balance(nonce::State::size())
                         }
                     };
