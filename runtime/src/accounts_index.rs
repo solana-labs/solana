@@ -10,6 +10,7 @@ use std::ops::{
     Bound::{Excluded, Included, Unbounded},
 };
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 use std::{
     collections::{
         btree_map::{self, BTreeMap},
@@ -18,6 +19,7 @@ use std::{
     ops::{Range, RangeBounds},
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
+
 pub const ITER_BATCH_SIZE: usize = 1000;
 
 pub type SlotList<T> = Vec<(Slot, T)>;
@@ -214,7 +216,7 @@ struct SecondaryIndex {
     // Map from index keys to index values
     index: DashMap<Pubkey, DashSet<Pubkey>>,
     // Map from index values back to index keys, used for cleanup.
-    reverse_index: DashMap<Pubkey, DashSet<Pubkey>>,
+    reverse_index: DashMap<Pubkey, Mutex<Vec<Pubkey>>>,
 }
 
 impl SecondaryIndex {
@@ -231,10 +233,13 @@ impl SecondaryIndex {
             let keys = self.reverse_index.get(value).unwrap_or_else(|| {
                 self.reverse_index
                     .entry(*value)
-                    .or_insert(DashSet::new())
+                    .or_insert(Mutex::new(Vec::with_capacity(1)))
                     .downgrade()
             });
-            keys.insert(*key);
+            let mut keys = keys.lock().unwrap();
+            if !keys.contains(key) {
+                keys.push(*key);
+            }
         }
     }
 
@@ -243,7 +248,7 @@ impl SecondaryIndex {
         let keys: Option<Vec<Pubkey>> = self
             .reverse_index
             .remove(value)
-            .map(|(_, keys)| keys.into_iter().collect());
+            .map(|(_, keys)| keys.into_inner().unwrap());
 
         // Remove this value from those keys
         if let Some(keys) = keys {
@@ -1490,6 +1495,8 @@ mod tests {
             .get(&account_key)
             .unwrap()
             .value()
+            .lock()
+            .unwrap()
             .contains(&mint_key));
 
         // Insert into index, simulate dead key
