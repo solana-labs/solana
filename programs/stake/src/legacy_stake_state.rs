@@ -1004,7 +1004,7 @@ mod tests {
         let vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &vote_account);
         let vote_state_credits = vote_state.credits();
         vote_keyed_account
-            .set_state(&VoteStateVersions::Current(Box::new(vote_state)))
+            .set_state(&VoteStateVersions::new_current(vote_state))
             .unwrap();
 
         let stake_pubkey = solana_sdk::pubkey::new_rand();
@@ -1902,7 +1902,7 @@ mod tests {
         ));
         let vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &vote_account);
         vote_keyed_account
-            .set_state(&VoteStateVersions::Current(Box::new(VoteState::default())))
+            .set_state(&VoteStateVersions::new_current(VoteState::default()))
             .unwrap();
         assert_eq!(
             stake_keyed_account.delegate(
@@ -1993,7 +1993,7 @@ mod tests {
         ));
         let vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &vote_account);
         vote_keyed_account
-            .set_state(&VoteStateVersions::Current(Box::new(VoteState::default())))
+            .set_state(&VoteStateVersions::new_current(VoteState::default()))
             .unwrap();
 
         stake_keyed_account
@@ -2235,7 +2235,7 @@ mod tests {
         ));
         let vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &vote_account);
         vote_keyed_account
-            .set_state(&VoteStateVersions::Current(Box::new(VoteState::default())))
+            .set_state(&VoteStateVersions::new_current(VoteState::default()))
             .unwrap();
         let signers = vec![stake_pubkey].into_iter().collect();
         assert_eq!(
@@ -2351,7 +2351,7 @@ mod tests {
         ));
         let vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &vote_account);
         vote_keyed_account
-            .set_state(&VoteStateVersions::Current(Box::new(VoteState::default())))
+            .set_state(&VoteStateVersions::new_current(VoteState::default()))
             .unwrap();
         let signers = vec![stake_pubkey].into_iter().collect();
         assert_eq!(

@@ -316,7 +316,7 @@ mod tests {
         let vote_state = VoteState::new(&vote_init, &clock);
         let account = Account::new_data(
             rng.gen(), // lamports
-            &VoteStateVersions::Current(Box::new(vote_state.clone())),
+            &VoteStateVersions::new_current(vote_state.clone()),
             &Pubkey::new_unique(), // owner
         )
         .unwrap();

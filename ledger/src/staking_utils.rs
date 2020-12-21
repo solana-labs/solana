@@ -311,7 +311,7 @@ pub(crate) mod tests {
         let vote_accounts = stakes.into_iter().map(|(stake, vote_state)| {
             let account = Account::new_data(
                 rng.gen(), // lamports
-                &VoteStateVersions::Current(Box::new(vote_state)),
+                &VoteStateVersions::new_current(vote_state),
                 &Pubkey::new_unique(), // owner
             )
             .unwrap();
