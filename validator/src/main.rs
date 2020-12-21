@@ -1008,6 +1008,7 @@ pub fn main() {
                 .long("accounts")
                 .value_name("PATHS")
                 .takes_value(true)
+                .multiple(true)
                 .help("Comma separated persistent accounts location"),
         )
         .arg(
@@ -1529,11 +1530,16 @@ pub fn main() {
         solana_net_utils::parse_port_range(matches.value_of("dynamic_port_range").unwrap())
             .expect("invalid dynamic_port_range");
 
-    let account_paths = if let Some(account_paths) = matches.value_of("account_paths") {
-        account_paths.split(',').map(PathBuf::from).collect()
-    } else {
-        vec![ledger_path.join("accounts")]
-    };
+    let account_paths: Vec<PathBuf> =
+        if let Ok(account_paths) = values_t!(matches, "account_paths", String) {
+            account_paths
+                .join(",")
+                .split(',')
+                .map(PathBuf::from)
+                .collect()
+        } else {
+            vec![ledger_path.join("accounts")]
+        };
 
     // Create and canonicalize account paths to avoid issues with symlink creation
     validator_config.account_paths = account_paths
