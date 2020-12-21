@@ -1410,7 +1410,7 @@ pub mod test {
             if !heaviest_fork_failures.is_empty() {
                 return heaviest_fork_failures;
             }
-            let vote = tower.new_vote_from_bank(&vote_bank, &my_vote_pubkey).0;
+            let vote = tower.new_vote_from_bank(&vote_bank, &my_vote_pubkey, 0).0;
             if let Some(new_root) = tower.record_bank_vote(vote) {
                 self.set_root(new_root);
             }

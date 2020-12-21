@@ -1030,7 +1030,6 @@ impl Bank {
                     .map(|drop_callback| drop_callback.clone_box()),
             )),
             freeze_started: AtomicBool::new(false),
-            vote_hash_mismatch_count: AtomicU64::new(parent.vote_hash_mismatch_count()),
             vote_hash_mismatch_count: parent.vote_hash_mismatch_count.clone(),
         };
 
@@ -1168,7 +1167,6 @@ impl Bank {
             feature_set: new(),
             drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
-            vote_hash_mismatch_count: AtomicU64::new(0),
             vote_hash_mismatch_count: Arc::new(AtomicU64::new(0)),
         };
         bank.finish_init(genesis_config, additional_builtins);
