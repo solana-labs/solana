@@ -149,11 +149,10 @@ fn test_spend_and_verify_all_nodes_3() {
 }
 
 #[test]
-#[ignore]
+//#[ignore]
 #[serial]
 fn test_vote_hash_mismatch() {
     solana_logger::setup();
-    error!("test_vote_hash_mismatch");
     let num_nodes = 4;
     let mut validator_config = ValidatorConfig::default();
     let debug_votes = false;
@@ -163,9 +162,9 @@ fn test_vote_hash_mismatch() {
         validator_config.debug_keys = Some(Arc::new(debug_keys));
     }
     let mut validator_configs = vec![validator_config.clone(); num_nodes - 1];
-    validator_config.bad_vote_rate = 10;
+    validator_config.bad_vote_rate = 2;
     validator_configs.push(validator_config);
-    let config = ClusterConfig {
+    let mut config = ClusterConfig {
         cluster_lamports: 10_000,
         poh_config: PohConfig::new_sleep(Duration::from_millis(50)),
         node_stakes: vec![100; num_nodes],
@@ -173,7 +172,7 @@ fn test_vote_hash_mismatch() {
         ..ClusterConfig::default()
     };
     warn!("Starting cluster..");
-    let cluster = LocalCluster::new(&config);
+    let cluster = LocalCluster::new(&mut config);
     let keys = cluster.get_node_pubkeys();
     warn!("Waiting for cluster..");
     let mut slot = 0;
@@ -192,9 +191,9 @@ fn test_vote_hash_mismatch() {
             if let Ok(count) = res {
                 max_mismatch_count = std::cmp::max(count, max_mismatch_count);
                 if count > 0 {
+                    warn!("{} vote hash mismatch: {}", i, count);
                     break;
                 }
-                warn!("{} vote hash mismatch: {}", i, count);
             }
         }
         if max_mismatch_count > 0 {

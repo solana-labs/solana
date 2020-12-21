@@ -944,6 +944,7 @@ impl Bank {
         slot: Slot,
         reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
     ) -> Self {
+        warn!("_new_from_parent, slot: {}", slot);
         parent.freeze();
         assert_ne!(slot, parent.slot());
 
@@ -2956,6 +2957,8 @@ impl Bank {
         let transaction_log_collector_config =
             self.transaction_log_collector_config.read().unwrap();
 
+        let mut vote_hash_mismatch_errors: u64 = 0;
+
         for (i, ((r, _nonce_rollback), tx)) in executed.iter().zip(txs.iter()).enumerate() {
             if let Some(debug_keys) = &self.transaction_debug_keys {
                 for key in &tx.message.account_keys {
@@ -3009,6 +3012,16 @@ impl Bank {
                 }
             }
 
+            match &*r {
+                Err(b) => {
+                    if Bank::check_for_vote_hash_mismatch(tx, &b) == 1 {
+                        vote_hash_mismatch_errors += 1;
+                    }
+                }
+                Ok(()) => {
+                }
+            }
+
             if r.is_ok() {
                 tx_count += 1;
             } else {
@@ -3017,8 +3030,17 @@ impl Bank {
                 }
             }
         }
-        self.vote_hash_mismatch_count
-            .fetch_add(vote_hash_mismatch_errors, Relaxed);
+        if vote_hash_mismatch_errors > 0 {
+            self.vote_hash_mismatch_count
+                .fetch_add(vote_hash_mismatch_errors, Relaxed);
+            // would like to use parents_inclusive here
+            // but, this idea is likely too slow anyway - traversing up to all parents.
+            self.parents().iter().enumerate().for_each(|(_i, p)| {
+                p.vote_hash_mismatch_count
+                    .fetch_add(vote_hash_mismatch_errors, Relaxed);
+            });
+        }
+    
         if *err_count > 0 {
             debug!(
                 "{} errors of {} txs",
