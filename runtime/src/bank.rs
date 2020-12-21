@@ -1877,35 +1877,36 @@ impl Bank {
         epoch_start_timestamp: Option<(Slot, UnixTimestamp)>,
     ) -> Option<UnixTimestamp> {
         let mut get_timestamp_estimate_time = Measure::start("get_timestamp_estimate");
-        let recent_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = self
-            .vote_accounts()
-            .into_iter()
-            .filter_map(|(pubkey, (_, account))| {
-                account.vote_state().as_ref().ok().and_then(|state| {
-                    let timestamp_slot = state.last_timestamp.slot;
-                    if (self
-                        .feature_set
-                        .is_active(&feature_set::timestamp_bounding::id())
-                        && self.slot().checked_sub(timestamp_slot)?
-                            <= self.epoch_schedule().slots_per_epoch)
-                        || self.slot().checked_sub(timestamp_slot)?
-                            <= DEPRECATED_TIMESTAMP_SLOT_RANGE as u64
+        let timestamp_bounding_enabled = self
+            .feature_set
+            .is_active(&feature_set::timestamp_bounding::id());
+        let slots_per_epoch = self.epoch_schedule().slots_per_epoch;
+        let recent_timestamps =
+            self.vote_accounts()
+                .into_iter()
+                .filter_map(|(pubkey, (_, account))| {
+                    let vote_state = account.vote_state();
+                    let vote_state = vote_state.as_ref().ok()?;
+                    let slot_delta = self.slot().checked_sub(vote_state.last_timestamp.slot)?;
+                    if (timestamp_bounding_enabled && slot_delta <= slots_per_epoch)
+                        || slot_delta <= DEPRECATED_TIMESTAMP_SLOT_RANGE as u64
                     {
                         Some((
                             pubkey,
-                            (state.last_timestamp.slot, state.last_timestamp.timestamp),
+                            (
+                                vote_state.last_timestamp.slot,
+                                vote_state.last_timestamp.timestamp,
+                            ),
                         ))
                     } else {
                         None
                     }
-                })
-            })
-            .collect();
+                });
         let slot_duration = Duration::from_nanos(self.ns_per_slot as u64);
         let epoch = self.epoch_schedule().get_epoch(self.slot());
         let stakes = self.epoch_vote_accounts(epoch)?;
         let stake_weighted_timestamp = calculate_stake_weighted_timestamp(
-            &recent_timestamps,
+            recent_timestamps,
             stakes,
             self.slot(),
             slot_duration,
@@ -3169,25 +3170,24 @@ impl Bank {
     //
     // Ref: collect_fees
     #[allow(clippy::needless_collect)]
-    fn distribute_rent_to_validators(
-        &self,
-        vote_account_hashmap: &HashMap<Pubkey, (u64, ArcVoteAccount)>,
-        rent_to_be_distributed: u64,
-    ) {
+    fn distribute_rent_to_validators<I>(&self, vote_accounts: I, rent_to_be_distributed: u64)
+    where
+        I: IntoIterator<Item = (Pubkey, (u64, ArcVoteAccount))>,
+    {
         let mut total_staked = 0;
 
         // Collect the stake associated with each validator.
         // Note that a validator may be present in this vector multiple times if it happens to have
         // more than one staked vote account somehow
-        let mut validator_stakes = vote_account_hashmap
-            .iter()
+        let mut validator_stakes = vote_accounts
+            .into_iter()
             .filter_map(|(_vote_pubkey, (staked, account))| {
-                if *staked == 0 {
+                if staked == 0 {
                     None
                 } else {
-                    total_staked += *staked;
+                    total_staked += staked;
                     let node_pubkey = account.vote_state().as_ref().ok()?.node_pubkey;
-                    Some((node_pubkey, *staked))
+                    Some((node_pubkey, staked))
                 }
             })
             .collect::<Vec<(Pubkey, u64)>>();
@@ -3287,7 +3287,7 @@ impl Bank {
             return;
         }
 
-        self.distribute_rent_to_validators(&self.vote_accounts(), rent_to_be_distributed);
+        self.distribute_rent_to_validators(self.vote_accounts(), rent_to_be_distributed);
     }
 
     fn collect_rent(
@@ -4326,8 +4326,14 @@ impl Bank {
     ///   attributed to each account
     /// Note: This clones the entire vote-accounts hashmap. For a single
     /// account lookup use get_vote_account instead.
-    pub fn vote_accounts(&self) -> HashMap<Pubkey, (u64 /*stake*/, ArcVoteAccount)> {
-        self.stakes.read().unwrap().vote_accounts().clone()
+    pub fn vote_accounts(&self) -> Vec<(Pubkey, (u64 /*stake*/, ArcVoteAccount))> {
+        self.stakes
+            .read()
+            .unwrap()
+            .vote_accounts()
+            .iter()
+            .map(|(k, v)| (*k, v.clone()))
+            .collect()
     }
 
     /// Vote account for the given vote account pubkey along with the stake.
@@ -5697,7 +5703,7 @@ pub(crate) mod tests {
 
         let bank = Bank::new(&genesis_config);
         let old_validator_lamports = bank.get_balance(&validator_pubkey);
-        bank.distribute_rent_to_validators(&bank.vote_accounts(), RENT_TO_BE_DISTRIBUTED);
+        bank.distribute_rent_to_validators(bank.vote_accounts(), RENT_TO_BE_DISTRIBUTED);
         let new_validator_lamports = bank.get_balance(&validator_pubkey);
         assert_eq!(
             new_validator_lamports,
@@ -5711,7 +5717,7 @@ pub(crate) mod tests {
         let bank = std::panic::AssertUnwindSafe(Bank::new(&genesis_config));
         let old_validator_lamports = bank.get_balance(&validator_pubkey);
         let new_validator_lamports = std::panic::catch_unwind(|| {
-            bank.distribute_rent_to_validators(&bank.vote_accounts(), RENT_TO_BE_DISTRIBUTED);
+            bank.distribute_rent_to_validators(bank.vote_accounts(), RENT_TO_BE_DISTRIBUTED);
             bank.get_balance(&validator_pubkey)
         });
 
@@ -8484,7 +8490,7 @@ pub(crate) mod tests {
 
         bank.process_transaction(&transaction).unwrap();
 
-        let vote_accounts = bank.vote_accounts();
+        let vote_accounts = bank.vote_accounts().into_iter().collect::<HashMap<_, _>>();
 
         assert_eq!(vote_accounts.len(), 2);
 

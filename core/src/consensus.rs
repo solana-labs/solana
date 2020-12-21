@@ -216,6 +216,7 @@ impl Tower {
     where
         F: IntoIterator<Item = (Pubkey, (u64, ArcVoteAccount))>,
     {
+        let mut vote_slots = HashSet::new();
         let mut voted_stakes = HashMap::new();
         let mut total_stake = 0;
         let mut bank_weight = 0;
@@ -278,7 +279,7 @@ impl Tower {
 
             for vote in &vote_state.votes {
                 bank_weight += vote.lockout() as u128 * voted_stake as u128;
-                Self::populate_ancestor_voted_stakes(&mut voted_stakes, &vote, ancestors);
+                vote_slots.insert(vote.slot);
             }
 
             if start_root != vote_state.root_slot {
@@ -289,7 +290,7 @@ impl Tower {
                     };
                     trace!("ROOT: {}", vote.slot);
                     bank_weight += vote.lockout() as u128 * voted_stake as u128;
-                    Self::populate_ancestor_voted_stakes(&mut voted_stakes, &vote, ancestors);
+                    vote_slots.insert(vote.slot);
                 }
             }
             if let Some(root) = vote_state.root_slot {
@@ -298,7 +299,7 @@ impl Tower {
                     slot: root,
                 };
                 bank_weight += vote.lockout() as u128 * voted_stake as u128;
-                Self::populate_ancestor_voted_stakes(&mut voted_stakes, &vote, ancestors);
+                vote_slots.insert(vote.slot);
             }
 
             // The last vote in the vote stack is a simulated vote on bank_slot, which
@@ -326,6 +327,9 @@ impl Tower {
             total_stake += voted_stake;
         }
 
+        // TODO: populate_ancestor_voted_stakes only adds zeros. Comment why
+        // that is necessary (if so).
+        Self::populate_ancestor_voted_stakes(&mut voted_stakes, vote_slots, ancestors);
         ComputedBankState {
             voted_stakes,
             total_stake,
@@ -766,20 +770,19 @@ impl Tower {
     /// Update lockouts for all the ancestors
     pub(crate) fn populate_ancestor_voted_stakes(
         voted_stakes: &mut VotedStakes,
-        vote: &Lockout,
+        vote_slots: impl IntoIterator<Item = Slot>,
         ancestors: &HashMap<Slot, HashSet<Slot>>,
     ) {
         // If there's no ancestors, that means this slot must be from before the current root,
         // in which case the lockouts won't be calculated in bank_weight anyways, so ignore
         // this slot
-        let vote_slot_ancestors = ancestors.get(&vote.slot);
-        if vote_slot_ancestors.is_none() {
-            return;
-        }
-        let mut slot_with_ancestors = vec![vote.slot];
-        slot_with_ancestors.extend(vote_slot_ancestors.unwrap());
-        for slot in slot_with_ancestors {
-            voted_stakes.entry(slot).or_default();
+        for vote_slot in vote_slots {
+            if let Some(slot_ancestors) = ancestors.get(&vote_slot) {
+                voted_stakes.entry(vote_slot).or_default();
+                for slot in slot_ancestors {
+                    voted_stakes.entry(*slot).or_default();
+                }
+            }
         }
     }
 
@@ -793,15 +796,11 @@ impl Tower {
     ) {
         // If there's no ancestors, that means this slot must be from
         // before the current root, so ignore this slot
-        let vote_slot_ancestors = ancestors.get(&voted_slot);
-        if vote_slot_ancestors.is_none() {
-            return;
-        }
-        let mut slot_with_ancestors = vec![voted_slot];
-        slot_with_ancestors.extend(vote_slot_ancestors.unwrap());
-        for slot in slot_with_ancestors {
-            let current = voted_stakes.entry(slot).or_default();
-            *current += voted_stake;
+        if let Some(vote_slot_ancestors) = ancestors.get(&voted_slot) {
+            *voted_stakes.entry(voted_slot).or_default() += voted_stake;
+            for slot in vote_slot_ancestors {
+                *voted_stakes.entry(*slot).or_default() += voted_stake;
+            }
         }
     }
 
