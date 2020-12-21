@@ -168,52 +168,40 @@ pub fn download_snapshot(
     desired_snapshot_hash: (Slot, Hash),
     use_progress_bar: bool,
 ) -> Result<(), String> {
-    // Remove all snapshot not matching the desired hash
-    let snapshot_packages = snapshot_utils::get_snapshot_archives(ledger_path);
-    let mut found_package = false;
-    for (snapshot_package, (snapshot_slot, snapshot_hash, _compression)) in snapshot_packages.iter()
-    {
-        if (*snapshot_slot, *snapshot_hash) != desired_snapshot_hash {
-            info!("Removing old snapshot: {:?}", snapshot_package);
-            fs::remove_file(snapshot_package)
-                .unwrap_or_else(|err| info!("Failed to remove old snapshot: {:}", err));
-        } else {
-            found_package = true;
+    snapshot_utils::purge_old_snapshot_archives(ledger_path);
+
+    for compression in &[
+        CompressionType::Zstd,
+        CompressionType::Gzip,
+        CompressionType::Bzip2,
+    ] {
+        let desired_snapshot_package = snapshot_utils::get_snapshot_archive_path(
+            ledger_path,
+            &desired_snapshot_hash,
+            compression,
+        );
+
+        if desired_snapshot_package.is_file() {
+            return Ok(());
+        }
+
+        if download_file(
+            &format!(
+                "http://{}/{}",
+                rpc_addr,
+                desired_snapshot_package
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+            ),
+            &desired_snapshot_package,
+            use_progress_bar,
+        )
+        .is_ok()
+        {
+            return Ok(());
         }
     }
-
-    if found_package {
-        Ok(())
-    } else {
-        for compression in &[
-            CompressionType::Zstd,
-            CompressionType::Gzip,
-            CompressionType::Bzip2,
-        ] {
-            let desired_snapshot_package = snapshot_utils::get_snapshot_archive_path(
-                ledger_path,
-                &desired_snapshot_hash,
-                compression,
-            );
-
-            if download_file(
-                &format!(
-                    "http://{}/{}",
-                    rpc_addr,
-                    desired_snapshot_package
-                        .file_name()
-                        .unwrap()
-                        .to_str()
-                        .unwrap()
-                ),
-                &desired_snapshot_package,
-                use_progress_bar,
-            )
-            .is_ok()
-            {
-                return Ok(());
-            }
-        }
-        Err("Snapshot couldn't be downloaded".to_string())
-    }
+    Err("Snapshot couldn't be downloaded".to_string())
 }
