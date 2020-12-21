@@ -214,7 +214,7 @@ impl VoteState {
     pub fn size_of() -> usize {
         // Upper limit on the size of the Vote State. Equal to
         // size_of(VoteState) when votes.len() is MAX_LOCKOUT_HISTORY
-        let vote_state = VoteStateVersions::Current(Box::new(Self::get_max_sized_vote_state()));
+        let vote_state = VoteStateVersions::new_current(Self::get_max_sized_vote_state());
         serialized_size(&vote_state).unwrap() as usize
     }
 
@@ -594,7 +594,7 @@ pub fn authorize<S: std::hash::BuildHasher>(
         }
     }
 
-    vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
+    vote_account.set_state(&VoteStateVersions::new_current(vote_state))
 }
 
 /// Update the node_pubkey, requires signature of the authorized voter
@@ -614,7 +614,7 @@ pub fn update_validator_identity<S: std::hash::BuildHasher>(
 
     vote_state.node_pubkey = *node_pubkey;
 
-    vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
+    vote_account.set_state(&VoteStateVersions::new_current(vote_state))
 }
 
 /// Update the vote account's commission
@@ -631,7 +631,7 @@ pub fn update_commission<S: std::hash::BuildHasher>(
 
     vote_state.commission = commission;
 
-    vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
+    vote_account.set_state(&VoteStateVersions::new_current(vote_state))
 }
 
 fn verify_authorized_signer<S: std::hash::BuildHasher>(
@@ -683,9 +683,9 @@ pub fn initialize_account<S: std::hash::BuildHasher>(
     // node must agree to accept this vote account
     verify_authorized_signer(&vote_init.node_pubkey, signers)?;
 
-    vote_account.set_state(&VoteStateVersions::Current(Box::new(VoteState::new(
+    vote_account.set_state(&VoteStateVersions::new_current(VoteState::new(
         vote_init, clock,
-    ))))
+    )))
 }
 
 pub fn process_vote<S: std::hash::BuildHasher>(
@@ -715,7 +715,7 @@ pub fn process_vote<S: std::hash::BuildHasher>(
             .ok_or_else(|| VoteError::EmptySlots)
             .and_then(|slot| vote_state.process_timestamp(*slot, timestamp))?;
     }
-    vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
+    vote_account.set_state(&VoteStateVersions::new_current(vote_state))
 }
 
 pub fn create_account_with_authorized(
@@ -737,7 +737,7 @@ pub fn create_account_with_authorized(
         &Clock::default(),
     );
 
-    let versioned = VoteStateVersions::Current(Box::new(vote_state));
+    let versioned = VoteStateVersions::new_current(vote_state);
     VoteState::to(&versioned, &mut vote_account).unwrap();
 
     vote_account
@@ -915,11 +915,11 @@ mod tests {
         vote_state
             .votes
             .resize(MAX_LOCKOUT_HISTORY, Lockout::default());
-        let versioned = VoteStateVersions::Current(Box::new(vote_state));
+        let versioned = VoteStateVersions::new_current(vote_state);
         assert!(VoteState::serialize(&versioned, &mut buffer[0..4]).is_err());
         VoteState::serialize(&versioned, &mut buffer).unwrap();
         assert_eq!(
-            VoteStateVersions::Current(Box::new(VoteState::deserialize(&buffer).unwrap())),
+            VoteStateVersions::new_current(VoteState::deserialize(&buffer).unwrap()),
             versioned
         );
     }
@@ -1994,7 +1994,7 @@ mod tests {
                 )
             });
 
-            let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
+            let versioned = VoteStateVersions::new_current(vote_state.take().unwrap());
             VoteState::serialize(&versioned, &mut max_sized_data).unwrap();
             vote_state = Some(versioned.convert_to_current());
         }
