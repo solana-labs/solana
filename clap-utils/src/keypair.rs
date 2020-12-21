@@ -58,6 +58,15 @@ impl CliSignerInfo {
             Some(0)
         }
     }
+    pub fn index_of_or_none(&self, pubkey: Option<Pubkey>) -> Option<usize> {
+        if let Some(pubkey) = pubkey {
+            self.signers
+                .iter()
+                .position(|signer| signer.pubkey() == pubkey)
+        } else {
+            None
+        }
+    }
 }
 
 pub struct DefaultSigner {

@@ -48,6 +48,10 @@ impl RpcSender for MockSender {
             return Ok(Value::Null);
         }
         let val = match request {
+            RpcRequest::GetAccountInfo => serde_json::to_value(Response {
+                context: RpcResponseContext { slot: 1 },
+                value: Value::Null,
+            })?,
             RpcRequest::GetBalance => serde_json::to_value(Response {
                 context: RpcResponseContext { slot: 1 },
                 value: Value::Number(Number::from(50)),
