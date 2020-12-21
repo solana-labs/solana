@@ -754,7 +754,7 @@ pub struct Bank {
     transaction_count: AtomicU64,
 
     /// Number of vote hash mismatches seen, not absolute
-    vote_hash_mismatch_count: AtomicU64,
+    vote_hash_mismatch_count: Arc<AtomicU64>,
 
     /// Bank tick height
     tick_height: AtomicU64,
@@ -1031,6 +1031,7 @@ impl Bank {
             )),
             freeze_started: AtomicBool::new(false),
             vote_hash_mismatch_count: AtomicU64::new(parent.vote_hash_mismatch_count()),
+            vote_hash_mismatch_count: parent.vote_hash_mismatch_count.clone(),
         };
 
         datapoint_info!(
@@ -1168,6 +1169,7 @@ impl Bank {
             drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
             vote_hash_mismatch_count: AtomicU64::new(0),
+            vote_hash_mismatch_count: Arc::new(AtomicU64::new(0)),
         };
         bank.finish_init(genesis_config, additional_builtins);
 
@@ -3012,13 +3014,13 @@ impl Bank {
                 }
             }
 
-            match &*r {
+            match r {
                 Err(b) => {
                     if Bank::check_for_vote_hash_mismatch(tx, &b) == 1 {
                         vote_hash_mismatch_errors += 1;
                     }
                 }
-                Ok(()) => {
+                Ok(_) => {
                 }
             }
 
@@ -3033,12 +3035,6 @@ impl Bank {
         if vote_hash_mismatch_errors > 0 {
             self.vote_hash_mismatch_count
                 .fetch_add(vote_hash_mismatch_errors, Relaxed);
-            // would like to use parents_inclusive here
-            // but, this idea is likely too slow anyway - traversing up to all parents.
-            self.parents().iter().enumerate().for_each(|(_i, p)| {
-                p.vote_hash_mismatch_count
-                    .fetch_add(vote_hash_mismatch_errors, Relaxed);
-            });
         }
     
         if *err_count > 0 {
