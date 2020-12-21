@@ -42,7 +42,7 @@ pub enum InflationPointCalculationEvent {
     CreditsObserved(u64, u64),
 }
 
-fn null_tracer() -> Option<impl FnMut(&InflationPointCalculationEvent)> {
+pub(crate) fn null_tracer() -> Option<impl FnMut(&InflationPointCalculationEvent)> {
     None::<fn(&_)>
 }
 
@@ -415,7 +415,7 @@ impl Delegation {
         }
     }
 
-    fn rewrite_stake(
+    pub(crate) fn rewrite_stake(
         &mut self,
         account_balance: u64,
         rent_exempt_balance: u64,
