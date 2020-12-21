@@ -1154,10 +1154,10 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
     let my_shred_version = cluster_info.my_shred_version();
     let my_id = cluster_info.id();
 
-    for (activated_stake, vote_account) in bank.vote_accounts().values() {
+    for (_, (activated_stake, vote_account)) in bank.vote_accounts() {
         total_activated_stake += activated_stake;
 
-        if *activated_stake == 0 {
+        if activated_stake == 0 {
             continue;
         }
         let vote_state_node_pubkey = vote_account
@@ -1179,13 +1179,13 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
                 online_stake += activated_stake;
             } else {
                 wrong_shred_stake += activated_stake;
-                wrong_shred_nodes.push((*activated_stake, vote_state_node_pubkey));
+                wrong_shred_nodes.push((activated_stake, vote_state_node_pubkey));
             }
         } else if vote_state_node_pubkey == my_id {
             online_stake += activated_stake; // This node is online
         } else {
             offline_stake += activated_stake;
-            offline_nodes.push((*activated_stake, vote_state_node_pubkey));
+            offline_nodes.push((activated_stake, vote_state_node_pubkey));
         }
     }
 
