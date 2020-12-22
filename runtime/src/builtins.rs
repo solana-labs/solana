@@ -104,11 +104,11 @@ fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
         ),
         (
             Builtin::new(
-                "stake_program_v2",
+                "stake_program_v3",
                 solana_stake_program::id(),
                 solana_stake_program::stake_instruction::process_instruction,
             ),
-            feature_set::stake_program_v2::id(),
+            feature_set::stake_program_v3::id(),
             ActivationType::NewVersion,
         ),
     ]
