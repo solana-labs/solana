@@ -1,5 +1,5 @@
 use crate::inline_spl_token_v2_0;
-use dashmap::{DashMap, DashSet};
+use dashmap::DashMap;
 use log::*;
 use ouroboros::self_referencing;
 use solana_sdk::{
@@ -30,7 +30,7 @@ pub type RefCount = u64;
 pub type AccountMap<K, V> = BTreeMap<K, V>;
 
 type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
-type SecondaryIndexEntry = DashMap<Pubkey, DashSet<Slot>>;
+type SecondaryIndexEntry = DashMap<Pubkey, RwLock<HashSet<Slot>>>;
 
 enum ScanTypes<R: RangeBounds<Pubkey>> {
     Standard(Option<R>),
@@ -216,7 +216,7 @@ struct SecondaryIndex {
     // Alternative is to store Option<Pubkey> in each AccountInfo in the
     // AccountsIndex if something is an SPL account with a mint, but then
     // every AccountInfo would have to allocate `Option<Pubkey>`
-    reverse_index: DashMap<Pubkey, DashMap<Slot, Pubkey>>,
+    reverse_index: DashMap<Pubkey, RwLock<HashMap<Slot, Pubkey>>>,
 }
 
 impl SecondaryIndex {
@@ -226,23 +226,41 @@ impl SecondaryIndex {
                 .index
                 .get(key)
                 .unwrap_or_else(|| self.index.entry(*key).or_insert(DashMap::new()).downgrade());
+
             let slot_set = pubkeys_map.get(inner_key).unwrap_or_else(|| {
                 pubkeys_map
                     .entry(*inner_key)
-                    .or_insert(DashSet::new())
+                    .or_insert(RwLock::new(HashSet::new()))
                     .downgrade()
             });
-            slot_set.insert(slot);
+            let contains_key = slot_set.read().unwrap().contains(&slot);
+            if !contains_key {
+                slot_set.write().unwrap().insert(slot);
+            }
         }
 
         let prev_key = {
             let slots_map = self.reverse_index.get(inner_key).unwrap_or_else(|| {
                 self.reverse_index
                     .entry(*inner_key)
-                    .or_insert(DashMap::new())
+                    .or_insert(RwLock::new(HashMap::new()))
                     .downgrade()
             });
-            slots_map.insert(slot, *key)
+            let should_insert = {
+                // Most of the time, key should already exist and match
+                // the one in the update
+                if let Some(existing_key) = slots_map.read().unwrap().get(&slot) {
+                    existing_key != key
+                } else {
+                    // If there is no key yet, then insert
+                    true
+                }
+            };
+            if should_insert {
+                slots_map.write().unwrap().insert(slot, *key)
+            } else {
+                None
+            }
         };
 
         if let Some(prev_key) = prev_key {
@@ -258,14 +276,15 @@ impl SecondaryIndex {
         let is_key_empty = if let Some(inner_key_map) = self.index.get(&key) {
             // Delete the slot from the slot set
             let is_inner_key_empty = if let Some(slot_set) = inner_key_map.get(&inner_key) {
+                let mut w_slot_set = slot_set.write().unwrap();
                 for slot in slots.iter() {
-                    if slot_set.remove(slot).is_none() {
+                    let is_present = w_slot_set.remove(slot);
+                    if !is_present {
                         warn!("Reverse index is missing previous entry for key {}, inner_key: {}, slot: {}",
                         key, inner_key, slot);
                     }
                 }
-
-                slot_set.is_empty()
+                w_slot_set.is_empty()
             } else {
                 false
             };
@@ -277,7 +296,11 @@ impl SecondaryIndex {
                 {
                     // Delete the `inner_key` if the slot set is empty
                     let slot_set = inner_key_entry.get();
-                    if slot_set.is_empty() {
+
+                    // Write lock on `inner_key_entry` above through the `entry`
+                    // means nobody else has access to this lock at this time,
+                    // so this check for empty -> remove() is atomic
+                    if slot_set.read().unwrap().is_empty() {
                         inner_key_entry.remove();
                     }
                 }
@@ -318,20 +341,23 @@ impl SecondaryIndex {
                 self.reverse_index
                     .get(inner_key)
                     .map(|slots_map| {
+                        // Ideally we use a concurrent map here as well to prevent clean
+                        // from blocking writes, but memory usage of DashMap is high
+                        let mut w_slots_map = slots_map.value().write().unwrap();
                         for slot in slots_to_remove.iter() {
-                            if let Some(removed) = slots_map.value().remove(slot) {
+                            if let Some(removed_key) = w_slots_map.remove(slot) {
                                 key_to_removed_slots
-                                    .entry(removed.1)
+                                    .entry(removed_key)
                                     .or_default()
                                     .push(*slot);
                             }
                         }
-                        slots_map.is_empty()
+                        w_slots_map.is_empty()
                     })
                     .unwrap_or(false)
             } else {
                 if let Some((_, removed_slot_map)) = self.reverse_index.remove(inner_key) {
-                    for (slot, key) in removed_slot_map {
+                    for (slot, key) in removed_slot_map.into_inner().unwrap().into_iter() {
                         key_to_removed_slots.entry(key).or_default().push(slot);
                     }
                 }
@@ -344,7 +370,7 @@ impl SecondaryIndex {
             if let dashmap::mapref::entry::Entry::Occupied(slot_map) =
                 self.reverse_index.entry(*inner_key)
             {
-                if slot_map.get().is_empty() {
+                if slot_map.get().read().unwrap().is_empty() {
                     slot_map.remove();
                 }
             }
@@ -1590,17 +1616,17 @@ mod tests {
         account_key: &Pubkey,
     ) {
         // Check secondary index has unique mapping from secondary index key
-        //  to the account key and slot
+        // to the account key and slot
         assert_eq!(secondary_index.index.len(), 1);
         let inner_key_map = secondary_index.index.get(key).unwrap();
         assert_eq!(inner_key_map.len(), 1);
         let slots_map = inner_key_map.value().get(account_key).unwrap();
-        assert_eq!(slots_map.len(), 1);
-        assert!(slots_map.contains(&slot));
+        assert_eq!(slots_map.read().unwrap().len(), 1);
+        assert!(slots_map.read().unwrap().contains(&slot));
 
         // Check reverse index is unique
         let slots_map = secondary_index.reverse_index.get(account_key).unwrap();
-        assert_eq!(slots_map.value().get(&slot).unwrap().value(), key);
+        assert_eq!(slots_map.value().read().unwrap().get(&slot).unwrap(), key);
     }
 
     #[test]
@@ -1635,15 +1661,17 @@ mod tests {
         assert!(index.mint_index.index.is_empty());
         assert!(index.mint_index.reverse_index.is_empty());
 
-        // Just right
-        index.update_secondary_indexes(
-            &account_key,
-            slot,
-            &inline_spl_token_v2_0::id(),
-            &correct_account_data,
-            &[IndexType::Mint],
-        );
-        check_secondary_index_unique(&index.mint_index, slot, &mint_key, &account_key);
+        // Just right. Inserting the same index multiple times should be ok
+        for _ in 0..2 {
+            index.update_secondary_indexes(
+                &account_key,
+                slot,
+                &inline_spl_token_v2_0::id(),
+                &correct_account_data,
+                &[IndexType::Mint],
+            );
+            check_secondary_index_unique(&index.mint_index, slot, &mint_key, &account_key);
+        }
 
         // Insert into index, simulate dead key
         index.upsert(0, &account_key, true, &mut vec![]);
