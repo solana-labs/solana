@@ -102,6 +102,25 @@ pub mod simple_capitalization {
     solana_sdk::declare_id!("9r69RnnxABmpcPFfj1yhg4n9YFR2MNaLdKJCC6v3Speb");
 }
 
+<<<<<<< HEAD
+=======
+pub mod bpf_loader_upgradeable_program {
+    solana_sdk::declare_id!("FbhK8HN9qvNHvJcoFVHAEUCNkagHvu7DTWzdnLuVQ5u4");
+}
+
+pub mod try_find_program_address_syscall_enabled {
+    solana_sdk::declare_id!("EMsMNadQNhCYDyGpYH5Tx6dGHxiUqKHk782PU5XaWfmi");
+}
+
+pub mod warp_testnet_timestamp {
+    solana_sdk::declare_id!("Bfqm7fGk5MBptqa2WHXWFLH7uJvq8hkJcAQPipy2bAMk");
+}
+
+pub mod stake_program_v3 {
+    solana_sdk::declare_id!("Ego6nTu7WsBcZBvVqJQKp6Yku2N3mrfG8oYCfaLZkAeK");
+}
+
+>>>>>>> 7042f1179... Feature-gate stake-program-v3 (#14232)
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -129,6 +148,13 @@ lazy_static! {
         (rewrite_stake::id(), "rewrite stake"),
         (filter_stake_delegation_accounts::id(), "filter stake_delegation_accounts #14062"),
         (simple_capitalization::id(), "simple capitalization"),
+<<<<<<< HEAD
+=======
+        (bpf_loader_upgradeable_program::id(), "upgradeable bpf loader"),
+        (try_find_program_address_syscall_enabled::id(), "add try_find_program_address syscall"),
+        (warp_testnet_timestamp::id(), "warp testnet timestamp to current #14210"),
+        (stake_program_v3::id(), "solana_stake_program v3"),
+>>>>>>> 7042f1179... Feature-gate stake-program-v3 (#14232)
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
