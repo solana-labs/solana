@@ -1132,7 +1132,10 @@ impl RpcClient {
         &self,
         commitment_config: CommitmentConfig,
     ) -> ClientResult<u64> {
-        self.send(RpcRequest::GetVoteHashMismatchCount, json!([commitment_config]))
+        self.send(
+            RpcRequest::GetVoteHashMismatchCount,
+            json!([commitment_config]),
+        )
     }
 
     pub fn poll_get_balance_with_commitment(

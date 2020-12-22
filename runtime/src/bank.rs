@@ -70,7 +70,7 @@ use solana_stake_program::stake_state::{
     self, Delegation, InflationPointCalculationEvent, PointValue,
 };
 use solana_vote_program::vote_instruction::VoteError;
-use solana_vote_program::{vote_instruction::VoteInstruction};
+use solana_vote_program::vote_instruction::VoteInstruction;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -3018,8 +3018,7 @@ impl Bank {
                         vote_hash_mismatch_errors += 1;
                     }
                 }
-                Ok(_) => {
-                }
+                Ok(_) => {}
             }
 
             if r.is_ok() {

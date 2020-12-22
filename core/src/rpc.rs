@@ -1682,7 +1682,11 @@ pub trait RpcSol {
     fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64>;
 
     #[rpc(meta, name = "getVoteHashMismatchCount")]
-    fn get_vote_hash_mismatch_count(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64>;
+    fn get_vote_hash_mismatch_count(
+        &self,
+        meta: Self::Metadata,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<u64>;
 
     #[rpc(meta, name = "getTransactionCount")]
     fn get_transaction_count(
@@ -2241,7 +2245,11 @@ impl RpcSol for RpcSolImpl {
         Ok(meta.get_slot(commitment))
     }
 
-    fn get_vote_hash_mismatch_count(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64> {
+    fn get_vote_hash_mismatch_count(
+        &self,
+        meta: Self::Metadata,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<u64> {
         Ok(meta.get_vote_hash_mismatch_count(commitment))
     }
 
