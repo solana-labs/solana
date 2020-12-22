@@ -283,7 +283,7 @@ impl SecondaryIndex {
             false
         };
 
-        // Delete the `key` if the set of inner keys is epty
+        // Delete the `key` if the set of inner keys is empty
         if is_key_empty {
             if let dashmap::mapref::entry::Entry::Occupied(key_entry) = self.index.entry(*key) {
                 if key_entry.get().is_empty() {
@@ -296,6 +296,9 @@ impl SecondaryIndex {
     // Specifying `slots_to_remove` == None will only remove keys for those specific slots
     // found for the `inner_key` in the reverse index. Otherwise, passing `None`
     // will  remove all keys that are found for the `inner_key` in the reverse index.
+
+    // Note passing `None` is dangerous unless you're sure there's no other competing threads
+    // writing updates to the index for this Pubkey at the same time!
     fn remove_by_inner_key(&self, inner_key: &Pubkey, slots_to_remove: Option<&HashSet<Slot>>) {
         // Save off which keys in `self.index` had slots removed so we can remove them
         // after we purge the reverse index
@@ -666,6 +669,10 @@ impl<T: 'static + Clone> AccountsIndex<T> {
                     if index_entry.get().slot_list.read().unwrap().is_empty() {
                         index_entry.remove();
 
+                        // Note passing `None` to remove all the entries for this key
+                        // is only safe because we have the lock for this key's entry
+                        // in the AccountsIndex, so no other thread is also updating
+                        // the index
                         self.purge_secondary_indexes_by_inner_key(key, None);
                     }
                 }
