@@ -585,21 +585,13 @@ mod tests {
                     account.owner = id();
                     account
                 } else if meta.pubkey == invalid_vote_state_pubkey() {
-<<<<<<< HEAD
                     let mut account = Account::default();
                     account.owner = solana_vote_program::id();
                     account
-=======
-                    Account {
-                        owner: solana_vote_program::id(),
-                        ..Account::default()
-                    }
                 } else if meta.pubkey == spoofed_stake_state_pubkey() {
-                    Account {
-                        owner: spoofed_stake_program_id(),
-                        ..Account::default()
-                    }
->>>>>>> 7042f1179... Feature-gate stake-program-v3 (#14232)
+                    let mut account = Account::default();
+                    account.owner = spoofed_stake_program_id();
+                    account
                 } else {
                     Account {
                         owner: id(),
