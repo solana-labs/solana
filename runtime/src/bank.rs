@@ -3823,10 +3823,10 @@ impl Bank {
     }
 
     /// Compute all the parents of the bank including this bank itself
-    pub fn parents_inclusive(self: &Arc<Self>) -> Vec<Arc<Bank>> {
-        let mut all = vec![self.clone()];
-        all.extend(self.parents().into_iter());
-        all
+    pub fn parents_inclusive(self: Arc<Self>) -> Vec<Arc<Bank>> {
+        let mut parents = self.parents();
+        parents.insert(0, self);
+        parents
     }
 
     pub fn store_account(&self, pubkey: &Pubkey, account: &Account) {
@@ -4033,7 +4033,7 @@ impl Bank {
     }
 
     pub fn get_largest_accounts(
-        self: &Arc<Self>,
+        &self,
         num: usize,
         filter_by_address: &HashSet<Pubkey>,
         filter: AccountAddressFilter,
@@ -11587,7 +11587,7 @@ pub(crate) mod tests {
                     // are currently discoverable, previous parents should have
                     // been squashed
                     assert_eq!(
-                        current_minor_fork_bank.parents_inclusive().len(),
+                        current_minor_fork_bank.clone().parents_inclusive().len(),
                         num_new_banks + 1,
                     );
 
