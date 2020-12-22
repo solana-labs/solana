@@ -99,9 +99,17 @@ impl StakeState {
     }
 
     pub fn lockup(&self) -> Option<Lockup> {
+        self.meta().map(|meta| meta.lockup)
+    }
+
+    pub fn meta_from(account: &Account) -> Option<Meta> {
+        Self::from(account).and_then(|state: Self| state.meta())
+    }
+
+    pub fn meta(&self) -> Option<Meta> {
         match self {
-            StakeState::Stake(meta, _stake) => Some(meta.lockup),
-            StakeState::Initialized(meta) => Some(meta.lockup),
+            StakeState::Stake(meta, _stake) => Some(*meta),
+            StakeState::Initialized(meta) => Some(*meta),
             _ => None,
         }
     }
@@ -1054,6 +1062,11 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 _ => return Err(InstructionError::InvalidAccountData),
             }
 
+            // Deinitialize state upon zero balance
+            if lamports == self.lamports()? {
+                self.set_state(&StakeState::Uninitialized)?;
+            }
+
             split.try_account_ref_mut()?.lamports += lamports;
             self.try_account_ref_mut()?.lamports -= lamports;
             Ok(())
@@ -1089,6 +1102,9 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         if let Some(merged_state) = stake_merge_kind.merge(source_merge_kind)? {
             self.set_state(&merged_state)?;
         }
+
+        // Source is about to be drained, deinitialize its state
+        source_account.set_state(&StakeState::Uninitialized)?;
 
         // Drain the source stake account
         let lamports = source_account.lamports()?;
@@ -1164,6 +1180,11 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         {
             assert!(!is_staked);
             return Err(InstructionError::InsufficientFunds);
+        }
+
+        // Deinitialize state upon zero balance
+        if lamports == self.lamports()? {
+            self.set_state(&StakeState::Uninitialized)?;
         }
 
         self.try_account_ref_mut()?.lamports -= lamports;
@@ -2828,6 +2849,7 @@ mod tests {
             Ok(())
         );
         assert_eq!(stake_account.borrow().lamports, 0);
+        assert_eq!(stake_keyed_account.state(), Ok(StakeState::Uninitialized));
 
         // reset balance
         stake_account.borrow_mut().lamports = stake_lamports;
@@ -2953,6 +2975,7 @@ mod tests {
             Ok(())
         );
         assert_eq!(stake_account.borrow().lamports, 0);
+        assert_eq!(stake_keyed_account.state(), Ok(StakeState::Uninitialized));
     }
 
     #[test]
@@ -3128,6 +3151,7 @@ mod tests {
             ),
             Ok(())
         );
+        assert_eq!(stake_keyed_account.state(), Ok(StakeState::Uninitialized));
     }
 
     #[test]
@@ -3184,6 +3208,7 @@ mod tests {
                 ),
                 Ok(())
             );
+            assert_eq!(stake_keyed_account.state(), Ok(StakeState::Uninitialized));
         }
     }
 
@@ -3600,6 +3625,7 @@ mod tests {
             ),
             Ok(())
         );
+        assert_eq!(stake_keyed_account.state(), Ok(StakeState::Uninitialized));
     }
 
     #[test]
@@ -4498,7 +4524,7 @@ mod tests {
             match state {
                 StakeState::Initialized(_) => {
                     assert_eq!(Ok(*state), split_stake_keyed_account.state());
-                    assert_eq!(Ok(*state), stake_keyed_account.state());
+                    assert_eq!(Ok(StakeState::Uninitialized), stake_keyed_account.state());
                 }
                 StakeState::Stake(meta, stake) => {
                     assert_eq!(
@@ -4514,19 +4540,7 @@ mod tests {
                         )),
                         split_stake_keyed_account.state()
                     );
-                    assert_eq!(
-                        Ok(StakeState::Stake(
-                            *meta,
-                            Stake {
-                                delegation: Delegation {
-                                    stake: 0,
-                                    ..stake.delegation
-                                },
-                                ..*stake
-                            }
-                        )),
-                        stake_keyed_account.state()
-                    );
+                    assert_eq!(Ok(StakeState::Uninitialized), stake_keyed_account.state());
                 }
                 _ => unreachable!(),
             }
@@ -4608,19 +4622,7 @@ mod tests {
                     )),
                     split_stake_keyed_account.state()
                 );
-                assert_eq!(
-                    Ok(StakeState::Stake(
-                        meta,
-                        Stake {
-                            delegation: Delegation {
-                                stake: 0,
-                                ..stake.delegation
-                            },
-                            ..stake
-                        }
-                    )),
-                    stake_keyed_account.state()
-                );
+                assert_eq!(Ok(StakeState::Uninitialized), stake_keyed_account.state());
             }
         }
     }
@@ -4722,9 +4724,9 @@ mod tests {
                         Ok(StakeState::Initialized(expected_split_meta)),
                         split_stake_keyed_account.state()
                     );
-                    assert_eq!(Ok(*state), stake_keyed_account.state());
+                    assert_eq!(Ok(StakeState::Uninitialized), stake_keyed_account.state());
                 }
-                StakeState::Stake(meta, stake) => {
+                StakeState::Stake(_meta, stake) => {
                     // Expected stake should reflect original stake amount so that extra lamports
                     // from the rent_exempt_reserve inequality do not magically activate
                     let expected_stake = stake_lamports - rent_exempt_reserve;
@@ -4748,19 +4750,7 @@ mod tests {
                             + expected_rent_exempt_reserve
                             + (rent_exempt_reserve - expected_rent_exempt_reserve)
                     );
-                    assert_eq!(
-                        Ok(StakeState::Stake(
-                            *meta,
-                            Stake {
-                                delegation: Delegation {
-                                    stake: 0,
-                                    ..stake.delegation
-                                },
-                                ..*stake
-                            }
-                        )),
-                        stake_keyed_account.state()
-                    );
+                    assert_eq!(Ok(StakeState::Uninitialized), stake_keyed_account.state());
                 }
                 _ => unreachable!(),
             }
@@ -4836,6 +4826,44 @@ mod tests {
                     stake_lamports * 2
                 );
                 assert_eq!(source_stake_keyed_account.account.borrow().lamports, 0);
+
+                // check state
+                match state {
+                    StakeState::Initialized(meta) => {
+                        assert_eq!(
+                            stake_keyed_account.state(),
+                            Ok(StakeState::Initialized(*meta)),
+                        );
+                    }
+                    StakeState::Stake(meta, stake) => {
+                        let expected_stake = stake.delegation.stake
+                            + source_state
+                                .stake()
+                                .map(|stake| stake.delegation.stake)
+                                .unwrap_or_else(|| {
+                                    stake_lamports
+                                        - source_state.meta().unwrap().rent_exempt_reserve
+                                });
+                        assert_eq!(
+                            stake_keyed_account.state(),
+                            Ok(StakeState::Stake(
+                                *meta,
+                                Stake {
+                                    delegation: Delegation {
+                                        stake: expected_stake,
+                                        ..stake.delegation
+                                    },
+                                    ..*stake
+                                }
+                            )),
+                        );
+                    }
+                    _ => unreachable!(),
+                }
+                assert_eq!(
+                    source_stake_keyed_account.state(),
+                    Ok(StakeState::Uninitialized)
+                );
             }
         }
     }
@@ -5127,7 +5155,11 @@ mod tests {
             let test_source_keyed =
                 KeyedAccount::new(source_account.unsigned_key(), true, &test_source_account);
 
-            test_stake_keyed.merge(&test_source_keyed, clock, stake_history, signers)
+            let result = test_stake_keyed.merge(&test_source_keyed, clock, stake_history, signers);
+            if result.is_ok() {
+                assert_eq!(test_source_keyed.state(), Ok(StakeState::Uninitialized),);
+            }
+            result
         }
 
         // stake activation epoch, source initialized succeeds
