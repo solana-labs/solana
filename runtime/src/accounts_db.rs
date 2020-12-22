@@ -5513,6 +5513,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_shrink_and_clean() {
         solana_logger::setup();
 
