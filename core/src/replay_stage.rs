@@ -1056,7 +1056,8 @@ impl ReplayStage {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
         }
         trace!("handle votable bank {}", bank.slot());
-        let (vote, tower_index) = tower.new_vote_from_bank(bank, vote_account_pubkey, bad_vote_rate);
+        let (vote, tower_index) =
+            tower.new_vote_from_bank(bank, vote_account_pubkey, bad_vote_rate);
         let new_root = tower.record_bank_vote(vote);
         let last_vote = tower.last_vote_and_timestamp();
 
