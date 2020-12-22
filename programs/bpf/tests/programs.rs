@@ -21,9 +21,7 @@ use solana_runtime::{
 };
 use solana_sdk::{
     account::Account,
-    account_utils::StateMut,
     bpf_loader, bpf_loader_deprecated,
-    bpf_loader_upgradeable::UpgradeableLoaderState,
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, MAX_PROCESSING_AGE},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
