@@ -8679,6 +8679,50 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_get_filtered_indexed_accounts() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(500);
+        let bank = Arc::new(Bank::new(&genesis_config));
+
+        let address = Pubkey::new_unique();
+        let program_id = Pubkey::new_unique();
+        let account = Account::new(1, 0, &program_id);
+        bank.store_account(&address, &account);
+
+        let indexed_accounts =
+            bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |_| true);
+        assert_eq!(indexed_accounts.len(), 1);
+        assert_eq!(indexed_accounts[0], (address, account));
+
+        // Even though the account is re-stored in the bank (and the index) under a new program id,
+        // it is still present in the index under the original program id as well. This
+        // demonstrates the need for a redundant post-processing filter.
+        let another_program_id = Pubkey::new_unique();
+        let new_account = Account::new(1, 0, &another_program_id);
+        bank.store_account(&address, &new_account);
+        let indexed_accounts =
+            bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |_| true);
+        assert_eq!(indexed_accounts.len(), 1);
+        assert_eq!(indexed_accounts[0], (address, new_account.clone()));
+        let indexed_accounts =
+            bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(another_program_id), |_| true);
+        assert_eq!(indexed_accounts.len(), 1);
+        assert_eq!(indexed_accounts[0], (address, new_account.clone()));
+
+        // Post-processing filter
+        let indexed_accounts = bank
+            .get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |account| {
+                account.owner == program_id
+            });
+        assert!(indexed_accounts.is_empty());
+        let indexed_accounts = bank
+            .get_filtered_indexed_accounts(&IndexKey::ProgramId(another_program_id), |account| {
+                account.owner == another_program_id
+            });
+        assert_eq!(indexed_accounts.len(), 1);
+        assert_eq!(indexed_accounts[0], (address, new_account));
+    }
+
+    #[test]
     fn test_status_cache_ancestors() {
         solana_logger::setup();
         let (genesis_config, _mint_keypair) = create_genesis_config(500);
