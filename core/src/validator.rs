@@ -79,6 +79,7 @@ pub struct ValidatorConfig {
     pub expected_shred_version: Option<u16>,
     pub voting_disabled: bool,
     pub account_paths: Vec<PathBuf>,
+    pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
@@ -120,6 +121,7 @@ impl Default for ValidatorConfig {
             voting_disabled: false,
             max_ledger_shreds: None,
             account_paths: Vec::new(),
+            account_shrink_paths: None,
             rpc_config: JsonRpcConfig::default(),
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
@@ -272,6 +274,11 @@ impl Validator {
         for accounts_path in &config.account_paths {
             cleanup_accounts_path(accounts_path);
         }
+        if let Some(ref shrink_paths) = config.account_shrink_paths {
+            for accounts_path in shrink_paths {
+                cleanup_accounts_path(accounts_path);
+            }
+        }
         start.stop();
         info!("done. {}", start);
 
@@ -311,6 +318,9 @@ impl Validator {
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let bank = bank_forks.working_bank();
+        if let Some(ref shrink_paths) = config.account_shrink_paths {
+            bank.set_shrink_paths(shrink_paths.clone());
+        }
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
         let sample_performance_service =
@@ -907,6 +917,7 @@ fn new_banks_from_ledger(
         &genesis_config,
         &blockstore,
         config.account_paths.clone(),
+        config.account_shrink_paths.clone(),
         config.snapshot_config.as_ref(),
         process_options,
         transaction_history_services
