@@ -1756,7 +1756,6 @@ impl ClusterInfo {
                             .unwrap()
                             .set_shred_version(entrypoint.shred_version);
                         self.insert_self();
-                        *self.entrypoint.write().unwrap() = Some(entrypoint);
                         *adopt_shred_version = false;
                     }
                 }
@@ -4249,10 +4248,6 @@ mod tests {
 
         // Adopt the entrypoint's gossiped contact info and verify
         ClusterInfo::handle_adopt_shred_version(&cluster_info, &mut true);
-        assert_eq!(
-            cluster_info.entrypoint.read().unwrap().as_ref().unwrap(),
-            &gossiped_entrypoint_info
-        );
         assert_eq!(cluster_info.my_shred_version(), 1);
     }
 }
