@@ -3028,6 +3028,7 @@ impl Bank {
                 if *err_count == 0 {
                     debug!("tx error: {:?} {:?}", r, tx);
                 }
+                *err_count += 1;
             }
         }
         if vote_hash_mismatch_errors > 0 {
