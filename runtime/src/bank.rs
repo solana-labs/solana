@@ -8698,6 +8698,7 @@ pub(crate) mod tests {
         // demonstrates the need for a redundant post-processing filter.
         let another_program_id = Pubkey::new_unique();
         let new_account = Account::new(1, 0, &another_program_id);
+        let bank = Arc::new(new_from_parent(&bank));
         bank.store_account(&address, &new_account);
         let indexed_accounts =
             bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |_| true);
