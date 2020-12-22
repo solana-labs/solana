@@ -1,6 +1,6 @@
 use crate::{
     accounts_db::{AccountsDB, AppendVecId, BankHashInfo, ErrorCounters},
-    accounts_index::{Ancestors, IndexKey},
+    accounts_index::{Ancestors, IndexKey, IndexType},
     append_vec::StoredAccount,
     bank::{
         NonceRollbackFull, NonceRollbackInfo, TransactionCheckResult, TransactionExecutionResult,
@@ -82,8 +82,20 @@ pub enum AccountAddressFilter {
 
 impl Accounts {
     pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
+        Self::new_with_indexes(paths, cluster_type, &[])
+    }
+
+    pub fn new_with_indexes(
+        paths: Vec<PathBuf>,
+        cluster_type: &ClusterType,
+        supported_indexes: &[IndexType],
+    ) -> Self {
         Self {
-            accounts_db: Arc::new(AccountsDB::new(paths, cluster_type)),
+            accounts_db: Arc::new(AccountsDB::new_with_indexes(
+                paths,
+                cluster_type,
+                supported_indexes,
+            )),
             account_locks: Mutex::new(HashSet::new()),
             readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
             ..Self::default()
@@ -598,9 +610,8 @@ impl Accounts {
         program_id: &Pubkey,
         filter: F,
     ) -> Vec<(Pubkey, Account)> {
-        self.accounts_db.index_scan_accounts(
+        self.accounts_db.scan_accounts(
             ancestors,
-            IndexKey::ProgramId(*program_id),
             |collector: &mut Vec<(Pubkey, Account)>, some_account_tuple| {
                 Self::load_while_filtering(collector, some_account_tuple, |account| {
                     account.owner == *program_id && filter(account)

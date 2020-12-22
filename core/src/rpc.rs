@@ -39,7 +39,7 @@ use solana_metrics::inc_new_counter_info;
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::{
     accounts::AccountAddressFilter,
-    accounts_index::IndexKey,
+    accounts_index::{IndexKey, IndexType},
     bank::Bank,
     bank_forks::BankForks,
     commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
@@ -110,6 +110,7 @@ pub struct JsonRpcConfig {
     pub enable_bigtable_ledger_storage: bool,
     pub enable_bigtable_ledger_upload: bool,
     pub max_multiple_accounts: Option<usize>,
+    pub supported_indexes: Vec<IndexType>,
 }
 
 #[derive(Clone)]
@@ -318,9 +319,9 @@ impl JsonRpcRequestProcessor {
         check_slice_and_encoding(&encoding, data_slice_config.is_some())?;
         let keyed_accounts = {
             if let Some(owner) = get_spl_token_owner_filter(program_id, &filters) {
-                get_filtered_spl_token_accounts_by_owner(&bank, &owner, filters)
+                self.get_filtered_spl_token_accounts_by_owner(&bank, &owner, filters)
             } else {
-                get_filtered_program_accounts(&bank, program_id, filters)
+                self.get_filtered_program_accounts(&bank, program_id, filters)
             }
         };
         let result =
@@ -1163,20 +1164,20 @@ impl JsonRpcRequestProcessor {
                 "Invalid param: not a v2.0 Token mint".to_string(),
             ));
         }
-        let mut token_balances: Vec<RpcTokenAccountBalance> =
-            get_filtered_spl_token_accounts_by_mint(&bank, &mint, vec![])
-                .into_iter()
-                .map(|(address, account)| {
-                    let amount = TokenAccount::unpack(&account.data)
-                        .map(|account| account.amount)
-                        .unwrap_or(0);
-                    let amount = token_amount_to_ui_amount(amount, decimals);
-                    RpcTokenAccountBalance {
-                        address: address.to_string(),
-                        amount,
-                    }
-                })
-                .collect();
+        let mut token_balances: Vec<RpcTokenAccountBalance> = self
+            .get_filtered_spl_token_accounts_by_mint(&bank, &mint, vec![])
+            .into_iter()
+            .map(|(address, account)| {
+                let amount = TokenAccount::unpack(&account.data)
+                    .map(|account| account.amount)
+                    .unwrap_or(0);
+                let amount = token_amount_to_ui_amount(amount, decimals);
+                RpcTokenAccountBalance {
+                    address: address.to_string(),
+                    amount,
+                }
+            })
+            .collect();
         token_balances.sort_by(|a, b| {
             a.amount
                 .amount
@@ -1212,7 +1213,7 @@ impl JsonRpcRequestProcessor {
             }));
         }
 
-        let keyed_accounts = get_filtered_spl_token_accounts_by_owner(&bank, owner, filters);
+        let keyed_accounts = self.get_filtered_spl_token_accounts_by_owner(&bank, owner, filters);
         let accounts = if encoding == UiAccountEncoding::JsonParsed {
             get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
         } else {
@@ -1264,13 +1265,13 @@ impl JsonRpcRequestProcessor {
         ];
         // Optional filter on Mint address, uses mint account index for scan
         let keyed_accounts = if let Some(mint) = mint {
-            get_filtered_spl_token_accounts_by_mint(&bank, &mint, filters)
+            self.get_filtered_spl_token_accounts_by_mint(&bank, &mint, filters)
         } else {
             // Filter on Token Account state
             filters.push(RpcFilterType::DataSize(
                 TokenAccount::get_packed_len() as u64
             ));
-            get_filtered_program_accounts(&bank, &token_program_id, filters)
+            self.get_filtered_program_accounts(&bank, &token_program_id, filters)
         };
         let accounts = if encoding == UiAccountEncoding::JsonParsed {
             get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
@@ -1290,6 +1291,103 @@ impl JsonRpcRequestProcessor {
                 .collect()
         };
         Ok(new_response(&bank, accounts))
+    }
+
+    /// Use a set of filters to get an iterator of keyed program accounts from a bank
+    fn get_filtered_program_accounts(
+        &self,
+        bank: &Arc<Bank>,
+        program_id: &Pubkey,
+        filters: Vec<RpcFilterType>,
+    ) -> Vec<(Pubkey, Account)> {
+        let filter_closure = |account: &Account| {
+            filters.iter().all(|filter_type| match filter_type {
+                RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
+                RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
+            })
+        };
+        if self
+            .config
+            .supported_indexes
+            .contains(&IndexType::ProgramId)
+        {
+            bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(*program_id), filter_closure)
+        } else {
+            bank.get_filtered_program_accounts(program_id, filter_closure)
+        }
+    }
+
+    /// Get an iterator of spl-token accounts by owner address
+    fn get_filtered_spl_token_accounts_by_owner(
+        &self,
+        bank: &Arc<Bank>,
+        owner_key: &Pubkey,
+        mut filters: Vec<RpcFilterType>,
+    ) -> Vec<(Pubkey, Account)> {
+        // The by-owner accounts index checks for Token Account state and Owner address on inclusion.
+        // However, due to the current AppendVec implementation, accounts may remain in the index after
+        // being wiped and reinitialized as something else. We include the redundant filters here to
+        // avoid returning these accounts.
+        //
+        // Filter on Token Account state
+        filters.push(RpcFilterType::DataSize(
+            TokenAccount::get_packed_len() as u64
+        ));
+        // Filter on Owner address
+        filters.push(RpcFilterType::Memcmp(Memcmp {
+            offset: 32,
+            bytes: MemcmpEncodedBytes::Binary(owner_key.to_string()),
+            encoding: None,
+        }));
+
+        if self
+            .config
+            .supported_indexes
+            .contains(&IndexType::TokenOwner)
+        {
+            bank.get_filtered_indexed_accounts(&IndexKey::TokenOwner(*owner_key), |account| {
+                filters.iter().all(|filter_type| match filter_type {
+                    RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
+                    RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
+                })
+            })
+        } else {
+            self.get_filtered_program_accounts(bank, &spl_token_id_v2_0(), filters)
+        }
+    }
+
+    /// Get an iterator of spl-token accounts by mint address
+    fn get_filtered_spl_token_accounts_by_mint(
+        &self,
+        bank: &Arc<Bank>,
+        mint_key: &Pubkey,
+        mut filters: Vec<RpcFilterType>,
+    ) -> Vec<(Pubkey, Account)> {
+        // The by-mint accounts index checks for Token Account state and Mint address on inclusion.
+        // However, due to the current AppendVec implementation, accounts may remain in the index after
+        // being wiped and reinitialized as something else. We include the redundant filters here to
+        // avoid returning these accounts.
+        //
+        // Filter on Token Account state
+        filters.push(RpcFilterType::DataSize(
+            TokenAccount::get_packed_len() as u64
+        ));
+        // Filter on Mint address
+        filters.push(RpcFilterType::Memcmp(Memcmp {
+            offset: 0,
+            bytes: MemcmpEncodedBytes::Binary(mint_key.to_string()),
+            encoding: None,
+        }));
+        if self.config.supported_indexes.contains(&IndexType::Mint) {
+            bank.get_filtered_indexed_accounts(&IndexKey::Mint(*mint_key), |account| {
+                filters.iter().all(|filter_type| match filter_type {
+                    RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
+                    RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
+                })
+            })
+        } else {
+            self.get_filtered_program_accounts(bank, &spl_token_id_v2_0(), filters)
+        }
     }
 }
 
@@ -1387,80 +1485,6 @@ fn get_encoded_account(
         }
     }
     Ok(response)
-}
-
-/// Use a set of filters to get an iterator of keyed program accounts from a bank
-fn get_filtered_program_accounts(
-    bank: &Arc<Bank>,
-    program_id: &Pubkey,
-    filters: Vec<RpcFilterType>,
-) -> Vec<(Pubkey, Account)> {
-    bank.get_filtered_program_accounts(&program_id, |account| {
-        filters.iter().all(|filter_type| match filter_type {
-            RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
-            RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
-        })
-    })
-}
-
-/// Get an iterator of spl-token accounts by owner address
-fn get_filtered_spl_token_accounts_by_owner(
-    bank: &Arc<Bank>,
-    owner_key: &Pubkey,
-    mut filters: Vec<RpcFilterType>,
-) -> Vec<(Pubkey, Account)> {
-    // The by-owner accounts index checks for Token Account state and Owner address on inclusion.
-    // However, due to the current AppendVec implementation, accounts may remain in the index after
-    // being wiped and reinitialized as something else. We include the redundant filters here to
-    // avoid returning these accounts.
-    //
-    // Filter on Token Account state
-    filters.push(RpcFilterType::DataSize(
-        TokenAccount::get_packed_len() as u64
-    ));
-    // Filter on Owner address
-    filters.push(RpcFilterType::Memcmp(Memcmp {
-        offset: 32,
-        bytes: MemcmpEncodedBytes::Binary(owner_key.to_string()),
-        encoding: None,
-    }));
-
-    bank.get_filtered_indexed_accounts(&IndexKey::TokenOwner(*owner_key), |account| {
-        filters.iter().all(|filter_type| match filter_type {
-            RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
-            RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
-        })
-    })
-}
-
-/// Get an iterator of spl-token accounts by mint address
-fn get_filtered_spl_token_accounts_by_mint(
-    bank: &Arc<Bank>,
-    mint_key: &Pubkey,
-    mut filters: Vec<RpcFilterType>,
-) -> Vec<(Pubkey, Account)> {
-    // The by-mint accounts index checks for Token Account state and Mint address on inclusion.
-    // However, due to the current AppendVec implementation, accounts may remain in the index after
-    // being wiped and reinitialized as something else. We include the redundant filters here to
-    // avoid returning these accounts.
-    //
-    // Filter on Token Account state
-    filters.push(RpcFilterType::DataSize(
-        TokenAccount::get_packed_len() as u64
-    ));
-    // Filter on Mint address
-    filters.push(RpcFilterType::Memcmp(Memcmp {
-        offset: 0,
-        bytes: MemcmpEncodedBytes::Binary(mint_key.to_string()),
-        encoding: None,
-    }));
-
-    bank.get_filtered_indexed_accounts(&IndexKey::Mint(*mint_key), |account| {
-        filters.iter().all(|filter_type| match filter_type {
-            RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
-            RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
-        })
-    })
 }
 
 fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> Option<Pubkey> {

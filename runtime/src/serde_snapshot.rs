@@ -2,7 +2,7 @@ use {
     crate::{
         accounts::Accounts,
         accounts_db::{AccountStorageEntry, AccountsDB, AppendVecId, BankHashInfo},
-        accounts_index::Ancestors,
+        accounts_index::{Ancestors, IndexType},
         append_vec::AppendVec,
         bank::{Bank, BankFieldsToDeserialize, BankRc, Builtins},
         blockhash_queue::BlockhashQueue,
@@ -126,6 +126,7 @@ pub(crate) fn bank_from_stream<R, P>(
     frozen_account_pubkeys: &[Pubkey],
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
+    supported_indexes: &[IndexType],
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -144,6 +145,7 @@ where
                 append_vecs_path,
                 debug_keys,
                 additional_builtins,
+                supported_indexes,
             )?;
             Ok(bank)
         }};
@@ -230,6 +232,7 @@ fn reconstruct_bank_from_fields<E, P>(
     append_vecs_path: P,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
+    supported_indexes: &[IndexType],
 ) -> Result<Bank, Error>
 where
     E: Into<AccountStorageEntry>,
@@ -242,6 +245,7 @@ where
         &genesis_config.cluster_type,
     )?;
     accounts_db.freeze_accounts(&bank_fields.ancestors, frozen_account_pubkeys);
+    accounts_db.supported_indexes = supported_indexes.to_vec();
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
     let bank = Bank::new_from_fields(

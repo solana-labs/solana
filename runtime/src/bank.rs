@@ -8,7 +8,7 @@ use crate::{
         TransactionLoadResult, TransactionLoaders,
     },
     accounts_db::{ErrorCounters, SnapshotStorages},
-    accounts_index::{Ancestors, IndexKey},
+    accounts_index::{Ancestors, IndexKey, IndexType},
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType},
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
@@ -859,7 +859,22 @@ impl Default for BlockhashQueue {
 
 impl Bank {
     pub fn new(genesis_config: &GenesisConfig) -> Self {
-        Self::new_with_paths(&genesis_config, Vec::new(), &[], None, None)
+        Self::new_with_paths(&genesis_config, Vec::new(), &[], None, None, &[])
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_with_indexes(
+        genesis_config: &GenesisConfig,
+        supported_indexes: &[IndexType],
+    ) -> Self {
+        Self::new_with_paths(
+            &genesis_config,
+            Vec::new(),
+            &[],
+            None,
+            None,
+            supported_indexes,
+        )
     }
 
     pub fn new_with_paths(
@@ -868,13 +883,18 @@ impl Bank {
         frozen_account_pubkeys: &[Pubkey],
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
+        supported_indexes: &[IndexType],
     ) -> Self {
         let mut bank = Self::default();
         bank.ancestors.insert(bank.slot(), 0);
         bank.transaction_debug_keys = debug_keys;
         bank.cluster_type = Some(genesis_config.cluster_type);
 
-        bank.rc.accounts = Arc::new(Accounts::new(paths, &genesis_config.cluster_type));
+        bank.rc.accounts = Arc::new(Accounts::new_with_indexes(
+            paths,
+            &genesis_config.cluster_type,
+            supported_indexes,
+        ));
         bank.process_genesis_config(genesis_config);
         bank.finish_init(genesis_config, additional_builtins);
 
@@ -8681,7 +8701,10 @@ pub(crate) mod tests {
     #[test]
     fn test_get_filtered_indexed_accounts() {
         let (genesis_config, _mint_keypair) = create_genesis_config(500);
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank = Arc::new(Bank::new_with_indexes(
+            &genesis_config,
+            &[IndexType::ProgramId],
+        ));
 
         let address = Pubkey::new_unique();
         let program_id = Pubkey::new_unique();
@@ -11085,6 +11108,7 @@ pub(crate) mod tests {
             &[],
             None,
             Some(&builtins),
+            &[],
         ));
         // move to next epoch to create now deprecated rewards sysvar intentionally
         let bank1 = Arc::new(Bank::new_from_parent(
