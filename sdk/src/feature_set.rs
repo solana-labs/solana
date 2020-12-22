@@ -114,6 +114,10 @@ pub mod warp_testnet_timestamp {
     solana_sdk::declare_id!("Bfqm7fGk5MBptqa2WHXWFLH7uJvq8hkJcAQPipy2bAMk");
 }
 
+pub mod stake_program_v3 {
+    solana_sdk::declare_id!("Ego6nTu7WsBcZBvVqJQKp6Yku2N3mrfG8oYCfaLZkAeK");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -144,6 +148,7 @@ lazy_static! {
         (bpf_loader_upgradeable_program::id(), "upgradeable bpf loader"),
         (try_find_program_address_syscall_enabled::id(), "add try_find_program_address syscall"),
         (warp_testnet_timestamp::id(), "warp testnet timestamp to current #14210"),
+        (stake_program_v3::id(), "solana_stake_program v3"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
