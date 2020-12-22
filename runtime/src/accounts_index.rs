@@ -30,7 +30,6 @@ pub type RefCount = u64;
 pub type AccountMap<K, V> = BTreeMap<K, V>;
 
 type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
-type MintIndexEntry = DashSet<Pubkey>;
 
 enum ScanTypes<R: RangeBounds<Pubkey>> {
     Standard(Option<R>),
@@ -199,16 +198,6 @@ impl<'a, T: 'static + Clone> Iterator for AccountsIndexIterator<'a, T> {
         self.start_bound = Excluded(chunk.last().unwrap().0);
         Some(chunk)
     }
-}
-
-#[derive(Debug, Default)]
-pub struct MintIndex {
-    index: DashMap<Pubkey, MintIndexEntry>,
-    // Map from pubkey to the mint it's stored in, used for cleanup.
-    // Alternative is to store Option<Pubkey> in each AccountInfo in the
-    // AccountsIndex if something is an SPL account with a mint, but then
-    // every AccountInfo would have to allocate `Option<Pubkey>`
-    accounts_to_mints: DashMap<Pubkey, DashSet<Pubkey>>,
 }
 
 #[derive(Debug, Default)]
