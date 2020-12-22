@@ -705,7 +705,6 @@ fn load_bank_forks(
         &genesis_config,
         &blockstore,
         account_paths,
-        None,
         snapshot_config.as_ref(),
         process_options,
         None,
