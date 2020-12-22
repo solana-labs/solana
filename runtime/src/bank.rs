@@ -3034,7 +3034,6 @@ impl Bank {
             self.vote_hash_mismatch_count
                 .fetch_add(vote_hash_mismatch_errors, Relaxed);
         }
-    
         if *err_count > 0 {
             debug!(
                 "{} errors of {} txs",
