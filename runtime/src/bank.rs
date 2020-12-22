@@ -70,7 +70,7 @@ use solana_stake_program::stake_state::{
     self, Delegation, InflationPointCalculationEvent, PointValue,
 };
 use solana_vote_program::vote_instruction::VoteError;
-use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteState};
+use solana_vote_program::{vote_instruction::VoteInstruction};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
