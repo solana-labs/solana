@@ -127,7 +127,7 @@ pub(crate) fn new_rand_timestamp<R: Rng>(rng: &mut R) -> u64 {
 impl CrdsData {
     /// New random CrdsData for tests and benchmarks.
     fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> CrdsData {
-        let kind = rng.gen_range(0, 5);
+        let kind = rng.gen_range(0, 6);
         // TODO: Implement other kinds of CrdsData here.
         // TODO: Assign ranges to each arm proportional to their frequency in
         // the mainnet crds table.
@@ -136,7 +136,8 @@ impl CrdsData {
             1 => CrdsData::LowestSlot(rng.gen(), LowestSlot::new_rand(rng, pubkey)),
             2 => CrdsData::SnapshotHashes(SnapshotHash::new_rand(rng, pubkey)),
             3 => CrdsData::AccountsHashes(SnapshotHash::new_rand(rng, pubkey)),
-            _ => CrdsData::Version(Version::new_rand(rng, pubkey)),
+            4 => CrdsData::Version(Version::new_rand(rng, pubkey)),
+            _ => CrdsData::Vote(rng.gen_range(0, MAX_VOTES), Vote::new_rand(rng, pubkey)),
         }
     }
 }
@@ -261,6 +262,15 @@ impl Vote {
             from: *from,
             transaction,
             wallclock,
+        }
+    }
+
+    /// New random Vote for tests and benchmarks.
+    fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
+        Self {
+            from: pubkey.unwrap_or_else(pubkey::new_rand),
+            transaction: Transaction::default(),
+            wallclock: new_rand_timestamp(rng),
         }
     }
 }
@@ -821,7 +831,7 @@ mod test {
             let index = rng.gen_range(0, keys.len());
             CrdsValue::new_rand(&mut rng, Some(&keys[index]))
         })
-        .take(256)
+        .take(2048)
         .collect();
         let mut currents = HashMap::new();
         for value in filter_current(&values) {
@@ -843,9 +853,9 @@ mod test {
         }
         assert_eq!(count, currents.len());
         // Currently CrdsData::new_rand is only implemented for 5 different
-        // kinds and excludes Vote and EpochSlots, and so the unique labels
-        // cannot be more than 5 times number of keys.
-        assert!(currents.len() <= keys.len() * 5);
+        // kinds and excludes EpochSlots, and so the unique labels cannot be
+        // more than (5 + MAX_VOTES) times number of keys.
+        assert!(currents.len() <= keys.len() * (5 + MAX_VOTES as usize));
     }
 
     #[test]
