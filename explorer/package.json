@@ -5,7 +5,7 @@
   "dependencies": {
     "@project-serum/serum": "^0.13.15",
     "@react-hook/debounce": "^3.0.0",
-    "@sentry/react": "^5.29.0",
+    "@sentry/react": "^5.29.2",
     "@solana/web3.js": "^0.87.1",
     "@testing-library/jest-dom": "^5.11.6",
     "@testing-library/react": "^11.2.2",
