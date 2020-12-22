@@ -202,7 +202,7 @@ fn test_vote_hash_mismatch() {
         sleep(Duration::from_secs(2));
     }
     warn!(
-        "done max mismatch count: {} slot: {}",
+        "done max mismatch count: {}, slot: {}",
         max_mismatch_count, slot
     );
     assert!(max_mismatch_count > 0);
