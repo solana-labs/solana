@@ -19,6 +19,7 @@ use solana_sdk::{
     sysvar::clock::Clock,
 };
 use std::boxed::Box;
+use std::cmp::Ordering;
 use std::collections::{HashSet, VecDeque};
 
 mod vote_state_0_23_5;
@@ -655,8 +656,13 @@ pub fn withdraw<S: std::hash::BuildHasher>(
 
     verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
 
-    if vote_account.lamports()? < lamports {
-        return Err(InstructionError::InsufficientFunds);
+    match vote_account.lamports()?.cmp(&lamports) {
+        Ordering::Less => return Err(InstructionError::InsufficientFunds),
+        Ordering::Equal => {
+            // Deinitialize upon zero-balance
+            vote_account.set_state(&VoteStateVersions::new_current(VoteState::default()))?;
+        }
+        _ => (),
     }
     vote_account.try_account_ref_mut()?.lamports -= lamports;
     to_account.try_account_ref_mut()?.lamports += lamports;
@@ -1624,6 +1630,7 @@ mod tests {
         let lamports = vote_account.borrow().lamports;
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
         let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+        let pre_state: VoteStateVersions = vote_account.borrow().state().unwrap();
         let res = withdraw(
             &keyed_accounts[0],
             lamports,
@@ -1633,9 +1640,13 @@ mod tests {
         assert_eq!(res, Ok(()));
         assert_eq!(vote_account.borrow().lamports, 0);
         assert_eq!(to_account.borrow().lamports, lamports);
+        let post_state: VoteStateVersions = vote_account.borrow().state().unwrap();
+        // State has been deinitialized since balance is zero
+        assert!(post_state.is_uninitialized());
 
-        // reset balance, verify that authorized_withdrawer works
+        // reset balance and restore state, verify that authorized_withdrawer works
         vote_account.borrow_mut().lamports = lamports;
+        vote_account.borrow_mut().set_state(&pre_state).unwrap();
 
         // authorize authorized_withdrawer
         let authorized_withdrawer_pubkey = solana_sdk::pubkey::new_rand();
@@ -1669,6 +1680,9 @@ mod tests {
         assert_eq!(res, Ok(()));
         assert_eq!(vote_account.borrow().lamports, 0);
         assert_eq!(withdrawer_account.borrow().lamports, lamports);
+        let post_state: VoteStateVersions = vote_account.borrow().state().unwrap();
+        // State has been deinitialized since balance is zero
+        assert!(post_state.is_uninitialized());
     }
 
     #[test]
@@ -1989,5 +2003,13 @@ mod tests {
             VoteState::serialize(&versioned, &mut max_sized_data).unwrap();
             vote_state = Some(versioned.convert_to_current());
         }
+    }
+
+    #[test]
+    fn test_default_vote_state_is_uninitialized() {
+        // The default `VoteState` is stored to de-initialize a zero-balance vote account,
+        // so must remain such that `VoteStateVersions::is_uninitialized()` returns true
+        // when called on a `VoteStateVersions` that stores it
+        assert!(VoteStateVersions::new_current(VoteState::default()).is_uninitialized());
     }
 }
