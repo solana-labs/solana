@@ -1389,18 +1389,19 @@ fn call<'a>(
             .ok_or(SyscallError::InstructionError(
                 InstructionError::MissingAccount,
             ))?;
-    if !program_account.executable {
+    if !program_account.borrow().executable {
         return Err(SyscallError::InstructionError(InstructionError::AccountNotExecutable).into());
     }
-    let programdata_executable = if program_account.owner == bpf_loader_upgradeable::id() {
+    let programdata_executable = if program_account.borrow().owner == bpf_loader_upgradeable::id() {
         if let UpgradeableLoaderState::Program {
             programdata_address,
         } = program_account
+            .borrow()
             .state()
             .map_err(SyscallError::InstructionError)?
         {
             if let Some(account) = invoke_context.get_account(&programdata_address) {
-                Some((programdata_address, RefCell::new(account)))
+                Some((programdata_address, account))
             } else {
                 return Err(
                     SyscallError::InstructionError(InstructionError::MissingAccount).into(),
@@ -1412,7 +1413,7 @@ fn call<'a>(
     } else {
         None
     };
-    let mut executable_accounts = vec![(callee_program_id, RefCell::new(program_account))];
+    let mut executable_accounts = vec![(callee_program_id, program_account)];
     if let Some(programdata) = programdata_executable {
         executable_accounts.push(programdata);
     }
