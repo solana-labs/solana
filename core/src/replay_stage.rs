@@ -616,7 +616,7 @@ impl ReplayStage {
         let (root_bank, frozen_banks) = {
             let bank_forks = bank_forks.read().unwrap();
             (
-                bank_forks.root_bank().clone(),
+                bank_forks.root_bank(),
                 bank_forks.frozen_banks().values().cloned().collect(),
             )
         };
@@ -630,7 +630,7 @@ impl ReplayStage {
     }
 
     pub(crate) fn initialize_progress_and_fork_choice(
-        root_bank: &Arc<Bank>,
+        root_bank: &Bank,
         mut frozen_banks: Vec<Arc<Bank>>,
         my_pubkey: &Pubkey,
         vote_account: &Pubkey,
@@ -3120,7 +3120,7 @@ pub(crate) mod tests {
     ) {
         let stake = 10_000;
         let (bank_forks, _, _) = initialize_state(&all_keypairs, stake);
-        let root_bank = bank_forks.root_bank().clone();
+        let root_bank = bank_forks.root_bank();
         let mut propagated_stats = PropagatedStats {
             total_epoch_stake: stake * all_keypairs.len() as u64,
             ..PropagatedStats::default()
@@ -3805,7 +3805,7 @@ pub(crate) mod tests {
             ..
         } = replay_blockstore_components();
 
-        let root_bank = bank_forks.read().unwrap().root_bank().clone();
+        let root_bank = bank_forks.read().unwrap().root_bank();
         let my_pubkey = leader_schedule_cache
             .slot_leader_at(root_bank.slot(), Some(&root_bank))
             .unwrap();

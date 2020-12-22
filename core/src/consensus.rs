@@ -26,7 +26,10 @@ use std::{
     collections::{HashMap, HashSet},
     fs::{self, File},
     io::BufReader,
-    ops::Bound::{Included, Unbounded},
+    ops::{
+        Bound::{Included, Unbounded},
+        Deref,
+    },
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -183,7 +186,7 @@ impl Tower {
         let root_bank = bank_forks.root_bank();
         let (_progress, heaviest_subtree_fork_choice) =
             crate::replay_stage::ReplayStage::initialize_progress_and_fork_choice(
-                root_bank,
+                root_bank.deref(),
                 bank_forks.frozen_banks().values().cloned().collect(),
                 &my_pubkey,
                 &vote_account,
