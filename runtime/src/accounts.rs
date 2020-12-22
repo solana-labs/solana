@@ -61,11 +61,17 @@ pub struct Accounts {
 
 // for the load instructions
 pub type TransactionAccounts = Vec<Account>;
+pub type TransactionAccountDeps = Vec<(Pubkey, Account)>;
 pub type TransactionRent = u64;
 pub type TransactionLoaders = Vec<Vec<(Pubkey, Account)>>;
 
 pub type TransactionLoadResult = (
-    Result<(TransactionAccounts, TransactionLoaders, TransactionRent)>,
+    Result<(
+        TransactionAccounts,
+        TransactionAccountDeps,
+        TransactionLoaders,
+        TransactionRent,
+    )>,
     Option<NonceRollbackFull>,
 );
 
@@ -137,7 +143,7 @@ impl Accounts {
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
-    ) -> Result<(TransactionAccounts, TransactionRent)> {
+    ) -> Result<(TransactionAccounts, TransactionAccountDeps, TransactionRent)> {
         // Copy all the accounts
         let message = tx.message();
         if tx.signatures.is_empty() && fee != 0 {
@@ -148,6 +154,7 @@ impl Accounts {
             let mut payer_index = None;
             let mut tx_rent: TransactionRent = 0;
             let mut accounts = Vec::with_capacity(message.account_keys.len());
+            let mut account_deps = Vec::with_capacity(message.account_keys.len());
             let rent_fix_enabled = feature_set.cumulative_rent_related_fixes_enabled();
 
             for (i, key) in message.account_keys.iter().enumerate() {
@@ -180,6 +187,28 @@ impl Accounts {
                                 }
                             })
                             .unwrap_or_default();
+
+                        if account.executable && bpf_loader_upgradeable::check_id(&account.owner) {
+                            // The upgradeable loader requires the derived ProgramData account
+                            if let Ok(UpgradeableLoaderState::Program {
+                                programdata_address,
+                            }) = account.state()
+                            {
+                                if let Some(account) = self
+                                    .accounts_db
+                                    .load(ancestors, &programdata_address)
+                                    .map(|(account, _)| account)
+                                {
+                                    account_deps.push((programdata_address, account));
+                                } else {
+                                    error_counters.account_not_found += 1;
+                                    return Err(TransactionError::ProgramAccountNotFound);
+                                }
+                            } else {
+                                error_counters.invalid_program_for_execution += 1;
+                                return Err(TransactionError::InvalidProgramForExecution);
+                            }
+                        }
 
                         tx_rent += rent;
                         account
@@ -216,7 +245,7 @@ impl Accounts {
                         Err(TransactionError::InsufficientFundsForFee)
                     } else {
                         accounts[payer_index].lamports -= fee;
-                        Ok((accounts, tx_rent))
+                        Ok((accounts, account_deps, tx_rent))
                     }
                 }
             } else {
@@ -357,8 +386,8 @@ impl Accounts {
                         rent_collector,
                         feature_set,
                     );
-                    let (accounts, rents) = match load_res {
-                        Ok((a, r)) => (a, r),
+                    let (accounts, account_deps, rents) = match load_res {
+                        Ok((a, d, r)) => (a, d, r),
                         Err(e) => return (Err(e), None),
                     };
 
@@ -382,7 +411,7 @@ impl Accounts {
                         None
                     };
 
-                    (Ok((accounts, loaders, rents)), nonce_rollback)
+                    (Ok((accounts, account_deps, loaders, rents)), nonce_rollback)
                 }
                 (_, (Err(e), _nonce_rollback)) => (Err(e), None),
             })
@@ -885,7 +914,7 @@ impl Accounts {
                         }
                     }
                     if account.rent_epoch == 0 {
-                        acc.2 += rent_collector.collect_from_created_account(
+                        acc.3 += rent_collector.collect_from_created_account(
                             &key,
                             account,
                             rent_fix_enabled,
@@ -1226,7 +1255,7 @@ mod tests {
         );
         assert_eq!(loaded_accounts.len(), 1);
         let (load_res, _nonce_rollback) = &loaded_accounts[0];
-        let (tx_accounts, _loaders, _rents) = load_res.as_ref().unwrap();
+        let (tx_accounts, _account_deps, _loaders, _rents) = load_res.as_ref().unwrap();
         assert_eq!(tx_accounts[0].lamports, min_balance);
 
         // Fee leaves zero balance fails
@@ -1288,7 +1317,12 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
             (
-                Ok((transaction_accounts, transaction_loaders, _transaction_rents)),
+                Ok((
+                    transaction_accounts,
+                    _transaction_account_deps,
+                    transaction_loaders,
+                    _transaction_rents,
+                )),
                 _nonce_rollback,
             ) => {
                 assert_eq!(transaction_accounts.len(), 3);
@@ -1514,7 +1548,12 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
             (
-                Ok((transaction_accounts, transaction_loaders, _transaction_rents)),
+                Ok((
+                    transaction_accounts,
+                    _transaction_account_deps,
+                    transaction_loaders,
+                    _transaction_rents,
+                )),
                 _nonce_rollback,
             ) => {
                 assert_eq!(transaction_accounts.len(), 3);
@@ -1811,6 +1850,7 @@ mod tests {
         let loaded0 = (
             Ok((
                 transaction_accounts0,
+                vec![],
                 transaction_loaders0,
                 transaction_rent0,
             )),
@@ -1823,6 +1863,7 @@ mod tests {
         let loaded1 = (
             Ok((
                 transaction_accounts1,
+                vec![],
                 transaction_loaders1,
                 transaction_rent1,
             )),
@@ -2193,7 +2234,12 @@ mod tests {
         let transaction_loaders = vec![];
         let transaction_rent = 0;
         let loaded = (
-            Ok((transaction_accounts, transaction_loaders, transaction_rent)),
+            Ok((
+                transaction_accounts,
+                vec![],
+                transaction_loaders,
+                transaction_rent,
+            )),
             nonce_rollback,
         );
 
@@ -2298,7 +2344,12 @@ mod tests {
         let transaction_loaders = vec![];
         let transaction_rent = 0;
         let loaded = (
-            Ok((transaction_accounts, transaction_loaders, transaction_rent)),
+            Ok((
+                transaction_accounts,
+                vec![],
+                transaction_loaders,
+                transaction_rent,
+            )),
             nonce_rollback,
         );
 

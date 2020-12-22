@@ -993,6 +993,7 @@ mod tests {
             Rent::default(),
             vec![],
             &[],
+            &[],
             None,
             BpfComputeBudget {
                 max_units: 1,

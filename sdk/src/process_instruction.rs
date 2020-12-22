@@ -62,7 +62,7 @@ pub trait InvokeContext {
     /// Get the bank's active feature set
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool;
     /// Get an account from a pre-account
-    fn get_account(&self, pubkey: &Pubkey) -> Option<Account>;
+    fn get_account(&self, pubkey: &Pubkey) -> Option<RefCell<Account>>;
 }
 
 #[derive(Clone, Copy, Debug, AbiExample)]
@@ -342,7 +342,7 @@ impl InvokeContext for MockInvokeContext {
     fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
         true
     }
-    fn get_account(&self, _pubkey: &Pubkey) -> Option<Account> {
+    fn get_account(&self, _pubkey: &Pubkey) -> Option<RefCell<Account>> {
         None
     }
 }
