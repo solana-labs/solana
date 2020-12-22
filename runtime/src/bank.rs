@@ -4,8 +4,8 @@
 //! already been signed and verified.
 use crate::{
     accounts::{
-        AccountAddressFilter, Accounts, TransactionAccounts, TransactionLoadResult,
-        TransactionLoaders,
+        AccountAddressFilter, Accounts, TransactionAccountDeps, TransactionAccounts,
+        TransactionLoadResult, TransactionLoaders,
     },
     accounts_db::{ErrorCounters, SnapshotStorages},
     accounts_index::Ancestors,
@@ -117,6 +117,7 @@ type BankStatusCache = StatusCache<Result<()>>;
 #[frozen_abi(digest = "GSPuprru1pomsgvopKG7XRWiXdqdXJdLPkgJ2arPbkXM")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<Account>>>;
+type TransactionAccountDepRefCells = Vec<(Pubkey, RefCell<Account>)>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, RefCell<Account>)>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -2699,11 +2700,20 @@ impl Bank {
     /// ownership by draining the source
     fn accounts_to_refcells(
         accounts: &mut TransactionAccounts,
+        account_deps: &mut TransactionAccountDeps,
         loaders: &mut TransactionLoaders,
-    ) -> (TransactionAccountRefCells, TransactionLoaderRefCells) {
+    ) -> (
+        TransactionAccountRefCells,
+        TransactionAccountDepRefCells,
+        TransactionLoaderRefCells,
+    ) {
         let account_refcells: Vec<_> = accounts
             .drain(..)
             .map(|account| Rc::new(RefCell::new(account)))
+            .collect();
+        let account_dep_refcells: Vec<_> = account_deps
+            .drain(..)
+            .map(|(pubkey, account_dep)| (pubkey, RefCell::new(account_dep)))
             .collect();
         let loader_refcells: Vec<Vec<_>> = loaders
             .iter_mut()
@@ -2713,7 +2723,7 @@ impl Bank {
                     .collect()
             })
             .collect();
-        (account_refcells, loader_refcells)
+        (account_refcells, account_dep_refcells, loader_refcells)
     }
 
     /// Converts back from RefCell<Account> to Account, this involves moving
@@ -2865,13 +2875,13 @@ impl Bank {
             .zip(OrderedIterator::new(txs, batch.iteration_order()))
             .map(|(accs, (_, tx))| match accs {
                 (Err(e), _nonce_rollback) => (Err(e.clone()), None),
-                (Ok((accounts, loaders, _rents)), nonce_rollback) => {
+                (Ok((accounts, account_deps, loaders, _rents)), nonce_rollback) => {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
 
                     let executors = self.get_executors(&tx.message, &loaders);
 
-                    let (account_refcells, loader_refcells) =
-                        Self::accounts_to_refcells(accounts, loaders);
+                    let (account_refcells, account_dep_refcells, loader_refcells) =
+                        Self::accounts_to_refcells(accounts, account_deps, loaders);
 
                     let instruction_recorders = if enable_cpi_recording {
                         let ix_count = tx.message.instructions.len();
@@ -2892,6 +2902,7 @@ impl Bank {
                         tx.message(),
                         &loader_refcells,
                         &account_refcells,
+                        &account_dep_refcells,
                         &self.rent_collector,
                         log_collector.clone(),
                         executors.clone(),
@@ -3308,7 +3319,7 @@ impl Bank {
 
             let acc = raccs.as_ref().unwrap();
 
-            collected_rent += acc.2;
+            collected_rent += acc.3;
         }
 
         self.collected_rent.fetch_add(collected_rent, Relaxed);
