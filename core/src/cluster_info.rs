@@ -1731,7 +1731,7 @@ impl ClusterInfo {
         Ok(())
     }
 
-    fn handle_adopt_shred_version(self: &Arc<Self>, adopt_shred_version: &mut bool) {
+    fn handle_adopt_shred_version(&self, adopt_shred_version: &mut bool) {
         // Adopt the entrypoint's `shred_version` if ours is unset
         if *adopt_shred_version {
             // If gossip was given an entrypoint, look up the ContactInfo by the given
@@ -1765,7 +1765,7 @@ impl ClusterInfo {
     }
 
     fn handle_purge(
-        self: &Arc<Self>,
+        &self,
         thread_pool: &ThreadPool,
         bank_forks: &Option<Arc<RwLock<BankForks>>>,
         stakes: &HashMap<Pubkey, u64>,
