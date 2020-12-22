@@ -68,7 +68,8 @@ if [[ -n $CI || -z $1 ]]; then
     $(git grep -l "proc-macro.*true" :**/Cargo.toml | sed 's|Cargo.toml|src/lib.rs|')
 fi
 
-RUST_LOG=solana=trace _ "$cargo" nightly test --target-dir target/cov --no-run "${packages[@]}"
+# RUST_LOG=solana=trace _ "$cargo" nightly test --target-dir target/cov --no-run "${packages[@]}"
+RUST_LOG=solana=trace _ "$cargo" nightly test --package solana-runtime test_shrink_and_clean
 if RUST_LOG=solana=trace _ "$cargo" nightly test --target-dir target/cov "${packages[@]}" 2> target/cov/coverage-stderr.log; then
   test_status=0
 else
