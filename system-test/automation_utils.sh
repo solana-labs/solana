@@ -108,6 +108,11 @@ function collect_performance_statistics {
       GROUP BY time(1s)
     )'
 
+  declare q_dropped_vote_hash_count='
+    SELECT max("count") as "max_dropped_vote_hash"
+      FROM "'$TESTNET_TAG'"."autogen"."dropped-vote-hash"
+      WHERE time > now() - '"$TEST_DURATION_SECONDS"'s'
+
   declare q_mean_confirmation='
     SELECT round(mean("duration_ms")) as "mean_confirmation_ms"
       FROM "'$TESTNET_TAG'"."autogen"."validator-confirmation"
@@ -138,7 +143,7 @@ function collect_performance_statistics {
 
   curl -G "${INFLUX_HOST}/query?u=ro&p=topsecret" \
     --data-urlencode "db=${TESTNET_TAG}" \
-    --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation;$q_max_tower_distance_observed;$q_last_tower_distance_observed" |
+    --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation;$q_max_tower_distance_observed;$q_last_tower_distance_observed;$q_dropped_vote_hash_count" |
     python "${REPO_ROOT}"/system-test/testnet-automation-json-parser.py >>"$RESULT_FILE"
 }
 
