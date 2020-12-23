@@ -64,7 +64,7 @@ struct Config {
     delinquent_grace_slot_distance: u64,
 
     /// Don't ever unstake more than this percentage of the cluster at one time
-    max_poor_block_productor_percentage: usize,
+    max_poor_block_producer_percentage: usize,
 
     address_labels: HashMap<String, String>,
 }
@@ -146,6 +146,15 @@ fn get_config() -> Config {
                 .help("Quality validators produce a block in at least this percentage of their leader slots over the previous epoch")
         )
         .arg(
+            Arg::with_name("max_poor_block_producer_percentage")
+                .long("max-poor-block-producer-percentage")
+                .value_name("PERCENTAGE")
+                .takes_value(true)
+                .default_value("20")
+                .validator(is_valid_percentage)
+                .help("Do not add or remove bonus stake from any non-delinquent validators if at least this percentage of all validators are poor block producers")
+        )
+        .arg(
             Arg::with_name("baseline_stake_amount")
                 .long("baseline-stake-amount")
                 .value_name("SOL")
@@ -175,6 +184,8 @@ fn get_config() -> Config {
     let cluster = value_t!(matches, "cluster", String).unwrap_or_else(|_| "unknown".into());
     let quality_block_producer_percentage =
         value_t_or_exit!(matches, "quality_block_producer_percentage", usize);
+    let max_poor_block_producer_percentage =
+        value_t_or_exit!(matches, "max_poor_block_producer_percentage", usize);
     let baseline_stake_amount =
         sol_to_lamports(value_t_or_exit!(matches, "baseline_stake_amount", f64));
     let bonus_stake_amount = sol_to_lamports(value_t_or_exit!(matches, "bonus_stake_amount", f64));
@@ -230,7 +241,7 @@ fn get_config() -> Config {
         bonus_stake_amount,
         delinquent_grace_slot_distance: 21600, // ~24 hours worth of slots at 2.5 slots per second
         quality_block_producer_percentage,
-        max_poor_block_productor_percentage: 20,
+        max_poor_block_producer_percentage,
         address_labels: config.address_labels,
     };
 
@@ -576,7 +587,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         classify_block_producers(&rpc_client, &config, last_epoch)?;
 
     let too_many_poor_block_producers = poor_block_producers.len()
-        > quality_block_producers.len() * config.max_poor_block_productor_percentage / 100;
+        > quality_block_producers.len() * config.max_poor_block_producer_percentage / 100;
 
     // Fetch vote account status for all the validator_listed validators
     let vote_account_status = rpc_client.get_vote_accounts()?;
@@ -877,7 +888,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         let message = format!(
             "Note: Something is wrong, more than {}% of validators classified \
                        as poor block producers in epoch {}.  Bonus stake frozen",
-            config.max_poor_block_productor_percentage, last_epoch,
+            config.max_poor_block_producer_percentage, last_epoch,
         );
         warn!("{}", message);
         if !config.dry_run {
