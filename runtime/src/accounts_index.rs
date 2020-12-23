@@ -46,7 +46,7 @@ pub enum IndexKey {
     SplTokenOwner(Pubkey),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AccountIndex {
     ProgramId,
     SplTokenMint,
@@ -883,7 +883,7 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         slot: Slot,
         account_owner: &Pubkey,
         account_data: &[u8],
-        account_indexes: &[AccountIndex],
+        account_indexes: &HashSet<AccountIndex>,
     ) {
         if account_indexes.contains(&AccountIndex::ProgramId) {
             self.program_id_index.insert(account_owner, pubkey, slot);
@@ -1636,6 +1636,12 @@ mod tests {
         assert_eq!(slots_map.value().read().unwrap().get(&slot).unwrap(), key);
     }
 
+    fn spl_token_mint_index_enabled() -> HashSet<AccountIndex> {
+        let mut account_indexes = HashSet::new();
+        account_indexes.insert(AccountIndex::SplTokenMint);
+        account_indexes
+    }
+
     #[test]
     fn test_secondary_indexes() {
         let index = AccountsIndex::<bool>::default();
@@ -1652,7 +1658,7 @@ mod tests {
             slot,
             &Pubkey::default(),
             &correct_account_data,
-            &[AccountIndex::SplTokenMint],
+            &spl_token_mint_index_enabled(),
         );
         assert!(index.spl_token_mint_index.index.is_empty());
         assert!(index.spl_token_mint_index.reverse_index.is_empty());
@@ -1663,7 +1669,7 @@ mod tests {
             slot,
             &inline_spl_token_v2_0::id(),
             &correct_account_data[1..],
-            &[AccountIndex::SplTokenMint],
+            &spl_token_mint_index_enabled(),
         );
         assert!(index.spl_token_mint_index.index.is_empty());
         assert!(index.spl_token_mint_index.reverse_index.is_empty());
@@ -1675,7 +1681,7 @@ mod tests {
                 slot,
                 &inline_spl_token_v2_0::id(),
                 &correct_account_data,
-                &[AccountIndex::SplTokenMint],
+                &spl_token_mint_index_enabled(),
             );
             check_secondary_index_unique(
                 &index.spl_token_mint_index,
@@ -1717,7 +1723,7 @@ mod tests {
             slot,
             &inline_spl_token_v2_0::id(),
             &account_data1,
-            &[AccountIndex::SplTokenMint],
+            &spl_token_mint_index_enabled(),
         );
 
         // Now write a different mint index
@@ -1727,7 +1733,7 @@ mod tests {
             slot,
             &inline_spl_token_v2_0::id(),
             &account_data2,
-            &[AccountIndex::SplTokenMint],
+            &spl_token_mint_index_enabled(),
         );
 
         // Check correctness
@@ -1747,7 +1753,7 @@ mod tests {
             fork,
             &inline_spl_token_v2_0::id(),
             &account_data1,
-            &[AccountIndex::SplTokenMint],
+            &spl_token_mint_index_enabled(),
         );
         assert_eq!(
             index.spl_token_mint_index.get(&mint_key1),

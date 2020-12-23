@@ -468,7 +468,7 @@ pub struct AccountsDB {
 
     pub cluster_type: Option<ClusterType>,
 
-    pub account_indexes: Vec<AccountIndex>,
+    pub account_indexes: HashSet<AccountIndex>,
 }
 
 #[derive(Debug, Default)]
@@ -547,27 +547,27 @@ impl Default for AccountsDB {
             frozen_accounts: HashMap::new(),
             stats: AccountsStats::default(),
             cluster_type: None,
-            account_indexes: vec![],
+            account_indexes: HashSet::new(),
         }
     }
 }
 
 impl AccountsDB {
     pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
-        AccountsDB::new_with_indexes(paths, cluster_type, &[])
+        AccountsDB::new_with_indexes(paths, cluster_type, HashSet::new())
     }
 
     pub fn new_with_indexes(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
-        account_indexes: &[AccountIndex],
+        account_indexes: HashSet<AccountIndex>,
     ) -> Self {
         let new = if !paths.is_empty() {
             Self {
                 paths,
                 temp_paths: None,
                 cluster_type: Some(*cluster_type),
-                account_indexes: account_indexes.to_vec(),
+                account_indexes,
                 ..Self::default()
             }
         } else {
@@ -578,7 +578,7 @@ impl AccountsDB {
                 paths,
                 temp_paths: Some(temp_dirs),
                 cluster_type: Some(*cluster_type),
-                account_indexes: account_indexes.to_vec(),
+                account_indexes,
                 ..Self::default()
             }
         };

@@ -859,13 +859,13 @@ impl Default for BlockhashQueue {
 
 impl Bank {
     pub fn new(genesis_config: &GenesisConfig) -> Self {
-        Self::new_with_paths(&genesis_config, Vec::new(), &[], None, None, &[])
+        Self::new_with_paths(&genesis_config, Vec::new(), &[], None, None, HashSet::new())
     }
 
     #[cfg(test)]
     pub(crate) fn new_with_indexes(
         genesis_config: &GenesisConfig,
-        account_indexes: &[AccountIndex],
+        account_indexes: HashSet<AccountIndex>,
     ) -> Self {
         Self::new_with_paths(
             &genesis_config,
@@ -883,7 +883,7 @@ impl Bank {
         frozen_account_pubkeys: &[Pubkey],
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
-        account_indexes: &[AccountIndex],
+        account_indexes: HashSet<AccountIndex>,
     ) -> Self {
         let mut bank = Self::default();
         bank.ancestors.insert(bank.slot(), 0);
@@ -8701,10 +8701,9 @@ pub(crate) mod tests {
     #[test]
     fn test_get_filtered_indexed_accounts() {
         let (genesis_config, _mint_keypair) = create_genesis_config(500);
-        let bank = Arc::new(Bank::new_with_indexes(
-            &genesis_config,
-            &[AccountIndex::ProgramId],
-        ));
+        let mut account_indexes = HashSet::new();
+        account_indexes.insert(AccountIndex::ProgramId);
+        let bank = Arc::new(Bank::new_with_indexes(&genesis_config, account_indexes));
 
         let address = Pubkey::new_unique();
         let program_id = Pubkey::new_unique();
@@ -11108,7 +11107,7 @@ pub(crate) mod tests {
             &[],
             None,
             Some(&builtins),
-            &[],
+            HashSet::new(),
         ));
         // move to next epoch to create now deprecated rewards sysvar intentionally
         let bank1 = Arc::new(Bank::new_from_parent(

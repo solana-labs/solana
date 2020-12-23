@@ -593,7 +593,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     genesis_config: &GenesisConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
-    account_indexes: &[AccountIndex],
+    account_indexes: HashSet<AccountIndex>,
 ) -> Result<Bank> {
     // Untar the snapshot into a temporary directory
     let unpack_dir = tempfile::Builder::new()
@@ -778,7 +778,7 @@ fn rebuild_bank_from_snapshots<P>(
     genesis_config: &GenesisConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
-    account_indexes: &[AccountIndex],
+    account_indexes: HashSet<AccountIndex>,
 ) -> Result<Bank>
 where
     P: AsRef<Path>,

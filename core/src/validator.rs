@@ -118,7 +118,7 @@ pub struct ValidatorConfig {
     pub send_transaction_leader_forward_count: u64,
     pub no_poh_speed_test: bool,
     pub poh_pinned_cpu_core: usize,
-    pub account_indexes: Vec<AccountIndex>,
+    pub account_indexes: HashSet<AccountIndex>,
 }
 
 impl Default for ValidatorConfig {
@@ -163,7 +163,7 @@ impl Default for ValidatorConfig {
             send_transaction_leader_forward_count: 2,
             no_poh_speed_test: true,
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
-            account_indexes: Vec::new(),
+            account_indexes: HashSet::new(),
         }
     }
 }

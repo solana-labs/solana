@@ -82,13 +82,13 @@ pub enum AccountAddressFilter {
 
 impl Accounts {
     pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
-        Self::new_with_indexes(paths, cluster_type, &[])
+        Self::new_with_indexes(paths, cluster_type, HashSet::new())
     }
 
     pub fn new_with_indexes(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
-        account_indexes: &[AccountIndex],
+        account_indexes: HashSet<AccountIndex>,
     ) -> Self {
         Self {
             accounts_db: Arc::new(AccountsDB::new_with_indexes(
