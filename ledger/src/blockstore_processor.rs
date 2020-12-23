@@ -925,7 +925,7 @@ fn load_frozen_forks(
                 leader_schedule_cache.set_root(&new_root_bank);
                 new_root_bank.squash();
 
-                if last_free.elapsed() > Duration::from_secs(30) {
+                if last_free.elapsed() > Duration::from_secs(10) {
                     // This could take few secs; so update last_free later
                     new_root_bank.exhaustively_free_unused_resource();
                     last_free = Instant::now();

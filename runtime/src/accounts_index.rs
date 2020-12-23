@@ -712,6 +712,10 @@ impl<T: 'static + Clone> AccountsIndex<T> {
             .contains(&slot)
     }
 
+    pub fn num_roots(&self) -> usize {
+        self.roots_tracker.read().unwrap().roots.len()
+    }
+
     pub fn all_roots(&self) -> Vec<Slot> {
         self.roots_tracker
             .read()
