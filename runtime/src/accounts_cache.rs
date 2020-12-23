@@ -147,8 +147,8 @@ impl AccountsCache {
         std::mem::replace(&mut self.cached_roots.write().unwrap(), HashSet::new())
     }
 
-    // Removes slots less than or equal to `max_root`. Only safe to call with roots, otherwise
-    // the slot removed could still be undergoing replay!
+    // Removes slots less than or equal to `max_root`. Only safe to pass in a rooted slot,
+    // otherwise the slot removed could still be undergoing replay!
     pub fn remove_slots_le(&self, max_root: Slot) -> Vec<(Slot, SlotCache)> {
         let mut removed_slots = vec![];
         self.cache.retain(|slot, slot_cache| {

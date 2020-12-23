@@ -148,8 +148,8 @@ fn bench_delete_dependencies(bencher: &mut Bencher) {
     for i in 0..1000 {
         let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new((i + 1) as u64, 0, &Account::default().owner);
-        accounts.store_slow(i, &pubkey, &account);
-        accounts.store_slow(i, &old_pubkey, &zero_account);
+        accounts.store_slow_uncached(i, &pubkey, &account);
+        accounts.store_slow_uncached(i, &old_pubkey, &zero_account);
         old_pubkey = pubkey;
         accounts.add_root(i);
     }
@@ -181,7 +181,7 @@ fn store_accounts_with_possible_contention<F: 'static>(
             .map(|_| {
                 let pubkey = solana_sdk::pubkey::new_rand();
                 let account = Account::new(1, 0, &Account::default().owner);
-                accounts.store_slow(slot, &pubkey, &account);
+                accounts.store_slow_uncached(slot, &pubkey, &account);
                 pubkey
             })
             .collect(),
@@ -207,7 +207,7 @@ fn store_accounts_with_possible_contention<F: 'static>(
             // Write to a different slot than the one being read from. Because
             // there's a new account pubkey being written to every time, will
             // compete for the accounts index lock on every store
-            accounts.store_slow(slot + 1, &solana_sdk::pubkey::new_rand(), &account);
+            accounts.store_slow_uncached(slot + 1, &solana_sdk::pubkey::new_rand(), &account);
         }
     })
 }

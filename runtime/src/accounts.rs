@@ -455,10 +455,10 @@ impl Accounts {
     {
         let accumulator: Vec<Vec<(Pubkey, u64, B)>> = self.accounts_db.scan_account_storage(
             slot,
-            |stored_account: LoadedAccount, _id: AppendVecId, accum: &mut Vec<(Pubkey, u64, B)>| {
-                let pubkey = *stored_account.pubkey();
-                let write_version = stored_account.write_version();
-                if let Some(val) = func(stored_account) {
+            |loaded_account: LoadedAccount, _id: AppendVecId, accum: &mut Vec<(Pubkey, u64, B)>| {
+                let pubkey = *loaded_account.pubkey();
+                let write_version = loaded_account.write_version();
+                if let Some(val) = func(loaded_account) {
                     accum.push((pubkey, std::u64::MAX - write_version, val));
                 }
             },
@@ -670,9 +670,11 @@ impl Accounts {
         )
     }
 
-    /// Slow because lock is held for 1 operation instead of many
-    pub fn store_slow(&self, slot: Slot, pubkey: &Pubkey, account: &Account) {
-        self.accounts_db.store(slot, &[(pubkey, account)]);
+    /// Slow because lock is held for 1 operation instead of many.
+    /// WARNING: This noncached version is only to be used for tests/benchmarking
+    /// as bypassing the cache in general is not supported
+    pub fn store_slow_uncached(&self, slot: Slot, pubkey: &Pubkey, account: &Account) {
+        self.accounts_db.store_uncached(slot, &[(pubkey, account)]);
     }
 
     pub fn store_slow_cached(&self, slot: Slot, pubkey: &Pubkey, account: &Account) {
@@ -1028,18 +1030,18 @@ pub fn create_test_accounts(
     for t in 0..num {
         let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new((t + 1) as u64, 0, &Account::default().owner);
-        accounts.store_slow(slot, &pubkey, &account);
+        accounts.store_slow_uncached(slot, &pubkey, &account);
         pubkeys.push(pubkey);
     }
 }
 
 // Only used by bench, not safe to call otherwise accounts can conflict with the
 // accounts cache!
-pub fn update_accounts(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64) {
+pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64) {
     for pubkey in pubkeys {
         let amount = thread_rng().gen_range(0, 10);
         let account = Account::new(amount, 0, &Account::default().owner);
-        accounts.store_slow(slot, &pubkey, &account);
+        accounts.store_slow_uncached(slot, &pubkey, &account);
     }
 }
 
@@ -1078,7 +1080,7 @@ mod tests {
         hash_queue.register_hash(&tx.message().recent_blockhash, &fee_calculator);
         let accounts = Accounts::new(Vec::new(), &ClusterType::Development);
         for ka in ka.iter() {
-            accounts.store_slow(0, &ka.0, &ka.1);
+            accounts.store_slow_uncached(0, &ka.0, &ka.1);
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
@@ -1630,13 +1632,13 @@ mod tests {
         // Load accounts owned by various programs into AccountsDB
         let pubkey0 = solana_sdk::pubkey::new_rand();
         let account0 = Account::new(1, 0, &Pubkey::new(&[2; 32]));
-        accounts.store_slow(0, &pubkey0, &account0);
+        accounts.store_slow_uncached(0, &pubkey0, &account0);
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let account1 = Account::new(1, 0, &Pubkey::new(&[2; 32]));
-        accounts.store_slow(0, &pubkey1, &account1);
+        accounts.store_slow_uncached(0, &pubkey1, &account1);
         let pubkey2 = solana_sdk::pubkey::new_rand();
         let account2 = Account::new(1, 0, &Pubkey::new(&[3; 32]));
-        accounts.store_slow(0, &pubkey2, &account2);
+        accounts.store_slow_uncached(0, &pubkey2, &account2);
 
         let loaded = accounts.load_by_program_slot(0, Some(&Pubkey::new(&[2; 32])));
         assert_eq!(loaded.len(), 2);
@@ -1683,10 +1685,10 @@ mod tests {
         let account3 = Account::new(4, 0, &Pubkey::default());
 
         let accounts = Accounts::new(Vec::new(), &ClusterType::Development);
-        accounts.store_slow(0, &keypair0.pubkey(), &account0);
-        accounts.store_slow(0, &keypair1.pubkey(), &account1);
-        accounts.store_slow(0, &keypair2.pubkey(), &account2);
-        accounts.store_slow(0, &keypair3.pubkey(), &account3);
+        accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
+        accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
+        accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
+        accounts.store_slow_uncached(0, &keypair3.pubkey(), &account3);
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -1795,9 +1797,9 @@ mod tests {
         let account2 = Account::new(3, 0, &Pubkey::default());
 
         let accounts = Accounts::new(Vec::new(), &ClusterType::Development);
-        accounts.store_slow(0, &keypair0.pubkey(), &account0);
-        accounts.store_slow(0, &keypair1.pubkey(), &account1);
-        accounts.store_slow(0, &keypair2.pubkey(), &account2);
+        accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
+        accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
+        accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
 
         let accounts_arc = Arc::new(accounts);
 
@@ -1982,8 +1984,8 @@ mod tests {
         for i in 0..2_000 {
             let pubkey = solana_sdk::pubkey::new_rand();
             let account = Account::new((i + 1) as u64, 0, &Account::default().owner);
-            accounts.store_slow(i, &pubkey, &account);
-            accounts.store_slow(i, &old_pubkey, &zero_account);
+            accounts.store_slow_uncached(i, &pubkey, &account);
+            accounts.store_slow_uncached(i, &old_pubkey, &zero_account);
             old_pubkey = pubkey;
             accounts.add_root(i);
             if i % 1_000 == 0 {

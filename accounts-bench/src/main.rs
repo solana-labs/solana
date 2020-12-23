@@ -2,7 +2,7 @@ use clap::{crate_description, crate_name, value_t, App, Arg};
 use rayon::prelude::*;
 use solana_measure::measure::Measure;
 use solana_runtime::{
-    accounts::{create_test_accounts, update_accounts, Accounts},
+    accounts::{create_test_accounts, update_accounts_bench, Accounts},
     accounts_index::Ancestors,
 };
 use solana_sdk::{genesis_config::ClusterType, pubkey::Pubkey};
@@ -92,7 +92,7 @@ fn main() {
             time.stop();
             println!("{}", time);
             for slot in 0..num_slots {
-                update_accounts(&accounts, &pubkeys, ((x + 1) * num_slots + slot) as u64);
+                update_accounts_bench(&accounts, &pubkeys, ((x + 1) * num_slots + slot) as u64);
                 accounts.add_root((x * num_slots + slot) as u64);
             }
         } else {

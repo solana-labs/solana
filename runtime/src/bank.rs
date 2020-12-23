@@ -1998,8 +1998,8 @@ impl Bank {
             // freeze is a one-way trip, idempotent
             self.freeze_started.store(true, Relaxed);
             *hash = self.hash_internal_state();
+            self.rc.accounts.accounts_db.mark_slot_frozen(self.slot());
         }
-        self.rc.accounts.accounts_db.mark_slot_frozen(self.slot());
     }
 
     // Should not be called outside of startup, will race with
