@@ -8,7 +8,6 @@ use solana_sdk::{
     account::Account,
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    clock::Epoch,
     feature_set::{instructions_sysvar_enabled, FeatureSet},
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_readonly_accounts, KeyedAccount},
@@ -54,11 +53,7 @@ pub struct PreAccount {
     key: Pubkey,
     is_signer: bool,
     is_writable: bool,
-    is_executable: bool,
-    lamports: u64,
-    data: Vec<u8>,
-    owner: Pubkey,
-    rent_epoch: Epoch,
+    account: RefCell<Account>,
 }
 impl PreAccount {
     pub fn new(key: &Pubkey, account: &Account, is_signer: bool, is_writable: bool) -> Self {
@@ -66,11 +61,7 @@ impl PreAccount {
             key: *key,
             is_signer,
             is_writable,
-            lamports: account.lamports,
-            data: account.data.clone(),
-            owner: account.owner,
-            is_executable: account.executable,
-            rent_epoch: account.rent_epoch,
+            account: RefCell::new(account.clone()),
         }
     }
 
@@ -80,41 +71,43 @@ impl PreAccount {
         rent: &Rent,
         post: &Account,
     ) -> Result<(), InstructionError> {
+        let pre = self.account.borrow();
+
         // Only the owner of the account may change owner and
         //   only if the account is writable and
         //   only if the account is not executable and
         //   only if the data is zero-initialized or empty
-        if self.owner != post.owner
+        if pre.owner != post.owner
             && (!self.is_writable // line coverage used to get branch coverage
-                || self.is_executable
-                || *program_id != self.owner
+                || pre.executable
+                || *program_id != pre.owner
             || !Self::is_zeroed(&post.data))
         {
             return Err(InstructionError::ModifiedProgramId);
         }
 
         // An account not assigned to the program cannot have its balance decrease.
-        if *program_id != self.owner // line coverage used to get branch coverage
-         && self.lamports > post.lamports
+        if *program_id != pre.owner // line coverage used to get branch coverage
+         && pre.lamports > post.lamports
         {
             return Err(InstructionError::ExternalAccountLamportSpend);
         }
 
         // The balance of read-only and executable accounts may not change
-        if self.lamports != post.lamports {
+        if pre.lamports != post.lamports {
             if !self.is_writable {
                 return Err(InstructionError::ReadonlyLamportChange);
             }
-            if self.is_executable {
+            if pre.executable {
                 return Err(InstructionError::ExecutableLamportChange);
             }
         }
 
         // Only the system program can change the size of the data
         //  and only if the system program owns the account
-        if self.data.len() != post.data.len()
+        if pre.data.len() != post.data.len()
             && (!system_program::check_id(program_id) // line coverage used to get branch coverage
-                || !system_program::check_id(&self.owner))
+                || !system_program::check_id(&pre.owner))
         {
             return Err(InstructionError::AccountDataSizeChanged);
         }
@@ -122,12 +115,12 @@ impl PreAccount {
         // Only the owner may change account data
         //   and if the account is writable
         //   and if the account is not executable
-        if !(*program_id == self.owner
+        if !(*program_id == pre.owner
             && self.is_writable  // line coverage used to get branch coverage
-            && !self.is_executable)
-            && self.data != post.data
+            && !pre.executable)
+            && pre.data != post.data
         {
-            if self.is_executable {
+            if pre.executable {
                 return Err(InstructionError::ExecutableDataModified);
             } else if self.is_writable {
                 return Err(InstructionError::ExternalAccountDataModified);
@@ -137,20 +130,20 @@ impl PreAccount {
         }
 
         // executable is one-way (false->true) and only the account owner may set it.
-        if self.is_executable != post.executable {
+        if pre.executable != post.executable {
             if !rent.is_exempt(post.lamports, post.data.len()) {
                 return Err(InstructionError::ExecutableAccountNotRentExempt);
             }
             if !self.is_writable // line coverage used to get branch coverage
-                || self.is_executable
-                || *program_id != self.owner
+                || pre.executable
+                || *program_id != pre.owner
             {
                 return Err(InstructionError::ExecutableModified);
             }
         }
 
         // No one modifies rent_epoch (yet).
-        if self.rent_epoch != post.rent_epoch {
+        if pre.rent_epoch != post.rent_epoch {
             return Err(InstructionError::RentEpochModified);
         }
 
@@ -158,14 +151,16 @@ impl PreAccount {
     }
 
     pub fn update(&mut self, account: &Account) {
-        self.lamports = account.lamports;
-        self.owner = account.owner;
-        if self.data.len() != account.data.len() {
+        let mut pre = self.account.borrow_mut();
+
+        pre.lamports = account.lamports;
+        pre.owner = account.owner;
+        if pre.data.len() != account.data.len() {
             // Only system account can change data size, copy with alloc
-            self.data = account.data.clone();
+            pre.data = account.data.clone();
         } else {
             // Copy without allocate
-            self.data.clone_from_slice(&account.data);
+            pre.data.clone_from_slice(&account.data);
         }
     }
 
@@ -174,7 +169,7 @@ impl PreAccount {
     }
 
     pub fn lamports(&self) -> u64 {
-        self.lamports
+        self.account.borrow().lamports
     }
 
     pub fn is_zeroed(buf: &[u8]) -> bool {
@@ -317,24 +312,18 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.feature_set.is_active(feature_id)
     }
     fn get_account(&self, pubkey: &Pubkey) -> Option<RefCell<Account>> {
-        if let Some(account) = self.account_deps.iter().find_map(|(key, account)| {
-            if key == pubkey {
-                Some(account.clone())
+        if let Some(account) = self.pre_accounts.iter().find_map(|pre| {
+            if pre.key == *pubkey {
+                Some(pre.account.clone())
             } else {
                 None
             }
         }) {
             return Some(account);
         }
-        self.pre_accounts.iter().find_map(|pre| {
-            if pre.key == *pubkey {
-                Some(RefCell::new(Account {
-                    lamports: pre.lamports,
-                    data: pre.data.clone(),
-                    owner: pre.owner,
-                    executable: pre.is_executable,
-                    rent_epoch: pre.rent_epoch,
-                }))
+        self.account_deps.iter().find_map(|(key, account)| {
+            if key == pubkey {
+                Some(account.clone())
             } else {
                 None
             }
@@ -1049,7 +1038,10 @@ mod tests {
                 .verify_and_update(&message, &message.instructions[0], &these_accounts)
                 .unwrap();
             assert_eq!(
-                invoke_context.pre_accounts[owned_index].data[0],
+                invoke_context.pre_accounts[owned_index]
+                    .account
+                    .borrow()
+                    .data[0],
                 (MAX_DEPTH + owned_index) as u8
             );
 
@@ -1064,7 +1056,13 @@ mod tests {
                 ),
                 Err(InstructionError::ExternalAccountDataModified)
             );
-            assert_eq!(invoke_context.pre_accounts[not_owned_index].data[0], data);
+            assert_eq!(
+                invoke_context.pre_accounts[not_owned_index]
+                    .account
+                    .borrow()
+                    .data[0],
+                data
+            );
             accounts[not_owned_index].borrow_mut().data[0] = data;
 
             invoke_context.pop();
@@ -1143,12 +1141,12 @@ mod tests {
             self
         }
         pub fn executable(mut self, pre: bool, post: bool) -> Self {
-            self.pre.is_executable = pre;
+            self.pre.account.borrow_mut().executable = pre;
             self.post.executable = post;
             self
         }
         pub fn lamports(mut self, pre: u64, post: u64) -> Self {
-            self.pre.lamports = pre;
+            self.pre.account.borrow_mut().lamports = pre;
             self.post.lamports = post;
             self
         }
@@ -1157,12 +1155,12 @@ mod tests {
             self
         }
         pub fn data(mut self, pre: Vec<u8>, post: Vec<u8>) -> Self {
-            self.pre.data = pre;
+            self.pre.account.borrow_mut().data = pre;
             self.post.data = post;
             self
         }
         pub fn rent_epoch(mut self, pre: u64, post: u64) -> Self {
-            self.pre.rent_epoch = pre;
+            self.pre.account.borrow_mut().rent_epoch = pre;
             self.post.rent_epoch = post;
             self
         }
