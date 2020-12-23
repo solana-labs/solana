@@ -457,6 +457,10 @@ pub fn process_instruction(
     let keyed_accounts = &mut keyed_accounts.iter();
     let me = &next_keyed_account(keyed_accounts)?;
 
+    if me.owner()? != id() {
+        return Err(InstructionError::IncorrectProgramId);
+    }
+
     match limited_deserialize(data)? {
         StakeInstruction::Initialize(authorized, lockup) => me.initialize(
             &authorized,
@@ -538,12 +542,27 @@ mod tests {
         RefCell::new(Account::default())
     }
 
+    fn create_default_stake_account() -> RefCell<Account> {
+        RefCell::new(Account {
+            owner: id(),
+            ..Account::default()
+        })
+    }
+
     fn invalid_stake_state_pubkey() -> Pubkey {
         Pubkey::from_str("BadStake11111111111111111111111111111111111").unwrap()
     }
 
     fn invalid_vote_state_pubkey() -> Pubkey {
         Pubkey::from_str("BadVote111111111111111111111111111111111111").unwrap()
+    }
+
+    fn spoofed_stake_state_pubkey() -> Pubkey {
+        Pubkey::from_str("SpoofedStake1111111111111111111111111111111").unwrap()
+    }
+
+    fn spoofed_stake_program_id() -> Pubkey {
+        Pubkey::from_str("Spoofed111111111111111111111111111111111111").unwrap()
     }
 
     fn process_instruction(instruction: &Instruction) -> Result<(), InstructionError> {
@@ -569,8 +588,15 @@ mod tests {
                     let mut account = Account::default();
                     account.owner = solana_vote_program::id();
                     account
+                } else if meta.pubkey == spoofed_stake_state_pubkey() {
+                    let mut account = Account::default();
+                    account.owner = spoofed_stake_program_id();
+                    account
                 } else {
-                    Account::default()
+                    Account {
+                        owner: id(),
+                        ..Account::default()
+                    }
                 })
             })
             .collect();
@@ -677,6 +703,115 @@ mod tests {
     }
 
     #[test]
+    fn test_spoofed_stake_accounts() {
+        assert_eq!(
+            process_instruction(&initialize(
+                &spoofed_stake_state_pubkey(),
+                &Authorized::default(),
+                &Lockup::default()
+            )),
+            Err(InstructionError::IncorrectProgramId),
+        );
+        assert_eq!(
+            process_instruction(&authorize(
+                &spoofed_stake_state_pubkey(),
+                &Pubkey::default(),
+                &Pubkey::default(),
+                StakeAuthorize::Staker
+            )),
+            Err(InstructionError::IncorrectProgramId),
+        );
+        assert_eq!(
+            process_instruction(
+                &split(
+                    &spoofed_stake_state_pubkey(),
+                    &Pubkey::default(),
+                    100,
+                    &Pubkey::default(),
+                )[1]
+            ),
+            Err(InstructionError::IncorrectProgramId),
+        );
+        assert_eq!(
+            process_instruction(
+                &split(
+                    &Pubkey::default(),
+                    &Pubkey::default(),
+                    100,
+                    &spoofed_stake_state_pubkey(),
+                )[1]
+            ),
+            Err(InstructionError::IncorrectProgramId),
+        );
+        assert_eq!(
+            process_instruction(
+                &merge(
+                    &spoofed_stake_state_pubkey(),
+                    &Pubkey::default(),
+                    &Pubkey::default(),
+                )[0]
+            ),
+            Err(InstructionError::IncorrectProgramId),
+        );
+        assert_eq!(
+            process_instruction(
+                &merge(
+                    &Pubkey::default(),
+                    &spoofed_stake_state_pubkey(),
+                    &Pubkey::default(),
+                )[0]
+            ),
+            Err(InstructionError::IncorrectProgramId),
+        );
+        assert_eq!(
+            process_instruction(
+                &split_with_seed(
+                    &spoofed_stake_state_pubkey(),
+                    &Pubkey::default(),
+                    100,
+                    &Pubkey::default(),
+                    &Pubkey::default(),
+                    "seed"
+                )[1]
+            ),
+            Err(InstructionError::IncorrectProgramId),
+        );
+        assert_eq!(
+            process_instruction(&delegate_stake(
+                &spoofed_stake_state_pubkey(),
+                &Pubkey::default(),
+                &Pubkey::default(),
+            )),
+            Err(InstructionError::IncorrectProgramId),
+        );
+        assert_eq!(
+            process_instruction(&withdraw(
+                &spoofed_stake_state_pubkey(),
+                &Pubkey::default(),
+                &solana_sdk::pubkey::new_rand(),
+                100,
+                None,
+            )),
+            Err(InstructionError::IncorrectProgramId),
+        );
+        assert_eq!(
+            process_instruction(&deactivate_stake(
+                &spoofed_stake_state_pubkey(),
+                &Pubkey::default()
+            )),
+            Err(InstructionError::IncorrectProgramId),
+        );
+        assert_eq!(
+            process_instruction(&set_lockup(
+                &spoofed_stake_state_pubkey(),
+                &LockupArgs::default(),
+                &Pubkey::default()
+            )),
+            Err(InstructionError::IncorrectProgramId),
+        );
+    }
+
+    #[test]
     fn test_stake_process_instruction_decode_bail() {
         // these will not call stake_state, have bogus contents
 
@@ -702,7 +837,7 @@ mod tests {
                 &[KeyedAccount::new(
                     &Pubkey::default(),
                     false,
-                    &create_default_account(),
+                    &create_default_stake_account(),
                 )],
                 &serialize(&StakeInstruction::Initialize(
                     Authorized::default(),
@@ -719,8 +854,8 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &[
-                    KeyedAccount::new(&Pubkey::default(), false, &create_default_account(),),
-                    KeyedAccount::new(&sysvar::rent::id(), false, &create_default_account(),)
+                    KeyedAccount::new(&Pubkey::default(), false, &create_default_stake_account()),
+                    KeyedAccount::new(&sysvar::rent::id(), false, &create_default_account())
                 ],
                 &serialize(&StakeInstruction::Initialize(
                     Authorized::default(),
@@ -737,7 +872,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &[
-                    KeyedAccount::new(&Pubkey::default(), false, &create_default_account()),
+                    KeyedAccount::new(&Pubkey::default(), false, &create_default_stake_account()),
                     KeyedAccount::new(
                         &sysvar::rent::id(),
                         false,
@@ -761,7 +896,7 @@ mod tests {
                 &[KeyedAccount::new(
                     &Pubkey::default(),
                     false,
-                    &create_default_account()
+                    &create_default_stake_account()
                 ),],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
                 &mut MockInvokeContext::default()
@@ -776,7 +911,7 @@ mod tests {
                 &[KeyedAccount::new(
                     &Pubkey::default(),
                     false,
-                    &create_default_account()
+                    &create_default_stake_account()
                 )],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
                 &mut MockInvokeContext::default()
@@ -791,7 +926,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &[
-                    KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
+                    KeyedAccount::new(&Pubkey::default(), true, &create_default_stake_account()),
                     KeyedAccount::new(&Pubkey::default(), false, &bad_vote_account),
                     KeyedAccount::new(
                         &sysvar::clock::id(),
@@ -823,7 +958,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &[
-                    KeyedAccount::new(&Pubkey::default(), false, &create_default_account()),
+                    KeyedAccount::new(&Pubkey::default(), false, &create_default_stake_account()),
                     KeyedAccount::new(&Pubkey::default(), false, &create_default_account()),
                     KeyedAccount::new(
                         &sysvar::rewards::id(),
@@ -852,7 +987,7 @@ mod tests {
                 &[KeyedAccount::new(
                     &Pubkey::default(),
                     false,
-                    &create_default_account()
+                    &create_default_stake_account()
                 )],
                 &serialize(&StakeInstruction::Withdraw(42)).unwrap(),
                 &mut MockInvokeContext::default()
@@ -865,7 +1000,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &[
-                    KeyedAccount::new(&Pubkey::default(), false, &create_default_account()),
+                    KeyedAccount::new(&Pubkey::default(), false, &create_default_stake_account()),
                     KeyedAccount::new(
                         &sysvar::rewards::id(),
                         false,

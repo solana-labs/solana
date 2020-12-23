@@ -102,6 +102,10 @@ pub mod simple_capitalization {
     solana_sdk::declare_id!("9r69RnnxABmpcPFfj1yhg4n9YFR2MNaLdKJCC6v3Speb");
 }
 
+pub mod stake_program_v3 {
+    solana_sdk::declare_id!("Ego6nTu7WsBcZBvVqJQKp6Yku2N3mrfG8oYCfaLZkAeK");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -129,6 +133,7 @@ lazy_static! {
         (rewrite_stake::id(), "rewrite stake"),
         (filter_stake_delegation_accounts::id(), "filter stake_delegation_accounts #14062"),
         (simple_capitalization::id(), "simple capitalization"),
+        (stake_program_v3::id(), "solana_stake_program v3"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
