@@ -39,7 +39,7 @@ use solana_metrics::inc_new_counter_info;
 use solana_perf::packet::PACKET_DATA_SIZE;
 use solana_runtime::{
     accounts::AccountAddressFilter,
-    accounts_index::{IndexKey, IndexType},
+    accounts_index::{AccountIndex, IndexKey},
     bank::Bank,
     bank_forks::BankForks,
     commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
@@ -110,7 +110,7 @@ pub struct JsonRpcConfig {
     pub enable_bigtable_ledger_storage: bool,
     pub enable_bigtable_ledger_upload: bool,
     pub max_multiple_accounts: Option<usize>,
-    pub supported_indexes: Vec<IndexType>,
+    pub account_indexes: Vec<AccountIndex>,
 }
 
 #[derive(Clone)]
@@ -1308,8 +1308,8 @@ impl JsonRpcRequestProcessor {
         };
         if self
             .config
-            .supported_indexes
-            .contains(&IndexType::ProgramId)
+            .account_indexes
+            .contains(&AccountIndex::ProgramId)
         {
             bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(*program_id), filter_closure)
         } else {
@@ -1342,10 +1342,10 @@ impl JsonRpcRequestProcessor {
 
         if self
             .config
-            .supported_indexes
-            .contains(&IndexType::TokenOwner)
+            .account_indexes
+            .contains(&AccountIndex::SplTokenOwner)
         {
-            bank.get_filtered_indexed_accounts(&IndexKey::TokenOwner(*owner_key), |account| {
+            bank.get_filtered_indexed_accounts(&IndexKey::SplTokenOwner(*owner_key), |account| {
                 filters.iter().all(|filter_type| match filter_type {
                     RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
                     RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
@@ -1378,8 +1378,12 @@ impl JsonRpcRequestProcessor {
             bytes: MemcmpEncodedBytes::Binary(mint_key.to_string()),
             encoding: None,
         }));
-        if self.config.supported_indexes.contains(&IndexType::Mint) {
-            bank.get_filtered_indexed_accounts(&IndexKey::Mint(*mint_key), |account| {
+        if self
+            .config
+            .account_indexes
+            .contains(&AccountIndex::SplTokenMint)
+        {
+            bank.get_filtered_indexed_accounts(&IndexKey::SplTokenMint(*mint_key), |account| {
                 filters.iter().all(|filter_type| match filter_type {
                     RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
                     RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),

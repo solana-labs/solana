@@ -15,7 +15,7 @@ use solana_measure::{measure::Measure, thread_mem_usage};
 use solana_metrics::{datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
-    accounts_index::IndexType,
+    accounts_index::AccountIndex,
     bank::{
         Bank, InnerInstructionsList, TransactionBalancesSet, TransactionExecutionResult,
         TransactionLogMessages, TransactionResults,
@@ -345,7 +345,7 @@ pub struct ProcessOptions {
     pub new_hard_forks: Option<Vec<Slot>>,
     pub frozen_accounts: Vec<Pubkey>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
-    pub supported_indexes: Vec<IndexType>,
+    pub account_indexes: Vec<AccountIndex>,
 }
 
 pub fn process_blockstore(
@@ -370,7 +370,7 @@ pub fn process_blockstore(
         &opts.frozen_accounts,
         opts.debug_keys.clone(),
         Some(&crate::builtins::get(opts.bpf_jit)),
-        &opts.supported_indexes,
+        &opts.account_indexes,
     );
     let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");

@@ -40,15 +40,15 @@ enum ScanTypes<R: RangeBounds<Pubkey>> {
 #[derive(Debug, Clone, Copy)]
 pub enum IndexKey {
     ProgramId(Pubkey),
-    TokenOwner(Pubkey),
-    Mint(Pubkey),
+    SplTokenMint(Pubkey),
+    SplTokenOwner(Pubkey),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum IndexType {
+pub enum AccountIndex {
     ProgramId,
-    TokenOwner,
-    Mint,
+    SplTokenMint,
+    SplTokenOwner,
 }
 
 #[derive(Debug)]
@@ -398,8 +398,8 @@ impl SecondaryIndex {
 pub struct AccountsIndex<T> {
     pub account_maps: RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
     program_id_index: SecondaryIndex,
-    token_owner_index: SecondaryIndex,
-    mint_index: SecondaryIndex,
+    spl_token_mint_index: SecondaryIndex,
+    spl_token_owner_index: SecondaryIndex,
     roots_tracker: RwLock<RootsTracker>,
     ongoing_scan_roots: RwLock<BTreeMap<Slot, u64>>,
 }
@@ -567,21 +567,21 @@ impl<T: 'static + Clone> AccountsIndex<T> {
                     Some(max_root),
                 );
             }
-            ScanTypes::Indexed(IndexKey::TokenOwner(owner_key)) => {
+            ScanTypes::Indexed(IndexKey::SplTokenMint(mint_key)) => {
                 self.do_scan_secondary_index(
                     ancestors,
                     func,
-                    &self.token_owner_index,
-                    &owner_key,
+                    &self.spl_token_mint_index,
+                    &mint_key,
                     Some(max_root),
                 );
             }
-            ScanTypes::Indexed(IndexKey::Mint(mint_key)) => {
+            ScanTypes::Indexed(IndexKey::SplTokenOwner(owner_key)) => {
                 self.do_scan_secondary_index(
                     ancestors,
                     func,
-                    &self.mint_index,
-                    &mint_key,
+                    &self.spl_token_owner_index,
+                    &owner_key,
                     Some(max_root),
                 );
             }
@@ -881,23 +881,23 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         slot: Slot,
         account_owner: &Pubkey,
         account_data: &[u8],
-        supported_indexes: &[IndexType],
+        account_indexes: &[AccountIndex],
     ) {
-        if supported_indexes.contains(&IndexType::ProgramId) {
+        if account_indexes.contains(&AccountIndex::ProgramId) {
             self.program_id_index.insert(account_owner, pubkey, slot);
         }
         if *account_owner == inline_spl_token_v2_0::id()
             && account_data.len() == inline_spl_token_v2_0::state::Account::get_packed_len()
         {
-            if supported_indexes.contains(&IndexType::Mint) {
-                let mint_key = Pubkey::new(&account_data[..PUBKEY_BYTES]);
-                self.mint_index.insert(&mint_key, pubkey, slot);
-            }
-
-            if supported_indexes.contains(&IndexType::TokenOwner) {
+            if account_indexes.contains(&AccountIndex::SplTokenOwner) {
                 let owner_key =
                     Pubkey::new(&account_data[PUBKEY_BYTES..PUBKEY_BYTES + PUBKEY_BYTES]);
-                self.token_owner_index.insert(&owner_key, pubkey, slot);
+                self.spl_token_owner_index.insert(&owner_key, pubkey, slot);
+            }
+
+            if account_indexes.contains(&AccountIndex::SplTokenMint) {
+                let mint_key = Pubkey::new(&account_data[..PUBKEY_BYTES]);
+                self.spl_token_mint_index.insert(&mint_key, pubkey, slot);
             }
         }
     }
@@ -937,11 +937,11 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         inner_key: &Pubkey,
         slots_to_remove: Option<&HashSet<Slot>>,
     ) {
-        self.mint_index
-            .remove_by_inner_key(inner_key, slots_to_remove);
         self.program_id_index
             .remove_by_inner_key(inner_key, slots_to_remove);
-        self.token_owner_index
+        self.spl_token_owner_index
+            .remove_by_inner_key(inner_key, slots_to_remove);
+        self.spl_token_mint_index
             .remove_by_inner_key(inner_key, slots_to_remove);
     }
 
@@ -1645,10 +1645,10 @@ mod tests {
             slot,
             &Pubkey::default(),
             &correct_account_data,
-            &[IndexType::Mint],
+            &[AccountIndex::SplTokenMint],
         );
-        assert!(index.mint_index.index.is_empty());
-        assert!(index.mint_index.reverse_index.is_empty());
+        assert!(index.spl_token_mint_index.index.is_empty());
+        assert!(index.spl_token_mint_index.reverse_index.is_empty());
 
         // Wrong account data size
         index.update_secondary_indexes(
@@ -1656,10 +1656,10 @@ mod tests {
             slot,
             &inline_spl_token_v2_0::id(),
             &correct_account_data[1..],
-            &[IndexType::Mint],
+            &[AccountIndex::SplTokenMint],
         );
-        assert!(index.mint_index.index.is_empty());
-        assert!(index.mint_index.reverse_index.is_empty());
+        assert!(index.spl_token_mint_index.index.is_empty());
+        assert!(index.spl_token_mint_index.reverse_index.is_empty());
 
         // Just right. Inserting the same index multiple times should be ok
         for _ in 0..2 {
@@ -1668,9 +1668,14 @@ mod tests {
                 slot,
                 &inline_spl_token_v2_0::id(),
                 &correct_account_data,
-                &[IndexType::Mint],
+                &[AccountIndex::SplTokenMint],
             );
-            check_secondary_index_unique(&index.mint_index, slot, &mint_key, &account_key);
+            check_secondary_index_unique(
+                &index.spl_token_mint_index,
+                slot,
+                &mint_key,
+                &account_key,
+            );
         }
 
         // Insert into index, simulate dead key
@@ -1682,8 +1687,8 @@ mod tests {
 
         // Everything should be deleted
         index.handle_dead_keys(&[account_key]);
-        assert!(index.mint_index.index.is_empty());
-        assert!(index.mint_index.reverse_index.is_empty());
+        assert!(index.spl_token_mint_index.index.is_empty());
+        assert!(index.spl_token_mint_index.reverse_index.is_empty());
     }
 
     #[test]
@@ -1705,7 +1710,7 @@ mod tests {
             slot,
             &inline_spl_token_v2_0::id(),
             &account_data1,
-            &[IndexType::Mint],
+            &[AccountIndex::SplTokenMint],
         );
 
         // Now write a different mint index
@@ -1715,13 +1720,16 @@ mod tests {
             slot,
             &inline_spl_token_v2_0::id(),
             &account_data2,
-            &[IndexType::Mint],
+            &[AccountIndex::SplTokenMint],
         );
 
         // Check correctness
-        check_secondary_index_unique(&index.mint_index, slot, &mint_key2, &account_key);
-        assert!(index.mint_index.get(&mint_key1).is_empty());
-        assert_eq!(index.mint_index.get(&mint_key2), vec![account_key]);
+        check_secondary_index_unique(&index.spl_token_mint_index, slot, &mint_key2, &account_key);
+        assert!(index.spl_token_mint_index.get(&mint_key1).is_empty());
+        assert_eq!(
+            index.spl_token_mint_index.get(&mint_key2),
+            vec![account_key]
+        );
 
         // If another fork reintroduces mint_key1, then it should be readded to the
         // index
@@ -1732,9 +1740,12 @@ mod tests {
             fork,
             &inline_spl_token_v2_0::id(),
             &account_data1,
-            &[IndexType::Mint],
+            &[AccountIndex::SplTokenMint],
         );
-        assert_eq!(index.mint_index.get(&mint_key1), vec![account_key]);
+        assert_eq!(
+            index.spl_token_mint_index.get(&mint_key1),
+            vec![account_key]
+        );
 
         // If we set a root at fork, and clean, then the mint_key1 should no longer
         // be findable
@@ -1745,10 +1756,13 @@ mod tests {
             .slot_list_mut(|slot_list| {
                 index.purge_older_root_entries(&account_key, slot_list, &mut vec![], None)
             });
-        assert!(index.mint_index.get(&mint_key2).is_empty());
-        assert_eq!(index.mint_index.get(&mint_key1), vec![account_key]);
+        assert!(index.spl_token_mint_index.get(&mint_key2).is_empty());
+        assert_eq!(
+            index.spl_token_mint_index.get(&mint_key1),
+            vec![account_key]
+        );
 
         // Check correctness
-        check_secondary_index_unique(&index.mint_index, fork, &mint_key1, &account_key);
+        check_secondary_index_unique(&index.spl_token_mint_index, fork, &mint_key1, &account_key);
     }
 }

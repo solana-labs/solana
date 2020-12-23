@@ -1,6 +1,6 @@
 use crate::{
     accounts_db::{AccountsDB, AppendVecId, BankHashInfo, ErrorCounters},
-    accounts_index::{Ancestors, IndexKey, IndexType},
+    accounts_index::{AccountIndex, Ancestors, IndexKey},
     append_vec::StoredAccount,
     bank::{
         NonceRollbackFull, NonceRollbackInfo, TransactionCheckResult, TransactionExecutionResult,
@@ -88,13 +88,13 @@ impl Accounts {
     pub fn new_with_indexes(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
-        supported_indexes: &[IndexType],
+        account_indexes: &[AccountIndex],
     ) -> Self {
         Self {
             accounts_db: Arc::new(AccountsDB::new_with_indexes(
                 paths,
                 cluster_type,
-                supported_indexes,
+                account_indexes,
             )),
             account_locks: Mutex::new(HashSet::new()),
             readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),

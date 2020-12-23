@@ -19,7 +19,7 @@
 //! commit for each slot entry would be indexed.
 
 use crate::{
-    accounts_index::{AccountsIndex, Ancestors, IndexKey, IndexType, SlotList, SlotSlice},
+    accounts_index::{AccountIndex, AccountsIndex, Ancestors, IndexKey, SlotList, SlotSlice},
     append_vec::{AppendVec, StoredAccount, StoredMeta},
 };
 use blake3::traits::digest::Digest;
@@ -468,7 +468,7 @@ pub struct AccountsDB {
 
     pub cluster_type: Option<ClusterType>,
 
-    pub supported_indexes: Vec<IndexType>,
+    pub account_indexes: Vec<AccountIndex>,
 }
 
 #[derive(Debug, Default)]
@@ -547,7 +547,7 @@ impl Default for AccountsDB {
             frozen_accounts: HashMap::new(),
             stats: AccountsStats::default(),
             cluster_type: None,
-            supported_indexes: vec![],
+            account_indexes: vec![],
         }
     }
 }
@@ -560,14 +560,14 @@ impl AccountsDB {
     pub fn new_with_indexes(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
-        supported_indexes: &[IndexType],
+        account_indexes: &[AccountIndex],
     ) -> Self {
         let new = if !paths.is_empty() {
             Self {
                 paths,
                 temp_paths: None,
                 cluster_type: Some(*cluster_type),
-                supported_indexes: supported_indexes.to_vec(),
+                account_indexes: account_indexes.to_vec(),
                 ..Self::default()
             }
         } else {
@@ -578,7 +578,7 @@ impl AccountsDB {
                 paths,
                 temp_paths: Some(temp_dirs),
                 cluster_type: Some(*cluster_type),
-                supported_indexes: supported_indexes.to_vec(),
+                account_indexes: account_indexes.to_vec(),
                 ..Self::default()
             }
         };
@@ -2554,7 +2554,7 @@ impl AccountsDB {
                 slot,
                 &pubkey_account.1.owner,
                 &pubkey_account.1.data,
-                &self.supported_indexes,
+                &self.account_indexes,
             );
         }
         reclaims
@@ -2999,7 +2999,7 @@ impl AccountsDB {
                             *slot,
                             &stored_account.account_meta.owner,
                             &stored_account.data,
-                            &self.supported_indexes,
+                            &self.account_indexes,
                         );
                         entry.push((stored_account.meta.write_version, account_info));
                     },
