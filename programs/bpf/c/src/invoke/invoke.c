@@ -291,7 +291,8 @@ extern uint64_t entrypoint(const uint8_t *input) {
   case TEST_EMPTY_ACCOUNTS_SLICE: {
     sol_log("Empty accounts slice");
 
-    SolAccountMeta arguments[] = {};
+    SolAccountMeta arguments[] = {
+        {accounts[INVOKED_ARGUMENT_INDEX].key, false, false}};
     uint8_t data[] = {};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                         arguments, SOL_ARRAY_SIZE(arguments),
