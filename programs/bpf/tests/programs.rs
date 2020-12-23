@@ -989,7 +989,7 @@ fn test_program_bpf_invoke() {
         let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
         assert_eq!(
             result.unwrap_err().unwrap(),
-            TransactionError::InstructionError(0, InstructionError::ModifiedProgramId)
+            TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature)
         );
         assert_eq!(10, bank.get_balance(&from_pubkey));
         assert_eq!(0, bank.get_balance(&to_pubkey));
