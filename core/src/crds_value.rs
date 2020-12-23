@@ -84,6 +84,7 @@ pub enum CrdsData {
     Version(Version),
     NodeInstance(NodeInstance),
     DuplicateShred(DuplicateShred),
+    Root(Root),
 }
 
 impl Sanitize for CrdsData {
@@ -114,6 +115,7 @@ impl Sanitize for CrdsData {
             CrdsData::Version(version) => version.sanitize(),
             CrdsData::NodeInstance(node) => node.sanitize(),
             CrdsData::DuplicateShred(shred) => shred.sanitize(),
+            CrdsData::Root(root) => root.sanitize(),
         }
     }
 }
@@ -380,6 +382,20 @@ impl Sanitize for NodeInstance {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, AbiExample, Deserialize, Serialize)]
+pub struct Root {
+    from: Pubkey,
+    wallclock: u64,
+    slot: Slot,
+}
+
+impl Sanitize for Root {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        sanitize_wallclock(self.wallclock)?;
+        self.from.sanitize()
+    }
+}
+
 /// Type of the replicated value
 /// These are labels for values in a record that is associated with `Pubkey`
 #[derive(PartialEq, Hash, Eq, Clone, Debug)]
@@ -394,6 +410,7 @@ pub enum CrdsValueLabel {
     Version(Pubkey),
     NodeInstance(Pubkey, u64 /*token*/),
     DuplicateShred(DuplicateShredIndex, Pubkey),
+    Root(Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -409,6 +426,7 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::Version(_) => write!(f, "Version({})", self.pubkey()),
             CrdsValueLabel::NodeInstance(pk, token) => write!(f, "NodeInstance({}, {})", pk, token),
             CrdsValueLabel::DuplicateShred(ix, pk) => write!(f, "DuplicateShred({:?}, {})", ix, pk),
+            CrdsValueLabel::Root(pk) => write!(f, "Root({})", pk),
         }
     }
 }
@@ -426,6 +444,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::Version(p) => *p,
             CrdsValueLabel::NodeInstance(p, _ /*token*/) => *p,
             CrdsValueLabel::DuplicateShred(_, p) => *p,
+            CrdsValueLabel::Root(p) => *p,
         }
     }
 }
@@ -474,6 +493,7 @@ impl CrdsValue {
             CrdsData::Version(version) => version.wallclock,
             CrdsData::NodeInstance(node) => node.wallclock,
             CrdsData::DuplicateShred(shred) => shred.wallclock,
+            CrdsData::Root(root) => root.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -488,6 +508,7 @@ impl CrdsValue {
             CrdsData::Version(version) => version.from,
             CrdsData::NodeInstance(node) => node.from,
             CrdsData::DuplicateShred(shred) => shred.from,
+            CrdsData::Root(root) => root.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -504,6 +525,7 @@ impl CrdsValue {
             CrdsData::DuplicateShred(shred) => {
                 CrdsValueLabel::DuplicateShred(DuplicateShredIndex::from(shred), shred.from)
             }
+            CrdsData::Root(root) => CrdsValueLabel::Root(root.from),
         }
     }
     pub fn contact_info(&self) -> Option<&ContactInfo> {
