@@ -113,7 +113,7 @@ fn do_verify_reachable_ports(
     udp_retry_count: usize,
 ) -> bool {
     info!(
-        "Checking that tcp ports {:?} from {:?}",
+        "Checking that tcp ports {:?} are reachable from {:?}",
         tcp_listeners, ip_echo_server_addr
     );
 
@@ -334,7 +334,7 @@ pub fn is_host(string: String) -> Result<(), String> {
 pub fn parse_host_port(host_port: &str) -> Result<SocketAddr, String> {
     let addrs: Vec<_> = host_port
         .to_socket_addrs()
-        .map_err(|err| err.to_string())?
+        .map_err(|err| format!("Unable to resolve host {}: {}", host_port, err))?
         .collect();
     if addrs.is_empty() {
         Err(format!("Unable to resolve host: {}", host_port))
