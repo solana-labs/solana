@@ -13,7 +13,7 @@ use solana_sdk::{
     account::Account,
     account_info::AccountInfo,
     account_utils::StateMut,
-    bpf_loader_deprecated,
+    bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     feature_set::{
@@ -24,6 +24,7 @@ use solana_sdk::{
     instruction::{AccountMeta, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     message::Message,
+    native_loader,
     process_instruction::{stable_log, ComputeMeter, InvokeContext, Logger},
     program_error::ProgramError,
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS},
@@ -1338,6 +1339,17 @@ impl<'a> SyscallObject<BPFError> for SyscallInvokeSignedC<'a> {
     }
 }
 
+fn is_authorized_program(program_id: &Pubkey) -> Result<(), EbpfError<BPFError>> {
+    if native_loader::check_id(program_id)
+        || bpf_loader::check_id(program_id)
+        || bpf_loader_deprecated::check_id(program_id)
+        || bpf_loader_upgradeable::check_id(program_id)
+    {
+        return Err(SyscallError::InstructionError(InstructionError::UnsupportedProgramId).into());
+    }
+    Ok(())
+}
+
 /// Call process instruction, common to both Rust and C
 fn call<'a>(
     syscall: &mut dyn SyscallInvokeSigned<'a>,
@@ -1372,6 +1384,7 @@ fn call<'a>(
     let (message, callee_program_id) =
         MessageProcessor::create_message(&instruction, &keyed_account_refs, &signers)
             .map_err(SyscallError::InstructionError)?;
+    is_authorized_program(&callee_program_id)?;
     let (accounts, account_refs) = syscall.translate_accounts(
         &message,
         account_infos_addr,

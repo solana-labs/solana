@@ -1337,6 +1337,7 @@ fn test_program_bpf_test_use_latest_executor() {
         .is_ok());
 }
 
+#[ignore] // Invoking BPF loaders from CPI not allowed
 #[cfg(feature = "bpf_rust")]
 #[test]
 fn test_program_bpf_test_use_latest_executor2() {
