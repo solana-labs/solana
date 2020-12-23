@@ -663,10 +663,21 @@ fn rpc_bootstrap(
                     get_highest_snapshot_archive_path(ledger_path)
                         .map(|(_path, (slot, _hash, _compression))| slot)
                 {
-                    if highest_local_snapshot_slot > snapshot_hash.0.saturating_sub(maximum_local_snapshot_age) {
-                        info!("Reusing local snapshot at slot {} instead of downloading a newer snapshot for slot {}",
-                              highest_local_snapshot_slot, snapshot_hash.0);
+                    if highest_local_snapshot_slot
+                        > snapshot_hash.0.saturating_sub(maximum_local_snapshot_age)
+                    {
+                        info!(
+                            "Reusing local snapshot at slot {} instead \
+                               of downloading a newer snapshot for slot {}",
+                            highest_local_snapshot_slot, snapshot_hash.0
+                        );
                         use_local_snapshot = true;
+                    } else {
+                        info!(
+                            "Local snapshot from slot {} is too old. \
+                              Downloading a newer snapshot for slot {}",
+                            highest_local_snapshot_slot, snapshot_hash.0
+                        );
                     }
                 }
 
