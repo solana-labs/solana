@@ -1,4 +1,6 @@
-use crate::inline_spl_token_v2_0;
+use crate::inline_spl_token_v2_0::{
+    self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET,
+};
 use dashmap::DashMap;
 use log::*;
 use ouroboros::self_referencing;
@@ -890,13 +892,18 @@ impl<T: 'static + Clone> AccountsIndex<T> {
             && account_data.len() == inline_spl_token_v2_0::state::Account::get_packed_len()
         {
             if account_indexes.contains(&AccountIndex::SplTokenOwner) {
-                let owner_key =
-                    Pubkey::new(&account_data[PUBKEY_BYTES..PUBKEY_BYTES + PUBKEY_BYTES]);
+                let owner_key = Pubkey::new(
+                    &account_data[SPL_TOKEN_ACCOUNT_OWNER_OFFSET
+                        ..SPL_TOKEN_ACCOUNT_OWNER_OFFSET + PUBKEY_BYTES],
+                );
                 self.spl_token_owner_index.insert(&owner_key, pubkey, slot);
             }
 
             if account_indexes.contains(&AccountIndex::SplTokenMint) {
-                let mint_key = Pubkey::new(&account_data[..PUBKEY_BYTES]);
+                let mint_key = Pubkey::new(
+                    &account_data[SPL_TOKEN_ACCOUNT_MINT_OFFSET
+                        ..SPL_TOKEN_ACCOUNT_MINT_OFFSET + PUBKEY_BYTES],
+                );
                 self.spl_token_mint_index.insert(&mint_key, pubkey, slot);
             }
         }

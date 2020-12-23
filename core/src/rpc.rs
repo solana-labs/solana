@@ -43,6 +43,7 @@ use solana_runtime::{
     bank::Bank,
     bank_forks::BankForks,
     commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
+    inline_spl_token_v2_0::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
 };
 use solana_sdk::{
     account::Account,
@@ -52,7 +53,7 @@ use solana_sdk::{
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
     hash::Hash,
-    pubkey::{Pubkey, PUBKEY_BYTES},
+    pubkey::Pubkey,
     signature::Signature,
     stake_history::StakeHistory,
     system_instruction,
@@ -1335,7 +1336,7 @@ impl JsonRpcRequestProcessor {
         ));
         // Filter on Owner address
         filters.push(RpcFilterType::Memcmp(Memcmp {
-            offset: 32,
+            offset: SPL_TOKEN_ACCOUNT_OWNER_OFFSET,
             bytes: MemcmpEncodedBytes::Binary(owner_key.to_string()),
             encoding: None,
         }));
@@ -1374,7 +1375,7 @@ impl JsonRpcRequestProcessor {
         ));
         // Filter on Mint address
         filters.push(RpcFilterType::Memcmp(Memcmp {
-            offset: 0,
+            offset: SPL_TOKEN_ACCOUNT_MINT_OFFSET,
             bytes: MemcmpEncodedBytes::Binary(mint_key.to_string()),
             encoding: None,
         }));
@@ -1501,7 +1502,7 @@ fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) ->
         match filter {
             RpcFilterType::DataSize(size) => data_size_filter = Some(*size),
             RpcFilterType::Memcmp(Memcmp {
-                offset: PUBKEY_BYTES,
+                offset: SPL_TOKEN_ACCOUNT_OWNER_OFFSET,
                 bytes: MemcmpEncodedBytes::Binary(bytes),
                 ..
             }) => {
