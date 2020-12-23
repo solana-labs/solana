@@ -23,7 +23,6 @@ use solana_sdk::{
     hash::{Hasher, HASH_BYTES},
     instruction::{AccountMeta, Instruction, InstructionError},
     keyed_account::KeyedAccount,
-    message::Message,
     native_loader,
     process_instruction::{stable_log, ComputeMeter, InvokeContext, Logger},
     program_error::ProgramError,
@@ -834,7 +833,10 @@ struct AccountReferences<'a> {
     ref_to_len_in_vm: &'a mut u64,
     serialized_len_ptr: &'a mut u64,
 }
-type TranslatedAccounts<'a> = (Vec<Rc<RefCell<Account>>>, Vec<AccountReferences<'a>>);
+type TranslatedAccounts<'a> = (
+    Vec<Rc<RefCell<Account>>>,
+    Vec<Option<AccountReferences<'a>>>,
+);
 
 /// Implemented by language specific data structure translators
 trait SyscallInvokeSigned<'a> {
@@ -847,7 +849,8 @@ trait SyscallInvokeSigned<'a> {
     ) -> Result<Instruction, EbpfError<BPFError>>;
     fn translate_accounts(
         &self,
-        message: &Message,
+        account_keys: &[Pubkey],
+        program_account_index: usize,
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &MemoryMapping,
@@ -905,7 +908,8 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
 
     fn translate_accounts(
         &self,
-        message: &Message,
+        account_keys: &[Pubkey],
+        program_account_index: usize,
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &MemoryMapping,
@@ -921,9 +925,13 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
             &[]
         };
 
-        let mut accounts = Vec::with_capacity(message.account_keys.len());
-        let mut refs = Vec::with_capacity(message.account_keys.len());
-        'root: for account_key in message.account_keys.iter() {
+        let mut accounts = Vec::with_capacity(account_keys.len());
+        let mut refs = Vec::with_capacity(account_keys.len());
+        'root: for (i, account_key) in account_keys.iter().enumerate() {
+            if i == program_account_index {
+                // Don't look for caller passed executable, runtime already has it
+                continue 'root;
+            }
             for account_info in account_infos.iter() {
                 let key = translate_type::<Pubkey>(
                     memory_mapping,
@@ -986,14 +994,14 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                         owner: *owner,
                         rent_epoch: account_info.rent_epoch,
                     })));
-                    refs.push(AccountReferences {
+                    refs.push(Some(AccountReferences {
                         lamports,
                         owner,
                         data,
                         vm_data_addr,
                         ref_to_len_in_vm,
                         serialized_len_ptr,
-                    });
+                    }));
                     continue 'root;
                 }
             }
@@ -1182,7 +1190,8 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
 
     fn translate_accounts(
         &self,
-        message: &Message,
+        account_keys: &[Pubkey],
+        program_account_index: usize,
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &MemoryMapping,
@@ -1193,9 +1202,13 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             account_infos_len,
             self.loader_id,
         )?;
-        let mut accounts = Vec::with_capacity(message.account_keys.len());
-        let mut refs = Vec::with_capacity(message.account_keys.len());
-        'root: for account_key in message.account_keys.iter() {
+        let mut accounts = Vec::with_capacity(account_keys.len());
+        let mut refs = Vec::with_capacity(account_keys.len());
+        'root: for (i, account_key) in account_keys.iter().enumerate() {
+            if i == program_account_index {
+                // Don't look for caller passed executable, runtime already has it
+                continue 'root;
+            }
             for account_info in account_infos.iter() {
                 let key = translate_type::<Pubkey>(
                     memory_mapping,
@@ -1247,14 +1260,14 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                         owner: *owner,
                         rent_epoch: account_info.rent_epoch,
                     })));
-                    refs.push(AccountReferences {
+                    refs.push(Some(AccountReferences {
                         lamports,
                         owner,
                         data,
                         vm_data_addr,
                         ref_to_len_in_vm,
                         serialized_len_ptr,
-                    });
+                    }));
                     continue 'root;
                 }
             }
@@ -1381,12 +1394,13 @@ fn call<'a>(
         .get_callers_keyed_accounts()
         .iter()
         .collect::<Vec<&KeyedAccount>>();
-    let (message, callee_program_id) =
+    let (message, callee_program_id, program_id_index) =
         MessageProcessor::create_message(&instruction, &keyed_account_refs, &signers)
             .map_err(SyscallError::InstructionError)?;
     is_authorized_program(&callee_program_id)?;
-    let (accounts, account_refs) = syscall.translate_accounts(
-        &message,
+    let (mut accounts, mut account_refs) = syscall.translate_accounts(
+        &message.account_keys,
+        program_id_index,
         account_infos_addr,
         account_infos_len,
         memory_mapping,
@@ -1426,6 +1440,8 @@ fn call<'a>(
     } else {
         None
     };
+    accounts.insert(program_id_index, Rc::new(program_account.clone()));
+    account_refs.insert(program_id_index, None);
     let mut executable_accounts = vec![(callee_program_id, program_account)];
     if let Some(programdata) = programdata_executable {
         executable_accounts.push(programdata);
@@ -1446,37 +1462,40 @@ fn call<'a>(
     }
 
     // Copy results back to caller
-
     for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
         let account = account.borrow();
-        if message.is_writable(i) && !account.executable {
-            *account_ref.lamports = account.lamports;
-            *account_ref.owner = account.owner;
-            if account_ref.data.len() != account.data.len() {
-                if !account_ref.data.is_empty() {
-                    // Only support for `CreateAccount` at this time.
-                    // Need a way to limit total realloc size across multiple CPI calls
-                    return Err(
-                        SyscallError::InstructionError(InstructionError::InvalidRealloc).into(),
-                    );
+        if let Some(account_ref) = account_ref {
+            if message.is_writable(i) && !account.executable {
+                *account_ref.lamports = account.lamports;
+                *account_ref.owner = account.owner;
+                if account_ref.data.len() != account.data.len() {
+                    if !account_ref.data.is_empty() {
+                        // Only support for `CreateAccount` at this time.
+                        // Need a way to limit total realloc size across multiple CPI calls
+                        return Err(SyscallError::InstructionError(
+                            InstructionError::InvalidRealloc,
+                        )
+                        .into());
+                    }
+                    if account.data.len() > account_ref.data.len() + MAX_PERMITTED_DATA_INCREASE {
+                        return Err(SyscallError::InstructionError(
+                            InstructionError::InvalidRealloc,
+                        )
+                        .into());
+                    }
+                    let _ = translate(
+                        memory_mapping,
+                        AccessType::Store,
+                        account_ref.vm_data_addr,
+                        account.data.len() as u64,
+                    )?;
+                    *account_ref.ref_to_len_in_vm = account.data.len() as u64;
+                    *account_ref.serialized_len_ptr = account.data.len() as u64;
                 }
-                if account.data.len() > account_ref.data.len() + MAX_PERMITTED_DATA_INCREASE {
-                    return Err(
-                        SyscallError::InstructionError(InstructionError::InvalidRealloc).into(),
-                    );
-                }
-                let _ = translate(
-                    memory_mapping,
-                    AccessType::Store,
-                    account_ref.vm_data_addr,
-                    account.data.len() as u64,
-                )?;
-                *account_ref.ref_to_len_in_vm = account.data.len() as u64;
-                *account_ref.serialized_len_ptr = account.data.len() as u64;
+                account_ref
+                    .data
+                    .clone_from_slice(&account.data[0..account_ref.data.len()]);
             }
-            account_ref
-                .data
-                .clone_from_slice(&account.data[0..account_ref.data.len()]);
         }
     }
 

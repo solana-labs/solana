@@ -385,7 +385,11 @@ fn process_instruction(
         }
         TEST_EMPTY_ACCOUNTS_SLICE => {
             msg!("Empty accounts slice");
-            let instruction = create_instruction(*accounts[INVOKED_PROGRAM_INDEX].key, &[], vec![]);
+            let instruction = create_instruction(
+                *accounts[INVOKED_PROGRAM_INDEX].key,
+                &[(accounts[INVOKED_ARGUMENT_INDEX].key, false, false)],
+                vec![],
+            );
             invoke(&instruction, &[])?;
         }
         TEST_CAP_SEEDS => {

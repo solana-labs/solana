@@ -509,58 +509,11 @@ impl MessageProcessor {
         Err(InstructionError::UnsupportedProgramId)
     }
 
-    /// Verify instruction against the caller
-    pub fn verify_instruction(
-        keyed_accounts: &[&KeyedAccount],
-        instruction: &Instruction,
-        signers: &[Pubkey],
-    ) -> Result<(), InstructionError> {
-        // Check for privilege escalation
-        for account in instruction.accounts.iter() {
-            let keyed_account = keyed_accounts
-                .iter()
-                .find_map(|keyed_account| {
-                    if &account.pubkey == keyed_account.unsigned_key() {
-                        Some(keyed_account)
-                    } else {
-                        None
-                    }
-                })
-                .ok_or(InstructionError::MissingAccount)?;
-            // Readonly account cannot become writable
-            if account.is_writable && !keyed_account.is_writable() {
-                return Err(InstructionError::PrivilegeEscalation);
-            }
-
-            if account.is_signer && // If message indicates account is signed
-            !( // one of the following needs to be true:
-                keyed_account.signer_key().is_some() // Signed in the parent instruction
-                || signers.contains(&account.pubkey) // Signed by the program
-            ) {
-                return Err(InstructionError::PrivilegeEscalation);
-            }
-        }
-
-        // validate the caller has access to the program account
-        let _ = keyed_accounts
-            .iter()
-            .find_map(|keyed_account| {
-                if &instruction.program_id == keyed_account.unsigned_key() {
-                    Some(keyed_account)
-                } else {
-                    None
-                }
-            })
-            .ok_or(InstructionError::MissingAccount)?;
-
-        Ok(())
-    }
-
     pub fn create_message(
         instruction: &Instruction,
         keyed_accounts: &[&KeyedAccount],
         signers: &[Pubkey],
-    ) -> Result<(Message, Pubkey), InstructionError> {
+    ) -> Result<(Message, Pubkey, usize), InstructionError> {
         // Check for privilege escalation
         for account in instruction.accounts.iter() {
             let keyed_account = keyed_accounts
@@ -588,6 +541,7 @@ impl MessageProcessor {
         }
 
         // validate the caller has access to the program account
+        let program_id = instruction.program_id;
         let _ = keyed_accounts
             .iter()
             .find_map(|keyed_account| {
@@ -600,10 +554,9 @@ impl MessageProcessor {
             .ok_or(InstructionError::MissingAccount)?;
 
         let message = Message::new(&[instruction.clone()], None);
-        let id = *message
-            .program_id(0)
-            .ok_or(InstructionError::MissingAccount)?;
-        Ok((message, id))
+        let program_id_index = message.instructions[0].program_id_index as usize;
+
+        Ok((message, program_id, program_id_index))
     }
 
     /// Entrypoint for a cross-program invocation from a native program
@@ -621,7 +574,7 @@ impl MessageProcessor {
             .iter()
             .map(|seeds| Pubkey::create_program_address(&seeds, caller_program_id))
             .collect::<Result<Vec<_>, solana_sdk::pubkey::PubkeyError>>()?;
-        let (message, callee_program_id) =
+        let (message, callee_program_id, _) =
             Self::create_message(&instruction, &keyed_accounts, &signers)?;
         let mut accounts = vec![];
         let mut account_refs = vec![];
