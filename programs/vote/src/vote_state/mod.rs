@@ -19,6 +19,7 @@ use solana_sdk::{
     sysvar::clock::Clock,
 };
 use std::boxed::Box;
+use std::cmp::Ordering;
 use std::collections::{HashSet, VecDeque};
 
 mod vote_state_0_23_5;
@@ -214,7 +215,7 @@ impl VoteState {
     pub fn size_of() -> usize {
         // Upper limit on the size of the Vote State. Equal to
         // size_of(VoteState) when votes.len() is MAX_LOCKOUT_HISTORY
-        let vote_state = VoteStateVersions::Current(Box::new(Self::get_max_sized_vote_state()));
+        let vote_state = VoteStateVersions::new_current(Self::get_max_sized_vote_state());
         serialized_size(&vote_state).unwrap() as usize
     }
 
@@ -594,7 +595,7 @@ pub fn authorize<S: std::hash::BuildHasher>(
         }
     }
 
-    vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
+    vote_account.set_state(&VoteStateVersions::new_current(vote_state))
 }
 
 /// Update the node_pubkey, requires signature of the authorized voter
@@ -614,7 +615,7 @@ pub fn update_validator_identity<S: std::hash::BuildHasher>(
 
     vote_state.node_pubkey = *node_pubkey;
 
-    vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
+    vote_account.set_state(&VoteStateVersions::new_current(vote_state))
 }
 
 /// Update the vote account's commission
@@ -631,7 +632,7 @@ pub fn update_commission<S: std::hash::BuildHasher>(
 
     vote_state.commission = commission;
 
-    vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
+    vote_account.set_state(&VoteStateVersions::new_current(vote_state))
 }
 
 fn verify_authorized_signer<S: std::hash::BuildHasher>(
@@ -657,8 +658,13 @@ pub fn withdraw<S: std::hash::BuildHasher>(
 
     verify_authorized_signer(&vote_state.authorized_withdrawer, signers)?;
 
-    if vote_account.lamports()? < lamports {
-        return Err(InstructionError::InsufficientFunds);
+    match vote_account.lamports()?.cmp(&lamports) {
+        Ordering::Less => return Err(InstructionError::InsufficientFunds),
+        Ordering::Equal => {
+            // Deinitialize upon zero-balance
+            vote_account.set_state(&VoteStateVersions::new_current(VoteState::default()))?;
+        }
+        _ => (),
     }
     vote_account.try_account_ref_mut()?.lamports -= lamports;
     to_account.try_account_ref_mut()?.lamports += lamports;
@@ -683,9 +689,9 @@ pub fn initialize_account<S: std::hash::BuildHasher>(
     // node must agree to accept this vote account
     verify_authorized_signer(&vote_init.node_pubkey, signers)?;
 
-    vote_account.set_state(&VoteStateVersions::Current(Box::new(VoteState::new(
+    vote_account.set_state(&VoteStateVersions::new_current(VoteState::new(
         vote_init, clock,
-    ))))
+    )))
 }
 
 pub fn process_vote<S: std::hash::BuildHasher>(
@@ -715,7 +721,7 @@ pub fn process_vote<S: std::hash::BuildHasher>(
             .ok_or_else(|| VoteError::EmptySlots)
             .and_then(|slot| vote_state.process_timestamp(*slot, timestamp))?;
     }
-    vote_account.set_state(&VoteStateVersions::Current(Box::new(vote_state)))
+    vote_account.set_state(&VoteStateVersions::new_current(vote_state))
 }
 
 pub fn create_account_with_authorized(
@@ -737,7 +743,7 @@ pub fn create_account_with_authorized(
         &Clock::default(),
     );
 
-    let versioned = VoteStateVersions::Current(Box::new(vote_state));
+    let versioned = VoteStateVersions::new_current(vote_state);
     VoteState::to(&versioned, &mut vote_account).unwrap();
 
     vote_account
@@ -915,11 +921,11 @@ mod tests {
         vote_state
             .votes
             .resize(MAX_LOCKOUT_HISTORY, Lockout::default());
-        let versioned = VoteStateVersions::Current(Box::new(vote_state));
+        let versioned = VoteStateVersions::new_current(vote_state);
         assert!(VoteState::serialize(&versioned, &mut buffer[0..4]).is_err());
         VoteState::serialize(&versioned, &mut buffer).unwrap();
         assert_eq!(
-            VoteStateVersions::Current(Box::new(VoteState::deserialize(&buffer).unwrap())),
+            VoteStateVersions::new_current(VoteState::deserialize(&buffer).unwrap()),
             versioned
         );
     }
@@ -1626,6 +1632,7 @@ mod tests {
         let lamports = vote_account.borrow().lamports;
         let keyed_accounts = &[KeyedAccount::new(&vote_pubkey, true, &vote_account)];
         let signers: HashSet<Pubkey> = get_signers(keyed_accounts);
+        let pre_state: VoteStateVersions = vote_account.borrow().state().unwrap();
         let res = withdraw(
             &keyed_accounts[0],
             lamports,
@@ -1635,9 +1642,13 @@ mod tests {
         assert_eq!(res, Ok(()));
         assert_eq!(vote_account.borrow().lamports, 0);
         assert_eq!(to_account.borrow().lamports, lamports);
+        let post_state: VoteStateVersions = vote_account.borrow().state().unwrap();
+        // State has been deinitialized since balance is zero
+        assert!(post_state.is_uninitialized());
 
-        // reset balance, verify that authorized_withdrawer works
+        // reset balance and restore state, verify that authorized_withdrawer works
         vote_account.borrow_mut().lamports = lamports;
+        vote_account.borrow_mut().set_state(&pre_state).unwrap();
 
         // authorize authorized_withdrawer
         let authorized_withdrawer_pubkey = solana_sdk::pubkey::new_rand();
@@ -1671,6 +1682,9 @@ mod tests {
         assert_eq!(res, Ok(()));
         assert_eq!(vote_account.borrow().lamports, 0);
         assert_eq!(withdrawer_account.borrow().lamports, lamports);
+        let post_state: VoteStateVersions = vote_account.borrow().state().unwrap();
+        // State has been deinitialized since balance is zero
+        assert!(post_state.is_uninitialized());
     }
 
     #[test]
@@ -1994,9 +2008,17 @@ mod tests {
                 )
             });
 
-            let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
+            let versioned = VoteStateVersions::new_current(vote_state.take().unwrap());
             VoteState::serialize(&versioned, &mut max_sized_data).unwrap();
             vote_state = Some(versioned.convert_to_current());
         }
+    }
+
+    #[test]
+    fn test_default_vote_state_is_uninitialized() {
+        // The default `VoteState` is stored to de-initialize a zero-balance vote account,
+        // so must remain such that `VoteStateVersions::is_uninitialized()` returns true
+        // when called on a `VoteStateVersions` that stores it
+        assert!(VoteStateVersions::new_current(VoteState::default()).is_uninitialized());
     }
 }
