@@ -143,7 +143,7 @@ fn main() {
     };
 
     let mint_address = pubkey_of(&matches, "mint_address").unwrap_or_else(|| {
-        read_keypair_file(dbg!(&cli_config.keypair_path))
+        read_keypair_file(&cli_config.keypair_path)
             .unwrap_or_else(|_| Keypair::new())
             .pubkey()
     });
