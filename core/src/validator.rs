@@ -493,6 +493,7 @@ impl Validator {
             node.sockets.gossip,
             config.gossip_validators.clone(),
             &exit,
+            validator_exit.clone(),
         );
         cluster_info.set_entrypoints(cluster_entrypoints);
 

@@ -1,7 +1,7 @@
 //! The `gossip_service` module implements the network control plane.
 
 use crate::cluster_info::{ClusterInfo, VALIDATOR_PORT_RANGE};
-use crate::contact_info::ContactInfo;
+use crate::{contact_info::ContactInfo, validator::ValidatorExit};
 use rand::{thread_rng, Rng};
 use solana_client::thin_client::{create_client, ThinClient};
 use solana_perf::recycler::Recycler;
@@ -34,6 +34,7 @@ impl GossipService {
         gossip_socket: UdpSocket,
         gossip_validators: Option<HashSet<Pubkey>>,
         exit: &Arc<AtomicBool>,
+        validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
     ) -> Self {
         let (request_sender, request_receiver) = channel();
         let gossip_socket = Arc::new(gossip_socket);
@@ -57,6 +58,7 @@ impl GossipService {
             request_receiver,
             response_sender.clone(),
             exit,
+            validator_exit,
         );
         let t_gossip = ClusterInfo::gossip(
             cluster_info.clone(),
@@ -108,8 +110,14 @@ pub fn discover(
     let keypair = keypair.unwrap_or_else(|| Arc::new(Keypair::new()));
 
     let exit = Arc::new(AtomicBool::new(false));
-    let (gossip_service, ip_echo, spy_ref) =
-        make_gossip_node(keypair, entrypoint, &exit, my_gossip_addr, my_shred_version);
+    let (gossip_service, ip_echo, spy_ref) = make_gossip_node(
+        keypair,
+        entrypoint,
+        &exit,
+        my_gossip_addr,
+        my_shred_version,
+        Arc::default(), // validator exit
+    );
 
     let id = spy_ref.id();
     info!("Entrypoint: {:?}", entrypoint);
@@ -268,6 +276,7 @@ fn make_gossip_node(
     exit: &Arc<AtomicBool>,
     gossip_addr: Option<&SocketAddr>,
     shred_version: u16,
+    validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
 ) -> (GossipService, Option<TcpListener>, Arc<ClusterInfo>) {
     let (node, gossip_socket, ip_echo) = if let Some(gossip_addr) = gossip_addr {
         ClusterInfo::gossip_node(&keypair.pubkey(), gossip_addr, shred_version)
@@ -279,7 +288,14 @@ fn make_gossip_node(
         cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint));
     }
     let cluster_info = Arc::new(cluster_info);
-    let gossip_service = GossipService::new(&cluster_info, None, gossip_socket, None, &exit);
+    let gossip_service = GossipService::new(
+        &cluster_info,
+        None,
+        gossip_socket,
+        None,
+        &exit,
+        validator_exit,
+    );
     (gossip_service, ip_echo, cluster_info)
 }
 
@@ -298,7 +314,14 @@ mod tests {
         let tn = Node::new_localhost();
         let cluster_info = ClusterInfo::new_with_invalid_keypair(tn.info.clone());
         let c = Arc::new(cluster_info);
-        let d = GossipService::new(&c, None, tn.sockets.gossip, None, &exit);
+        let d = GossipService::new(
+            &c,
+            None,
+            tn.sockets.gossip,
+            None,
+            &exit,
+            Arc::default(), // validator exit
+        );
         exit.store(true, Ordering::Relaxed);
         d.join().unwrap();
     }

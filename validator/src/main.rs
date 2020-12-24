@@ -131,6 +131,7 @@ fn start_gossip_node(
         gossip_socket,
         gossip_validators,
         &gossip_exit_flag,
+        Arc::default(), // validator exit
     );
     (cluster_info, gossip_exit_flag, gossip_service)
 }

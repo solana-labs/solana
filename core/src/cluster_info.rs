@@ -25,6 +25,7 @@ use crate::{
     epoch_slots::EpochSlots,
     ping_pong::{self, PingCache, Pong},
     result::{Error, Result},
+    validator::ValidatorExit,
     weighted_shuffle::weighted_shuffle,
 };
 
@@ -2899,6 +2900,7 @@ impl ClusterInfo {
         requests_receiver: PacketReceiver,
         response_sender: PacketSender,
         exit: &Arc<AtomicBool>,
+        validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
         let recycler = PacketsRecycler::default();
@@ -2935,9 +2937,14 @@ impl ClusterInfo {
                                     self.id()
                                 );
                                 exit.store(true, Ordering::Relaxed);
-                                // TODO: Pass through ValidatorExit here so
-                                // that this will exit cleanly.
-                                std::process::exit(1);
+                                if let Some(validator_exit) = validator_exit.write().unwrap().take()
+                                {
+                                    error!("initiating validator exit");
+                                    validator_exit.exit()
+                                } else {
+                                    error!("forcing process exit");
+                                    std::process::exit(1);
+                                }
                             }
                             _ => error!("gossip run_listen failed: {}", err),
                         }

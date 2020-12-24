@@ -689,7 +689,9 @@ impl Drop for LocalCluster {
 #[cfg(test)]
 mod test {
     use super::*;
+    use log::{LevelFilter, Log, Metadata, Record};
     use solana_sdk::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH;
+    use std::{io::Write, sync::RwLock};
 
     #[test]
     fn test_local_cluster_start_and_exit() {
@@ -716,5 +718,68 @@ mod test {
         };
         let cluster = LocalCluster::new(&mut config);
         assert_eq!(cluster.validators.len(), NUM_NODES);
+    }
+
+    struct MockLogger<W>(Arc<RwLock<W>>);
+
+    impl<W: Write + Send + Sync> Log for MockLogger<W> {
+        fn enabled(&self, _: &Metadata) -> bool {
+            true
+        }
+
+        fn log(&self, record: &Record) {
+            self.0
+                .write()
+                .unwrap()
+                .write_fmt(format_args!(
+                    "{}:{}:{}\n",
+                    record.level(),
+                    record.target(),
+                    record.args()
+                ))
+                .unwrap();
+        }
+
+        fn flush(&self) {}
+    }
+
+    #[test]
+    fn test_local_cluster_duplicate_instance() {
+        let sink = Arc::<RwLock<Vec<u8>>>::default();
+        log::set_max_level(LevelFilter::Error);
+        log::set_boxed_logger(Box::new(MockLogger(sink.clone()))).unwrap();
+        let mut cluster = LocalCluster::new_with_equal_stakes(
+            5,   // num_nodes,
+            100, // cluster lamports
+            3,   // lamports per node
+        );
+        let nodes = discover_cluster(&cluster.entry_point_info.gossip, 10).unwrap();
+        assert_eq!(nodes.len(), 5);
+        // Add a new node to the cluster.
+        let keypair = Arc::new(Keypair::new());
+        cluster.add_validator(
+            &ValidatorConfig::default(),
+            0, // stake
+            keypair.clone(),
+            Some(Arc::new(Keypair::new())), // voting keypair
+        );
+        let nodes = discover_cluster(&cluster.entry_point_info.gossip, 6).unwrap();
+        assert_eq!(nodes.len(), 6);
+        // Add a duplicate node to the cluster.
+        cluster.add_validator(
+            &ValidatorConfig::default(),
+            0, // stake
+            keypair.clone(),
+            Some(Arc::new(Keypair::new())), // voting keypair
+        );
+        let nodes = discover_cluster(&cluster.entry_point_info.gossip, 7).unwrap();
+        assert_eq!(nodes.len(), 6);
+        let errors = String::from_utf8(sink.read().unwrap().clone()).unwrap();
+        assert!(errors.contains(&format!(
+            "ERROR:solana_core::cluster_info:duplicate running \
+             instances of the same validator node: {}",
+            keypair.pubkey()
+        )));
+        assert!(errors.contains("ERROR:solana_core::cluster_info:initiating validator exit"));
     }
 }

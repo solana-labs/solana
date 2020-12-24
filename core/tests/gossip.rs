@@ -19,8 +19,14 @@ fn test_node(exit: &Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, UdpSoc
     let keypair = Arc::new(Keypair::new());
     let mut test_node = Node::new_localhost_with_pubkey(&keypair.pubkey());
     let cluster_info = Arc::new(ClusterInfo::new(test_node.info.clone(), keypair));
-    let gossip_service =
-        GossipService::new(&cluster_info, None, test_node.sockets.gossip, None, exit);
+    let gossip_service = GossipService::new(
+        &cluster_info,
+        None,
+        test_node.sockets.gossip,
+        None,
+        exit,
+        Arc::default(), // validator exit
+    );
     let _ = cluster_info.my_contact_info();
     (
         cluster_info,
@@ -42,6 +48,7 @@ fn test_node_with_bank(
         test_node.sockets.gossip,
         None,
         exit,
+        Arc::default(), // validator exit
     );
     let _ = cluster_info.my_contact_info();
     (
