@@ -16,7 +16,7 @@ import {BPF_LOADER_PROGRAM_ID} from '../src/bpf-loader';
 
 if (!mockRpcEnabled) {
   // The default of 5 seconds is too slow for live testing sometimes
-  jest.setTimeout(120000);
+  jest.setTimeout(240000);
 }
 
 test('load BPF C program', async () => {
@@ -54,7 +54,7 @@ test('load BPF C program', async () => {
   });
   await sendAndConfirmTransaction(connection, transaction, [from], {
     commitment: 'singleGossip',
-    skipPreflight: true,
+    preflightCommitment: 'singleGossip',
   });
 });
 
@@ -67,7 +67,6 @@ describe('load BPF Rust program', () => {
   const connection = new Connection(url, 'singleGossip');
 
   let program: Account;
-  let signature: string;
   let payerAccount: Account;
   let programData: Buffer;
 
@@ -116,7 +115,9 @@ describe('load BPF Rust program', () => {
       programData,
       BPF_LOADER_PROGRAM_ID,
     );
+  });
 
+  test('get confirmed transaction', async () => {
     const transaction = new Transaction().add({
       keys: [
         {pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
@@ -124,18 +125,16 @@ describe('load BPF Rust program', () => {
       programId: program.publicKey,
     });
 
-    signature = await sendAndConfirmTransaction(
+    const signature = await sendAndConfirmTransaction(
       connection,
       transaction,
       [payerAccount],
       {
-        commitment: 'max',
-        skipPreflight: true,
+        commitment: 'max', // `getParsedConfirmedTransaction` requires max commitment
+        preflightCommitment: connection.commitment || 'max',
       },
     );
-  });
 
-  test('get confirmed transaction', async () => {
     const parsedTx = await connection.getParsedConfirmedTransaction(signature);
     if (parsedTx === null) {
       expect(parsedTx).not.toBeNull();
