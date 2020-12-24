@@ -466,18 +466,19 @@ impl MessageProcessor {
     /// This method calls the instruction's program entrypoint method
     fn process_instruction(
         &self,
+        program_id: &Pubkey,
         keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
         if let Some(root_account) = keyed_accounts.iter().next() {
+            let root_id = root_account.unsigned_key();
             if native_loader::check_id(&root_account.owner()?) {
-                let root_id = root_account.unsigned_key();
                 for (id, process_instruction) in &self.programs {
                     if id == root_id {
                         // Call the builtin program
                         return process_instruction(
-                            &root_id,
+                            &program_id,
                             &keyed_accounts[1..],
                             instruction_data,
                             invoke_context,
@@ -486,7 +487,7 @@ impl MessageProcessor {
                 }
                 // Call the program via the native loader
                 return self.native_loader.process_instruction(
-                    &native_loader::id(),
+                    program_id,
                     keyed_accounts,
                     instruction_data,
                     invoke_context,
@@ -497,7 +498,7 @@ impl MessageProcessor {
                     if id == owner_id {
                         // Call the program via a builtin loader
                         return process_instruction(
-                            &owner_id,
+                            &program_id,
                             keyed_accounts,
                             instruction_data,
                             invoke_context,
@@ -656,6 +657,8 @@ impl MessageProcessor {
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
         if let Some(instruction) = message.instructions.get(0) {
+            let program_id = instruction.program_id(&message.account_keys);
+
             // Verify the calling program hasn't misbehaved
             invoke_context.verify_and_update(message, instruction, accounts)?;
 
@@ -664,7 +667,7 @@ impl MessageProcessor {
                 Self::create_keyed_accounts(message, instruction, executable_accounts, accounts);
 
             // Invoke callee
-            invoke_context.push(instruction.program_id(&message.account_keys))?;
+            invoke_context.push(program_id)?;
 
             let mut message_processor = MessageProcessor::default();
             for (program_id, process_instruction) in invoke_context.get_programs().iter() {
@@ -672,6 +675,7 @@ impl MessageProcessor {
             }
 
             let mut result = message_processor.process_instruction(
+                program_id,
                 &keyed_accounts,
                 &instruction.data,
                 invoke_context,
@@ -840,8 +844,9 @@ impl MessageProcessor {
         }
 
         let pre_accounts = Self::create_pre_accounts(message, instruction, accounts);
+        let program_id = instruction.program_id(&message.account_keys);
         let mut invoke_context = ThisInvokeContext::new(
-            instruction.program_id(&message.account_keys),
+            program_id,
             rent_collector.rent,
             pre_accounts,
             account_deps,
@@ -854,7 +859,12 @@ impl MessageProcessor {
         );
         let keyed_accounts =
             Self::create_keyed_accounts(message, instruction, executable_accounts, accounts);
-        self.process_instruction(&keyed_accounts, &instruction.data, &mut invoke_context)?;
+        self.process_instruction(
+            program_id,
+            &keyed_accounts,
+            &instruction.data,
+            &mut invoke_context,
+        )?;
         Self::verify(
             message,
             instruction,
