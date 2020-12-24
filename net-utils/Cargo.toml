@@ -21,7 +21,7 @@ socket2 = "0.3.17"
 solana-clap-utils = { path = "../clap-utils", version = "1.6.0" }
 solana-logger = { path = "../logger", version = "1.6.0" }
 solana-version = { path = "../version", version = "1.6.0" }
-tokio = "0.1"
+tokio = "1.0"
 url = "2.1.1"
 
 [lib]
