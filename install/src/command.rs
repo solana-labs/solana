@@ -369,7 +369,9 @@ fn add_to_path(new_path: &str) -> bool {
     use winreg::enums::{RegType, HKEY_CURRENT_USER, KEY_READ, KEY_WRITE};
     use winreg::{RegKey, RegValue};
 
-    let old_path = if let Some(s) = get_windows_path_var()? {
+    let old_path = if let Some(s) =
+        get_windows_path_var().unwrap_or_else(|err| panic!("Unable to get PATH: {}", err))
+    {
         s
     } else {
         return false;
@@ -385,7 +387,7 @@ fn add_to_path(new_path: &str) -> bool {
         let root = RegKey::predef(HKEY_CURRENT_USER);
         let environment = root
             .open_subkey_with_flags("Environment", KEY_READ | KEY_WRITE)
-            .map_err(|err| format!("Unable to open HKEY_CURRENT_USER\\Environment: {}", err))?;
+            .unwrap_or_else(|err| panic!("Unable to open HKEY_CURRENT_USER\\Environment: {}", err));
 
         let reg_value = RegValue {
             bytes: string_to_winreg_bytes(&new_path),
@@ -394,7 +396,9 @@ fn add_to_path(new_path: &str) -> bool {
 
         environment
             .set_raw_value("PATH", &reg_value)
-            .map_err(|err| format!("Unable set HKEY_CURRENT_USER\\Environment\\PATH: {}", err))?;
+            .unwrap_or_else(|err| {
+                panic!("Unable set HKEY_CURRENT_USER\\Environment\\PATH: {}", err)
+            });
 
         // Tell other processes to update their environment
         unsafe {
