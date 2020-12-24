@@ -2919,7 +2919,10 @@ export class Connection {
     const signData = transaction.serializeMessage();
     const wireTransaction = transaction._serialize(signData);
     const encodedTransaction = wireTransaction.toString('base64');
-    const config: any = {encoding: 'base64'};
+    const config: any = {
+      encoding: 'base64',
+      commitment: this.commitment,
+    };
     const args = [encodedTransaction, config];
 
     if (signers) {

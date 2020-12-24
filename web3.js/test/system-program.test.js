@@ -13,6 +13,7 @@ import {
 } from '../src';
 import {NONCE_ACCOUNT_LENGTH} from '../src/nonce-account';
 import {mockRpcEnabled} from './__mocks__/node-fetch';
+import {newAccountWithLamports} from './new-account-with-lamports';
 import {sleep} from '../src/util/sleep';
 import {url} from './url';
 
@@ -277,19 +278,17 @@ test('live Nonce actions', async () => {
     return;
   }
 
-  const connection = new Connection(url, 'recent');
+  const connection = new Connection(url, 'singleGossip');
   const nonceAccount = new Account();
-  const from = new Account();
+  const from = await newAccountWithLamports(connection, 2 * LAMPORTS_PER_SOL);
   const to = new Account();
-  const authority = new Account();
-  const newAuthority = new Account();
-  await connection.requestAirdrop(from.publicKey, 2 * LAMPORTS_PER_SOL);
-  await connection.requestAirdrop(authority.publicKey, LAMPORTS_PER_SOL);
-  await connection.requestAirdrop(newAuthority.publicKey, LAMPORTS_PER_SOL);
+  const newAuthority = await newAccountWithLamports(
+    connection,
+    LAMPORTS_PER_SOL,
+  );
 
   const minimumAmount = await connection.getMinimumBalanceForRentExemption(
     NONCE_ACCOUNT_LENGTH,
-    'recent',
   );
 
   let createNonceAccount = new Transaction().add(
@@ -304,7 +303,7 @@ test('live Nonce actions', async () => {
     connection,
     createNonceAccount,
     [from, nonceAccount],
-    {commitment: 'single', skipPreflight: true},
+    {commitment: 'singleGossip', preflightCommitment: 'singleGossip'},
   );
   const nonceBalance = await connection.getBalance(nonceAccount.publicKey);
   expect(nonceBalance).toEqual(minimumAmount);
@@ -333,8 +332,8 @@ test('live Nonce actions', async () => {
     }),
   );
   await sendAndConfirmTransaction(connection, advanceNonce, [from], {
-    commitment: 'single',
-    skipPreflight: true,
+    commitment: 'singleGossip',
+    preflightCommitment: 'singleGossip',
   });
   const nonceQuery3 = await connection.getNonce(nonceAccount.publicKey);
   if (nonceQuery3 === null) {
@@ -355,8 +354,8 @@ test('live Nonce actions', async () => {
     }),
   );
   await sendAndConfirmTransaction(connection, authorizeNonce, [from], {
-    commitment: 'single',
-    skipPreflight: true,
+    commitment: 'singleGossip',
+    preflightCommitment: 'singleGossip',
   });
 
   let transfer = new Transaction().add(
@@ -375,8 +374,8 @@ test('live Nonce actions', async () => {
   };
 
   await sendAndConfirmTransaction(connection, transfer, [from, newAuthority], {
-    commitment: 'single',
-    skipPreflight: true,
+    commitment: 'singleGossip',
+    preflightCommitment: 'singleGossip',
   });
   const toBalance = await connection.getBalance(to.publicKey);
   expect(toBalance).toEqual(minimumAmount);
@@ -394,8 +393,8 @@ test('live Nonce actions', async () => {
     }),
   );
   await sendAndConfirmTransaction(connection, withdrawNonce, [newAuthority], {
-    commitment: 'single',
-    skipPreflight: true,
+    commitment: 'singleGossip',
+    preflightCommitment: 'singleGossip',
   });
   expect(await connection.getBalance(nonceAccount.publicKey)).toEqual(0);
   const withdrawBalance = await connection.getBalance(

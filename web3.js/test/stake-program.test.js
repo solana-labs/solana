@@ -15,11 +15,12 @@ import {
   Transaction,
 } from '../src';
 import {mockRpcEnabled} from './__mocks__/node-fetch';
+import {newAccountWithLamports} from './new-account-with-lamports';
 import {url} from './url';
 
 if (!mockRpcEnabled) {
   // Testing max commitment level takes around 20s to complete
-  jest.setTimeout(30000);
+  jest.setTimeout(60000);
 }
 
 test('createAccountWithSeed', async () => {
@@ -265,19 +266,26 @@ test('live staking actions', async () => {
     return;
   }
 
-  const connection = new Connection(url, 'recent');
+  const connection = new Connection(url, 'singleGossip');
   const voteAccounts = await connection.getVoteAccounts();
   const voteAccount = voteAccounts.current.concat(voteAccounts.delinquent)[0];
   const votePubkey = new PublicKey(voteAccount.votePubkey);
 
-  const from = new Account();
-  const authorized = new Account();
-  await connection.requestAirdrop(from.publicKey, 2 * LAMPORTS_PER_SOL);
-  await connection.requestAirdrop(authorized.publicKey, 2 * LAMPORTS_PER_SOL);
+  const from = await newAccountWithLamports(connection, 2 * LAMPORTS_PER_SOL);
+  const authorized = await newAccountWithLamports(
+    connection,
+    2 * LAMPORTS_PER_SOL,
+  );
 
   const minimumAmount = await connection.getMinimumBalanceForRentExemption(
     StakeProgram.space,
-    'recent',
+  );
+
+  expect(await connection.getBalance(from.publicKey)).toEqual(
+    2 * LAMPORTS_PER_SOL,
+  );
+  expect(await connection.getBalance(authorized.publicKey)).toEqual(
+    2 * LAMPORTS_PER_SOL,
   );
 
   {
@@ -295,7 +303,7 @@ test('live staking actions', async () => {
       connection,
       createAndInitialize,
       [from, newStakeAccount],
-      {commitment: 'single', skipPreflight: true},
+      {commitment: 'singleGossip'},
     );
     expect(await connection.getBalance(newStakeAccount.publicKey)).toEqual(
       minimumAmount + 42,
@@ -307,8 +315,7 @@ test('live staking actions', async () => {
       votePubkey,
     });
     await sendAndConfirmTransaction(connection, delegation, [authorized], {
-      commitment: 'single',
-      skipPreflight: true,
+      commitment: 'singleGossip',
     });
   }
 
@@ -334,7 +341,7 @@ test('live staking actions', async () => {
     connection,
     createAndInitializeWithSeed,
     [from],
-    {commitment: 'single', skipPreflight: true},
+    {commitment: 'singleGossip'},
   );
   let originalStakeBalance = await connection.getBalance(newAccountPubkey);
   expect(originalStakeBalance).toEqual(3 * minimumAmount + 42);
@@ -345,8 +352,7 @@ test('live staking actions', async () => {
     votePubkey,
   });
   await sendAndConfirmTransaction(connection, delegation, [authorized], {
-    commitment: 'single',
-    skipPreflight: true,
+    commitment: 'singleGossip',
   });
 
   // Test that withdraw fails before deactivation
@@ -359,8 +365,7 @@ test('live staking actions', async () => {
   });
   await expect(
     sendAndConfirmTransaction(connection, withdraw, [authorized], {
-      commitment: 'single',
-      skipPreflight: true,
+      commitment: 'singleGossip',
     }),
   ).rejects.toThrow();
 
@@ -373,8 +378,7 @@ test('live staking actions', async () => {
     lamports: minimumAmount + 20,
   });
   await sendAndConfirmTransaction(connection, split, [authorized, newStake], {
-    commitment: 'single',
-    skipPreflight: true,
+    commitment: 'singleGossip',
   });
 
   // Authorize to new account
@@ -388,8 +392,7 @@ test('live staking actions', async () => {
     stakeAuthorizationType: StakeAuthorizationLayout.Withdrawer,
   });
   await sendAndConfirmTransaction(connection, authorize, [authorized], {
-    commitment: 'single',
-    skipPreflight: true,
+    commitment: 'singleGossip',
   });
   authorize = StakeProgram.authorize({
     stakePubkey: newAccountPubkey,
@@ -398,8 +401,7 @@ test('live staking actions', async () => {
     stakeAuthorizationType: StakeAuthorizationLayout.Staker,
   });
   await sendAndConfirmTransaction(connection, authorize, [authorized], {
-    commitment: 'single',
-    skipPreflight: true,
+    commitment: 'singleGossip',
   });
 
   // Test old authorized can't deactivate
@@ -412,7 +414,7 @@ test('live staking actions', async () => {
       connection,
       deactivateNotAuthorized,
       [authorized],
-      {commitment: 'single', skipPreflight: true},
+      {commitment: 'singleGossip', skipPreflight: true},
     ),
   ).rejects.toThrow();
 
@@ -422,8 +424,7 @@ test('live staking actions', async () => {
     authorizedPubkey: newAuthorized.publicKey,
   });
   await sendAndConfirmTransaction(connection, deactivate, [newAuthorized], {
-    commitment: 'single',
-    skipPreflight: true,
+    commitment: 'singleGossip',
   });
 
   // Test that withdraw succeeds after deactivation
@@ -433,9 +434,9 @@ test('live staking actions', async () => {
     toPubkey: recipient.publicKey,
     lamports: minimumAmount + 20,
   });
+
   await sendAndConfirmTransaction(connection, withdraw, [newAuthorized], {
-    commitment: 'single',
-    skipPreflight: true,
+    commitment: 'singleGossip',
   });
   const balance = await connection.getBalance(newAccountPubkey);
   expect(balance).toEqual(minimumAmount + 2);
@@ -450,11 +451,10 @@ test('live staking actions', async () => {
     stakeAuthorizationType: StakeAuthorizationLayout.Withdrawer,
   });
   await sendAndConfirmTransaction(connection, authorize, [newAuthorized], {
-    commitment: 'single',
-    skipPreflight: true,
+    commitment: 'singleGossip',
   });
 
-  // Restore the previous authority using a dervied address
+  // Restore the previous authority using a derived address
   authorize = StakeProgram.authorizeWithSeed({
     stakePubkey: newAccountPubkey,
     authorityBase: from.publicKey,
@@ -464,7 +464,6 @@ test('live staking actions', async () => {
     stakeAuthorizationType: StakeAuthorizationLayout.Withdrawer,
   });
   await sendAndConfirmTransaction(connection, authorize, [from], {
-    commitment: 'single',
-    skipPreflight: true,
+    commitment: 'singleGossip',
   });
 });

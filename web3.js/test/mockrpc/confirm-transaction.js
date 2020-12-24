@@ -7,7 +7,7 @@ export function mockConfirmTransaction(signature: TransactionSignature) {
   mockRpcSocket.push([
     {
       method: 'signatureSubscribe',
-      params: [signature, {commitment: 'single'}],
+      params: [signature, {commitment: 'singleGossip'}],
     },
     {
       context: {

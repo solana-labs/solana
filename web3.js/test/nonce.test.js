@@ -34,13 +34,13 @@ const expectedData = (authorizedPubkey: PublicKey): [string, string] => {
 test('create and query nonce account', async () => {
   const from = new Account();
   const nonceAccount = new Account();
-  const connection = new Connection(url, 'recent');
+  const connection = new Connection(url, 'singleGossip');
 
   mockRpc.push([
     url,
     {
       method: 'getMinimumBalanceForRentExemption',
-      params: [NONCE_ACCOUNT_LENGTH, {commitment: 'recent'}],
+      params: [NONCE_ACCOUNT_LENGTH, {commitment: 'singleGossip'}],
     },
     {
       error: null,
@@ -70,13 +70,13 @@ test('create and query nonce account', async () => {
     minimumAmount * 2,
   );
   mockConfirmTransaction(signature);
-  await connection.confirmTransaction(signature, 'single');
+  await connection.confirmTransaction(signature, 'singleGossip');
 
   mockRpc.push([
     url,
     {
       method: 'getBalance',
-      params: [from.publicKey.toBase58(), {commitment: 'recent'}],
+      params: [from.publicKey.toBase58(), {commitment: 'singleGossip'}],
     },
     {
       error: null,
@@ -121,7 +121,7 @@ test('create and query nonce account', async () => {
     },
   );
   mockConfirmTransaction(nonceSignature);
-  await connection.confirmTransaction(nonceSignature, 'single');
+  await connection.confirmTransaction(nonceSignature, 'singleGossip');
 
   mockRpc.push([
     url,
@@ -129,7 +129,7 @@ test('create and query nonce account', async () => {
       method: 'getAccountInfo',
       params: [
         nonceAccount.publicKey.toBase58(),
-        {encoding: 'base64', commitment: 'recent'},
+        {encoding: 'base64', commitment: 'singleGossip'},
       ],
     },
     {
@@ -165,13 +165,13 @@ test('create and query nonce account with seed', async () => {
     seed,
     SystemProgram.programId,
   );
-  const connection = new Connection(url, 'recent');
+  const connection = new Connection(url, 'singleGossip');
 
   mockRpc.push([
     url,
     {
       method: 'getMinimumBalanceForRentExemption',
-      params: [NONCE_ACCOUNT_LENGTH, {commitment: 'recent'}],
+      params: [NONCE_ACCOUNT_LENGTH, {commitment: 'singleGossip'}],
     },
     {
       error: null,
@@ -201,13 +201,13 @@ test('create and query nonce account with seed', async () => {
     minimumAmount * 2,
   );
   mockConfirmTransaction(signature);
-  await connection.confirmTransaction(signature, 'single');
+  await connection.confirmTransaction(signature, 'singleGossip');
 
   mockRpc.push([
     url,
     {
       method: 'getBalance',
-      params: [from.publicKey.toBase58(), {commitment: 'recent'}],
+      params: [from.publicKey.toBase58(), {commitment: 'singleGossip'}],
     },
     {
       error: null,
@@ -250,7 +250,7 @@ test('create and query nonce account with seed', async () => {
     skipPreflight: true,
   });
   mockConfirmTransaction(nonceSignature);
-  await connection.confirmTransaction(nonceSignature, 'single');
+  await connection.confirmTransaction(nonceSignature, 'singleGossip');
 
   mockRpc.push([
     url,
@@ -258,7 +258,7 @@ test('create and query nonce account with seed', async () => {
       method: 'getAccountInfo',
       params: [
         noncePubkey.toBase58(),
-        {encoding: 'base64', commitment: 'recent'},
+        {encoding: 'base64', commitment: 'singleGossip'},
       ],
     },
     {
