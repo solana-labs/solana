@@ -243,9 +243,9 @@ where
         account_paths,
         append_vecs_path,
         &genesis_config.cluster_type,
+        account_indexes,
     )?;
     accounts_db.freeze_accounts(&bank_fields.ancestors, frozen_account_pubkeys);
-    accounts_db.account_indexes = account_indexes;
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
     let bank = Bank::new_from_fields(
@@ -264,13 +264,14 @@ fn reconstruct_accountsdb_from_fields<E, P>(
     account_paths: &[PathBuf],
     stream_append_vecs_path: P,
     cluster_type: &ClusterType,
+    account_indexes: HashSet<AccountIndex>,
 ) -> Result<AccountsDB, Error>
 where
     E: Into<AccountStorageEntry>,
     P: AsRef<Path>,
 {
-    let mut accounts_db = AccountsDB::new(account_paths.to_vec(), cluster_type);
-
+    let mut accounts_db =
+        AccountsDB::new_with_indexes(account_paths.to_vec(), cluster_type, account_indexes);
     let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
 
     // convert to two level map of slot -> id -> account storage entry
