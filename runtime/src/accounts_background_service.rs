@@ -275,6 +275,10 @@ impl AccountsBackgroundService {
                 let snapshot_block_height =
                     request_handler.handle_snapshot_requests(accounts_db_caching_enabled);
                 if accounts_db_caching_enabled {
+                    // Note that the flush will do an internal clean of the
+                    // cache up to bank.slot(), so should be safe as long
+                    // as any later snapshots that are taken are of
+                    // slots >= bank.slot()
                     bank.flush_accounts_cache_if_needed();
                 }
 
@@ -300,6 +304,10 @@ impl AccountsBackgroundService {
                         > (CLEAN_INTERVAL_BLOCKS + thread_rng().gen_range(0, 10))
                     {
                         if accounts_db_caching_enabled {
+                            // Note that the flush will do an internal clean of the
+                            // cache up to bank.slot(), so should be safe as long
+                            // as any later snapshots that are taken are of
+                            // slots >= bank.slot()
                             bank.force_flush_accounts_cache();
                         }
                         bank.clean_accounts(true);
