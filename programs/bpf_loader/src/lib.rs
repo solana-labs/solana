@@ -153,6 +153,12 @@ fn write_program_data(
     Ok(())
 }
 
+fn check_loader_id(id: &Pubkey) -> bool {
+    bpf_loader::check_id(id)
+        || bpf_loader_deprecated::check_id(id)
+        || bpf_loader_upgradeable::check_id(id)
+}
+
 /// Default program heap size, allocators
 /// are expected to enforce this
 const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
@@ -217,41 +223,39 @@ fn process_instruction_common(
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_logger();
 
-    if !(bpf_loader::check_id(program_id)
-        || bpf_loader_deprecated::check_id(program_id)
-        || bpf_loader_upgradeable::check_id(program_id))
-    {
-        log!(logger, "Invalid BPF loader id");
-        return Err(InstructionError::IncorrectProgramId);
-    }
-
     let account_iter = &mut keyed_accounts.iter();
     let first_account = next_keyed_account(account_iter)?;
     if first_account.executable()? {
-        let (program, keyed_accounts, offset) = if bpf_loader_upgradeable::check_id(program_id) {
-            if let UpgradeableLoaderState::Program {
-                programdata_address,
-            } = first_account.state()?
-            {
-                let programdata = next_keyed_account(account_iter)?;
-                if programdata_address != *programdata.unsigned_key() {
-                    log!(logger, "Wrong ProgramData account for this Program account");
-                    return Err(InstructionError::InvalidArgument);
-                }
-                (
-                    programdata,
-                    &keyed_accounts[1..],
-                    UpgradeableLoaderState::programdata_data_offset()?,
-                )
-            } else {
-                log!(logger, "Invalid Program account");
-                return Err(InstructionError::InvalidAccountData);
-            }
-        } else {
-            (first_account, keyed_accounts, 0)
-        };
+        if first_account.unsigned_key() != program_id {
+            log!(logger, "Program id mismatch");
+            return Err(InstructionError::IncorrectProgramId);
+        }
 
-        if program.owner()? != *program_id {
+        let (program, keyed_accounts, offset) =
+            if bpf_loader_upgradeable::check_id(&first_account.owner()?) {
+                if let UpgradeableLoaderState::Program {
+                    programdata_address,
+                } = first_account.state()?
+                {
+                    let programdata = next_keyed_account(account_iter)?;
+                    if programdata_address != *programdata.unsigned_key() {
+                        log!(logger, "Wrong ProgramData account for this Program account");
+                        return Err(InstructionError::InvalidArgument);
+                    }
+                    (
+                        programdata,
+                        &keyed_accounts[1..],
+                        UpgradeableLoaderState::programdata_data_offset()?,
+                    )
+                } else {
+                    log!(logger, "Invalid Program account");
+                    return Err(InstructionError::InvalidAccountData);
+                }
+            } else {
+                (first_account, keyed_accounts, 0)
+            };
+
+        if !check_loader_id(&program.owner()?) {
             log!(logger, "Executable account not owned by the BPF loader");
             return Err(InstructionError::IncorrectProgramId);
         }
@@ -266,28 +270,35 @@ fn process_instruction_common(
             )?,
         };
         executor.execute(
-            program_id,
+            &program.owner()?,
             keyed_accounts,
             instruction_data,
             invoke_context,
             use_jit,
         )?
-    } else if bpf_loader_upgradeable::check_id(program_id) {
-        process_loader_upgradeable_instruction(
-            program_id,
-            keyed_accounts,
-            instruction_data,
-            invoke_context,
-            use_jit,
-        )?;
     } else {
-        process_loader_instruction(
-            program_id,
-            keyed_accounts,
-            instruction_data,
-            invoke_context,
-            use_jit,
-        )?;
+        if !check_loader_id(program_id) {
+            log!(logger, "Invalid BPF loader id");
+            return Err(InstructionError::IncorrectProgramId);
+        }
+
+        if bpf_loader_upgradeable::check_id(program_id) {
+            process_loader_upgradeable_instruction(
+                program_id,
+                keyed_accounts,
+                instruction_data,
+                invoke_context,
+                use_jit,
+            )?;
+        } else {
+            process_loader_instruction(
+                program_id,
+                keyed_accounts,
+                instruction_data,
+                invoke_context,
+                use_jit,
+            )?;
+        }
     }
     Ok(())
 }
@@ -961,20 +972,20 @@ mod tests {
         // Case: Empty keyed accounts
         assert_eq!(
             Err(InstructionError::NotEnoughAccountKeys),
-            process_instruction(&bpf_loader::id(), &[], &[], &mut invoke_context)
+            process_instruction(&program_id, &[], &[], &mut invoke_context)
         );
 
         // Case: Only a program account
         assert_eq!(
             Ok(()),
-            process_instruction(&bpf_loader::id(), &keyed_accounts, &[], &mut invoke_context)
+            process_instruction(&program_key, &keyed_accounts, &[], &mut invoke_context)
         );
 
-        // Case: Account not program
+        // Case: Account not a program
         keyed_accounts[0].account.borrow_mut().executable = false;
         assert_eq!(
             Err(InstructionError::InvalidInstructionData),
-            process_instruction(&bpf_loader::id(), &keyed_accounts, &[], &mut invoke_context)
+            process_instruction(&program_id, &keyed_accounts, &[], &mut invoke_context)
         );
         keyed_accounts[0].account.borrow_mut().executable = true;
 
@@ -983,7 +994,7 @@ mod tests {
         keyed_accounts.push(KeyedAccount::new(&program_key, false, &parameter_account));
         assert_eq!(
             Ok(()),
-            process_instruction(&bpf_loader::id(), &keyed_accounts, &[], &mut invoke_context)
+            process_instruction(&program_key, &keyed_accounts, &[], &mut invoke_context)
         );
 
         // Case: limited budget
@@ -1014,7 +1025,7 @@ mod tests {
         );
         assert_eq!(
             Err(InstructionError::ProgramFailedToComplete),
-            process_instruction(&bpf_loader::id(), &keyed_accounts, &[], &mut invoke_context)
+            process_instruction(&program_key, &keyed_accounts, &[], &mut invoke_context)
         );
 
         // Case: With duplicate accounts
@@ -1026,7 +1037,7 @@ mod tests {
         assert_eq!(
             Ok(()),
             process_instruction(
-                &bpf_loader::id(),
+                &program_key,
                 &keyed_accounts,
                 &[],
                 &mut MockInvokeContext::default()
@@ -1054,7 +1065,7 @@ mod tests {
         assert_eq!(
             Ok(()),
             process_instruction(
-                &bpf_loader_deprecated::id(),
+                &program_key,
                 &keyed_accounts,
                 &[],
                 &mut MockInvokeContext::default()
@@ -1070,7 +1081,7 @@ mod tests {
         assert_eq!(
             Ok(()),
             process_instruction(
-                &bpf_loader_deprecated::id(),
+                &program_key,
                 &keyed_accounts,
                 &[],
                 &mut MockInvokeContext::default()
@@ -1098,7 +1109,7 @@ mod tests {
         assert_eq!(
             Ok(()),
             process_instruction(
-                &bpf_loader::id(),
+                &program_key,
                 &keyed_accounts,
                 &[],
                 &mut MockInvokeContext::default()
@@ -1114,7 +1125,7 @@ mod tests {
         assert_eq!(
             Ok(()),
             process_instruction(
-                &bpf_loader::id(),
+                &program_key,
                 &keyed_accounts,
                 &[],
                 &mut MockInvokeContext::default()

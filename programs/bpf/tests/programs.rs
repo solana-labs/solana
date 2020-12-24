@@ -1666,3 +1666,45 @@ fn test_program_bpf_invoke_upgradeable_via_cpi() {
         TransactionError::InstructionError(0, InstructionError::Custom(42))
     );
 }
+
+#[test]
+#[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
+fn test_program_bpf_disguised_as_bpf_loader() {
+    solana_logger::setup();
+
+    let mut programs = Vec::new();
+    #[cfg(feature = "bpf_c")]
+    {
+        programs.extend_from_slice(&[("noop")]);
+    }
+    #[cfg(feature = "bpf_rust")]
+    {
+        programs.extend_from_slice(&[("noop")]);
+    }
+
+    for program in programs.iter() {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(50);
+        let mut bank = Bank::new(&genesis_config);
+        let (name, id, entrypoint) = solana_bpf_loader_deprecated_program!();
+        bank.add_builtin(&name, id, entrypoint);
+        let bank_client = BankClient::new(bank);
+
+        let program_id = load_bpf_program(
+            &bank_client,
+            &bpf_loader_deprecated::id(),
+            &mint_keypair,
+            program,
+        );
+        let account_metas = vec![AccountMeta::new_readonly(program_id, false)];
+        let instruction = Instruction::new(bpf_loader_deprecated::id(), &1u8, account_metas);
+        let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            TransactionError::InstructionError(0, InstructionError::IncorrectProgramId)
+        );
+    }
+}
