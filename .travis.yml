@@ -16,19 +16,9 @@ language: minimal
 
 jobs:
   include:
-    - name: "Export Github Repositories"
-      if: type IN (push, cron) AND branch = master
-      language: python
-      git:
-        depth: false
-      script:
-        - .travis/export-github-repo.sh web3.js/ solana-web3.js
-        - .travis/export-github-repo.sh explorer/ explorer
-
     - &release-artifacts
-      if: type IN (api, cron) OR tag IS present
-      name: "macOS release artifacts"
-      os: osx
+      name: "Windows release artifacts"
+      os: windows
       language: rust
       rust:
         - stable
@@ -57,9 +47,6 @@ jobs:
           file: travis-release-upload/*
           on:
             tags: true
-    - <<: *release-artifacts
-      name: "Windows release artifacts"
-      os: windows
     #  Linux release artifacts are still built by ci/buildkite-secondary.yml
     #- <<: *release-artifacts
     #  name: "Linux release artifacts"
@@ -67,70 +54,3 @@ jobs:
     #  before_install:
     #    - sudo apt-get install libssl-dev libudev-dev
 
-    # explorer pull request
-    - name: "explorer"
-      if: type = pull_request AND branch = master
-
-      language: node_js
-      node_js:
-        - "node"
-
-      cache:
-        directories:
-          - ~/.npm
-
-      before_install:
-        - .travis/affects.sh explorer/ .travis || travis_terminate 0
-        - cd explorer
-
-      script:
-        - npm run build
-        - npm run format
-
-    # web3.js pull request
-    - name: "web3.js"
-      if: type = pull_request AND branch = master
-
-      language: node_js
-      node_js:
-        - "lts/*"
-
-      services:
-        - docker
-
-      cache:
-        directories:
-          - ~/.npm
-
-      before_install:
-        - .travis/affects.sh web3.js/ .travis || travis_terminate 0
-        - cd web3.js/
-        - source .travis/before_install.sh
-
-      script:
-        - ../.travis/commitlint.sh
-        - source .travis/script.sh
-
-    # docs pull request
-    - name: "docs"
-      if: type IN (push, pull_request) OR tag IS present
-      language: node_js
-      node_js:
-        - "node"
-
-      services:
-        - docker
-
-      cache:
-        directories:
-          - ~/.npm
-
-      before_install:
-        - source ci/env.sh
-        - .travis/channel_restriction.sh edge beta || travis_terminate 0
-        - .travis/affects.sh docs/ .travis || travis_terminate 0
-        - cd docs/
-        - source .travis/before_install.sh
-
-      script:
-        - source .travis/script.sh
