@@ -1312,7 +1312,9 @@ impl JsonRpcRequestProcessor {
             .account_indexes
             .contains(&AccountIndex::ProgramId)
         {
-            bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(*program_id), filter_closure)
+            bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(*program_id), |account| {
+                account.owner == *program_id && filter_closure(account)
+            })
         } else {
             bank.get_filtered_program_accounts(program_id, filter_closure)
         }
@@ -1347,10 +1349,11 @@ impl JsonRpcRequestProcessor {
             .contains(&AccountIndex::SplTokenOwner)
         {
             bank.get_filtered_indexed_accounts(&IndexKey::SplTokenOwner(*owner_key), |account| {
-                filters.iter().all(|filter_type| match filter_type {
-                    RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
-                    RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
-                })
+                account.owner == spl_token_id_v2_0()
+                    && filters.iter().all(|filter_type| match filter_type {
+                        RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
+                        RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
+                    })
             })
         } else {
             self.get_filtered_program_accounts(bank, &spl_token_id_v2_0(), filters)
@@ -1385,10 +1388,11 @@ impl JsonRpcRequestProcessor {
             .contains(&AccountIndex::SplTokenMint)
         {
             bank.get_filtered_indexed_accounts(&IndexKey::SplTokenMint(*mint_key), |account| {
-                filters.iter().all(|filter_type| match filter_type {
-                    RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
-                    RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
-                })
+                account.owner == spl_token_id_v2_0()
+                    && filters.iter().all(|filter_type| match filter_type {
+                        RpcFilterType::DataSize(size) => account.data.len() as u64 == *size,
+                        RpcFilterType::Memcmp(compare) => compare.bytes_match(&account.data),
+                    })
             })
         } else {
             self.get_filtered_program_accounts(bank, &spl_token_id_v2_0(), filters)
