@@ -33,9 +33,10 @@ pub type AccountMap<K, V> = BTreeMap<K, V>;
 
 type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
 type SecondaryIndexEntry = DashMap<Pubkey, RwLock<HashSet<Slot>>>;
+type SecondaryReverseIndexEntry = RwLock<HashMap<Slot, Pubkey>>;
 
 enum ScanTypes<R: RangeBounds<Pubkey>> {
-    Standard(Option<R>),
+    Unindexed(Option<R>),
     Indexed(IndexKey),
 }
 
@@ -218,7 +219,7 @@ struct SecondaryIndex {
     // Alternative is to store Option<Pubkey> in each AccountInfo in the
     // AccountsIndex if something is an SPL account with a mint, but then
     // every AccountInfo would have to allocate `Option<Pubkey>`
-    reverse_index: DashMap<Pubkey, RwLock<HashMap<Slot, Pubkey>>>,
+    reverse_index: DashMap<Pubkey, SecondaryReverseIndexEntry>,
 }
 
 impl SecondaryIndex {
@@ -325,7 +326,7 @@ impl SecondaryIndex {
         }
     }
 
-    // Specifying `slots_to_remove` == None will only remove keys for those specific slots
+    // Specifying `slots_to_remove` == Some will only remove keys for those specific slots
     // found for the `inner_key` in the reverse index. Otherwise, passing `None`
     // will  remove all keys that are found for the `inner_key` in the reverse index.
 
@@ -359,8 +360,11 @@ impl SecondaryIndex {
                     .unwrap_or(false)
             } else {
                 if let Some((_, removed_slot_map)) = self.reverse_index.remove(inner_key) {
-                    for (slot, key) in removed_slot_map.into_inner().unwrap().into_iter() {
-                        key_to_removed_slots.entry(key).or_default().push(slot);
+                    for (slot, removed_key) in removed_slot_map.into_inner().unwrap().into_iter() {
+                        key_to_removed_slots
+                            .entry(removed_key)
+                            .or_default()
+                            .push(slot);
                     }
                 }
                 // We just removed the key, no need to remove it again
@@ -557,7 +561,7 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         will not be cleaned in the middle of the scan either.
         */
         match scan_type {
-            ScanTypes::Standard(range) => {
+            ScanTypes::Unindexed(range) => {
                 self.do_scan_accounts(ancestors, func, range, Some(max_root));
             }
             ScanTypes::Indexed(IndexKey::ProgramId(program_id)) => {
@@ -720,7 +724,7 @@ impl<T: 'static + Clone> AccountsIndex<T> {
     where
         F: FnMut(&Pubkey, (&T, Slot)),
     {
-        self.do_checked_scan_accounts(ancestors, func, ScanTypes::Standard(None::<Range<Pubkey>>));
+        self.do_checked_scan_accounts(ancestors, func, ScanTypes::Unindexed(None::<Range<Pubkey>>));
     }
 
     pub(crate) fn unchecked_scan_accounts<F>(&self, ancestors: &Ancestors, func: F)
