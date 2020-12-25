@@ -2547,6 +2547,17 @@ impl AccountsDB {
         let mut reclaims = SlotList::<AccountInfo>::with_capacity(infos.len() * 2);
         for (info, pubkey_account) in infos.into_iter().zip(accounts.iter()) {
             let pubkey = pubkey_account.0;
+            // We don't atomically update both primary index and secondary index together.
+            // This certainly creates small time window with inconsistent state across the two indexes.
+            // However, this is acceptable because:
+            //
+            //  - A strict consistent view at any given moment of time is not necessary, because the only
+            //  use case for the secondary index is `scan`, and `scans` are only supported/require consistency
+            //  on frozen banks, and this inconsistency is only possible on working banks.
+            //
+            //  - The secondary index is never consulted as primary source of truth for gets/stores.
+            //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
+            //  account operations.
             self.accounts_index
                 .upsert(slot, pubkey, info, &mut reclaims);
             self.accounts_index.update_secondary_indexes(

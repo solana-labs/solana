@@ -1328,7 +1328,7 @@ impl JsonRpcRequestProcessor {
         mut filters: Vec<RpcFilterType>,
     ) -> Vec<(Pubkey, Account)> {
         // The by-owner accounts index checks for Token Account state and Owner address on inclusion.
-        // However, due to the current AppendVec implementation, accounts may remain in the index after
+        // However, due to the current AccountsDB implementation, accounts may remain in the index after
         // being wiped and reinitialized as something else. We include the redundant filters here to
         // avoid returning these accounts.
         //
@@ -1368,7 +1368,7 @@ impl JsonRpcRequestProcessor {
         mut filters: Vec<RpcFilterType>,
     ) -> Vec<(Pubkey, Account)> {
         // The by-mint accounts index checks for Token Account state and Mint address on inclusion.
-        // However, due to the current AppendVec implementation, accounts may remain in the index after
+        // However, due to the current AccountsDB implementation, accounts may remain in the index after
         // being wiped and reinitialized as something else. We include the redundant filters here to
         // avoid returning these accounts.
         //

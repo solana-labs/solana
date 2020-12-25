@@ -1,7 +1,7 @@
 use crate::inline_spl_token_v2_0::{
     self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET,
 };
-use dashmap::DashMap;
+use dashmap::{mapref::entry::Entry::Occupied, DashMap};
 use log::*;
 use ouroboros::self_referencing;
 use solana_sdk::{
@@ -294,9 +294,7 @@ impl SecondaryIndex {
 
             // Check if `key` is empty
             let is_key_empty = if is_inner_key_empty {
-                if let dashmap::mapref::entry::Entry::Occupied(inner_key_entry) =
-                    inner_key_map.entry(*inner_key)
-                {
+                if let Occupied(inner_key_entry) = inner_key_map.entry(*inner_key) {
                     // Delete the `inner_key` if the slot set is empty
                     let slot_set = inner_key_entry.get();
 
@@ -318,7 +316,9 @@ impl SecondaryIndex {
 
         // Delete the `key` if the set of inner keys is empty
         if is_key_empty {
-            if let dashmap::mapref::entry::Entry::Occupied(key_entry) = self.index.entry(*key) {
+            if let Occupied(key_entry) = self.index.entry(*key) {
+                // Other threads may have interleaved writes to this `key`,
+                // so double-check again for its emptiness
                 if key_entry.get().is_empty() {
                     key_entry.remove();
                 }
@@ -373,9 +373,7 @@ impl SecondaryIndex {
         };
 
         if needs_remove {
-            if let dashmap::mapref::entry::Entry::Occupied(slot_map) =
-                self.reverse_index.entry(*inner_key)
-            {
+            if let Occupied(slot_map) = self.reverse_index.entry(*inner_key) {
                 if slot_map.get().read().unwrap().is_empty() {
                     slot_map.remove();
                 }
@@ -892,6 +890,18 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         if account_indexes.contains(&AccountIndex::ProgramId) {
             self.program_id_index.insert(account_owner, pubkey, slot);
         }
+        // Note because of the below check below on the account data length, when an
+        // account hits zero lamports and is reset to Account::Default, then we skip
+        // the below updates to the secondary indexes.
+        //
+        // Skipping means not updating secondary index to mark the account as missing.
+        // This doesn't introduce false positives during a scan because the caller to scan
+        // provides the ancestors to check. So even if a zero-lamport account is not yet
+        // removed from the secondary index, the scan function will:
+        // 1) consult the primary index via `get(&pubkey, Some(ancestors), max_root)`
+        // and find the zero-lamport version
+        // 2) When the fetch from storage occurs, it will return nothing because the account
+        // is default in that storage entry
         if *account_owner == inline_spl_token_v2_0::id()
             && account_data.len() == inline_spl_token_v2_0::state::Account::get_packed_len()
         {
