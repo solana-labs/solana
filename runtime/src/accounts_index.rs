@@ -930,12 +930,16 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         &self,
         slot: Slot,
         pubkey: &Pubkey,
+        account_owner: &Pubkey,
+        account_data: &[u8],
+        account_indexes: &HashSet<AccountIndex>,
         account_info: T,
         reclaims: &mut SlotList<T>,
     ) -> bool {
         let (mut w_account_entry, is_newly_inserted) =
             self.get_account_write_entry_else_create(pubkey);
         w_account_entry.update(slot, account_info, reclaims);
+        self.update_secondary_indexes(pubkey, slot, account_owner, account_data, account_indexes);
         is_newly_inserted
     }
 
@@ -1123,7 +1127,15 @@ mod tests {
         let key = Keypair::new();
         let index = AccountsIndex::<bool>::default();
         let mut gc = Vec::new();
-        index.upsert(0, &key.pubkey(), true, &mut gc);
+        index.upsert(
+            0,
+            &key.pubkey(),
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            true,
+            &mut gc,
+        );
         assert!(gc.is_empty());
 
         let ancestors = HashMap::new();
@@ -1140,7 +1152,15 @@ mod tests {
         let key = Keypair::new();
         let index = AccountsIndex::<bool>::default();
         let mut gc = Vec::new();
-        index.upsert(0, &key.pubkey(), true, &mut gc);
+        index.upsert(
+            0,
+            &key.pubkey(),
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            true,
+            &mut gc,
+        );
         assert!(gc.is_empty());
 
         let ancestors = vec![(1, 1)].into_iter().collect();
@@ -1156,7 +1176,15 @@ mod tests {
         let key = Keypair::new();
         let index = AccountsIndex::<bool>::default();
         let mut gc = Vec::new();
-        index.upsert(0, &key.pubkey(), true, &mut gc);
+        index.upsert(
+            0,
+            &key.pubkey(),
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            true,
+            &mut gc,
+        );
         assert!(gc.is_empty());
 
         let ancestors = vec![(0, 0)].into_iter().collect();
@@ -1181,7 +1209,15 @@ mod tests {
 
         let mut pubkeys: Vec<Pubkey> = std::iter::repeat_with(|| {
             let new_pubkey = solana_sdk::pubkey::new_rand();
-            index.upsert(root_slot, &new_pubkey, true, &mut vec![]);
+            index.upsert(
+                root_slot,
+                &new_pubkey,
+                &Pubkey::default(),
+                &[],
+                &HashSet::new(),
+                true,
+                &mut vec![],
+            );
             new_pubkey
         })
         .take(num_pubkeys.saturating_sub(1))
@@ -1189,7 +1225,15 @@ mod tests {
 
         if num_pubkeys != 0 {
             pubkeys.push(Pubkey::default());
-            index.upsert(root_slot, &Pubkey::default(), true, &mut vec![]);
+            index.upsert(
+                root_slot,
+                &Pubkey::default(),
+                &Pubkey::default(),
+                &[],
+                &HashSet::new(),
+                true,
+                &mut vec![],
+            );
         }
 
         index.add_root(root_slot);
@@ -1312,7 +1356,15 @@ mod tests {
         let mut iter = index.iter(None::<Range<Pubkey>>);
         assert!(iter.next().is_none());
         let mut gc = vec![];
-        index.upsert(0, &solana_sdk::pubkey::new_rand(), true, &mut gc);
+        index.upsert(
+            0,
+            &solana_sdk::pubkey::new_rand(),
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            true,
+            &mut gc,
+        );
         assert!(iter.next().is_none());
     }
 
@@ -1329,7 +1381,15 @@ mod tests {
         let key = Keypair::new();
         let index = AccountsIndex::<bool>::default();
         let mut gc = Vec::new();
-        index.upsert(0, &key.pubkey(), true, &mut gc);
+        index.upsert(
+            0,
+            &key.pubkey(),
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            true,
+            &mut gc,
+        );
         assert!(gc.is_empty());
 
         index.add_root(0);
@@ -1435,14 +1495,30 @@ mod tests {
         let index = AccountsIndex::<bool>::default();
         let ancestors = vec![(0, 0)].into_iter().collect();
         let mut gc = Vec::new();
-        index.upsert(0, &key.pubkey(), true, &mut gc);
+        index.upsert(
+            0,
+            &key.pubkey(),
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            true,
+            &mut gc,
+        );
         assert!(gc.is_empty());
         let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
         drop(list);
 
         let mut gc = Vec::new();
-        index.upsert(0, &key.pubkey(), false, &mut gc);
+        index.upsert(
+            0,
+            &key.pubkey(),
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            false,
+            &mut gc,
+        );
         assert_eq!(gc, vec![(0, true)]);
         let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
         assert_eq!(list.slot_list()[idx], (0, false));
@@ -1455,9 +1531,25 @@ mod tests {
         let index = AccountsIndex::<bool>::default();
         let ancestors = vec![(0, 0)].into_iter().collect();
         let mut gc = Vec::new();
-        index.upsert(0, &key.pubkey(), true, &mut gc);
+        index.upsert(
+            0,
+            &key.pubkey(),
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            true,
+            &mut gc,
+        );
         assert!(gc.is_empty());
-        index.upsert(1, &key.pubkey(), false, &mut gc);
+        index.upsert(
+            1,
+            &key.pubkey(),
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            false,
+            &mut gc,
+        );
         assert!(gc.is_empty());
         let (list, idx) = index.get(&key.pubkey(), Some(&ancestors), None).unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
@@ -1471,15 +1563,55 @@ mod tests {
         let key = Keypair::new();
         let index = AccountsIndex::<bool>::default();
         let mut gc = Vec::new();
-        index.upsert(0, &key.pubkey(), true, &mut gc);
+        index.upsert(
+            0,
+            &key.pubkey(),
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            true,
+            &mut gc,
+        );
         assert!(gc.is_empty());
-        index.upsert(1, &key.pubkey(), false, &mut gc);
-        index.upsert(2, &key.pubkey(), true, &mut gc);
-        index.upsert(3, &key.pubkey(), true, &mut gc);
+        index.upsert(
+            1,
+            &key.pubkey(),
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            false,
+            &mut gc,
+        );
+        index.upsert(
+            2,
+            &key.pubkey(),
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            true,
+            &mut gc,
+        );
+        index.upsert(
+            3,
+            &key.pubkey(),
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            true,
+            &mut gc,
+        );
         index.add_root(0);
         index.add_root(1);
         index.add_root(3);
-        index.upsert(4, &key.pubkey(), true, &mut gc);
+        index.upsert(
+            4,
+            &key.pubkey(),
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            true,
+            &mut gc,
+        );
 
         // Updating index should not purge older roots, only purges
         // previous updates within the same slot
@@ -1505,9 +1637,25 @@ mod tests {
         let key = Keypair::new();
         let index = AccountsIndex::<u64>::default();
         let mut gc = Vec::new();
-        assert!(index.upsert(1, &key.pubkey(), 12, &mut gc));
+        assert!(index.upsert(
+            1,
+            &key.pubkey(),
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            12,
+            &mut gc
+        ));
 
-        assert!(!index.upsert(1, &key.pubkey(), 10, &mut gc));
+        assert!(!index.upsert(
+            1,
+            &key.pubkey(),
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            10,
+            &mut gc
+        ));
 
         let purges = index.purge(&key.pubkey());
         assert_eq!(purges, (vec![], false));
@@ -1516,7 +1664,15 @@ mod tests {
         let purges = index.purge(&key.pubkey());
         assert_eq!(purges, (vec![(1, 10)], true));
 
-        assert!(!index.upsert(1, &key.pubkey(), 9, &mut gc));
+        assert!(!index.upsert(
+            1,
+            &key.pubkey(),
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            9,
+            &mut gc
+        ));
     }
 
     #[test]
@@ -1667,23 +1823,27 @@ mod tests {
         correct_account_data[..PUBKEY_BYTES].clone_from_slice(&(mint_key.clone().to_bytes()));
 
         // Wrong program id
-        index.update_secondary_indexes(
+        index.upsert(
+            0,
             &account_key,
-            slot,
             &Pubkey::default(),
             &correct_account_data,
             &spl_token_mint_index_enabled(),
+            true,
+            &mut vec![],
         );
         assert!(index.spl_token_mint_index.index.is_empty());
         assert!(index.spl_token_mint_index.reverse_index.is_empty());
 
         // Wrong account data size
-        index.update_secondary_indexes(
+        index.upsert(
+            0,
             &account_key,
-            slot,
             &inline_spl_token_v2_0::id(),
             &correct_account_data[1..],
             &spl_token_mint_index_enabled(),
+            true,
+            &mut vec![],
         );
         assert!(index.spl_token_mint_index.index.is_empty());
         assert!(index.spl_token_mint_index.reverse_index.is_empty());
@@ -1705,8 +1865,6 @@ mod tests {
             );
         }
 
-        // Insert into index, simulate dead key
-        index.upsert(0, &account_key, true, &mut vec![]);
         index
             .get_account_write_entry(&account_key)
             .unwrap()
@@ -1731,23 +1889,25 @@ mod tests {
         account_data2[..PUBKEY_BYTES].clone_from_slice(&(mint_key2.clone().to_bytes()));
 
         // First write one mint index
-        index.upsert(slot, &account_key, true, &mut vec![]);
-        index.update_secondary_indexes(
-            &account_key,
+        index.upsert(
             slot,
+            &account_key,
             &inline_spl_token_v2_0::id(),
             &account_data1,
             &spl_token_mint_index_enabled(),
+            true,
+            &mut vec![],
         );
 
         // Now write a different mint index
-        index.upsert(slot, &account_key, true, &mut vec![]);
-        index.update_secondary_indexes(
-            &account_key,
+        index.upsert(
             slot,
+            &account_key,
             &inline_spl_token_v2_0::id(),
             &account_data2,
             &spl_token_mint_index_enabled(),
+            true,
+            &mut vec![],
         );
 
         // Check correctness
@@ -1761,13 +1921,14 @@ mod tests {
         // If another fork reintroduces mint_key1, then it should be readded to the
         // index
         let fork = slot + 1;
-        index.upsert(fork, &account_key, true, &mut vec![]);
-        index.update_secondary_indexes(
-            &account_key,
+        index.upsert(
             fork,
+            &account_key,
             &inline_spl_token_v2_0::id(),
             &account_data1,
             &spl_token_mint_index_enabled(),
+            true,
+            &mut vec![],
         );
         assert_eq!(
             index.spl_token_mint_index.get(&mint_key1),

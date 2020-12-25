@@ -1459,33 +1459,6 @@ impl AccountsDB {
         })
     }
 
-    fn scan_account_storage_inner_with_state<F, F2, S>(
-        &self,
-        slot: Slot,
-        state: S,
-        scan_func: F,
-        post_scan_func: F2,
-    ) where
-        F: Fn(&StoredAccount, AppendVecId, &S) + Send + Sync,
-        F2: Fn(&Self, S),
-        S: Sync,
-    {
-        let storage_maps: Vec<Arc<AccountStorageEntry>> = self
-            .storage
-            .get_slot_stores(slot)
-            .map(|res| res.read().unwrap().values().cloned().collect())
-            .unwrap_or_default();
-        self.thread_pool.install(|| {
-            storage_maps.into_par_iter().for_each(|storage| {
-                let accounts = storage.accounts.accounts(0);
-                accounts.into_iter().for_each(|stored_account| {
-                    scan_func(&stored_account, storage.append_vec_id(), &state)
-                });
-            })
-        });
-        post_scan_func(self, state)
-    }
-
     pub fn set_hash(&self, slot: Slot, parent_slot: Slot) {
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         if bank_hashes.get(&slot).is_some() {
@@ -2585,14 +2558,14 @@ impl AccountsDB {
             //  - The secondary index is never consulted as primary source of truth for gets/stores.
             //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
             //  account operations.
-            self.accounts_index
-                .upsert(slot, pubkey, info, &mut reclaims);
-            self.accounts_index.update_secondary_indexes(
-                pubkey,
+            self.accounts_index.upsert(
                 slot,
+                pubkey,
                 &pubkey_account.1.owner,
                 &pubkey_account.1.data,
                 &self.account_indexes,
+                info,
+                &mut reclaims,
             );
         }
         reclaims
@@ -3006,7 +2979,8 @@ impl AccountsDB {
     }
 
     pub fn generate_index(&self) {
-        type AccountsMap = DashMap<Pubkey, Mutex<BTreeMap<u64, AccountInfo>>>;
+        type AccountsMap<'a> =
+            DashMap<Pubkey, Mutex<BTreeMap<u64, (AppendVecId, StoredAccount<'a>)>>>;
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
@@ -3018,68 +2992,68 @@ impl AccountsDB {
                 info!("generating index: {}/{} slots...", index, slots.len());
                 last_log_update = now;
             }
-
             let accounts_map: AccountsMap = DashMap::new();
-            self.scan_account_storage_inner_with_state(
-                *slot,
-                accounts_map,
-                |stored_account: &StoredAccount,
-                 store_id: AppendVecId,
-                 accounts_map: &AccountsMap| {
-                    let account_info = AccountInfo {
-                        store_id,
-                        offset: stored_account.offset,
-                        lamports: stored_account.account_meta.lamports,
-                    };
-
-                    let entry = accounts_map
-                        .get(&stored_account.meta.pubkey)
-                        .unwrap_or_else(|| {
-                            accounts_map
-                                .entry(stored_account.meta.pubkey)
-                                .or_insert(Mutex::new(BTreeMap::new()))
-                                .downgrade()
-                        });
-                    /*self.accounts_index.update_secondary_indexes(
-                        &stored_account.meta.pubkey,
-                        *slot,
-                        &stored_account.account_meta.owner,
-                        &stored_account.data,
-                        &self.account_indexes,
-                    );*/
-
-                    assert!(
-                        // There should only be one update per write version for a specific slot
-                        // and account
-                        entry
-                            .lock()
-                            .unwrap()
-                            .insert(stored_account.meta.write_version, account_info)
-                            .is_none()
-                    );
-                },
-                |accounts_db: &Self, accounts_map: AccountsMap| {
-                    // Need to restore indexes even with older write versions which may
-                    // be shielding other accounts. When they are then purged, the
-                    // original non-shielded account value will be visible when the account
-                    // is restored from the append-vec
-                    if !accounts_map.is_empty() {
-                        let mut _reclaims: Vec<(u64, AccountInfo)> = vec![];
-                        for (pubkey, account_infos) in accounts_map.into_iter() {
-                            for (_, account_info) in account_infos.into_inner().unwrap().into_iter()
-                            {
-                                accounts_db.accounts_index.upsert(
-                                    *slot,
-                                    &pubkey,
-                                    account_info,
-                                    &mut _reclaims,
-                                );
-                            }
-                        }
+            let storage_maps: Vec<Arc<AccountStorageEntry>> = self
+                .storage
+                .get_slot_stores(*slot)
+                .map(|res| res.read().unwrap().values().cloned().collect())
+                .unwrap_or_default();
+            self.thread_pool.install(|| {
+                storage_maps.par_iter().for_each(|storage| {
+                    let accounts = storage.accounts.accounts(0);
+                    accounts.into_iter().for_each(|stored_account| {
+                        let entry = accounts_map
+                            .get(&stored_account.meta.pubkey)
+                            .unwrap_or_else(|| {
+                                accounts_map
+                                    .entry(stored_account.meta.pubkey)
+                                    .or_insert(Mutex::new(BTreeMap::new()))
+                                    .downgrade()
+                            });
+                        assert!(
+                            // There should only be one update per write version for a specific slot
+                            // and account
+                            entry
+                                .lock()
+                                .unwrap()
+                                .insert(
+                                    stored_account.meta.write_version,
+                                    (storage.append_vec_id(), stored_account)
+                                )
+                                .is_none()
+                        );
+                    })
+                });
+            });
+            // Need to restore indexes even with older write versions which may
+            // be shielding other accounts. When they are then purged, the
+            // original non-shielded account value will be visible when the account
+            // is restored from the append-vec
+            if !accounts_map.is_empty() {
+                let mut _reclaims: Vec<(u64, AccountInfo)> = vec![];
+                for (pubkey, account_infos) in accounts_map.into_iter() {
+                    for (_, (store_id, stored_account)) in
+                        account_infos.into_inner().unwrap().into_iter()
+                    {
+                        let account_info = AccountInfo {
+                            store_id,
+                            offset: stored_account.offset,
+                            lamports: stored_account.account_meta.lamports,
+                        };
+                        self.accounts_index.upsert(
+                            *slot,
+                            &pubkey,
+                            &stored_account.account_meta.owner,
+                            &stored_account.data,
+                            &self.account_indexes,
+                            account_info,
+                            &mut _reclaims,
+                        );
                     }
-                },
-            );
+                }
+            }
         }
+
         // Need to add these last, otherwise older updates will be cleaned
         for slot in slots {
             self.accounts_index.add_root(slot);
@@ -5507,12 +5481,60 @@ pub mod tests {
             lamports: 0,
         };
         let mut reclaims = vec![];
-        accounts_index.upsert(0, &key0, info0, &mut reclaims);
-        accounts_index.upsert(1, &key0, info1.clone(), &mut reclaims);
-        accounts_index.upsert(1, &key1, info1, &mut reclaims);
-        accounts_index.upsert(2, &key1, info2.clone(), &mut reclaims);
-        accounts_index.upsert(2, &key2, info2, &mut reclaims);
-        accounts_index.upsert(3, &key2, info3, &mut reclaims);
+        accounts_index.upsert(
+            0,
+            &key0,
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            info0,
+            &mut reclaims,
+        );
+        accounts_index.upsert(
+            1,
+            &key0,
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            info1.clone(),
+            &mut reclaims,
+        );
+        accounts_index.upsert(
+            1,
+            &key1,
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            info1,
+            &mut reclaims,
+        );
+        accounts_index.upsert(
+            2,
+            &key1,
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            info2.clone(),
+            &mut reclaims,
+        );
+        accounts_index.upsert(
+            2,
+            &key2,
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            info2,
+            &mut reclaims,
+        );
+        accounts_index.upsert(
+            3,
+            &key2,
+            &Pubkey::default(),
+            &[],
+            &HashSet::new(),
+            info3,
+            &mut reclaims,
+        );
         accounts_index.add_root(0);
         accounts_index.add_root(1);
         accounts_index.add_root(2);
