@@ -269,6 +269,12 @@ impl SecondaryIndex {
         if let Some(prev_key) = prev_key {
             // If the inner key was moved to a different primary key, remove
             // the previous index entry.
+
+            // Check is necessary because anoher thread's writes could feasibly be
+            // interleaved between  `should_insert = { ... slots_map.get(...) ... }` and
+            // `prev_key = { ... slots_map.insert(...) ... }`
+            // Currently this isn't possible due to current AccountsIndex's (pubkey, slot)-per-thread
+            // exclusive-locking, but check is here for future-proofing a more relaxed implementation
             if prev_key != *key {
                 self.remove_index_entries(&prev_key, inner_key, &[slot]);
             }
@@ -879,7 +885,7 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         max_root
     }
 
-    pub fn update_secondary_indexes(
+    fn update_secondary_indexes(
         &self,
         pubkey: &Pubkey,
         slot: Slot,
@@ -900,8 +906,9 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         // removed from the secondary index, the scan function will:
         // 1) consult the primary index via `get(&pubkey, Some(ancestors), max_root)`
         // and find the zero-lamport version
-        // 2) When the fetch from storage occurs, it will return nothing because the account
-        // is default in that storage entry
+        // 2) When the fetch from storage occurs, it will return Account::Default
+        // (as persisted tombstone for snapshots). This will then ultimately be
+        // filtered out by post-scan filters, like in `get_filtered_spl_token_accounts_by_owner()`.
         if *account_owner == inline_spl_token_v2_0::id()
             && account_data.len() == inline_spl_token_v2_0::state::Account::get_packed_len()
         {
@@ -938,6 +945,17 @@ impl<T: 'static + Clone> AccountsIndex<T> {
     ) -> bool {
         let (mut w_account_entry, is_newly_inserted) =
             self.get_account_write_entry_else_create(pubkey);
+        // We don't atomically update both primary index and secondary index together.
+        // This certainly creates small time window with inconsistent state across the two indexes.
+        // However, this is acceptable because:
+        //
+        //  - A strict consistent view at any given moment of time is not necessary, because the only
+        //  use case for the secondary index is `scan`, and `scans` are only supported/require consistency
+        //  on frozen banks, and this inconsistency is only possible on working banks.
+        //
+        //  - The secondary index is never consulted as primary source of truth for gets/stores.
+        //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
+        //  account operations.
         w_account_entry.update(slot, account_info, reclaims);
         self.update_secondary_indexes(pubkey, slot, account_owner, account_data, account_indexes);
         is_newly_inserted
