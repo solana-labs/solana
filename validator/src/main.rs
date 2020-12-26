@@ -108,12 +108,13 @@ fn get_trusted_snapshot_hashes(
 fn start_gossip_node(
     identity_keypair: &Arc<Keypair>,
     cluster_entrypoints: &[ContactInfo],
+    ledger_path: &Path,
     gossip_addr: &SocketAddr,
     gossip_socket: UdpSocket,
     expected_shred_version: Option<u16>,
     gossip_validators: Option<HashSet<Pubkey>>,
 ) -> (Arc<ClusterInfo>, Arc<AtomicBool>, GossipService) {
-    let cluster_info = ClusterInfo::new(
+    let mut cluster_info = ClusterInfo::new(
         ClusterInfo::gossip_contact_info(
             &identity_keypair.pubkey(),
             *gossip_addr,
@@ -122,6 +123,7 @@ fn start_gossip_node(
         identity_keypair.clone(),
     );
     cluster_info.set_entrypoints(cluster_entrypoints.to_vec());
+    cluster_info.restore_contact_info(ledger_path, 0);
     let cluster_info = Arc::new(cluster_info);
 
     let gossip_exit_flag = Arc::new(AtomicBool::new(false));
@@ -590,6 +592,7 @@ fn rpc_bootstrap(
             gossip = Some(start_gossip_node(
                 &identity_keypair,
                 &cluster_entrypoints,
+                ledger_path,
                 &node.info.gossip,
                 node.sockets.gossip.try_clone().unwrap(),
                 validator_config.expected_shred_version,
@@ -689,8 +692,9 @@ fn rpc_bootstrap(
                         .map_err(|err| format!("Failed to get RPC node slot: {}", err))
                         .and_then(|slot| {
                             info!("RPC node root slot: {}", slot);
-                            let (_cluster_info, gossip_exit_flag, gossip_service) =
+                            let (cluster_info, gossip_exit_flag, gossip_service) =
                                 gossip.take().unwrap();
+                            cluster_info.save_contact_info();
                             gossip_exit_flag.store(true, Ordering::Relaxed);
                             let ret = download_snapshot(
                                 &rpc_contact_info.rpc,
@@ -747,7 +751,8 @@ fn rpc_bootstrap(
         );
         blacklisted_rpc_nodes.insert(rpc_contact_info.id);
     }
-    if let Some((_cluster_info, gossip_exit_flag, gossip_service)) = gossip.take() {
+    if let Some((cluster_info, gossip_exit_flag, gossip_service)) = gossip.take() {
+        cluster_info.save_contact_info();
         gossip_exit_flag.store(true, Ordering::Relaxed);
         gossip_service.join().unwrap();
     }

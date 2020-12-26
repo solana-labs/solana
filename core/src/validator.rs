@@ -3,7 +3,10 @@
 use crate::{
     broadcast_stage::BroadcastStageType,
     cache_block_time_service::{CacheBlockTimeSender, CacheBlockTimeService},
-    cluster_info::{ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL},
+    cluster_info::{
+        ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
+        DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
+    },
     cluster_info_vote_listener::VoteTracker,
     completed_data_sets_service::CompletedDataSetsService,
     consensus::{reconcile_blockstore_roots_with_tower, Tower},
@@ -107,6 +110,7 @@ pub struct ValidatorConfig {
     pub require_tower: bool,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub contact_debug_interval: u64,
+    pub contact_save_interval: u64,
     pub bpf_jit: bool,
     pub send_transaction_retry_ms: u64,
     pub send_transaction_leader_forward_count: u64,
@@ -147,7 +151,8 @@ impl Default for ValidatorConfig {
             cuda: false,
             require_tower: false,
             debug_keys: None,
-            contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL,
+            contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
+            contact_save_interval: DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
             bpf_jit: false,
             send_transaction_retry_ms: 2000,
             send_transaction_leader_forward_count: 2,
@@ -365,6 +370,8 @@ impl Validator {
 
         let mut cluster_info = ClusterInfo::new(node.info.clone(), identity_keypair.clone());
         cluster_info.set_contact_debug_interval(config.contact_debug_interval);
+        cluster_info.set_entrypoints(cluster_entrypoints);
+        cluster_info.restore_contact_info(ledger_path, config.contact_save_interval);
         let cluster_info = Arc::new(cluster_info);
         let mut block_commitment_cache = BlockCommitmentCache::default();
         block_commitment_cache.initialize_slots(bank.slot());
@@ -495,8 +502,6 @@ impl Validator {
             config.gossip_validators.clone(),
             &exit,
         );
-        cluster_info.set_entrypoints(cluster_entrypoints);
-
         let serve_repair = Arc::new(RwLock::new(ServeRepair::new(cluster_info.clone())));
         let serve_repair_service = ServeRepairService::new(
             &serve_repair,
