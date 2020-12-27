@@ -61,6 +61,7 @@ use std::time::Instant;
 use std::{
     collections::HashSet,
     net::SocketAddr,
+    ops::Deref,
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::Receiver,
@@ -536,7 +537,9 @@ impl Validator {
             "New shred signal for the TVU should be the same as the clear bank signal."
         );
 
-        let vote_tracker = Arc::new(VoteTracker::new(bank_forks.read().unwrap().root_bank()));
+        let vote_tracker = Arc::new(VoteTracker::new(
+            bank_forks.read().unwrap().root_bank().deref(),
+        ));
 
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
