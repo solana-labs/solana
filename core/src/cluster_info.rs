@@ -237,10 +237,8 @@ struct GossipStats {
     entrypoint2: Counter,
     gossip_packets_dropped_count: Counter,
     push_vote_read: Counter,
-    vote_process_push: Counter,
     get_votes: Counter,
     get_accounts_hash: Counter,
-    get_snapshot_hash: Counter,
     all_tvu_peers: Counter,
     tvu_peers: Counter,
     retransmit_peers: Counter,
@@ -273,8 +271,6 @@ struct GossipStats {
     pull_request_ping_pong_check_failed_count: Counter,
     purge: Counter,
     epoch_slots_lookup: Counter,
-    epoch_slots_push: Counter,
-    push_message: Counter,
     new_pull_requests: Counter,
     new_pull_requests_count: Counter,
     mark_pull_request: Counter,
@@ -1020,33 +1016,19 @@ impl ClusterInfo {
         let (labels, txs): (Vec<CrdsValueLabel>, Vec<Transaction>) = self
             .time_gossip_read_lock("get_votes", &self.stats.get_votes)
             .crds
-            .iter()
-            .filter(|(_, x)| x.insert_timestamp > since)
-            .filter_map(|(label, x)| {
-                max_ts = std::cmp::max(x.insert_timestamp, max_ts);
-                x.value
-                    .vote()
-                    .map(|v| (label.clone(), v.transaction.clone()))
+            .get_votes()
+            .filter(|vote| vote.insert_timestamp > since)
+            .map(|vote| {
+                max_ts = std::cmp::max(vote.insert_timestamp, max_ts);
+                let transaction = match &vote.value.data {
+                    CrdsData::Vote(_, vote) => vote.transaction.clone(),
+                    _ => panic!("this should not happen!"),
+                };
+                (vote.value.label(), transaction)
             })
             .unzip();
         inc_new_counter_info!("cluster_info-get_votes-count", txs.len());
         (labels, txs, max_ts)
-    }
-
-    pub fn get_snapshot_hash(&self, slot: Slot) -> Vec<(Pubkey, Hash)> {
-        self.time_gossip_read_lock("get_snapshot_hash", &self.stats.get_snapshot_hash)
-            .crds
-            .values()
-            .filter_map(|x| x.value.snapshot_hash())
-            .filter_map(|x| {
-                for (table_slot, hash) in &x.hashes {
-                    if *table_slot == slot {
-                        return Some((x.from, *hash));
-                    }
-                }
-                None
-            })
-            .collect()
     }
 
     pub fn get_accounts_hash_for_node<F, Y>(&self, pubkey: &Pubkey, map: F) -> Option<Y>
@@ -2668,11 +2650,6 @@ impl ClusterInfo {
                 ("entrypoint", self.stats.entrypoint.clear(), i64),
                 ("entrypoint2", self.stats.entrypoint2.clear(), i64),
                 ("push_vote_read", self.stats.push_vote_read.clear(), i64),
-                (
-                    "vote_process_push",
-                    self.stats.vote_process_push.clear(),
-                    i64
-                ),
                 ("get_votes", self.stats.get_votes.clear(), i64),
                 (
                     "get_accounts_hash",
@@ -2824,8 +2801,6 @@ impl ClusterInfo {
                     self.stats.epoch_slots_lookup.clear(),
                     i64
                 ),
-                ("epoch_slots_push", self.stats.epoch_slots_push.clear(), i64),
-                ("push_message", self.stats.push_message.clear(), i64),
                 (
                     "new_pull_requests",
                     self.stats.new_pull_requests.clear(),
