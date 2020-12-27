@@ -119,8 +119,8 @@ impl BankForks {
         self.banks.get(&bank_slot)
     }
 
-    pub fn root_bank(&self) -> &Arc<Bank> {
-        &self[self.root()]
+    pub fn root_bank(&self) -> Arc<Bank> {
+        self[self.root()].clone()
     }
 
     pub fn new_from_banks(initial_forks: &[Arc<Bank>], root: Slot) -> Self {
@@ -219,7 +219,7 @@ impl BankForks {
                 if self.snapshot_config.is_some()
                     && accounts_background_request_sender.is_snapshot_creation_enabled()
                 {
-                    let snapshot_root_bank = self.root_bank().clone();
+                    let snapshot_root_bank = self.root_bank();
                     let root_slot = snapshot_root_bank.slot();
                     if let Err(e) =
                         accounts_background_request_sender.send_snapshot_request(SnapshotRequest {

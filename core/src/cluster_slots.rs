@@ -85,7 +85,7 @@ impl ClusterSlots {
     }
 
     fn update_peers(&self, cluster_info: &ClusterInfo, bank_forks: &RwLock<BankForks>) {
-        let root_bank = bank_forks.read().unwrap().root_bank().clone();
+        let root_bank = bank_forks.read().unwrap().root_bank();
         let root_epoch = root_bank.epoch();
         let my_epoch = *self.epoch.read().unwrap();
 
