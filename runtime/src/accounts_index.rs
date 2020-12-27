@@ -780,28 +780,26 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         )
     }
 
-    // filter any rooted entries and return them along with a bool that indicates
-    // if this account has no more entries.
-    pub fn purge(&self, pubkey: &Pubkey) -> (SlotList<T>, bool) {
-        let mut write_account_map_entry = self.get_account_write_entry(pubkey).unwrap();
-        write_account_map_entry.slot_list_mut(|slot_list| {
-            let reclaims = self.get_rooted_entries(slot_list, None);
-            slot_list.retain(|(slot, _)| !self.is_root(*slot));
-            (reclaims, slot_list.is_empty())
-        })
-    }
-
-    pub fn purge_exact(&self, pubkey: &Pubkey, slots: HashSet<Slot>) -> (SlotList<T>, bool) {
-        let mut write_account_map_entry = self.get_account_write_entry(pubkey).unwrap();
-        write_account_map_entry.slot_list_mut(|slot_list| {
-            let reclaims = slot_list
-                .iter()
-                .filter(|(slot, _)| slots.contains(&slot))
-                .cloned()
-                .collect();
-            slot_list.retain(|(slot, _)| !slots.contains(slot));
-            (reclaims, slot_list.is_empty())
-        })
+    pub fn purge_exact(
+        &self,
+        pubkey: &Pubkey,
+        slots: HashSet<Slot>,
+        account_indexes: &HashSet<AccountIndex>,
+    ) -> (SlotList<T>, bool) {
+        let res = {
+            let mut write_account_map_entry = self.get_account_write_entry(pubkey).unwrap();
+            write_account_map_entry.slot_list_mut(|slot_list| {
+                let reclaims = slot_list
+                    .iter()
+                    .filter(|(slot, _)| slots.contains(&slot))
+                    .cloned()
+                    .collect();
+                slot_list.retain(|(slot, _)| !slots.contains(slot));
+                (reclaims, slot_list.is_empty())
+            })
+        };
+        self.purge_secondary_indexes_by_inner_key(pubkey, Some(&slots), account_indexes);
+        res
     }
 
     pub fn min_ongoing_scan_root(&self) -> Option<Slot> {
@@ -1138,12 +1136,30 @@ impl<T: 'static + Clone> AccountsIndex<T> {
     pub fn uncleaned_roots_len(&self) -> usize {
         self.roots_tracker.read().unwrap().uncleaned_roots.len()
     }
+
+    #[cfg(test)]
+    // filter any rooted entries and return them along with a bool that indicates
+    // if this account has no more entries.
+    pub fn purge_roots(&self, pubkey: &Pubkey) -> (SlotList<T>, bool) {
+        let mut write_account_map_entry = self.get_account_write_entry(pubkey).unwrap();
+        write_account_map_entry.slot_list_mut(|slot_list| {
+            let reclaims = self.get_rooted_entries(slot_list, None);
+            slot_list.retain(|(slot, _)| !self.is_root(*slot));
+            (reclaims, slot_list.is_empty())
+        })
+    }
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use solana_sdk::signature::{Keypair, Signer};
+
+    pub fn spl_token_mint_index_enabled() -> HashSet<AccountIndex> {
+        let mut account_indexes = HashSet::new();
+        account_indexes.insert(AccountIndex::SplTokenMint);
+        account_indexes
+    }
 
     #[test]
     fn test_get_empty() {
@@ -1693,11 +1709,11 @@ mod tests {
             &mut gc
         ));
 
-        let purges = index.purge(&key.pubkey());
+        let purges = index.purge_roots(&key.pubkey());
         assert_eq!(purges, (vec![], false));
         index.add_root(1);
 
-        let purges = index.purge(&key.pubkey());
+        let purges = index.purge_roots(&key.pubkey());
         assert_eq!(purges, (vec![(1, 10)], true));
 
         assert!(!index.upsert(
@@ -1752,6 +1768,68 @@ mod tests {
                 .unwrap(),
             3
         );
+    }
+
+    #[test]
+    fn test_purge_exact_secondary_index() {
+        // No roots, should be no reclaims
+        let index = AccountsIndex::<bool>::default();
+        let slots = vec![1, 2, 5, 9];
+        let account_key = Pubkey::new_unique();
+
+        // Create necessary secondary index state
+        let mint_key = Pubkey::new_unique();
+        let mut correct_account_data =
+            vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
+        correct_account_data[..PUBKEY_BYTES].clone_from_slice(&(mint_key.clone().to_bytes()));
+
+        // Insert slots into secondary index
+        for slot in &slots {
+            index.upsert(
+                *slot,
+                &account_key,
+                // Make sure these accounts are added to secondary index
+                &inline_spl_token_v2_0::id(),
+                &correct_account_data,
+                &spl_token_mint_index_enabled(),
+                true,
+                &mut vec![],
+            );
+        }
+
+        // Only one mint exists
+        assert_eq!(
+            index
+                .spl_token_mint_index
+                .index
+                .get(&mint_key)
+                .unwrap()
+                .len(),
+            1
+        );
+        // One account maps to many different mints
+        // across many slots
+        assert_eq!(
+            index
+                .spl_token_mint_index
+                .reverse_index
+                .get(&account_key)
+                .unwrap()
+                .value()
+                .read()
+                .unwrap()
+                .len(),
+            slots.len()
+        );
+
+        index.purge_exact(
+            &account_key,
+            slots.into_iter().collect(),
+            &spl_token_mint_index_enabled(),
+        );
+
+        assert!(index.spl_token_mint_index.index.is_empty());
+        assert!(index.spl_token_mint_index.reverse_index.is_empty());
     }
 
     #[test]
@@ -1888,12 +1966,6 @@ mod tests {
         // Check reverse index is unique
         let slots_map = secondary_index.reverse_index.get(account_key).unwrap();
         assert_eq!(slots_map.value().read().unwrap().get(&slot).unwrap(), key);
-    }
-
-    fn spl_token_mint_index_enabled() -> HashSet<AccountIndex> {
-        let mut account_indexes = HashSet::new();
-        account_indexes.insert(AccountIndex::SplTokenMint);
-        account_indexes
     }
 
     #[test]

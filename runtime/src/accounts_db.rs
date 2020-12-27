@@ -758,7 +758,9 @@ impl AccountsDB {
         let mut dead_keys = Vec::new();
 
         for (pubkey, slots_set) in pubkey_to_slot_set {
-            let (new_reclaims, is_empty) = self.accounts_index.purge_exact(&pubkey, slots_set);
+            let (new_reclaims, is_empty) =
+                self.accounts_index
+                    .purge_exact(&pubkey, slots_set, &self.account_indexes);
             if is_empty {
                 dead_keys.push(pubkey);
             }
@@ -3148,9 +3150,13 @@ impl AccountsDB {
 pub mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
     use super::*;
-    use crate::{accounts_index::RefCount, append_vec::AccountMeta};
+    use crate::{
+        accounts_index::tests::*, accounts_index::RefCount, append_vec::AccountMeta,
+        inline_spl_token_v2_0,
+    };
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
+    use solana_sdk::pubkey::PUBKEY_BYTES;
     use solana_sdk::{account::Account, hash::HASH_BYTES};
     use std::{fs, iter::FromIterator, str::FromStr};
 
@@ -3947,11 +3953,26 @@ pub mod tests {
     fn test_clean_old_with_both_normal_and_zero_lamport_accounts() {
         solana_logger::setup();
 
-        let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
+        let accounts = AccountsDB::new_with_indexes(
+            Vec::new(),
+            &ClusterType::Development,
+            spl_token_mint_index_enabled(),
+        );
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
-        let normal_account = Account::new(1, 0, &Account::default().owner);
-        let zero_account = Account::new(0, 0, &Account::default().owner);
+
+        // Set up account to be added to secondary index
+        let mint_key = Pubkey::new_unique();
+        let mut account_data_with_mint =
+            vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
+        account_data_with_mint[..PUBKEY_BYTES].clone_from_slice(&(mint_key.clone().to_bytes()));
+
+        let mut normal_account = Account::new(1, 0, &Account::default().owner);
+        normal_account.owner = inline_spl_token_v2_0::id();
+        normal_account.data = account_data_with_mint.clone();
+        let mut zero_account = Account::new(0, 0, &Account::default().owner);
+        zero_account.owner = inline_spl_token_v2_0::id();
+        zero_account.data = account_data_with_mint;
 
         //store an account
         accounts.store(0, &[(&pubkey1, &normal_account)]);
@@ -3970,6 +3991,19 @@ pub mod tests {
         assert_eq!(accounts.alive_account_count_in_store(1), 1);
         assert_eq!(accounts.alive_account_count_in_store(2), 1);
 
+        // Secondary index should still find both pubkeys
+        let mut found_accounts = HashSet::new();
+        accounts.accounts_index.index_scan_accounts(
+            &HashMap::new(),
+            IndexKey::SplTokenMint(mint_key),
+            |key, _| {
+                found_accounts.insert(*key);
+            },
+        );
+        assert_eq!(found_accounts.len(), 2);
+        assert!(found_accounts.contains(&pubkey1));
+        assert!(found_accounts.contains(&pubkey2));
+
         accounts.clean_accounts(None);
 
         //both zero lamport and normal accounts are cleaned up
@@ -3980,9 +4014,18 @@ pub mod tests {
         assert_eq!(accounts.alive_account_count_in_store(1), 0);
         assert_eq!(accounts.alive_account_count_in_store(2), 1);
 
-        // Pubkey 1, a zero lamport account, should no longer exist in accounts index
-        // because it has been removed
+        // `pubkey1`, a zero lamport account, should no longer exist in accounts index
+        // because it has been removed by the clean
         assert!(accounts.accounts_index.get(&pubkey1, None, None).is_none());
+
+        // Secondary index should have purged `pubkey1` as well
+        let mut found_accounts = vec![];
+        accounts.accounts_index.index_scan_accounts(
+            &HashMap::new(),
+            IndexKey::SplTokenMint(mint_key),
+            |key, _| found_accounts.push(*key),
+        );
+        assert_eq!(found_accounts, vec![pubkey2]);
     }
 
     #[test]

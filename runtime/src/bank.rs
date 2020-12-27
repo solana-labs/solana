@@ -6721,7 +6721,7 @@ pub(crate) mod tests {
             .accounts
             .accounts_db
             .accounts_index
-            .purge(&zero_lamport_pubkey);
+            .purge_roots(&zero_lamport_pubkey);
 
         let some_slot = 1000;
         let bank2_with_zero = Arc::new(Bank::new_from_parent(
