@@ -650,6 +650,7 @@ impl AccountsDB {
                             &pubkey,
                             &mut reclaims,
                             max_clean_root,
+                            &self.account_indexes,
                         );
                     }
                     reclaims
@@ -930,7 +931,8 @@ impl AccountsDB {
 
         let (reclaims, dead_keys) = self.purge_keys_exact(pubkey_to_slot_set);
 
-        self.accounts_index.handle_dead_keys(&dead_keys);
+        self.accounts_index
+            .handle_dead_keys(&dead_keys, &self.account_indexes);
 
         self.handle_reclaims(&reclaims, None, false, None);
 
@@ -1882,6 +1884,7 @@ impl AccountsDB {
                     remove_slot,
                     pubkey,
                     &mut reclaims,
+                    &self.account_indexes,
                 );
             }
         }
@@ -4565,7 +4568,8 @@ pub mod tests {
         let account2 = Account::new(3, 0, &key);
         db.store(2, &[(&key1, &account2)]);
 
-        db.accounts_index.handle_dead_keys(&dead_keys);
+        db.accounts_index
+            .handle_dead_keys(&dead_keys, &HashSet::new());
 
         db.print_accounts_stats("post");
         let ancestors = vec![(2, 0)].into_iter().collect();
