@@ -28,7 +28,7 @@ use crate::contact_info::ContactInfo;
 use crate::crds_shards::CrdsShards;
 use crate::crds_value::{CrdsData, CrdsValue, CrdsValueLabel, LowestSlot};
 use bincode::serialize;
-use indexmap::map::{rayon::ParValues, Entry, IndexMap, Iter, Values};
+use indexmap::map::{rayon::ParValues, Entry, IndexMap, Values};
 use indexmap::set::IndexSet;
 use rayon::{prelude::*, ThreadPool};
 use solana_sdk::hash::{hash, Hash};
@@ -47,8 +47,8 @@ pub struct Crds {
     table: IndexMap<CrdsValueLabel, VersionedCrdsValue>,
     pub num_inserts: usize, // Only used in tests.
     shards: CrdsShards,
-    // Indices of all crds values which are node ContactInfo.
-    nodes: IndexSet<usize>,
+    nodes: IndexSet<usize>, // Indices of nodes' ContactInfo.
+    votes: IndexSet<usize>, // Indices of Vote crds values.
     // Indices of all crds values associated with a node.
     records: HashMap<Pubkey, IndexSet<usize>>,
 }
@@ -109,6 +109,7 @@ impl Default for Crds {
             num_inserts: 0,
             shards: CrdsShards::new(CRDS_SHARDS_BITS),
             nodes: IndexSet::default(),
+            votes: IndexSet::default(),
             records: HashMap::default(),
         }
     }
@@ -141,9 +142,15 @@ impl Crds {
             Entry::Vacant(entry) => {
                 let entry_index = entry.index();
                 self.shards.insert(entry_index, &new_value);
-                if let CrdsData::ContactInfo(_) = new_value.value.data {
-                    self.nodes.insert(entry_index);
-                }
+                match new_value.value.data {
+                    CrdsData::ContactInfo(_) => {
+                        self.nodes.insert(entry_index);
+                    }
+                    CrdsData::Vote(_, _) => {
+                        self.votes.insert(entry_index);
+                    }
+                    _ => (),
+                };
                 self.records
                     .entry(new_value.value.pubkey())
                     .or_default()
@@ -215,16 +222,17 @@ impl Crds {
         })
     }
 
+    /// Returns all entries which are Vote.
+    pub(crate) fn get_votes(&self) -> impl Iterator<Item = &VersionedCrdsValue> {
+        self.votes.iter().map(move |i| self.table.index(*i))
+    }
+
     pub fn len(&self) -> usize {
         self.table.len()
     }
 
     pub fn is_empty(&self) -> bool {
         self.table.is_empty()
-    }
-
-    pub fn iter(&self) -> Iter<'_, CrdsValueLabel, VersionedCrdsValue> {
-        self.table.iter()
     }
 
     pub fn values(&self) -> Values<'_, CrdsValueLabel, VersionedCrdsValue> {
@@ -290,8 +298,14 @@ impl Crds {
     pub fn remove(&mut self, key: &CrdsValueLabel) -> Option<VersionedCrdsValue> {
         let (index, _ /*label*/, value) = self.table.swap_remove_full(key)?;
         self.shards.remove(index, &value);
-        if let CrdsData::ContactInfo(_) = value.value.data {
-            self.nodes.swap_remove(&index);
+        match value.value.data {
+            CrdsData::ContactInfo(_) => {
+                self.nodes.swap_remove(&index);
+            }
+            CrdsData::Vote(_, _) => {
+                self.votes.swap_remove(&index);
+            }
+            _ => (),
         }
         // Remove the index from records associated with the value's pubkey.
         let pubkey = value.value.pubkey();
@@ -313,10 +327,17 @@ impl Crds {
             let value = self.table.index(index);
             self.shards.remove(size, value);
             self.shards.insert(index, value);
-            if let CrdsData::ContactInfo(_) = value.value.data {
-                self.nodes.swap_remove(&size);
-                self.nodes.insert(index);
-            }
+            match value.value.data {
+                CrdsData::ContactInfo(_) => {
+                    self.nodes.swap_remove(&size);
+                    self.nodes.insert(index);
+                }
+                CrdsData::Vote(_, _) => {
+                    self.votes.swap_remove(&size);
+                    self.votes.insert(index);
+                }
+                _ => (),
+            };
             let pubkey = value.value.pubkey();
             let records = self.records.get_mut(&pubkey).unwrap();
             records.swap_remove(&size);
@@ -537,35 +558,48 @@ mod test {
     }
 
     #[test]
-    fn test_crds_nodes() {
-        fn check_crds_nodes(crds: &Crds) -> usize {
+    fn test_crds_value_indices() {
+        fn check_crds_value_indices(crds: &Crds) -> (usize, usize) {
             let num_nodes = crds
                 .table
                 .values()
                 .filter(|value| matches!(value.value.data, CrdsData::ContactInfo(_)))
                 .count();
+            let num_votes = crds
+                .table
+                .values()
+                .filter(|value| matches!(value.value.data, CrdsData::Vote(_, _)))
+                .count();
             assert_eq!(num_nodes, crds.get_nodes_contact_info().count());
-            num_nodes
+            assert_eq!(num_votes, crds.get_votes().count());
+            for vote in crds.get_votes() {
+                match vote.value.data {
+                    CrdsData::Vote(_, _) => (),
+                    _ => panic!("not a vote!"),
+                }
+            }
+            (num_nodes, num_votes)
         }
         let mut rng = thread_rng();
-        let keypairs: Vec<_> = std::iter::repeat_with(Keypair::new).take(256).collect();
+        let keypairs: Vec<_> = repeat_with(Keypair::new).take(128).collect();
         let mut crds = Crds::default();
         let mut num_inserts = 0;
         let mut num_overrides = 0;
-        for _ in 0..4096 {
+        for k in 0..4096 {
             let keypair = &keypairs[rng.gen_range(0, keypairs.len())];
             let value = VersionedCrdsValue::new_rand(&mut rng, Some(keypair));
             match crds.insert_versioned(value) {
                 Ok(None) => {
                     num_inserts += 1;
-                    check_crds_nodes(&crds);
                 }
                 Ok(Some(_)) => {
                     num_inserts += 1;
                     num_overrides += 1;
-                    check_crds_nodes(&crds);
                 }
                 Err(_) => (),
+            }
+            if k % 64 == 0 {
+                check_crds_value_indices(&crds);
             }
         }
         assert_eq!(num_inserts, crds.num_inserts);
@@ -573,15 +607,18 @@ mod test {
         assert!(num_overrides > 500);
         assert!(crds.table.len() > 200);
         assert!(num_inserts > crds.table.len());
-        let num_nodes = check_crds_nodes(&crds);
+        let (num_nodes, num_votes) = check_crds_value_indices(&crds);
         assert!(num_nodes * 3 < crds.table.len());
-        assert!(num_nodes > 150);
+        assert!(num_nodes > 100, "num nodes: {}", num_nodes);
+        assert!(num_votes > 100, "num votes: {}", num_votes);
         // Remove values one by one and assert that nodes indices stay valid.
         while !crds.table.is_empty() {
             let index = rng.gen_range(0, crds.table.len());
             let key = crds.table.get_index(index).unwrap().0.clone();
             crds.remove(&key);
-            check_crds_nodes(&crds);
+            if crds.table.len() % 64 == 0 {
+                check_crds_value_indices(&crds);
+            }
         }
     }
 
