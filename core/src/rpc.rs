@@ -187,7 +187,7 @@ impl JsonRpcRequestProcessor {
                 "Bank with {:?} not found at slot: {:?}",
                 commitment_level, slot
             );
-            r_bank_forks.root_bank().clone()
+            r_bank_forks.root_bank()
         })
     }
 

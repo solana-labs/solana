@@ -49,7 +49,7 @@ impl SamplePerformanceService {
         exit: Arc<AtomicBool>,
     ) {
         let forks = bank_forks.read().unwrap();
-        let bank = forks.root_bank().clone();
+        let bank = forks.root_bank();
         let highest_slot = forks.highest_slot();
         drop(forks);
 

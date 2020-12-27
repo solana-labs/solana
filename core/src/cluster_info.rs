@@ -1851,7 +1851,7 @@ impl ClusterInfo {
 
                     let stakes: HashMap<_, _> = match bank_forks {
                         Some(ref bank_forks) => {
-                            bank_forks.read().unwrap().working_bank().staked_nodes()
+                            bank_forks.read().unwrap().root_bank().staked_nodes()
                         }
                         None => HashMap::new(),
                     };
@@ -2502,24 +2502,24 @@ impl ClusterInfo {
 
     fn get_stakes_and_epoch_time(
         bank_forks: Option<&Arc<RwLock<BankForks>>>,
-    ) -> (HashMap<Pubkey, u64>, u64) {
-        let epoch_time_ms;
-        let stakes: HashMap<_, _> = match bank_forks {
+    ) -> (
+        HashMap<Pubkey, u64>, // staked nodes
+        u64,                  // epoch time ms
+    ) {
+        match bank_forks {
             Some(ref bank_forks) => {
-                let bank = bank_forks.read().unwrap().working_bank();
+                let bank = bank_forks.read().unwrap().root_bank();
                 let epoch = bank.epoch();
-                let epoch_schedule = bank.epoch_schedule();
-                epoch_time_ms = epoch_schedule.get_slots_in_epoch(epoch) * DEFAULT_MS_PER_SLOT;
-                bank.staked_nodes()
+                (
+                    bank.staked_nodes(),
+                    bank.get_slots_in_epoch(epoch) * DEFAULT_MS_PER_SLOT,
+                )
             }
             None => {
                 inc_new_counter_info!("cluster_info-purge-no_working_bank", 1);
-                epoch_time_ms = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
-                HashMap::new()
+                (HashMap::new(), CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS)
             }
-        };
-
-        (stakes, epoch_time_ms)
+        }
     }
 
     fn process_packets(
