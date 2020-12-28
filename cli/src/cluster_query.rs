@@ -89,7 +89,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                     pubkey!(Arg::with_name("node_pubkey")
                         .index(1)
                         .value_name("VALIDATOR_PUBKEY")
-                        .required(true),
+                        .required(false),
                         "Identity pubkey of the validator"),
                 )
                 .arg(
@@ -105,6 +105,18 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .long("follow")
                         .takes_value(false)
                         .help("Continue reporting progress even after the validator has caught up"),
+                )
+                .arg(
+                    Arg::with_name("our_localhost")
+                        .long("our-localhost")
+                        .takes_value(false)
+                        .help("Guess Identity pubkey and validator rpc node assuming local (possibly private) validator"),
+                )
+                .arg(
+                    Arg::with_name("log")
+                        .long("log")
+                        .takes_value(false)
+                        .help("Don't update the progress inplace; instead show updates with its own new lines"),
                 )
                 .arg(commitment_arg()),
         )
@@ -379,14 +391,18 @@ pub fn parse_catchup(
     matches: &ArgMatches<'_>,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let node_pubkey = pubkey_of_signer(matches, "node_pubkey", wallet_manager)?.unwrap();
+    let node_pubkey = pubkey_of_signer(matches, "node_pubkey", wallet_manager)?;
     let node_json_rpc_url = value_t!(matches, "node_json_rpc_url", String).ok();
+    let guess = matches.is_present("our_localhost");
     let follow = matches.is_present("follow");
+    let log = matches.is_present("log");
     Ok(CliCommandInfo {
         command: CliCommand::Catchup {
             node_pubkey,
             node_json_rpc_url,
             follow,
+            guess,
+            log,
         },
         signers: vec![],
     })
@@ -566,38 +582,67 @@ pub fn parse_transaction_history(
 pub fn process_catchup(
     rpc_client: &RpcClient,
     config: &CliConfig,
-    node_pubkey: &Pubkey,
-    node_json_rpc_url: &Option<String>,
+    node_pubkey: Option<Pubkey>,
+    mut node_json_rpc_url: Option<String>,
     follow: bool,
+    guess: bool,
+    log: bool,
 ) -> ProcessResult {
     let sleep_interval = 5;
 
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message("Connecting...");
 
-    let node_client = if let Some(node_json_rpc_url) = node_json_rpc_url {
-        RpcClient::new(node_json_rpc_url.to_string())
-    } else {
-        let rpc_addr = loop {
-            let cluster_nodes = rpc_client.get_cluster_nodes()?;
-            if let Some(contact_info) = cluster_nodes
-                .iter()
-                .find(|contact_info| contact_info.pubkey == node_pubkey.to_string())
-            {
-                if let Some(rpc_addr) = contact_info.rpc {
-                    break rpc_addr;
-                }
-                progress_bar.set_message(&format!("RPC service not found for {}", node_pubkey));
-            } else {
-                progress_bar.set_message(&format!(
-                    "Contact information not found for {}",
-                    node_pubkey
-                ));
-            }
-            sleep(Duration::from_secs(sleep_interval as u64));
-        };
+    if guess {
+        let gussed_default = Some("http://localhost:8899".to_owned());
+        if node_json_rpc_url.is_some() && node_json_rpc_url != gussed_default {
+            eprintln!("Prefering explicitly given rpc as us, although --our-localhost is given");
+        } else {
+            node_json_rpc_url = gussed_default;
+        }
+    }
 
-        RpcClient::new_socket(rpc_addr)
+    let (node_client, node_pubkey) = if guess {
+        let client = RpcClient::new(node_json_rpc_url.unwrap());
+        let guessed_default = Some(client.get_identity()?);
+        (
+            client,
+            (if node_pubkey.is_some() && guessed_default != node_pubkey {
+                eprintln!("Prefering explicitly given node pubkey as us, although --our-localhost is given");
+                node_pubkey
+            } else {
+                guessed_default
+            }).unwrap(),
+        )
+    } else if let Some(node_pubkey) = node_pubkey {
+        if let Some(node_json_rpc_url) = node_json_rpc_url {
+            (RpcClient::new(node_json_rpc_url), node_pubkey)
+        } else {
+            let rpc_addr = loop {
+                let cluster_nodes = rpc_client.get_cluster_nodes()?;
+                if let Some(contact_info) = cluster_nodes
+                    .iter()
+                    .find(|contact_info| contact_info.pubkey == node_pubkey.to_string())
+                {
+                    if let Some(rpc_addr) = contact_info.rpc {
+                        break rpc_addr;
+                    }
+                    progress_bar.set_message(&format!("RPC service not found for {}", node_pubkey));
+                } else {
+                    progress_bar.set_message(&format!(
+                        "Contact information not found for {}",
+                        node_pubkey
+                    ));
+                }
+                sleep(Duration::from_secs(sleep_interval as u64));
+            };
+
+            (RpcClient::new_socket(rpc_addr), node_pubkey)
+        }
+    } else {
+        return Err(
+            "At least node_pubkey must be specified unless --our-localhost is given".into(),
+        );
     };
 
     let reported_node_pubkey = loop {
@@ -614,7 +659,7 @@ pub fn process_catchup(
         }
     };
 
-    if reported_node_pubkey != *node_pubkey {
+    if reported_node_pubkey != node_pubkey {
         return Err(format!(
             "The identity reported by node RPC URL does not match.  Expected: {:?}.  Reported: {:?}",
             node_pubkey, reported_node_pubkey
@@ -622,7 +667,7 @@ pub fn process_catchup(
         .into());
     }
 
-    if rpc_client.get_identity()? == *node_pubkey {
+    if rpc_client.get_identity()? == node_pubkey {
         return Err("Both RPC URLs reference the same node, unable to monitor for catchup.  Try a different --url".into());
     }
 
@@ -653,8 +698,13 @@ pub fn process_catchup(
         };
 
         progress_bar.set_message(&format!(
-            "{} slots behind (us:{} them:{}){}",
-            slot_distance,
+            "{} slot(s) {} (us:{} them:{}){}",
+            slot_distance.abs(),
+            if slot_distance >= 0 {
+                "behind"
+            } else {
+                "ahead"
+            },
             node_slot,
             rpc_slot,
             if slot_distance == 0 || previous_rpc_slot == std::u64::MAX {
@@ -670,8 +720,11 @@ pub fn process_catchup(
                     slots_per_second,
                     time_remaining
                 )
-            }
+            },
         ));
+        if log {
+            println!();
+        }
 
         sleep(Duration::from_secs(sleep_interval as u64));
         previous_rpc_slot = rpc_slot;
