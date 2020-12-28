@@ -12,6 +12,8 @@ static const uint8_t TEST_EMPTY_ACCOUNTS_SLICE = 5;
 static const uint8_t TEST_CAP_SEEDS = 6;
 static const uint8_t TEST_CAP_SIGNERS = 7;
 static const uint8_t TEST_ALLOC_ACCESS_VIOLATION = 8;
+static const uint8_t TEST_INSTRUCTION_DATA_TOO_LARGE = 9;
+static const uint8_t TEST_INSTRUCTION_META_TOO_LARGE = 10;
 
 static const int MINT_INDEX = 0;
 static const int ARGUMENT_INDEX = 1;
@@ -403,6 +405,36 @@ extern uint64_t entrypoint(const uint8_t *input) {
                sol_invoke_signed(&instruction,
                                  (const SolAccountInfo *)invoke_accounts, 3,
                                  signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
+    break;
+  }
+  case TEST_INSTRUCTION_DATA_TOO_LARGE: {
+    sol_log("Test instruction data too large");
+    SolAccountMeta arguments[] = {};
+    uint8_t *data = sol_calloc(1500, 1);
+    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                        arguments, SOL_ARRAY_SIZE(arguments),
+                                        data, 1500};
+    const SolSignerSeeds signers_seeds[] = {};
+    sol_assert(SUCCESS == sol_invoke_signed(
+                              &instruction, accounts, SOL_ARRAY_SIZE(accounts),
+                              signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
+
+    break;
+  }
+  case TEST_INSTRUCTION_META_TOO_LARGE: {
+    sol_log("Test instruction meta too large");
+    SolAccountMeta *arguments = sol_calloc(40, sizeof(SolAccountMeta));
+    sol_log_64(0, 0, 0, 0, (uint64_t)arguments);
+    sol_assert(0 != arguments);
+    uint8_t data[] = {};
+    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                        arguments, 40, data,
+                                        SOL_ARRAY_SIZE(data)};
+    const SolSignerSeeds signers_seeds[] = {};
+    sol_assert(SUCCESS == sol_invoke_signed(
+                              &instruction, accounts, SOL_ARRAY_SIZE(accounts),
+                              signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
+
     break;
   }
   default:

@@ -24,6 +24,8 @@ const TEST_EMPTY_ACCOUNTS_SLICE: u8 = 5;
 const TEST_CAP_SEEDS: u8 = 6;
 const TEST_CAP_SIGNERS: u8 = 7;
 const TEST_ALLOC_ACCESS_VIOLATION: u8 = 8;
+const TEST_INSTRUCTION_DATA_TOO_LARGE: u8 = 9;
+const TEST_INSTRUCTION_META_TOO_LARGE: u8 = 10;
 
 // const MINT_INDEX: usize = 0;
 const ARGUMENT_INDEX: usize = 1;
@@ -496,6 +498,21 @@ fn process_instruction(
                 &[system_info.clone(), from_info.clone(), derived_info.clone()],
                 &[&[b"You pass butter", &[bump_seed1]]],
             )?;
+        }
+        TEST_INSTRUCTION_DATA_TOO_LARGE => {
+            msg!("Test instruction data too large");
+            let instruction =
+                create_instruction(*accounts[INVOKED_PROGRAM_INDEX].key, &[], vec![0; 1500]);
+            invoke_signed(&instruction, &[], &[])?;
+        }
+        TEST_INSTRUCTION_META_TOO_LARGE => {
+            msg!("Test instruction metas too large");
+            let instruction = create_instruction(
+                *accounts[INVOKED_PROGRAM_INDEX].key,
+                &[(&Pubkey::default(), false, false); 40],
+                vec![],
+            );
+            invoke_signed(&instruction, &[], &[])?;
         }
         _ => panic!(),
     }
