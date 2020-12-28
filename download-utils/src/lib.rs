@@ -35,7 +35,7 @@ pub fn download_file(
 
     fs::create_dir_all(destination_file.parent().unwrap()).map_err(|err| err.to_string())?;
 
-    let temp_destination_file = destination_file.with_extension(".tmp");
+    let temp_destination_file = destination_file.with_extension("tmp");
 
     let progress_bar = new_spinner_progress_bar();
     if use_progress_bar {
