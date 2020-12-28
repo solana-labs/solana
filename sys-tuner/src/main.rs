@@ -94,6 +94,16 @@ fn tune_kernel_udp_buffers_and_vmmap() {
 
     // increase mmap counts for many append_vecs
     sysctl_write("vm.max_map_count", "500000");
+
+    // Delay writes (and thereby reduce them by being overlapping and discarded)
+    // actually hitting the hardware as much as possible.
+    // This is mainly for AccountsDB and snapshot creation IO.
+    // Moreover, we don't generally care about durability not much.
+    // Reference: https://unix.stackexchange.com/a/41831/364236
+    sysctl_write("vm.dirty_ratio", "90");
+    sysctl_write("vm.dirty_background_ratio", "90");
+    sysctl_write("vm.dirty_expire_centisecs", "36000");
+    sysctl_write("vm.dirty_writeback_centisecs", "36000");
 }
 
 #[cfg(unix)]
