@@ -115,16 +115,10 @@ pub struct AppendVec {
 
 impl Drop for AppendVec {
     fn drop(&mut self) {
-<<<<<<< HEAD
-        let _ignored = remove_file(&self.path);
-=======
-        if self.remove_on_drop {
-            if let Err(e) = remove_file(&self.path) {
-                // promote this to panic soon.
-                error!("AppendVec failed to remove {:?}: {:?}", &self.path, e);
-            }
+        if let Err(e) = remove_file(&self.path) {
+            // promote this to panic soon.
+            error!("AppendVec failed to remove {:?}: {:?}", &self.path, e);
         }
->>>>>>> addffd769... Log error from AppendVec removal & a panic clean (#14302)
     }
 }
 
