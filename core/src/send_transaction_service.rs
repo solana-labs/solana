@@ -151,7 +151,15 @@ impl SendTransactionService {
                         let addresses = leader_info
                             .as_ref()
                             .map(|leader_info| leader_info.get_leader_tpus(leader_forward_count));
-                        let addresses = addresses.unwrap_or_else(|| vec![&tpu_address]);
+                        let addresses = addresses
+                            .map(|address_list| {
+                                if address_list.is_empty() {
+                                    vec![&tpu_address]
+                                } else {
+                                    address_list
+                                }
+                            })
+                            .unwrap_or_else(|| vec![&tpu_address]);
                         for address in addresses {
                             Self::send_transaction(
                                 &send_socket,
