@@ -115,7 +115,10 @@ pub struct AppendVec {
 
 impl Drop for AppendVec {
     fn drop(&mut self) {
-        let _ignored = remove_file(&self.path);
+        if let Err(e) = remove_file(&self.path) {
+            // promote this to panic soon.
+            error!("AppendVec failed to remove {:?}: {:?}", &self.path, e);
+        }
     }
 }
 
@@ -135,19 +138,11 @@ impl AppendVec {
             .create(create)
             .open(file)
             .map_err(|e| {
-                let mut msg = format!("in current dir {:?}\n", std::env::current_dir());
-                for ancestor in file.ancestors() {
-                    msg.push_str(&format!(
-                        "{:?} is {:?}\n",
-                        ancestor,
-                        std::fs::metadata(ancestor)
-                    ));
-                }
                 panic!(
-                    "{}Unable to {} data file {}, err {:?}",
-                    msg,
+                    "Unable to {} data file {} in current dir({:?}): {:?}",
                     if create { "create" } else { "open" },
                     file.display(),
+                    std::env::current_dir(),
                     e
                 );
             })
