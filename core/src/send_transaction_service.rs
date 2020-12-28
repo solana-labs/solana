@@ -240,7 +240,8 @@ impl SendTransactionService {
                     inc_new_counter_info!("send_transaction_service-expired", 1);
                     return false;
                 }
-            } else if transaction_info.last_valid_slot < root_bank.slot() {
+            }
+            if transaction_info.last_valid_slot < root_bank.slot() {
                 info!("Dropping expired transaction: {}", signature);
                 result.expired += 1;
                 inc_new_counter_info!("send_transaction_service-expired", 1);
@@ -525,6 +526,8 @@ mod test {
             .transfer(2, &mint_keypair, &mint_keypair.pubkey())
             .unwrap();
 
+        let last_valid_slot = working_bank.slot() + 300;
+
         let failed_signature = {
             let blockhash = working_bank.last_blockhash();
             let transaction =
@@ -542,7 +545,7 @@ mod test {
             TransactionInfo::new(
                 rooted_signature,
                 vec![],
-                0,
+                last_valid_slot,
                 Some((nonce_address, durable_nonce)),
             ),
         );
@@ -568,7 +571,7 @@ mod test {
             TransactionInfo::new(
                 rooted_signature,
                 vec![],
-                0,
+                last_valid_slot,
                 Some((nonce_address, Hash::new_unique())),
             ),
         );
@@ -589,15 +592,41 @@ mod test {
             }
         );
 
-        // Expired durable-nonce transactions are dropped; nonce has advanced
+        // Expired durable-nonce transactions are dropped; nonce has advanced...
         info!("Expired durable-nonce transactions are dropped...");
         transactions.insert(
             Signature::default(),
             TransactionInfo::new(
                 Signature::default(),
                 vec![],
-                0,
+                last_valid_slot,
                 Some((nonce_address, Hash::new_unique())),
+            ),
+        );
+        let result = SendTransactionService::process_transactions(
+            &working_bank,
+            &root_bank,
+            &send_socket,
+            &tpu_address,
+            &mut transactions,
+            &None,
+        );
+        assert!(transactions.is_empty());
+        assert_eq!(
+            result,
+            ProcessTransactionsResult {
+                expired: 1,
+                ..ProcessTransactionsResult::default()
+            }
+        );
+        // ... or last_valid_slot timeout has passed
+        transactions.insert(
+            Signature::default(),
+            TransactionInfo::new(
+                Signature::default(),
+                vec![],
+                root_bank.slot() - 1,
+                Some((nonce_address, durable_nonce)),
             ),
         );
         let result = SendTransactionService::process_transactions(
@@ -623,7 +652,7 @@ mod test {
             TransactionInfo::new(
                 failed_signature,
                 vec![],
-                0,
+                last_valid_slot,
                 Some((nonce_address, Hash::new_unique())), // runtime should advance nonce on failed transactions
             ),
         );
@@ -650,7 +679,7 @@ mod test {
             TransactionInfo::new(
                 non_rooted_signature,
                 vec![],
-                0,
+                last_valid_slot,
                 Some((nonce_address, Hash::new_unique())), // runtime advances nonce when transaction lands
             ),
         );
@@ -672,13 +701,13 @@ mod test {
         );
         transactions.clear();
 
-        info!("Unknown durable-nonce transactions are retried until nonce advances..."); // even though last_valid_slot == 0
+        info!("Unknown durable-nonce transactions are retried until nonce advances...");
         transactions.insert(
             Signature::default(),
             TransactionInfo::new(
                 Signature::default(),
                 vec![],
-                0,
+                last_valid_slot,
                 Some((nonce_address, durable_nonce)),
             ),
         );
