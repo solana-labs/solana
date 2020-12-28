@@ -213,6 +213,9 @@ impl SendTransactionService {
         let mut result = ProcessTransactionsResult::default();
 
         transactions.retain(|signature, transaction_info| {
+            if transaction_info.durable_nonce_info.is_some() {
+                inc_new_counter_info!("send_transaction_service-nonced", 1);
+            }
             if root_bank.has_signature(signature) {
                 info!("Transaction is rooted: {}", signature);
                 result.rooted += 1;
