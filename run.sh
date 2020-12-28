@@ -105,7 +105,8 @@ args=(
   --init-complete-file "$dataDir"/init-completed
   --require-tower
 )
-solana-validator "${args[@]}" &
+# shellcheck disable=SC2086
+solana-validator "${args[@]}" $SOLANA_RUN_SH_VALIDATOR_ARGS &
 validator=$!
 
 wait "$validator"
