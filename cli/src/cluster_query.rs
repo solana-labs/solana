@@ -132,7 +132,17 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                     .help("Slot number of the block to query")
             )
         )
-        .subcommand(SubCommand::with_name("leader-schedule").about("Display leader schedule"))
+        .subcommand(SubCommand::with_name("leader-schedule")
+            .about("Display leader schedule")
+            .arg(
+                Arg::with_name("epoch")
+                    .long("epoch")
+                    .takes_value(true)
+                    .value_name("EPOCH")
+                    .validator(is_epoch)
+                    .help("Epoch to show leader schedule for. (default: current)")
+            )
+        )
         .subcommand(
             SubCommand::with_name("epoch-info")
             .about("Get information about the current epoch")
@@ -713,9 +723,23 @@ pub fn process_first_available_block(rpc_client: &RpcClient) -> ProcessResult {
     Ok(format!("{}", first_available_block))
 }
 
-pub fn process_leader_schedule(rpc_client: &RpcClient) -> ProcessResult {
+pub fn parse_leader_schedule(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
+    let epoch = value_of(matches, "epoch");
+    Ok(CliCommandInfo {
+        command: CliCommand::LeaderSchedule { epoch },
+        signers: vec![],
+    })
+}
+
+pub fn process_leader_schedule(rpc_client: &RpcClient, epoch: Option<Epoch>) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info()?;
-    let first_slot_in_epoch = epoch_info.absolute_slot - epoch_info.slot_index;
+    let epoch = epoch.unwrap_or(epoch_info.epoch);
+    if epoch > epoch_info.epoch {
+        return Err(format!("Epoch {} is in the future", epoch).into());
+    }
+
+    let epoch_schedule = rpc_client.get_epoch_schedule()?;
+    let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
 
     let leader_schedule = rpc_client.get_leader_schedule(Some(first_slot_in_epoch))?;
     if leader_schedule.is_none() {
