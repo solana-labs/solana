@@ -82,6 +82,7 @@ pub fn download_file(
         response: R,
         last_print: Instant,
         current_bytes: usize,
+        last_print_bytes: usize,
         download_size: f32,
         use_progress_bar: bool,
     }
@@ -94,14 +95,16 @@ pub fn download_file(
                 } else {
                     self.current_bytes += n;
                     if self.last_print.elapsed().as_secs() > 5 {
-                        let bytes_f32 = self.current_bytes as f32;
+                        let total_bytes_f32 = self.current_bytes as f32;
+                        let diff_bytes_f32 = (self.current_bytes - self.last_print_bytes) as f32;
                         info!(
                             "downloaded {} bytes {:.1}% {:.1} bytes/s",
                             self.current_bytes,
-                            100f32 * (bytes_f32 / self.download_size),
-                            bytes_f32 / self.last_print.elapsed().as_secs_f32(),
+                            100f32 * (total_bytes_f32 / self.download_size),
+                            diff_bytes_f32 / self.last_print.elapsed().as_secs_f32(),
                         );
                         self.last_print = Instant::now();
+                        self.last_print_bytes = self.current_bytes;
                     }
                 }
                 n
@@ -114,6 +117,7 @@ pub fn download_file(
         response,
         last_print: Instant::now(),
         current_bytes: 0,
+        last_print_bytes: 0,
         download_size: (download_size as f32).max(1f32),
         use_progress_bar,
     };
