@@ -1880,7 +1880,17 @@ fn _send_transaction(
         return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
     }
     let signature = transaction.signatures[0];
-    let transaction_info = TransactionInfo::new(signature, wire_transaction, last_valid_slot);
+    let durable_nonce_info = solana_sdk::transaction::uses_durable_nonce(&transaction)
+        .and_then(|nonce_ix| {
+            solana_sdk::transaction::get_nonce_pubkey_from_instruction(&nonce_ix, &transaction)
+        })
+        .map(|&pubkey| (pubkey, transaction.message.recent_blockhash));
+    let transaction_info = TransactionInfo::new(
+        signature,
+        wire_transaction,
+        last_valid_slot,
+        durable_nonce_info,
+    );
     meta.transaction_sender
         .lock()
         .unwrap()
