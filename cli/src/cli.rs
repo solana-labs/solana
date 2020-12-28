@@ -105,7 +105,9 @@ pub enum CliCommand {
     LargestAccounts {
         filter: Option<RpcLargestAccountsFilter>,
     },
-    LeaderSchedule,
+    LeaderSchedule {
+        epoch: Option<Epoch>,
+    },
     LiveSlots,
     Logs {
         filter: RpcTransactionLogsFilter,
@@ -571,10 +573,7 @@ pub fn parse_command(
         ("supply", Some(matches)) => parse_supply(matches),
         ("total-supply", Some(matches)) => parse_total_supply(matches),
         ("transaction-count", Some(matches)) => parse_get_transaction_count(matches),
-        ("leader-schedule", Some(_matches)) => Ok(CliCommandInfo {
-            command: CliCommand::LeaderSchedule,
-            signers: vec![],
-        }),
+        ("leader-schedule", Some(matches)) => parse_leader_schedule(matches),
         ("ping", Some(matches)) => parse_cluster_ping(matches, default_signer, wallet_manager),
         ("live-slots", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::LiveSlots,
@@ -1166,7 +1165,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::Inflation(inflation_subcommand) => {
             process_inflation_subcommand(&rpc_client, config, inflation_subcommand)
         }
-        CliCommand::LeaderSchedule => process_leader_schedule(&rpc_client),
+        CliCommand::LeaderSchedule { epoch } => process_leader_schedule(&rpc_client, *epoch),
         CliCommand::LiveSlots => process_live_slots(&config),
         CliCommand::Logs { filter } => process_logs(&config, filter),
         CliCommand::Ping {
