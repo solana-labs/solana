@@ -1,7 +1,7 @@
 use crate::keypair::{parse_keypair_path, KeypairUrl, ASK_KEYWORD};
 use chrono::DateTime;
 use solana_sdk::{
-    clock::Slot,
+    clock::{Epoch, Slot},
     hash::Hash,
     pubkey::Pubkey,
     signature::{read_keypair_file, Signature},
@@ -146,6 +146,13 @@ where
         }
         Err(err) => Err(format!("{}", err)),
     }
+}
+
+pub fn is_epoch<T>(epoch: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    is_parsable_generic::<Epoch, _>(epoch)
 }
 
 pub fn is_slot<T>(slot: T) -> Result<(), String>
