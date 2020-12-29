@@ -22,6 +22,7 @@ pub mod log_collector;
 pub mod message_processor;
 mod native_loader;
 pub mod rent_collector;
+pub mod secondary_index;
 pub mod serde_snapshot;
 pub mod snapshot_package;
 pub mod snapshot_utils;

@@ -1,25 +1,26 @@
-use crate::inline_spl_token_v2_0::{
-    self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET,
+use crate::{
+    inline_spl_token_v2_0::{self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
+    secondary_index::*,
 };
-use dashmap::{mapref::entry::Entry::Occupied, DashMap};
-use log::*;
 use ouroboros::self_referencing;
 use solana_sdk::{
     clock::Slot,
     pubkey::{Pubkey, PUBKEY_BYTES},
 };
-use std::ops::{
-    Bound,
-    Bound::{Excluded, Included, Unbounded},
-};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::{
     collections::{
         btree_map::{self, BTreeMap},
         HashMap, HashSet,
     },
-    ops::{Range, RangeBounds},
-    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    ops::{
+        Bound,
+        Bound::{Excluded, Included, Unbounded},
+        Range, RangeBounds,
+    },
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, RwLock, RwLockReadGuard, RwLockWriteGuard,
+    },
 };
 
 pub const ITER_BATCH_SIZE: usize = 1000;
@@ -32,8 +33,6 @@ pub type RefCount = u64;
 pub type AccountMap<K, V> = BTreeMap<K, V>;
 
 type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
-type SecondaryIndexEntry = DashMap<Pubkey, RwLock<HashSet<Slot>>>;
-type SecondaryReverseIndexEntry = RwLock<HashMap<Slot, Pubkey>>;
 
 enum ScanTypes<R: RangeBounds<Pubkey>> {
     Unindexed(Option<R>),
@@ -212,207 +211,11 @@ impl<'a, T: 'static + Clone> Iterator for AccountsIndexIterator<'a, T> {
 }
 
 #[derive(Debug, Default)]
-struct SecondaryIndex {
-    // Map from index keys to index values
-    index: DashMap<Pubkey, SecondaryIndexEntry>,
-    // Map from index values back to index keys, used for cleanup.
-    // Alternative is to store Option<Pubkey> in each AccountInfo in the
-    // AccountsIndex if something is an SPL account with a mint, but then
-    // every AccountInfo would have to allocate `Option<Pubkey>`
-    reverse_index: DashMap<Pubkey, SecondaryReverseIndexEntry>,
-}
-
-impl SecondaryIndex {
-    fn insert(&self, key: &Pubkey, inner_key: &Pubkey, slot: Slot) {
-        {
-            let pubkeys_map = self
-                .index
-                .get(key)
-                .unwrap_or_else(|| self.index.entry(*key).or_insert(DashMap::new()).downgrade());
-
-            let slot_set = pubkeys_map.get(inner_key).unwrap_or_else(|| {
-                pubkeys_map
-                    .entry(*inner_key)
-                    .or_insert(RwLock::new(HashSet::new()))
-                    .downgrade()
-            });
-            let contains_key = slot_set.read().unwrap().contains(&slot);
-            if !contains_key {
-                slot_set.write().unwrap().insert(slot);
-            }
-        }
-
-        let prev_key = {
-            let slots_map = self.reverse_index.get(inner_key).unwrap_or_else(|| {
-                self.reverse_index
-                    .entry(*inner_key)
-                    .or_insert(RwLock::new(HashMap::new()))
-                    .downgrade()
-            });
-            let should_insert = {
-                // Most of the time, key should already exist and match
-                // the one in the update
-                if let Some(existing_key) = slots_map.read().unwrap().get(&slot) {
-                    existing_key != key
-                } else {
-                    // If there is no key yet, then insert
-                    true
-                }
-            };
-            if should_insert {
-                slots_map.write().unwrap().insert(slot, *key)
-            } else {
-                None
-            }
-        };
-
-        if let Some(prev_key) = prev_key {
-            // If the inner key was moved to a different primary key, remove
-            // the previous index entry.
-
-            // Check is necessary because anoher thread's writes could feasibly be
-            // interleaved between  `should_insert = { ... slots_map.get(...) ... }` and
-            // `prev_key = { ... slots_map.insert(...) ... }`
-            // Currently this isn't possible due to current AccountsIndex's (pubkey, slot)-per-thread
-            // exclusive-locking, but check is here for future-proofing a more relaxed implementation
-            if prev_key != *key {
-                self.remove_index_entries(&prev_key, inner_key, &[slot]);
-            }
-        }
-    }
-
-    fn remove_index_entries(&self, key: &Pubkey, inner_key: &Pubkey, slots: &[Slot]) {
-        let is_key_empty = if let Some(inner_key_map) = self.index.get(&key) {
-            // Delete the slot from the slot set
-            let is_inner_key_empty = if let Some(slot_set) = inner_key_map.get(&inner_key) {
-                let mut w_slot_set = slot_set.write().unwrap();
-                for slot in slots.iter() {
-                    let is_present = w_slot_set.remove(slot);
-                    if !is_present {
-                        warn!("Reverse index is missing previous entry for key {}, inner_key: {}, slot: {}",
-                        key, inner_key, slot);
-                    }
-                }
-                w_slot_set.is_empty()
-            } else {
-                false
-            };
-
-            // Check if `key` is empty
-            let is_key_empty = if is_inner_key_empty {
-                if let Occupied(inner_key_entry) = inner_key_map.entry(*inner_key) {
-                    // Delete the `inner_key` if the slot set is empty
-                    let slot_set = inner_key_entry.get();
-
-                    // Write lock on `inner_key_entry` above through the `entry`
-                    // means nobody else has access to this lock at this time,
-                    // so this check for empty -> remove() is atomic
-                    if slot_set.read().unwrap().is_empty() {
-                        inner_key_entry.remove();
-                    }
-                }
-                inner_key_map.is_empty()
-            } else {
-                false
-            };
-            is_key_empty
-        } else {
-            false
-        };
-
-        // Delete the `key` if the set of inner keys is empty
-        if is_key_empty {
-            if let Occupied(key_entry) = self.index.entry(*key) {
-                // Other threads may have interleaved writes to this `key`,
-                // so double-check again for its emptiness
-                if key_entry.get().is_empty() {
-                    key_entry.remove();
-                }
-            }
-        }
-    }
-
-    // Specifying `slots_to_remove` == Some will only remove keys for those specific slots
-    // found for the `inner_key` in the reverse index. Otherwise, passing `None`
-    // will  remove all keys that are found for the `inner_key` in the reverse index.
-
-    // Note passing `None` is dangerous unless you're sure there's no other competing threads
-    // writing updates to the index for this Pubkey at the same time!
-    fn remove_by_inner_key(&self, inner_key: &Pubkey, slots_to_remove: Option<&HashSet<Slot>>) {
-        // Save off which keys in `self.index` had slots removed so we can remove them
-        // after we purge the reverse index
-        let mut key_to_removed_slots: HashMap<Pubkey, Vec<Slot>> = HashMap::new();
-
-        // Check if the entry for `inner_key` in the reverse index is empty
-        // and can be removed
-        let needs_remove = {
-            if let Some(slots_to_remove) = slots_to_remove {
-                self.reverse_index
-                    .get(inner_key)
-                    .map(|slots_map| {
-                        // Ideally we use a concurrent map here as well to prevent clean
-                        // from blocking writes, but memory usage of DashMap is high
-                        let mut w_slots_map = slots_map.value().write().unwrap();
-                        for slot in slots_to_remove.iter() {
-                            if let Some(removed_key) = w_slots_map.remove(slot) {
-                                key_to_removed_slots
-                                    .entry(removed_key)
-                                    .or_default()
-                                    .push(*slot);
-                            }
-                        }
-                        w_slots_map.is_empty()
-                    })
-                    .unwrap_or(false)
-            } else {
-                if let Some((_, removed_slot_map)) = self.reverse_index.remove(inner_key) {
-                    for (slot, removed_key) in removed_slot_map.into_inner().unwrap().into_iter() {
-                        key_to_removed_slots
-                            .entry(removed_key)
-                            .or_default()
-                            .push(slot);
-                    }
-                }
-                // We just removed the key, no need to remove it again
-                false
-            }
-        };
-
-        if needs_remove {
-            // Other threads may have interleaved writes to this `inner_key`, between
-            // releasing the `self.reverse_index.get(inner_key)` lock and now,
-            // so double-check again for emptiness
-            if let Occupied(slot_map) = self.reverse_index.entry(*inner_key) {
-                if slot_map.get().read().unwrap().is_empty() {
-                    slot_map.remove();
-                }
-            }
-        }
-
-        // Remove this value from those keys
-        for (key, slots) in key_to_removed_slots {
-            self.remove_index_entries(&key, inner_key, &slots);
-        }
-    }
-
-    fn get(&self, key: &Pubkey) -> Vec<Pubkey> {
-        if let Some(inner_keys_map) = self.index.get(key) {
-            inner_keys_map
-                .iter()
-                .map(|entry_ref| *entry_ref.key())
-                .collect()
-        } else {
-            vec![]
-        }
-    }
-}
-
-#[derive(Debug, Default)]
 pub struct AccountsIndex<T> {
     pub account_maps: RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
-    program_id_index: SecondaryIndex,
-    spl_token_mint_index: SecondaryIndex,
-    spl_token_owner_index: SecondaryIndex,
+    program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
+    spl_token_mint_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
+    spl_token_owner_index: SecondaryIndex<RwLockSecondaryIndexEntry>,
     roots_tracker: RwLock<RootsTracker>,
     ongoing_scan_roots: RwLock<BTreeMap<Slot, u64>>,
 }
@@ -643,11 +446,14 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         }
     }
 
-    fn do_scan_secondary_index<F>(
+    fn do_scan_secondary_index<
+        F,
+        SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send,
+    >(
         &self,
         ancestors: &Ancestors,
         mut func: F,
-        index: &SecondaryIndex,
+        index: &SecondaryIndex<SecondaryIndexEntryType>,
         index_key: &Pubkey,
         max_root: Option<Slot>,
     ) where
@@ -1162,10 +968,45 @@ pub mod tests {
     use super::*;
     use solana_sdk::signature::{Keypair, Signer};
 
+    pub enum SecondaryIndexTypes<'a> {
+        RwLock(&'a SecondaryIndex<RwLockSecondaryIndexEntry>),
+        DashMap(&'a SecondaryIndex<DashMapSecondaryIndexEntry>),
+    }
+
     pub fn spl_token_mint_index_enabled() -> HashSet<AccountIndex> {
         let mut account_indexes = HashSet::new();
         account_indexes.insert(AccountIndex::SplTokenMint);
         account_indexes
+    }
+
+    pub fn spl_token_owner_index_enabled() -> HashSet<AccountIndex> {
+        let mut account_indexes = HashSet::new();
+        account_indexes.insert(AccountIndex::SplTokenOwner);
+        account_indexes
+    }
+
+    fn create_dashmap_secondary_index_state() -> (usize, usize, HashSet<AccountIndex>) {
+        {
+            // Check that we're actually testing the correct variant
+            let index = AccountsIndex::<bool>::default();
+            let _type_check = SecondaryIndexTypes::DashMap(&index.spl_token_mint_index);
+        }
+
+        (0, PUBKEY_BYTES, spl_token_mint_index_enabled())
+    }
+
+    fn create_rwlock_secondary_index_state() -> (usize, usize, HashSet<AccountIndex>) {
+        {
+            // Check that we're actually testing the correct variant
+            let index = AccountsIndex::<bool>::default();
+            let _type_check = SecondaryIndexTypes::RwLock(&index.spl_token_owner_index);
+        }
+
+        (
+            SPL_TOKEN_ACCOUNT_OWNER_OFFSET,
+            SPL_TOKEN_ACCOUNT_OWNER_OFFSET + PUBKEY_BYTES,
+            spl_token_owner_index_enabled(),
+        )
     }
 
     #[test]
@@ -1777,18 +1618,22 @@ pub mod tests {
         );
     }
 
-    #[test]
-    fn test_purge_exact_secondary_index() {
+    fn run_test_purge_exact_secondary_index<
+        SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send,
+    >(
+        index: &AccountsIndex<bool>,
+        secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
+        key_start: usize,
+        key_end: usize,
+        account_index: &HashSet<AccountIndex>,
+    ) {
         // No roots, should be no reclaims
-        let index = AccountsIndex::<bool>::default();
         let slots = vec![1, 2, 5, 9];
+        let index_key = Pubkey::new_unique();
         let account_key = Pubkey::new_unique();
 
-        // Create necessary secondary index state
-        let mint_key = Pubkey::new_unique();
-        let mut correct_account_data =
-            vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
-        correct_account_data[..PUBKEY_BYTES].clone_from_slice(&(mint_key.clone().to_bytes()));
+        let mut account_data = vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
+        account_data[key_start..key_end].clone_from_slice(&(index_key.clone().to_bytes()));
 
         // Insert slots into secondary index
         for slot in &slots {
@@ -1797,28 +1642,20 @@ pub mod tests {
                 &account_key,
                 // Make sure these accounts are added to secondary index
                 &inline_spl_token_v2_0::id(),
-                &correct_account_data,
-                &spl_token_mint_index_enabled(),
+                &account_data,
+                account_index,
                 true,
                 &mut vec![],
             );
         }
 
-        // Only one mint exists
+        // Only one top level index entry exists
+        assert_eq!(secondary_index.index.get(&index_key).unwrap().len(), 1);
+
+        // In the reverse index, one account maps across multiple slots
+        // to the same top level key
         assert_eq!(
-            index
-                .spl_token_mint_index
-                .index
-                .get(&mint_key)
-                .unwrap()
-                .len(),
-            1
-        );
-        // One account maps to many different mints
-        // across many slots
-        assert_eq!(
-            index
-                .spl_token_mint_index
+            secondary_index
                 .reverse_index
                 .get(&account_key)
                 .unwrap()
@@ -1829,14 +1666,36 @@ pub mod tests {
             slots.len()
         );
 
-        index.purge_exact(
-            &account_key,
-            slots.into_iter().collect(),
-            &spl_token_mint_index_enabled(),
-        );
+        index.purge_exact(&account_key, slots.into_iter().collect(), account_index);
 
-        assert!(index.spl_token_mint_index.index.is_empty());
-        assert!(index.spl_token_mint_index.reverse_index.is_empty());
+        assert!(secondary_index.index.is_empty());
+        assert!(secondary_index.reverse_index.is_empty());
+    }
+
+    #[test]
+    fn test_purge_exact_dashmap_secondary_index() {
+        let (key_start, key_end, account_index) = create_dashmap_secondary_index_state();
+        let index = AccountsIndex::<bool>::default();
+        run_test_purge_exact_secondary_index(
+            &index,
+            &index.spl_token_mint_index,
+            key_start,
+            key_end,
+            &account_index,
+        );
+    }
+
+    #[test]
+    fn test_purge_exact_rwlock_secondary_index() {
+        let (key_start, key_end, account_index) = create_rwlock_secondary_index_state();
+        let index = AccountsIndex::<bool>::default();
+        run_test_purge_exact_secondary_index(
+            &index,
+            &index.spl_token_owner_index,
+            key_start,
+            key_end,
+            &account_index,
+        );
     }
 
     #[test]
@@ -1955,43 +1814,54 @@ pub mod tests {
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
     }
 
-    fn check_secondary_index_unique(
-        secondary_index: &SecondaryIndex,
+    fn check_secondary_index_unique<SecondaryIndexEntryType>(
+        secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
         slot: Slot,
         key: &Pubkey,
         account_key: &Pubkey,
-    ) {
+    ) where
+        SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send,
+    {
         // Check secondary index has unique mapping from secondary index key
         // to the account key and slot
         assert_eq!(secondary_index.index.len(), 1);
         let inner_key_map = secondary_index.index.get(key).unwrap();
         assert_eq!(inner_key_map.len(), 1);
-        let slots_map = inner_key_map.value().get(account_key).unwrap();
-        assert_eq!(slots_map.read().unwrap().len(), 1);
-        assert!(slots_map.read().unwrap().contains(&slot));
+        inner_key_map
+            .value()
+            .get(account_key, &|slots_map: Option<&RwLock<HashSet<Slot>>>| {
+                let slots_map = slots_map.unwrap();
+                assert_eq!(slots_map.read().unwrap().len(), 1);
+                assert!(slots_map.read().unwrap().contains(&slot));
+            });
 
         // Check reverse index is unique
         let slots_map = secondary_index.reverse_index.get(account_key).unwrap();
         assert_eq!(slots_map.value().read().unwrap().get(&slot).unwrap(), key);
     }
 
-    #[test]
-    fn test_secondary_indexes() {
-        let index = AccountsIndex::<bool>::default();
+    fn run_test_secondary_indexes<
+        SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send,
+    >(
+        index: &AccountsIndex<bool>,
+        secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
+        key_start: usize,
+        key_end: usize,
+        account_index: &HashSet<AccountIndex>,
+    ) {
         let account_key = Pubkey::new_unique();
-        let mint_key = Pubkey::new_unique();
+        let index_key = Pubkey::new_unique();
         let slot = 1;
-        let mut correct_account_data =
-            vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
-        correct_account_data[..PUBKEY_BYTES].clone_from_slice(&(mint_key.clone().to_bytes()));
+        let mut account_data = vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
+        account_data[key_start..key_end].clone_from_slice(&(index_key.clone().to_bytes()));
 
         // Wrong program id
         index.upsert(
             0,
             &account_key,
             &Pubkey::default(),
-            &correct_account_data,
-            &spl_token_mint_index_enabled(),
+            &account_data,
+            account_index,
             true,
             &mut vec![],
         );
@@ -2003,8 +1873,8 @@ pub mod tests {
             0,
             &account_key,
             &inline_spl_token_v2_0::id(),
-            &correct_account_data[1..],
-            &spl_token_mint_index_enabled(),
+            &account_data[1..],
+            account_index,
             true,
             &mut vec![],
         );
@@ -2017,15 +1887,10 @@ pub mod tests {
                 &account_key,
                 slot,
                 &inline_spl_token_v2_0::id(),
-                &correct_account_data,
-                &spl_token_mint_index_enabled(),
+                &account_data,
+                account_index,
             );
-            check_secondary_index_unique(
-                &index.spl_token_mint_index,
-                slot,
-                &mint_key,
-                &account_key,
-            );
+            check_secondary_index_unique(secondary_index, slot, &index_key, &account_key);
         }
 
         index
@@ -2034,22 +1899,56 @@ pub mod tests {
             .slot_list_mut(|slot_list| slot_list.clear());
 
         // Everything should be deleted
-        index.handle_dead_keys(&[account_key], &spl_token_mint_index_enabled());
+        index.handle_dead_keys(&[account_key], account_index);
         assert!(index.spl_token_mint_index.index.is_empty());
         assert!(index.spl_token_mint_index.reverse_index.is_empty());
     }
 
     #[test]
-    fn test_secondary_indexes_same_slot_and_forks() {
+    fn test_dashmap_secondary_index() {
+        let (key_start, key_end, account_index) = create_dashmap_secondary_index_state();
         let index = AccountsIndex::<bool>::default();
+        run_test_secondary_indexes(
+            &index,
+            &index.spl_token_mint_index,
+            key_start,
+            key_end,
+            &account_index,
+        );
+    }
+
+    #[test]
+    fn test_rwlock_secondary_index() {
+        let (key_start, key_end, account_index) = create_rwlock_secondary_index_state();
+        let index = AccountsIndex::<bool>::default();
+        run_test_secondary_indexes(
+            &index,
+            &index.spl_token_owner_index,
+            key_start,
+            key_end,
+            &account_index,
+        );
+    }
+
+    fn run_test_secondary_indexes_same_slot_and_forks<
+        SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send,
+    >(
+        index: &AccountsIndex<bool>,
+        secondary_index: &SecondaryIndex<SecondaryIndexEntryType>,
+        index_key_start: usize,
+        index_key_end: usize,
+        account_index: &HashSet<AccountIndex>,
+    ) {
         let account_key = Pubkey::new_unique();
-        let mint_key1 = Pubkey::new_unique();
-        let mint_key2 = Pubkey::new_unique();
+        let secondary_key1 = Pubkey::new_unique();
+        let secondary_key2 = Pubkey::new_unique();
         let slot = 1;
         let mut account_data1 = vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
-        account_data1[..PUBKEY_BYTES].clone_from_slice(&(mint_key1.clone().to_bytes()));
+        account_data1[index_key_start..index_key_end]
+            .clone_from_slice(&(secondary_key1.clone().to_bytes()));
         let mut account_data2 = vec![0; inline_spl_token_v2_0::state::Account::get_packed_len()];
-        account_data2[..PUBKEY_BYTES].clone_from_slice(&(mint_key2.clone().to_bytes()));
+        account_data2[index_key_start..index_key_end]
+            .clone_from_slice(&(secondary_key2.clone().to_bytes()));
 
         // First write one mint index
         index.upsert(
@@ -2057,7 +1956,7 @@ pub mod tests {
             &account_key,
             &inline_spl_token_v2_0::id(),
             &account_data1,
-            &spl_token_mint_index_enabled(),
+            account_index,
             true,
             &mut vec![],
         );
@@ -2068,20 +1967,17 @@ pub mod tests {
             &account_key,
             &inline_spl_token_v2_0::id(),
             &account_data2,
-            &spl_token_mint_index_enabled(),
+            account_index,
             true,
             &mut vec![],
         );
 
         // Check correctness
-        check_secondary_index_unique(&index.spl_token_mint_index, slot, &mint_key2, &account_key);
-        assert!(index.spl_token_mint_index.get(&mint_key1).is_empty());
-        assert_eq!(
-            index.spl_token_mint_index.get(&mint_key2),
-            vec![account_key]
-        );
+        check_secondary_index_unique(&secondary_index, slot, &secondary_key2, &account_key);
+        assert!(secondary_index.get(&secondary_key1).is_empty());
+        assert_eq!(secondary_index.get(&secondary_key2), vec![account_key]);
 
-        // If another fork reintroduces mint_key1, then it should be readded to the
+        // If another fork reintroduces secondary_key1, then it should be readded to the
         // index
         let fork = slot + 1;
         index.upsert(
@@ -2089,16 +1985,13 @@ pub mod tests {
             &account_key,
             &inline_spl_token_v2_0::id(),
             &account_data1,
-            &spl_token_mint_index_enabled(),
+            account_index,
             true,
             &mut vec![],
         );
-        assert_eq!(
-            index.spl_token_mint_index.get(&mint_key1),
-            vec![account_key]
-        );
+        assert_eq!(secondary_index.get(&secondary_key1), vec![account_key]);
 
-        // If we set a root at fork, and clean, then the mint_key1 should no longer
+        // If we set a root at fork, and clean, then the secondary_key1 should no longer
         // be findable
         index.add_root(fork);
         index
@@ -2110,16 +2003,39 @@ pub mod tests {
                     slot_list,
                     &mut vec![],
                     None,
-                    &spl_token_mint_index_enabled(),
+                    account_index,
                 )
             });
-        assert!(index.spl_token_mint_index.get(&mint_key2).is_empty());
-        assert_eq!(
-            index.spl_token_mint_index.get(&mint_key1),
-            vec![account_key]
-        );
+        assert!(secondary_index.get(&secondary_key2).is_empty());
+        assert_eq!(secondary_index.get(&secondary_key1), vec![account_key]);
 
         // Check correctness
-        check_secondary_index_unique(&index.spl_token_mint_index, fork, &mint_key1, &account_key);
+        check_secondary_index_unique(secondary_index, fork, &secondary_key1, &account_key);
+    }
+
+    #[test]
+    fn test_dashmap_secondary_index_same_slot_and_forks() {
+        let (key_start, key_end, account_index) = create_dashmap_secondary_index_state();
+        let index = AccountsIndex::<bool>::default();
+        run_test_secondary_indexes_same_slot_and_forks(
+            &index,
+            &index.spl_token_mint_index,
+            key_start,
+            key_end,
+            &account_index,
+        );
+    }
+
+    #[test]
+    fn test_rwlock_secondary_index_same_slot_and_forks() {
+        let (key_start, key_end, account_index) = create_rwlock_secondary_index_state();
+        let index = AccountsIndex::<bool>::default();
+        run_test_secondary_indexes_same_slot_and_forks(
+            &index,
+            &index.spl_token_owner_index,
+            key_start,
+            key_end,
+            &account_index,
+        );
     }
 }
