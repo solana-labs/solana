@@ -1814,6 +1814,10 @@ impl AccountsDB {
             self.page_align(size),
         ));
 
+        if store.append_vec_id() == CACHE_VIRTUAL_STORAGE_ID {
+            panic!("We've run out of storage ids!");
+        }
+
         debug!(
             "creating store: {} slot: {} len: {} size: {} from: {} path: {:?}",
             store.append_vec_id(),
@@ -1862,10 +1866,11 @@ impl AccountsDB {
                 .or_insert(Arc::new(RwLock::new(HashMap::new())))
                 .clone());
 
-        slot_storages
+        assert!(slot_storages
             .write()
             .unwrap()
-            .insert(store.append_vec_id(), store);
+            .insert(store.append_vec_id(), store)
+            .is_none());
     }
 
     pub fn purge_slot(&self, slot: Slot) {

@@ -365,6 +365,10 @@ where
         );
     }
 
+    if max_id > AppendVecId::MAX / 2 {
+        panic!("Storage id {} larger than allowed max", max_id);
+    }
+
     accounts_db.next_id.store(max_id + 1, Ordering::Relaxed);
     accounts_db
         .write_version
