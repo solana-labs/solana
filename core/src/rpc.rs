@@ -46,7 +46,7 @@ use solana_runtime::{
 use solana_sdk::{
     account::Account,
     account_utils::StateMut,
-    clock::{Slot, UnixTimestamp},
+    clock::{Slot, UnixTimestamp, MAX_RECENT_BLOCKHASHES},
     commitment_config::{CommitmentConfig, CommitmentLevel},
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
@@ -1875,12 +1875,18 @@ fn _send_transaction(
     transaction: Transaction,
     wire_transaction: Vec<u8>,
     last_valid_slot: Slot,
+    durable_nonce_info: Option<(Pubkey, Hash)>,
 ) -> Result<String> {
     if transaction.signatures.is_empty() {
         return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
     }
     let signature = transaction.signatures[0];
-    let transaction_info = TransactionInfo::new(signature, wire_transaction, last_valid_slot);
+    let transaction_info = TransactionInfo::new(
+        signature,
+        wire_transaction,
+        last_valid_slot,
+        durable_nonce_info,
+    );
     meta.transaction_sender
         .lock()
         .unwrap()
@@ -2309,7 +2315,7 @@ impl RpcSol for RpcSolImpl {
             Error::internal_error()
         })?;
 
-        _send_transaction(meta, transaction, wire_transaction, last_valid_slot)
+        _send_transaction(meta, transaction, wire_transaction, last_valid_slot, None)
     }
 
     fn send_transaction(
@@ -2328,9 +2334,22 @@ impl RpcSol for RpcSolImpl {
             .map(|commitment| CommitmentConfig { commitment });
         let preflight_bank = &*meta.bank(preflight_commitment);
 
-        let last_valid_slot = preflight_bank
+        let mut last_valid_slot = preflight_bank
             .get_blockhash_last_valid_slot(&transaction.message.recent_blockhash)
             .unwrap_or(0);
+
+        let durable_nonce_info = solana_sdk::transaction::uses_durable_nonce(&transaction)
+            .and_then(|nonce_ix| {
+                solana_sdk::transaction::get_nonce_pubkey_from_instruction(&nonce_ix, &transaction)
+            })
+            .map(|&pubkey| (pubkey, transaction.message.recent_blockhash));
+        if durable_nonce_info.is_some() {
+            // While it uses a defined constant, this last_valid_slot value is chosen arbitrarily.
+            // It provides a fallback timeout for durable-nonce transaction retries in case of
+            // malicious packing of the retry queue. Durable-nonce transactions are otherwise
+            // retried until the nonce is advanced.
+            last_valid_slot = preflight_bank.slot() + MAX_RECENT_BLOCKHASHES as u64;
+        }
 
         if !config.skip_preflight {
             if let Err(e) = verify_transaction(&transaction) {
@@ -2352,7 +2371,13 @@ impl RpcSol for RpcSolImpl {
             }
         }
 
-        _send_transaction(meta, transaction, wire_transaction, last_valid_slot)
+        _send_transaction(
+            meta,
+            transaction,
+            wire_transaction,
+            last_valid_slot,
+            durable_nonce_info,
+        )
     }
 
     fn simulate_transaction(
