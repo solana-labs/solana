@@ -72,6 +72,7 @@ fn main() {
             "invoke",
             "invoke_and_error",
             "invoke_and_ok",
+            "invoke_and_return",
             "invoked",
             "iter",
             "many_args",

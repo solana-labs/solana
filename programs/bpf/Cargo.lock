@@ -1985,6 +1985,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-invoke-and-return"
+version = "1.4.20"
+dependencies = [
+ "solana-program",
+]
+
+[[package]]
 name = "solana-bpf-rust-invoked"
 version = "1.4.20"
 dependencies = [
