@@ -62,7 +62,6 @@ use std::{
     collections::HashSet,
     net::SocketAddr,
     path::{Path, PathBuf},
-    process,
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::Receiver,
     sync::{mpsc::channel, Arc, Mutex, RwLock},
@@ -201,6 +200,15 @@ pub struct Validator {
     ip_echo_server: solana_net_utils::IpEchoServer,
 }
 
+// in the distant future, get rid of ::new()/exit() and use Result properly...
+fn abort() -> ! {
+    #[cfg(not(test))]
+    std::process::exit(1);
+
+    #[cfg(test)]
+    panic!("process::exit(1) is intercepted for friendly test failure...");
+}
+
 impl Validator {
     pub fn new(
         mut node: Node,
@@ -242,7 +250,7 @@ impl Validator {
                 "ledger directory does not exist or is not accessible: {:?}",
                 ledger_path
             );
-            process::exit(1);
+            abort();
         }
 
         if let Some(shred_version) = config.expected_shred_version {
@@ -341,7 +349,7 @@ impl Validator {
                     "shred version mismatch: expected {} found: {}",
                     expected_shred_version, node.info.shred_version,
                 );
-                process::exit(1);
+                abort();
             }
         }
 
@@ -508,7 +516,7 @@ impl Validator {
             };
 
         if wait_for_supermajority(config, &bank, &cluster_info, rpc_override_health_check) {
-            std::process::exit(1);
+            abort();
         }
 
         let poh_service = PohService::new(poh_recorder.clone(), &poh_config, &exit);
@@ -776,7 +784,7 @@ fn post_process_restored_tower(
                     "And there is an existing vote_account containing actual votes. \
                      Aborting due to possible conflicting duplicate votes",
                 );
-                process::exit(1);
+                abort();
             }
             if err.is_file_missing() && !voting_has_been_active {
                 // Currently, don't protect against spoofed snapshots with no tower at all
@@ -836,7 +844,7 @@ fn new_banks_from_ledger(
         if genesis_hash != expected_genesis_hash {
             error!("genesis hash mismatch: expected {}", expected_genesis_hash);
             error!("Delete the ledger directory to continue: {:?}", ledger_path);
-            process::exit(1);
+            abort();
         }
     }
 
@@ -853,7 +861,7 @@ fn new_banks_from_ledger(
     if let Ok(tower) = &restored_tower {
         reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap_or_else(|err| {
             error!("Failed to reconcile blockstore with tower: {:?}", err);
-            std::process::exit(1);
+            abort()
         });
     }
 
@@ -887,7 +895,7 @@ fn new_banks_from_ledger(
     )
     .unwrap_or_else(|err| {
         error!("Failed to load ledger: {:?}", err);
-        process::exit(1);
+        abort()
     });
 
     let tower = post_process_restored_tower(
@@ -1109,7 +1117,7 @@ unsafe fn check_avx() {
         error!(
             "Your machine does not have AVX support, please rebuild from source on your machine"
         );
-        process::exit(1);
+        abort();
     }
 }
 
