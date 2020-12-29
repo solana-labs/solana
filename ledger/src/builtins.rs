@@ -2,44 +2,34 @@ use solana_runtime::{
     bank::{Builtin, Builtins},
     builtins::ActivationType,
 };
-use solana_sdk::{feature_set, genesis_config::ClusterType, pubkey::Pubkey};
+use solana_sdk::{feature_set, pubkey::Pubkey};
+
+macro_rules! to_builtin {
+    ($b:expr) => {
+        Builtin::new(&$b.0, $b.1, $b.2)
+    };
+}
 
 /// Builtin programs that are always available
-fn genesis_builtins(cluster_type: ClusterType) -> Vec<Builtin> {
-    let builtins = if cluster_type != ClusterType::MainnetBeta {
-        vec![
-            solana_bpf_loader_deprecated_program!(),
-            solana_bpf_loader_program!(),
-        ]
-    } else {
-        // Remove this `else` block and the `cluster_type` argument to this function once
-        // `feature_set::bpf_loader2_program::id()` is active on Mainnet Beta
-        vec![solana_bpf_loader_deprecated_program!()]
-    };
-
-    builtins
-        .into_iter()
-        .map(|b| Builtin::new(&b.0, b.1, b.2))
-        .collect()
+fn genesis_builtins() -> Vec<Builtin> {
+    vec![
+        to_builtin!(solana_bpf_loader_deprecated_program!()),
+        to_builtin!(solana_bpf_loader_program!()),
+    ]
 }
 
 /// Builtin programs activated dynamically by feature
 fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
-    let builtins = vec![(
-        solana_bpf_loader_program!(),
-        feature_set::bpf_loader2_program::id(),
+    vec![(
+        to_builtin!(solana_bpf_loader_upgradeable_program!()),
+        feature_set::bpf_loader_upgradeable_program::id(),
         ActivationType::NewProgram,
-    )];
-
-    builtins
-        .into_iter()
-        .map(|(b, p, t)| (Builtin::new(&b.0, b.1, b.2), p, t))
-        .collect()
+    )]
 }
 
-pub(crate) fn get(cluster_type: ClusterType) -> Builtins {
+pub(crate) fn get() -> Builtins {
     Builtins {
-        genesis_builtins: genesis_builtins(cluster_type),
+        genesis_builtins: genesis_builtins(),
         feature_builtins: feature_builtins(),
     }
 }

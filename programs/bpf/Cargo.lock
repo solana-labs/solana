@@ -2096,6 +2096,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-upgradeable"
+version = "1.4.20"
+dependencies = [
+ "solana-program",
+]
+
+[[package]]
+name = "solana-bpf-rust-upgraded"
+version = "1.4.20"
+dependencies = [
+ "solana-program",
+]
+
+[[package]]
 name = "solana-config-program"
 version = "1.4.20"
 dependencies = [

@@ -67,6 +67,8 @@ members = [
     "rust/sanity",
     "rust/sha256",
     "rust/sysval",
+    "rust/upgradeable",
+    "rust/upgraded",
 ]
 
 [package.metadata.docs.rs]
