@@ -197,8 +197,15 @@ function launch_testnet() {
   execution_step "Average slot rate: $SLOTS_PER_SECOND slots/second over $((SLOT_COUNT_END_SECONDS - SLOT_COUNT_START_SECONDS)) seconds"
 
   if [[ "$SKIP_PERF_RESULTS" = "false" ]]; then
+    declare -g dropped_vote_hash_count
+
     collect_performance_statistics
     echo "slots_per_second: $SLOTS_PER_SECOND" >>"$RESULT_FILE"
+
+    if [[ $dropped_vote_hash_count -gt 0 ]]; then
+      execution_step "Checking for dropped vote hash count"
+      exit 1
+    fi
   fi
 
   RESULT_DETAILS=$(<"$RESULT_FILE")

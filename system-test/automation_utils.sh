@@ -140,6 +140,18 @@ function collect_performance_statistics {
     --data-urlencode "db=${TESTNET_TAG}" \
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation;$q_max_tower_distance_observed;$q_last_tower_distance_observed" |
     python "${REPO_ROOT}"/system-test/testnet-automation-json-parser.py >>"$RESULT_FILE"
+
+  declare q_dropped_vote_hash_count='
+    SELECT sum("count") as "sum_dropped_vote_hash"
+      FROM "'$TESTNET_TAG'"."autogen"."dropped-vote-hash"
+      WHERE time > now() - '"$TEST_DURATION_SECONDS"'s'
+
+  # store in variable to be returned
+  dropped_vote_hash_count=$( \
+  curl -G "${INFLUX_HOST}/query?u=ro&p=topsecret" \
+    --data-urlencode "db=${TESTNET_TAG}" \
+    --data-urlencode "q=$q_dropped_vote_hash_count" |
+    python "${REPO_ROOT}"/system-test/testnet-automation-json-parser-missing.py)
 }
 
 function upload_results_to_slack() {
