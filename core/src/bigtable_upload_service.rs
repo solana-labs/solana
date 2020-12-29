@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, RwLock},
     thread::{self, Builder, JoinHandle},
 };
-use tokio::runtime;
+use tokio::runtime::Runtime;
 
 // Delay uploading the largest confirmed root for this many slots.  This is done in an attempt to
 // ensure that the `CacheBlockTimeService` has had enough time to add the block time for the root
@@ -21,7 +21,7 @@ pub struct BigTableUploadService {
 
 impl BigTableUploadService {
     pub fn new(
-        runtime_handle: runtime::Handle,
+        runtime: Arc<Runtime>,
         bigtable_ledger_storage: solana_storage_bigtable::LedgerStorage,
         blockstore: Arc<Blockstore>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
@@ -32,7 +32,7 @@ impl BigTableUploadService {
             .name("bigtable-upload".to_string())
             .spawn(move || {
                 Self::run(
-                    runtime_handle,
+                    runtime,
                     bigtable_ledger_storage,
                     blockstore,
                     block_commitment_cache,
@@ -45,7 +45,7 @@ impl BigTableUploadService {
     }
 
     fn run(
-        runtime: runtime::Handle,
+        runtime: Arc<Runtime>,
         bigtable_ledger_storage: solana_storage_bigtable::LedgerStorage,
         blockstore: Arc<Blockstore>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
