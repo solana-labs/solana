@@ -1,8 +1,8 @@
 use solana_sdk::{
     account::Account,
     feature_set::{
-        bpf_compute_budget_balancing, max_invoke_depth_4, max_program_call_depth_64,
-        pubkey_log_syscall_enabled, FeatureSet,
+        bpf_compute_budget_balancing, max_cpi_instruction_size_ipv6_mtu, max_invoke_depth_4,
+        max_program_call_depth_64, pubkey_log_syscall_enabled, FeatureSet,
     },
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
@@ -91,6 +91,8 @@ pub struct BpfComputeBudget {
     pub stack_frame_size: usize,
     /// Number of compute units consumed by logging a `Pubkey`
     pub log_pubkey_units: u64,
+    /// Maximum cross-program invocation instruction size
+    pub max_cpi_instruction_size: usize,
 }
 impl Default for BpfComputeBudget {
     fn default() -> Self {
@@ -113,6 +115,7 @@ impl BpfComputeBudget {
             max_call_depth: 20,
             stack_frame_size: 4_096,
             log_pubkey_units: 0,
+            max_cpi_instruction_size: std::usize::MAX,
         };
 
         if feature_set.is_active(&bpf_compute_budget_balancing::id()) {
@@ -141,6 +144,12 @@ impl BpfComputeBudget {
         if feature_set.is_active(&pubkey_log_syscall_enabled::id()) {
             bpf_compute_budget = BpfComputeBudget {
                 log_pubkey_units: 100,
+                ..bpf_compute_budget
+            };
+        }
+        if feature_set.is_active(&max_cpi_instruction_size_ipv6_mtu::id()) {
+            bpf_compute_budget = BpfComputeBudget {
+                max_cpi_instruction_size: 1280, // IPv6 Min MTU size
                 ..bpf_compute_budget
             };
         }
