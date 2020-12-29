@@ -928,10 +928,9 @@ fn load_frozen_forks(
                 leader_schedule_cache.set_root(&new_root_bank);
                 new_root_bank.squash();
 
-                // Flush all the rooted accounts. Must be called after `squash()`,
-                // so that AccountsDb knows what the roots are.
-                new_root_bank.force_flush_accounts_cache();
                 if last_free.elapsed() > Duration::from_secs(10) {
+                    // Must be called after `squash()`, so that AccountsDb knows what
+                    // the roots are for the cache flushing in exhaustively_free_unused_resource().
                     // This could take few secs; so update last_free later
                     new_root_bank.exhaustively_free_unused_resource();
                     last_free = Instant::now();

@@ -61,6 +61,24 @@ const STORE_META_OVERHEAD: usize = 256;
 const SHRINK_RATIO: f64 = 0.80;
 const MAX_CACHE_SLOTS: usize = 200;
 
+// A specially reserved storage id just for entries in the cache, so that
+// operations that take a storage entry can maintain a common interface
+// when interacting with cached accounts. This id is "virtual" in that it
+// doesn't actually refer to an actual storage entry.
+const CACHE_VIRTUAL_STORAGE_ID: usize = AppendVecId::MAX;
+
+// A specially reserved write version (identifier for ordering writes in an AppendVec)
+// for entries in the cache, so that  operations that take a storage entry can maintain
+// a common interface when interacting with cached accounts. This version is "virtual" in
+// that it doesn't actually map to an entry in an AppendVec.
+const CACHE_VIRTUAL_WRITE_VERSION: u64 = 0;
+
+// A specially reserved offset (represents an offset into an AppendVec)
+// for entries in the cache, so that  operations that take a storage entry can maintain
+// a common interface when interacting with cached accounts. This version is "virtual" in
+// that it doesn't actually map to an entry in an AppendVec.
+const CACHE_VIRTUAL_OFFSET: usize = 0;
+
 lazy_static! {
     // FROZEN_ACCOUNT_PANIC is used to signal local_cluster that an AccountsDB panic has occurred,
     // as |cargo test| cannot observe panics in other threads
@@ -192,7 +210,7 @@ impl<'a> LoadedAccount<'a> {
     pub fn write_version(&self) -> u64 {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.meta.write_version,
-            LoadedAccount::Cached(_) => 0,
+            LoadedAccount::Cached(_) => CACHE_VIRTUAL_WRITE_VERSION,
         }
     }
 
@@ -1495,7 +1513,7 @@ impl AccountsDB {
                         *cached_account.key(),
                         Cow::Borrowed(cached_account.value()),
                     )),
-                    Self::cache_store_virtual_id(),
+                    CACHE_VIRTUAL_STORAGE_ID,
                     &mut retval,
                 );
             }
@@ -1616,7 +1634,7 @@ impl AccountsDB {
         store_id: usize,
         offset: usize,
     ) -> LoadedAccountAccessor<'a> {
-        if store_id == Self::cache_store_virtual_id() {
+        if store_id == CACHE_VIRTUAL_STORAGE_ID {
             LoadedAccountAccessor::Cached((&self.accounts_cache, slot, pubkey))
         } else {
             let account_storage_entry = self.storage.get_account_storage_entry(slot, store_id);
@@ -1986,12 +2004,12 @@ impl AccountsDB {
 
         let mut remove_storages_elapsed = Measure::start("remove_storages_elapsed");
 
-        // Remove the backing storages for the dead slots. The accounts index cleaning (removing
-        // from the slot list, decrementing the account ref count), is handled in
-        // clean_accounts() -> purge_older_root_entries()
         for remove_slot in non_roots {
             if let Some(slot_cache) = self.accounts_cache.remove_slot(*remove_slot) {
-                // If the slot is still in the cache, remove it from the cache
+                // If the slot is still in the cache, remove the backing storages for
+                // the slot. The accounts index cleaning (removing from the slot list,
+                // decrementing the account ref count), is handled in
+                // clean_accounts() -> purge_older_root_entries()
                 self.purge_slot_cache_keys(*remove_slot, slot_cache);
             } else if let Some((_, slot_removed_storages)) = self.storage.0.remove(&remove_slot) {
                 // Because AccountsBackgroundService synchronously flushes from the accounts cache
@@ -2010,9 +2028,9 @@ impl AccountsDB {
                 }
                 all_removed_slot_storages.push(slot_removed_storages.clone());
             }
-            // It's possible that a slot is neither in the cache or storage, if the
-            // bank for that slot was on the wrong fork, and no account store has happened in
-            // that bank yet (only seen ticks).
+            // It should not be possible that a slot is neither in the cache or storage. Even in
+            // a slot with all ticks, `Bank::new_from_parent()` immediately stores some sysvars
+            // on bank creation.
         }
         remove_storages_elapsed.stop();
 
@@ -2288,7 +2306,7 @@ impl AccountsDB {
             .fetch_add(count as u64, Ordering::Relaxed)
     }
 
-    fn write_accounts_to_backing_stores<F: FnMut(Slot, usize) -> Arc<AccountStorageEntry>>(
+    fn write_accounts_to_storage<F: FnMut(Slot, usize) -> Arc<AccountStorageEntry>>(
         &self,
         slot: Slot,
         hashes: &[Hash],
@@ -2403,6 +2421,20 @@ impl AccountsDB {
         // longer relevant. See comment in BankForks::set_root() to see why this is safe
         // to do.
         if let Some(max_root) = max_root {
+            // Note: Replay cannot be happening concurrently with `BankForks::set_root()`
+            // for this to be safe. To see why, imagine we have forks
+            //
+            /*
+                        2 ----- 3 (max_root)----- 5
+                       /
+                     1
+                       \------ 4
+            */
+            // Slot slot 4 may not have been frozen before slot 3 was set as max root,
+            // but after slot 3 was set as max root, slot 4 should no longer be replayed
+            // because it's removed from BankForks after the call to `BankForks::set_root()`
+            // returns. However the cache entry for slot 4 is only safe to remove here if no
+            // concurrent replay is happening with `BankForks::set_root()`.
             let removed_slots = self.accounts_cache.remove_slots_le(max_root);
             for (removed_slot, slot_cache) in removed_slots {
                 // All roots less than `max_root` should have been flushed, so
@@ -2412,10 +2444,7 @@ impl AccountsDB {
                 let reclaims = self.purge_slot_cache_keys(removed_slot, slot_cache);
                 for (reclaimed_slot, reclaimed_account_info) in reclaims {
                     assert_eq!(reclaimed_slot, removed_slot);
-                    assert_eq!(
-                        reclaimed_account_info.store_id,
-                        Self::cache_store_virtual_id()
-                    );
+                    assert_eq!(reclaimed_account_info.store_id, CACHE_VIRTUAL_STORAGE_ID);
                 }
             }
         }
@@ -2465,20 +2494,14 @@ impl AccountsDB {
                     .len(),
                 1
             );
-        };
 
-        self.accounts_cache.remove_slot(slot);
+            // Remove this slot from the cache, which will to AccountsDb readers should look like an
+            // atomic switch from the cache to storage
+            self.accounts_cache.remove_slot(slot);
+        }
     }
 
-    // A specially reserved storage id just for entries in the cache, so that
-    // operations that take a storage entry can maintain a common interface
-    // when interacting with cached accounts. This id is "virtual" in that it
-    // doesn't actually refer to an actual storage entry.
-    fn cache_store_virtual_id() -> usize {
-        AppendVecId::MAX
-    }
-
-    fn cache_accounts(
+    fn write_accounts_to_cache(
         &self,
         slot: Slot,
         hashes: &[Hash],
@@ -2492,8 +2515,8 @@ impl AccountsDB {
                 self.accounts_cache
                     .store(slot, &meta.pubkey, (**account).clone(), *hash);
                 AccountInfo {
-                    store_id: Self::cache_store_virtual_id(),
-                    offset: 0,
+                    store_id: CACHE_VIRTUAL_STORAGE_ID,
+                    offset: CACHE_VIRTUAL_OFFSET,
                     lamports: account.lamports,
                 }
             })
@@ -2533,9 +2556,9 @@ impl AccountsDB {
             .collect();
 
         if use_cache {
-            self.cache_accounts(slot, hashes, &accounts_and_meta_to_store)
+            self.write_accounts_to_cache(slot, hashes, &accounts_and_meta_to_store)
         } else {
-            self.write_accounts_to_backing_stores(
+            self.write_accounts_to_storage(
                 slot,
                 hashes,
                 storage_finder,
@@ -2955,7 +2978,7 @@ impl AccountsDB {
         let mut new_shrink_candidates: ShrinkCandidates = HashMap::new();
         for (slot, account_info) in reclaims {
             // No cached accounts should make it here
-            assert_ne!(account_info.store_id, Self::cache_store_virtual_id());
+            assert_ne!(account_info.store_id, CACHE_VIRTUAL_STORAGE_ID);
             if let Some(ref mut reclaimed_offsets) = reclaimed_offsets {
                 reclaimed_offsets
                     .entry(account_info.store_id)
@@ -3343,7 +3366,7 @@ impl AccountsDB {
         // filter out the cached reclaims as those don't actually map
         // to anything that needs to be cleaned in the backing storage
         // entries
-        reclaims.retain(|(_, r)| r.store_id != Self::cache_store_virtual_id());
+        reclaims.retain(|(_, r)| r.store_id != CACHE_VIRTUAL_STORAGE_ID);
         if use_cache {
             assert!(reclaims.is_empty());
         }

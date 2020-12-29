@@ -681,10 +681,6 @@ impl Accounts {
         self.accounts_db.store_cached(slot, &[(pubkey, account)]);
     }
 
-    pub fn flush_accounts_cache(&self) {
-        self.accounts_db.force_flush_accounts_cache();
-    }
-
     fn is_locked_readonly(&self, key: &Pubkey) -> bool {
         self.readonly_locks
             .read()

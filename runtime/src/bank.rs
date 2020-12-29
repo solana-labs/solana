@@ -2005,6 +2005,12 @@ impl Bank {
     // Should not be called outside of startup, will race with
     // concurrent cleaning logic in AccountsBackgroundService
     pub fn exhaustively_free_unused_resource(&self) {
+        let mut flush = Measure::start("flush");
+        // Flush all the rooted accounts. Must be called after `squash()`,
+        // so that AccountsDb knows what the roots are.
+        self.force_flush_accounts_cache();
+        flush.stop();
+
         let mut clean = Measure::start("clean");
         // Don't clean the slot we're snapshotting because it may have zero-lamport
         // accounts that were included in the bank delta hash when the bank was frozen,
@@ -2019,9 +2025,10 @@ impl Bank {
 
         info!(
             "exhaustively_free_unused_resource()
+            flush: {},
             clean: {},
             shrink: {}",
-            clean, shrink,
+            flush, clean, shrink,
         );
     }
 

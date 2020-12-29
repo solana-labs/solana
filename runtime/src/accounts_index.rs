@@ -865,7 +865,7 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
         w_roots_tracker.roots.insert(slot);
         w_roots_tracker.uncleaned_roots.insert(slot);
-        // AccountsCache `flush_accounts_cache()` relies on roots being added in order
+        // `AccountsDb::flush_accounts_cache()` relies on roots being added in order
         assert!(slot >= w_roots_tracker.max_root);
         w_roots_tracker.max_root = slot;
     }
