@@ -16,7 +16,7 @@ use crate::{
         OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
     },
     poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
-    poh_service::PohService,
+    poh_service::{self, PohService},
     rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
     rpc::JsonRpcConfig,
     rpc_pubsub_service::{PubSubConfig, PubSubService},
@@ -116,6 +116,7 @@ pub struct ValidatorConfig {
     pub send_transaction_retry_ms: u64,
     pub send_transaction_leader_forward_count: u64,
     pub no_poh_speed_test: bool,
+    pub poh_pinned_cpu_core: usize,
 }
 
 impl Default for ValidatorConfig {
@@ -159,6 +160,7 @@ impl Default for ValidatorConfig {
             send_transaction_retry_ms: 2000,
             send_transaction_leader_forward_count: 2,
             no_poh_speed_test: true,
+            poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
         }
     }
 }
@@ -547,6 +549,7 @@ impl Validator {
             &poh_config,
             &exit,
             bank.ticks_per_slot(),
+            config.poh_pinned_cpu_core,
         );
         assert_eq!(
             blockstore.new_shreds_signals.len(),
