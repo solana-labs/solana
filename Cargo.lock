@@ -4144,8 +4144,9 @@ version = "1.6.0"
 dependencies = [
  "bincode",
  "byteorder",
- "bytes 0.4.12",
+ "bytes 0.6.0",
  "clap",
+ "futures 0.3.8",
  "log 0.4.11",
  "serde",
  "serde_derive",
@@ -4155,8 +4156,8 @@ dependencies = [
  "solana-metrics",
  "solana-sdk",
  "solana-version",
- "tokio 0.1.22",
- "tokio-codec",
+ "tokio 0.3.5",
+ "tokio-util 0.5.1",
 ]
 
 [[package]]
@@ -5935,6 +5936,20 @@ dependencies = [
  "futures-sink",
  "log 0.4.11",
  "pin-project-lite 0.1.5",
+ "tokio 0.3.5",
+]
+
+[[package]]
+name = "tokio-util"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3137de2b078e95274b696cc522e87f22c9a753fe3ef3344116ffb94f104f10a3"
+dependencies = [
+ "bytes 0.6.0",
+ "futures-core",
+ "futures-sink",
+ "log 0.4.11",
+ "pin-project-lite 0.2.0",
  "tokio 0.3.5",
 ]
 
