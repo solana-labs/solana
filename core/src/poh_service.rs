@@ -19,12 +19,15 @@ pub struct PohService {
 // See benches/poh.rs for some benchmarks that attempt to justify this magic number.
 pub const NUM_HASHES_PER_BATCH: u64 = 1;
 
+pub const DEFAULT_PINNED_CPU_CORE: usize = 0;
+
 impl PohService {
     pub fn new(
         poh_recorder: Arc<Mutex<PohRecorder>>,
         poh_config: &Arc<PohConfig>,
         poh_exit: &Arc<AtomicBool>,
         ticks_per_slot: u64,
+        pinned_cpu_core: usize,
     ) -> Self {
         let poh_exit_ = poh_exit.clone();
         let poh_config = poh_config.clone();
@@ -47,7 +50,7 @@ impl PohService {
                     // Let's dedicate one of the CPU cores to this thread so that it can gain
                     // from cache performance.
                     if let Some(cores) = core_affinity::get_core_ids() {
-                        core_affinity::set_for_current(cores[0]);
+                        core_affinity::set_for_current(cores[pinned_cpu_core]);
                     }
                     Self::tick_producer(
                         poh_recorder,
@@ -215,7 +218,13 @@ mod tests {
                     .unwrap()
             };
 
-            let poh_service = PohService::new(poh_recorder.clone(), &poh_config, &exit, 0);
+            let poh_service = PohService::new(
+                poh_recorder.clone(),
+                &poh_config,
+                &exit,
+                0,
+                DEFAULT_PINNED_CPU_CORE,
+            );
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
             // get some events
