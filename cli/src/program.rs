@@ -11,7 +11,7 @@ use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use serde_json::{self, json};
-use solana_bpf_loader_program::{bpf_verifier, BPFError, ThisInstructionMeter};
+use solana_bpf_loader_program::bpf_verifier;
 use solana_clap_utils::{
     self, commitment::commitment_arg_with_default, input_parsers::*, input_validators::*,
     keypair::*,
@@ -21,7 +21,7 @@ use solana_client::{
     rpc_client::RpcClient, rpc_config::RpcSendTransactionConfig,
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, rpc_response::RpcLeaderSchedule,
 };
-use solana_rbpf::vm::{Config, Executable};
+use solana_rbpf::vm::EbpfVm;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account::Account,
@@ -795,12 +795,8 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
         .map_err(|err| format!("Unable to read program file: {}", err))?;
 
     // Verify the program
-    Executable::<BPFError, ThisInstructionMeter>::from_elf(
-        &program_data,
-        Some(|x| bpf_verifier::check(x, false)),
-        Config::default(),
-    )
-    .map_err(|err| format!("ELF error: {}", err))?;
+    EbpfVm::create_executable_from_elf(&program_data, Some(|x| bpf_verifier::check(x, false)))
+        .map_err(|err| CliError::DynamicProgramError(format!("ELF error: {}", err)))?;
 
     Ok(program_data)
 }

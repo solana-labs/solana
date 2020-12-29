@@ -54,12 +54,8 @@ fn test_cli_program_deploy_non_upgradeable() {
 
     let mut config = CliConfig::recent_for_tests();
     let keypair = Keypair::new();
-<<<<<<< HEAD:cli/tests/deploy.rs
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-=======
-    config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&keypair];
->>>>>>> 3316e7166... Rework upgradeable loader cli (#14209):cli/tests/program.rs
     config.command = CliCommand::Airdrop {
         faucet_host: None,
         faucet_port: faucet_addr.port(),
@@ -155,14 +151,10 @@ fn test_cli_program_deploy_non_upgradeable() {
     assert_eq!(account2.lamports, 2 * minimum_balance_for_rent_exemption);
     assert_eq!(account2.owner, bpf_loader::id());
     assert_eq!(account2.executable, true);
-<<<<<<< HEAD:cli/tests/deploy.rs
-    assert_eq!(account0.data, account2.data);
+    assert_eq!(account2.data, account0.data);
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
-=======
-    assert_eq!(account2.data, account0.data);
->>>>>>> 3316e7166... Rework upgradeable loader cli (#14209):cli/tests/program.rs
 }
 
 #[test]
@@ -251,6 +243,9 @@ fn test_cli_program_deploy_no_authority() {
         max_len: None,
     });
     process_command(&config).unwrap_err();
+
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
 }
 
 #[test]
@@ -263,14 +258,19 @@ fn test_cli_program_deploy_with_authority() {
     pathbuf.push("noop");
     pathbuf.set_extension("so");
 
-    let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let TestValidator {
+        server,
+        leader_data,
+        alice,
+        ledger_path,
+        ..
+    } = TestValidator::run();
 
     let (sender, receiver) = channel();
-    run_local_faucet(mint_keypair, sender, None);
+    run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new(test_validator.rpc_url());
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();
@@ -288,7 +288,7 @@ fn test_cli_program_deploy_with_authority() {
 
     let mut config = CliConfig::recent_for_tests();
     let keypair = Keypair::new();
-    config.json_rpc_url = test_validator.rpc_url();
+    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.signers = vec![&keypair];
     config.command = CliCommand::Airdrop {
         faucet_host: None,
