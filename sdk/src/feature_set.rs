@@ -118,6 +118,10 @@ pub mod stake_program_v3 {
     solana_sdk::declare_id!("Ego6nTu7WsBcZBvVqJQKp6Yku2N3mrfG8oYCfaLZkAeK");
 }
 
+pub mod max_cpi_instruction_size_ipv6_mtu {
+    solana_sdk::declare_id!("5WLtuUJA5VVA1Cc28qULPfGs8anhoBev8uNqaaXeasnf");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -149,6 +153,7 @@ lazy_static! {
         (try_find_program_address_syscall_enabled::id(), "add try_find_program_address syscall"),
         (warp_testnet_timestamp::id(), "warp testnet timestamp to current #14210"),
         (stake_program_v3::id(), "solana_stake_program v3"),
+        (max_cpi_instruction_size_ipv6_mtu::id(), "Max cross-program invocation size 1280"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
