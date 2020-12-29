@@ -379,6 +379,9 @@ impl SecondaryIndex {
         };
 
         if needs_remove {
+            // Other threads may have interleaved writes to this `inner_key`, between
+            // releasing the `self.reverse_index.get(inner_key)` lock and now,
+            // so double-check again for emptiness
             if let Occupied(slot_map) = self.reverse_index.entry(*inner_key) {
                 if slot_map.get().read().unwrap().is_empty() {
                     slot_map.remove();
@@ -941,20 +944,23 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         account_info: T,
         reclaims: &mut SlotList<T>,
     ) -> bool {
-        let (mut w_account_entry, is_newly_inserted) =
-            self.get_account_write_entry_else_create(pubkey);
-        // We don't atomically update both primary index and secondary index together.
-        // This certainly creates small time window with inconsistent state across the two indexes.
-        // However, this is acceptable because:
-        //
-        //  - A strict consistent view at any given moment of time is not necessary, because the only
-        //  use case for the secondary index is `scan`, and `scans` are only supported/require consistency
-        //  on frozen banks, and this inconsistency is only possible on working banks.
-        //
-        //  - The secondary index is never consulted as primary source of truth for gets/stores.
-        //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
-        //  account operations.
-        w_account_entry.update(slot, account_info, reclaims);
+        let is_newly_inserted = {
+            let (mut w_account_entry, is_newly_inserted) =
+                self.get_account_write_entry_else_create(pubkey);
+            // We don't atomically update both primary index and secondary index together.
+            // This certainly creates small time window with inconsistent state across the two indexes.
+            // However, this is acceptable because:
+            //
+            //  - A strict consistent view at any given moment of time is not necessary, because the only
+            //  use case for the secondary index is `scan`, and `scans` are only supported/require consistency
+            //  on frozen banks, and this inconsistency is only possible on working banks.
+            //
+            //  - The secondary index is never consulted as primary source of truth for gets/stores.
+            //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
+            //  account operations.
+            w_account_entry.update(slot, account_info, reclaims);
+            is_newly_inserted
+        };
         self.update_secondary_indexes(pubkey, slot, account_owner, account_data, account_indexes);
         is_newly_inserted
     }
@@ -1139,7 +1145,8 @@ impl<T: 'static + Clone> AccountsIndex<T> {
 
     #[cfg(test)]
     // filter any rooted entries and return them along with a bool that indicates
-    // if this account has no more entries.
+    // if this account has no more entries. Note this does not update the secondary
+    // indexes!
     pub fn purge_roots(&self, pubkey: &Pubkey) -> (SlotList<T>, bool) {
         let mut write_account_map_entry = self.get_account_write_entry(pubkey).unwrap();
         write_account_map_entry.slot_list_mut(|slot_list| {
