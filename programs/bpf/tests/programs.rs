@@ -566,6 +566,8 @@ fn test_program_bpf_invoke() {
     const TEST_CAP_SEEDS: u8 = 6;
     const TEST_CAP_SIGNERS: u8 = 7;
     const TEST_ALLOC_ACCESS_VIOLATION: u8 = 8;
+    const TEST_INSTRUCTION_DATA_TOO_LARGE: u8 = 9;
+    const TEST_INSTRUCTION_META_TOO_LARGE: u8 = 10;
 
     #[allow(dead_code)]
     #[derive(Debug)]
@@ -892,6 +894,70 @@ fn test_program_bpf_invoke() {
         assert_eq!(
             result.unwrap_err(),
             TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
+        );
+
+        let instruction = Instruction::new(
+            invoke_program_id,
+            &[
+                TEST_INSTRUCTION_DATA_TOO_LARGE,
+                bump_seed1,
+                bump_seed2,
+                bump_seed3,
+            ],
+            account_metas.clone(),
+        );
+        let message = Message::new(&[instruction], Some(&mint_pubkey));
+        let tx = Transaction::new(
+            &[
+                &mint_keypair,
+                &argument_keypair,
+                &invoked_argument_keypair,
+                &from_keypair,
+            ],
+            message.clone(),
+            bank.last_blockhash(),
+        );
+        let (result, inner_instructions) = process_transaction_and_record_inner(&bank, tx);
+        let invoked_programs: Vec<Pubkey> = inner_instructions[0]
+            .iter()
+            .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
+            .collect();
+        assert_eq!(invoked_programs, vec![]);
+        assert_eq!(
+            result.unwrap_err(),
+            TransactionError::InstructionError(0, InstructionError::ComputationalBudgetExceeded)
+        );
+
+        let instruction = Instruction::new(
+            invoke_program_id,
+            &[
+                TEST_INSTRUCTION_META_TOO_LARGE,
+                bump_seed1,
+                bump_seed2,
+                bump_seed3,
+            ],
+            account_metas.clone(),
+        );
+        let message = Message::new(&[instruction], Some(&mint_pubkey));
+        let tx = Transaction::new(
+            &[
+                &mint_keypair,
+                &argument_keypair,
+                &invoked_argument_keypair,
+                &from_keypair,
+            ],
+            message.clone(),
+            bank.last_blockhash(),
+        );
+        let (result, inner_instructions) = process_transaction_and_record_inner(&bank, tx);
+        let invoked_programs: Vec<Pubkey> = inner_instructions[0]
+            .iter()
+            .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
+            .collect();
+        assert_eq!(invoked_programs, vec![]);
+        assert_eq!(
+            result.unwrap_err(),
+            TransactionError::InstructionError(0, InstructionError::ComputationalBudgetExceeded)
         );
 
         // Check final state
