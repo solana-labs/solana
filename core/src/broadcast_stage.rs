@@ -666,8 +666,6 @@ pub mod test {
                 }
             }
 
-            sleep(Duration::from_millis(2000));
-
             trace!(
                 "[broadcast_ledger] max_tick_height: {}, start_tick_height: {}, ticks_per_slot: {}",
                 max_tick_height,
@@ -675,10 +673,17 @@ pub mod test {
                 ticks_per_slot,
             );
 
-            let blockstore = broadcast_service.blockstore;
-            let entries = blockstore
-                .get_slot_entries(slot, 0)
-                .expect("Expect entries to be present");
+            let mut entries = vec![];
+            for _ in 0..10 {
+                entries = broadcast_service
+                    .blockstore
+                    .get_slot_entries(slot, 0)
+                    .expect("Expect entries to be present");
+                if entries.len() >= max_tick_height as usize {
+                    break;
+                }
+                sleep(Duration::from_millis(1000));
+            }
             assert_eq!(entries.len(), max_tick_height as usize);
 
             drop(entry_sender);
