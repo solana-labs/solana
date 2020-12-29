@@ -82,18 +82,18 @@ impl Poh {
     }
 }
 
-pub fn compute_hashes_per_tick(duration: Duration, hashes_sample_size: u64) -> u64 {
-    // calculate hash rate with the system under maximum load
-    info!(
-        "Running {} hashes in parallel on all threads...",
-        hashes_sample_size
-    );
+pub fn compute_hash_time_ns(hashes_sample_size: u64) -> u64 {
+    info!("Running {} hashes...", hashes_sample_size);
     let mut v = Hash::default();
     let start = Instant::now();
     for _ in 0..hashes_sample_size {
         v = hash(&v.as_ref());
     }
-    let elapsed = start.elapsed().as_millis() as u64;
+    start.elapsed().as_nanos() as u64
+}
+
+pub fn compute_hashes_per_tick(duration: Duration, hashes_sample_size: u64) -> u64 {
+    let elapsed = compute_hash_time_ns(hashes_sample_size) / (1000 * 1000);
     duration.as_millis() as u64 * hashes_sample_size / elapsed
 }
 

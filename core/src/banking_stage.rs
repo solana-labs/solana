@@ -1088,7 +1088,12 @@ pub fn create_test_recorder(
     poh_recorder.set_bank(&bank);
 
     let poh_recorder = Arc::new(Mutex::new(poh_recorder));
-    let poh_service = PohService::new(poh_recorder.clone(), &poh_config, &exit);
+    let poh_service = PohService::new(
+        poh_recorder.clone(),
+        &poh_config,
+        &exit,
+        bank.ticks_per_slot(),
+    );
 
     (exit, poh_recorder, poh_service, entry_receiver)
 }
