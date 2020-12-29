@@ -11,7 +11,6 @@ use std::{
     },
     time::Duration,
 };
-use tokio::time::delay_for;
 
 // Attempt to upload this many blocks in parallel
 const NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL: usize = 32;
@@ -81,7 +80,7 @@ pub async fn upload_confirmed_blocks(
                     Err(err) => {
                         error!("get_confirmed_blocks for {} failed: {:?}", start_slot, err);
                         // Consider exponential backoff...
-                        delay_for(Duration::from_secs(2)).await;
+                        tokio::time::sleep(Duration::from_secs(2)).await;
                     }
                 }
             };
