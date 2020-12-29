@@ -1986,7 +1986,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-invoke-and-return"
-version = "1.6.0"
+version = "1.4.20"
 dependencies = [
  "solana-program",
 ]
