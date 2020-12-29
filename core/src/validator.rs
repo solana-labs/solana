@@ -40,6 +40,7 @@ use solana_ledger::{
     blockstore_processor::{self, TransactionStatusSender},
     leader_schedule::FixedSchedule,
     leader_schedule_cache::LeaderScheduleCache,
+    poh::compute_hash_time_ns,
 };
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
@@ -114,6 +115,7 @@ pub struct ValidatorConfig {
     pub bpf_jit: bool,
     pub send_transaction_retry_ms: u64,
     pub send_transaction_leader_forward_count: u64,
+    pub no_poh_speed_test: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -156,6 +158,7 @@ impl Default for ValidatorConfig {
             bpf_jit: false,
             send_transaction_retry_ms: 2000,
             send_transaction_leader_forward_count: 2,
+            no_poh_speed_test: true,
         }
     }
 }
@@ -531,11 +534,20 @@ impl Validator {
                 (None, None)
             };
 
+        if !config.no_poh_speed_test {
+            check_poh_speed(&genesis_config, None);
+        }
+
         if wait_for_supermajority(config, &bank, &cluster_info, rpc_override_health_check) {
             abort();
         }
 
-        let poh_service = PohService::new(poh_recorder.clone(), &poh_config, &exit);
+        let poh_service = PohService::new(
+            poh_recorder.clone(),
+            &poh_config,
+            &exit,
+            bank.ticks_per_slot(),
+        );
         assert_eq!(
             blockstore.new_shreds_signals.len(),
             1,
@@ -752,6 +764,35 @@ fn active_vote_account_exists_in_bank(bank: &Arc<Bank>, vote_account: &Pubkey) -
         }
     }
     false
+}
+
+fn check_poh_speed(genesis_config: &GenesisConfig, maybe_hash_samples: Option<u64>) {
+    if let Some(hashes_per_tick) = genesis_config.hashes_per_tick() {
+        let ticks_per_slot = genesis_config.ticks_per_slot();
+        let hashes_per_slot = hashes_per_tick * ticks_per_slot;
+
+        let hash_samples = maybe_hash_samples.unwrap_or(hashes_per_slot);
+        let hash_time_ns = compute_hash_time_ns(hash_samples);
+
+        let my_ns_per_slot = (hash_time_ns * hashes_per_slot) / hash_samples;
+        debug!("computed: ns_per_slot: {}", my_ns_per_slot);
+        let target_ns_per_slot = genesis_config.ns_per_slot() as u64;
+        debug!(
+            "cluster ns_per_hash: {}ns ns_per_slot: {}",
+            target_ns_per_slot / hashes_per_slot,
+            target_ns_per_slot
+        );
+        if my_ns_per_slot < target_ns_per_slot {
+            let extra_ns = target_ns_per_slot - my_ns_per_slot;
+            info!("PoH speed check: Will sleep {}ns per slot.", extra_ns);
+        } else {
+            error!(
+                "PoH is slower than cluster target tick rate! mine: {} cluster: {}. If you wish to continue, try --ignore-poh-speed",
+                my_ns_per_slot, target_ns_per_slot,
+            );
+            abort();
+        }
+    }
 }
 
 fn post_process_restored_tower(
@@ -1266,6 +1307,8 @@ pub fn is_snapshot_config_invalid(
 mod tests {
     use super::*;
     use solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader};
+    use solana_sdk::genesis_config::create_genesis_config;
+    use solana_sdk::poh_config::PohConfig;
     use std::fs::remove_dir_all;
 
     #[test]
@@ -1384,7 +1427,6 @@ mod tests {
     #[test]
     fn test_wait_for_supermajority() {
         solana_logger::setup();
-        use solana_sdk::genesis_config::create_genesis_config;
         use solana_sdk::hash::hash;
         let node_keypair = Arc::new(Keypair::new());
         let cluster_info = ClusterInfo::new(
@@ -1440,5 +1482,39 @@ mod tests {
         assert!(is_snapshot_config_invalid(230, 100));
         assert!(!is_snapshot_config_invalid(500, 100));
         assert!(!is_snapshot_config_invalid(5, 5));
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_poh_speed() {
+        solana_logger::setup();
+        let poh_config = PohConfig {
+            target_tick_duration: Duration::from_millis(solana_sdk::clock::MS_PER_TICK),
+            // make PoH rate really fast to cause the panic condition
+            hashes_per_tick: Some(
+                100 * solana_sdk::clock::DEFAULT_HASHES_PER_SECOND
+                    / solana_sdk::clock::DEFAULT_TICKS_PER_SECOND,
+            ),
+            ..PohConfig::default()
+        };
+        let genesis_config = GenesisConfig {
+            poh_config,
+            ..GenesisConfig::default()
+        };
+        check_poh_speed(&genesis_config, Some(10_000));
+    }
+
+    #[test]
+    fn test_poh_speed_no_hashes_per_tick() {
+        let poh_config = PohConfig {
+            target_tick_duration: Duration::from_millis(solana_sdk::clock::MS_PER_TICK),
+            hashes_per_tick: None,
+            ..PohConfig::default()
+        };
+        let genesis_config = GenesisConfig {
+            poh_config,
+            ..GenesisConfig::default()
+        };
+        check_poh_speed(&genesis_config, Some(10_000));
     }
 }
