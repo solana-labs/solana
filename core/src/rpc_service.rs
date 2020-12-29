@@ -32,7 +32,6 @@ use std::{
     sync::{mpsc::channel, Arc, Mutex, RwLock},
     thread::{self, Builder, JoinHandle},
 };
-use tokio::runtime;
 
 pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
@@ -41,7 +40,6 @@ pub struct JsonRpcService {
     pub request_processor: JsonRpcRequestProcessor, // Used only by test_rpc_new()...
 
     close_handle: Option<CloseHandle>,
-    runtime: runtime::Runtime,
 }
 
 struct RpcRequestMiddleware {
@@ -282,12 +280,13 @@ impl JsonRpcService {
         ));
 
         let tpu_address = cluster_info.my_contact_info().tpu;
-        let mut runtime = runtime::Builder::new()
-            .threaded_scheduler()
-            .thread_name("rpc-runtime")
-            .enable_all()
-            .build()
-            .expect("Runtime");
+        let runtime = Arc::new(
+            tokio::runtime::Builder::new_multi_thread()
+                .thread_name("rpc-runtime")
+                .enable_all()
+                .build()
+                .expect("Runtime"),
+        );
 
         let exit_bigtable_ledger_upload_service = Arc::new(AtomicBool::new(false));
 
@@ -301,7 +300,7 @@ impl JsonRpcService {
                         info!("BigTable ledger storage initialized");
 
                         let bigtable_ledger_upload_service = Arc::new(BigTableUploadService::new(
-                            runtime.handle().clone(),
+                            runtime.clone(),
                             bigtable_ledger_storage.clone(),
                             blockstore.clone(),
                             block_commitment_cache.clone(),
@@ -330,7 +329,7 @@ impl JsonRpcService {
             health.clone(),
             cluster_info.clone(),
             genesis_hash,
-            &runtime,
+            runtime,
             bigtable_ledger_storage,
             optimistically_confirmed_bank,
         );
@@ -404,7 +403,6 @@ impl JsonRpcService {
             .register_exit(Box::new(move || close_handle_.close()));
         Self {
             thread_hdl,
-            runtime,
             #[cfg(test)]
             request_processor: test_request_processor,
             close_handle: Some(close_handle),
@@ -418,7 +416,6 @@ impl JsonRpcService {
     }
 
     pub fn join(self) -> thread::Result<()> {
-        self.runtime.shutdown_background();
         self.thread_hdl.join()
     }
 }
