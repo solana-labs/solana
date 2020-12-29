@@ -4,10 +4,8 @@
 //! checking requests against a request cap for a given time time_slice
 //! and (to come) an IP rate limit.
 
-use bincode::{deserialize, serialize};
+use bincode::{deserialize, serialize, serialized_size};
 use byteorder::{ByteOrder, LittleEndian};
-use bytes::{Bytes, BytesMut};
-use futures::{SinkExt, StreamExt};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_metrics::datapoint_info;
@@ -28,10 +26,10 @@ use std::{
     time::Duration,
 };
 use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream as TokioTcpStream},
     runtime::Runtime,
 };
-use tokio_util::codec::{BytesCodec, Decoder};
 
 #[macro_export]
 macro_rules! socketaddr {
@@ -56,6 +54,16 @@ pub enum FaucetRequest {
         to: Pubkey,
         blockhash: Hash,
     },
+}
+
+impl Default for FaucetRequest {
+    fn default() -> Self {
+        Self::GetAirdrop {
+            lamports: u64::default(),
+            to: Pubkey::default(),
+            blockhash: Hash::default(),
+        }
+    }
 }
 
 pub struct Faucet {
@@ -154,7 +162,7 @@ impl Faucet {
             }
         }
     }
-    pub fn process_faucet_request(&mut self, bytes: &BytesMut) -> Result<Bytes, io::Error> {
+    pub fn process_faucet_request(&mut self, bytes: &[u8]) -> Result<Vec<u8>, io::Error> {
         let req: FaucetRequest = deserialize(bytes).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
@@ -177,9 +185,8 @@ impl Faucet {
                 LittleEndian::write_u16(&mut response_vec_with_length, response_vec.len() as u16);
                 response_vec_with_length.extend_from_slice(&response_vec);
 
-                let response_bytes = Bytes::from(response_vec_with_length);
                 info!("Airdrop transaction granted");
-                Ok(response_bytes)
+                Ok(response_vec_with_length)
             }
             Err(err) => {
                 warn!("Airdrop transaction failed: {:?}", err);
@@ -315,29 +322,24 @@ pub async fn run_faucet(
 }
 
 async fn process(
-    stream: TokioTcpStream,
+    mut stream: TokioTcpStream,
     faucet: Arc<Mutex<Faucet>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let framed = BytesCodec::new().framed(stream);
-    let (mut writer, mut reader) = framed.split();
+    let mut request = vec![0u8; serialized_size(&FaucetRequest::default()).unwrap() as usize];
+    while stream.read_exact(&mut request).await.is_ok() {
+        trace!("{:?}", request);
 
-    while let Some(request) = reader.next().await {
-        match request {
-            Ok(bytes) => {
-                let response = match faucet.lock().unwrap().process_faucet_request(&bytes) {
-                    Ok(response_bytes) => {
-                        trace!("Airdrop response_bytes: {:?}", response_bytes.to_vec());
-                        response_bytes
-                    }
-                    Err(e) => {
-                        info!("Error in request: {:?}", e);
-                        Bytes::from(0u16.to_le_bytes().to_vec())
-                    }
-                };
-                writer.send(response).await?;
+        let response = match faucet.lock().unwrap().process_faucet_request(&request) {
+            Ok(response_bytes) => {
+                trace!("Airdrop response_bytes: {:?}", response_bytes);
+                response_bytes
             }
-            Err(e) => return Err(e.into()),
-        }
+            Err(e) => {
+                info!("Error in request: {:?}", e);
+                0u16.to_le_bytes().to_vec()
+            }
+        };
+        stream.write_all(&response).await?;
     }
 
     Ok(())
@@ -346,7 +348,6 @@ async fn process(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bytes::BufMut;
     use solana_sdk::system_instruction::SystemInstruction;
     use std::time::Duration;
 
@@ -458,8 +459,6 @@ mod tests {
             to,
         };
         let req = serialize(&req).unwrap();
-        let mut bytes = BytesMut::with_capacity(req.len());
-        bytes.put(&req[..]);
 
         let keypair = Keypair::new();
         let expected_instruction = system_instruction::transfer(&keypair.pubkey(), &to, lamports);
@@ -471,11 +470,11 @@ mod tests {
         expected_vec_with_length.extend_from_slice(&expected_bytes);
 
         let mut faucet = Faucet::new(keypair, None, None, None);
-        let response = faucet.process_faucet_request(&bytes);
+        let response = faucet.process_faucet_request(&req);
         let response_vec = response.unwrap().to_vec();
         assert_eq!(expected_vec_with_length, response_vec);
 
-        let bad_bytes = BytesMut::from("bad bytes");
+        let bad_bytes = "bad bytes".as_bytes();
         assert!(faucet.process_faucet_request(&bad_bytes).is_err());
     }
 }
