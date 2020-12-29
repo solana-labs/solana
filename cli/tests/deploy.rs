@@ -198,11 +198,6 @@ fn test_cli_deploy_upgradeable_program() {
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data).unwrap();
     let max_len = program_data.len();
-    println!(
-        "max_len {:?} {:?}",
-        max_len,
-        UpgradeableLoaderState::programdata_len(max_len)
-    );
     let minimum_balance_for_programdata = rpc_client
         .get_minimum_balance_for_rent_exemption(
             UpgradeableLoaderState::programdata_len(max_len).unwrap(),

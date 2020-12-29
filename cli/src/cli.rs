@@ -1400,6 +1400,7 @@ fn send_deploy_messages(
             config.commitment,
             RpcSendTransactionConfig {
                 skip_preflight: true,
+                preflight_commitment: Some(config.commitment.commitment),
                 ..RpcSendTransactionConfig::default()
             },
         )
