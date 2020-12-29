@@ -787,7 +787,7 @@ fn check_poh_speed(genesis_config: &GenesisConfig, maybe_hash_samples: Option<u6
             info!("PoH speed check: Will sleep {}ns per slot.", extra_ns);
         } else {
             error!(
-                "PoH is slower than cluster target tick rate! mine: {} cluster: {}. If you wish to continue, try --ignore-poh-speed",
+                "PoH is slower than cluster target tick rate! mine: {} cluster: {}. If you wish to continue, try --no-poh-speed-test",
                 my_ns_per_slot, target_ns_per_slot,
             );
             abort();
