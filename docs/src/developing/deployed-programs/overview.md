@@ -157,21 +157,27 @@ For further information see [deploying](deploying.md)
 ### Input Parameter Serialization
 
 BPF loaders serialize the program input parameters into a byte array that is
-then passed to the program's entrypoint where the program is responsible for
+then passed to the program's entrypoint, where the program is responsible for
 deserializing it on-chain.  One of the changes between the deprecated loader and
 the current loader is that the input parameters are serialized in a way that
 results in various parameters falling on aligned offsets within the aligned byte
 array.  This allows deserialization implementations to directly reference the
 byte array and provide aligned pointers to the program.
 
-The current loader serializes the program input parameters as follows (all
+For language specific information about serialization see:
+- [Rust program parameter
+  deserialization](developing-rust.md#parameter-deserialization)
+- [C program parameter
+  deserialization](developing-c.md#parameter-deserialization)
+
+The latest loader serializes the program input parameters as follows (all
 encoding is little endian):
 
 - 8 byte unsigned number of accounts
 - For each account
-  - 1 byte indicating if this is a duplicate account, if it is a duplicate then
-    the value is 0, otherwise contains the index of the account it is a
-    duplicate of
+  - 1 byte indicating if this is a duplicate account, if not a duplicate then
+    the value is 0xff, otherwise the value is the index of the account it is a
+    duplicate of.
   - 7 bytes of padding
     - if not duplicate
       - 1 byte padding
@@ -190,9 +196,3 @@ encoding is little endian):
 - 8 bytes of unsigned number of instruction data
 - x bytes of instruction data
 - 32 bytes of the program id
-
-For language specific information about serialization see:
-- [Rust program parameter
-  deserialization](developing-rust.md#parameter-deserialization)
-- [C program parameter
-  deserialization](developing-c.md#parameter-deserialization)
