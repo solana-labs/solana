@@ -5,7 +5,7 @@ use clap::{
 use log::*;
 use rand::{seq::SliceRandom, thread_rng, Rng};
 use solana_clap_utils::{
-    input_parsers::{keypair_of, keypairs_of, pubkey_of},
+    input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
     input_validators::{
         is_keypair_or_ask_keyword, is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot,
     },
@@ -19,6 +19,7 @@ use solana_core::{
     cluster_info::{ClusterInfo, Node, MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
     contact_info::ContactInfo,
     gossip_service::GossipService,
+    poh_service,
     rpc::JsonRpcConfig,
     rpc_pubsub_service::PubSubConfig,
     validator::{is_snapshot_config_invalid, Validator, ValidatorConfig},
@@ -1395,6 +1396,22 @@ pub fn main() {
                 .takes_value(false)
                 .help("Use the just-in-time compiler instead of the interpreter for BPF."),
         )
+        .arg(
+            Arg::with_name("poh_pinned_cpu_core")
+                .hidden(true)
+                .long("experimental-poh-pinned-cpu-core")
+                .takes_value(true)
+                .value_name("CPU_CORE_INDEX")
+                .validator(|s| {
+                    let core_index = usize::from_str(&s).map_err(|e| e.to_string())?;
+                    let max_index = core_affinity::get_core_ids().map(|cids| cids.len() - 1).unwrap_or(0);
+                    if core_index > max_index {
+                        return Err(format!("core index must be in the range [0, {}]", max_index));
+                    }
+                    Ok(())
+                })
+                .help("EXPERIMENTAL: Specify which CPU core PoH is pinned to")
+        )
         .get_matches();
 
     let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(Keypair::new));
@@ -1550,6 +1567,8 @@ pub fn main() {
             u64
         ),
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
+        poh_pinned_cpu_core: value_of(&matches, "poh_pinned_cpu_core")
+            .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),
         ..ValidatorConfig::default()
     };
 
