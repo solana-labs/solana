@@ -180,14 +180,19 @@ fn test_cli_deploy_upgradeable_program() {
     pathbuf.push("noop");
     pathbuf.set_extension("so");
 
-    let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let TestValidator {
+        server,
+        leader_data,
+        alice: mint_keypair,
+        ledger_path,
+        ..
+    } = TestValidator::run();
 
     let (sender, receiver) = channel();
     run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new(test_validator.rpc_url());
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();
@@ -210,7 +215,7 @@ fn test_cli_deploy_upgradeable_program() {
 
     let mut config = CliConfig::recent_for_tests();
     let keypair = Keypair::new();
-    config.json_rpc_url = test_validator.rpc_url();
+    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.command = CliCommand::Airdrop {
         faucet_host: None,
         faucet_port: faucet_addr.port(),
@@ -433,4 +438,7 @@ fn test_cli_deploy_upgradeable_program() {
         upgrade_authority: 1,
     };
     process_command(&config).unwrap_err();
+
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
 }

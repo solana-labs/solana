@@ -4,12 +4,7 @@ pub mod bpf_verifier;
 pub mod deprecated;
 pub mod serialization;
 pub mod syscalls;
-<<<<<<< HEAD
-=======
 pub mod upgradeable;
-pub mod upgradeable_with_jit;
-pub mod with_jit;
->>>>>>> 9e9039458... Upgradeable loader (#13689)
 
 use crate::{
     bpf_verifier::VerifierError,
@@ -106,25 +101,9 @@ pub fn create_and_cache_executor(
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<Arc<BPFExecutor>, InstructionError> {
-<<<<<<< HEAD
-    let executable = EbpfVm::create_executable_from_elf(&program.try_account_ref()?.data, None)
+    let executable = EbpfVm::create_executable_from_elf(data, None)
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
     let (_, elf_bytes) = executable
-=======
-    let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
-    let mut program = Executable::<BPFError, ThisInstructionMeter>::from_elf(
-        data,
-        None,
-        Config {
-            max_call_depth: bpf_compute_budget.max_call_depth,
-            stack_frame_size: bpf_compute_budget.stack_frame_size,
-            enable_instruction_meter: true,
-            enable_instruction_tracing: false,
-        },
-    )
-    .map_err(|e| map_ebpf_error(invoke_context, e))?;
-    let (_, elf_bytes) = program
->>>>>>> 9e9039458... Upgradeable loader (#13689)
         .get_text_bytes()
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
     bpf_verifier::check(
@@ -132,34 +111,7 @@ pub fn create_and_cache_executor(
         !invoke_context.is_feature_active(&bpf_compute_budget_balancing::id()),
     )
     .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e)))?;
-<<<<<<< HEAD
     let executor = Arc::new(BPFExecutor { executable });
-    invoke_context.add_executor(program.unsigned_key(), executor.clone());
-    Ok(executor)
-}
-
-/// Create the BPF virtual machine
-pub fn create_vm<'a>(
-    loader_id: &'a Pubkey,
-    executable: &'a dyn Executable<BPFError>,
-    parameter_accounts: &'a [KeyedAccount<'a>],
-    invoke_context: &'a mut dyn InvokeContext,
-) -> Result<(EbpfVm<'a, BPFError>, MemoryRegion), EbpfError<BPFError>> {
-    let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
-    let mut vm = EbpfVm::new(
-        executable,
-        Config {
-            max_call_depth: bpf_compute_budget.max_call_depth,
-            stack_frame_size: bpf_compute_budget.stack_frame_size,
-        },
-=======
-    let syscall_registry = syscalls::register_syscalls(invoke_context)
-        .map_err(|e| map_ebpf_error(invoke_context, e))?;
-    program.set_syscall_registry(syscall_registry);
-    if use_jit && program.jit_compile().is_err() {
-        return Err(BPFLoaderError::JustInTimeCompilationFailed.into());
-    }
-    let executor = Arc::new(BPFExecutor { program });
     invoke_context.add_executor(key, executor.clone());
     Ok(executor)
 }
@@ -190,28 +142,20 @@ fn write_program_data(
     Ok(())
 }
 
-/// Default program heap size, allocators
-/// are expected to enforce this
-const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
-
 /// Create the BPF virtual machine
 pub fn create_vm<'a>(
     loader_id: &'a Pubkey,
-    program: &'a dyn Executable<BPFError, ThisInstructionMeter>,
-    parameter_bytes: &mut [u8],
+    executable: &'a dyn Executable<BPFError>,
     parameter_accounts: &'a [KeyedAccount<'a>],
     invoke_context: &'a mut dyn InvokeContext,
-) -> Result<EbpfVm<'a, BPFError, ThisInstructionMeter>, EbpfError<BPFError>> {
-    let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
-    let heap_region = MemoryRegion::new_from_slice(&heap, MM_HEAP_START, 0, true);
-    let mut vm = EbpfVm::new(program, parameter_bytes, &[heap_region])?;
-    syscalls::bind_syscall_context_objects(
-        loader_id,
-        &mut vm,
-        parameter_accounts,
-        invoke_context,
-        heap,
->>>>>>> 9e9039458... Upgradeable loader (#13689)
+) -> Result<(EbpfVm<'a, BPFError>, MemoryRegion), EbpfError<BPFError>> {
+    let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
+    let mut vm = EbpfVm::new(
+        executable,
+        Config {
+            max_call_depth: bpf_compute_budget.max_call_depth,
+            stack_frame_size: bpf_compute_budget.stack_frame_size,
+        },
     )?;
     let heap_region =
         syscalls::register_syscalls(loader_id, &mut vm, parameter_accounts, invoke_context)?;
@@ -219,44 +163,10 @@ pub fn create_vm<'a>(
 }
 
 pub fn process_instruction(
-<<<<<<< HEAD
-=======
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
-) -> Result<(), InstructionError> {
-    process_instruction_common(
-        program_id,
-        keyed_accounts,
-        instruction_data,
-        invoke_context,
-        false,
-    )
-}
-
-pub fn process_instruction_jit(
->>>>>>> 9e9039458... Upgradeable loader (#13689)
-    program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
-    instruction_data: &[u8],
-    invoke_context: &mut dyn InvokeContext,
-) -> Result<(), InstructionError> {
-    process_instruction_common(
-        program_id,
-        keyed_accounts,
-        instruction_data,
-        invoke_context,
-        true,
-    )
-}
-
-fn process_instruction_common(
-    program_id: &Pubkey,
-    keyed_accounts: &[KeyedAccount],
-    instruction_data: &[u8],
-    invoke_context: &mut dyn InvokeContext,
-    use_jit: bool,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_logger();
 
@@ -300,46 +210,22 @@ fn process_instruction_common(
 
         let executor = match invoke_context.get_executor(program.unsigned_key()) {
             Some(executor) => executor,
-<<<<<<< HEAD
-            None => create_and_cache_executor(program, invoke_context)?,
-        };
-        executor.execute(program_id, keyed_accounts, instruction_data, invoke_context)?
-    } else if !keyed_accounts.is_empty() {
-        match limited_deserialize(instruction_data)? {
-            LoaderInstruction::Write { offset, bytes } => {
-                if program.signer_key().is_none() {
-                    log!(logger, "key[0] did not sign the transaction");
-=======
             None => create_and_cache_executor(
                 program.unsigned_key(),
                 &program.try_account_ref()?.data[offset..],
                 invoke_context,
-                use_jit,
             )?,
         };
-        executor.execute(
-            program_id,
-            keyed_accounts,
-            instruction_data,
-            invoke_context,
-            use_jit,
-        )?
+        executor.execute(program_id, keyed_accounts, instruction_data, invoke_context)?
     } else if bpf_loader_upgradeable::check_id(program_id) {
         process_loader_upgradeable_instruction(
             program_id,
             keyed_accounts,
             instruction_data,
             invoke_context,
-            use_jit,
         )?;
     } else {
-        process_loader_instruction(
-            program_id,
-            keyed_accounts,
-            instruction_data,
-            invoke_context,
-            use_jit,
-        )?;
+        process_loader_instruction(program_id, keyed_accounts, instruction_data, invoke_context)?;
     }
     Ok(())
 }
@@ -349,7 +235,6 @@ fn process_loader_upgradeable_instruction(
     keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
-    use_jit: bool,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_logger();
     let account_iter = &mut keyed_accounts.iter();
@@ -447,7 +332,6 @@ fn process_loader_upgradeable_instruction(
                 programdata.unsigned_key(),
                 &buffer.try_account_ref()?.data[buffer_data_offset..],
                 invoke_context,
-                use_jit,
             )?;
 
             // Update the ProgramData account and record the program bits
@@ -539,7 +423,6 @@ fn process_loader_upgradeable_instruction(
                 }
                 if upgrade_authority_address != Some(*authority.unsigned_key()) {
                     log!(logger, "Upgrade authority not present");
->>>>>>> 9e9039458... Upgradeable loader (#13689)
                     return Err(InstructionError::MissingRequiredSignature);
                 }
                 if authority.signer_key().is_none() {
@@ -557,7 +440,6 @@ fn process_loader_upgradeable_instruction(
                 programdata.unsigned_key(),
                 &buffer.try_account_ref()?.data[buffer_data_offset..],
                 invoke_context,
-                use_jit,
             )?;
 
             // Update the ProgramData account and record the upgraded data
@@ -600,16 +482,6 @@ fn process_loader_upgradeable_instruction(
                     log!(logger, "Upgrade authority not present");
                     return Err(InstructionError::MissingRequiredSignature);
                 }
-<<<<<<< HEAD
-
-                let _ = create_and_cache_executor(program, invoke_context)?;
-                program.try_account_ref_mut()?.executable = true;
-                log!(
-                    logger,
-                    "Finalized account {:?}",
-                    program.signer_key().unwrap()
-                );
-=======
                 if present_authority.signer_key().is_none() {
                     log!(logger, "Upgrade authority did not sign");
                     return Err(InstructionError::MissingRequiredSignature);
@@ -621,7 +493,6 @@ fn process_loader_upgradeable_instruction(
             } else {
                 log!(logger, "Not a ProgramData account");
                 return Err(InstructionError::InvalidAccountData);
->>>>>>> 9e9039458... Upgradeable loader (#13689)
             }
 
             log!(logger, "New authority {:?}", new_authority);
@@ -631,14 +502,11 @@ fn process_loader_upgradeable_instruction(
     Ok(())
 }
 
-<<<<<<< HEAD
-=======
 fn process_loader_instruction(
     program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
-    use_jit: bool,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_logger();
     let account_iter = &mut keyed_accounts.iter();
@@ -662,7 +530,6 @@ fn process_loader_instruction(
                 program.unsigned_key(),
                 &program.try_account_ref()?.data,
                 invoke_context,
-                use_jit,
             )?;
             program.try_account_ref_mut()?.executable = true;
             log!(logger, "Finalized account {:?}", program.unsigned_key());
@@ -672,7 +539,6 @@ fn process_loader_instruction(
     Ok(())
 }
 
->>>>>>> 9e9039458... Upgradeable loader (#13689)
 /// Passed to the VM to enforce the compute budget
 struct ThisInstructionMeter {
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
@@ -695,11 +561,7 @@ impl InstructionMeter for ThisInstructionMeter {
 
 /// BPF Loader's Executor implementation
 pub struct BPFExecutor {
-<<<<<<< HEAD
     executable: Box<dyn Executable<BPFError>>,
-=======
-    program: Box<dyn Executable<BPFError, ThisInstructionMeter>>,
->>>>>>> 9e9039458... Upgradeable loader (#13689)
 }
 
 // Well, implement Debug for solana_rbpf::vm::Executable in solana-rbpf...
@@ -734,12 +596,7 @@ impl Executor for BPFExecutor {
             let compute_meter = invoke_context.get_compute_meter();
             let (mut vm, heap_region) = match create_vm(
                 program_id,
-<<<<<<< HEAD
                 self.executable.as_ref(),
-=======
-                self.program.as_ref(),
-                &mut parameter_bytes,
->>>>>>> 9e9039458... Upgradeable loader (#13689)
                 &parameter_accounts,
                 invoke_context,
             ) {
@@ -850,23 +707,10 @@ mod tests {
         ];
         let input = &mut [0x00];
 
-<<<<<<< HEAD
         let executable = EbpfVm::create_executable_from_text_bytes(program, None).unwrap();
         let mut vm = EbpfVm::<BPFError>::new(executable.as_ref(), Config::default()).unwrap();
         let instruction_meter = TestInstructionMeter { remaining: 10 };
         vm.execute_program_metered(input, &[], &[], instruction_meter)
-=======
-        let program = Executable::<BPFError, TestInstructionMeter>::from_text_bytes(
-            program,
-            None,
-            Config::default(),
-        )
-        .unwrap();
-        let mut vm =
-            EbpfVm::<BPFError, TestInstructionMeter>::new(program.as_ref(), input, &[]).unwrap();
-        let mut instruction_meter = TestInstructionMeter { remaining: 10 };
-        vm.execute_program_interpreted(&mut instruction_meter)
->>>>>>> 9e9039458... Upgradeable loader (#13689)
             .unwrap();
     }
 

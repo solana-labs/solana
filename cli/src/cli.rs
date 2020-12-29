@@ -1248,12 +1248,8 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     })?;
 
     // Verify the program
-    Executable::<BPFError, ThisInstructionMeter>::from_elf(
-        &program_data,
-        Some(|x| bpf_verifier::check(x, false)),
-        Config::default(),
-    )
-    .map_err(|err| CliError::DynamicProgramError(format!("ELF error: {}", err)))?;
+    EbpfVm::create_executable_from_elf(&program_data, Some(|x| bpf_verifier::check(x, false)))
+        .map_err(|err| CliError::DynamicProgramError(format!("ELF error: {}", err)))?;
 
     Ok(program_data)
 }
@@ -1464,12 +1460,7 @@ fn do_process_program_deploy(
     };
     let program_keypair = Keypair::new();
 
-<<<<<<< HEAD
-    EbpfVm::create_executable_from_elf(&program_data, Some(|x| bpf_verifier::check(x, false)))
-        .map_err(|err| CliError::DynamicProgramError(format!("ELF error: {}", err)))?;
-=======
     let program_data = read_and_verify_elf(program_location)?;
->>>>>>> 9e9039458... Upgradeable loader (#13689)
 
     // Determine which loader
     let (loader_id, program_signer, data_len, minimum_balance) = if use_deprecated_loader {
