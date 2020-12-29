@@ -5036,6 +5036,7 @@ dependencies = [
  "chrono",
  "clap",
  "console",
+ "core_affinity",
  "libc",
  "log 0.4.8",
  "rand 0.7.3",
