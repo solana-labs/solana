@@ -1168,6 +1168,11 @@ pub fn main() {
                       0 to disable snapshots"),
         )
         .arg(
+            Arg::with_name("no_poh_speed_test")
+                .long("no-poh-speed-test")
+                .help("Skip the check for PoH speed."),
+        )
+        .arg(
             Arg::with_name("accounts_hash_interval_slots")
                 .long("accounts-hash-slots")
                 .value_name("ACCOUNTS_HASH_INTERVAL_SLOTS")
@@ -1603,6 +1608,7 @@ pub fn main() {
             "rpc_send_transaction_leader_forward_count",
             u64
         ),
+        no_poh_speed_test: matches.is_present("no_poh_speed_test"),
         ..ValidatorConfig::default()
     };
 
