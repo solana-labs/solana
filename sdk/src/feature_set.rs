@@ -106,13 +106,12 @@ pub mod stake_program_v3 {
     solana_sdk::declare_id!("Ego6nTu7WsBcZBvVqJQKp6Yku2N3mrfG8oYCfaLZkAeK");
 }
 
-<<<<<<< HEAD
 pub mod bpf_loader_upgradeable_program {
     solana_sdk::declare_id!("FbhK8HN9qvNHvJcoFVHAEUCNkagHvu7DTWzdnLuVQ5u4");
-=======
+}
+
 pub mod max_cpi_instruction_size_ipv6_mtu {
     solana_sdk::declare_id!("5WLtuUJA5VVA1Cc28qULPfGs8anhoBev8uNqaaXeasnf");
->>>>>>> 5524938a5... Limit CPI instruction size (#14317)
 }
 
 lazy_static! {
@@ -143,11 +142,8 @@ lazy_static! {
         (filter_stake_delegation_accounts::id(), "filter stake_delegation_accounts #14062"),
         (simple_capitalization::id(), "simple capitalization"),
         (stake_program_v3::id(), "solana_stake_program v3"),
-<<<<<<< HEAD
         (bpf_loader_upgradeable_program::id(), "upgradeable bpf loader"),
-=======
         (max_cpi_instruction_size_ipv6_mtu::id(), "Max cross-program invocation size 1280"),
->>>>>>> 5524938a5... Limit CPI instruction size (#14317)
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

@@ -652,12 +652,8 @@ trait SyscallInvokeSigned<'a> {
     fn translate_instruction(
         &self,
         addr: u64,
-<<<<<<< HEAD
-        ro_regions: &[MemoryRegion],
-=======
         max_size: usize,
-        memory_mapping: &MemoryMapping,
->>>>>>> 5524938a5... Limit CPI instruction size (#14317)
+        ro_regions: &[MemoryRegion],
     ) -> Result<Instruction, EbpfError<BPFError>>;
     fn translate_accounts(
         &self,
@@ -694,29 +690,18 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
     fn translate_instruction(
         &self,
         addr: u64,
-<<<<<<< HEAD
+        max_size: usize,
         ro_regions: &[MemoryRegion],
     ) -> Result<Instruction, EbpfError<BPFError>> {
         let ix = translate_type!(Instruction, addr, ro_regions, self.loader_id)?;
+        check_instruction_size(ix.accounts.len(), ix.data.len(), max_size)?;
+
         let accounts = translate_slice!(
             AccountMeta,
             ix.accounts.as_ptr(),
             ix.accounts.len(),
             ro_regions,
             self.loader_id
-=======
-        max_size: usize,
-        memory_mapping: &MemoryMapping,
-    ) -> Result<Instruction, EbpfError<BPFError>> {
-        let ix = translate_type::<Instruction>(memory_mapping, addr, self.loader_id)?;
-        check_instruction_size(ix.accounts.len(), ix.data.len(), max_size)?;
-
-        let accounts = translate_slice::<AccountMeta>(
-            memory_mapping,
-            ix.accounts.as_ptr() as u64,
-            ix.accounts.len() as u64,
-            self.loader_id,
->>>>>>> 5524938a5... Limit CPI instruction size (#14317)
         )?
         .to_vec();
         let data = translate_slice!(
@@ -987,24 +972,14 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
     fn translate_instruction(
         &self,
         addr: u64,
-<<<<<<< HEAD
+        max_size: usize,
         ro_regions: &[MemoryRegion],
     ) -> Result<Instruction, EbpfError<BPFError>> {
         let ix_c = translate_type!(SolInstruction, addr, ro_regions, self.loader_id)?;
+        check_instruction_size(ix_c.accounts_len, ix_c.data_len, max_size)?;
         let program_id = translate_type!(Pubkey, ix_c.program_id_addr, ro_regions, self.loader_id)?;
         let meta_cs = translate_slice!(
             SolAccountMeta,
-=======
-        max_size: usize,
-        memory_mapping: &MemoryMapping,
-    ) -> Result<Instruction, EbpfError<BPFError>> {
-        let ix_c = translate_type::<SolInstruction>(memory_mapping, addr, self.loader_id)?;
-        check_instruction_size(ix_c.accounts_len, ix_c.data_len, max_size)?;
-        let program_id =
-            translate_type::<Pubkey>(memory_mapping, ix_c.program_id_addr, self.loader_id)?;
-        let meta_cs = translate_slice::<SolAccountMeta>(
-            memory_mapping,
->>>>>>> 5524938a5... Limit CPI instruction size (#14317)
             ix_c.accounts_addr,
             ix_c.accounts_len,
             ro_regions,
@@ -1236,17 +1211,13 @@ fn call<'a>(
 
     // Translate and verify caller's data
 
-<<<<<<< HEAD
-    let instruction = syscall.translate_instruction(instruction_addr, ro_regions)?;
-=======
     let instruction = syscall.translate_instruction(
         instruction_addr,
         invoke_context
             .get_bpf_compute_budget()
             .max_cpi_instruction_size,
-        &memory_mapping,
+        ro_regions,
     )?;
->>>>>>> 5524938a5... Limit CPI instruction size (#14317)
     let caller_program_id = invoke_context
         .get_caller()
         .map_err(SyscallError::InstructionError)?;
@@ -1263,16 +1234,9 @@ fn call<'a>(
     let (message, callee_program_id) =
         MessageProcessor::create_message(&instruction, &keyed_account_refs, &signers)
             .map_err(SyscallError::InstructionError)?;
-<<<<<<< HEAD
-    is_authorized_program(&callee_program_id)?;
+    check_authorized_program(&callee_program_id)?;
     let (accounts, account_refs) = syscall.translate_accounts(
         &message,
-=======
-    check_authorized_program(&callee_program_id)?;
-    let (mut accounts, mut account_refs) = syscall.translate_accounts(
-        &message.account_keys,
-        program_id_index,
->>>>>>> 5524938a5... Limit CPI instruction size (#14317)
         account_infos_addr,
         account_infos_len as usize,
         ro_regions,
