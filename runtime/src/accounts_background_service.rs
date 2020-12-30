@@ -25,6 +25,9 @@ use std::{
 };
 
 const INTERVAL_MS: u64 = 100;
+const SHRUNKEN_ACCOUNT_PER_SEC: usize = 250;
+const SHRUNKEN_ACCOUNT_PER_INTERVAL: usize =
+    SHRUNKEN_ACCOUNT_PER_SEC / (1000 / INTERVAL_MS as usize);
 const CLEAN_INTERVAL_BLOCKS: u64 = 100;
 
 pub type SnapshotRequestSender = Sender<SnapshotRequest>;
@@ -74,7 +77,7 @@ pub struct SnapshotRequestHandler {
 
 impl SnapshotRequestHandler {
     // Returns the latest requested snapshot slot, if one exists
-    pub fn handle_snapshot_requests(&self) -> Option<u64> {
+    pub fn handle_snapshot_requests(&self, caching_enabled: bool) -> Option<u64> {
         self.snapshot_request_receiver
             .try_iter()
             .last()
@@ -88,10 +91,18 @@ impl SnapshotRequestHandler {
                 snapshot_root_bank.update_accounts_hash();
                 hash_time.stop();
 
-                let mut flush_accounts_cache_time = Measure::start("flush_accounts_cache_time");
+                let mut shrink_time = Measure::start("shrink_time");
+                if !caching_enabled {
+                    snapshot_root_bank
+                        .process_stale_slot_with_budget(0, SHRUNKEN_ACCOUNT_PER_INTERVAL);
+                }
+                shrink_time.stop();
 
-                // Force flush all the roots from the cache so that the snapshot can be taken.
-                snapshot_root_bank.force_flush_accounts_cache();
+                let mut flush_accounts_cache_time = Measure::start("flush_accounts_cache_time");
+                if caching_enabled {
+                    // Force flush all the roots from the cache so that the snapshot can be taken.
+                    snapshot_root_bank.force_flush_accounts_cache();
+                }
                 flush_accounts_cache_time.stop();
 
                 let mut clean_time = Measure::start("clean_time");
@@ -102,9 +113,11 @@ impl SnapshotRequestHandler {
                 snapshot_root_bank.clean_accounts(true);
                 clean_time.stop();
 
-                let mut shrink_time = Measure::start("shrink_time");
-                snapshot_root_bank.shrink_candidate_slots();
-                shrink_time.stop();
+                if caching_enabled {
+                    shrink_time = Measure::start("shrink_time");
+                    snapshot_root_bank.shrink_candidate_slots();
+                    shrink_time.stop();
+                }
 
                 // Generate an accounts package
                 let mut snapshot_time = Measure::start("snapshot_time");
@@ -188,11 +201,11 @@ pub struct ABSRequestHandler {
 
 impl ABSRequestHandler {
     // Returns the latest requested snapshot block height, if one exists
-    pub fn handle_snapshot_requests(&self) -> Option<u64> {
+    pub fn handle_snapshot_requests(&self, caching_enabled: bool) -> Option<u64> {
         self.snapshot_request_handler
             .as_ref()
             .and_then(|snapshot_request_handler| {
-                snapshot_request_handler.handle_snapshot_requests()
+                snapshot_request_handler.handle_snapshot_requests(caching_enabled)
             })
     }
 
@@ -216,9 +229,11 @@ impl AccountsBackgroundService {
         bank_forks: Arc<RwLock<BankForks>>,
         exit: &Arc<AtomicBool>,
         request_handler: ABSRequestHandler,
+        caching_enabled: bool,
     ) -> Self {
         info!("AccountsBackgroundService active");
         let exit = exit.clone();
+        let mut consumed_budget = 0;
         let mut last_cleaned_block_height = 0;
         let mut removed_slots_count = 0;
         let mut total_remove_slots_time = 0;
@@ -257,7 +272,8 @@ impl AccountsBackgroundService {
                 // request for `N` to the snapshot request channel before setting a root `R > N`, and
                 // snapshot_request_handler.handle_requests() will always look for the latest
                 // available snapshot in the channel.
-                let snapshot_block_height = request_handler.handle_snapshot_requests();
+                let snapshot_block_height =
+                    request_handler.handle_snapshot_requests(caching_enabled);
                 bank.flush_accounts_cache_if_needed();
 
                 if let Some(snapshot_block_height) = snapshot_block_height {
@@ -265,8 +281,19 @@ impl AccountsBackgroundService {
                     assert!(last_cleaned_block_height <= snapshot_block_height);
                     last_cleaned_block_height = snapshot_block_height;
                 } else {
-                    bank.shrink_candidate_slots();
-
+                    if caching_enabled {
+                        bank.shrink_candidate_slots();
+                    } else {
+                        // under sustained writes, shrink can lag behind so cap to	                    bank.shrink_candidate_slots();
+                        // SHRUNKEN_ACCOUNT_PER_INTERVAL (which is based on INTERVAL_MS,
+                        // which in turn roughly asscociated block time)
+                        consumed_budget = bank
+                            .process_stale_slot_with_budget(
+                                consumed_budget,
+                                SHRUNKEN_ACCOUNT_PER_INTERVAL,
+                            )
+                            .min(SHRUNKEN_ACCOUNT_PER_INTERVAL);
+                    }
                     if bank.block_height() - last_cleaned_block_height
                         > (CLEAN_INTERVAL_BLOCKS + thread_rng().gen_range(0, 10))
                     {

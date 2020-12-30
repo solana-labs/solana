@@ -272,6 +272,7 @@ impl Tvu {
             bank_forks.clone(),
             &exit,
             accounts_background_request_handler,
+            false,
         );
 
         Tvu {
