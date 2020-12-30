@@ -4144,7 +4144,6 @@ version = "1.6.0"
 dependencies = [
  "bincode",
  "byteorder",
- "bytes 0.4.12",
  "clap",
  "log 0.4.11",
  "serde",
@@ -4155,8 +4154,7 @@ dependencies = [
  "solana-metrics",
  "solana-sdk",
  "solana-version",
- "tokio 0.1.22",
- "tokio-codec",
+ "tokio 0.3.5",
 ]
 
 [[package]]

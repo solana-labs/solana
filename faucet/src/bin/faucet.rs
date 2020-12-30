@@ -11,7 +11,8 @@ use std::{
     thread,
 };
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let default_keypair = solana_cli_config::Config::default().keypair_path;
 
     solana_logger::setup_with_default("solana=info");
@@ -76,5 +77,5 @@ fn main() {
         faucet1.lock().unwrap().clear_request_count();
     });
 
-    run_faucet(faucet, faucet_addr, None);
+    run_faucet(faucet, faucet_addr, None).await;
 }
