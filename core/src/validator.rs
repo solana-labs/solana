@@ -756,7 +756,7 @@ impl Validator {
         self.completed_data_sets_service
             .join()
             .expect("completed_data_sets_service");
-        self.ip_echo_server.shutdown_now();
+        self.ip_echo_server.shutdown_background();
     }
 }
 
