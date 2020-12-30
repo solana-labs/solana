@@ -122,6 +122,10 @@ pub mod max_cpi_instruction_size_ipv6_mtu {
     solana_sdk::declare_id!("5WLtuUJA5VVA1Cc28qULPfGs8anhoBev8uNqaaXeasnf");
 }
 
+pub mod limit_cpi_loader_invoke {
+    solana_sdk::declare_id!("xGbcW7EEC7zMRJ6LaJCob65EJxKryWjwM4rv8f57SRM");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -154,6 +158,7 @@ lazy_static! {
         (warp_testnet_timestamp::id(), "warp testnet timestamp to current #14210"),
         (stake_program_v3::id(), "solana_stake_program v3"),
         (max_cpi_instruction_size_ipv6_mtu::id(), "Max cross-program invocation size 1280"),
+        (limit_cpi_loader_invoke::id(), "Loader not authorized via CPI"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
