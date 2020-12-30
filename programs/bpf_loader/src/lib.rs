@@ -126,19 +126,12 @@ fn write_program_data(
     Ok(())
 }
 
-<<<<<<< HEAD
-=======
 fn check_loader_id(id: &Pubkey) -> bool {
     bpf_loader::check_id(id)
         || bpf_loader_deprecated::check_id(id)
         || bpf_loader_upgradeable::check_id(id)
 }
 
-/// Default program heap size, allocators
-/// are expected to enforce this
-const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
-
->>>>>>> ee0a80a09... Prevent bpf loader impersonators (#14278)
 /// Create the BPF virtual machine
 pub fn create_vm<'a>(
     loader_id: &'a Pubkey,
@@ -199,7 +192,9 @@ pub fn process_instruction(
                 (first_account, keyed_accounts, 0)
             };
 
-        if !check_loader_id(&program.owner()?) {
+        let loader_id = &program.owner()?;
+
+        if !check_loader_id(loader_id) {
             log!(logger, "Executable account not owned by the BPF loader");
             return Err(InstructionError::IncorrectProgramId);
         }
@@ -212,25 +207,7 @@ pub fn process_instruction(
                 invoke_context,
             )?,
         };
-<<<<<<< HEAD
-        executor.execute(program_id, keyed_accounts, instruction_data, invoke_context)?
-    } else if bpf_loader_upgradeable::check_id(program_id) {
-        process_loader_upgradeable_instruction(
-            program_id,
-            keyed_accounts,
-            instruction_data,
-            invoke_context,
-        )?;
-    } else {
-        process_loader_instruction(program_id, keyed_accounts, instruction_data, invoke_context)?;
-=======
-        executor.execute(
-            &program.owner()?,
-            keyed_accounts,
-            instruction_data,
-            invoke_context,
-            use_jit,
-        )?
+        executor.execute(loader_id, keyed_accounts, instruction_data, invoke_context)?
     } else {
         if !check_loader_id(program_id) {
             log!(logger, "Invalid BPF loader id");
@@ -243,7 +220,6 @@ pub fn process_instruction(
                 keyed_accounts,
                 instruction_data,
                 invoke_context,
-                use_jit,
             )?;
         } else {
             process_loader_instruction(
@@ -251,10 +227,8 @@ pub fn process_instruction(
                 keyed_accounts,
                 instruction_data,
                 invoke_context,
-                use_jit,
             )?;
         }
->>>>>>> ee0a80a09... Prevent bpf loader impersonators (#14278)
     }
     Ok(())
 }
@@ -612,7 +586,7 @@ impl Debug for BPFExecutor {
 impl Executor for BPFExecutor {
     fn execute(
         &self,
-        program_id: &Pubkey,
+        loader_id: &Pubkey,
         keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
@@ -625,7 +599,7 @@ impl Executor for BPFExecutor {
 
         let parameter_accounts = keyed_accounts_iter.as_slice();
         let parameter_bytes = serialize_parameters(
-            program_id,
+            loader_id,
             program.unsigned_key(),
             parameter_accounts,
             &instruction_data,
@@ -633,7 +607,7 @@ impl Executor for BPFExecutor {
         {
             let compute_meter = invoke_context.get_compute_meter();
             let (mut vm, heap_region) = match create_vm(
-                program_id,
+                loader_id,
                 self.executable.as_ref(),
                 &parameter_accounts,
                 invoke_context,
@@ -692,7 +666,7 @@ impl Executor for BPFExecutor {
                 }
             }
         }
-        deserialize_parameters(program_id, parameter_accounts, &parameter_bytes)?;
+        deserialize_parameters(loader_id, parameter_accounts, &parameter_bytes)?;
         stable_log::program_success(&logger, program.unsigned_key());
         Ok(())
     }

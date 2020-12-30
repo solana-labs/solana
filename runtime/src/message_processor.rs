@@ -916,18 +916,13 @@ impl MessageProcessor {
             feature_set,
         );
         let keyed_accounts =
-<<<<<<< HEAD
             Self::create_keyed_accounts(message, instruction, executable_accounts, accounts)?;
-        self.process_instruction(&keyed_accounts, &instruction.data, &mut invoke_context)?;
-=======
-            Self::create_keyed_accounts(message, instruction, executable_accounts, accounts);
         self.process_instruction(
             program_id,
             &keyed_accounts,
             &instruction.data,
             &mut invoke_context,
         )?;
->>>>>>> ee0a80a09... Prevent bpf loader impersonators (#14278)
         Self::verify(
             message,
             instruction,
