@@ -4129,6 +4129,7 @@ dependencies = [
  "tokio-fs",
  "tokio-io",
  "trees",
+ "zstd",
 ]
 
 [[package]]

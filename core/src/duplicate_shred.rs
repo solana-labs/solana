@@ -1,4 +1,4 @@
-use crate::crds_value::sanitize_wallclock;
+use crate::{crds_value::sanitize_wallclock, encode};
 use itertools::Itertools;
 use solana_ledger::{
     blockstore_meta::DuplicateSlotProof,
@@ -49,10 +49,8 @@ pub struct DuplicateShredIndex {
 pub enum Error {
     #[error("data chunk mismatch")]
     DataChunkMismatch,
-    #[error("decoding error")]
-    DecodingError(std::io::Error),
     #[error("encoding error")]
-    EncodingError(std::io::Error),
+    EncodingError(#[from] encode::Error),
     #[error("invalid chunk index")]
     InvalidChunkIndex,
     #[error("invalid duplicate shreds")]
@@ -117,7 +115,7 @@ pub fn from_duplicate_slot_proof(
     leader: impl LeaderScheduleFn,
     wallclock: u64,
     max_size: usize, // Maximum serialized size of each DuplicateShred.
-    encoder: impl FnOnce(Vec<u8>) -> Result<Vec<u8>, std::io::Error>,
+    encode_options: encode::Options,
 ) -> Result<impl Iterator<Item = DuplicateShred>, Error> {
     if proof.shred1 == proof.shred2 {
         return Err(Error::InvalidDuplicateSlotProof);
@@ -130,8 +128,7 @@ pub fn from_duplicate_slot_proof(
         shred1.index(),
         shred1.common_header.shred_type,
     );
-    let data = bincode::serialize(proof)?;
-    let data = encoder(data).map_err(Error::EncodingError)?;
+    let data = encode::encode(&proof, encode_options)?;
     let chunk_size = if DUPLICATE_SHRED_HEADER_SIZE < max_size {
         max_size - DUPLICATE_SHRED_HEADER_SIZE
     } else {
@@ -184,7 +181,6 @@ fn check_chunk(
 pub fn into_shreds(
     chunks: impl IntoIterator<Item = DuplicateShred>,
     leader: impl LeaderScheduleFn,
-    decoder: impl FnOnce(Vec<u8>) -> Result<Vec<u8>, std::io::Error>,
 ) -> Result<(Shred, Shred), Error> {
     let mut chunks = chunks.into_iter();
     let DuplicateShred {
@@ -220,8 +216,7 @@ pub fn into_shreds(
         return Err(Error::MissingDataChunk);
     }
     let data = (0..num_chunks).map(|k| data.remove(&k).unwrap());
-    let data = decoder(data.concat()).map_err(Error::DecodingError)?;
-    let proof: DuplicateSlotProof = bincode::deserialize(&data)?;
+    let proof: DuplicateSlotProof = encode::decode(&data.concat())?;
     if proof.shred1 == proof.shred2 {
         return Err(Error::InvalidDuplicateSlotProof);
     }
@@ -269,9 +264,10 @@ impl From<&DuplicateShred> for DuplicateShredIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::encode::tests::new_rand_shred;
     use rand::Rng;
-    use solana_ledger::{entry::Entry, shred::Shredder};
-    use solana_sdk::{hash, signature::Keypair, signature::Signer, system_transaction};
+    use solana_ledger::shred::Shredder;
+    use solana_sdk::{signature::Keypair, signature::Signer};
     use std::sync::Arc;
 
     #[test]
@@ -294,30 +290,6 @@ mod tests {
             bincode::serialized_size(&dup).unwrap(),
             DUPLICATE_SHRED_HEADER_SIZE as u64
         );
-    }
-
-    fn new_rand_shred<R: Rng>(rng: &mut R, next_shred_index: u32, shredder: &Shredder) -> Shred {
-        let entries: Vec<_> = std::iter::repeat_with(|| {
-            let tx = system_transaction::transfer(
-                &Keypair::new(),       // from
-                &Pubkey::new_unique(), // to
-                rng.gen(),             // lamports
-                hash::new_rand(rng),   // recent blockhash
-            );
-            Entry::new(
-                &hash::new_rand(rng), // prev_hash
-                1,                    // num_hashes,
-                vec![tx],             // transactions
-            )
-        })
-        .take(5)
-        .collect();
-        let (mut data_shreds, _coding_shreds, _last_shred_index) = shredder.entries_to_shreds(
-            &entries,
-            true, // is_last_in_slot
-            next_shred_index,
-        );
-        data_shreds.swap_remove(0)
     }
 
     #[test]
@@ -355,12 +327,12 @@ mod tests {
             leader,
             rng.gen(), // wallclock
             512,       // max_size
-            Ok,        // encoder
+            encode::Options::Zstd { level: 0 },
         )
         .unwrap()
         .collect();
-        assert!(chunks.len() > 4);
-        let (shred3, shred4) = into_shreds(chunks, leader, Ok).unwrap();
+        assert!(chunks.len() > 3);
+        let (shred3, shred4) = into_shreds(chunks, leader).unwrap();
         assert_eq!(shred1, shred3);
         assert_eq!(shred2, shred4);
     }
