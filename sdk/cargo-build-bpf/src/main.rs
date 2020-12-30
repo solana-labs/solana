@@ -217,7 +217,7 @@ fn build_bpf_package(
 
         println!();
         println!("To deploy this program:");
-        println!("  $ solana deploy {}", program_so.display());
+        println!("  $ solana program deploy {}", program_so.display());
     } else if config.dump {
         println!("Note: --dump is only available for crates with a cdylib target");
     }
