@@ -255,7 +255,9 @@ fn process_instruction_common(
                 (first_account, keyed_accounts, 0)
             };
 
-        if !check_loader_id(&program.owner()?) {
+        let loader_id = &program.owner()?;
+
+        if !check_loader_id(loader_id) {
             log!(logger, "Executable account not owned by the BPF loader");
             return Err(InstructionError::IncorrectProgramId);
         }
@@ -270,7 +272,7 @@ fn process_instruction_common(
             )?,
         };
         executor.execute(
-            &program.owner()?,
+            loader_id,
             keyed_accounts,
             instruction_data,
             invoke_context,
@@ -661,7 +663,7 @@ impl Debug for BPFExecutor {
 impl Executor for BPFExecutor {
     fn execute(
         &self,
-        program_id: &Pubkey,
+        loader_id: &Pubkey,
         keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
@@ -675,7 +677,7 @@ impl Executor for BPFExecutor {
 
         let parameter_accounts = keyed_accounts_iter.as_slice();
         let mut parameter_bytes = serialize_parameters(
-            program_id,
+            loader_id,
             program.unsigned_key(),
             parameter_accounts,
             &instruction_data,
@@ -683,7 +685,7 @@ impl Executor for BPFExecutor {
         {
             let compute_meter = invoke_context.get_compute_meter();
             let mut vm = match create_vm(
-                program_id,
+                loader_id,
                 self.program.as_ref(),
                 &mut parameter_bytes,
                 &parameter_accounts,
@@ -742,7 +744,7 @@ impl Executor for BPFExecutor {
                 }
             }
         }
-        deserialize_parameters(program_id, parameter_accounts, &parameter_bytes)?;
+        deserialize_parameters(loader_id, parameter_accounts, &parameter_bytes)?;
         stable_log::program_success(&logger, program.unsigned_key());
         Ok(())
     }
