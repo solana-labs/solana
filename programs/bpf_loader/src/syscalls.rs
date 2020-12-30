@@ -652,6 +652,7 @@ trait SyscallInvokeSigned<'a> {
     fn translate_instruction(
         &self,
         addr: u64,
+        max_size: usize,
         ro_regions: &[MemoryRegion],
     ) -> Result<Instruction, EbpfError<BPFError>>;
     fn translate_accounts(
@@ -689,9 +690,12 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
     fn translate_instruction(
         &self,
         addr: u64,
+        max_size: usize,
         ro_regions: &[MemoryRegion],
     ) -> Result<Instruction, EbpfError<BPFError>> {
         let ix = translate_type!(Instruction, addr, ro_regions, self.loader_id)?;
+        check_instruction_size(ix.accounts.len(), ix.data.len(), max_size)?;
+
         let accounts = translate_slice!(
             AccountMeta,
             ix.accounts.as_ptr(),
@@ -960,15 +964,19 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             .try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed.into())
     }
+
     fn get_callers_keyed_accounts(&self) -> &'a [KeyedAccount<'a>] {
         self.callers_keyed_accounts
     }
+
     fn translate_instruction(
         &self,
         addr: u64,
+        max_size: usize,
         ro_regions: &[MemoryRegion],
     ) -> Result<Instruction, EbpfError<BPFError>> {
         let ix_c = translate_type!(SolInstruction, addr, ro_regions, self.loader_id)?;
+        check_instruction_size(ix_c.accounts_len, ix_c.data_len, max_size)?;
         let program_id = translate_type!(Pubkey, ix_c.program_id_addr, ro_regions, self.loader_id)?;
         let meta_cs = translate_slice!(
             SolAccountMeta,
@@ -1161,7 +1169,20 @@ impl<'a> SyscallObject<BPFError> for SyscallInvokeSignedC<'a> {
     }
 }
 
-fn is_authorized_program(program_id: &Pubkey) -> Result<(), EbpfError<BPFError>> {
+fn check_instruction_size(
+    num_accounts: usize,
+    data_len: usize,
+    max_size: usize,
+) -> Result<(), EbpfError<BPFError>> {
+    if max_size < num_accounts * size_of::<AccountMeta>() + data_len {
+        return Err(
+            SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded).into(),
+        );
+    }
+    Ok(())
+}
+
+fn check_authorized_program(program_id: &Pubkey) -> Result<(), EbpfError<BPFError>> {
     if native_loader::check_id(program_id)
         || bpf_loader::check_id(program_id)
         || bpf_loader_deprecated::check_id(program_id)
@@ -1190,7 +1211,13 @@ fn call<'a>(
 
     // Translate and verify caller's data
 
-    let instruction = syscall.translate_instruction(instruction_addr, ro_regions)?;
+    let instruction = syscall.translate_instruction(
+        instruction_addr,
+        invoke_context
+            .get_bpf_compute_budget()
+            .max_cpi_instruction_size,
+        ro_regions,
+    )?;
     let caller_program_id = invoke_context
         .get_caller()
         .map_err(SyscallError::InstructionError)?;
@@ -1207,7 +1234,7 @@ fn call<'a>(
     let (message, callee_program_id) =
         MessageProcessor::create_message(&instruction, &keyed_account_refs, &signers)
             .map_err(SyscallError::InstructionError)?;
-    is_authorized_program(&callee_program_id)?;
+    check_authorized_program(&callee_program_id)?;
     let (accounts, account_refs) = syscall.translate_accounts(
         &message,
         account_infos_addr,

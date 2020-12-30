@@ -935,6 +935,7 @@ mod tests {
                 max_call_depth: 20,
                 stack_frame_size: 4096,
                 log_pubkey_units: 100,
+                max_cpi_instruction_size: usize::MAX,
             },
             Rc::new(RefCell::new(Executors::default())),
             None,

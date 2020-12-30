@@ -110,6 +110,10 @@ pub mod bpf_loader_upgradeable_program {
     solana_sdk::declare_id!("FbhK8HN9qvNHvJcoFVHAEUCNkagHvu7DTWzdnLuVQ5u4");
 }
 
+pub mod max_cpi_instruction_size_ipv6_mtu {
+    solana_sdk::declare_id!("5WLtuUJA5VVA1Cc28qULPfGs8anhoBev8uNqaaXeasnf");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -139,6 +143,7 @@ lazy_static! {
         (simple_capitalization::id(), "simple capitalization"),
         (stake_program_v3::id(), "solana_stake_program v3"),
         (bpf_loader_upgradeable_program::id(), "upgradeable bpf loader"),
+        (max_cpi_instruction_size_ipv6_mtu::id(), "Max cross-program invocation size 1280"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
