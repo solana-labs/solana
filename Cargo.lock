@@ -5099,6 +5099,7 @@ dependencies = [
  "chrono",
  "clap",
  "console",
+ "core_affinity",
  "fd-lock",
  "indicatif",
  "libc",
