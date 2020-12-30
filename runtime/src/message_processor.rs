@@ -207,6 +207,7 @@ pub struct ThisInvokeContext<'a> {
     program_ids: Vec<Pubkey>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
+    account_deps: &'a [(Pubkey, RefCell<Account>)],
     programs: &'a [(Pubkey, ProcessInstructionWithContext)],
     logger: Rc<RefCell<dyn Logger>>,
     bpf_compute_budget: BpfComputeBudget,
@@ -216,10 +217,12 @@ pub struct ThisInvokeContext<'a> {
     feature_set: Arc<FeatureSet>,
 }
 impl<'a> ThisInvokeContext<'a> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         program_id: &Pubkey,
         rent: Rent,
         pre_accounts: Vec<PreAccount>,
+        account_deps: &'a [(Pubkey, RefCell<Account>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         log_collector: Option<Rc<LogCollector>>,
         bpf_compute_budget: BpfComputeBudget,
@@ -233,6 +236,7 @@ impl<'a> ThisInvokeContext<'a> {
             program_ids,
             rent,
             pre_accounts,
+            account_deps,
             programs,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
             bpf_compute_budget,
@@ -312,16 +316,25 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
         self.feature_set.is_active(feature_id)
     }
-    fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
+    fn get_account(&self, pubkey: &Pubkey) -> Option<RefCell<Account>> {
+        if let Some(account) = self.account_deps.iter().find_map(|(key, account)| {
+            if key == pubkey {
+                Some(account.clone())
+            } else {
+                None
+            }
+        }) {
+            return Some(account);
+        }
         self.pre_accounts.iter().find_map(|pre| {
             if pre.key == *pubkey {
-                Some(Account {
+                Some(RefCell::new(Account {
                     lamports: pre.lamports,
                     data: pre.data.clone(),
                     owner: pre.owner,
                     executable: pre.is_executable,
                     rent_epoch: pre.rent_epoch,
-                })
+                }))
             } else {
                 None
             }
@@ -641,26 +654,27 @@ impl MessageProcessor {
         let program_account = invoke_context
             .get_account(&callee_program_id)
             .ok_or(InstructionError::MissingAccount)?;
-        if !program_account.executable {
+        if !program_account.borrow().executable {
             return Err(InstructionError::AccountNotExecutable);
         }
-        let programdata_executable = if program_account.owner == bpf_loader_upgradeable::id() {
-            if let UpgradeableLoaderState::Program {
-                programdata_address,
-            } = program_account.state()?
-            {
-                if let Some(account) = invoke_context.get_account(&programdata_address) {
-                    Some((programdata_address, RefCell::new(account)))
+        let programdata_executable =
+            if program_account.borrow().owner == bpf_loader_upgradeable::id() {
+                if let UpgradeableLoaderState::Program {
+                    programdata_address,
+                } = program_account.borrow().state()?
+                {
+                    if let Some(account) = invoke_context.get_account(&programdata_address) {
+                        Some((programdata_address, account))
+                    } else {
+                        return Err(InstructionError::MissingAccount);
+                    }
                 } else {
                     return Err(InstructionError::MissingAccount);
                 }
             } else {
-                return Err(InstructionError::MissingAccount);
-            }
-        } else {
-            None
-        };
-        let mut executable_accounts = vec![(callee_program_id, RefCell::new(program_account))];
+                None
+            };
+        let mut executable_accounts = vec![(callee_program_id, program_account)];
         if let Some(programdata) = programdata_executable {
             executable_accounts.push(programdata);
         }
@@ -859,6 +873,7 @@ impl MessageProcessor {
         instruction: &CompiledInstruction,
         executable_accounts: &[(Pubkey, RefCell<Account>)],
         accounts: &[Rc<RefCell<Account>>],
+        account_deps: &[(Pubkey, RefCell<Account>)],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
@@ -887,6 +902,7 @@ impl MessageProcessor {
             instruction.program_id(&message.account_keys),
             rent_collector.rent,
             pre_accounts,
+            account_deps,
             &self.programs,
             log_collector,
             bpf_compute_budget,
@@ -917,6 +933,7 @@ impl MessageProcessor {
         message: &Message,
         loaders: &[Vec<(Pubkey, RefCell<Account>)>],
         accounts: &[Rc<RefCell<Account>>],
+        account_deps: &[(Pubkey, RefCell<Account>)],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
@@ -933,6 +950,7 @@ impl MessageProcessor {
                 instruction,
                 &loaders[instruction_index],
                 accounts,
+                account_deps,
                 rent_collector,
                 log_collector.clone(),
                 executors.clone(),
@@ -988,6 +1006,7 @@ mod tests {
             &program_ids[0],
             Rent::default(),
             pre_accounts,
+            &[],
             &[],
             None,
             BpfComputeBudget::default(),
@@ -1542,6 +1561,7 @@ mod tests {
             &message,
             &loaders,
             &accounts,
+            &[],
             &rent_collector,
             None,
             executors.clone(),
@@ -1566,6 +1586,7 @@ mod tests {
             &message,
             &loaders,
             &accounts,
+            &[],
             &rent_collector,
             None,
             executors.clone(),
@@ -1594,6 +1615,7 @@ mod tests {
             &message,
             &loaders,
             &accounts,
+            &[],
             &rent_collector,
             None,
             executors,
@@ -1706,6 +1728,7 @@ mod tests {
             &message,
             &loaders,
             &accounts,
+            &[],
             &rent_collector,
             None,
             executors.clone(),
@@ -1734,6 +1757,7 @@ mod tests {
             &message,
             &loaders,
             &accounts,
+            &[],
             &rent_collector,
             None,
             executors.clone(),
@@ -1759,6 +1783,7 @@ mod tests {
             &message,
             &loaders,
             &accounts,
+            &[],
             &rent_collector,
             None,
             executors,
@@ -1844,6 +1869,7 @@ mod tests {
                 not_owned_preaccount,
                 executable_preaccount,
             ],
+            &[],
             programs.as_slice(),
             None,
             BpfComputeBudget::default(),

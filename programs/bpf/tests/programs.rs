@@ -19,9 +19,7 @@ use solana_runtime::{
 };
 use solana_sdk::{
     account::Account,
-    account_utils::StateMut,
     bpf_loader, bpf_loader_deprecated,
-    bpf_loader_upgradeable::UpgradeableLoaderState,
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, MAX_PROCESSING_AGE},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
@@ -1384,11 +1382,11 @@ fn test_program_bpf_upgrade() {
     bank.add_builtin(&name, id, entrypoint);
     let bank_client = BankClient::new(bank);
 
-    // deploy upgrade program
+    // Deploy upgrade program
     let (program_id, authority_keypair) =
         load_upgradeable_bpf_program(&bank_client, &mint_keypair, "solana_bpf_rust_upgradeable");
 
-    // call upgrade program
+    // Call upgrade program
     nonce += 1;
     let instruction = Instruction::new(
         program_id,
@@ -1404,7 +1402,7 @@ fn test_program_bpf_upgrade() {
         TransactionError::InstructionError(0, InstructionError::Custom(42))
     );
 
-    // upgrade program
+    // Upgrade program
     upgrade_bpf_program(
         &bank_client,
         &mint_keypair,
@@ -1413,7 +1411,7 @@ fn test_program_bpf_upgrade() {
         "solana_bpf_rust_upgraded",
     );
 
-    // call upgraded program
+    // Call upgraded program
     nonce += 1;
     let instruction = Instruction::new(
         program_id,
@@ -1429,7 +1427,7 @@ fn test_program_bpf_upgrade() {
         TransactionError::InstructionError(0, InstructionError::Custom(43))
     );
 
-    // upgrade back to the original program
+    // Set a new authority
     let new_authority_keypair = Keypair::new();
     set_upgrade_authority(
         &bank_client,
@@ -1439,7 +1437,7 @@ fn test_program_bpf_upgrade() {
         Some(&new_authority_keypair.pubkey()),
     );
 
-    // upgrade back to the original program
+    // Upgrade back to the original program
     upgrade_bpf_program(
         &bank_client,
         &mint_keypair,
@@ -1448,7 +1446,7 @@ fn test_program_bpf_upgrade() {
         "solana_bpf_rust_upgradeable",
     );
 
-    // call original program
+    // Call original program
     nonce += 1;
     let instruction = Instruction::new(
         program_id,
@@ -1467,9 +1465,10 @@ fn test_program_bpf_upgrade() {
 
 #[cfg(feature = "bpf_rust")]
 #[test]
-fn test_program_bpf_invoke_upgradeable() {
+fn test_program_bpf_invoke_upgradeable_via_cpi() {
     solana_logger::setup();
 
+    let mut nonce = 0;
     let GenesisConfigInfo {
         genesis_config,
         mint_keypair,
@@ -1488,29 +1487,81 @@ fn test_program_bpf_invoke_upgradeable() {
         "solana_bpf_rust_invoke_and_return",
     );
 
-    // deploy upgrade program
-    let (program_id, _) =
+    // Deploy upgrade program
+    let (program_id, authority_keypair) =
         load_upgradeable_bpf_program(&bank_client, &mint_keypair, "solana_bpf_rust_upgradeable");
 
-    let data = bank_client.get_account(&program_id).unwrap().unwrap();
-    let programdata_address = if let UpgradeableLoaderState::Program {
-        programdata_address,
-    } = data.state().unwrap()
-    {
-        programdata_address
-    } else {
-        panic!("Not a program");
-    };
-
-    // call invoker program to invoke the upgradeable program
+    // Call invoker program to invoke the upgradeable program
+    nonce += 1;
     let instruction = Instruction::new(
         invoke_and_return,
-        &[0],
+        &[nonce],
         vec![
             AccountMeta::new(program_id, false),
             AccountMeta::new(clock::id(), false),
             AccountMeta::new(fees::id(), false),
-            AccountMeta::new(programdata_address, false),
+        ],
+    );
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::InstructionError(0, InstructionError::Custom(42))
+    );
+
+    // Upgrade program
+    upgrade_bpf_program(
+        &bank_client,
+        &mint_keypair,
+        &program_id,
+        &authority_keypair,
+        "solana_bpf_rust_upgraded",
+    );
+
+    // Call the upgraded program
+    nonce += 1;
+    let instruction = Instruction::new(
+        invoke_and_return,
+        &[nonce],
+        vec![
+            AccountMeta::new(program_id, false),
+            AccountMeta::new(clock::id(), false),
+            AccountMeta::new(fees::id(), false),
+        ],
+    );
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::InstructionError(0, InstructionError::Custom(43))
+    );
+
+    // Set a new authority
+    let new_authority_keypair = Keypair::new();
+    set_upgrade_authority(
+        &bank_client,
+        &mint_keypair,
+        &program_id,
+        &authority_keypair,
+        Some(&new_authority_keypair.pubkey()),
+    );
+
+    // Upgrade back to the original program
+    upgrade_bpf_program(
+        &bank_client,
+        &mint_keypair,
+        &program_id,
+        &new_authority_keypair,
+        "solana_bpf_rust_upgradeable",
+    );
+
+    // Call original program
+    nonce += 1;
+    let instruction = Instruction::new(
+        invoke_and_return,
+        &[nonce],
+        vec![
+            AccountMeta::new(program_id, false),
+            AccountMeta::new(clock::id(), false),
+            AccountMeta::new(fees::id(), false),
         ],
     );
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
