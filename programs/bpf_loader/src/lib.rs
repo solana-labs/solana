@@ -194,7 +194,17 @@ pub fn process_instruction(
 
         let loader_id = &program.owner()?;
 
+<<<<<<< HEAD
         if !check_loader_id(loader_id) {
+=======
+<<<<<<< HEAD
+        if program.owner()? != *program_id {
+=======
+        let loader_id = &program.owner()?;
+
+        if !check_loader_id(loader_id) {
+>>>>>>> 6c6095abe... nit: clarify loader id (#14355)
+>>>>>>> 5e6de5a37 (nit: clarify loader id (#14355))
             log!(logger, "Executable account not owned by the BPF loader");
             return Err(InstructionError::IncorrectProgramId);
         }
@@ -207,7 +217,23 @@ pub fn process_instruction(
                 invoke_context,
             )?,
         };
+<<<<<<< HEAD
         executor.execute(loader_id, keyed_accounts, instruction_data, invoke_context)?
+=======
+<<<<<<< HEAD
+        executor.execute(program_id, keyed_accounts, instruction_data, invoke_context)?
+    } else if bpf_loader_upgradeable::check_id(program_id) {
+        process_loader_upgradeable_instruction(
+            program_id,
+=======
+        executor.execute(
+            loader_id,
+>>>>>>> 6c6095abe... nit: clarify loader id (#14355)
+            keyed_accounts,
+            instruction_data,
+            invoke_context,
+        )?;
+>>>>>>> 5e6de5a37 (nit: clarify loader id (#14355))
     } else {
         if !check_loader_id(program_id) {
             log!(logger, "Invalid BPF loader id");
