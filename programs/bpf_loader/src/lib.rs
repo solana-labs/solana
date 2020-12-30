@@ -11,7 +11,6 @@ use crate::{
     serialization::{deserialize_parameters, serialize_parameters},
     syscalls::SyscallError,
 };
-use num_derive::{FromPrimitive, ToPrimitive};
 use solana_rbpf::{
     error::{EbpfError, UserDefinedError},
     memory_region::MemoryRegion,
@@ -23,7 +22,6 @@ use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
-    decode_error::DecodeError,
     entrypoint::SUCCESS,
     feature_set::bpf_compute_budget_balancing,
     instruction::InstructionError,
@@ -44,20 +42,6 @@ solana_sdk::declare_builtin!(
     solana_bpf_loader_program,
     solana_bpf_loader_program::process_instruction
 );
-
-/// Errors returned by the BPFLoader if the VM fails to run the program
-#[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
-pub enum BPFLoaderError {
-    #[error("failed to create virtual machine")]
-    VirtualMachineCreationFailed = 0x0b9f_0001,
-    #[error("virtual machine failed to run the program to completion")]
-    VirtualMachineFailedToRunProgram = 0x0b9f_0002,
-}
-impl<E> DecodeError<E> for BPFLoaderError {
-    fn type_of() -> &'static str {
-        "BPFLoaderError"
-    }
-}
 
 /// Errors returned by functions the BPF Loader registers with the VM
 #[derive(Debug, Error, PartialEq)]
@@ -613,7 +597,7 @@ impl Executor for BPFExecutor {
                 Ok(info) => info,
                 Err(e) => {
                     log!(logger, "Failed to create BPF VM: {}", e);
-                    return Err(BPFLoaderError::VirtualMachineCreationFailed.into());
+                    return Err(InstructionError::ProgramEnvironmentSetupFailure);
                 }
             };
 
@@ -653,7 +637,10 @@ impl Executor for BPFExecutor {
                         EbpfError::UserError(BPFError::SyscallError(
                             SyscallError::InstructionError(error),
                         )) => error,
-                        _ => BPFLoaderError::VirtualMachineFailedToRunProgram.into(),
+                        err => {
+                            log!(logger, "Program failed to complete: {:?}", err);
+                            InstructionError::ProgramFailedToComplete
+                        }
                     };
 
                     stable_log::program_failure(&logger, program.unsigned_key(), &error);
@@ -935,7 +922,7 @@ mod tests {
             Arc::new(FeatureSet::default()),
         );
         assert_eq!(
-            Err(InstructionError::Custom(194969602)),
+            Err(InstructionError::ProgramFailedToComplete),
             process_instruction(&bpf_loader::id(), &keyed_accounts, &[], &mut invoke_context)
         );
 
