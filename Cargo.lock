@@ -4511,7 +4511,6 @@ name = "solana-net-utils"
 version = "1.6.0"
 dependencies = [
  "bincode",
- "bytes 0.4.12",
  "clap",
  "log 0.4.11",
  "nix 0.19.0",
@@ -4522,7 +4521,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-logger 1.6.0",
  "solana-version",
- "tokio 0.1.22",
+ "tokio 0.3.5",
  "url 2.1.1",
 ]
 
