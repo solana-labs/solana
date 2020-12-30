@@ -39,6 +39,7 @@ use solana_sdk::{
     hash::{Hash, Hasher},
     pubkey::Pubkey,
 };
+use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     borrow::Cow,
     boxed::Box,
@@ -60,6 +61,7 @@ const MAX_RECYCLE_STORES: usize = 1000;
 const STORE_META_OVERHEAD: usize = 256;
 const SHRINK_RATIO: f64 = 0.80;
 const MAX_CACHE_SLOTS: usize = 200;
+const FLUSH_CACHE_RANDOM_THRESHOLD: usize = MAX_LOCKOUT_HISTORY;
 
 // A specially reserved storage id just for entries in the cache, so that
 // operations that take a storage entry can maintain a common interface
@@ -2457,6 +2459,21 @@ impl AccountsDB {
         // If there are > MAX_CACHE_SLOTS, then flush the excess ones to storage
         for old_slot in self.accounts_cache.find_older_frozen_slots(MAX_CACHE_SLOTS) {
             self.flush_slot_cache(old_slot);
+        }
+
+        // Flush a random slot out after every force flush to catch any inconsistencies
+        // between cache and written state (i.e. should cause a hash mismatch between validators
+        // that flush and don't flush if such a bug exists).
+        let num_slots_remaining = self.accounts_cache.num_slots();
+        if force_flush && num_slots_remaining >= FLUSH_CACHE_RANDOM_THRESHOLD {
+            let frozen_slots = self.accounts_cache.find_older_frozen_slots(0);
+            // Remove a random index 0 <= i < `frozen_slots.len()`
+            let rand_slot = frozen_slots[thread_rng().gen_range(0, frozen_slots.len())];
+            info!(
+                "Flushing random slot: {}, num_remaining: {}",
+                rand_slot, num_slots_remaining
+            );
+            self.flush_slot_cache(rand_slot);
         }
 
         inc_new_counter_info!("flush_roots_elapsed", flush_roots_elapsed.as_us() as usize);
