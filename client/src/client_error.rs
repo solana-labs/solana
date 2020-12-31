@@ -5,6 +5,8 @@ use solana_sdk::{
 use std::io;
 use thiserror::Error;
 
+pub use reqwest; // export `reqwest` for clients
+
 #[derive(Error, Debug)]
 pub enum ClientErrorKind {
     #[error(transparent)]
