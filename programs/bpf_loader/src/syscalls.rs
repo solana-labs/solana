@@ -16,8 +16,8 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     feature_set::{
-        pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled, sha256_syscall_enabled,
-        sol_log_compute_units_syscall,
+        limit_cpi_loader_invoke, pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled,
+        sha256_syscall_enabled, sol_log_compute_units_syscall,
     },
     hash::{Hasher, HASH_BYTES},
     instruction::{AccountMeta, Instruction, InstructionError},
@@ -1234,7 +1234,9 @@ fn call<'a>(
     let (message, callee_program_id) =
         MessageProcessor::create_message(&instruction, &keyed_account_refs, &signers)
             .map_err(SyscallError::InstructionError)?;
-    check_authorized_program(&callee_program_id)?;
+    if invoke_context.is_feature_active(&limit_cpi_loader_invoke::id()) {
+        check_authorized_program(&callee_program_id)?;
+    }
     let (accounts, account_refs) = syscall.translate_accounts(
         &message,
         account_infos_addr,
