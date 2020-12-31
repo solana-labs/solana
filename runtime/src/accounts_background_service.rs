@@ -274,7 +274,9 @@ impl AccountsBackgroundService {
                 // available snapshot in the channel.
                 let snapshot_block_height =
                     request_handler.handle_snapshot_requests(caching_enabled);
-                bank.flush_accounts_cache_if_needed();
+                if caching_enabled {
+                    bank.flush_accounts_cache_if_needed();
+                }
 
                 if let Some(snapshot_block_height) = snapshot_block_height {
                     // Safe, see proof above
@@ -297,7 +299,9 @@ impl AccountsBackgroundService {
                     if bank.block_height() - last_cleaned_block_height
                         > (CLEAN_INTERVAL_BLOCKS + thread_rng().gen_range(0, 10))
                     {
-                        bank.force_flush_accounts_cache();
+                        if caching_enabled {
+                            bank.force_flush_accounts_cache();
+                        }
                         bank.clean_accounts(true);
                         last_cleaned_block_height = bank.block_height();
                     }

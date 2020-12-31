@@ -6,9 +6,7 @@ use solana_runtime::{
     accounts_index::Ancestors,
 };
 use solana_sdk::{genesis_config::ClusterType, pubkey::Pubkey};
-use std::env;
-use std::fs;
-use std::path::PathBuf;
+use std::{collections::HashSet, env, fs, path::PathBuf};
 
 fn main() {
     solana_logger::setup();
@@ -56,7 +54,8 @@ fn main() {
     if fs::remove_dir_all(path.clone()).is_err() {
         println!("Warning: Couldn't remove {:?}", path);
     }
-    let accounts = Accounts::new(vec![path], &ClusterType::Testnet);
+    let accounts =
+        Accounts::new_with_config(vec![path], &ClusterType::Testnet, HashSet::new(), false);
     println!("Creating {} accounts", num_accounts);
     let mut create_time = Measure::start("create accounts");
     let pubkeys: Vec<_> = (0..num_slots)

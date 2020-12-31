@@ -271,7 +271,7 @@ where
     P: AsRef<Path>,
 {
     let mut accounts_db =
-        AccountsDB::new_with_indexes(account_paths.to_vec(), cluster_type, account_indexes);
+        AccountsDB::new_with_config(account_paths.to_vec(), cluster_type, account_indexes, false);
     let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
 
     // convert to two level map of slot -> id -> account storage entry

@@ -105,6 +105,7 @@ mod tests {
                 None,
                 None,
                 HashSet::new(),
+                false,
             );
             bank0.freeze();
             let mut bank_forks = BankForks::new(bank0);

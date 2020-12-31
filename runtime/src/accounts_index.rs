@@ -1667,7 +1667,12 @@ pub mod tests {
             slots.len()
         );
 
-        index.purge_exact(&account_key, &slots.into_iter().collect(), &mut vec![], account_index);
+        index.purge_exact(
+            &account_key,
+            &slots.into_iter().collect(),
+            &mut vec![],
+            account_index,
+        );
 
         assert!(secondary_index.index.is_empty());
         assert!(secondary_index.reverse_index.is_empty());

@@ -121,7 +121,8 @@ where
 fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     solana_logger::setup();
     let (_accounts_dir, paths) = get_temp_accounts_paths(4).unwrap();
-    let accounts = Accounts::new(paths, &ClusterType::Development);
+    let accounts =
+        Accounts::new_with_config(paths, &ClusterType::Development, HashSet::new(), false);
 
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 100, 0);

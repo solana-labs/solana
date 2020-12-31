@@ -859,13 +859,22 @@ impl Default for BlockhashQueue {
 
 impl Bank {
     pub fn new(genesis_config: &GenesisConfig) -> Self {
-        Self::new_with_paths(&genesis_config, Vec::new(), &[], None, None, HashSet::new())
+        Self::new_with_paths(
+            &genesis_config,
+            Vec::new(),
+            &[],
+            None,
+            None,
+            HashSet::new(),
+            false,
+        )
     }
 
     #[cfg(test)]
-    pub(crate) fn new_with_indexes(
+    pub(crate) fn new_with_config(
         genesis_config: &GenesisConfig,
         account_indexes: HashSet<AccountIndex>,
+        caching_enabled: bool,
     ) -> Self {
         Self::new_with_paths(
             &genesis_config,
@@ -874,6 +883,7 @@ impl Bank {
             None,
             None,
             account_indexes,
+            caching_enabled,
         )
     }
 
@@ -884,16 +894,18 @@ impl Bank {
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
         account_indexes: HashSet<AccountIndex>,
+        caching_enabled: bool,
     ) -> Self {
         let mut bank = Self::default();
         bank.ancestors.insert(bank.slot(), 0);
         bank.transaction_debug_keys = debug_keys;
         bank.cluster_type = Some(genesis_config.cluster_type);
 
-        bank.rc.accounts = Arc::new(Accounts::new_with_indexes(
+        bank.rc.accounts = Arc::new(Accounts::new_with_config(
             paths,
             &genesis_config.cluster_type,
             account_indexes,
+            caching_enabled,
         ));
         bank.process_genesis_config(genesis_config);
         bank.finish_init(genesis_config, additional_builtins);
@@ -8734,7 +8746,11 @@ pub(crate) mod tests {
         let (genesis_config, _mint_keypair) = create_genesis_config(500);
         let mut account_indexes = HashSet::new();
         account_indexes.insert(AccountIndex::ProgramId);
-        let bank = Arc::new(Bank::new_with_indexes(&genesis_config, account_indexes));
+        let bank = Arc::new(Bank::new_with_config(
+            &genesis_config,
+            account_indexes,
+            false,
+        ));
 
         let address = Pubkey::new_unique();
         let program_id = Pubkey::new_unique();
@@ -10179,8 +10195,8 @@ pub(crate) mod tests {
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
 
-        // Set root for bank 0
-        let mut bank0 = Arc::new(Bank::new(&genesis_config));
+        // Set root for bank 0, with caching enabled
+        let mut bank0 = Arc::new(Bank::new_with_config(&genesis_config, HashSet::new(), true));
         bank0.restore_old_behavior_for_fragile_tests();
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank0).unwrap());
         bank0.freeze();
@@ -11194,6 +11210,7 @@ pub(crate) mod tests {
             None,
             Some(&builtins),
             HashSet::new(),
+            false,
         ));
         // move to next epoch to create now deprecated rewards sysvar intentionally
         let bank1 = Arc::new(Bank::new_from_parent(

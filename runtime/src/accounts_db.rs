@@ -581,7 +581,7 @@ pub struct AccountsDB {
     pub cluster_type: Option<ClusterType>,
 
     pub account_indexes: HashSet<AccountIndex>,
-    
+
     pub caching_enabled: bool,
 }
 
@@ -671,13 +671,14 @@ impl Default for AccountsDB {
 
 impl AccountsDB {
     pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
-        AccountsDB::new_with_indexes(paths, cluster_type, HashSet::new())
+        AccountsDB::new_with_config(paths, cluster_type, HashSet::new(), false)
     }
 
-    pub fn new_with_indexes(
+    pub fn new_with_config(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
         account_indexes: HashSet<AccountIndex>,
+        caching_enabled: bool,
     ) -> Self {
         let new = if !paths.is_empty() {
             Self {
@@ -685,6 +686,7 @@ impl AccountsDB {
                 temp_paths: None,
                 cluster_type: Some(*cluster_type),
                 account_indexes,
+                caching_enabled,
                 ..Self::default()
             }
         } else {
@@ -696,6 +698,7 @@ impl AccountsDB {
                 temp_paths: Some(temp_dirs),
                 cluster_type: Some(*cluster_type),
                 account_indexes,
+                caching_enabled,
                 ..Self::default()
             }
         };
@@ -3379,8 +3382,9 @@ impl AccountsDB {
                 let count = store.remove_account();
                 if count == 0 {
                     dead_slots.insert(*slot);
-                } else if (count as f64 / store.approx_store_count.load(Ordering::Relaxed) as f64)
-                    < SHRINK_RATIO
+                } else if self.caching_enabled
+                    && (count as f64 / store.approx_store_count.load(Ordering::Relaxed) as f64)
+                        < SHRINK_RATIO
                 {
                     // Checking that this single storage entry is ready for shrinking,
                     // should be a sufficient indication that the slot is ready to be shrunk
@@ -3396,14 +3400,16 @@ impl AccountsDB {
             }
         }
 
-        {
-            let mut shrink_candidate_slots = self.shrink_candidate_slots.lock().unwrap();
-            for (slot, slot_shrink_candidates) in new_shrink_candidates {
-                for (store_id, store) in slot_shrink_candidates {
-                    shrink_candidate_slots
-                        .entry(slot)
-                        .or_default()
-                        .insert(store_id, store);
+        if self.caching_enabled {
+            {
+                let mut shrink_candidate_slots = self.shrink_candidate_slots.lock().unwrap();
+                for (slot, slot_shrink_candidates) in new_shrink_candidates {
+                    for (store_id, store) in slot_shrink_candidates {
+                        shrink_candidate_slots
+                            .entry(slot)
+                            .or_default()
+                            .insert(store_id, store);
+                    }
                 }
             }
         }
@@ -3745,9 +3751,12 @@ impl AccountsDB {
         // filter out the cached reclaims as those don't actually map
         // to anything that needs to be cleaned in the backing storage
         // entries
-        reclaims.retain(|(_, r)| r.store_id != CACHE_VIRTUAL_STORAGE_ID);
-        if use_cache {
-            assert!(reclaims.is_empty());
+        if self.caching_enabled {
+            reclaims.retain(|(_, r)| r.store_id != CACHE_VIRTUAL_STORAGE_ID);
+
+            if use_cache {
+                assert!(reclaims.is_empty());
+            }
         }
 
         update_index_time.stop();
@@ -3779,7 +3788,9 @@ impl AccountsDB {
 
     pub fn add_root(&self, slot: Slot) {
         self.accounts_index.add_root(slot);
-        self.accounts_cache.add_root(slot);
+        if self.caching_enabled {
+            self.accounts_cache.add_root(slot);
+        }
     }
 
     pub fn get_snapshot_storages(&self, snapshot_slot: Slot) -> SnapshotStorages {
@@ -4763,10 +4774,11 @@ pub mod tests {
     fn test_clean_old_with_both_normal_and_zero_lamport_accounts() {
         solana_logger::setup();
 
-        let accounts = AccountsDB::new_with_indexes(
+        let accounts = AccountsDB::new_with_config(
             Vec::new(),
             &ClusterType::Development,
             spl_token_mint_index_enabled(),
+            false,
         );
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();

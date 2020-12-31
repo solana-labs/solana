@@ -50,6 +50,7 @@ fn test_accounts_create(bencher: &mut Bencher) {
         None,
         None,
         HashSet::new(),
+        false,
     );
     bencher.iter(|| {
         let mut pubkeys: Vec<Pubkey> = vec![];
@@ -68,6 +69,7 @@ fn test_accounts_squash(bencher: &mut Bencher) {
         None,
         None,
         HashSet::new(),
+        false,
     ));
     let mut pubkeys: Vec<Pubkey> = vec![];
     deposit_many(&prev_bank, &mut pubkeys, 250_000);
@@ -88,9 +90,11 @@ fn test_accounts_squash(bencher: &mut Bencher) {
 
 #[bench]
 fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
-    let accounts = Accounts::new(
+    let accounts = Accounts::new_with_config(
         vec![PathBuf::from("bench_accounts_hash_internal")],
         &ClusterType::Development,
+        HashSet::new(),
+        false,
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
     let num_accounts = 60_000;
@@ -108,9 +112,11 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
 #[bench]
 fn test_update_accounts_hash(bencher: &mut Bencher) {
     solana_logger::setup();
-    let accounts = Accounts::new(
+    let accounts = Accounts::new_with_config(
         vec![PathBuf::from("update_accounts_hash")],
         &ClusterType::Development,
+        HashSet::new(),
+        false,
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 50_000, 0);
@@ -125,9 +131,11 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
 #[bench]
 fn test_accounts_delta_hash(bencher: &mut Bencher) {
     solana_logger::setup();
-    let accounts = Accounts::new(
+    let accounts = Accounts::new_with_config(
         vec![PathBuf::from("accounts_delta_hash")],
         &ClusterType::Development,
+        HashSet::new(),
+        false,
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 100_000, 0);
@@ -139,9 +147,11 @@ fn test_accounts_delta_hash(bencher: &mut Bencher) {
 #[bench]
 fn bench_delete_dependencies(bencher: &mut Bencher) {
     solana_logger::setup();
-    let accounts = Accounts::new(
+    let accounts = Accounts::new_with_config(
         vec![PathBuf::from("accounts_delete_deps")],
         &ClusterType::Development,
+        HashSet::new(),
+        false,
     );
     let mut old_pubkey = Pubkey::default();
     let zero_account = Account::new(0, 0, &Account::default().owner);
@@ -166,12 +176,14 @@ fn store_accounts_with_possible_contention<F: 'static>(
     F: Fn(&Accounts, &[Pubkey]) + Send + Copy,
 {
     let num_readers = 5;
-    let accounts = Arc::new(Accounts::new(
+    let accounts = Arc::new(Accounts::new_with_config(
         vec![
             PathBuf::from(std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string()))
                 .join(bench_name),
         ],
         &ClusterType::Development,
+        HashSet::new(),
+        false,
     ));
     let num_keys = 1000;
     let slot = 0;
