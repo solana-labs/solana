@@ -8,10 +8,7 @@ use {
         input_validators::{is_pubkey_or_keypair, is_url},
     },
     solana_cli_output::display::format_labeled_address,
-    solana_client::{
-        client_error::Result as ClientResult, rpc_client::RpcClient,
-        rpc_response::RpcVoteAccountStatus,
-    },
+    solana_client::{client_error, rpc_client::RpcClient, rpc_response::RpcVoteAccountStatus},
     solana_metrics::{datapoint_error, datapoint_info},
     solana_notifier::Notifier,
     solana_sdk::{
@@ -29,6 +26,7 @@ use {
 
 struct Config {
     address_labels: HashMap<String, String>,
+    ignore_http_bad_gateway: bool,
     interval: Duration,
     json_rpc_url: String,
     monitor_active_stake: bool,
@@ -116,6 +114,15 @@ fn get_config() -> Config {
                 .takes_value(false)
                 .help("Alert when the current stake for the cluster drops below 80%"),
         )
+        .arg(
+            Arg::with_name("ignore_http_bad_gateway")
+                .long("ignore-http-bad-gateway")
+                .takes_value(false)
+                .help("Ignore HTTP 502 Bad Gateway errors from the JSON RPC URL. \
+                    This flag can help reduce false positives, at the expense of \
+                    no alerting should a Bad Gateway error be a side effect of \
+                    the real problem")
+        )
         .get_matches();
 
     let config = if let Some(config_file) = matches.value_of("config_file") {
@@ -134,9 +141,11 @@ fn get_config() -> Config {
         .collect();
 
     let monitor_active_stake = matches.is_present("monitor_active_stake");
+    let ignore_http_bad_gateway = matches.is_present("ignore_http_bad_gateway");
 
     let config = Config {
         address_labels: config.address_labels,
+        ignore_http_bad_gateway,
         interval,
         json_rpc_url,
         monitor_active_stake,
@@ -155,7 +164,7 @@ fn get_config() -> Config {
 fn get_cluster_info(
     config: &Config,
     rpc_client: &RpcClient,
-) -> ClientResult<(u64, Hash, RpcVoteAccountStatus, HashMap<Pubkey, u64>)> {
+) -> client_error::Result<(u64, Hash, RpcVoteAccountStatus, HashMap<Pubkey, u64>)> {
     let transaction_count = rpc_client.get_transaction_count()?;
     let recent_blockhash = rpc_client.get_recent_blockhash()?.0;
     let vote_accounts = rpc_client.get_vote_accounts()?;
@@ -294,7 +303,21 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 }
                 failures.into_iter().next() // Only report the first failure if any
             }
-            Err(err) => Some(("rpc-error", err.to_string())),
+            Err(err) => {
+                let mut failure = Some(("rpc-error", err.to_string()));
+
+                if let client_error::ClientErrorKind::Reqwest(reqwest_err) = err.kind() {
+                    if let Some(client_error::reqwest::StatusCode::BAD_GATEWAY) =
+                        reqwest_err.status()
+                    {
+                        if config.ignore_http_bad_gateway {
+                            warn!("Error suppressed: {}", err);
+                            failure = None;
+                        }
+                    }
+                }
+                failure
+            }
         };
 
         if let Some((failure_test_name, failure_error_message)) = &failure {
