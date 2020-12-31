@@ -300,17 +300,22 @@ impl JsonRpcService {
                     .map(|bigtable_ledger_storage| {
                         info!("BigTable ledger storage initialized");
 
-                        let bigtable_ledger_upload_service = Arc::new(BigTableUploadService::new(
-                            runtime.handle().clone(),
-                            bigtable_ledger_storage.clone(),
-                            blockstore.clone(),
-                            block_commitment_cache.clone(),
-                            exit_bigtable_ledger_upload_service.clone(),
-                        ));
+                        let bigtable_ledger_upload_service = if config.enable_bigtable_ledger_upload
+                        {
+                            Some(Arc::new(BigTableUploadService::new(
+                                runtime.handle().clone(),
+                                bigtable_ledger_storage.clone(),
+                                blockstore.clone(),
+                                block_commitment_cache.clone(),
+                                exit_bigtable_ledger_upload_service.clone(),
+                            )))
+                        } else {
+                            None
+                        };
 
                         (
                             Some(bigtable_ledger_storage),
-                            Some(bigtable_ledger_upload_service),
+                            bigtable_ledger_upload_service,
                         )
                     })
                     .unwrap_or_else(|err| {
