@@ -159,7 +159,7 @@ fn main() {
     };
     let rpc_port = value_t_or_exit!(matches, "rpc_port", u16);
     let faucet_addr = Some(SocketAddr::new(
-        IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         FAUCET_PORT,
     ));
 
@@ -318,7 +318,10 @@ fn main() {
         println_name_value("Gossip Address:", &test_validator.gossip().to_string());
         println_name_value("TPU Address:", &test_validator.tpu().to_string());
         if let Some(faucet_addr) = &faucet_addr {
-            println_name_value("Faucet Address:", &faucet_addr.to_string());
+            println_name_value(
+                "Faucet Address:",
+                &format!("{}:{}", &test_validator.gossip().ip(), faucet_addr.port()),
+            );
         }
 
         let progress_bar = new_spinner_progress_bar();

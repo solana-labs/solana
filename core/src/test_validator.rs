@@ -24,8 +24,13 @@ use {
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
     },
     std::{
-        collections::HashMap, fs::remove_dir_all, net::SocketAddr, path::PathBuf, sync::Arc,
-        thread::sleep, time::Duration,
+        collections::HashMap,
+        fs::remove_dir_all,
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+        path::PathBuf,
+        sync::Arc,
+        thread::sleep,
+        time::Duration,
     },
 };
 
@@ -328,13 +333,19 @@ impl TestValidator {
         }
 
         let vote_account_address = validator_vote_account.pubkey();
-        let rpc_url = format!("http://{}:{}", node.info.rpc.ip(), node.info.rpc.port());
+        let rpc_url = format!("http://{}", node.info.rpc);
         let rpc_pubsub_url = format!("ws://{}/", node.info.rpc_pubsub);
         let tpu = node.info.tpu;
         let gossip = node.info.gossip;
 
         let validator_config = ValidatorConfig {
-            rpc_addrs: Some((node.info.rpc, node.info.rpc_pubsub)),
+            rpc_addrs: Some((
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
+                SocketAddr::new(
+                    IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                    node.info.rpc_pubsub.port(),
+                ),
+            )),
             rpc_config: config.rpc_config.clone(),
             accounts_hash_interval_slots: 100,
             account_paths: vec![ledger_path.join("accounts")],
