@@ -45,7 +45,7 @@ use std::{
     collections::HashSet,
     env,
     fs::{self, File},
-    net::{SocketAddr, TcpListener, UdpSocket},
+    net::{IpAddr, SocketAddr, TcpListener, UdpSocket},
     path::{Path, PathBuf},
     process::exit,
     str::FromStr,
@@ -872,7 +872,7 @@ pub fn main() {
                 .value_name("FILE")
                 .takes_value(true)
                 .help("Create this file if it doesn't already exist \
-                       once node initialization is complete"),
+                       once validator initialization is complete"),
         )
         .arg(
             Arg::with_name("ledger_path")
@@ -910,7 +910,7 @@ pub fn main() {
             Arg::with_name("no_voting")
                 .long("no-voting")
                 .takes_value(false)
-                .help("Launch node without voting"),
+                .help("Launch validator without voting"),
         )
         .arg(
             Arg::with_name("no_check_vote_account")
@@ -951,7 +951,7 @@ pub fn main() {
             Arg::with_name("private_rpc")
                 .long("--private-rpc")
                 .takes_value(false)
-                .help("Do not publish the RPC port for use by other nodes")
+                .help("Do not publish the RPC port for use by others")
         )
         .arg(
             Arg::with_name("no_port_check")
@@ -1046,7 +1046,7 @@ pub fn main() {
                 .long("gossip-port")
                 .value_name("PORT")
                 .takes_value(true)
-                .help("Gossip port number for the node"),
+                .help("Gossip port number for the validator"),
         )
         .arg(
             Arg::with_name("gossip_host")
@@ -1054,7 +1054,7 @@ pub fn main() {
                 .value_name("HOST")
                 .takes_value(true)
                 .validator(solana_net_utils::is_host)
-                .help("Gossip DNS name or IP address for the node to advertise in gossip \
+                .help("Gossip DNS name or IP address for the validator to advertise in gossip \
                        [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
 
         )
@@ -1065,8 +1065,8 @@ pub fn main() {
                 .takes_value(true)
                 .conflicts_with("private_rpc")
                 .validator(solana_net_utils::is_host_port)
-                .help("RPC address for the node to advertise publicly in gossip. \
-                      Useful for nodes running behind a load balancer or proxy \
+                .help("RPC address for the validator to advertise publicly in gossip. \
+                      Useful for validators running behind a load balancer or proxy \
                       [default: use --rpc-bind-address / --rpc-port]"),
         )
         .arg(
@@ -1141,7 +1141,7 @@ pub fn main() {
             Arg::with_name("skip_poh_verify")
                 .long("skip-poh-verify")
                 .takes_value(false)
-                .help("Skip ledger verification at node bootup"),
+                .help("Skip ledger verification at validator bootup"),
         )
         .arg(
             Arg::with_name("cuda")
@@ -1754,7 +1754,6 @@ pub fn main() {
     info!("{} {}", crate_name!(), solana_version::version!());
     info!("Starting validator with: {:#?}", std::env::args_os());
 
-    use std::net::IpAddr;
     let gossip_host: IpAddr = matches
         .value_of("gossip_host")
         .map(|gossip_host| {
