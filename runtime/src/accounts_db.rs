@@ -3153,56 +3153,57 @@ impl AccountsDB {
             .cloned()
             .collect();
         let mismatch_found = AtomicU64::new(0);
-        let hashes: Vec<(Pubkey, Hash, u64)> = self
-            .thread_pool_clean
-            .install(|| {
-                keys.par_iter().filter_map(|pubkey| {
-                    if let Some((lock, index)) =
-                        self.accounts_index.get(pubkey, Some(ancestors), Some(slot))
-                    {
-                        let (slot, account_info) = &lock.slot_list()[index];
-                        if account_info.lamports != 0 {
-                            self.get_account_accessor_from_cache_or_storage(
-                                *slot,
-                                pubkey,
-                                account_info.store_id,
-                                account_info.offset,
-                            )
-                            .get_loaded_account()
-                            .and_then(|loaded_account| {
-                                let loaded_hash = loaded_account.loaded_hash();
-                                let balance = Self::account_balance_for_capitalization(
-                                    account_info.lamports,
-                                    loaded_account.owner(),
-                                    loaded_account.executable(),
-                                    simple_capitalization_enabled,
-                                );
-
-                                if check_hash {
-                                    let computed_hash = loaded_account.compute_hash(
-                                        *slot,
-                                        &self
-                                            .cluster_type
-                                            .expect("Cluster type must be set at initialization"),
-                                        pubkey,
+        let hashes: Vec<(Pubkey, Hash, u64)> = {
+            self.thread_pool_clean.install(|| {
+                keys.par_iter()
+                    .filter_map(|pubkey| {
+                        if let Some((lock, index)) =
+                            self.accounts_index.get(pubkey, Some(ancestors), Some(slot))
+                        {
+                            let (slot, account_info) = &lock.slot_list()[index];
+                            if account_info.lamports != 0 {
+                                self.get_account_accessor_from_cache_or_storage(
+                                    *slot,
+                                    pubkey,
+                                    account_info.store_id,
+                                    account_info.offset,
+                                )
+                                .get_loaded_account()
+                                .and_then(|loaded_account| {
+                                    let loaded_hash = loaded_account.loaded_hash();
+                                    let balance = Self::account_balance_for_capitalization(
+                                        account_info.lamports,
+                                        loaded_account.owner(),
+                                        loaded_account.executable(),
+                                        simple_capitalization_enabled,
                                     );
-                                    if computed_hash != *loaded_hash {
-                                        mismatch_found.fetch_add(1, Ordering::Relaxed);
-                                        return None;
-                                    }
-                                }
 
-                                Some((*pubkey, *loaded_hash, balance))
-                            })
+                                    if check_hash {
+                                        let computed_hash = loaded_account.compute_hash(
+                                            *slot,
+                                            &self.cluster_type.expect(
+                                                "Cluster type must be set at initialization",
+                                            ),
+                                            pubkey,
+                                        );
+                                        if computed_hash != *loaded_hash {
+                                            mismatch_found.fetch_add(1, Ordering::Relaxed);
+                                            return None;
+                                        }
+                                    }
+
+                                    Some((*pubkey, *loaded_hash, balance))
+                                })
+                            } else {
+                                None
+                            }
                         } else {
                             None
                         }
-                    } else {
-                        None
-                    }
-                })
+                    })
+                    .collect()
             })
-            .collect();
+        };
         if mismatch_found.load(Ordering::Relaxed) > 0 {
             warn!(
                 "{} mismatched account hash(es) found",
