@@ -28,6 +28,7 @@ use solana_download_utils::{download_genesis_if_missing, download_snapshot};
 use solana_ledger::blockstore_db::BlockstoreRecoveryMode;
 use solana_perf::recycler::enable_recycler_warming;
 use solana_runtime::{
+    accounts_index::AccountIndex,
     bank_forks::{CompressionType, SnapshotConfig, SnapshotVersion},
     hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     snapshot_utils::get_highest_snapshot_archive_path,
@@ -1410,7 +1411,16 @@ pub fn main() {
                     }
                     Ok(())
                 })
-                .help("EXPERIMENTAL: Specify which CPU core PoH is pinned to")
+                .help("EXPERIMENTAL: Specify which CPU core PoH is pinned to"),
+        )
+        .arg(
+            Arg::with_name("account_indexes")
+                .long("account-index")
+                .takes_value(true)
+                .multiple(true)
+                .possible_values(&["program-id", "spl-token-owner", "spl-token-mint"])
+                .value_name("INDEX")
+                .help("Enable an accounts index, indexed by the selected account field"),
         )
         .get_matches();
 
@@ -1489,6 +1499,17 @@ pub fn main() {
 
     let contact_debug_interval = value_t_or_exit!(matches, "contact_debug_interval", u64);
 
+    let account_indexes: HashSet<AccountIndex> = matches
+        .values_of("account_indexes")
+        .unwrap_or_default()
+        .map(|value| match value {
+            "program-id" => AccountIndex::ProgramId,
+            "spl-token-mint" => AccountIndex::SplTokenMint,
+            "spl-token-owner" => AccountIndex::SplTokenOwner,
+            _ => unreachable!(),
+        })
+        .collect();
+
     let restricted_repair_only_mode = matches.is_present("restricted_repair_only_mode");
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
@@ -1523,6 +1544,7 @@ pub fn main() {
                 "health_check_slot_distance",
                 u64
             ),
+            account_indexes: account_indexes.clone(),
         },
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
             (
@@ -1569,6 +1591,7 @@ pub fn main() {
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
         poh_pinned_cpu_core: value_of(&matches, "poh_pinned_cpu_core")
             .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),
+        account_indexes,
         ..ValidatorConfig::default()
     };
 

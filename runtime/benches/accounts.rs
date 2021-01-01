@@ -14,7 +14,7 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::PathBuf,
     sync::{Arc, RwLock},
     thread::Builder,
@@ -49,6 +49,7 @@ fn test_accounts_create(bencher: &mut Bencher) {
         &[],
         None,
         None,
+        HashSet::new(),
     );
     bencher.iter(|| {
         let mut pubkeys: Vec<Pubkey> = vec![];
@@ -66,6 +67,7 @@ fn test_accounts_squash(bencher: &mut Bencher) {
         &[],
         None,
         None,
+        HashSet::new(),
     ));
     let mut pubkeys: Vec<Pubkey> = vec![];
     deposit_many(&bank1, &mut pubkeys, 250_000);
