@@ -8,10 +8,11 @@ use crate::{
         TransactionLoadResult, TransactionLoaders,
     },
     accounts_db::{ErrorCounters, SnapshotStorages},
-    accounts_index::Ancestors,
+    accounts_index::{AccountIndex, Ancestors, IndexKey},
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType},
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
+    inline_spl_token_v2_0,
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
     message_processor::{Executors, MessageProcessor},
@@ -85,29 +86,6 @@ use std::{
     },
     time::Duration,
 };
-
-// Partial SPL Token v2.0.x declarations inlined to avoid an external dependency on the spl-token crate
-pub mod inline_spl_token_v2_0 {
-    solana_sdk::declare_id!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-    pub mod native_mint {
-        solana_sdk::declare_id!("So11111111111111111111111111111111111111112");
-
-        /*
-            Mint {
-                mint_authority: COption::None,
-                supply: 0,
-                decimals: 9,
-                is_initialized: true,
-                freeze_authority: COption::None,
-            }
-        */
-        pub const ACCOUNT_DATA: [u8; 82] = [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ];
-    }
-}
 
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
@@ -311,6 +289,7 @@ pub struct BankRc {
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
+
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for BankRc {
     fn example() -> Self {
@@ -880,7 +859,22 @@ impl Default for BlockhashQueue {
 
 impl Bank {
     pub fn new(genesis_config: &GenesisConfig) -> Self {
-        Self::new_with_paths(&genesis_config, Vec::new(), &[], None, None)
+        Self::new_with_paths(&genesis_config, Vec::new(), &[], None, None, HashSet::new())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_with_indexes(
+        genesis_config: &GenesisConfig,
+        account_indexes: HashSet<AccountIndex>,
+    ) -> Self {
+        Self::new_with_paths(
+            &genesis_config,
+            Vec::new(),
+            &[],
+            None,
+            None,
+            account_indexes,
+        )
     }
 
     pub fn new_with_paths(
@@ -889,13 +883,18 @@ impl Bank {
         frozen_account_pubkeys: &[Pubkey],
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
+        account_indexes: HashSet<AccountIndex>,
     ) -> Self {
         let mut bank = Self::default();
         bank.ancestors.insert(bank.slot(), 0);
         bank.transaction_debug_keys = debug_keys;
         bank.cluster_type = Some(genesis_config.cluster_type);
 
-        bank.rc.accounts = Arc::new(Accounts::new(paths, &genesis_config.cluster_type));
+        bank.rc.accounts = Arc::new(Accounts::new_with_indexes(
+            paths,
+            &genesis_config.cluster_type,
+            account_indexes,
+        ));
         bank.process_genesis_config(genesis_config);
         bank.finish_init(genesis_config, additional_builtins);
 
@@ -3985,6 +3984,26 @@ impl Bank {
             .load_by_program(&self.ancestors, program_id)
     }
 
+    pub fn get_filtered_program_accounts<F: Fn(&Account) -> bool>(
+        &self,
+        program_id: &Pubkey,
+        filter: F,
+    ) -> Vec<(Pubkey, Account)> {
+        self.rc
+            .accounts
+            .load_by_program_with_filter(&self.ancestors, program_id, filter)
+    }
+
+    pub fn get_filtered_indexed_accounts<F: Fn(&Account) -> bool>(
+        &self,
+        index_key: &IndexKey,
+        filter: F,
+    ) -> Vec<(Pubkey, Account)> {
+        self.rc
+            .accounts
+            .load_by_index_key_with_filter(&self.ancestors, index_key, filter)
+    }
+
     pub fn get_all_accounts_with_modified_slots(&self) -> Vec<(Pubkey, Account, Slot)> {
         self.rc.accounts.load_all(&self.ancestors)
     }
@@ -6702,7 +6721,7 @@ pub(crate) mod tests {
             .accounts
             .accounts_db
             .accounts_index
-            .purge(&zero_lamport_pubkey);
+            .purge_roots(&zero_lamport_pubkey);
 
         let some_slot = 1000;
         let bank2_with_zero = Arc::new(Bank::new_from_parent(
@@ -8677,6 +8696,53 @@ pub(crate) mod tests {
         bank3.squash();
         assert_eq!(bank1.get_program_accounts(&program_id).len(), 2);
         assert_eq!(bank3.get_program_accounts(&program_id).len(), 2);
+    }
+
+    #[test]
+    fn test_get_filtered_indexed_accounts() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(500);
+        let mut account_indexes = HashSet::new();
+        account_indexes.insert(AccountIndex::ProgramId);
+        let bank = Arc::new(Bank::new_with_indexes(&genesis_config, account_indexes));
+
+        let address = Pubkey::new_unique();
+        let program_id = Pubkey::new_unique();
+        let account = Account::new(1, 0, &program_id);
+        bank.store_account(&address, &account);
+
+        let indexed_accounts =
+            bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |_| true);
+        assert_eq!(indexed_accounts.len(), 1);
+        assert_eq!(indexed_accounts[0], (address, account));
+
+        // Even though the account is re-stored in the bank (and the index) under a new program id,
+        // it is still present in the index under the original program id as well. This
+        // demonstrates the need for a redundant post-processing filter.
+        let another_program_id = Pubkey::new_unique();
+        let new_account = Account::new(1, 0, &another_program_id);
+        let bank = Arc::new(new_from_parent(&bank));
+        bank.store_account(&address, &new_account);
+        let indexed_accounts =
+            bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |_| true);
+        assert_eq!(indexed_accounts.len(), 1);
+        assert_eq!(indexed_accounts[0], (address, new_account.clone()));
+        let indexed_accounts =
+            bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(another_program_id), |_| true);
+        assert_eq!(indexed_accounts.len(), 1);
+        assert_eq!(indexed_accounts[0], (address, new_account.clone()));
+
+        // Post-processing filter
+        let indexed_accounts = bank
+            .get_filtered_indexed_accounts(&IndexKey::ProgramId(program_id), |account| {
+                account.owner == program_id
+            });
+        assert!(indexed_accounts.is_empty());
+        let indexed_accounts = bank
+            .get_filtered_indexed_accounts(&IndexKey::ProgramId(another_program_id), |account| {
+                account.owner == another_program_id
+            });
+        assert_eq!(indexed_accounts.len(), 1);
+        assert_eq!(indexed_accounts[0], (address, new_account));
     }
 
     #[test]
@@ -11041,6 +11107,7 @@ pub(crate) mod tests {
             &[],
             None,
             Some(&builtins),
+            HashSet::new(),
         ));
         // move to next epoch to create now deprecated rewards sysvar intentionally
         let bank1 = Arc::new(Bank::new_from_parent(

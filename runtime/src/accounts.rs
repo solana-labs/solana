@@ -1,6 +1,6 @@
 use crate::{
     accounts_db::{AccountsDB, AppendVecId, BankHashInfo, ErrorCounters},
-    accounts_index::Ancestors,
+    accounts_index::{AccountIndex, Ancestors, IndexKey},
     append_vec::StoredAccount,
     bank::{
         NonceRollbackFull, NonceRollbackInfo, TransactionCheckResult, TransactionExecutionResult,
@@ -82,8 +82,20 @@ pub enum AccountAddressFilter {
 
 impl Accounts {
     pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
+        Self::new_with_indexes(paths, cluster_type, HashSet::new())
+    }
+
+    pub fn new_with_indexes(
+        paths: Vec<PathBuf>,
+        cluster_type: &ClusterType,
+        account_indexes: HashSet<AccountIndex>,
+    ) -> Self {
         Self {
-            accounts_db: Arc::new(AccountsDB::new(paths, cluster_type)),
+            accounts_db: Arc::new(AccountsDB::new_with_indexes(
+                paths,
+                cluster_type,
+                account_indexes,
+            )),
             account_locks: Mutex::new(HashSet::new()),
             readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
             ..Self::default()
@@ -447,7 +459,7 @@ impl Accounts {
             |stored_account: &StoredAccount,
              _id: AppendVecId,
              accum: &mut Vec<(Pubkey, u64, B)>| {
-                if let Some(val) = func(stored_account) {
+                if let Some(val) = func(&stored_account) {
                     accum.push((
                         stored_account.meta.pubkey,
                         std::u64::MAX - stored_account.meta.write_version,
@@ -588,6 +600,37 @@ impl Accounts {
                 Self::load_while_filtering(collector, some_account_tuple, |account| {
                     account.owner == *program_id
                 })
+            },
+        )
+    }
+
+    pub fn load_by_program_with_filter<F: Fn(&Account) -> bool>(
+        &self,
+        ancestors: &Ancestors,
+        program_id: &Pubkey,
+        filter: F,
+    ) -> Vec<(Pubkey, Account)> {
+        self.accounts_db.scan_accounts(
+            ancestors,
+            |collector: &mut Vec<(Pubkey, Account)>, some_account_tuple| {
+                Self::load_while_filtering(collector, some_account_tuple, |account| {
+                    account.owner == *program_id && filter(account)
+                })
+            },
+        )
+    }
+
+    pub fn load_by_index_key_with_filter<F: Fn(&Account) -> bool>(
+        &self,
+        ancestors: &Ancestors,
+        index_key: &IndexKey,
+        filter: F,
+    ) -> Vec<(Pubkey, Account)> {
+        self.accounts_db.index_scan_accounts(
+            ancestors,
+            *index_key,
+            |collector: &mut Vec<(Pubkey, Account)>, some_account_tuple| {
+                Self::load_while_filtering(collector, some_account_tuple, |account| filter(account))
             },
         )
     }
