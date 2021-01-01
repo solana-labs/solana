@@ -3,6 +3,8 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use std::{convert::TryFrom, fmt, mem, str::FromStr};
 use thiserror::Error;
 
+/// Number of bytes in a pubkey
+pub const PUBKEY_BYTES: usize = 32;
 /// maximum length of derived `Pubkey` seed
 pub const MAX_SEED_LEN: usize = 32;
 /// Maximum number of seeds

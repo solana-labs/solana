@@ -2,7 +2,7 @@ use {
     crate::{
         accounts::Accounts,
         accounts_db::{AccountStorageEntry, AccountsDB, AppendVecId, BankHashInfo},
-        accounts_index::Ancestors,
+        accounts_index::{AccountIndex, Ancestors},
         append_vec::AppendVec,
         bank::{Bank, BankFieldsToDeserialize, BankRc, Builtins},
         blockhash_queue::BlockhashQueue,
@@ -126,6 +126,7 @@ pub(crate) fn bank_from_stream<R, P>(
     frozen_account_pubkeys: &[Pubkey],
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
+    account_indexes: HashSet<AccountIndex>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -144,6 +145,7 @@ where
                 append_vecs_path,
                 debug_keys,
                 additional_builtins,
+                account_indexes,
             )?;
             Ok(bank)
         }};
@@ -230,6 +232,7 @@ fn reconstruct_bank_from_fields<E, P>(
     append_vecs_path: P,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
+    account_indexes: HashSet<AccountIndex>,
 ) -> Result<Bank, Error>
 where
     E: Into<AccountStorageEntry>,
@@ -240,6 +243,7 @@ where
         account_paths,
         append_vecs_path,
         &genesis_config.cluster_type,
+        account_indexes,
     )?;
     accounts_db.freeze_accounts(&bank_fields.ancestors, frozen_account_pubkeys);
 
@@ -260,13 +264,14 @@ fn reconstruct_accountsdb_from_fields<E, P>(
     account_paths: &[PathBuf],
     stream_append_vecs_path: P,
     cluster_type: &ClusterType,
+    account_indexes: HashSet<AccountIndex>,
 ) -> Result<AccountsDB, Error>
 where
     E: Into<AccountStorageEntry>,
     P: AsRef<Path>,
 {
-    let mut accounts_db = AccountsDB::new(account_paths.to_vec(), cluster_type);
-
+    let mut accounts_db =
+        AccountsDB::new_with_indexes(account_paths.to_vec(), cluster_type, account_indexes);
     let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
 
     // convert to two level map of slot -> id -> account storage entry
