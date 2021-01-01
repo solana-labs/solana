@@ -119,6 +119,7 @@ pub struct ValidatorConfig {
     pub no_poh_speed_test: bool,
     pub poh_pinned_cpu_core: usize,
     pub account_indexes: HashSet<AccountIndex>,
+    pub caching_enabled: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -164,6 +165,7 @@ impl Default for ValidatorConfig {
             no_poh_speed_test: true,
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
             account_indexes: HashSet::new(),
+            caching_enabled: false,
         }
     }
 }
@@ -629,6 +631,7 @@ impl Validator {
                 trusted_validators: config.trusted_validators.clone(),
                 repair_validators: config.repair_validators.clone(),
                 accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
+                caching_enabled: config.caching_enabled,
             },
         );
 
@@ -960,6 +963,7 @@ fn new_banks_from_ledger(
         frozen_accounts: config.frozen_accounts.clone(),
         debug_keys: config.debug_keys.clone(),
         account_indexes: config.account_indexes.clone(),
+        caching_enabled: config.caching_enabled,
         ..blockstore_processor::ProcessOptions::default()
     };
 

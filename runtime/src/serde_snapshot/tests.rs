@@ -70,6 +70,7 @@ where
         stream_append_vecs_path,
         &ClusterType::Development,
         HashSet::new(),
+        false,
     )
 }
 
@@ -217,6 +218,7 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
         None,
         None,
         HashSet::new(),
+        false,
     )
     .unwrap();
     dbank.src = ref_sc;

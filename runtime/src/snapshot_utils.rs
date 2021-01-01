@@ -573,6 +573,7 @@ pub fn remove_snapshot<P: AsRef<Path>>(slot: Slot, snapshot_path: P) -> Result<(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn bank_from_archive<P: AsRef<Path>>(
     account_paths: &[PathBuf],
     frozen_account_pubkeys: &[Pubkey],
@@ -583,6 +584,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_indexes: HashSet<AccountIndex>,
+    caching_enabled: bool,
 ) -> Result<Bank> {
     // Untar the snapshot into a temporary directory
     let unpack_dir = tempfile::Builder::new()
@@ -608,6 +610,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         debug_keys,
         additional_builtins,
         account_indexes,
+        caching_enabled,
     )?;
 
     if !bank.verify_snapshot_bank() {
@@ -744,6 +747,7 @@ pub fn untar_snapshot_in<P: AsRef<Path>, Q: AsRef<Path>>(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn rebuild_bank_from_snapshots<P>(
     snapshot_version: &str,
     account_paths: &[PathBuf],
@@ -754,6 +758,7 @@ fn rebuild_bank_from_snapshots<P>(
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_indexes: HashSet<AccountIndex>,
+    caching_enabled: bool,
 ) -> Result<Bank>
 where
     P: AsRef<Path>,
@@ -791,6 +796,7 @@ where
                 debug_keys,
                 additional_builtins,
                 account_indexes,
+                caching_enabled,
             ),
         }?)
     })?;

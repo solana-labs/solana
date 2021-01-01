@@ -162,6 +162,7 @@ mod tests {
             None,
             None,
             HashSet::new(),
+            false,
         )
         .unwrap();
 
