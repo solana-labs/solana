@@ -1569,7 +1569,7 @@ mod tests {
     use super::*;
     use crate::{client_error::ClientErrorKind, mock_sender::PUBKEY};
     use assert_matches::assert_matches;
-    use jsonrpc_core::{Error, IoHandler, Params};
+    use jsonrpc_core::{futures::prelude::*, Error, IoHandler, Params};
     use jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
     use serde_json::Number;
     use solana_sdk::{
@@ -1586,14 +1586,14 @@ mod tests {
             let mut io = IoHandler::default();
             // Successful request
             io.add_method("getBalance", |_params: Params| {
-                Ok(Value::Number(Number::from(50)))
+                future::ok(Value::Number(Number::from(50)))
             });
             // Failed request
             io.add_method("getRecentBlockhash", |params: Params| {
                 if params != Params::None {
-                    Err(Error::invalid_request())
+                    future::err(Error::invalid_request())
                 } else {
-                    Ok(Value::String(
+                    future::ok(Value::String(
                         "deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx".to_string(),
                     ))
                 }

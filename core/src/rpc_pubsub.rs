@@ -488,7 +488,7 @@ mod tests {
         rpc_subscriptions::tests::robust_poll_or_panic,
     };
     use crossbeam_channel::unbounded;
-    use jsonrpc_core::{futures::sync::mpsc, Response};
+    use jsonrpc_core::{futures::channel::mpsc, Response};
     use jsonrpc_pubsub::{PubSubHandler, Session};
     use serial_test::serial;
     use solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding};
@@ -543,7 +543,7 @@ mod tests {
     }
 
     fn create_session() -> Arc<Session> {
-        Arc::new(Session::new(mpsc::channel(1).0))
+        Arc::new(Session::new(mpsc::unbounded().0))
     }
 
     #[test]

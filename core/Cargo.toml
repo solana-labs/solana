@@ -28,12 +28,12 @@ fs_extra = "1.1.0"
 flate2 = "1.0"
 indexmap = { version = "1.5", features = ["rayon"] }
 itertools = "0.9.0"
-jsonrpc-core = "15.0.0"
-jsonrpc-core-client = { version = "15.0.0", features = ["ws"] }
-jsonrpc-derive = "15.0.0"
-jsonrpc-http-server = "15.0.0"
-jsonrpc-pubsub = "15.0.0"
-jsonrpc-ws-server = "15.0.0"
+jsonrpc-core = "17.0.0"
+jsonrpc-core-client = { version = "17.0.0", features = ["ws"] }
+jsonrpc-derive = "17.0.0"
+jsonrpc-http-server = "17.0.0"
+jsonrpc-pubsub = "17.0.0"
+jsonrpc-ws-server = "17.0.0"
 log = "0.4.11"
 lru = "0.6.1"
 miow = "0.2.2"
@@ -77,11 +77,7 @@ spl-token-v2-0 = { package = "spl-token", version = "=3.0.1", features = ["no-en
 tempfile = "3.1.0"
 thiserror = "1.0"
 tokio = { version = "0.2", features = ["full"] }
-tokio_01 = { version = "0.1", package = "tokio" }
-tokio_01_bytes = { version = "0.4.7", package = "bytes" }
-tokio_fs_01 = { version = "0.1", package = "tokio-fs" }
-tokio_io_01 = { version = "0.1", package = "tokio-io" }
-tokio_codec_01 = { version = "0.1", package = "tokio-codec" }
+tokio-util = { version = "0.2", features = ["codec"] }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "1.6.0" }
 trees = "0.2.1"
 
