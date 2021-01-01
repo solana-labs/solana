@@ -59,7 +59,10 @@ mod tests {
         signature::{Keypair, Signer},
         system_transaction,
     };
-    use std::{fs, path::PathBuf, sync::atomic::AtomicBool, sync::mpsc::channel, sync::Arc};
+    use std::{
+        collections::HashSet, fs, path::PathBuf, sync::atomic::AtomicBool, sync::mpsc::channel,
+        sync::Arc,
+    };
     use tempfile::TempDir;
 
     DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS!(V1_2_0, Development, V1_2_0_Development);
@@ -93,6 +96,7 @@ mod tests {
                 &[],
                 None,
                 None,
+                HashSet::new(),
             );
             bank0.freeze();
             let mut bank_forks = BankForks::new(bank0);
@@ -148,6 +152,7 @@ mod tests {
             old_genesis_config,
             None,
             None,
+            HashSet::new(),
         )
         .unwrap();
 

@@ -68,6 +68,7 @@ pub fn load(
                     genesis_config,
                     process_options.debug_keys.clone(),
                     Some(&crate::builtins::get(process_options.bpf_jit)),
+                    process_options.account_indexes.clone(),
                 )
                 .expect("Load from snapshot failed");
                 if let Some(shrink_paths) = shrink_paths {
