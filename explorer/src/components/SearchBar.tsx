@@ -20,7 +20,10 @@ export function SearchBar() {
   const location = useLocation();
   const { cluster } = useCluster();
 
-  const onChange = ({ pathname }: ValueType<any>, meta: ActionMeta<any>) => {
+  const onChange = (
+    { pathname }: ValueType<any, false>,
+    meta: ActionMeta<any>
+  ) => {
     if (meta.action === "select-option") {
       history.push({ ...location, pathname });
       setSearch("");
@@ -197,7 +200,7 @@ function buildOptions(rawSearch: string, cluster: Cluster) {
       options: [
         {
           label: `Slot #${search}`,
-          value: search,
+          value: [search],
           pathname: `/block/${search}`,
         },
       ],
@@ -215,7 +218,7 @@ function buildOptions(rawSearch: string, cluster: Cluster) {
         options: [
           {
             label: search,
-            value: search,
+            value: [search],
             pathname: "/address/" + search,
           },
         ],
@@ -226,7 +229,7 @@ function buildOptions(rawSearch: string, cluster: Cluster) {
         options: [
           {
             label: search,
-            value: search,
+            value: [search],
             pathname: "/tx/" + search,
           },
         ],
