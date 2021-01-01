@@ -4,7 +4,8 @@ extern crate test;
 
 use rand::{thread_rng, Rng};
 use solana_runtime::{accounts_db::AccountInfo, accounts_index::AccountsIndex};
-use solana_sdk::pubkey;
+use solana_sdk::pubkey::{self, Pubkey};
+use std::collections::HashSet;
 use test::Bencher;
 
 #[bench]
@@ -18,7 +19,15 @@ fn bench_accounts_index(bencher: &mut Bencher) {
     let index = AccountsIndex::<AccountInfo>::default();
     for f in 0..NUM_FORKS {
         for pubkey in pubkeys.iter().take(NUM_PUBKEYS) {
-            index.upsert(f, pubkey, AccountInfo::default(), &mut reclaims);
+            index.upsert(
+                f,
+                pubkey,
+                &Pubkey::default(),
+                &[],
+                &HashSet::new(),
+                AccountInfo::default(),
+                &mut reclaims,
+            );
         }
     }
 
@@ -30,6 +39,9 @@ fn bench_accounts_index(bencher: &mut Bencher) {
             index.upsert(
                 fork,
                 &pubkeys[pubkey],
+                &Pubkey::default(),
+                &[],
+                &HashSet::new(),
                 AccountInfo::default(),
                 &mut reclaims,
             );
