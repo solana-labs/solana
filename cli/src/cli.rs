@@ -1939,7 +1939,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(false)
                         .help("Use the designated program id, even if the account already holds a large balance of SOL")
                 )
-                .arg(commitment_arg_with_default("max")),
+                .arg(commitment_arg_with_default("singleGossip")),
         )
         .subcommand(
             SubCommand::with_name("pay")

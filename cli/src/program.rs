@@ -94,7 +94,8 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("BUFFER_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Intermediate buffer account to write data to, can be used to resume a failed deploy [default: new random address]")
+                                .help("Intermediate buffer account to write data to, which can be used to resume a failed deploy \
+                                      [default: random address]")
                         )
                         .arg(
                             pubkey!(Arg::with_name("upgrade_authority")
@@ -106,7 +107,8 @@ impl ProgramSubCommands for App<'_, '_> {
                             pubkey!(Arg::with_name("program_id")
                                 .long("program-id")
                                 .value_name("PROGRAM_ID"),
-                                "Executable program's address, must be a signer for initial deploys, can be a pubkey for upgrades [default: new random address or the address of keypair file /path/to/program.json]"),
+                                "Executable program's address, must be a signer for initial deploys, can be a pubkey for upgrades \
+                                [default: address of keypair at /path/to/program-keypair.json if present, otherwise a random address]"),
                         )
                         .arg(
                             Arg::with_name("final")
@@ -119,13 +121,14 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("max_len")
                                 .takes_value(true)
                                 .required(false)
-                                .help("Maximum length of the upgradeable program, [default: twice the length of the original deployed program]")
+                                .help("Maximum length of the upgradeable program \
+                                      [default: twice the length of the original deployed program]")
                         )
                         .arg(
                             Arg::with_name("allow_excessive_balance")
                                 .long("allow-excessive-deploy-account-balance")
                                 .takes_value(false)
-                                .help("Use the designated program id, even if the account already holds a large balance of SOL")
+                                .help("Use the designated program id even if the account already holds a large balance of SOL")
                         )
                         .arg(commitment_arg_with_default("singleGossip")),
                 )
@@ -161,7 +164,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .conflicts_with("new_upgrade_authority")
                                 .help("The program will not be upgradeable")
                         )
-                        .arg(commitment_arg_with_default("max")),
+                        .arg(commitment_arg_with_default("singleGossip")),
                 )
         )
     }
