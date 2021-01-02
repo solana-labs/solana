@@ -3156,9 +3156,8 @@ pub mod tests {
     };
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
-    use solana_sdk::pubkey::PUBKEY_BYTES;
-    use solana_sdk::{account::Account, hash::HASH_BYTES};
-    use std::{fs, iter::FromIterator, str::FromStr};
+    use solana_sdk::{account::Account, hash::HASH_BYTES, pubkey::PUBKEY_BYTES};
+    use std::{iter::FromIterator, str::FromStr};
 
     fn linear_ancestors(end_slot: u64) -> Ancestors {
         let mut ancestors: Ancestors = vec![(0, 0)].into_iter().collect();
@@ -4633,24 +4632,6 @@ pub mod tests {
         let ancestors = vec![(0, 0)].into_iter().collect();
         let ret = db.load_slow(&ancestors, &key).unwrap();
         assert_eq!(ret.0.data.len(), data_len);
-    }
-
-    pub fn copy_append_vecs<P: AsRef<Path>>(
-        accounts_db: &AccountsDB,
-        output_dir: P,
-    ) -> IOResult<()> {
-        let storage_entries = accounts_db.get_snapshot_storages(Slot::max_value());
-        for storage in storage_entries.iter().flatten() {
-            let storage_path = storage.get_path();
-            let output_path = output_dir.as_ref().join(AppendVec::new_relative_path(
-                storage.slot(),
-                storage.append_vec_id(),
-            ));
-
-            fs::copy(storage_path, output_path)?;
-        }
-
-        Ok(())
     }
 
     #[test]
