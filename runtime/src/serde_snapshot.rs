@@ -288,6 +288,12 @@ where
         map
     };
 
+    // Ensure all account paths exist
+    for path in &accounts_db.paths {
+        std::fs::create_dir_all(path)
+            .unwrap_or_else(|err| panic!("Failed to create directory {}: {}", path.display(), err));
+    }
+
     let mut last_log_update = Instant::now();
     let mut remaining_slots_to_process = storage.len();
 
@@ -306,8 +312,6 @@ where
             for (id, storage_entry) in slot_storage.drain() {
                 let path_index = thread_rng().gen_range(0, accounts_db.paths.len());
                 let local_dir = &accounts_db.paths[path_index];
-
-                std::fs::create_dir_all(local_dir).expect("Create directory failed");
 
                 // Move the corresponding AppendVec from the snapshot into the directory pointed
                 // at by `local_dir`
