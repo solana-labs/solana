@@ -371,17 +371,37 @@ Once your validator is operating normally, you can reduce the time it takes to
 restart your validator by adding the `--no-port-check` flag to your
 `solana-validator` command-line.
 
-### Using a ramdisk for the accounts database to reduce SSD wear
-If your machine has plenty of RAM, a ramdisk
+### Disable snapshot compression to reduce CPU usage
+If you are not serving snapshots to other validators, snapshot compression can
+be disabled to reduce CPU load at the expense of slightly more disk usage for
+local snapshot storage.
+
+Add the `--snapshot-compression none` argument to your `solana-validator`
+command-line arguments and restart the validator.
+
+### Using a ramdisk with spill-over into swap for the accounts database to reduce SSD wear
+If your machine has plenty of RAM, a tmpfs ramdisk
 ([tmpfs](https://man7.org/linux/man-pages/man5/tmpfs.5.html)) may be used to hold
-the accounts database.
+the accounts database
 
-Assuming your tmpfs ramdisk is mounted at `/mnt/solana-accounts` and writable
-by the validator user, add the `--accounts /mnt/solana-accounts` argument to
-your validator command-line to use it.  Once your validator restarts, you should
-now see activity in `/mnt/solana-accounts` instead of the `accounts/`
-subdirectory of your ledger (`--ledger` argument) directory.
+When using tmpfs it's essential to also configure swap on your machine as well to
+avoid running out of tmpfs space periodically.
 
-For Mainnet Beta it's recommended that a ramdisk of 64GB be used.  Note that if
-your machine has less than 100GB of RAM in total, using a ramdisk is not
-recommended.
+A 300GB tmpfs partition is recommended, with an accompanying 250GB swap
+partition.
+
+Example configuration:
+1. `sudo mkdir /mnt/solana-accounts`
+2. Add a 300GB tmpfs parition by adding a new line containing `tmpfs
+   /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` to `/etc/fstab`
+   (assuming your validator is running under the user "sol").  **CAREFUL: If you
+   incorrectly edit /etc/fstab your machine may no longer boot**
+3. Create at least 250GB of swap space
+  - Choose a device to use in place of `SWAPDEV` for the remainder of these instructions.  Ideally select a free disk partition of 250GB or greater on a fast disk. If one is not available, create a swap file with `sudo fallocate -l 250G /swapfile`, set its permissions with `sudo chmod 0600 /swapfile` and use `/swapfile` as `SWAPDEV` for the remainder of these instructions
+  - Format the device for usage as swap with `sudo mkswap SWAPDEV`
+4. Add the swap file to `/etc/fstab` with a new line containing `SWAPDEV swap swap defaults 0 0`
+5. Enable swap with `sudo swapon -a` and mount the tmpfs with `sudo mount /mnt/solana-accounts/`
+6. Confirm swap is active with `free -g` and the tmpfs is mounted with `mount`
+
+Now add the `--accounts /mnt/solana-accounts` argument to your `solana-validator`
+command-line arguments and restart the validator.
