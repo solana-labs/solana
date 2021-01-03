@@ -396,8 +396,10 @@ Example configuration:
    /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` to `/etc/fstab`
    (assuming your validator is running under the user "sol").  **CAREFUL: If you
    incorrectly edit /etc/fstab your machine may no longer boot**
-3. Create a 250GB swap file with `sudo fallocate -l 250G /swapfile`, `sudo mkswap /swapfile`, `sudo chmod 0600 /swapfile`
-4. Add the swap file to `/etc/fstab` with a new line containing `/swapfile swap swap defaults 0 0`
+3. Create at least 250GB of swap space
+  - Choose a device to use in place of `SWAPDEV` for the remainder of these instructions.  Ideally select a free disk partition of 250GB or greater on a fast disk. If one is not available, create a swap file with `sudo fallocate -l 250G /swapfile`, set its permissions with `sudo chmod 0600 /swapfile` and use `/swapfile` as `SWAPDEV` for the remainder of these instructions
+  - Format the device for usage as swap with `sudo mkswap SWAPDEV`
+4. Add the swap file to `/etc/fstab` with a new line containing `SWAPDEV swap swap defaults 0 0`
 5. Enable swap with `sudo swapon -a` and mount the tmpfs with `sudo mount /mnt/solana-accounts/`
 6. Confirm swap is active with `free -g` and the tmpfs is mounted with `mount`
 
