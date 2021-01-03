@@ -6,6 +6,7 @@ use solana_ledger::{
 };
 use solana_sdk::{
     clock::Slot,
+    packet::PACKET_DATA_SIZE,
     pubkey::Pubkey,
     sanitize::{Sanitize, SanitizeError},
 };
@@ -17,6 +18,8 @@ use std::{
 use thiserror::Error;
 
 const DUPLICATE_SHRED_HEADER_SIZE: usize = 63;
+// An upper bound on bytes needed to send a duplicate shred proof.
+const DUPLICATE_PROOF_DECODE_LIMIT: usize = 2 * PACKET_DATA_SIZE + 256;
 
 /// Function returning leader at a given slot.
 pub trait LeaderScheduleFn: FnOnce(Slot) -> Option<Pubkey> {}
@@ -216,7 +219,7 @@ pub fn into_shreds(
         return Err(Error::MissingDataChunk);
     }
     let data = (0..num_chunks).map(|k| data.remove(&k).unwrap());
-    let proof: DuplicateSlotProof = encode::decode(&data.concat())?;
+    let proof: DuplicateSlotProof = encode::decode(&data.concat(), DUPLICATE_PROOF_DECODE_LIMIT)?;
     if proof.shred1 == proof.shred2 {
         return Err(Error::InvalidDuplicateSlotProof);
     }

@@ -83,7 +83,10 @@ pub fn encode<T: Serialize>(obj: &T, options: Options) -> bincode::Result<Vec<u8
     bincode::options().serialize(&encoded)
 }
 
-pub fn decode<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, Error> {
+pub fn decode<T: DeserializeOwned>(
+    bytes: &[u8],
+    limit: usize, // Limit maximum number of bytes decoded.
+) -> Result<T, Error> {
     let encoded = bincode::options().deserialize_from(bytes)?;
     let decoder: Box<dyn Read> = match &encoded {
         Encoded::Bincode(bytes) => Box::new(&bytes[..]),
@@ -92,7 +95,9 @@ pub fn decode<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, Error> {
         Encoded::Zlib(bytes) => Box::new(ZlibDecoder::new(&bytes[..])),
         Encoded::Zstd(bytes) => Box::new(zstd::stream::read::Decoder::new(&bytes[..])?),
     };
-    Ok(bincode::options().deserialize_from(decoder)?)
+    Ok(bincode::options()
+        .with_limit(limit as u64)
+        .deserialize_from(decoder)?)
 }
 
 #[cfg(test)]
@@ -163,7 +168,7 @@ pub(crate) mod tests {
         ];
         for opts in options {
             let bytes = encode(&proof, opts).unwrap();
-            let other: DuplicateSlotProof = decode(&bytes[..]).unwrap();
+            let other: DuplicateSlotProof = decode(&bytes[..], 4096).unwrap();
             assert_eq!(proof.shred1, other.shred1);
             assert_eq!(proof.shred2, other.shred2);
         }
