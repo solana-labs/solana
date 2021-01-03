@@ -274,10 +274,10 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
             ));
 
         // `storage_path` - The file path where the AppendVec itself is located
-        // `output_path` - The directory where the AppendVec will be placed in the staging directory.
+        // `output_path` - The file path where the AppendVec will be placed in the staging directory.
         let storage_path =
             fs::canonicalize(storage_path).expect("Could not get absolute path for accounts");
-        symlink::symlink_dir(storage_path, &output_path)?;
+        symlink::symlink_file(storage_path, &output_path)?;
         if !output_path.is_file() {
             return Err(SnapshotError::StoragePathSymlinkInvalid);
         }
