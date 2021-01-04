@@ -276,24 +276,24 @@ getrandom = { version = "0.1.14", features = ["dummy"] }
 
 Rust's `println!` macro is computationally expensive and not supported.  Instead
 the helper macro
-[`info!`](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/log.rs#L10)
+[`msg!`](https://github.com/solana-labs/solana/blob/6705b5a98c076ac08f3991bb8a6f9fcb280bf51e/sdk/program/src/log.rs#L33)
 is provided.
 
-`info!` has two forms:
+`msg!` has two forms:
 
 ```rust
-info!("A string");
+msg!("A string");
 ```
 or
 ```rust
-info!(0_64, 1_64, 2_64, 3_64, 4_64)
+msg!(0_64, 1_64, 2_64, 3_64, 4_64);
 ```
 
 Both forms output the results to the program logs.  If a program so wishes they
 can emulate `println!` by using `format!`:
 
 ```rust
-info!(&format!("Some varialbe: {:?}", variable));
+msg!("Some variable: {:?}", variable);
 ```
 
 The [debugging](debugging.md#logging) section has more information about working
@@ -333,8 +333,8 @@ Then provide a custom implementation of the panic handler:
 #[cfg(all(feature = "custom-panic", target_arch = "bpf"))]
 #[no_mangle]
 fn custom_panic(info: &core::panic::PanicInfo<'_>) {
-    solana_program::info!("program custom panic enabled");
-    solana_program::info!(&format!("{}", info));
+    solana_program::msg!("program custom panic enabled");
+    solana_program::msg!("{}", info);
 }
 ```
 
