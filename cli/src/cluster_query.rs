@@ -911,7 +911,7 @@ pub fn process_show_block_production(
     slot_limit: Option<u64>,
 ) -> ProcessResult {
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
-    let epoch_info = rpc_client.get_epoch_info_with_commitment(CommitmentConfig::root())?;
+    let epoch_info = rpc_client.get_epoch_info_with_commitment(CommitmentConfig::max())?;
 
     let epoch = epoch.unwrap_or(epoch_info.epoch);
     if epoch > epoch_info.epoch {
