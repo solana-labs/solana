@@ -63,6 +63,7 @@ use solana_sdk::{
 };
 use solana_streamer::sendmmsg::multicast;
 use solana_streamer::streamer::{PacketReceiver, PacketSender};
+use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
     borrow::Cow,
     collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
@@ -1076,22 +1077,59 @@ impl ClusterInfo {
         self.push_message(CrdsValue::new_signed(message, &self.keypair));
     }
 
-    pub fn push_vote(&self, tower_index: usize, vote: Transaction) {
+    pub fn push_vote(&self, tower: &[Slot], vote: Transaction) {
+        debug_assert!(tower.iter().tuple_windows().all(|(a, b)| a < b));
         let now = timestamp();
-        let vote = Vote::new(&self.id(), vote, now);
-        let vote_ix = {
-            let r_gossip =
-                self.time_gossip_read_lock("gossip_read_push_vote", &self.stats.push_vote_read);
-            let current_votes: Vec<_> = (0..crds_value::MAX_VOTES)
-                .filter_map(|ix| r_gossip.crds.lookup(&CrdsValueLabel::Vote(ix, self.id())))
-                .collect();
-            CrdsValue::compute_vote_index(tower_index, current_votes)
+        // Find a crds vote which is evicted from the tower, and recycle its
+        // vote-index. This can be either an old vote which is popped off the
+        // deque, or recent vote which has expired before getting enough
+        // confirmations.
+        // If all votes are still in the tower, add a new vote-index. If more
+        // than one vote is evicted, the one with most recent wallclock is
+        // returned because that had got fewer confirmations.
+        // TODO: When there are more than one vote evicted from the tower, only
+        // one crds vote is overwritten here. Decide what to do with the rest.
+        let mut num_crds_votes = 0;
+        let self_pubkey = self.id();
+        // Returns true if the tower does not contain the vote.slot.
+        let should_evict_vote = |vote: &Vote| -> bool {
+            match vote.slot() {
+                Some(slot) => !tower.contains(&slot),
+                None => {
+                    error!("crds vote with no slots!");
+                    true
+                }
+            }
         };
-        let entry = CrdsValue::new_signed(CrdsData::Vote(vote_ix, vote), &self.keypair);
-        self.local_message_pending_push_queue
+        let vote_index = {
+            let gossip =
+                self.time_gossip_read_lock("gossip_read_push_vote", &self.stats.push_vote_read);
+            (0..MAX_LOCKOUT_HISTORY as u8)
+                .filter_map(|ix| {
+                    let vote = CrdsValueLabel::Vote(ix, self_pubkey);
+                    let vote = gossip.crds.lookup(&vote)?;
+                    num_crds_votes += 1;
+                    match &vote.data {
+                        CrdsData::Vote(_, vote) if should_evict_vote(vote) => {
+                            Some((vote.wallclock, ix))
+                        }
+                        CrdsData::Vote(_, _) => None,
+                        _ => panic!("this should not happen!"),
+                    }
+                })
+                .max() // Take the evicted vote with the most recent wallclock.
+                .map(|(_ /*wallclock*/, ix)| ix)
+        };
+        let vote_index = vote_index.unwrap_or(num_crds_votes);
+        assert!((vote_index as usize) < MAX_LOCKOUT_HISTORY);
+        let vote = Vote::new(self_pubkey, vote, now);
+        debug_assert_eq!(vote.slot().unwrap(), *tower.last().unwrap());
+        let vote = CrdsData::Vote(vote_index, vote);
+        let vote = CrdsValue::new_signed(vote, &self.keypair);
+        self.gossip
             .write()
             .unwrap()
-            .push((entry, now));
+            .process_push_message(&self_pubkey, vec![vote], now);
     }
 
     pub fn send_vote(&self, vote: &Transaction) -> Result<()> {
@@ -1116,7 +1154,7 @@ impl ClusterInfo {
             .map(|vote| {
                 max_ts = std::cmp::max(vote.insert_timestamp, max_ts);
                 let transaction = match &vote.value.data {
-                    CrdsData::Vote(_, vote) => vote.transaction.clone(),
+                    CrdsData::Vote(_, vote) => vote.transaction().clone(),
                     _ => panic!("this should not happen!"),
                 };
                 (vote.value.label(), transaction)
@@ -3146,7 +3184,6 @@ mod tests {
     use crate::crds_value::{CrdsValue, CrdsValueLabel, Vote as CrdsVote};
     use itertools::izip;
     use rand::seq::SliceRandom;
-    use solana_perf::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, Signer};
     use solana_vote_program::{vote_instruction, vote_state::Vote};
     use std::iter::repeat_with;
@@ -3632,6 +3669,7 @@ mod tests {
 
     #[test]
     fn test_push_vote() {
+        let mut rng = rand::thread_rng();
         let keys = Keypair::new();
         let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
@@ -3643,9 +3681,21 @@ mod tests {
         assert_eq!(max_ts, now);
 
         // add a vote
-        let tx = test_tx();
-        let index = 1;
-        cluster_info.push_vote(index, tx.clone());
+        let vote = Vote::new(
+            vec![1, 3, 7], // slots
+            solana_sdk::hash::new_rand(&mut rng),
+        );
+        let ix = vote_instruction::vote(
+            &Pubkey::new_unique(), // vote_pubkey
+            &Pubkey::new_unique(), // authorized_voter_pubkey
+            vote,
+        );
+        let tx = Transaction::new_with_payer(
+            &[ix], // instructions
+            None,  // payer
+        );
+        let tower = vec![7]; // Last slot in the vote.
+        cluster_info.push_vote(&tower, tx.clone());
         cluster_info.flush_push_queue();
 
         // -1 to make sure that the clock is strictly lower then when insert occurred
@@ -4029,11 +4079,11 @@ mod tests {
         vote_tx.partial_sign(&[keypair.as_ref()], Hash::default());
         vote_tx.partial_sign(&[keypair.as_ref()], Hash::default());
 
-        let vote = CrdsVote {
-            from: keypair.pubkey(),
-            transaction: vote_tx,
-            wallclock: 0,
-        };
+        let vote = CrdsVote::new(
+            keypair.pubkey(),
+            vote_tx,
+            0, // wallclock
+        );
         let vote = CrdsValue::new_signed(CrdsData::Vote(1, vote), &Keypair::new());
         assert!(bincode::serialized_size(&vote).unwrap() <= PUSH_MESSAGE_MAX_PAYLOAD_SIZE as u64);
     }
