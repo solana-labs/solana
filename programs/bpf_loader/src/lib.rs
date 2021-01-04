@@ -207,18 +207,13 @@ pub fn process_instruction(
                 invoke_context,
             )?,
         };
-<<<<<<< HEAD
-        executor.execute(loader_id, keyed_accounts, instruction_data, invoke_context)?
-=======
         executor.execute(
             loader_id,
             first_account.unsigned_key(),
             keyed_accounts,
             instruction_data,
             invoke_context,
-            use_jit,
         )?
->>>>>>> 061980580... Upgradeable programs needs program account's address as program id (#14417)
     } else {
         if !check_loader_id(program_id) {
             log!(logger, "Invalid BPF loader id");
@@ -610,17 +605,8 @@ impl Executor for BPFExecutor {
         let program = next_keyed_account(&mut keyed_accounts_iter)?;
 
         let parameter_accounts = keyed_accounts_iter.as_slice();
-<<<<<<< HEAD
-        let parameter_bytes = serialize_parameters(
-            loader_id,
-            program.unsigned_key(),
-            parameter_accounts,
-            &instruction_data,
-        )?;
-=======
-        let mut parameter_bytes =
+        let parameter_bytes =
             serialize_parameters(loader_id, program_id, parameter_accounts, &instruction_data)?;
->>>>>>> 061980580... Upgradeable programs needs program account's address as program id (#14417)
         {
             let compute_meter = invoke_context.get_compute_meter();
             let (mut vm, heap_region) = match create_vm(
