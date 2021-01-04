@@ -41,6 +41,7 @@ use solana_sdk::{
     message::Message,
     native_token::lamports_to_sol,
     pubkey::{self, Pubkey},
+    rpc_port::DEFAULT_RPC_PORT_STR,
     signature::Signature,
     system_instruction, system_program,
     sysvar::{
@@ -88,14 +89,14 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                 .arg(
                     pubkey!(Arg::with_name("node_pubkey")
                         .index(1)
-                        .value_name("VALIDATOR_PUBKEY")
+                        .value_name("OUR_VALIDATOR_PUBKEY")
                         .required(false),
                         "Identity pubkey of the validator"),
                 )
                 .arg(
                     Arg::with_name("node_json_rpc_url")
                         .index(2)
-                        .value_name("URL")
+                        .value_name("OUR_URL")
                         .takes_value(true)
                         .validator(is_url)
                         .help("JSON RPC URL for validator, which is useful for validators with a private RPC service")
@@ -110,6 +111,9 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                     Arg::with_name("our_localhost")
                         .long("our-localhost")
                         .takes_value(false)
+                        .value_name("PORT")
+                        .default_value(&DEFAULT_RPC_PORT_STR)
+                        .validator(is_port)
                         .help("Guess Identity pubkey and validator rpc node assuming local (possibly private) validator"),
                 )
                 .arg(
@@ -392,8 +396,19 @@ pub fn parse_catchup(
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
     let node_pubkey = pubkey_of_signer(matches, "node_pubkey", wallet_manager)?;
+    let mut our_localhost_port = value_t!(matches, "our_localhost", u16).ok();
+    // if there is no explicitly specified --our-localhost,
+    // disable the guess mode (= our_localhost_port)
+    if matches.occurrences_of("our_localhost") == 0 {
+        our_localhost_port = None
+    }
     let node_json_rpc_url = value_t!(matches, "node_json_rpc_url", String).ok();
-    let guess = matches.is_present("our_localhost");
+    // requirement of node_pubkey is relaxed only if our_localhost_port
+    if our_localhost_port.is_none() && node_pubkey.is_none() {
+        return Err(CliError::BadParameter(
+            "OUR_VALIDATOR_PUBKEY (and possibly OUR_URL) must be specified unless --our-localhost is given".into(),
+        ));
+    }
     let follow = matches.is_present("follow");
     let log = matches.is_present("log");
     Ok(CliCommandInfo {
@@ -401,7 +416,7 @@ pub fn parse_catchup(
             node_pubkey,
             node_json_rpc_url,
             follow,
-            guess,
+            our_localhost_port,
             log,
         },
         signers: vec![],
@@ -585,16 +600,15 @@ pub fn process_catchup(
     node_pubkey: Option<Pubkey>,
     mut node_json_rpc_url: Option<String>,
     follow: bool,
-    guess: bool,
+    our_localhost_port: Option<u16>,
     log: bool,
 ) -> ProcessResult {
     let sleep_interval = 5;
-
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message("Connecting...");
 
-    if guess {
-        let gussed_default = Some("http://localhost:8899".to_owned());
+    if let Some(our_localhost_port) = our_localhost_port {
+        let gussed_default = Some(format!("http://localhost:{}", our_localhost_port));
         if node_json_rpc_url.is_some() && node_json_rpc_url != gussed_default {
             eprintln!("Prefering explicitly given rpc as us, although --our-localhost is given");
         } else {
@@ -602,7 +616,7 @@ pub fn process_catchup(
         }
     }
 
-    let (node_client, node_pubkey) = if guess {
+    let (node_client, node_pubkey) = if our_localhost_port.is_some() {
         let client = RpcClient::new(node_json_rpc_url.unwrap());
         let guessed_default = Some(client.get_identity()?);
         (
@@ -640,9 +654,7 @@ pub fn process_catchup(
             (RpcClient::new_socket(rpc_addr), node_pubkey)
         }
     } else {
-        return Err(
-            "At least node_pubkey must be specified unless --our-localhost is given".into(),
-        );
+        unreachable!()
     };
 
     let reported_node_pubkey = loop {
@@ -673,9 +685,35 @@ pub fn process_catchup(
 
     let mut previous_rpc_slot = std::u64::MAX;
     let mut previous_slot_distance = 0;
+    let mut retry_count = 0;
+    let max_retry_count = 5;
+    let mut get_slot_while_retrying = |client: &RpcClient| {
+        loop {
+            match client.get_slot_with_commitment(config.commitment) {
+                Ok(r) => {
+                    retry_count = 0;
+                    return Ok(r);
+                }
+                Err(e) => {
+                    if retry_count >= max_retry_count {
+                        return Err(e);
+                    }
+                    retry_count += 1;
+                    if log {
+                        // special newlines handling to avoid conflict with the progress bar
+                        println!("\rRetrying({}/{}): {}\n", retry_count, max_retry_count, e);
+                    }
+                    sleep(Duration::from_secs(1));
+                }
+            };
+        }
+    };
+
     loop {
-        let rpc_slot = rpc_client.get_slot_with_commitment(config.commitment)?;
-        let node_slot = node_client.get_slot_with_commitment(config.commitment)?;
+        // humbly retry; the reference node (rpc_client) could be spotty,
+        // especially if pointing to api.meinnet-beta.solana.com at times
+        let rpc_slot = get_slot_while_retrying(rpc_client)?;
+        let node_slot = get_slot_while_retrying(&node_client)?;
         if !follow && node_slot > std::cmp::min(previous_rpc_slot, rpc_slot) {
             progress_bar.finish_and_clear();
             return Ok(format!(
@@ -711,7 +749,8 @@ pub fn process_catchup(
                 "".to_string()
             } else {
                 format!(
-                    ", {} at {:.1} slots/second{}",
+                    ", {} node is {} at {:.1} slots/second{}",
+                    if slot_distance >= 0 { "our" } else { "their" },
                     if slots_per_second < 0.0 {
                         "falling behind"
                     } else {
