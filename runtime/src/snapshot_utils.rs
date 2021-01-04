@@ -229,11 +229,11 @@ pub fn remove_tmp_snapshot_archives(snapshot_path: &Path) {
 pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()> {
     info!(
         "Generating snapshot archive for slot {}",
-        snapshot_package.root
+        snapshot_package.slot
     );
 
     serialize_status_cache(
-        snapshot_package.root,
+        snapshot_package.slot,
         &snapshot_package.slot_deltas,
         &snapshot_package.snapshot_links.path().join(SNAPSHOT_STATUS_CACHE_FILE_NAME),
     )?;
@@ -360,13 +360,13 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
     info!(
         "Successfully created {:?}. slot: {}, elapsed ms: {}, size={}",
         snapshot_package.tar_output_file,
-        snapshot_package.root,
+        snapshot_package.slot,
         timer.as_ms(),
         metadata.len()
     );
     datapoint_info!(
         "snapshot-package",
-        ("slot", snapshot_package.root, i64),
+        ("slot", snapshot_package.slot, i64),
         ("duration_ms", timer.as_ms(), i64),
         ("size", metadata.len(), i64)
     );

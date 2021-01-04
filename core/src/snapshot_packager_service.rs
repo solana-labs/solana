@@ -51,7 +51,7 @@ impl SnapshotPackagerService {
                             {
                                 warn!("Failed to create snapshot archive: {}", err);
                             } else {
-                                hashes.push((snapshot_package.root, snapshot_package.hash));
+                                hashes.push((snapshot_package.slot, snapshot_package.hash));
                                 while hashes.len() > MAX_SNAPSHOT_HASHES {
                                     hashes.remove(0);
                                 }
