@@ -606,6 +606,7 @@ pub fn process_catchup(
     log: bool,
 ) -> ProcessResult {
     let sleep_interval = 5;
+
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message("Connecting...");
 
