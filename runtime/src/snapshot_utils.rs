@@ -27,7 +27,6 @@ use std::{
     str::FromStr,
 };
 use tar::Archive;
-use tempfile::TempDir;
 use thiserror::Error;
 
 pub const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
@@ -236,7 +235,7 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
     serialize_status_cache(
         snapshot_package.root,
         &snapshot_package.slot_deltas,
-        &snapshot_package.snapshot_links,
+        &snapshot_package.snapshot_links.path().join(SNAPSHOT_STATUS_CACHE_FILE_NAME),
     )?;
 
     let mut timer = Measure::start("snapshot_package-package_snapshots");
@@ -546,14 +545,10 @@ pub fn add_snapshot<P: AsRef<Path>>(
 fn serialize_status_cache(
     slot: Slot,
     slot_deltas: &[BankSlotDelta],
-    snapshot_links: &TempDir,
+    status_cache_path: &Path,
 ) -> Result<()> {
-    // the status cache is stored as snapshot_path/status_cache
-    let snapshot_status_cache_file_path =
-        snapshot_links.path().join(SNAPSHOT_STATUS_CACHE_FILE_NAME);
-
     let mut status_cache_serialize = Measure::start("status_cache_serialize-ms");
-    let consumed_size = serialize_snapshot_data_file(&snapshot_status_cache_file_path, |stream| {
+    let consumed_size = serialize_snapshot_data_file(status_cache_path, |stream| {
         serialize_into(stream, slot_deltas)?;
         Ok(())
     })?;
