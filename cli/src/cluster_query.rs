@@ -613,8 +613,12 @@ pub fn process_catchup(
     if let Some(our_localhost_port) = our_localhost_port {
         let gussed_default = Some(format!("http://localhost:{}", our_localhost_port));
         if node_json_rpc_url.is_some() && node_json_rpc_url != gussed_default {
-            // special newlines handling to avoid conflict with the progress bar
-            println!("\rPrefering explicitly given rpc as us, although --our-localhost is given\n");
+            // go to new line to leave this message on console
+            println!(
+                "Prefering explicitly given rpc ({}) as us, \
+                 although --our-localhost is given\n",
+                node_json_rpc_url.as_ref().unwrap()
+            );
         } else {
             node_json_rpc_url = gussed_default;
         }
@@ -625,13 +629,18 @@ pub fn process_catchup(
         let guessed_default = Some(client.get_identity()?);
         (
             client,
-            (if node_pubkey.is_some() && guessed_default != node_pubkey {
-                // special newlines handling to avoid conflict with the progress bar
-                println!("\rPrefering explicitly given node pubkey as us, although --our-localhost is given\n");
+            (if node_pubkey.is_some() && node_pubkey != guessed_default {
+                // go to new line to leave this message on console
+                println!(
+                    "Prefering explicitly given node pubkey ({}) as us, \
+                     although --our-localhost is given\n",
+                    node_pubkey.unwrap()
+                );
                 node_pubkey
             } else {
                 guessed_default
-            }).unwrap(),
+            })
+            .unwrap(),
         )
     } else if let Some(node_pubkey) = node_pubkey {
         if let Some(node_json_rpc_url) = node_json_rpc_url {
@@ -705,8 +714,8 @@ pub fn process_catchup(
                     }
                     retry_count += 1;
                     if log {
-                        // special newlines handling to avoid conflict with the progress bar
-                        println!("\rRetrying({}/{}): {}\n", retry_count, max_retry_count, e);
+                        // go to new line to leave this message on console
+                        println!("Retrying({}/{}): {}\n", retry_count, max_retry_count, e);
                     }
                     sleep(Duration::from_secs(1));
                 }
