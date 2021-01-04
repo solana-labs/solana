@@ -10640,6 +10640,7 @@ pub(crate) mod tests {
     impl Executor for TestExecutor {
         fn execute(
             &self,
+            _loader_id: &Pubkey,
             _program_id: &Pubkey,
             _keyed_accounts: &[KeyedAccount],
             _instruction_data: &[u8],
