@@ -334,7 +334,7 @@ Then provide a custom implementation of the panic handler:
 #[no_mangle]
 fn custom_panic(info: &core::panic::PanicInfo<'_>) {
     solana_program::msg!("program custom panic enabled");
-    solana_program::msg!(&format!("{}", info));
+    solana_program::msg!("{}", info);
 }
 ```
 
