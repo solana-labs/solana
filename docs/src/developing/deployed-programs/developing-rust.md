@@ -293,7 +293,7 @@ Both forms output the results to the program logs.  If a program so wishes they
 can emulate `println!` by using `format!`:
 
 ```rust
-msg!(&format!("Some varialbe: {:?}", variable));
+msg!("Some variable: {:?}", variable);
 ```
 
 The [debugging](debugging.md#logging) section has more information about working
