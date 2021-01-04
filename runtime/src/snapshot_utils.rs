@@ -584,7 +584,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_indexes: HashSet<AccountIndex>,
-    caching_enabled: bool,
+    accounts_db_caching_enabled: bool,
 ) -> Result<Bank> {
     // Untar the snapshot into a temporary directory
     let unpack_dir = tempfile::Builder::new()
@@ -610,7 +610,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
         debug_keys,
         additional_builtins,
         account_indexes,
-        caching_enabled,
+        accounts_db_caching_enabled,
     )?;
 
     if !bank.verify_snapshot_bank() {
@@ -758,7 +758,7 @@ fn rebuild_bank_from_snapshots<P>(
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_indexes: HashSet<AccountIndex>,
-    caching_enabled: bool,
+    accounts_db_caching_enabled: bool,
 ) -> Result<Bank>
 where
     P: AsRef<Path>,
@@ -796,7 +796,7 @@ where
                 debug_keys,
                 additional_builtins,
                 account_indexes,
-                caching_enabled,
+                accounts_db_caching_enabled,
             ),
         }?)
     })?;

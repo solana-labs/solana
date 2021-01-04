@@ -874,7 +874,7 @@ impl Bank {
     pub(crate) fn new_with_config(
         genesis_config: &GenesisConfig,
         account_indexes: HashSet<AccountIndex>,
-        caching_enabled: bool,
+        accounts_db_caching_enabled: bool,
     ) -> Self {
         Self::new_with_paths(
             &genesis_config,
@@ -883,7 +883,7 @@ impl Bank {
             None,
             None,
             account_indexes,
-            caching_enabled,
+            accounts_db_caching_enabled,
         )
     }
 
@@ -894,7 +894,7 @@ impl Bank {
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
         account_indexes: HashSet<AccountIndex>,
-        caching_enabled: bool,
+        accounts_db_caching_enabled: bool,
     ) -> Self {
         let mut bank = Self::default();
         bank.ancestors.insert(bank.slot(), 0);
@@ -905,7 +905,7 @@ impl Bank {
             paths,
             &genesis_config.cluster_type,
             account_indexes,
-            caching_enabled,
+            accounts_db_caching_enabled,
         ));
         bank.process_genesis_config(genesis_config);
         bank.finish_init(genesis_config, additional_builtins);

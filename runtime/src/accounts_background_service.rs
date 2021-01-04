@@ -77,7 +77,7 @@ pub struct SnapshotRequestHandler {
 
 impl SnapshotRequestHandler {
     // Returns the latest requested snapshot slot, if one exists
-    pub fn handle_snapshot_requests(&self, caching_enabled: bool) -> Option<u64> {
+    pub fn handle_snapshot_requests(&self, accounts_db_caching_enabled: bool) -> Option<u64> {
         self.snapshot_request_receiver
             .try_iter()
             .last()
@@ -92,14 +92,14 @@ impl SnapshotRequestHandler {
                 hash_time.stop();
 
                 let mut shrink_time = Measure::start("shrink_time");
-                if !caching_enabled {
+                if !accounts_db_caching_enabled {
                     snapshot_root_bank
                         .process_stale_slot_with_budget(0, SHRUNKEN_ACCOUNT_PER_INTERVAL);
                 }
                 shrink_time.stop();
 
                 let mut flush_accounts_cache_time = Measure::start("flush_accounts_cache_time");
-                if caching_enabled {
+                if accounts_db_caching_enabled {
                     // Force flush all the roots from the cache so that the snapshot can be taken.
                     snapshot_root_bank.force_flush_accounts_cache();
                 }
@@ -113,7 +113,7 @@ impl SnapshotRequestHandler {
                 snapshot_root_bank.clean_accounts(true);
                 clean_time.stop();
 
-                if caching_enabled {
+                if accounts_db_caching_enabled {
                     shrink_time = Measure::start("shrink_time");
                     snapshot_root_bank.shrink_candidate_slots();
                     shrink_time.stop();
@@ -201,11 +201,11 @@ pub struct ABSRequestHandler {
 
 impl ABSRequestHandler {
     // Returns the latest requested snapshot block height, if one exists
-    pub fn handle_snapshot_requests(&self, caching_enabled: bool) -> Option<u64> {
+    pub fn handle_snapshot_requests(&self, accounts_db_caching_enabled: bool) -> Option<u64> {
         self.snapshot_request_handler
             .as_ref()
             .and_then(|snapshot_request_handler| {
-                snapshot_request_handler.handle_snapshot_requests(caching_enabled)
+                snapshot_request_handler.handle_snapshot_requests(accounts_db_caching_enabled)
             })
     }
 
@@ -229,7 +229,7 @@ impl AccountsBackgroundService {
         bank_forks: Arc<RwLock<BankForks>>,
         exit: &Arc<AtomicBool>,
         request_handler: ABSRequestHandler,
-        caching_enabled: bool,
+        accounts_db_caching_enabled: bool,
     ) -> Self {
         info!("AccountsBackgroundService active");
         let exit = exit.clone();
@@ -273,8 +273,8 @@ impl AccountsBackgroundService {
                 // snapshot_request_handler.handle_requests() will always look for the latest
                 // available snapshot in the channel.
                 let snapshot_block_height =
-                    request_handler.handle_snapshot_requests(caching_enabled);
-                if caching_enabled {
+                    request_handler.handle_snapshot_requests(accounts_db_caching_enabled);
+                if accounts_db_caching_enabled {
                     bank.flush_accounts_cache_if_needed();
                 }
 
@@ -283,7 +283,7 @@ impl AccountsBackgroundService {
                     assert!(last_cleaned_block_height <= snapshot_block_height);
                     last_cleaned_block_height = snapshot_block_height;
                 } else {
-                    if caching_enabled {
+                    if accounts_db_caching_enabled {
                         bank.shrink_candidate_slots();
                     } else {
                         // under sustained writes, shrink can lag behind so cap to	                    bank.shrink_candidate_slots();
@@ -299,7 +299,7 @@ impl AccountsBackgroundService {
                     if bank.block_height() - last_cleaned_block_height
                         > (CLEAN_INTERVAL_BLOCKS + thread_rng().gen_range(0, 10))
                     {
-                        if caching_enabled {
+                        if accounts_db_caching_enabled {
                             bank.force_flush_accounts_cache();
                         }
                         bank.clean_accounts(true);

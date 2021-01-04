@@ -78,7 +78,7 @@ pub struct TvuConfig {
     pub trusted_validators: Option<HashSet<Pubkey>>,
     pub repair_validators: Option<HashSet<Pubkey>>,
     pub accounts_hash_fault_injection_slots: u64,
-    pub caching_enabled: bool,
+    pub accounts_db_caching_enabled: bool,
 }
 
 impl Tvu {
@@ -273,7 +273,7 @@ impl Tvu {
             bank_forks.clone(),
             &exit,
             accounts_background_request_handler,
-            tvu_config.caching_enabled,
+            tvu_config.accounts_db_caching_enabled,
         );
 
         Tvu {

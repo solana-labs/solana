@@ -346,7 +346,7 @@ pub struct ProcessOptions {
     pub frozen_accounts: Vec<Pubkey>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub account_indexes: HashSet<AccountIndex>,
-    pub caching_enabled: bool,
+    pub accounts_db_caching_enabled: bool,
 }
 
 pub fn process_blockstore(
@@ -372,7 +372,7 @@ pub fn process_blockstore(
         opts.debug_keys.clone(),
         Some(&crate::builtins::get(opts.bpf_jit)),
         opts.account_indexes.clone(),
-        opts.caching_enabled,
+        opts.accounts_db_caching_enabled,
     );
     let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");

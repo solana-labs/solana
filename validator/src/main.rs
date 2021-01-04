@@ -1424,8 +1424,8 @@ pub fn main() {
                 .help("Enable an accounts index, indexed by the selected account field"),
         )
         .arg(
-            Arg::with_name("enable_cache")
-                .long("enable-cache")
+            Arg::with_name("accounts_db_caching_enabled")
+                .long("accounts-db-caching-enabled")
                 .help("Enable accounts caching"),
         )
         .get_matches();
@@ -1598,7 +1598,7 @@ pub fn main() {
         poh_pinned_cpu_core: value_of(&matches, "poh_pinned_cpu_core")
             .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),
         account_indexes,
-        caching_enabled: matches.is_present("enable_cache"),
+        accounts_db_caching_enabled: matches.is_present("accounts_db_caching_enabled"),
         ..ValidatorConfig::default()
     };
 
