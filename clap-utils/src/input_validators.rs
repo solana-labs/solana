@@ -148,6 +148,33 @@ where
     }
 }
 
+pub fn is_url_or_moniker<T>(string: T) -> Result<(), String>
+where
+    T: AsRef<str> + Display,
+{
+    match url::Url::parse(&normalize_to_url_if_moniker(string.as_ref())) {
+        Ok(url) => {
+            if url.has_host() {
+                Ok(())
+            } else {
+                Err("no host provided".to_string())
+            }
+        }
+        Err(err) => Err(format!("{}", err)),
+    }
+}
+
+pub fn normalize_to_url_if_moniker(url_or_moniker: &str) -> String {
+    match url_or_moniker {
+        "mainnet-beta" => "http://api.mainnet-beta.solana.com",
+        "testnet" => "http://testnet.solana.com",
+        "devnet" => "http://devnet.solana.com",
+        "localnet" => "http://localhost:8899",
+        url => url,
+    }
+    .to_string()
+}
+
 pub fn is_epoch<T>(epoch: T) -> Result<(), String>
 where
     T: AsRef<str> + Display,

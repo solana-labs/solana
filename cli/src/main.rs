@@ -7,7 +7,7 @@ use console::style;
 use solana_clap_utils::{
     commitment::COMMITMENT_ARG,
     input_parsers::commitment_of,
-    input_validators::is_url,
+    input_validators::{is_url, is_url_or_moniker},
     keypair::{CliSigners, DefaultSigner, SKIP_SEED_PHRASE_VALIDATION_ARG},
     DisplayError,
 };
@@ -246,11 +246,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         Arg::with_name("json_rpc_url")
             .short("u")
             .long("url")
-            .value_name("URL")
+            .value_name("URL_OR_MONIKER")
             .takes_value(true)
             .global(true)
-            .validator(is_url)
-            .help("JSON RPC URL for the solana cluster"),
+            .validator(is_url_or_moniker)
+            .help("JSON RPC URL or some monikers (\"mainnet-beta\", \"testnet\", \"devnet\", \"localnet\")"),
     )
     .arg(
         Arg::with_name("websocket_url")
