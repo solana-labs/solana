@@ -15,7 +15,7 @@ pub type AccountsPackageSendError = SendError<AccountsPackage>;
 
 #[derive(Debug)]
 pub struct AccountsPackage {
-    pub root: Slot,
+    pub slot: Slot,
     pub block_height: Slot,
     pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
@@ -28,7 +28,7 @@ pub struct AccountsPackage {
 
 impl AccountsPackage {
     pub fn new(
-        root: Slot,
+        slot: Slot,
         block_height: u64,
         slot_deltas: Vec<BankSlotDelta>,
         snapshot_links: TempDir,
@@ -39,7 +39,7 @@ impl AccountsPackage {
         snapshot_version: SnapshotVersion,
     ) -> Self {
         Self {
-            root,
+            slot,
             block_height,
             slot_deltas,
             snapshot_links,
