@@ -406,7 +406,9 @@ pub fn parse_catchup(
     // requirement of node_pubkey is relaxed only if our_localhost_port
     if our_localhost_port.is_none() && node_pubkey.is_none() {
         return Err(CliError::BadParameter(
-            "OUR_VALIDATOR_PUBKEY (and possibly OUR_URL) must be specified unless --our-localhost is given".into(),
+            "OUR_VALIDATOR_PUBKEY (and possibly OUR_URL) must be specified \
+             unless --our-localhost is given"
+                .into(),
         ));
     }
     let follow = matches.is_present("follow");
@@ -610,7 +612,8 @@ pub fn process_catchup(
     if let Some(our_localhost_port) = our_localhost_port {
         let gussed_default = Some(format!("http://localhost:{}", our_localhost_port));
         if node_json_rpc_url.is_some() && node_json_rpc_url != gussed_default {
-            eprintln!("Prefering explicitly given rpc as us, although --our-localhost is given");
+            // special newlines handling to avoid conflict with the progress bar
+            println!("\rPrefering explicitly given rpc as us, although --our-localhost is given\n");
         } else {
             node_json_rpc_url = gussed_default;
         }
@@ -622,7 +625,8 @@ pub fn process_catchup(
         (
             client,
             (if node_pubkey.is_some() && guessed_default != node_pubkey {
-                eprintln!("Prefering explicitly given node pubkey as us, although --our-localhost is given");
+                // special newlines handling to avoid conflict with the progress bar
+                println!("\rPrefering explicitly given node pubkey as us, although --our-localhost is given\n");
                 node_pubkey
             } else {
                 guessed_default
