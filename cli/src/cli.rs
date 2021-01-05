@@ -75,9 +75,11 @@ pub const DEFAULT_RPC_TIMEOUT_SECONDS: &str = "30";
 pub enum CliCommand {
     // Cluster Query Commands
     Catchup {
-        node_pubkey: Pubkey,
+        node_pubkey: Option<Pubkey>,
         node_json_rpc_url: Option<String>,
         follow: bool,
+        our_localhost_port: Option<u16>,
+        log: bool,
     },
     ClusterDate,
     ClusterVersion,
@@ -1138,7 +1140,17 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             node_pubkey,
             node_json_rpc_url,
             follow,
-        } => process_catchup(&rpc_client, config, node_pubkey, node_json_rpc_url, *follow),
+            our_localhost_port,
+            log,
+        } => process_catchup(
+            &rpc_client,
+            config,
+            *node_pubkey,
+            node_json_rpc_url.clone(),
+            *follow,
+            *our_localhost_port,
+            *log,
+        ),
         CliCommand::ClusterDate => process_cluster_date(&rpc_client, config),
         CliCommand::ClusterVersion => process_cluster_version(&rpc_client, config),
         CliCommand::CreateAddressWithSeed {
