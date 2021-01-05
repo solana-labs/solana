@@ -172,6 +172,10 @@ pub fn upgrade(
     )
 }
 
+pub fn is_upgrade_instruction(instruction_data: &[u8]) -> bool {
+    3 == instruction_data[0]
+}
+
 /// Returns the instructions required to set a program's authority.
 pub fn set_authority(
     program_address: &Pubkey,

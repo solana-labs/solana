@@ -1377,11 +1377,15 @@ fn check_instruction_size(
     Ok(())
 }
 
-fn check_authorized_program(program_id: &Pubkey) -> Result<(), EbpfError<BPFError>> {
+fn check_authorized_program(
+    program_id: &Pubkey,
+    instruction_data: &[u8],
+) -> Result<(), EbpfError<BPFError>> {
     if native_loader::check_id(program_id)
         || bpf_loader::check_id(program_id)
         || bpf_loader_deprecated::check_id(program_id)
-        || bpf_loader_upgradeable::check_id(program_id)
+        || (bpf_loader_upgradeable::check_id(program_id)
+            && !bpf_loader_upgradeable::is_upgrade_instruction(instruction_data))
     {
         return Err(SyscallError::InstructionError(InstructionError::UnsupportedProgramId).into());
     }
@@ -1432,7 +1436,7 @@ fn call<'a>(
         MessageProcessor::create_message(&instruction, &keyed_account_refs, &signers)
             .map_err(SyscallError::InstructionError)?;
     if invoke_context.is_feature_active(&limit_cpi_loader_invoke::id()) {
-        check_authorized_program(&callee_program_id)?;
+        check_authorized_program(&callee_program_id, &instruction.data)?;
     }
     let (mut accounts, mut account_refs) = syscall.translate_accounts(
         use_loaded_program_accounts,
