@@ -465,11 +465,12 @@ impl CliConfig<'_> {
         json_rpc_cmd_url: &str,
         json_rpc_cfg_url: &str,
     ) -> (SettingType, String) {
-        Self::first_nonempty_setting(vec![
+        let (setting_type, url_or_moniker) = Self::first_nonempty_setting(vec![
             (SettingType::Explicit, json_rpc_cmd_url.to_string()),
             (SettingType::Explicit, json_rpc_cfg_url.to_string()),
             (SettingType::SystemDefault, Self::default_json_rpc_url()),
-        ])
+        ]);
+        (setting_type, normalize_to_url_if_moniker(&url_or_moniker))
     }
 
     pub fn compute_keypair_path_setting(
