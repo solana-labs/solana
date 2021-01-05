@@ -56,7 +56,7 @@ const PAGE_SIZE: u64 = 4 * 1024;
 pub const DEFAULT_FILE_SIZE: u64 = PAGE_SIZE * 1024;
 pub const DEFAULT_NUM_THREADS: u32 = 8;
 pub const DEFAULT_NUM_DIRS: u32 = 4;
-const MAX_RECYCLE_STORES: usize = 5000;
+const MAX_RECYCLE_STORES: usize = 1000;
 const STORE_META_OVERHEAD: usize = 256;
 
 lazy_static! {
