@@ -118,6 +118,10 @@ pub mod limit_cpi_loader_invoke {
     solana_sdk::declare_id!("xGbcW7EEC7zMRJ6LaJCob65EJxKryWjwM4rv8f57SRM");
 }
 
+pub mod try_find_program_address_syscall_enabled {
+    solana_sdk::declare_id!("EMsMNadQNhCYDyGpYH5Tx6dGHxiUqKHk782PU5XaWfmi");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -149,6 +153,7 @@ lazy_static! {
         (bpf_loader_upgradeable_program::id(), "upgradeable bpf loader"),
         (max_cpi_instruction_size_ipv6_mtu::id(), "Max cross-program invocation size 1280"),
         (limit_cpi_loader_invoke::id(), "Loader not authorized via CPI"),
+        (try_find_program_address_syscall_enabled::id(), "add try_find_program_address syscall"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

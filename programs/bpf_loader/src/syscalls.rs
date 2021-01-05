@@ -18,6 +18,7 @@ use solana_sdk::{
     feature_set::{
         limit_cpi_loader_invoke, pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled,
         sha256_syscall_enabled, sol_log_compute_units_syscall,
+        try_find_program_address_syscall_enabled,
     },
     hash::{Hasher, HASH_BYTES},
     instruction::{AccountMeta, Instruction, InstructionError},
@@ -180,6 +181,17 @@ pub fn register_syscalls<'a>(
             loader_id,
         }),
     )?;
+
+    if invoke_context.is_feature_active(&try_find_program_address_syscall_enabled::id()) {
+        vm.register_syscall_with_context_ex(
+            "sol_try_find_program_address",
+            Box::new(SyscallTryFindProgramAddress {
+                cost: bpf_compute_budget.create_program_address_units,
+                compute_meter: invoke_context.get_compute_meter(),
+                loader_id,
+            }),
+        )?;
+    }
 
     // Cross-program invocation syscalls
 
@@ -519,6 +531,34 @@ impl SyscallObject<BPFError> for SyscallAllocFree {
     }
 }
 
+fn translate_program_address_inputs<'a>(
+    seeds_addr: u64,
+    seeds_len: u64,
+    program_id_addr: u64,
+    ro_regions: &[MemoryRegion],
+    loader_id: &Pubkey,
+) -> Result<(Vec<&'a [u8]>, &'a Pubkey), EbpfError<BPFError>> {
+    let untranslated_seeds =
+        translate_slice!(&[&u8], seeds_addr, seeds_len, ro_regions, loader_id)?;
+    if untranslated_seeds.len() > MAX_SEEDS {
+        return Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into());
+    }
+    let seeds = untranslated_seeds
+        .iter()
+        .map(|untranslated_seed| {
+            translate_slice!(
+                u8,
+                untranslated_seed.as_ptr() as *const _ as u64,
+                untranslated_seed.len() as u64,
+                ro_regions,
+                loader_id
+            )
+        })
+        .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
+    let program_id = translate_type!(Pubkey, program_id_addr, ro_regions, loader_id)?;
+    Ok((seeds, program_id))
+}
+
 /// Create a program address
 struct SyscallCreateProgramAddress<'a> {
     cost: u64,
@@ -537,26 +577,16 @@ impl<'a> SyscallObject<BPFError> for SyscallCreateProgramAddress<'a> {
         rw_regions: &[MemoryRegion],
     ) -> Result<u64, EbpfError<BPFError>> {
         self.compute_meter.consume(self.cost)?;
-        // TODO need ref?
-        let untranslated_seeds =
-            translate_slice!(&[&u8], seeds_addr, seeds_len, ro_regions, self.loader_id)?;
-        if untranslated_seeds.len() > MAX_SEEDS {
-            return Ok(1);
-        }
-        let seeds = untranslated_seeds
-            .iter()
-            .map(|untranslated_seed| {
-                translate_slice!(
-                    u8,
-                    untranslated_seed.as_ptr(),
-                    untranslated_seed.len(),
-                    ro_regions,
-                    self.loader_id
-                )
-            })
-            .collect::<Result<Vec<_>, EbpfError<BPFError>>>()?;
-        let program_id = translate_type!(Pubkey, program_id_addr, ro_regions, self.loader_id)?;
 
+        let (seeds, program_id) = translate_program_address_inputs(
+            seeds_addr,
+            seeds_len,
+            program_id_addr,
+            ro_regions,
+            self.loader_id,
+        )?;
+
+        self.compute_meter.consume(self.cost)?;
         let new_address = match Pubkey::create_program_address(&seeds, program_id) {
             Ok(address) => address,
             Err(_) => return Ok(1),
@@ -564,6 +594,56 @@ impl<'a> SyscallObject<BPFError> for SyscallCreateProgramAddress<'a> {
         let address = translate_slice_mut!(u8, address_addr, 32, rw_regions, self.loader_id)?;
         address.copy_from_slice(new_address.as_ref());
         Ok(0)
+    }
+}
+
+/// Create a program address
+struct SyscallTryFindProgramAddress<'a> {
+    cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BPFError> for SyscallTryFindProgramAddress<'a> {
+    fn call(
+        &mut self,
+        seeds_addr: u64,
+        seeds_len: u64,
+        program_id_addr: u64,
+        address_addr: u64,
+        bump_seed_addr: u64,
+        ro_regions: &[MemoryRegion],
+        rw_regions: &[MemoryRegion],
+    ) -> Result<u64, EbpfError<BPFError>> {
+        let (seeds, program_id) = translate_program_address_inputs(
+            seeds_addr,
+            seeds_len,
+            program_id_addr,
+            ro_regions,
+            self.loader_id,
+        )?;
+
+        let mut bump_seed = [std::u8::MAX];
+        for _ in 0..std::u8::MAX {
+            {
+                let mut seeds_with_bump = seeds.to_vec();
+                seeds_with_bump.push(&bump_seed);
+
+                self.compute_meter.consume(self.cost)?;
+                if let Ok(new_address) =
+                    Pubkey::create_program_address(&seeds_with_bump, program_id)
+                {
+                    let bump_seed_ref =
+                        translate_type_mut!(u8, bump_seed_addr, rw_regions, self.loader_id)?;
+                    let address =
+                        translate_slice_mut!(u8, address_addr, 32, rw_regions, self.loader_id)?;
+                    *bump_seed_ref = bump_seed[0];
+                    address.copy_from_slice(new_address.as_ref());
+                    return Ok(0);
+                }
+            }
+            bump_seed[0] -= 1;
+        }
+        Ok(1)
     }
 }
 
