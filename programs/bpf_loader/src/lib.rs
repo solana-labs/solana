@@ -207,7 +207,13 @@ pub fn process_instruction(
                 invoke_context,
             )?,
         };
-        executor.execute(loader_id, keyed_accounts, instruction_data, invoke_context)?
+        executor.execute(
+            loader_id,
+            first_account.unsigned_key(),
+            keyed_accounts,
+            instruction_data,
+            invoke_context,
+        )?
     } else {
         if !check_loader_id(program_id) {
             log!(logger, "Invalid BPF loader id");
@@ -587,6 +593,7 @@ impl Executor for BPFExecutor {
     fn execute(
         &self,
         loader_id: &Pubkey,
+        program_id: &Pubkey,
         keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
@@ -598,12 +605,8 @@ impl Executor for BPFExecutor {
         let program = next_keyed_account(&mut keyed_accounts_iter)?;
 
         let parameter_accounts = keyed_accounts_iter.as_slice();
-        let parameter_bytes = serialize_parameters(
-            loader_id,
-            program.unsigned_key(),
-            parameter_accounts,
-            &instruction_data,
-        )?;
+        let parameter_bytes =
+            serialize_parameters(loader_id, program_id, parameter_accounts, &instruction_data)?;
         {
             let compute_meter = invoke_context.get_compute_meter();
             let (mut vm, heap_region) = match create_vm(

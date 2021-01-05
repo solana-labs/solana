@@ -1437,7 +1437,6 @@ fn test_program_bpf_test_use_latest_executor2() {
 fn test_program_bpf_upgrade() {
     solana_logger::setup();
 
-    let mut nonce = 0;
     let GenesisConfigInfo {
         genesis_config,
         mint_keypair,
@@ -1452,17 +1451,18 @@ fn test_program_bpf_upgrade() {
     let (program_id, authority_keypair) =
         load_upgradeable_bpf_program(&bank_client, &mint_keypair, "solana_bpf_rust_upgradeable");
 
-    // Call upgrade program
-    nonce += 1;
-    let instruction = Instruction::new(
+    let mut instruction = Instruction::new(
         program_id,
-        &[nonce],
+        &[0],
         vec![
+            AccountMeta::new(program_id.clone(), false),
             AccountMeta::new(clock::id(), false),
             AccountMeta::new(fees::id(), false),
         ],
     );
-    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+
+    // Call upgrade program
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
     assert_eq!(
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::Custom(42))
@@ -1478,16 +1478,8 @@ fn test_program_bpf_upgrade() {
     );
 
     // Call upgraded program
-    nonce += 1;
-    let instruction = Instruction::new(
-        program_id,
-        &[nonce],
-        vec![
-            AccountMeta::new(clock::id(), false),
-            AccountMeta::new(fees::id(), false),
-        ],
-    );
-    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    instruction.data[0] += 1;
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
     assert_eq!(
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::Custom(43))
@@ -1513,15 +1505,7 @@ fn test_program_bpf_upgrade() {
     );
 
     // Call original program
-    nonce += 1;
-    let instruction = Instruction::new(
-        program_id,
-        &[nonce],
-        vec![
-            AccountMeta::new(clock::id(), false),
-            AccountMeta::new(fees::id(), false),
-        ],
-    );
+    instruction.data[0] += 1;
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -1534,7 +1518,6 @@ fn test_program_bpf_upgrade() {
 fn test_program_bpf_invoke_upgradeable_via_cpi() {
     solana_logger::setup();
 
-    let mut nonce = 0;
     let GenesisConfigInfo {
         genesis_config,
         mint_keypair,
@@ -1557,18 +1540,20 @@ fn test_program_bpf_invoke_upgradeable_via_cpi() {
     let (program_id, authority_keypair) =
         load_upgradeable_bpf_program(&bank_client, &mint_keypair, "solana_bpf_rust_upgradeable");
 
-    // Call invoker program to invoke the upgradeable program
-    nonce += 1;
-    let instruction = Instruction::new(
+    let mut instruction = Instruction::new(
         invoke_and_return,
-        &[nonce],
+        &[0],
         vec![
+            AccountMeta::new(program_id, false),
             AccountMeta::new(program_id, false),
             AccountMeta::new(clock::id(), false),
             AccountMeta::new(fees::id(), false),
         ],
     );
-    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+
+    // Call invoker program to invoke the upgradeable program
+    instruction.data[0] += 1;
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
     assert_eq!(
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::Custom(42))
@@ -1584,17 +1569,8 @@ fn test_program_bpf_invoke_upgradeable_via_cpi() {
     );
 
     // Call the upgraded program
-    nonce += 1;
-    let instruction = Instruction::new(
-        invoke_and_return,
-        &[nonce],
-        vec![
-            AccountMeta::new(program_id, false),
-            AccountMeta::new(clock::id(), false),
-            AccountMeta::new(fees::id(), false),
-        ],
-    );
-    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    instruction.data[0] += 1;
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
     assert_eq!(
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::Custom(43))
@@ -1620,17 +1596,8 @@ fn test_program_bpf_invoke_upgradeable_via_cpi() {
     );
 
     // Call original program
-    nonce += 1;
-    let instruction = Instruction::new(
-        invoke_and_return,
-        &[nonce],
-        vec![
-            AccountMeta::new(program_id, false),
-            AccountMeta::new(clock::id(), false),
-            AccountMeta::new(fees::id(), false),
-        ],
-    );
-    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    instruction.data[0] += 1;
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
     assert_eq!(
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::Custom(42))
