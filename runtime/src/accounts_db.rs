@@ -1989,6 +1989,11 @@ impl AccountsDB {
         self.load(ancestors, pubkey)
     }
 
+    // Only safe to use the `get_account_accessor_from_cache_or_storage() -> get_loaded_account()`
+    // pattern if you're holding the AccountIndex lock for the `pubkey`, otherwise, a cache
+    // flush could happen between `get_account_accessor_from_cache_or_storage()` and
+    //`get_loaded_account()`, and the `LoadedAccountAccessor::Cached((&self.accounts_cache, slot, pubkey))`
+    // returned here won't be able to find a slot cache entry for that `slot`.
     fn get_account_accessor_from_cache_or_storage<'a>(
         &'a self,
         slot: Slot,
@@ -2855,6 +2860,10 @@ impl AccountsDB {
                 })
                 .unzip();
             let aligned_total_size = self.page_align(total_size);
+
+            // This ensures that all updates are written to an AppendVec, before any
+            // updates to the index happen, so anybody that sees a real entry in the index,
+            // will be able to find the account in storage
             let flushed_store =
                 self.create_and_insert_store(slot, aligned_total_size, "flush_slot_cache");
             self.store_accounts_custom(
