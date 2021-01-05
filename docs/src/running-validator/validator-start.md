@@ -405,3 +405,18 @@ Example configuration:
 
 Now add the `--accounts /mnt/solana-accounts` argument to your `solana-validator`
 command-line arguments and restart the validator.
+
+### Account indexing
+
+As the number of populated accounts on the cluster grows, account-data RPC
+requests that scan the entire account set  -- like
+[`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) and
+[SPL-token-specific requests](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate) --
+may perform poorly. If your validator needs to support any of these requests,
+you can use the `--account-index` parameter to activate one or more in-memory
+account indexes that significantly improve RPC performance by indexing accounts
+by the key field. Currently supports the following parameter values:
+
+- `program-id`: each account indexed by its owning program; used by [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts)
+- `spl-token-mint`: each SPL token account indexed by its token Mint; used by [getTokenAccountsByDelegate](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate), and [getTokenLargestAccounts](developing/clients/jsonrpc-api.md#gettokenlargestaccounts)
+- `spl-token-owner`: each SPL token account indexed by the token-owner address; used by [getTokenAccountsByOwner](developing/clients/jsonrpc-api.md#gettokenaccountsbyowner), and [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) requests that include an spl-token-owner filter.
