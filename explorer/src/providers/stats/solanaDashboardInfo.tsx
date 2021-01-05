@@ -108,10 +108,14 @@ export function dashboardInfoReducer(
           ? ClusterStatsStatus.Ready
           : ClusterStatsStatus.Loading;
 
-      let blockTime;
+      let blockTime = state.blockTime;
 
       // interpolate blocktime based on last known blocktime and average slot time
-      if (state.lastBlockTime && state.avgSlotTime_1h !== 0) {
+      if (
+        state.lastBlockTime &&
+        state.avgSlotTime_1h !== 0 &&
+        action.data.absoluteSlot >= state.lastBlockTime.slot
+      ) {
         blockTime =
           state.lastBlockTime.blockTime +
           (action.data.absoluteSlot - state.lastBlockTime.slot) *
