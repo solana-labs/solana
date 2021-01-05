@@ -10,6 +10,7 @@ import {
 import { slotsToHumanString } from "utils";
 import { useCluster } from "providers/cluster";
 import { TpsCard } from "components/TpsCard";
+import { displayTimestamp } from "utils/date";
 
 const CLUSTER_STATS_TIMEOUT = 10000;
 
@@ -52,7 +53,12 @@ function StatsCardBody() {
     return <StatsNotReady error={error} />;
   }
 
-  const { avgSlotTime_1h, avgSlotTime_1min, epochInfo } = dashboardInfo;
+  const {
+    avgSlotTime_1h,
+    avgSlotTime_1min,
+    epochInfo,
+    blockTime,
+  } = dashboardInfo;
   const hourlySlotTime = Math.round(1000 * avgSlotTime_1h);
   const averageSlotTime = Math.round(1000 * avgSlotTime_1min);
   const { slotIndex, slotsInEpoch } = epochInfo;
@@ -77,6 +83,14 @@ function StatsCardBody() {
           <td className="w-100">Block height</td>
           <td className="text-lg-right text-monospace">
             <Slot slot={blockHeight} />
+          </td>
+        </tr>
+      )}
+      {blockTime && (
+        <tr>
+          <td className="w-100">Block time</td>
+          <td className="text-lg-right text-monospace">
+            {displayTimestamp(blockTime)}
           </td>
         </tr>
       )}

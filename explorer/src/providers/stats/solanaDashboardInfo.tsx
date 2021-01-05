@@ -6,11 +6,19 @@ export type DashboardInfo = {
   avgSlotTime_1h: number;
   avgSlotTime_1min: number;
   epochInfo: EpochInfo;
+  blockTime?: number;
+  lastBlockTime?: BlockTimeInfo;
+};
+
+export type BlockTimeInfo = {
+  blockTime: number;
+  slot: number;
 };
 
 export enum DashboardInfoActionType {
   SetPerfSamples,
   SetEpochInfo,
+  SetLastBlockTime,
   SetError,
   Reset,
 }
@@ -35,17 +43,32 @@ export type DashboardInfoActionSetError = {
   data: string;
 };
 
+export type DashboardInfoActionSetLastBlockTime = {
+  type: DashboardInfoActionType.SetLastBlockTime;
+  data: BlockTimeInfo;
+};
+
 export type DashboardInfoAction =
   | DashboardInfoActionSetPerfSamples
   | DashboardInfoActionSetEpochInfo
   | DashboardInfoActionReset
-  | DashboardInfoActionSetError;
+  | DashboardInfoActionSetError
+  | DashboardInfoActionSetLastBlockTime;
 
 export function dashboardInfoReducer(
   state: DashboardInfo,
   action: DashboardInfoAction
 ) {
   switch (action.type) {
+    case DashboardInfoActionType.SetLastBlockTime: {
+      const blockTime = state.blockTime || action.data.blockTime;
+      return {
+        ...state,
+        lastBlockTime: action.data,
+        blockTime,
+      };
+    }
+
     case DashboardInfoActionType.SetPerfSamples: {
       if (action.data.length < 1) {
         return state;
@@ -85,10 +108,25 @@ export function dashboardInfoReducer(
           ? ClusterStatsStatus.Ready
           : ClusterStatsStatus.Loading;
 
+      let blockTime = state.blockTime;
+
+      // interpolate blocktime based on last known blocktime and average slot time
+      if (
+        state.lastBlockTime &&
+        state.avgSlotTime_1h !== 0 &&
+        action.data.absoluteSlot >= state.lastBlockTime.slot
+      ) {
+        blockTime =
+          state.lastBlockTime.blockTime +
+          (action.data.absoluteSlot - state.lastBlockTime.slot) *
+            Math.floor(state.avgSlotTime_1h * 1000);
+      }
+
       return {
         ...state,
         epochInfo: action.data,
         status,
+        blockTime,
       };
     }
 
