@@ -19,7 +19,7 @@ use solana_sdk::{
     feature_set::{
         limit_cpi_loader_invoke, pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled,
         sha256_syscall_enabled, sol_log_compute_units_syscall,
-        try_find_program_address_syscall_enabled,
+        try_find_program_address_syscall_enabled, use_loaded_program_accounts,
     },
     hash::{Hasher, HASH_BYTES},
     instruction::{AccountMeta, Instruction, InstructionError},
@@ -851,6 +851,7 @@ trait SyscallInvokeSigned<'a> {
     ) -> Result<Instruction, EbpfError<BPFError>>;
     fn translate_accounts(
         &self,
+        skip_program: bool,
         account_keys: &[Pubkey],
         program_account_index: usize,
         account_infos_addr: u64,
@@ -913,6 +914,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
 
     fn translate_accounts(
         &self,
+        skip_program: bool,
         account_keys: &[Pubkey],
         program_account_index: usize,
         account_infos_addr: u64,
@@ -933,7 +935,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
         let mut accounts = Vec::with_capacity(account_keys.len());
         let mut refs = Vec::with_capacity(account_keys.len());
         'root: for (i, account_key) in account_keys.iter().enumerate() {
-            if i == program_account_index {
+            if skip_program && i == program_account_index {
                 // Don't look for caller passed executable, runtime already has it
                 continue 'root;
             }
@@ -1199,6 +1201,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
 
     fn translate_accounts(
         &self,
+        skip_program: bool,
         account_keys: &[Pubkey],
         program_account_index: usize,
         account_infos_addr: u64,
@@ -1214,7 +1217,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
         let mut accounts = Vec::with_capacity(account_keys.len());
         let mut refs = Vec::with_capacity(account_keys.len());
         'root: for (i, account_key) in account_keys.iter().enumerate() {
-            if i == program_account_index {
+            if skip_program && i == program_account_index {
                 // Don't look for caller passed executable, runtime already has it
                 continue 'root;
             }
@@ -1400,6 +1403,9 @@ fn call<'a>(
         .get_compute_meter()
         .consume(invoke_context.get_bpf_compute_budget().invoke_units)?;
 
+    let use_loaded_program_accounts =
+        invoke_context.is_feature_active(&use_loaded_program_accounts::id());
+
     // Translate and verify caller's data
 
     let instruction = syscall.translate_instruction(
@@ -1422,15 +1428,16 @@ fn call<'a>(
         .get_callers_keyed_accounts()
         .iter()
         .collect::<Vec<&KeyedAccount>>();
-    let (message, callee_program_id, program_id_index) =
+    let (message, callee_program_id, callee_program_id_index) =
         MessageProcessor::create_message(&instruction, &keyed_account_refs, &signers)
             .map_err(SyscallError::InstructionError)?;
     if invoke_context.is_feature_active(&limit_cpi_loader_invoke::id()) {
         check_authorized_program(&callee_program_id)?;
     }
     let (mut accounts, mut account_refs) = syscall.translate_accounts(
+        use_loaded_program_accounts,
         &message.account_keys,
-        program_id_index,
+        callee_program_id_index,
         account_infos_addr,
         account_infos_len,
         memory_mapping,
@@ -1440,12 +1447,21 @@ fn call<'a>(
 
     invoke_context.record_instruction(&instruction);
 
-    let program_account =
-        invoke_context
-            .get_account(&callee_program_id)
+    let program_account = if use_loaded_program_accounts {
+        let program_account = invoke_context.get_account(&callee_program_id).ok_or(
+            SyscallError::InstructionError(InstructionError::MissingAccount),
+        )?;
+        accounts.insert(callee_program_id_index, Rc::new(program_account.clone()));
+        account_refs.insert(callee_program_id_index, None);
+        program_account
+    } else {
+        (**accounts
+            .get(callee_program_id_index)
             .ok_or(SyscallError::InstructionError(
                 InstructionError::MissingAccount,
-            ))?;
+            ))?)
+        .clone()
+    };
     if !program_account.borrow().executable {
         return Err(SyscallError::InstructionError(InstructionError::AccountNotExecutable).into());
     }
@@ -1470,8 +1486,6 @@ fn call<'a>(
     } else {
         None
     };
-    accounts.insert(program_id_index, Rc::new(program_account.clone()));
-    account_refs.insert(program_id_index, None);
     let mut executable_accounts = vec![(callee_program_id, program_account)];
     if let Some(programdata) = programdata_executable {
         executable_accounts.push(programdata);
