@@ -90,7 +90,7 @@ function StatsCardBody() {
         <tr>
           <td className="w-100">Block time</td>
           <td className="text-lg-right text-monospace">
-            {displayTimestamp(blockTime * 1000)}
+            {displayTimestamp(blockTime)}
           </td>
         </tr>
       )}

@@ -18,6 +18,7 @@ export const SAMPLE_HISTORY_HOURS = 6;
 export const PERFORMANCE_SAMPLE_INTERVAL = 60000;
 export const TRANSACTION_COUNT_INTERVAL = 5000;
 export const EPOCH_INFO_INTERVAL = 2000;
+export const BLOCK_TIME_INTERVAL = 5000;
 export const LOADING_TIMEOUT = 10000;
 
 export enum ClusterStatsStatus {
@@ -89,6 +90,7 @@ export function SolanaClusterStatsProvider({ children }: Props) {
     if (!active || !url) return;
 
     const connection = new Connection(url);
+    let lastSlot: number | null = null;
 
     const getPerformanceSamples = async () => {
       try {
@@ -148,19 +150,11 @@ export function SolanaClusterStatsProvider({ children }: Props) {
     const getEpochInfo = async () => {
       try {
         const epochInfo = await connection.getEpochInfo();
-        const blockTime = await connection.getBlockTime(epochInfo.absoluteSlot);
-
+        lastSlot = epochInfo.absoluteSlot;
         dispatchDashboardInfo({
           type: DashboardInfoActionType.SetEpochInfo,
           data: epochInfo,
         });
-
-        if (blockTime !== null) {
-          dispatchDashboardInfo({
-            type: DashboardInfoActionType.SetBlockTime,
-            data: blockTime,
-          });
-        }
       } catch (error) {
         if (cluster !== Cluster.Custom) {
           reportError(error, { url });
@@ -173,6 +167,25 @@ export function SolanaClusterStatsProvider({ children }: Props) {
       }
     };
 
+    const getBlockTime = async () => {
+      if (lastSlot) {
+        try {
+          const blockTime = await connection.getBlockTime(lastSlot);
+          if (blockTime !== null) {
+            dispatchDashboardInfo({
+              type: DashboardInfoActionType.SetLastBlockTime,
+              data: {
+                slot: lastSlot,
+                blockTime: blockTime * 1000,
+              },
+            });
+          }
+        } catch (error) {
+          // let this fail gracefully
+        }
+      }
+    };
+
     const performanceInterval = setInterval(
       getPerformanceSamples,
       PERFORMANCE_SAMPLE_INTERVAL
@@ -182,15 +195,20 @@ export function SolanaClusterStatsProvider({ children }: Props) {
       TRANSACTION_COUNT_INTERVAL
     );
     const epochInfoInterval = setInterval(getEpochInfo, EPOCH_INFO_INTERVAL);
+    const blockTimeInterval = setInterval(getBlockTime, BLOCK_TIME_INTERVAL);
 
     getPerformanceSamples();
     getTransactionCount();
-    getEpochInfo();
+    (async () => {
+      await getEpochInfo();
+      await getBlockTime();
+    })();
 
     return () => {
       clearInterval(performanceInterval);
       clearInterval(transactionCountInterval);
       clearInterval(epochInfoInterval);
+      clearInterval(blockTimeInterval);
     };
   }, [active, cluster, url]);
 

@@ -7,12 +7,18 @@ export type DashboardInfo = {
   avgSlotTime_1min: number;
   epochInfo: EpochInfo;
   blockTime?: number;
+  lastBlockTime?: BlockTimeInfo;
+};
+
+export type BlockTimeInfo = {
+  blockTime: number;
+  slot: number;
 };
 
 export enum DashboardInfoActionType {
   SetPerfSamples,
   SetEpochInfo,
-  SetBlockTime,
+  SetLastBlockTime,
   SetError,
   Reset,
 }
@@ -37,9 +43,9 @@ export type DashboardInfoActionSetError = {
   data: string;
 };
 
-export type DashboardInfoActionSetBlockTime = {
-  type: DashboardInfoActionType.SetBlockTime;
-  data: number;
+export type DashboardInfoActionSetLastBlockTime = {
+  type: DashboardInfoActionType.SetLastBlockTime;
+  data: BlockTimeInfo;
 };
 
 export type DashboardInfoAction =
@@ -47,17 +53,19 @@ export type DashboardInfoAction =
   | DashboardInfoActionSetEpochInfo
   | DashboardInfoActionReset
   | DashboardInfoActionSetError
-  | DashboardInfoActionSetBlockTime;
+  | DashboardInfoActionSetLastBlockTime;
 
 export function dashboardInfoReducer(
   state: DashboardInfo,
   action: DashboardInfoAction
 ) {
   switch (action.type) {
-    case DashboardInfoActionType.SetBlockTime: {
+    case DashboardInfoActionType.SetLastBlockTime: {
+      const blockTime = state.blockTime || action.data.blockTime;
       return {
         ...state,
-        blockTime: action.data,
+        lastBlockTime: action.data,
+        blockTime,
       };
     }
 
@@ -100,10 +108,21 @@ export function dashboardInfoReducer(
           ? ClusterStatsStatus.Ready
           : ClusterStatsStatus.Loading;
 
+      let blockTime;
+
+      // interpolate blocktime based on last known blocktime and average slot time
+      if (state.lastBlockTime && state.avgSlotTime_1h !== 0) {
+        blockTime =
+          state.lastBlockTime.blockTime +
+          (action.data.absoluteSlot - state.lastBlockTime.slot) *
+            Math.floor(state.avgSlotTime_1h * 1000);
+      }
+
       return {
         ...state,
         epochInfo: action.data,
         status,
+        blockTime,
       };
     }
 
