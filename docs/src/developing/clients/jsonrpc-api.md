@@ -715,7 +715,7 @@ starting at `start_slot` for up to `limit` blocks, inclusive.
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlockWithLimit2","params":[5, 3]}
+  {"jsonrpc": "2.0","id":1,"method":"getConfirmedBlocksWithLimit","params":[5, 3]}
 '
 ```
 
