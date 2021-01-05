@@ -20,6 +20,18 @@ function App() {
   return (
     <>
       <ClusterModal />
+      <div className="alert alert-secondary text-center">
+        An unlock event is timed for midnight UTC cluster time. Cluster time is
+        currently [pull time from endpoint] and may differ from actual UTC time.
+        More information can be found{" "}
+        <a
+          href="https://solana.com/transparency"
+          className="text-white font-weight-bold"
+          rel="noopener noreferrer"
+        >
+          here
+        </a>
+      </div>
       <div className="main-content">
         <Navbar />
         <MessageBanner />
