@@ -1945,6 +1945,7 @@ An array of:
   - `slot: <u64>` - The slot the transaction was processed
   - `confirmations: <usize | null>` - Number of blocks since signature confirmation, null if rooted, as well as finalized by a supermajority of the cluster
   - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
+  - `optimisticallyConfirmed: <bool | null>` - Whether the transaction has been optimistically confirmed by the cluster. See [singleGossip Commitment](jsonrpc-api.md#configuring-state-commitment)
   - DEPRECATED: `status: <object>` - Transaction status
     - `"Ok": <null>` - Transaction was successful
     - `"Err": <ERR>` - Transaction failed with TransactionError
@@ -1983,7 +1984,8 @@ Result:
         "err": null,
         "status": {
           "Ok": null
-        }
+        },
+        "optimisticallyConfirmed": true,
       },
       null
     ]
@@ -2027,7 +2029,8 @@ Result:
         "err": null,
         "status": {
           "Ok": null
-        }
+        },
+        "optimisticallyConfirmed": true,
       },
       null
     ]
