@@ -6,11 +6,13 @@ export type DashboardInfo = {
   avgSlotTime_1h: number;
   avgSlotTime_1min: number;
   epochInfo: EpochInfo;
+  blockTime?: number;
 };
 
 export enum DashboardInfoActionType {
   SetPerfSamples,
   SetEpochInfo,
+  SetBlockTime,
   SetError,
   Reset,
 }
@@ -35,17 +37,30 @@ export type DashboardInfoActionSetError = {
   data: string;
 };
 
+export type DashboardInfoActionSetBlockTime = {
+  type: DashboardInfoActionType.SetBlockTime;
+  data: number;
+};
+
 export type DashboardInfoAction =
   | DashboardInfoActionSetPerfSamples
   | DashboardInfoActionSetEpochInfo
   | DashboardInfoActionReset
-  | DashboardInfoActionSetError;
+  | DashboardInfoActionSetError
+  | DashboardInfoActionSetBlockTime;
 
 export function dashboardInfoReducer(
   state: DashboardInfo,
   action: DashboardInfoAction
 ) {
   switch (action.type) {
+    case DashboardInfoActionType.SetBlockTime: {
+      return {
+        ...state,
+        blockTime: action.data,
+      };
+    }
+
     case DashboardInfoActionType.SetPerfSamples: {
       if (action.data.length < 1) {
         return state;

@@ -148,10 +148,19 @@ export function SolanaClusterStatsProvider({ children }: Props) {
     const getEpochInfo = async () => {
       try {
         const epochInfo = await connection.getEpochInfo();
+        const blockTime = await connection.getBlockTime(epochInfo.absoluteSlot);
+
         dispatchDashboardInfo({
           type: DashboardInfoActionType.SetEpochInfo,
           data: epochInfo,
         });
+
+        if (blockTime !== null) {
+          dispatchDashboardInfo({
+            type: DashboardInfoActionType.SetBlockTime,
+            data: blockTime,
+          });
+        }
       } catch (error) {
         if (cluster !== Cluster.Custom) {
           reportError(error, { url });
