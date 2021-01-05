@@ -196,19 +196,6 @@ impl Pubkey {
         }
     }
 
-<<<<<<< HEAD
-    /// Find a valid program address and its corresponding bump seed which must be passed
-    /// as an additional seed when calling `invoke_signed`
-    #[allow(clippy::same_item_push)]
-    pub fn find_program_address(seeds: &[&[u8]], program_id: &Pubkey) -> (Pubkey, u8) {
-        let mut bump_seed = [std::u8::MAX];
-        for _ in 0..std::u8::MAX {
-            {
-                let mut seeds_with_bump = seeds.to_vec();
-                seeds_with_bump.push(&bump_seed);
-                if let Ok(address) = Self::create_program_address(&seeds_with_bump, program_id) {
-                    return (address, bump_seed[0]);
-=======
     /// Find a valid program address and its corresponding bump seed which must
     /// be passed as an additional seed when calling `invoke_signed`.
     ///
@@ -236,7 +223,6 @@ impl Pubkey {
                     {
                         return Some((address, bump_seed[0]));
                     }
->>>>>>> ab98c1f2d... Add try_find_program_address syscall (#14118)
                 }
                 bump_seed[0] -= 1;
             }
@@ -270,10 +256,6 @@ impl Pubkey {
                 _ => None,
             }
         }
-<<<<<<< HEAD
-        panic!("Unable to find a viable program address bump seed");
-=======
->>>>>>> ab98c1f2d... Add try_find_program_address syscall (#14118)
     }
 
     pub fn to_bytes(self) -> [u8; 32] {
