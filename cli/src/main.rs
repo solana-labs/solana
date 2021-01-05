@@ -250,7 +250,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .takes_value(true)
             .global(true)
             .validator(is_url_or_moniker)
-            .help("JSON RPC URL or some monikers (\"mainnet-beta\", \"testnet\", \"devnet\", \"localnet\")"),
+            .help(
+                "URL for Solana's JSON RPC or moniker (or their first letter): \
+                   [mainnet-beta, testnet, devnet, localhost]",
+            ),
     )
     .arg(
         Arg::with_name("websocket_url")
