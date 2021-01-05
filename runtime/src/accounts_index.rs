@@ -809,20 +809,23 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         }
     }
 
-    fn purge_older_root_entries(
+    fn purge_older_root_entries<F>(
         &self,
         pubkey: &Pubkey,
         list: &mut SlotList<T>,
         reclaims: &mut SlotList<T>,
         max_clean_root: Option<Slot>,
         account_indexes: &HashSet<AccountIndex>,
-    ) {
+        should_purge: F,
+    ) where
+        F: Fn(&T) -> bool,
+    {
         let roots_traker = &self.roots_tracker.read().unwrap();
         let max_root = Self::get_max_root(&roots_traker.roots, &list, max_clean_root);
 
         let mut purged_slots: HashSet<Slot> = HashSet::new();
         list.retain(|(slot, value)| {
-            let should_purge = Self::can_purge(max_root, *slot);
+            let should_purge = Self::can_purge(max_root, *slot) && should_purge(value);
             if should_purge {
                 reclaims.push((*slot, value.clone()));
                 purged_slots.insert(*slot);
@@ -833,13 +836,16 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         self.purge_secondary_indexes_by_inner_key(pubkey, Some(&purged_slots), account_indexes);
     }
 
-    pub fn clean_rooted_entries(
+    pub fn clean_rooted_entries<F>(
         &self,
         pubkey: &Pubkey,
         reclaims: &mut SlotList<T>,
         max_clean_root: Option<Slot>,
         account_indexes: &HashSet<AccountIndex>,
-    ) {
+        should_purge: F,
+    ) where
+        F: Fn(&T) -> bool,
+    {
         if let Some(mut locked_entry) = self.get_account_write_entry(pubkey) {
             locked_entry.slot_list_mut(|slot_list| {
                 self.purge_older_root_entries(
@@ -848,6 +854,7 @@ impl<T: 'static + Clone> AccountsIndex<T> {
                     reclaims,
                     max_clean_root,
                     account_indexes,
+                    should_purge,
                 );
             });
         }
@@ -868,6 +875,24 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         // `AccountsDb::flush_accounts_cache()` relies on roots being added in order
         assert!(slot >= w_roots_tracker.max_root);
         w_roots_tracker.max_root = slot;
+    }
+
+    pub fn add_cache_root(&self, slot: Slot) {
+        let mut w_roots_tracker = self.roots_tracker.write().unwrap();
+        w_roots_tracker.roots.insert(slot);
+        // `AccountsDb::flush_accounts_cache()` relies on roots being added in order
+        assert!(slot >= w_roots_tracker.max_root);
+        w_roots_tracker.max_root = slot;
+    }
+
+    pub fn add_uncleaned_roots<I>(&self, roots: I)
+    where
+        I: IntoIterator<Item = Slot>,
+    {
+        let mut w_roots_tracker = self.roots_tracker.write().unwrap();
+        for root in roots {
+            w_roots_tracker.uncleaned_roots.insert(root);
+        }
     }
 
     fn max_root(&self) -> Slot {
@@ -1716,6 +1741,7 @@ pub mod tests {
             &mut reclaims,
             None,
             &HashSet::new(),
+            |_| true,
         );
         assert!(reclaims.is_empty());
         assert_eq!(slot_list, vec![(1, true), (2, true), (5, true), (9, true)]);
@@ -1732,6 +1758,7 @@ pub mod tests {
             &mut reclaims,
             None,
             &HashSet::new(),
+            |_| true,
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -1746,6 +1773,7 @@ pub mod tests {
             &mut reclaims,
             None,
             &HashSet::new(),
+            |_| true,
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -1760,6 +1788,7 @@ pub mod tests {
             &mut reclaims,
             Some(6),
             &HashSet::new(),
+            |_| true,
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -1773,6 +1802,7 @@ pub mod tests {
             &mut reclaims,
             Some(5),
             &HashSet::new(),
+            |_| true,
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -1787,6 +1817,7 @@ pub mod tests {
             &mut reclaims,
             Some(2),
             &HashSet::new(),
+            |_| true,
         );
         assert!(reclaims.is_empty());
         assert_eq!(slot_list, vec![(1, true), (2, true), (5, true), (9, true)]);
@@ -1801,6 +1832,7 @@ pub mod tests {
             &mut reclaims,
             Some(1),
             &HashSet::new(),
+            |_| true,
         );
         assert!(reclaims.is_empty());
         assert_eq!(slot_list, vec![(1, true), (2, true), (5, true), (9, true)]);
@@ -1815,6 +1847,7 @@ pub mod tests {
             &mut reclaims,
             Some(7),
             &HashSet::new(),
+            |_| true,
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -2010,6 +2043,7 @@ pub mod tests {
                     &mut vec![],
                     None,
                     account_index,
+                    |_| true,
                 )
             });
         assert!(secondary_index.get(&secondary_key2).is_empty());

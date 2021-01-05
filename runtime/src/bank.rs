@@ -11524,7 +11524,7 @@ pub(crate) mod tests {
         assert!(!debug.is_empty());
     }
 
-    fn test_store_scan_consistency<F: 'static>(update_f: F)
+    fn test_store_scan_consistency<F: 'static>(accounts_db_caching_enabled: bool, update_f: F)
     where
         F: Fn(Arc<Bank>, crossbeam_channel::Sender<Arc<Bank>>, Arc<HashSet<Pubkey>>, Pubkey, u64)
             + std::marker::Send,
@@ -11537,7 +11537,11 @@ pub(crate) mod tests {
         )
         .genesis_config;
         genesis_config.rent = Rent::free();
-        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let bank0 = Arc::new(Bank::new_with_config(
+            &genesis_config,
+            HashSet::new(),
+            accounts_db_caching_enabled,
+        ));
 
         // Set up pubkeys to write to
         let total_pubkeys = ITER_BATCH_SIZE * 10;
@@ -11583,7 +11587,7 @@ pub(crate) mod tests {
                     bank_to_scan_receiver.recv_timeout(Duration::from_millis(10))
                 {
                     let accounts = bank_to_scan.get_program_accounts(&program_id);
-                    // Should never seen empty accounts because no slot ever deleted
+                    // Should never see empty accounts because no slot ever deleted
                     // any of the original accounts, and the scan should reflect the
                     // account state at some frozen slot `X` (no partial updates).
                     assert!(!accounts.is_empty());
@@ -11633,87 +11637,91 @@ pub(crate) mod tests {
 
     #[test]
     fn test_store_scan_consistency_unrooted() {
-        test_store_scan_consistency(
-            |bank0, bank_to_scan_sender, pubkeys_to_modify, program_id, starting_lamports| {
-                let mut current_major_fork_bank = bank0;
-                loop {
-                    let mut current_minor_fork_bank = current_major_fork_bank.clone();
-                    let num_new_banks = 2;
-                    let lamports = current_minor_fork_bank.slot() + starting_lamports + 1;
-                    // Modify banks on the two banks on the minor fork
-                    for pubkeys_to_modify in &pubkeys_to_modify
-                        .iter()
-                        .chunks(pubkeys_to_modify.len() / num_new_banks)
-                    {
-                        current_minor_fork_bank = Arc::new(Bank::new_from_parent(
-                            &current_minor_fork_bank,
-                            &solana_sdk::pubkey::new_rand(),
-                            current_minor_fork_bank.slot() + 2,
-                        ));
-                        let account = Account::new(lamports, 0, &program_id);
-                        // Write partial updates to each of the banks in the minor fork so if any of them
-                        // get cleaned up, there will be keys with the wrong account value/missing.
-                        for key in pubkeys_to_modify {
-                            current_minor_fork_bank.store_account(key, &account);
+        for accounts_db_caching_enabled in &[true] {
+            test_store_scan_consistency(
+                *accounts_db_caching_enabled,
+                |bank0, bank_to_scan_sender, pubkeys_to_modify, program_id, starting_lamports| {
+                    let mut current_major_fork_bank = bank0;
+                    loop {
+                        let mut current_minor_fork_bank = current_major_fork_bank.clone();
+                        let num_new_banks = 2;
+                        let lamports = current_minor_fork_bank.slot() + starting_lamports + 1;
+                        // Modify banks on the two banks on the minor fork
+                        for pubkeys_to_modify in &pubkeys_to_modify
+                            .iter()
+                            .chunks(pubkeys_to_modify.len() / num_new_banks)
+                        {
+                            current_minor_fork_bank = Arc::new(Bank::new_from_parent(
+                                &current_minor_fork_bank,
+                                &solana_sdk::pubkey::new_rand(),
+                                current_minor_fork_bank.slot() + 2,
+                            ));
+                            let account = Account::new(lamports, 0, &program_id);
+                            // Write partial updates to each of the banks in the minor fork so if any of them
+                            // get cleaned up, there will be keys with the wrong account value/missing.
+                            for key in pubkeys_to_modify {
+                                current_minor_fork_bank.store_account(key, &account);
+                            }
+                            current_minor_fork_bank.freeze();
                         }
-                        current_minor_fork_bank.freeze();
+
+                        // All the parent banks made in this iteration of the loop
+                        // are currently discoverable, previous parents should have
+                        // been squashed
+                        assert_eq!(
+                            current_minor_fork_bank.clone().parents_inclusive().len(),
+                            num_new_banks + 1,
+                        );
+
+                        // `next_major_bank` needs to be sandwiched between the minor fork banks
+                        // That way, after the squash(), the minor fork has the potential to see a
+                        // *partial* clean of the banks < `next_major_bank`.
+                        current_major_fork_bank = Arc::new(Bank::new_from_parent(
+                            &current_major_fork_bank,
+                            &solana_sdk::pubkey::new_rand(),
+                            current_minor_fork_bank.slot() - 1,
+                        ));
+                        let lamports = current_major_fork_bank.slot() + starting_lamports + 1;
+                        let account = Account::new(lamports, 0, &program_id);
+                        for key in pubkeys_to_modify.iter() {
+                            // Store rooted updates to these pubkeys such that the minor
+                            // fork updates to the same keys will be deleted by clean
+                            current_major_fork_bank.store_account(key, &account);
+                        }
+
+                        // Send the last new bank to the scan thread to perform the scan.
+                        // Meanwhile this thread will continually set roots on a separate fork
+                        // and squash.
+                        /*
+                                    bank 0
+                                /         \
+                        minor bank 1       \
+                            /         current_major_fork_bank
+                        minor bank 2
+
+                        */
+                        // The capacity of the channel is 1 so that this thread will wait for the scan to finish before starting
+                        // the next iteration, allowing the scan to stay in sync with these updates
+                        // such that every scan will see this interruption.
+                        if bank_to_scan_sender.send(current_minor_fork_bank).is_err() {
+                            // Channel was disconnected, exit
+                            return;
+                        }
+                        current_major_fork_bank.freeze();
+                        current_major_fork_bank.squash();
+                        // Try to get cache flush/clean to overlap with the scan
+                        current_major_fork_bank.force_flush_accounts_cache();
+                        current_major_fork_bank.clean_accounts(false);
                     }
-
-                    // All the parent banks made in this iteration of the loop
-                    // are currently discoverable, previous parents should have
-                    // been squashed
-                    assert_eq!(
-                        current_minor_fork_bank.clone().parents_inclusive().len(),
-                        num_new_banks + 1,
-                    );
-
-                    // `next_major_bank` needs to be sandwiched between the minor fork banks
-                    // That way, after the squash(), the minor fork has the potential to see a
-                    // *partial* clean of the banks < `next_major_bank`.
-                    current_major_fork_bank = Arc::new(Bank::new_from_parent(
-                        &current_major_fork_bank,
-                        &solana_sdk::pubkey::new_rand(),
-                        current_minor_fork_bank.slot() - 1,
-                    ));
-                    let lamports = current_major_fork_bank.slot() + starting_lamports + 1;
-                    let account = Account::new(lamports, 0, &program_id);
-                    for key in pubkeys_to_modify.iter() {
-                        // Store rooted updates to these pubkeys such that the minor
-                        // fork updates to the same keys will be deleted by clean
-                        current_major_fork_bank.store_account(key, &account);
-                    }
-
-                    // Send the last new bank to the scan thread to perform the scan.
-                    // Meanwhile this thread will continually set roots on a separate fork
-                    // and squash.
-                    /*
-                                bank 0
-                             /         \
-                     minor bank 1       \
-                          /         current_major_fork_bank
-                     minor bank 2
-
-                    */
-                    // The capacity of the channel is 1 so that this thread will wait for the scan to finish before starting
-                    // the next iteration, allowing the scan to stay in sync with these updates
-                    // such that every scan will see this interruption.
-                    current_major_fork_bank.freeze();
-                    current_major_fork_bank.squash();
-                    current_minor_fork_bank.force_flush_accounts_cache();
-                    if bank_to_scan_sender.send(current_minor_fork_bank).is_err() {
-                        // Channel was disconnected, exit
-                        return;
-                    }
-                    // Try to get clean to overlap with the scan
-                    current_major_fork_bank.clean_accounts(false);
-                }
-            },
-        )
+                },
+            )
+        }
     }
 
     #[test]
     fn test_store_scan_consistency_root() {
         test_store_scan_consistency(
+            false,
             |bank0, bank_to_scan_sender, pubkeys_to_modify, program_id, starting_lamports| {
                 let mut current_bank = bank0.clone();
                 let mut prev_bank = bank0;

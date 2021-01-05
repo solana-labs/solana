@@ -54,14 +54,16 @@ use std::{
 };
 use tempfile::TempDir;
 
-pub const DEFAULT_FILE_SIZE: u64 = PAGE_SIZE * 1024;
-pub const DEFAULT_NUM_THREADS: u32 = 8;
-pub const DEFAULT_NUM_DIRS: u32 = 4;
+const PAGE_SIZE: u64 = 4 * 1024;
 const MAX_RECYCLE_STORES: usize = 1000;
 const STORE_META_OVERHEAD: usize = 256;
 const SHRINK_RATIO: f64 = 0.80;
 const MAX_CACHE_SLOTS: usize = 200;
 const FLUSH_CACHE_RANDOM_THRESHOLD: usize = MAX_LOCKOUT_HISTORY;
+
+pub const DEFAULT_FILE_SIZE: u64 = PAGE_SIZE * 1024;
+pub const DEFAULT_NUM_THREADS: u32 = 8;
+pub const DEFAULT_NUM_DIRS: u32 = 4;
 
 // A specially reserved storage id just for entries in the cache, so that
 // operations that take a storage entry can maintain a common interface
@@ -771,6 +773,7 @@ impl AccountsDB {
                             &mut reclaims,
                             max_clean_root,
                             &self.account_indexes,
+                            |account_info| account_info.store_id != CACHE_VIRTUAL_STORAGE_ID,
                         );
                     }
                     reclaims
@@ -1928,8 +1931,17 @@ impl AccountsDB {
     }
 
     pub fn load(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Option<(Account, Slot)> {
+        self.do_load(ancestors, pubkey, None)
+    }
+
+    fn do_load(
+        &self,
+        ancestors: &Ancestors,
+        pubkey: &Pubkey,
+        max_root: Option<Slot>,
+    ) -> Option<(Account, Slot)> {
         let (slot, store_id, offset) = {
-            let (lock, index) = self.accounts_index.get(pubkey, Some(ancestors), None)?;
+            let (lock, index) = self.accounts_index.get(pubkey, Some(ancestors), max_root)?;
             let slot_list = lock.slot_list();
             let (
                 slot,
@@ -2379,9 +2391,7 @@ impl AccountsDB {
         for remove_slot in non_roots {
             if let Some(slot_cache) = self.accounts_cache.remove_slot(*remove_slot) {
                 // If the slot is still in the cache, remove the backing storages for
-                // the slot. The accounts index cleaning (removing from the slot list,
-                // decrementing the account ref count), is handled in
-                // clean_accounts() -> purge_older_root_entries()
+                // the slot and from the Accounts Index
                 self.purge_slot_cache_keys(*remove_slot, slot_cache);
             } else if let Some((_, slot_removed_storages)) = self.storage.0.remove(&remove_slot) {
                 // Because AccountsBackgroundService synchronously flushes from the accounts cache
@@ -2390,6 +2400,10 @@ impl AccountsDB {
                 // with this function call. This means, if we get into this case, we can be
                 // confident that the entire state for this slot has been flushed to the storage
                 // already.
+
+                // Note this only cleans up the storage entries. The accounts index cleaning
+                // (removing from the slot list, decrementing the account ref count), is handled in
+                // clean_accounts() -> purge_older_root_entries()
                 {
                     let r_slot_removed_storages = slot_removed_storages.read().unwrap();
                     total_removed_storage_entries += r_slot_removed_storages.len();
@@ -2776,62 +2790,52 @@ impl AccountsDB {
         // Flush all roots
         let mut flush_roots_elapsed = Measure::start("flush_roots_elapsed");
         let cached_roots = self.accounts_cache.clear_roots();
-        let mut max_root = None;
-        for root in cached_roots {
-            self.flush_slot_cache(root);
-            if let Some(max_root_slot) = max_root {
-                if root > max_root_slot {
-                    max_root = Some(root);
-                }
-            } else {
-                max_root = Some(root);
-            }
+        for root in &cached_roots {
+            self.flush_slot_cache(*root);
+            self.accounts_cache.set_max_flush_root(*root);
         }
+
+        // Only add to the uncleaned roots set *after* we've flushed the previous roots,
+        // so that clean will actually be able to clean the slots.
+        self.accounts_index.add_uncleaned_roots(cached_roots);
         flush_roots_elapsed.stop();
 
-        // Remove all unrooted slots less than `max_root`, as those are no
-        // longer relevant. See comment in BankForks::set_root() to see why this is safe
-        // to do.
-        if let Some(max_root) = max_root {
-            // Note: Replay cannot be happening concurrently with `BankForks::set_root()`
-            // for this to be safe. To see why, imagine we have forks
-            //
-            /*
-                        2 ----- 3 (max_root)----- 5
-                       /
-                     1
-                       \------ 4
-            */
-            // Slot slot 4 may not have been frozen before slot 3 was set as max root,
-            // but after slot 3 was set as max root, slot 4 should no longer be replayed
-            // because it's removed from BankForks after the call to `BankForks::set_root()`
-            // returns. However the cache entry for slot 4 is only safe to remove here if no
-            // concurrent replay is happening with `BankForks::set_root()`.
-            let removed_slots = self.accounts_cache.remove_slots_le(max_root);
-            for (removed_slot, slot_cache) in removed_slots {
-                // All roots less than `max_root` should have been flushed, so
-                // we shouldn't see any here.
-                assert!(!self.accounts_index.is_root(removed_slot));
-                // Purge the state like accounts index, hashes for unrooted slots
-                let reclaims = self.purge_slot_cache_keys(removed_slot, slot_cache);
-                for (reclaimed_slot, reclaimed_account_info) in reclaims {
-                    assert_eq!(reclaimed_slot, removed_slot);
-                    assert_eq!(reclaimed_account_info.store_id, CACHE_VIRTUAL_STORAGE_ID);
-                }
+        // Note we don't purge unrooted slots here because there may be ongoing scans/references
+        // for those slot, let the Bank::drop() implementation do cleanup instead on dead
+        // banks
+
+        // If there are > MAX_CACHE_SLOTS, then flush the excess ones to storage
+        let old_slots = self.accounts_cache.find_older_frozen_slots(MAX_CACHE_SLOTS);
+        let total_excess_slot_count = old_slots.len();
+        let mut unflushable_unrooted_slot_count = 0;
+        let max_flushed_root = self.accounts_cache.fetch_max_flush_root();
+        for old_slot in old_slots {
+            // Don't flush slots that are known to be unrooted
+            if old_slot > max_flushed_root {
+                self.flush_slot_cache(old_slot);
+            } else {
+                unflushable_unrooted_slot_count += 1;
             }
         }
 
-        // If there are > MAX_CACHE_SLOTS, then flush the excess ones to storage
-        for old_slot in self.accounts_cache.find_older_frozen_slots(MAX_CACHE_SLOTS) {
-            self.flush_slot_cache(old_slot);
-        }
+        datapoint_info!(
+            "accounts_db-cache-limit-slots",
+            ("total_excess_slot_count", total_excess_slot_count, i64),
+            (
+                "unflushable_unrooted_slot_count",
+                unflushable_unrooted_slot_count,
+                i64
+            ),
+        );
 
         // Flush a random slot out after every force flush to catch any inconsistencies
         // between cache and written state (i.e. should cause a hash mismatch between validators
         // that flush and don't flush if such a bug exists).
         let num_slots_remaining = self.accounts_cache.num_slots();
         if force_flush && num_slots_remaining >= FLUSH_CACHE_RANDOM_THRESHOLD {
-            let frozen_slots = self.accounts_cache.find_older_frozen_slots(0);
+            // Don't flush slots that are known to be unrooted
+            let mut frozen_slots = self.accounts_cache.find_older_frozen_slots(0);
+            frozen_slots.retain(|s| *s > max_flushed_root);
             // Remove a random index 0 <= i < `frozen_slots.len()`
             let rand_slot = frozen_slots[thread_rng().gen_range(0, frozen_slots.len())];
             info!(
@@ -3797,7 +3801,11 @@ impl AccountsDB {
     }
 
     pub fn add_root(&self, slot: Slot) {
-        self.accounts_index.add_root(slot);
+        if self.caching_enabled {
+            self.accounts_index.add_cache_root(slot);
+        } else {
+            self.accounts_index.add_root(slot);
+        }
         if self.caching_enabled {
             self.accounts_cache.add_root(slot);
         }
@@ -4024,7 +4032,12 @@ pub mod tests {
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
     use solana_sdk::{account::Account, hash::HASH_BYTES, pubkey::PUBKEY_BYTES};
-    use std::{iter::FromIterator, str::FromStr};
+    use std::{
+        iter::FromIterator,
+        str::FromStr,
+        thread::{sleep, Builder},
+        time::Duration,
+    };
 
     fn linear_ancestors(end_slot: u64) -> Ancestors {
         let mut ancestors: Ancestors = vec![(0, 0)].into_iter().collect();
@@ -5631,6 +5644,7 @@ pub mod tests {
             account_meta: &account_meta,
             data: &data,
             offset,
+            stored_size: 0,
             hash: &hash,
         };
         let account = stored_account.clone_account();
@@ -5909,7 +5923,7 @@ pub mod tests {
             .values()
             .next()
             .unwrap()
-            .remove_account();
+            .remove_account(0);
         assert!(db.get_snapshot_storages(after_slot).is_empty());
     }
 
@@ -5930,8 +5944,8 @@ pub mod tests {
             .next()
             .unwrap()
             .clone();
-        storage_entry.remove_account();
-        storage_entry.remove_account();
+        storage_entry.remove_account(0);
+        storage_entry.remove_account(0);
     }
 
     #[test]
@@ -6784,16 +6798,14 @@ pub mod tests {
         );
         db.force_flush_accounts_cache();
 
-        // After the flush, the unrooted slot is removed from the cache
-        // and the index. The rooted slots are flushed to storage and removed
-        // from the cache.
-        assert!(db.load_slow(&ancestors, &unrooted_key).is_none());
+        // After the flush, the unrooted slot is still in the cache
+        assert!(db.load_slow(&ancestors, &unrooted_key).is_some());
         assert!(db
             .accounts_index
             .get_account_read_entry(&unrooted_key)
-            .is_none());
-
-        assert_eq!(db.accounts_cache.num_slots(), 0);
+            .is_some());
+        assert_eq!(db.accounts_cache.num_slots(), 1);
+        assert!(db.accounts_cache.slot_cache(unrooted_slot).is_some());
         assert_eq!(
             db.load_slow(&HashMap::new(), &key5),
             Some((account0.clone(), root5))
@@ -6865,5 +6877,139 @@ pub mod tests {
                 Some((account0.clone(), slot))
             );
         }
+    }
+
+    #[test]
+    fn test_flush_cache_clean() {
+        let caching_enabled = true;
+        let db = Arc::new(AccountsDB::new_with_config(
+            Vec::new(),
+            &ClusterType::Development,
+            HashSet::new(),
+            caching_enabled,
+        ));
+
+        let account_key = Pubkey::new_unique();
+        let zero_lamport_account = Account::new(0, 0, &Account::default().owner);
+        let slot1_account = Account::new(1, 1, &Account::default().owner);
+        db.store_cached(0, &[(&account_key, &zero_lamport_account)]);
+        db.store_cached(1, &[(&account_key, &slot1_account)]);
+
+        db.add_root(0);
+        db.add_root(1);
+
+        // Clean should not remove anything yet as nothing has been flushed
+        db.clean_accounts(None);
+        let account = db
+            .do_load(&Ancestors::default(), &account_key, Some(0))
+            .unwrap();
+        assert_eq!(account.0.lamports, 0);
+
+        // Flush, then clean again. Should not need another root to initiate the cleaning
+        // because `accounts_index.uncleaned_roots` should be correct
+        db.force_flush_accounts_cache();
+        db.clean_accounts(None);
+        assert!(db
+            .do_load(&Ancestors::default(), &account_key, Some(0))
+            .is_none());
+    }
+
+    #[test]
+    fn test_scan_flush_accounts_cache_then_clean_drop() {
+        let caching_enabled = true;
+        let db = Arc::new(AccountsDB::new_with_config(
+            Vec::new(),
+            &ClusterType::Development,
+            HashSet::new(),
+            caching_enabled,
+        ));
+        let db_ = db.clone();
+        let account_key = Pubkey::new_unique();
+        let account_key2 = Pubkey::new_unique();
+        let zero_lamport_account = Account::new(0, 0, &Account::default().owner);
+        let slot1_account = Account::new(1, 1, &Account::default().owner);
+        let slot2_account = Account::new(2, 1, &Account::default().owner);
+        let exit = Arc::new(AtomicBool::new(false));
+        let exit_ = exit.clone();
+        let ready = Arc::new(AtomicBool::new(false));
+        let ready_ = ready.clone();
+
+        /*
+            Store zero lamport account into slots 0, 1, 2 where
+            root slots are 0, 2, and slot 1 is unrooted.
+                                    0 (root)
+                                /        \
+                              1            2 (root)
+        */
+        db.store_cached(0, &[(&account_key, &zero_lamport_account)]);
+        db.store_cached(1, &[(&account_key, &slot1_account)]);
+        db.store_cached(2, &[(&account_key, &slot2_account)]);
+        // Fodder for the scan so that the lock on `account_key` is not held
+        db.store_cached(2, &[(&account_key2, &slot2_account)]);
+        db.add_root(0);
+        let max_scan_root = 0;
+        let scan_ancestors: Arc<Ancestors> = Arc::new(vec![(0, 1), (1, 1)].into_iter().collect());
+        let scan_ancestors_ = scan_ancestors.clone();
+        let t_scan = Builder::new()
+            .name("scan".to_string())
+            .spawn(move || {
+                db_.scan_accounts(
+                    &scan_ancestors_,
+                    |_collector: &mut Vec<(Pubkey, Account)>, maybe_account| {
+                        ready_.store(true, Ordering::Relaxed);
+                        if let Some((pubkey, _, _)) = maybe_account {
+                            // Do the wait on account_key2, because clean is happening
+                            // on account_key1's index and we don't want to block the clean.
+                            if *pubkey == account_key2 {
+                                loop {
+                                    if exit_.load(Ordering::Relaxed) {
+                                        break;
+                                    } else {
+                                        sleep(Duration::from_millis(10));
+                                    }
+                                }
+                            }
+                        }
+                    },
+                );
+            })
+            .unwrap();
+
+        // Wait for scan to start
+        while !ready.load(Ordering::Relaxed) {
+            sleep(Duration::from_millis(10));
+        }
+
+        // Add a new root 2
+        db.add_root(2);
+
+        // Flush the cache, slot 1 should remain in the cache, everything else should be flushed
+        db.force_flush_accounts_cache();
+        assert_eq!(db.accounts_cache.num_slots(), 1);
+        assert!(db.accounts_cache.slot_cache(1).is_some());
+
+        // Run clean, unrooted slot 1 should not be purged, and still readable from the cache,
+        // because we're still doing a scan on it.
+        db.clean_accounts(None);
+        let account = db
+            .do_load(&scan_ancestors, &account_key, Some(max_scan_root))
+            .unwrap();
+        assert_eq!(account.0.lamports, slot1_account.lamports);
+
+        // When the scan is over, clean should not panic and should not purge something
+        // still in the cache.
+        exit.store(true, Ordering::Relaxed);
+        t_scan.join().unwrap();
+        db.clean_accounts(None);
+        let account = db
+            .do_load(&scan_ancestors, &account_key, Some(max_scan_root))
+            .unwrap();
+        assert_eq!(account.0.lamports, slot1_account.lamports);
+
+        // Simulate dropping the bank, which finally removes the slot from the cache
+        db.purge_slot(1);
+        assert!(db
+            .do_load(&scan_ancestors, &account_key, Some(max_scan_root))
+            .is_none());
     }
 }

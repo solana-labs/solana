@@ -89,6 +89,7 @@ pub struct CachedAccount {
 pub struct AccountsCache {
     cache: DashMap<Slot, SlotCache>,
     cached_roots: RwLock<HashSet<Slot>>,
+    max_flushed_root: AtomicU64,
 }
 
 impl AccountsCache {
@@ -185,6 +186,14 @@ impl AccountsCache {
 
     pub fn num_slots(&self) -> usize {
         self.cache.len()
+    }
+
+    pub fn fetch_max_flush_root(&self) -> Slot {
+        self.max_flushed_root.load(Ordering::Relaxed)
+    }
+
+    pub fn set_max_flush_root(&self, root: Slot) {
+        self.max_flushed_root.fetch_max(root, Ordering::Relaxed);
     }
 }
 
