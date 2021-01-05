@@ -11,11 +11,18 @@ use solana_sdk::{
 };
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum TransactionConfirmationStatus {
+    Recent,
+    Optimistic,
+    Max,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TransactionStatus {
     pub slot: Slot,
     pub confirmations: Option<usize>, // None = rooted
     pub err: Option<TransactionError>,
-    pub optimistically_confirmed: Option<bool>,
+    pub confirmation_status: Option<TransactionConfirmationStatus>,
 }
 
 #[tarpc::service]

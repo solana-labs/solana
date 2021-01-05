@@ -211,6 +211,7 @@ mod tests {
     use super::*;
     use csv::{ReaderBuilder, Trim};
     use solana_sdk::transaction::TransactionError;
+    use solana_transaction_status::TransactionConfirmationStatus;
     use tempfile::NamedTempFile;
 
     #[test]
@@ -307,7 +308,7 @@ mod tests {
             confirmations: Some(1),
             err: None,
             status: Ok(()),
-            optimistically_confirmed: Some(true),
+            confirmation_status: Some(TransactionConfirmationStatus::Optimistic),
         };
         assert_eq!(
             update_finalized_transaction(&mut db, &signature, Some(transaction_status), 0, 0)
@@ -335,7 +336,7 @@ mod tests {
             confirmations: None,
             err: Some(TransactionError::AccountNotFound),
             status: Ok(()),
-            optimistically_confirmed: Some(true),
+            confirmation_status: Some(TransactionConfirmationStatus::Max),
         };
         assert_eq!(
             update_finalized_transaction(&mut db, &signature, Some(transaction_status), 0, 0)
@@ -360,7 +361,7 @@ mod tests {
             confirmations: None,
             err: None,
             status: Ok(()),
-            optimistically_confirmed: Some(true),
+            confirmation_status: Some(TransactionConfirmationStatus::Max),
         };
         assert_eq!(
             update_finalized_transaction(&mut db, &signature, Some(transaction_status), 0, 0)

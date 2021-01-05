@@ -1038,6 +1038,7 @@ mod tests {
     use solana_core::test_validator::TestValidator;
     use solana_sdk::signature::{read_keypair_file, write_keypair_file, Signer};
     use solana_stake_program::stake_instruction::StakeInstruction;
+    use solana_transaction_status::TransactionConfirmationStatus;
 
     #[test]
     fn test_process_token_allocations() {
@@ -2105,7 +2106,7 @@ mod tests {
                 confirmations: Some(15),
                 status: Ok(()),
                 err: None,
-                optimistically_confirmed: Some(true),
+                confirmation_status: Some(TransactionConfirmationStatus::Max),
             })],
             &mut confirmations,
         )
@@ -2125,7 +2126,7 @@ mod tests {
                 confirmations: None,
                 status: Ok(()),
                 err: None,
-                optimistically_confirmed: Some(true),
+                confirmation_status: Some(TransactionConfirmationStatus::Max),
             })],
             &mut confirmations,
         )

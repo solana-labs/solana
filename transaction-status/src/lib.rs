@@ -262,12 +262,20 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub enum TransactionConfirmationStatus {
+    Recent,
+    Optimistic,
+    Max,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TransactionStatus {
     pub slot: Slot,
     pub confirmations: Option<usize>, // None = rooted
     pub status: Result<()>,           // legacy field
     pub err: Option<TransactionError>,
-    pub optimistically_confirmed: Option<bool>,
+    pub confirmation_status: Option<TransactionConfirmationStatus>,
 }
 
 impl TransactionStatus {
@@ -275,10 +283,13 @@ impl TransactionStatus {
         match commitment_config.commitment {
             CommitmentLevel::Max | CommitmentLevel::Root => self.confirmations.is_none(),
             CommitmentLevel::SingleGossip => {
-                (self.optimistically_confirmed.is_some() && self.optimistically_confirmed.unwrap())
+                if let Some(status) = &self.confirmation_status {
+                    *status != TransactionConfirmationStatus::Recent
+                } else {
                     // These fallback cases handle TransactionStatus RPC responses from older software
-                    || self.confirmations.is_some() && self.confirmations.unwrap() > 1
-                    || self.confirmations.is_none()
+                    self.confirmations.is_some() && self.confirmations.unwrap() > 1
+                        || self.confirmations.is_none()
+                }
             }
             CommitmentLevel::Single => match self.confirmations {
                 Some(confirmations) => confirmations >= 1,
@@ -558,7 +569,7 @@ mod test {
             confirmations: None,
             status: Ok(()),
             err: None,
-            optimistically_confirmed: Some(true),
+            confirmation_status: Some(TransactionConfirmationStatus::Max),
         };
 
         assert!(status.satisfies_commitment(CommitmentConfig::default()));
@@ -572,7 +583,7 @@ mod test {
             confirmations: Some(10),
             status: Ok(()),
             err: None,
-            optimistically_confirmed: Some(true),
+            confirmation_status: Some(TransactionConfirmationStatus::Optimistic),
         };
 
         assert!(!status.satisfies_commitment(CommitmentConfig::default()));
@@ -586,7 +597,7 @@ mod test {
             confirmations: Some(1),
             status: Ok(()),
             err: None,
-            optimistically_confirmed: Some(false),
+            confirmation_status: Some(TransactionConfirmationStatus::Recent),
         };
 
         assert!(!status.satisfies_commitment(CommitmentConfig::default()));
@@ -600,7 +611,7 @@ mod test {
             confirmations: Some(0),
             status: Ok(()),
             err: None,
-            optimistically_confirmed: None,
+            confirmation_status: None,
         };
 
         assert!(!status.satisfies_commitment(CommitmentConfig::default()));
@@ -615,7 +626,7 @@ mod test {
             confirmations: Some(1),
             status: Ok(()),
             err: None,
-            optimistically_confirmed: None,
+            confirmation_status: None,
         };
         assert!(!status.satisfies_commitment(CommitmentConfig::single_gossip()));
 
@@ -624,7 +635,7 @@ mod test {
             confirmations: Some(2),
             status: Ok(()),
             err: None,
-            optimistically_confirmed: None,
+            confirmation_status: None,
         };
         assert!(status.satisfies_commitment(CommitmentConfig::single_gossip()));
 
@@ -633,7 +644,7 @@ mod test {
             confirmations: None,
             status: Ok(()),
             err: None,
-            optimistically_confirmed: None,
+            confirmation_status: None,
         };
         assert!(status.satisfies_commitment(CommitmentConfig::single_gossip()));
     }

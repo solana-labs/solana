@@ -62,7 +62,8 @@ use solana_sdk::{
 };
 use solana_stake_program::stake_state::StakeState;
 use solana_transaction_status::{
-    EncodedConfirmedBlock, EncodedConfirmedTransaction, TransactionStatus, UiTransactionEncoding,
+    EncodedConfirmedBlock, EncodedConfirmedTransaction, TransactionConfirmationStatus,
+    TransactionStatus, UiTransactionEncoding,
 };
 use solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY};
 use spl_token_v2_0::{
@@ -858,7 +859,7 @@ impl JsonRpcRequestProcessor {
                             status: status_meta.status,
                             confirmations: None,
                             err,
-                            optimistically_confirmed: Some(true),
+                            confirmation_status: Some(TransactionConfirmationStatus::Max),
                         }
                     })
                     .or_else(|| {
@@ -888,9 +889,8 @@ impl JsonRpcRequestProcessor {
         let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
 
         let optimistically_confirmed_bank = self.bank(Some(CommitmentConfig::single_gossip()));
-        let optimistically_confirmed = optimistically_confirmed_bank
-            .get_signature_status_slot(&signature)
-            .map(|_| true);
+        let optimistically_confirmed =
+            optimistically_confirmed_bank.get_signature_status_slot(&signature);
 
         let confirmations = if r_block_commitment_cache.root() >= slot
             && is_confirmed_rooted(&r_block_commitment_cache, bank, &self.blockstore, slot)
@@ -907,7 +907,13 @@ impl JsonRpcRequestProcessor {
             status,
             confirmations,
             err,
-            optimistically_confirmed,
+            confirmation_status: if confirmations.is_none() {
+                Some(TransactionConfirmationStatus::Max)
+            } else if optimistically_confirmed.is_some() {
+                Some(TransactionConfirmationStatus::Optimistic)
+            } else {
+                Some(TransactionConfirmationStatus::Recent)
+            },
         })
     }
 

@@ -37,6 +37,7 @@ use solana_transaction_status::{
 };
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
+    cmp::min,
     net::SocketAddr,
     sync::RwLock,
     thread::sleep,
@@ -1372,7 +1373,7 @@ impl RpcClient {
 
             progress_bar.set_message(&format!(
                 "[{}/{}] Finalizing transaction {}",
-                confirmations + 1,
+                min(confirmations + 1, desired_confirmations),
                 desired_confirmations,
                 signature,
             ));
