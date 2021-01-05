@@ -307,6 +307,7 @@ mod tests {
             confirmations: Some(1),
             err: None,
             status: Ok(()),
+            optimistically_confirmed: Some(true),
         };
         assert_eq!(
             update_finalized_transaction(&mut db, &signature, Some(transaction_status), 0, 0)
@@ -334,6 +335,7 @@ mod tests {
             confirmations: None,
             err: Some(TransactionError::AccountNotFound),
             status: Ok(()),
+            optimistically_confirmed: Some(true),
         };
         assert_eq!(
             update_finalized_transaction(&mut db, &signature, Some(transaction_status), 0, 0)
@@ -358,6 +360,7 @@ mod tests {
             confirmations: None,
             err: None,
             status: Ok(()),
+            optimistically_confirmed: Some(true),
         };
         assert_eq!(
             update_finalized_transaction(&mut db, &signature, Some(transaction_status), 0, 0)

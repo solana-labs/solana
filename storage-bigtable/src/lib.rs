@@ -257,6 +257,7 @@ impl From<TransactionInfo> for TransactionStatus {
             confirmations: None,
             status,
             err,
+            optimistically_confirmed: Some(true),
         }
     }
 }

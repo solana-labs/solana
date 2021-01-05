@@ -15,6 +15,7 @@ pub struct TransactionStatus {
     pub slot: Slot,
     pub confirmations: Option<usize>, // None = rooted
     pub err: Option<TransactionError>,
+    pub optimistically_confirmed: Option<bool>,
 }
 
 #[tarpc::service]

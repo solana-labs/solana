@@ -1578,7 +1578,11 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
 
             for (signature, status) in pending_signatures.into_iter().zip(statuses.into_iter()) {
                 if let Some(status) = status {
-                    if status.confirmations.is_none() || status.confirmations.unwrap() > 1 {
+                    if status.confirmations.is_none()
+                        || (status.optimistically_confirmed.is_some()
+                            && status.optimistically_confirmed.unwrap())
+                        || status.confirmations.unwrap() > 1
+                    {
                         let _ = pending_transactions.remove(&signature);
                     }
                 }

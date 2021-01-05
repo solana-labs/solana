@@ -20,7 +20,7 @@ use solana_account_decoder::parse_token::UiTokenAmount;
 pub use solana_runtime::bank::RewardType;
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
-    commitment_config::CommitmentConfig,
+    commitment_config::{CommitmentConfig, CommitmentLevel},
     deserialize_utils::default_on_eof,
     instruction::CompiledInstruction,
     message::{Message, MessageHeader},
@@ -267,12 +267,25 @@ pub struct TransactionStatus {
     pub confirmations: Option<usize>, // None = rooted
     pub status: Result<()>,           // legacy field
     pub err: Option<TransactionError>,
+    pub optimistically_confirmed: Option<bool>,
 }
 
 impl TransactionStatus {
     pub fn satisfies_commitment(&self, commitment_config: CommitmentConfig) -> bool {
-        (commitment_config == CommitmentConfig::default() && self.confirmations.is_none())
-            || commitment_config == CommitmentConfig::recent()
+        match commitment_config.commitment {
+            CommitmentLevel::Max | CommitmentLevel::Root => self.confirmations.is_none(),
+            CommitmentLevel::SingleGossip => {
+                (self.optimistically_confirmed.is_some() && self.optimistically_confirmed.unwrap())
+                    // These fallback cases handle TransactionStatus RPC responses from older software
+                    || self.confirmations.is_some() && self.confirmations.unwrap() > 1
+                    || self.confirmations.is_none()
+            }
+            CommitmentLevel::Single => match self.confirmations {
+                Some(confirmations) => confirmations >= 1,
+                None => true,
+            },
+            CommitmentLevel::Recent => true,
+        }
     }
 }
 
@@ -545,9 +558,13 @@ mod test {
             confirmations: None,
             status: Ok(()),
             err: None,
+            optimistically_confirmed: Some(true),
         };
 
         assert!(status.satisfies_commitment(CommitmentConfig::default()));
+        assert!(status.satisfies_commitment(CommitmentConfig::root()));
+        assert!(status.satisfies_commitment(CommitmentConfig::single()));
+        assert!(status.satisfies_commitment(CommitmentConfig::single_gossip()));
         assert!(status.satisfies_commitment(CommitmentConfig::recent()));
 
         let status = TransactionStatus {
@@ -555,9 +572,69 @@ mod test {
             confirmations: Some(10),
             status: Ok(()),
             err: None,
+            optimistically_confirmed: Some(true),
         };
 
         assert!(!status.satisfies_commitment(CommitmentConfig::default()));
+        assert!(!status.satisfies_commitment(CommitmentConfig::root()));
+        assert!(status.satisfies_commitment(CommitmentConfig::single()));
+        assert!(status.satisfies_commitment(CommitmentConfig::single_gossip()));
         assert!(status.satisfies_commitment(CommitmentConfig::recent()));
+
+        let status = TransactionStatus {
+            slot: 0,
+            confirmations: Some(1),
+            status: Ok(()),
+            err: None,
+            optimistically_confirmed: Some(false),
+        };
+
+        assert!(!status.satisfies_commitment(CommitmentConfig::default()));
+        assert!(!status.satisfies_commitment(CommitmentConfig::root()));
+        assert!(status.satisfies_commitment(CommitmentConfig::single()));
+        assert!(!status.satisfies_commitment(CommitmentConfig::single_gossip()));
+        assert!(status.satisfies_commitment(CommitmentConfig::recent()));
+
+        let status = TransactionStatus {
+            slot: 0,
+            confirmations: Some(0),
+            status: Ok(()),
+            err: None,
+            optimistically_confirmed: None,
+        };
+
+        assert!(!status.satisfies_commitment(CommitmentConfig::default()));
+        assert!(!status.satisfies_commitment(CommitmentConfig::root()));
+        assert!(!status.satisfies_commitment(CommitmentConfig::single()));
+        assert!(!status.satisfies_commitment(CommitmentConfig::single_gossip()));
+        assert!(status.satisfies_commitment(CommitmentConfig::recent()));
+
+        // Test single_gossip fallback cases
+        let status = TransactionStatus {
+            slot: 0,
+            confirmations: Some(1),
+            status: Ok(()),
+            err: None,
+            optimistically_confirmed: None,
+        };
+        assert!(!status.satisfies_commitment(CommitmentConfig::single_gossip()));
+
+        let status = TransactionStatus {
+            slot: 0,
+            confirmations: Some(2),
+            status: Ok(()),
+            err: None,
+            optimistically_confirmed: None,
+        };
+        assert!(status.satisfies_commitment(CommitmentConfig::single_gossip()));
+
+        let status = TransactionStatus {
+            slot: 0,
+            confirmations: None,
+            status: Ok(()),
+            err: None,
+            optimistically_confirmed: None,
+        };
+        assert!(status.satisfies_commitment(CommitmentConfig::single_gossip()));
     }
 }

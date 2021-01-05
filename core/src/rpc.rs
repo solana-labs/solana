@@ -858,6 +858,7 @@ impl JsonRpcRequestProcessor {
                             status: status_meta.status,
                             confirmations: None,
                             err,
+                            optimistically_confirmed: Some(true),
                         }
                     })
                     .or_else(|| {
@@ -886,6 +887,11 @@ impl JsonRpcRequestProcessor {
         let (slot, status) = bank.get_signature_status_slot(&signature)?;
         let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
 
+        let optimistically_confirmed_bank = self.bank(Some(CommitmentConfig::single_gossip()));
+        let optimistically_confirmed = optimistically_confirmed_bank
+            .get_signature_status_slot(&signature)
+            .map(|_| true);
+
         let confirmations = if r_block_commitment_cache.root() >= slot
             && is_confirmed_rooted(&r_block_commitment_cache, bank, &self.blockstore, slot)
         {
@@ -901,6 +907,7 @@ impl JsonRpcRequestProcessor {
             status,
             confirmations,
             err,
+            optimistically_confirmed,
         })
     }
 

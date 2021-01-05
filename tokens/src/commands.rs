@@ -2105,6 +2105,7 @@ mod tests {
                 confirmations: Some(15),
                 status: Ok(()),
                 err: None,
+                optimistically_confirmed: Some(true),
             })],
             &mut confirmations,
         )
@@ -2124,6 +2125,7 @@ mod tests {
                 confirmations: None,
                 status: Ok(()),
                 err: None,
+                optimistically_confirmed: Some(true),
             })],
             &mut confirmations,
         )
