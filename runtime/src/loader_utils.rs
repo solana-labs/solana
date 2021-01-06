@@ -69,6 +69,7 @@ pub fn load_buffer_account<T: Client>(
                 &bpf_loader_upgradeable::create_buffer(
                     &from_keypair.pubkey(),
                     &buffer_pubkey,
+                    Some(&buffer_pubkey),
                     1.max(
                         bank_client
                             .get_minimum_balance_for_rent_exemption(program.len())
@@ -88,6 +89,7 @@ pub fn load_buffer_account<T: Client>(
         let message = Message::new(
             &[bpf_loader_upgradeable::write(
                 &buffer_pubkey,
+                None,
                 offset,
                 chunk.to_vec(),
             )],
@@ -168,7 +170,7 @@ pub fn set_upgrade_authority<T: Client>(
     new_authority_pubkey: Option<&Pubkey>,
 ) {
     let message = Message::new(
-        &[bpf_loader_upgradeable::set_authority(
+        &[bpf_loader_upgradeable::set_upgrade_authority(
             program_pubkey,
             &current_authority_keypair.pubkey(),
             new_authority_pubkey,
