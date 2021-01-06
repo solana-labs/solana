@@ -12,6 +12,7 @@ import { ClusterStatsPage } from "pages/ClusterStatsPage";
 import { SupplyPage } from "pages/SupplyPage";
 import { TransactionDetailsPage } from "pages/TransactionDetailsPage";
 import { BlockDetailsPage } from "pages/BlockDetailsPage";
+import { UnlockAlert } from "components/UnlockAlert";
 
 const ADDRESS_ALIASES = ["account", "accounts", "addresses"];
 const TX_ALIASES = ["txs", "txn", "txns", "transaction", "transactions"];
@@ -20,6 +21,7 @@ function App() {
   return (
     <>
       <ClusterModal />
+      <UnlockAlert />
       <div className="main-content">
         <Navbar />
         <MessageBanner />
