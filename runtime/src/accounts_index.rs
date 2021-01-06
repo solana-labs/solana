@@ -498,7 +498,7 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         if w_account_entry.is_none() {
             let new_entry = Arc::new(AccountMapEntryInner {
                 ref_count: AtomicU64::new(0),
-                slot_list: RwLock::new(SlotList::with_capacity(32)),
+                slot_list: RwLock::new(SlotList::with_capacity(1)),
             });
             let mut w_account_maps = self.account_maps.write().unwrap();
             let account_entry = w_account_maps.entry(*pubkey).or_insert_with(|| {
