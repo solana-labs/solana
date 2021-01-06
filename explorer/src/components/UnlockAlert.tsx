@@ -11,15 +11,15 @@ export function displayTimestamp(unixTimestamp: number): string {
     year: "numeric",
     month: "long",
     day: "numeric",
-    timeZone: "UTC"
+    timeZone: "UTC",
   }).format(expireDate);
   const timeString = new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "numeric",
     hour12: false,
-    timeZoneName: "long",
+    timeZone: "UTC",
   }).format(expireDate);
-  return `${dateString} at ${timeString}`;
+  return `${dateString} ${timeString}`;
 }
 
 export function UnlockAlert() {
@@ -73,20 +73,24 @@ export function UnlockAlert() {
 
   return (
     <div className="alert alert-secondary text-center">
-      <p>An unlock event is timed for January 7, 2021 at 00:00:00 UTC cluster time.</p>
-      <p>
-        It is currently {displayTimestamp(blockTime * 1000)} cluster time. Cluster time may
-        vary from actual UTC time.
+      <p className="mb-1">
+        An unlock event is timed for January 7, 2021 00:00 UTC cluster time.
+      </p>
+      <p className="mb-1">
+        It is currently {displayTimestamp(blockTime * 1000)} UTC cluster time.
+        Cluster time may vary from actual UTC time.
       </p>
       <p className="mb-0">
         More information can be found{" "}
-        <a
-          href="https://solana.com/transparency"
-          className="text-white font-weight-bold text-underline"
-          rel="noopener noreferrer"
-        >
-          here
-        </a>
+        <u>
+          <a
+            href="https://solana.com/transparency"
+            className="text-white font-weight-bold"
+            rel="noopener noreferrer"
+          >
+            here
+          </a>
+        </u>
         .
       </p>
     </div>
