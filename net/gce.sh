@@ -68,6 +68,7 @@ externalNodes=false
 failOnValidatorBootupFailure=true
 preemptible=true
 evalInfo=false
+tmpfsAccounts=false
 
 publicNetwork=false
 letsEncryptDomainName=
@@ -154,6 +155,7 @@ Manage testnet instances
                     - Specify validator boot disk size in gb.
    --client-machine-type [type]
                     - custom client machine type
+   --tmpfs-accounts - Put accounts directory on a swap-backed tmpfs volume
 
  config-specific options:
    -P               - Use public network IP addresses (default: $publicNetwork)
@@ -228,6 +230,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --reclaim-all-reservations ]]; then
       reclaimAllReservations=true
       shift
+    elif [[ $1 == --tmpfs-accounts ]]; then
+      tmpfsAccounts=true
+      shift
     else
       usage "Unknown long option: $1"
     fi
@@ -298,12 +303,20 @@ fi
 case $cloudProvider in
 gce)
   customMemoryGB="$(cloud_DefaultCustomMemoryGB)"
+  if [[ "$tmpfsAccounts" = "true" ]]; then
+    customMemoryGB=$(( customMemoryGB * 2 ))
+    cpuBootstrapLeaderMachineType+=" --local-ssd interface=nvme"
+    gpuBootstrapLeaderMachineType+=" --local-ssd interface=nvme"
+  fi
   cpuBootstrapLeaderMachineType+=" --custom-memory ${customMemoryGB}GB"
   gpuBootstrapLeaderMachineType+=" --custom-memory ${customMemoryGB}GB"
   ;;
 ec2|azure|colo)
   if [[ -n $validatorAdditionalDiskSizeInGb ]] ; then
     usage "Error: --validator-additional-disk-size-gb currently only supported with cloud provider: gce"
+  fi
+  if [[ "$tmpfsAccounts" = "true" ]]; then
+    usage "Error: --tmpfs-accounts only supported on cloud provider: gce"
   fi
   ;;
 *)
@@ -445,6 +458,7 @@ netBasename=$prefix
 publicNetwork=$publicNetwork
 sshPrivateKey=$sshPrivateKey
 letsEncryptDomainName=$letsEncryptDomainName
+export TMPFS_ACCOUNTS=$tmpfsAccounts
 EOF
   fi
   touch "$geoipConfigFile"
@@ -832,6 +846,24 @@ See startup script log messages in /var/log/syslog for status:
 $(printNetworkInfo)
 $(creationInfo)
 EOM
+
+$(
+  if [[ "$tmpfsAccounts" = "true" ]]; then
+    cat <<'EOSWAP'
+
+# Setup swap/tmpfs for accounts
+tmpfsMountPoint=/mnt/solana-accounts
+swapDevice="/dev/nvme0n1"
+swapUUID="43076c54-7840-4e59-a368-2d164f8984fb"
+mkswap --uuid "$swapUUID" "$swapDevice"
+echo "UUID=$swapUUID swap swap defaults 0 0" >> /etc/fstab
+swapon "UUID=$swapUUID"
+mkdir -p -m 0777 "$tmpfsMountPoint"
+echo "tmpfs $tmpfsMountPoint tmpfs defaults,size=300G 0 0" >> /etc/fstab
+mount "$tmpfsMountPoint"
+EOSWAP
+  fi
+)
 
 touch /solana-scratch/.instance-startup-complete
 
