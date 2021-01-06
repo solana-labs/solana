@@ -25,6 +25,7 @@ pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 2 * TICKS_PER_DAY / DEFAULT_TICKS_PER_S
 // leader schedule is governed by this
 pub const NUM_CONSECUTIVE_LEADER_SLOTS: u64 = 4;
 
+pub const DEFAULT_S_PER_SLOT: f64 = DEFAULT_TICKS_PER_SLOT as f64 / DEFAULT_TICKS_PER_SECOND as f64;
 pub const DEFAULT_MS_PER_SLOT: u64 = 1_000 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND;
 
 /// The time window of recent block hash values that the bank will track the signatures

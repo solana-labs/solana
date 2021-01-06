@@ -1327,9 +1327,7 @@ pub fn process_ping(
 
                     // Sleep for half a slot
                     if signal_receiver
-                        .recv_timeout(Duration::from_millis(
-                            500 * clock::DEFAULT_TICKS_PER_SLOT / clock::DEFAULT_TICKS_PER_SECOND,
-                        ))
+                        .recv_timeout(Duration::from_millis(clock::DEFAULT_MS_PER_SLOT / 2))
                         .is_ok()
                     {
                         break 'mainloop;

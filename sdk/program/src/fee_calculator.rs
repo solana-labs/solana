@@ -1,4 +1,4 @@
-use crate::clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT};
+use crate::clock::DEFAULT_MS_PER_SLOT;
 use crate::message::Message;
 use crate::secp256k1_program;
 use log::*;
@@ -87,8 +87,7 @@ pub struct FeeRateGovernor {
 }
 
 pub const DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE: u64 = 10_000;
-pub const DEFAULT_TARGET_SIGNATURES_PER_SLOT: u64 =
-    50_000 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND;
+pub const DEFAULT_TARGET_SIGNATURES_PER_SLOT: u64 = 50 * DEFAULT_MS_PER_SLOT;
 
 // Percentage of tx fees to burn
 pub const DEFAULT_BURN_PERCENT: u8 = 50;
