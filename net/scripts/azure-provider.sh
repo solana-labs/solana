@@ -8,6 +8,10 @@ cloud_DefaultZone() {
   echo "westus"
 }
 
+cloud_DefaultCustomMemoryGB() {
+  : # Not implemented
+}
+
 cloud_RestartPreemptedInstances() {
   : # Not implemented
 }
