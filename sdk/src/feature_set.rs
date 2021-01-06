@@ -130,6 +130,10 @@ pub mod use_loaded_program_accounts {
     solana_sdk::declare_id!("FLjgLeg1PJkZimQCVa5sVFtaq6VmSDPw3NvH8iQ3nyHn");
 }
 
+pub mod increase_hashes_per_tick {
+    solana_sdk::declare_id!("FXf6EJ8AbGJRwoT811iwy2hxEdbNyv9WtqsAyW1EhdSk");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -164,6 +168,7 @@ lazy_static! {
         (max_cpi_instruction_size_ipv6_mtu::id(), "Max cross-program invocation size 1280"),
         (limit_cpi_loader_invoke::id(), "Loader not authorized via CPI"),
         (use_loaded_program_accounts::id(), "Use loaded program accounts"),
+        (increase_hashes_per_tick::id(), "Increase hashes per tick by 25%"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

@@ -1026,6 +1026,7 @@ impl Bank {
             )),
             freeze_started: AtomicBool::new(false),
         };
+        new.update_hashes_per_tick_from_feature();
 
         datapoint_info!(
             "bank-new_from_parent-heights",
@@ -2069,6 +2070,17 @@ impl Bank {
         self.parent_slot
     }
 
+    fn update_hashes_per_tick_from_feature(&mut self) {
+        let target = solana_sdk::clock::DEFAULT_HASHES_PER_TICK_2021;
+        if self.get_hashes_per_tick().unwrap_or(std::u64::MAX) != target
+            && self
+                .feature_set
+                .is_active(&feature_set::increase_hashes_per_tick::id())
+        {
+            self.set_hashes_per_tick(Some(target));
+        }
+    }
+
     fn process_genesis_config(&mut self, genesis_config: &GenesisConfig) {
         // Bootstrap validator collects fees until `new_from_parent` is called.
         self.fee_rate_governor = genesis_config.fee_rate_governor.clone();
@@ -2106,6 +2118,10 @@ impl Bank {
             .genesis_hash(&genesis_config.hash(), &self.fee_calculator);
 
         self.hashes_per_tick = genesis_config.hashes_per_tick();
+
+        // jwash - if we are past the feature being active for the 2021 rate, then we need to start with that and NOT the genesis config value.
+        self.update_hashes_per_tick_from_feature();
+
         self.ticks_per_slot = genesis_config.ticks_per_slot();
         self.ns_per_slot = genesis_config.ns_per_slot();
         self.genesis_creation_time = genesis_config.creation_time;
@@ -2218,6 +2234,10 @@ impl Bank {
 
     pub fn set_hashes_per_tick(&mut self, hashes_per_tick: Option<u64>) {
         self.hashes_per_tick = hashes_per_tick;
+    }
+
+    pub fn get_hashes_per_tick(&self) -> Option<u64> {
+        self.hashes_per_tick
     }
 
     /// Return the last block hash registered.
@@ -11875,6 +11895,74 @@ pub(crate) mod tests {
             bank = new_from_parent(&Arc::new(bank));
         }
         assert_eq!(bank.get_inflation_num_slots(), 2 * slots_per_epoch);
+    }
+
+    fn clear_increase_hashes_per_tick_feature(genesis_config: &mut GenesisConfig) {
+        genesis_config
+            .accounts
+            .remove(&feature_set::increase_hashes_per_tick::id())
+            .unwrap();
+    }
+
+    #[test]
+    fn test_hashes_per_tick_feature_enable() {
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config_with_leader(42, &solana_sdk::pubkey::new_rand(), 42);
+        let hashes_per_tick = 20;
+        genesis_config.poh_config.hashes_per_tick = Some(hashes_per_tick);
+        let slots_per_epoch = 32;
+        genesis_config.epoch_schedule = EpochSchedule::new(slots_per_epoch);
+        clear_increase_hashes_per_tick_feature(&mut genesis_config);
+        let mut bank = Bank::new(&genesis_config);
+        assert_eq!(bank.get_inflation_num_slots(), 0);
+        for _ in 0..2 * slots_per_epoch {
+            assert_eq!(bank.hashes_per_tick().unwrap(), hashes_per_tick);
+            bank = new_from_parent(&Arc::new(bank));
+        }
+
+        // Activate increase_hashes_per_tick
+        let activation_slot = bank.slot();
+        bank.store_account(
+            &feature_set::increase_hashes_per_tick::id(),
+            &feature::create_account(
+                &Feature {
+                    activated_at: Some(activation_slot),
+                },
+                42,
+            ),
+        );
+
+        bank.compute_active_feature_set(true);
+        assert_eq!(bank.hashes_per_tick().unwrap(), hashes_per_tick);
+        bank = new_from_parent(&Arc::new(bank));
+        let hashes_per_tick = solana_sdk::clock::DEFAULT_HASHES_PER_TICK_2021;
+
+        assert_eq!(bank.hashes_per_tick().unwrap(), hashes_per_tick);
+    }
+
+    #[test]
+    fn test_hashes_per_tick_change() {
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config_with_leader(42, &solana_sdk::pubkey::new_rand(), 42);
+        clear_increase_hashes_per_tick_feature(&mut genesis_config);
+        let hashes_per_tick = 20;
+        genesis_config.poh_config.hashes_per_tick = Some(hashes_per_tick);
+        let slots_per_epoch = 32;
+        genesis_config.epoch_schedule = EpochSchedule::new(slots_per_epoch);
+        let mut bank = Bank::new(&genesis_config);
+        assert_eq!(bank.hashes_per_tick().unwrap(), hashes_per_tick);
+        for _ in 0..slots_per_epoch {
+            bank = new_from_parent(&Arc::new(bank));
+            assert_eq!(bank.hashes_per_tick().unwrap(), hashes_per_tick);
+        }
+        let hashes_per_tick = solana_sdk::clock::DEFAULT_HASHES_PER_TICK_2021;
+        bank.set_hashes_per_tick(Some(hashes_per_tick));
+        for _ in 0..slots_per_epoch {
+            assert_eq!(bank.hashes_per_tick().unwrap(), hashes_per_tick);
+            bank = new_from_parent(&Arc::new(bank));
+        }
     }
 
     #[test]

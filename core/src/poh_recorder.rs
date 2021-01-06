@@ -271,7 +271,24 @@ impl PohRecorder {
         self.working_bank = Some(working_bank);
         let _ = self.flush_cache(false);
     }
+
+    pub fn update_poh_config(&mut self, hashes_per_tick: Option<u64>) {
+        // if the bank has a different hashes_per_tick, then replace poh_config with a new one with the new hashes_per_tick
+        if hashes_per_tick != self.poh_config.hashes_per_tick {
+            let mut new_poh_config = (*self.poh_config).clone();
+            new_poh_config.hashes_per_tick = hashes_per_tick;
+            self.poh_config = Arc::new(new_poh_config);
+            self.poh
+                .lock()
+                .unwrap()
+                .set_hashes_per_tick(hashes_per_tick);
+        }
+        // Note that we are not updating poh_config in PohService because it is not currently necessary.
+        // The only value changing in poh_config is hashes_per_tick.
+    }
+
     pub fn set_bank(&mut self, bank: &Arc<Bank>) {
+        self.update_poh_config(bank.get_hashes_per_tick());
         let working_bank = WorkingBank {
             bank: bank.clone(),
             min_tick_height: bank.tick_height(),
@@ -1065,6 +1082,48 @@ mod tests {
             poh_recorder.set_bank(&bank);
             poh_recorder.clear_bank();
             assert!(receiver.try_recv().is_ok());
+        }
+        Blockstore::destroy(&ledger_path).unwrap();
+    }
+
+    #[test]
+    pub fn test_poh_update() {
+        solana_logger::setup();
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&ledger_path)
+                .expect("Expected to be able to open database ledger");
+            let GenesisConfigInfo {
+                mut genesis_config, ..
+            } = create_genesis_config(2);
+            genesis_config.poh_config.hashes_per_tick = Some(20);
+            let bank = Arc::new(Bank::new(&genesis_config));
+            let (sender, _) = sync_channel(1);
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new_with_clear_signal(
+                0,
+                Hash::default(),
+                0,
+                None,
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blockstore),
+                Some(sender),
+                &Arc::new(LeaderScheduleCache::default()),
+                &Arc::new(PohConfig::default()),
+            );
+            poh_recorder.set_bank(&bank);
+
+            let new_target = 30;
+            genesis_config.poh_config.hashes_per_tick = Some(new_target);
+            let bank = Arc::new(Bank::new(&genesis_config));
+            poh_recorder.set_bank(&bank);
+            assert_eq!(new_target, poh_recorder.poh_config.hashes_per_tick.unwrap());
+            assert_eq!(
+                new_target,
+                poh_recorder.poh.lock().unwrap().get_hashes_per_tick()
+            );
+
+            poh_recorder.clear_bank();
         }
         Blockstore::destroy(&ledger_path).unwrap();
     }

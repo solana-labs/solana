@@ -24,6 +24,9 @@ pub const DEFAULT_PINNED_CPU_CORE: usize = 0;
 const TARGET_SLOT_ADJUSTMENT_NS: u64 = 50_000_000;
 
 impl PohService {
+    // Note that poh_config is a snapshot at this function call.
+    // At runtime, the rest of the system may transition to use a new poh_config instance.
+    // Nothing in this file currently uses the poh_config members that are changing.
     pub fn new(
         poh_recorder: Arc<Mutex<PohRecorder>>,
         poh_config: &Arc<PohConfig>,

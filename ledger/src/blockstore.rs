@@ -1582,6 +1582,7 @@ impl Blockstore {
         }
 
         let mut missing_indexes = vec![];
+        // todo: don't convert to ticks, just use ms
         let ticks_since_first_insert =
             DEFAULT_TICKS_PER_SECOND * (timestamp() - first_timestamp) / 1000;
 
@@ -1616,6 +1617,13 @@ impl Blockstore {
                 &db_iterator.value().expect("couldn't read value"),
             ));
 
+            /*
+            in general, think if it makes sense to conver to ticks there. if tick rate was 10x faster,w ould you want to wait 10x more/less time?
+            compare in ms
+            hash rate shouldn't be tied to ticks_since_first_insert
+            network delay shouldn't be tied to tick rate
+            we chose to tie to tick rate where it didn't make sense
+            */
             if ticks_since_first_insert < reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
                 // The higher index holes have not timed out yet
                 break 'outer;
