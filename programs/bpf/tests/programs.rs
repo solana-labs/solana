@@ -21,7 +21,7 @@ use solana_runtime::{
 };
 use solana_sdk::{
     account::Account,
-    bpf_loader, bpf_loader_deprecated,
+    bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, MAX_PROCESSING_AGE},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
@@ -1632,7 +1632,7 @@ fn test_program_bpf_invoke_upgradeable_via_cpi() {
         "solana_bpf_rust_invoke_and_return",
     );
 
-    // Deploy upgrade program
+    // Deploy upgradeable program
     let (program_id, authority_keypair) =
         load_upgradeable_bpf_program(&bank_client, &mint_keypair, "solana_bpf_rust_upgradeable");
 
@@ -1740,4 +1740,84 @@ fn test_program_bpf_disguised_as_bpf_loader() {
             TransactionError::InstructionError(0, InstructionError::IncorrectProgramId)
         );
     }
+}
+
+#[cfg(feature = "bpf_rust")]
+#[test]
+fn test_program_bpf_upgrade_via_cpi() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, id, entrypoint);
+    let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
+    bank.add_builtin(&name, id, entrypoint);
+    let bank_client = BankClient::new(bank);
+    let invoke_and_return = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_invoke_and_return",
+    );
+
+    // Deploy upgradeable program
+    let (program_id, authority_keypair) =
+        load_upgradeable_bpf_program(&bank_client, &mint_keypair, "solana_bpf_rust_upgradeable");
+
+    let mut instruction = Instruction::new(
+        invoke_and_return,
+        &[0],
+        vec![
+            AccountMeta::new(program_id, false),
+            AccountMeta::new(program_id, false),
+            AccountMeta::new(clock::id(), false),
+            AccountMeta::new(fees::id(), false),
+        ],
+    );
+
+    // Call the upgraded program
+    instruction.data[0] += 1;
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::InstructionError(0, InstructionError::Custom(42))
+    );
+
+    // Load the buffer account
+    let path = create_bpf_path("solana_bpf_rust_upgraded");
+    let mut file = File::open(&path).unwrap_or_else(|err| {
+        panic!("Failed to open {}: {}", path.display(), err);
+    });
+    let mut elf = Vec::new();
+    file.read_to_end(&mut elf).unwrap();
+    let buffer_pubkey = load_buffer_account(&bank_client, &mint_keypair, &elf);
+
+    // Upgrade program via CPI
+    let mut upgrade_instruction = bpf_loader_upgradeable::upgrade(
+        &program_id,
+        &buffer_pubkey,
+        &authority_keypair.pubkey(),
+        &mint_keypair.pubkey(),
+    );
+    upgrade_instruction.program_id = invoke_and_return;
+    upgrade_instruction
+        .accounts
+        .insert(0, AccountMeta::new(bpf_loader_upgradeable::id(), false));
+    let message = Message::new(&[upgrade_instruction], Some(&mint_keypair.pubkey()));
+    bank_client
+        .send_and_confirm_message(&[&mint_keypair, &authority_keypair], message)
+        .unwrap();
+
+    // Call the upgraded program
+    instruction.data[0] += 1;
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::InstructionError(0, InstructionError::Custom(43))
+    );
 }
