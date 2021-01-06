@@ -1,6 +1,6 @@
 [package]
 name = "solana-bpf-rust-param-passing"
-version = "1.4.21"
+version = "1.4.22"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -9,8 +9,8 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-solana-bpf-rust-param-passing-dep = { path = "../param_passing_dep", version = "1.4.21" }
-solana-program = { path = "../../../../sdk/program", version = "1.4.21" }
+solana-bpf-rust-param-passing-dep = { path = "../param_passing_dep", version = "1.4.22" }
+solana-program = { path = "../../../../sdk/program", version = "1.4.22" }
 
 
 [lib]
