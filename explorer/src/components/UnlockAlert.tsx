@@ -74,11 +74,10 @@ export function UnlockAlert() {
   return (
     <div className="alert alert-secondary text-center">
       <p className="mb-1">
-        An unlock event is scheduled for January 7, 2021 00:00 UTC cluster time.
+        An unlock event is scheduled for January 7, 2021 00:00 cluster time.
       </p>
       <p className="mb-1">
-        Cluster time is currently {displayTimestamp(blockTime * 1000)} UTC.
-        Cluster time may vary from actual UTC time.
+        Cluster time is currently {displayTimestamp(blockTime * 1000)}.
       </p>
       <p className="mb-0">
         More information can be found{" "}
