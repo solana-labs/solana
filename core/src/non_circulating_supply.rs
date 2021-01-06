@@ -1,4 +1,7 @@
-use solana_runtime::bank::Bank;
+use solana_runtime::{
+    accounts_index::{AccountIndex, IndexKey},
+    bank::Bank,
+};
 use solana_sdk::pubkey::Pubkey;
 use solana_stake_program::stake_state::StakeState;
 use std::{collections::HashSet, sync::Arc};
@@ -18,7 +21,24 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> NonCirculatingSuppl
     let withdraw_authority_list = withdraw_authority();
 
     let clock = bank.clock();
-    let stake_accounts = bank.get_program_accounts(&solana_stake_program::id());
+    let stake_accounts = if bank
+        .rc
+        .accounts
+        .accounts_db
+        .account_indexes
+        .contains(&AccountIndex::ProgramId)
+    {
+        bank.get_filtered_indexed_accounts(
+            &IndexKey::ProgramId(solana_stake_program::id()),
+            // The program-id account index checks for Account owner on inclusion. However, due to
+            // the current AccountsDB implementation, an account may remain in storage as a
+            // zero-lamport Account::Default() after being wiped and reinitialized in later
+            // updates. We include the redundant filter here to avoid returning these accounts.
+            |account| account.owner == solana_stake_program::id(),
+        )
+    } else {
+        bank.get_program_accounts(&solana_stake_program::id())
+    };
     for (pubkey, account) in stake_accounts.iter() {
         let stake_account = StakeState::from(&account).unwrap_or_default();
         match stake_account {
