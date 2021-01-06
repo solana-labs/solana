@@ -28,7 +28,6 @@ export function displayTimestampUtc(unixTimestamp: number): string {
     minute: "numeric",
     second: "numeric",
     hour12: false,
-    timeZoneName: "short",
     timeZone: "UTC",
   }).format(expireDate);
   return `${dateString} at ${timeString}`;
