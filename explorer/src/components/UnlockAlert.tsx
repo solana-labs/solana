@@ -2,9 +2,24 @@ import React from "react";
 
 import { Connection } from "@solana/web3.js";
 import { useCluster, Cluster } from "providers/cluster";
-import { displayTimestamp } from "utils/date";
 
 const CLUSTER_SYNC_INTERVAL = 30000;
+
+export function displayTimestamp(unixTimestamp: number): string {
+  const expireDate = new Date(unixTimestamp);
+  const dateString = new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(expireDate);
+  const timeString = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+    timeZoneName: "long",
+  }).format(expireDate);
+  return `${dateString} at ${timeString}`;
+}
 
 export function UnlockAlert() {
   const { cluster, url } = useCluster();
@@ -57,15 +72,10 @@ export function UnlockAlert() {
 
   return (
     <div className="alert alert-secondary text-center">
+      <p>An unlock event is timed for midnight January 7th UTC cluster time.</p>
       <p>
-        An unlock event is timed for midnight, January 7th, UTC cluster time.
-      </p>
-      <p>
-        Cluster time is currently{" "}
-        <span className="text-monospace">
-          {displayTimestamp(blockTime * 1000)}
-        </span>{" "}
-        and may differ from actual UTC time.
+        Cluster time is currently {displayTimestamp(blockTime * 1000)} and may
+        differ from actual UTC time.
       </p>
       <p className="mb-0">
         More information can be found{" "}
