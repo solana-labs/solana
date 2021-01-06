@@ -21,6 +21,8 @@ pub const NUM_HASHES_PER_BATCH: u64 = 1;
 
 pub const DEFAULT_PINNED_CPU_CORE: usize = 0;
 
+const TARGET_SLOT_ADJUSTMENT_NS: u64 = 50_000_000;
+
 impl PohService {
     pub fn new(
         poh_recorder: Arc<Mutex<PohRecorder>>,
@@ -52,10 +54,17 @@ impl PohService {
                     if let Some(cores) = core_affinity::get_core_ids() {
                         core_affinity::set_for_current(cores[pinned_cpu_core]);
                     }
+                    // Account for some extra time outside of PoH generation to account
+                    // for processing time outside PoH.
+                    let adjustment_per_tick = if ticks_per_slot > 0 {
+                        TARGET_SLOT_ADJUSTMENT_NS / ticks_per_slot
+                    } else {
+                        0
+                    };
                     Self::tick_producer(
                         poh_recorder,
                         &poh_exit_,
-                        poh_config.target_tick_duration.as_nanos() as u64,
+                        poh_config.target_tick_duration.as_nanos() as u64 - adjustment_per_tick,
                         ticks_per_slot,
                     );
                 }
