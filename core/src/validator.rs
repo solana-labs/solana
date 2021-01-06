@@ -414,7 +414,13 @@ impl Validator {
             leader_schedule_cache.slot_leader_at(bank.slot(), Some(&bank))
         );
 
-        let poh_config = Arc::new(genesis_config.poh_config.clone());
+        // if we're using the dynamic clock, then we possibly don't use genesis_config here
+        let mut poh_config = genesis_config.poh_config.clone();
+        // the bank may have a different hashes_per_tick, so update
+        poh_config.hashes_per_tick = bank.get_hashes_per_tick();
+
+        let poh_config = Arc::new(poh_config);
+
         let (mut poh_recorder, entry_receiver) = PohRecorder::new_with_clear_signal(
             bank.tick_height(),
             bank.last_blockhash(),
@@ -540,7 +546,7 @@ impl Validator {
             };
 
         if !config.no_poh_speed_test {
-            check_poh_speed(&genesis_config, None);
+            check_poh_speed(&genesis_config, *bank.hashes_per_tick(), None);
         }
 
         if wait_for_supermajority(config, &bank, &cluster_info, rpc_override_health_check) {
@@ -772,8 +778,12 @@ fn active_vote_account_exists_in_bank(bank: &Arc<Bank>, vote_account: &Pubkey) -
     false
 }
 
-fn check_poh_speed(genesis_config: &GenesisConfig, maybe_hash_samples: Option<u64>) {
-    if let Some(hashes_per_tick) = genesis_config.hashes_per_tick() {
+fn check_poh_speed(
+    genesis_config: &GenesisConfig,
+    hashes_per_tick: Option<u64>,
+    maybe_hash_samples: Option<u64>,
+) {
+    if let Some(hashes_per_tick) = hashes_per_tick {
         let ticks_per_slot = genesis_config.ticks_per_slot();
         let hashes_per_slot = hashes_per_tick * ticks_per_slot;
 
@@ -1505,7 +1515,11 @@ mod tests {
             poh_config,
             ..GenesisConfig::default()
         };
-        check_poh_speed(&genesis_config, Some(10_000));
+        check_poh_speed(
+            &genesis_config,
+            genesis_config.hashes_per_tick(),
+            Some(10_000),
+        );
     }
 
     #[test]
@@ -1519,6 +1533,10 @@ mod tests {
             poh_config,
             ..GenesisConfig::default()
         };
-        check_poh_speed(&genesis_config, Some(10_000));
+        check_poh_speed(
+            &genesis_config,
+            genesis_config.hashes_per_tick(),
+            Some(10_000),
+        );
     }
 }

@@ -61,6 +61,14 @@ impl Poh {
         })
     }
 
+    pub fn set_hashes_per_tick(&mut self, hashes_per_tick: Option<u64>) {
+        self.hashes_per_tick = hashes_per_tick.unwrap_or(std::u64::MAX);
+    }
+
+    pub fn get_hashes_per_tick(&self) -> u64 {
+        self.hashes_per_tick
+    }
+
     pub fn tick(&mut self) -> Option<PohEntry> {
         self.hash = hash(&self.hash.as_ref());
         self.num_hashes += 1;

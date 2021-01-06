@@ -2220,6 +2220,10 @@ impl Bank {
         self.hashes_per_tick = hashes_per_tick;
     }
 
+    pub fn get_hashes_per_tick(&self) -> Option<u64> {
+        self.hashes_per_tick
+    }
+
     /// Return the last block hash registered.
     pub fn last_blockhash(&self) -> Hash {
         self.blockhash_queue.read().unwrap().last_hash()
@@ -11875,6 +11879,29 @@ pub(crate) mod tests {
             bank = new_from_parent(&Arc::new(bank));
         }
         assert_eq!(bank.get_inflation_num_slots(), 2 * slots_per_epoch);
+    }
+
+    #[test]
+    fn test_hashes_per_tick_change() {
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config_with_leader(42, &solana_sdk::pubkey::new_rand(), 42);
+        let hashes_per_tick = 20;
+        genesis_config.poh_config.hashes_per_tick = Some(hashes_per_tick);
+        let slots_per_epoch = 32;
+        genesis_config.epoch_schedule = EpochSchedule::new(slots_per_epoch);
+        let mut bank = Bank::new(&genesis_config);
+        assert_eq!(bank.hashes_per_tick().unwrap(), hashes_per_tick);
+        for _ in 0..slots_per_epoch {
+            bank = new_from_parent(&Arc::new(bank));
+            assert_eq!(bank.hashes_per_tick().unwrap(), hashes_per_tick);
+        }
+        let hashes_per_tick = hashes_per_tick * 2;
+        bank.set_hashes_per_tick(Some(hashes_per_tick));
+        for _ in 0..slots_per_epoch {
+            assert_eq!(bank.hashes_per_tick().unwrap(), hashes_per_tick);
+            bank = new_from_parent(&Arc::new(bank));
+        }
     }
 
     #[test]
