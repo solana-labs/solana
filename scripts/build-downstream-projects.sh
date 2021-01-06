@@ -84,7 +84,7 @@ serum_dex() {
     git clone https://github.com/project-serum/serum-dex.git
     cd serum-dex
     # TODO: Remove next line and debug build failure
-    git checkout 937e26da947ff04047b5dd1bde0939e000534429
+    git checkout 54400763dbcc64bc955621298f0bada33b591f53
 
     update_solana_dependencies .
     patch_crates_io Cargo.toml
