@@ -12,7 +12,7 @@ gce)
   # shellcheck source=net/scripts/gce-provider.sh
   source "$here"/scripts/gce-provider.sh
 
-  cpuBootstrapLeaderMachineType="--custom-cpu 24 --custom-memory 64GB --min-cpu-platform Intel%20Skylake"
+  cpuBootstrapLeaderMachineType="--custom-cpu 24 --min-cpu-platform Intel%20Skylake"
   gpuBootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType --accelerator count=1,type=nvidia-tesla-p100"
   clientMachineType="--custom-cpu 16 --custom-memory 20GB"
   blockstreamerMachineType="--machine-type n1-standard-8"
@@ -283,16 +283,6 @@ while getopts "h?p:Pn:c:r:z:gG:a:d:uxf" opt "${shortArgs[@]}"; do
   esac
 done
 
-if [[ -n "$customMachineType" ]] ; then
-  bootstrapLeaderMachineType="$customMachineType"
-elif [[ "$enableGpu" = "true" ]] ; then
-  bootstrapLeaderMachineType="$gpuBootstrapLeaderMachineType"
-else
-  bootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType"
-fi
-validatorMachineType=$bootstrapLeaderMachineType
-blockstreamerMachineType=$bootstrapLeaderMachineType
-
 [[ ${#zones[@]} -gt 0 ]] || zones+=("$(cloud_DefaultZone)")
 
 [[ -z $1 ]] || usage "Unexpected argument: $1"
@@ -307,6 +297,9 @@ fi
 
 case $cloudProvider in
 gce)
+  customMemoryGB="$(cloud_DefaultCustomMemoryGB)"
+  cpuBootstrapLeaderMachineType+=" --custom-memory ${customMemoryGB}GB"
+  gpuBootstrapLeaderMachineType+=" --custom-memory ${customMemoryGB}GB"
   ;;
 ec2|azure|colo)
   if [[ -n $validatorAdditionalDiskSizeInGb ]] ; then
@@ -337,6 +330,16 @@ fi
 if [[ -n $reclaimAllReservations || -n $reclaimOnlyPreemptibleReservations ]]; then
   forceDelete="true"
 fi
+
+if [[ -n "$customMachineType" ]] ; then
+  bootstrapLeaderMachineType="$customMachineType"
+elif [[ "$enableGpu" = "true" ]] ; then
+  bootstrapLeaderMachineType="$gpuBootstrapLeaderMachineType"
+else
+  bootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType"
+fi
+validatorMachineType=$bootstrapLeaderMachineType
+blockstreamerMachineType=$bootstrapLeaderMachineType
 
 # cloud_ForEachInstance [cmd] [extra args to cmd]
 #

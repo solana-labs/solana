@@ -17,6 +17,10 @@ cloud_DefaultZone() {
   echo "Denver"
 }
 
+cloud_DefaultCustomMemoryGB() {
+  : # Not implemented
+}
+
 cloud_RestartPreemptedInstances() {
   : # Not implemented
 }
