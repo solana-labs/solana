@@ -88,7 +88,7 @@ function StatsCardBody() {
       )}
       {blockTime && (
         <tr>
-          <td className="w-100">Block time</td>
+          <td className="w-100">Cluster time</td>
           <td className="text-lg-right text-monospace">
             {displayTimestamp(blockTime)}
           </td>

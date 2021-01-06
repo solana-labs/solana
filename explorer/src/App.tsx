@@ -12,6 +12,7 @@ import { ClusterStatsPage } from "pages/ClusterStatsPage";
 import { SupplyPage } from "pages/SupplyPage";
 import { TransactionDetailsPage } from "pages/TransactionDetailsPage";
 import { BlockDetailsPage } from "pages/BlockDetailsPage";
+import { UnlockAlert } from "components/UnlockAlert";
 
 const ADDRESS_ALIASES = ["account", "accounts", "addresses"];
 const TX_ALIASES = ["txs", "txn", "txns", "transaction", "transactions"];
@@ -20,18 +21,7 @@ function App() {
   return (
     <>
       <ClusterModal />
-      <div className="alert alert-secondary text-center">
-        An unlock event is timed for midnight UTC cluster time. Cluster time is
-        currently [pull time from endpoint] and may differ from actual UTC time.
-        More information can be found{" "}
-        <a
-          href="https://solana.com/transparency"
-          className="text-white font-weight-bold"
-          rel="noopener noreferrer"
-        >
-          here
-        </a>
-      </div>
+      <UnlockAlert />
       <div className="main-content">
         <Navbar />
         <MessageBanner />
