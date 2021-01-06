@@ -10,7 +10,7 @@ import {
 import { slotsToHumanString } from "utils";
 import { useCluster } from "providers/cluster";
 import { TpsCard } from "components/TpsCard";
-import { displayTimestamp } from "utils/date";
+import { displayTimestampUtc } from "utils/date";
 
 const CLUSTER_STATS_TIMEOUT = 10000;
 
@@ -90,7 +90,7 @@ function StatsCardBody() {
         <tr>
           <td className="w-100">Cluster time</td>
           <td className="text-lg-right text-monospace">
-            {displayTimestamp(blockTime)}
+            {displayTimestampUtc(blockTime)}
           </td>
         </tr>
       )}
