@@ -1313,6 +1313,11 @@ impl JsonRpcRequestProcessor {
             .contains(&AccountIndex::ProgramId)
         {
             bank.get_filtered_indexed_accounts(&IndexKey::ProgramId(*program_id), |account| {
+                // The program-id account index checks for Account owner on inclusion. However, due
+                // to the current AccountsDB implementation, an account may remain in storage as a
+                // zero-lamport Account::Default() after being wiped and reinitialized in later
+                // updates. We include the redundant filters here to avoid returning these
+                // accounts.
                 account.owner == *program_id && filter_closure(account)
             })
         } else {
@@ -1327,10 +1332,10 @@ impl JsonRpcRequestProcessor {
         owner_key: &Pubkey,
         mut filters: Vec<RpcFilterType>,
     ) -> Vec<(Pubkey, Account)> {
-        // The by-owner accounts index checks for Token Account state and Owner address on inclusion.
-        // However, due to the current AccountsDB implementation, accounts may remain in storage as
-        // be zero-lamport Account::Default() after being wiped and reinitialized in a later updates.
-        // We include the redundant filters here to avoid returning these accounts.
+        // The by-owner accounts index checks for Token Account state and Owner address on
+        // inclusion. However, due to the current AccountsDB implementation, an account may remain
+        // in storage as a zero-lamport Account::Default() after being wiped and reinitialized in
+        // later updates. We include the redundant filters here to avoid returning these accounts.
         //
         // Filter on Token Account state
         filters.push(RpcFilterType::DataSize(
@@ -1368,9 +1373,9 @@ impl JsonRpcRequestProcessor {
         mut filters: Vec<RpcFilterType>,
     ) -> Vec<(Pubkey, Account)> {
         // The by-mint accounts index checks for Token Account state and Mint address on inclusion.
-        // However, due to the current AccountsDB implementation, accounts may remain in storage as
-        // be zero-lamport Account::Default() after being wiped and reinitialized in a later updates.
-        // We include the redundant filters here to avoid returning these accounts.
+        // However, due to the current AccountsDB implementation, an account may remain in storage
+        // as be zero-lamport Account::Default() after being wiped and reinitialized in later
+        // updates. We include the redundant filters here to avoid returning these accounts.
         //
         // Filter on Token Account state
         filters.push(RpcFilterType::DataSize(
