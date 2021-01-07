@@ -21,7 +21,6 @@ function App() {
   return (
     <>
       <ClusterModal />
-      <UnlockAlert />
       <div className="main-content">
         <Navbar />
         <MessageBanner />
