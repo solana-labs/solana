@@ -8,7 +8,7 @@ use solana_measure::measure::Measure;
 use solana_metrics::{self, datapoint_info};
 use solana_sdk::{
     client::Client,
-    clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE},
+    clock::{DEFAULT_S_PER_SLOT, MAX_PROCESSING_AGE},
     commitment_config::CommitmentConfig,
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -32,8 +32,7 @@ use std::{
 };
 
 // The point at which transactions become "too old", in seconds.
-const MAX_TX_QUEUE_AGE: u64 =
-    MAX_PROCESSING_AGE as u64 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND;
+const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) as u64;
 
 pub const MAX_SPENDS_PER_TX: u64 = 4;
 

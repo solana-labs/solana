@@ -15,9 +15,7 @@ use solana_ledger::{
 };
 use solana_sdk::{
     client::SyncClient,
-    clock::{
-        self, Slot, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, NUM_CONSECUTIVE_LEADER_SLOTS,
-    },
+    clock::{self, Slot, DEFAULT_MS_PER_SLOT, NUM_CONSECUTIVE_LEADER_SLOTS},
     commitment_config::CommitmentConfig,
     epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
     hash::Hash,
@@ -34,8 +32,6 @@ use std::{
     thread::sleep,
     time::{Duration, Instant},
 };
-
-const DEFAULT_SLOT_MILLIS: u64 = (DEFAULT_TICKS_PER_SLOT * 1000) / DEFAULT_TICKS_PER_SECOND;
 
 /// Spend and verify from every node in the network
 pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher>(
@@ -131,7 +127,7 @@ pub fn validator_exit(entry_point_info: &ContactInfo, nodes: usize) {
         let client = create_client(node.client_facing_addr(), VALIDATOR_PORT_RANGE);
         assert!(client.validator_exit().unwrap());
     }
-    sleep(Duration::from_millis(DEFAULT_SLOT_MILLIS));
+    sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
     for node in &cluster_nodes {
         let client = create_client(node.client_facing_addr(), VALIDATOR_PORT_RANGE);
         assert!(client.validator_exit().is_err());

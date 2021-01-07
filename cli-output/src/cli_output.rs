@@ -284,10 +284,7 @@ impl fmt::Display for CliEpochInfo {
 }
 
 fn slot_to_human_time(slot: Slot) -> String {
-    humantime::format_duration(Duration::from_secs(
-        slot * clock::DEFAULT_TICKS_PER_SLOT / clock::DEFAULT_TICKS_PER_SECOND,
-    ))
-    .to_string()
+    humantime::format_duration(Duration::from_millis(slot * clock::DEFAULT_MS_PER_SLOT)).to_string()
 }
 
 #[derive(Serialize, Deserialize, Default)]

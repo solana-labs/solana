@@ -22,10 +22,7 @@ use solana_account_decoder::{
 };
 use solana_sdk::{
     account::Account,
-    clock::{
-        Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT,
-        MAX_HASH_AGE_IN_SECONDS,
-    },
+    clock::{Slot, UnixTimestamp, DEFAULT_MS_PER_SLOT, MAX_HASH_AGE_IN_SECONDS},
     commitment_config::{CommitmentConfig, CommitmentLevel},
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
@@ -903,9 +900,7 @@ impl RpcClient {
             debug!("Got same blockhash ({:?}), will retry...", blockhash);
 
             // Retry ~twice during a slot
-            sleep(Duration::from_millis(
-                500 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND,
-            ));
+            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT / 2));
             num_retries += 1;
         }
         Err(RpcError::ForUser(format!(
