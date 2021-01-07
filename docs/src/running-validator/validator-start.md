@@ -336,7 +336,18 @@ Start the service with:
 $ sudo systemctl enable --now sol
 ```
 
-### Log rotation
+### Logging
+#### Log output tuning
+
+The messages that a validator emits to the log can be controlled by the `RUST_LOG`
+environment variable. Details can by found in the [documentation](https://docs.rs/env_logger/latest/env_logger/#enabling-logging)
+for the `env_logger` Rust crate.
+
+Note that if logging output is reduced, this may make it difficult to debug issues
+encountered later. Should support be sought from the team, any changes will need
+to be reverted and the issue reproduced before help can be provided.
+
+#### Log rotation
 
 The validator log file, as specified by `--log ~/solana-validator.log`, can get
 very large over time and it's recommended that log rotation be configured.
@@ -344,7 +355,7 @@ very large over time and it's recommended that log rotation be configured.
 The validator will re-open its when it receives the `USR1` signal, which is the
 basic primitive that enables log rotation.
 
-### Using logrotate
+#### Using logrotate
 
 An example setup for the `logrotate`, which assumes that the validator is
 running as a systemd service called `sol.service` and writes a log file at
@@ -397,7 +408,11 @@ Example configuration:
    (assuming your validator is running under the user "sol").  **CAREFUL: If you
    incorrectly edit /etc/fstab your machine may no longer boot**
 3. Create at least 250GB of swap space
-  - Choose a device to use in place of `SWAPDEV` for the remainder of these instructions.  Ideally select a free disk partition of 250GB or greater on a fast disk. If one is not available, create a swap file with `sudo fallocate -l 250G /swapfile`, set its permissions with `sudo chmod 0600 /swapfile` and use `/swapfile` as `SWAPDEV` for the remainder of these instructions
+  - Choose a device to use in place of `SWAPDEV` for the remainder of these instructions.
+    Ideally select a free disk partition of 250GB or greater on a fast disk. If one is not
+    available, create a swap file with `sudo dd if=/dev/zero of=/swapfile bs=1MiB count=250KiB`,
+    set its permissions with `sudo chmod 0600 /swapfile` and use `/swapfile` as `SWAPDEV` for
+    the remainder of these instructions
   - Format the device for usage as swap with `sudo mkswap SWAPDEV`
 4. Add the swap file to `/etc/fstab` with a new line containing `SWAPDEV swap swap defaults 0 0`
 5. Enable swap with `sudo swapon -a` and mount the tmpfs with `sudo mount /mnt/solana-accounts/`
