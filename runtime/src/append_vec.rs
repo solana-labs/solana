@@ -74,6 +74,7 @@ pub struct StoredAccountMeta<'a> {
     pub account_meta: &'a AccountMeta,
     pub data: &'a [u8],
     pub offset: usize,
+    pub stored_size: usize,
     pub hash: &'a Hash,
 }
 
@@ -382,12 +383,14 @@ impl AppendVec {
         let (account_meta, next): (&'a AccountMeta, _) = self.get_type(next)?;
         let (hash, next): (&'a Hash, _) = self.get_type(next)?;
         let (data, next) = self.get_slice(next, meta.data_len as usize)?;
+        let stored_size = next - offset;
         Some((
             StoredAccountMeta {
                 meta,
                 account_meta,
                 data,
                 offset,
+                stored_size,
                 hash,
             },
             next,
@@ -439,6 +442,7 @@ impl AppendVec {
                 break;
             }
         }
+        rv.push(*offset);
         rv
     }
 

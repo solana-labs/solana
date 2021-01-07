@@ -57,13 +57,13 @@ use tempfile::TempDir;
 const PAGE_SIZE: u64 = 4 * 1024;
 const MAX_RECYCLE_STORES: usize = 1000;
 const STORE_META_OVERHEAD: usize = 256;
-const SHRINK_RATIO: f64 = 0.80;
 const MAX_CACHE_SLOTS: usize = 200;
 const FLUSH_CACHE_RANDOM_THRESHOLD: usize = MAX_LOCKOUT_HISTORY;
 
 pub const DEFAULT_FILE_SIZE: u64 = PAGE_SIZE * 1024;
 pub const DEFAULT_NUM_THREADS: u32 = 8;
 pub const DEFAULT_NUM_DIRS: u32 = 4;
+pub const SHRINK_RATIO: f64 = 0.80;
 
 // A specially reserved storage id just for entries in the cache, so that
 // operations that take a storage entry can maintain a common interface
@@ -114,6 +114,8 @@ pub struct AccountInfo {
 
     /// offset into the storage
     offset: usize,
+    /// size of the account
+    stored_size: usize,
 
     /// lamports in the account used when squashing kept for optimization
     /// purposes to remove accounts with zero balance.
@@ -229,6 +231,13 @@ impl<'a> LoadedAccount<'a> {
         }
     }
 
+    pub fn stored_size(&self) -> usize {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.stored_size,
+            LoadedAccount::Cached(_) => 0,
+        }
+    }
+
     pub fn account(self) -> Account {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.clone_account(),
@@ -312,6 +321,8 @@ pub struct AccountStorageEntry {
     /// This is used as a rough estimate for slot shrinking. As such a relaxed
     /// use case, this value ARE NOT strictly synchronized with count_and_status!
     approx_store_count: AtomicUsize,
+
+    alive_bytes: AtomicUsize,
 }
 
 impl AccountStorageEntry {
@@ -326,6 +337,7 @@ impl AccountStorageEntry {
             accounts,
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
             approx_store_count: AtomicUsize::new(0),
+            alive_bytes: AtomicUsize::new(0),
         }
     }
 
@@ -336,6 +348,7 @@ impl AccountStorageEntry {
             accounts: AppendVec::new_empty_map(accounts_current_len),
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
             approx_store_count: AtomicUsize::new(0),
+            alive_bytes: AtomicUsize::new(0),
         }
     }
 
@@ -367,6 +380,7 @@ impl AccountStorageEntry {
         self.slot.store(slot, Ordering::Release);
         self.id.store(id, Ordering::Relaxed);
         self.approx_store_count.store(0, Ordering::Relaxed);
+        self.alive_bytes.store(0, Ordering::Relaxed);
     }
 
     pub fn status(&self) -> AccountStorageStatus {
@@ -379,6 +393,10 @@ impl AccountStorageEntry {
 
     pub fn approx_stored_count(&self) -> usize {
         self.approx_store_count.load(Ordering::Relaxed)
+    }
+
+    pub fn alive_bytes(&self) -> usize {
+        self.alive_bytes.load(Ordering::SeqCst)
     }
 
     pub fn written_bytes(&self) -> u64 {
@@ -409,10 +427,11 @@ impl AccountStorageEntry {
         Some(self.accounts.get_account(offset)?.0)
     }
 
-    fn add_account(&self) {
+    fn add_account(&self, num_bytes: usize) {
         let mut count_and_status = self.count_and_status.write().unwrap();
         *count_and_status = (count_and_status.0 + 1, count_and_status.1);
         self.approx_store_count.fetch_add(1, Ordering::Relaxed);
+        self.alive_bytes.fetch_add(num_bytes, Ordering::SeqCst);
     }
 
     fn try_available(&self) -> bool {
@@ -427,7 +446,7 @@ impl AccountStorageEntry {
         }
     }
 
-    fn remove_account(&self) -> usize {
+    fn remove_account(&self, num_bytes: usize) -> usize {
         let mut count_and_status = self.count_and_status.write().unwrap();
         let (mut count, mut status) = *count_and_status;
 
@@ -456,6 +475,7 @@ impl AccountStorageEntry {
             self.append_vec_id(),
         );
 
+        self.alive_bytes.fetch_sub(num_bytes, Ordering::SeqCst);
         count -= 1;
         *count_and_status = (count, status);
         count
@@ -1204,7 +1224,7 @@ impl AccountsDB {
         let alive_total: u64 = alive_accounts
             .iter()
             .map(
-                |(_pubkey, _account, _account_hash, account_size, _location, _write_verion)| {
+                |(_pubkey, _account, _account_hash, account_size, _location, _write_version)| {
                     *account_size as u64
                 },
             )
@@ -2718,7 +2738,7 @@ impl AccountsDB {
             );
             append_accounts.stop();
             total_append_accounts_us += append_accounts.as_us();
-            if rvs.is_empty() {
+            if rvs.len() == 1 {
                 storage.set_status(AccountStorageStatus::Full);
 
                 // See if an account overflows the append vecs in the slot.
@@ -2742,12 +2762,17 @@ impl AccountsDB {
                 }
                 continue;
             }
-            for (offset, (_, account)) in rvs.iter().zip(&accounts_and_meta_to_store[infos.len()..])
+
+            for (offsets, (_, account)) in rvs
+                .windows(2)
+                .zip(&accounts_and_meta_to_store[infos.len()..])
             {
-                storage.add_account();
+                let stored_size = offsets[1] - offsets[0];
+                storage.add_account(stored_size);
                 infos.push(AccountInfo {
                     store_id: storage.append_vec_id(),
-                    offset: *offset,
+                    offset: offsets[0],
+                    stored_size,
                     lamports: account.lamports,
                 });
             }
@@ -2912,6 +2937,7 @@ impl AccountsDB {
                 AccountInfo {
                     store_id: CACHE_VIRTUAL_STORAGE_ID,
                     offset: CACHE_VIRTUAL_OFFSET,
+                    stored_size: 0,
                     lamports: account.lamports,
                 }
             })
@@ -2940,7 +2966,6 @@ impl AccountsDB {
                     *account
                 };
                 let data_len = account.data.len() as u64;
-
                 let meta = StoredMeta {
                     write_version: write_version_producer.next().unwrap(),
                     pubkey: **pubkey,
@@ -3393,11 +3418,12 @@ impl AccountsDB {
                     "AccountDB::accounts_index corrupted. Storage pointed to: {}, expected: {}, should only point to one slot",
                     store.slot(), *slot
                 );
-                let count = store.remove_account();
+                let count = store.remove_account(account_info.stored_size);
                 if count == 0 {
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
-                    && (count as f64 / store.approx_store_count.load(Ordering::Relaxed) as f64)
+                    && (self.page_align(store.alive_bytes() as u64) as f64
+                        / store.total_bytes() as f64)
                         < SHRINK_RATIO
                 {
                     // Checking that this single storage entry is ready for shrinking,
@@ -3907,6 +3933,7 @@ impl AccountsDB {
                         let account_info = AccountInfo {
                             store_id,
                             offset: stored_account.offset,
+                            stored_size: stored_account.stored_size,
                             lamports: stored_account.account_meta.lamports,
                         };
                         self.accounts_index.upsert(
@@ -3928,15 +3955,21 @@ impl AccountsDB {
             self.accounts_index.add_root(slot);
         }
 
-        let mut counts = HashMap::new();
+        let mut stored_sizes_and_counts = HashMap::new();
         for account_entry in self.accounts_index.account_maps.read().unwrap().values() {
             for (_slot, account_entry) in account_entry.slot_list.read().unwrap().iter() {
-                *counts.entry(account_entry.store_id).or_insert(0) += 1;
+                let storage_entry_meta = stored_sizes_and_counts
+                    .entry(account_entry.store_id)
+                    .or_insert((0, 0));
+                storage_entry_meta.0 += account_entry.stored_size;
+                storage_entry_meta.1 += 1;
             }
         }
         for slot_stores in self.storage.0.iter() {
             for (id, store) in slot_stores.value().read().unwrap().iter() {
-                if let Some(count) = counts.get(&id) {
+                // Should be default at this point
+                assert_eq!(store.alive_bytes(), 0);
+                if let Some((stored_size, count)) = stored_sizes_and_counts.get(&id) {
                     trace!(
                         "id: {} setting count: {} cur: {}",
                         id,
@@ -3944,6 +3977,7 @@ impl AccountsDB {
                         store.count_and_status.read().unwrap().0
                     );
                     store.count_and_status.write().unwrap().0 = *count;
+                    store.alive_bytes.store(*stored_size, Ordering::SeqCst);
                 } else {
                     trace!("id: {} clearing count", id);
                     store.count_and_status.write().unwrap().0 = 0;
@@ -6384,21 +6418,25 @@ pub mod tests {
         let info0 = AccountInfo {
             store_id: 0,
             offset: 0,
+            stored_size: 0,
             lamports: 0,
         };
         let info1 = AccountInfo {
             store_id: 1,
             offset: 0,
+            stored_size: 0,
             lamports: 0,
         };
         let info2 = AccountInfo {
             store_id: 2,
             offset: 0,
+            stored_size: 0,
             lamports: 0,
         };
         let info3 = AccountInfo {
             store_id: 3,
             offset: 0,
+            stored_size: 0,
             lamports: 0,
         };
         let mut reclaims = vec![];

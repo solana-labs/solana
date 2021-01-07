@@ -4899,6 +4899,7 @@ fn is_simple_vote_transaction(transaction: &Transaction) -> bool {
 pub(crate) mod tests {
     use super::*;
     use crate::{
+        accounts_db::SHRINK_RATIO,
         accounts_index::{AccountMap, Ancestors, ITER_BATCH_SIZE},
         genesis_utils::{
             activate_all_features, bootstrap_validator_stake_lamports,
@@ -10187,17 +10188,50 @@ pub(crate) mod tests {
         assert_eq!(42, bank.get_balance(&program2_pubkey));
     }
 
+    fn get_shrink_account_size() -> usize {
+        let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000_000);
+
+        // Set root for bank 0, with caching enabled
+        let mut bank0 = Arc::new(Bank::new_with_config(
+            &genesis_config,
+            HashSet::new(),
+            false,
+        ));
+        bank0.restore_old_behavior_for_fragile_tests();
+        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank0).unwrap());
+        bank0.freeze();
+        bank0.squash();
+
+        let sizes = bank0
+            .rc
+            .accounts
+            .scan_slot(0, |stored_account| Some(stored_account.stored_size()));
+
+        // Create an account such that it takes SHRINK_RATIO of the total account space for
+        // the slot, so when it gets pruned, the storage entry will become a shrink candidate.
+        let bank0_total_size: usize = sizes.into_iter().sum();
+        let pubkey0_size = (bank0_total_size as f64 / (1.0 - SHRINK_RATIO)).ceil();
+        assert!(pubkey0_size / (pubkey0_size + bank0_total_size as f64) > SHRINK_RATIO);
+        pubkey0_size as usize
+    }
+
     #[test]
-    fn test_shrink_candidate_slots() {
+    fn test_shrink_candidate_slots_cached() {
         solana_logger::setup();
 
         let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000_000);
+        let pubkey0 = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
 
         // Set root for bank 0, with caching enabled
         let mut bank0 = Arc::new(Bank::new_with_config(&genesis_config, HashSet::new(), true));
         bank0.restore_old_behavior_for_fragile_tests();
+
+        let pubkey0_size = get_shrink_account_size();
+        let account0 = Account::new(1000, pubkey0_size as usize, &Pubkey::new_unique());
+        bank0.store_account(&pubkey0, &account0);
+
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank0).unwrap());
         bank0.freeze();
         bank0.squash();
@@ -10212,6 +10246,7 @@ pub(crate) mod tests {
         // Store some lamports for pubkey1 in bank 2, root bank 2
         let mut bank2 = Arc::new(new_from_parent(&bank1));
         bank2.deposit(&pubkey1, some_lamports);
+        bank2.store_account(&pubkey0, &account0);
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank2).unwrap());
         bank2.freeze();
         bank2.squash();
@@ -10238,7 +10273,7 @@ pub(crate) mod tests {
         // No more slots should be shrunk
         assert_eq!(bank2.shrink_candidate_slots(), 0);
         // alive_counts represents the count of alive accounts in the three slots 0,1,2
-        assert_eq!(alive_counts, vec![9, 1, 6]);
+        assert_eq!(alive_counts, vec![9, 1, 7]);
     }
 
     #[test]
