@@ -4026,6 +4026,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rustc_version",
+ "rustversion",
  "serde",
  "serde_bytes",
  "serde_derive",
