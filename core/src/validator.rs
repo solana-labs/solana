@@ -1498,10 +1498,7 @@ mod tests {
         let poh_config = PohConfig {
             target_tick_duration: Duration::from_millis(solana_sdk::clock::MS_PER_TICK),
             // make PoH rate really fast to cause the panic condition
-            hashes_per_tick: Some(
-                100 * solana_sdk::clock::DEFAULT_HASHES_PER_SECOND
-                    / solana_sdk::clock::DEFAULT_TICKS_PER_SECOND,
-            ),
+            hashes_per_tick: Some(100 * solana_sdk::clock::DEFAULT_HASHES_PER_TICK),
             ..PohConfig::default()
         };
         let genesis_config = GenesisConfig {

@@ -462,8 +462,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 poh_config.hashes_per_tick = Some(hashes_per_tick);
             }
             ClusterType::Devnet | ClusterType::Testnet | ClusterType::MainnetBeta => {
-                poh_config.hashes_per_tick =
-                    Some(clock::DEFAULT_HASHES_PER_SECOND / clock::DEFAULT_TICKS_PER_SECOND);
+                poh_config.hashes_per_tick = Some(clock::DEFAULT_HASHES_PER_TICK);
             }
         },
         "sleep" => {

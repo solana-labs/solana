@@ -13,6 +13,8 @@ pub const DEFAULT_TICKS_PER_SLOT: u64 = 64;
 // GCP n1-standard hardware and also a xeon e5-2520 v4 are about this rate of hashes/s
 pub const DEFAULT_HASHES_PER_SECOND: u64 = 2_000_000;
 
+pub const DEFAULT_HASHES_PER_TICK: u64 = DEFAULT_HASHES_PER_SECOND / DEFAULT_TICKS_PER_SECOND;
+
 // 1 Dev Epoch = 400 ms * 8192 ~= 55 minutes
 pub const DEFAULT_DEV_SLOTS_PER_EPOCH: u64 = 8192;
 
