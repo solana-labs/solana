@@ -281,20 +281,23 @@ impl Crds {
         timeouts: &HashMap<Pubkey, u64>,
     ) -> Vec<CrdsValueLabel> {
         #[rustversion::before(1.49.0)]
-        fn select_nth<T: Ord>(records: &mut Vec<T>, _nth: usize) {
-            records.sort_unstable();
+        fn select_nth<T: Ord>(xs: &mut Vec<T>, _nth: usize) {
+            xs.sort_unstable();
         }
         #[rustversion::since(1.49.0)]
-        fn select_nth<T: Ord>(records: &mut Vec<T>, nth: usize) {
-            records.select_nth_unstable(nth);
+        fn select_nth<T: Ord>(xs: &mut Vec<T>, nth: usize) {
+            xs.select_nth_unstable(nth);
         }
         let default_timeout = *timeouts
             .get(&Pubkey::default())
             .expect("must have default timeout");
+        // Given an index of all crd values associated with a pubkey,
+        // returns crds labels of old values to be evicted.
         let evict = |pubkey, index: &IndexSet<usize>| {
             let timeout = *timeouts.get(pubkey).unwrap_or(&default_timeout);
             let mut old_labels = Vec::new();
-            let mut buffer: Vec<_> = index
+            // Buffer of crds values to be evicted based on their wallclock.
+            let mut buffer: Vec<(u64 /*wallclock*/, usize /*index*/)> = index
                 .into_iter()
                 .filter_map(|ix| {
                     let (label, value) = self.table.get_index(*ix).unwrap();
@@ -309,7 +312,9 @@ impl Crds {
                     }
                 })
                 .collect();
+            // Number of values to discard from the buffer:
             let nth = buffer.len().saturating_sub(MAX_CRDS_VALUES_PER_PUBKEY);
+            // Partition on wallclock to discard the older ones.
             if nth > 0 && nth < buffer.len() {
                 select_nth(&mut buffer, nth);
             }
