@@ -336,7 +336,18 @@ Start the service with:
 $ sudo systemctl enable --now sol
 ```
 
-### Log rotation
+### Logging
+#### Log output tuning
+
+The messages that a validator emits to the log can be controlled by the `RUST_LOG`
+environment variable. Details can by found in the [documentation](https://docs.rs/env_logger/latest/env_logger/#enabling-logging)
+for the `env_logger` Rust crate.
+
+Note that if logging output is reduced, this may make it difficult to debug issues
+encountered later. Should support be sought from the team, any changes will need
+to be reverted and the issue reproduced before help can be provided.
+
+#### Log rotation
 
 The validator log file, as specified by `--log ~/solana-validator.log`, can get
 very large over time and it's recommended that log rotation be configured.
@@ -344,7 +355,7 @@ very large over time and it's recommended that log rotation be configured.
 The validator will re-open its when it receives the `USR1` signal, which is the
 basic primitive that enables log rotation.
 
-### Using logrotate
+#### Using logrotate
 
 An example setup for the `logrotate`, which assumes that the validator is
 running as a systemd service called `sol.service` and writes a log file at
