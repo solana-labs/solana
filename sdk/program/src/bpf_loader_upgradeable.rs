@@ -24,7 +24,12 @@ pub enum UpgradeableLoaderState {
     /// Account is not initialized.
     Uninitialized,
     /// A Buffer account.
-    Buffer,
+    Buffer {
+        /// Authority address
+        authority_address: Option<Pubkey>,
+        // The raw program data follows this serialized structure in the
+        // account's data.
+    },
     /// An Program account.
     Program {
         /// Address of the ProgramData account.
@@ -43,9 +48,11 @@ pub enum UpgradeableLoaderState {
 impl UpgradeableLoaderState {
     /// Length of an buffer account's data.
     pub fn buffer_len(program_len: usize) -> Result<usize, InstructionError> {
-        Ok(serialized_size(&Self::Buffer)
-            .map(|len| len as usize)
-            .map_err(|_| InstructionError::InvalidInstructionData)?
+        Ok(serialized_size(&Self::Buffer {
+            authority_address: Some(Pubkey::default()),
+        })
+        .map(|len| len as usize)
+        .map_err(|_| InstructionError::InvalidInstructionData)?
             + program_len)
     }
     /// Offset into the ProgramData account's data of the program bits.
@@ -80,9 +87,14 @@ impl UpgradeableLoaderState {
 pub fn create_buffer(
     payer_address: &Pubkey,
     buffer_address: &Pubkey,
+    authority_address: Option<&Pubkey>,
     lamports: u64,
     program_len: usize,
 ) -> Result<Vec<Instruction>, InstructionError> {
+    let mut metas = vec![AccountMeta::new(*buffer_address, false)];
+    if let Some(authority_address) = authority_address {
+        metas.push(AccountMeta::new(*authority_address, false));
+    }
     Ok(vec![
         system_instruction::create_account(
             payer_address,
@@ -91,21 +103,29 @@ pub fn create_buffer(
             UpgradeableLoaderState::buffer_len(program_len)? as u64,
             &id(),
         ),
-        Instruction::new(
-            id(),
-            &UpgradeableLoaderInstruction::InitializeBuffer,
-            vec![AccountMeta::new(*buffer_address, false)],
-        ),
+        Instruction::new(id(), &UpgradeableLoaderInstruction::InitializeBuffer, metas),
     ])
 }
 
 /// Returns the instructions required to write a chunk of program data to a
 /// buffer account.
-pub fn write(buffer_address: &Pubkey, offset: u32, bytes: Vec<u8>) -> Instruction {
+pub fn write(
+    buffer_address: &Pubkey,
+    authority_address: Option<&Pubkey>,
+    offset: u32,
+    bytes: Vec<u8>,
+) -> Instruction {
+    let mut metas = vec![
+        AccountMeta::new(*buffer_address, false),
+        AccountMeta::new(*buffer_address, true),
+    ];
+    if let Some(authority_address) = authority_address {
+        metas[1] = AccountMeta::new(*authority_address, true);
+    }
     Instruction::new(
         id(),
         &UpgradeableLoaderInstruction::Write { offset, bytes },
-        vec![AccountMeta::new(*buffer_address, true)],
+        metas,
     )
 }
 
@@ -176,8 +196,24 @@ pub fn is_upgrade_instruction(instruction_data: &[u8]) -> bool {
     3 == instruction_data[0]
 }
 
+/// Returns the instructions required to set a buffers's authority.
+pub fn set_buffer_authority(
+    buffer_address: &Pubkey,
+    current_authority_address: &Pubkey,
+    new_authority_address: Option<&Pubkey>,
+) -> Instruction {
+    let mut metas = vec![
+        AccountMeta::new(*buffer_address, false),
+        AccountMeta::new_readonly(*current_authority_address, true),
+    ];
+    if let Some(address) = new_authority_address {
+        metas.push(AccountMeta::new_readonly(*address, false));
+    }
+    Instruction::new(id(), &UpgradeableLoaderInstruction::SetAuthority, metas)
+}
+
 /// Returns the instructions required to set a program's authority.
-pub fn set_authority(
+pub fn set_upgrade_authority(
     program_address: &Pubkey,
     current_authority_address: &Pubkey,
     new_authority_address: Option<&Pubkey>,
