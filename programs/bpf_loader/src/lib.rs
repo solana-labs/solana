@@ -199,17 +199,17 @@ pub fn process_instruction(
             return Err(InstructionError::IncorrectProgramId);
         }
 
-        let executor = match invoke_context.get_executor(program.unsigned_key()) {
+        let executor = match invoke_context.get_executor(program_id) {
             Some(executor) => executor,
             None => create_and_cache_executor(
-                program.unsigned_key(),
+                program_id,
                 &program.try_account_ref()?.data[offset..],
                 invoke_context,
             )?,
         };
         executor.execute(
             loader_id,
-            first_account.unsigned_key(),
+            program_id,
             keyed_accounts,
             instruction_data,
             invoke_context,
@@ -341,7 +341,7 @@ fn process_loader_upgradeable_instruction(
 
             // Load and verify the program bits
             let _ = create_and_cache_executor(
-                programdata.unsigned_key(),
+                program_id,
                 &buffer.try_account_ref()?.data[buffer_data_offset..],
                 invoke_context,
             )?;
@@ -449,7 +449,7 @@ fn process_loader_upgradeable_instruction(
             // Load and verify the program bits
 
             let _ = create_and_cache_executor(
-                programdata.unsigned_key(),
+                program.unsigned_key(),
                 &buffer.try_account_ref()?.data[buffer_data_offset..],
                 invoke_context,
             )?;
@@ -602,8 +602,7 @@ impl Executor for BPFExecutor {
         let invoke_depth = invoke_context.invoke_depth();
 
         let mut keyed_accounts_iter = keyed_accounts.iter();
-        let program = next_keyed_account(&mut keyed_accounts_iter)?;
-
+        let _ = next_keyed_account(&mut keyed_accounts_iter)?;
         let parameter_accounts = keyed_accounts_iter.as_slice();
         let parameter_bytes =
             serialize_parameters(loader_id, program_id, parameter_accounts, &instruction_data)?;
@@ -622,8 +621,13 @@ impl Executor for BPFExecutor {
                 }
             };
 
+<<<<<<< HEAD
             stable_log::program_invoke(&logger, program.unsigned_key(), invoke_depth);
             let instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
+=======
+            stable_log::program_invoke(&logger, program_id, invoke_depth);
+            let mut instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
+>>>>>>> 9d53eca6e... Report correct program id (#14486)
             let before = compute_meter.borrow().get_remaining();
             let result = vm.execute_program_metered(
                 parameter_bytes.as_slice(),
@@ -635,7 +639,7 @@ impl Executor for BPFExecutor {
             log!(
                 logger,
                 "Program {} consumed {} of {} compute units",
-                program.unsigned_key(),
+                program_id,
                 before - after,
                 before
             );
@@ -643,17 +647,12 @@ impl Executor for BPFExecutor {
                 Ok(status) => {
                     if status != SUCCESS {
                         let error: InstructionError = status.into();
-                        stable_log::program_failure(&logger, program.unsigned_key(), &error);
+                        stable_log::program_failure(&logger, program_id, &error);
                         return Err(error);
                     }
                 }
                 Err(error) => {
-                    log!(
-                        logger,
-                        "Program {} BPF VM error: {}",
-                        program.unsigned_key(),
-                        error
-                    );
+                    log!(logger, "Program {} BPF VM error: {}", program_id, error);
                     let error = match error {
                         EbpfError::UserError(BPFError::SyscallError(
                             SyscallError::InstructionError(error),
@@ -664,13 +663,13 @@ impl Executor for BPFExecutor {
                         }
                     };
 
-                    stable_log::program_failure(&logger, program.unsigned_key(), &error);
+                    stable_log::program_failure(&logger, program_id, &error);
                     return Err(error);
                 }
             }
         }
         deserialize_parameters(loader_id, parameter_accounts, &parameter_bytes)?;
-        stable_log::program_success(&logger, program.unsigned_key());
+        stable_log::program_success(&logger, program_id);
         Ok(())
     }
 }
