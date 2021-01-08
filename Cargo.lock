@@ -3972,6 +3972,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rustc_version",
+ "rustversion",
  "serde",
  "serde_derive",
  "serde_json",
