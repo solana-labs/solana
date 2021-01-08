@@ -88,7 +88,9 @@ pub struct CachedAccount {
 #[derive(Debug, Default)]
 pub struct AccountsCache {
     cache: DashMap<Slot, SlotCache>,
-    cached_roots: RwLock<HashSet<Slot>>,
+    // Queue of potentially unflushed roots. Random eviction + cache too large
+    // could have triggered a flush of this slot already
+    maybe_unflushed_roots: RwLock<HashSet<Slot>>,
     max_flushed_root: AtomicU64,
 }
 
@@ -106,7 +108,11 @@ impl AccountsCache {
             .sum();
         datapoint_info!(
             "accounts_cache_size",
-            ("num_roots", self.cached_roots.read().unwrap().len(), i64),
+            (
+                "num_roots",
+                self.maybe_unflushed_roots.read().unwrap().len(),
+                i64
+            ),
             ("num_slots", self.cache.len(), i64),
             ("total_unique_writes_size", total_unique_writes_size, i64),
         );
@@ -141,11 +147,14 @@ impl AccountsCache {
     }
 
     pub fn add_root(&self, root: Slot) {
-        self.cached_roots.write().unwrap().insert(root);
+        self.maybe_unflushed_roots.write().unwrap().insert(root);
     }
 
     pub fn clear_roots(&self) -> HashSet<Slot> {
-        std::mem::replace(&mut self.cached_roots.write().unwrap(), HashSet::new())
+        std::mem::replace(
+            &mut self.maybe_unflushed_roots.write().unwrap(),
+            HashSet::new(),
+        )
     }
 
     // Removes slots less than or equal to `max_root`. Only safe to pass in a rooted slot,

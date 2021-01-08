@@ -82,6 +82,7 @@ const CACHE_VIRTUAL_WRITE_VERSION: u64 = 0;
 // a common interface when interacting with cached accounts. This version is "virtual" in
 // that it doesn't actually map to an entry in an AppendVec.
 const CACHE_VIRTUAL_OFFSET: usize = 0;
+const CACHE_VIRTUAL_STORED_SIZE: usize = 0;
 
 lazy_static! {
     // FROZEN_ACCOUNT_PANIC is used to signal local_cluster that an AccountsDB panic has occurred,
@@ -114,7 +115,9 @@ pub struct AccountInfo {
 
     /// offset into the storage
     offset: usize,
-    /// size of the account
+
+    /// needed to track shrink candidacy in bytes. Used to update the number
+    /// of alive bytes in an AppendVec as newer slots purge outdated entries
     stored_size: usize,
 
     /// lamports in the account used when squashing kept for optimization
@@ -234,7 +237,7 @@ impl<'a> LoadedAccount<'a> {
     pub fn stored_size(&self) -> usize {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.stored_size,
-            LoadedAccount::Cached(_) => 0,
+            LoadedAccount::Cached(_) => CACHE_VIRTUAL_STORED_SIZE,
         }
     }
 
@@ -1755,12 +1758,16 @@ impl AccountsDB {
             HashMap::new(),
         );
         let num_candidates = shrink_slots.len();
-        for (slot, slot_shrink_candidates) in shrink_slots {
-            let mut measure = Measure::start("shrink_candidate_slots-ms");
-            self.do_shrink_slot_stores(slot, slot_shrink_candidates.values());
-            measure.stop();
-            inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
-        }
+        self.thread_pool_clean.install(|| {
+            shrink_slots
+                .par_iter()
+                .for_each(|(slot, slot_shrink_candidates)| {
+                    let mut measure = Measure::start("shrink_candidate_slots-ms");
+                    self.do_shrink_slot_stores(*slot, slot_shrink_candidates.values());
+                    measure.stop();
+                    inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
+                })
+        });
         num_candidates
     }
 
@@ -2937,7 +2944,7 @@ impl AccountsDB {
                 AccountInfo {
                     store_id: CACHE_VIRTUAL_STORAGE_ID,
                     offset: CACHE_VIRTUAL_OFFSET,
-                    stored_size: 0,
+                    stored_size: CACHE_VIRTUAL_STORED_SIZE,
                     lamports: account.lamports,
                 }
             })
@@ -2954,7 +2961,7 @@ impl AccountsDB {
         hashes: &[Hash],
         storage_finder: F,
         mut write_version_producer: P,
-        use_cache: bool,
+        is_cached_store: bool,
     ) -> Vec<AccountInfo> {
         let default_account = Account::default();
         let accounts_and_meta_to_store: Vec<(StoredMeta, &Account)> = accounts
@@ -2975,7 +2982,7 @@ impl AccountsDB {
             })
             .collect();
 
-        if self.caching_enabled && use_cache {
+        if self.caching_enabled && is_cached_store {
             self.write_accounts_to_cache(slot, hashes, &accounts_and_meta_to_store)
         } else {
             self.write_accounts_to_storage(
@@ -3621,7 +3628,7 @@ impl AccountsDB {
         self.do_store(slot, accounts, false);
     }
 
-    fn do_store(&self, slot: Slot, accounts: &[(&Pubkey, &Account)], use_cache: bool) {
+    fn do_store(&self, slot: Slot, accounts: &[(&Pubkey, &Account)], is_cached_store: bool) {
         self.assert_frozen_accounts(accounts);
         let mut hash_time = Measure::start("hash_accounts");
         let hashes = self.hash_accounts(
@@ -3635,7 +3642,7 @@ impl AccountsDB {
         self.stats
             .store_hash_accounts
             .fetch_add(hash_time.as_us(), Ordering::Relaxed);
-        self.store_accounts_default(slot, accounts, &hashes, use_cache);
+        self.store_accounts_default(slot, accounts, &hashes, is_cached_store);
         self.report_store_timings();
     }
 
@@ -3729,7 +3736,7 @@ impl AccountsDB {
         slot: Slot,
         accounts: &[(&Pubkey, &Account)],
         hashes: &[Hash],
-        use_cache: bool,
+        is_cached_store: bool,
     ) {
         self.store_accounts_custom(
             slot,
@@ -3737,7 +3744,7 @@ impl AccountsDB {
             hashes,
             None::<StorageFinder>,
             None::<Box<dyn Iterator<Item = u64>>>,
-            use_cache,
+            is_cached_store,
         );
     }
 
@@ -3748,7 +3755,7 @@ impl AccountsDB {
         hashes: &[Hash],
         storage_finder: Option<StorageFinder<'a>>,
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
-        use_cache: bool,
+        is_cached_store: bool,
     ) -> StoreAccountsTiming {
         let storage_finder: StorageFinder<'a> = storage_finder
             .unwrap_or_else(|| Box::new(move |slot, size| self.find_storage_candidate(slot, size)));
@@ -3773,7 +3780,7 @@ impl AccountsDB {
             hashes,
             storage_finder,
             write_version_producer,
-            use_cache,
+            is_cached_store,
         );
         store_accounts_time.stop();
         self.stats
@@ -3781,8 +3788,9 @@ impl AccountsDB {
             .fetch_add(store_accounts_time.as_us(), Ordering::Relaxed);
         let mut update_index_time = Measure::start("update_index");
 
-        // If the cache was flushed, then becasue `update_index` occurs
-        // after the accounts are stored, all reads after this point
+        // If the cache was flushed, then because `update_index` occurs
+        // after the account are stored by the above `store_accounts_to`
+        // call and all the accounts are stored, all reads after this point
         // will know to not check the cache anymore
         let mut reclaims = self.update_index(slot, infos, accounts);
 
@@ -3794,7 +3802,7 @@ impl AccountsDB {
         if self.caching_enabled {
             reclaims.retain(|(_, r)| r.store_id != CACHE_VIRTUAL_STORAGE_ID);
 
-            if use_cache {
+            if is_cached_store {
                 assert!(reclaims.is_empty());
             }
         }
@@ -5678,7 +5686,7 @@ pub mod tests {
             account_meta: &account_meta,
             data: &data,
             offset,
-            stored_size: 0,
+            stored_size: CACHE_VIRTUAL_STORED_SIZE,
             hash: &hash,
         };
         let account = stored_account.clone_account();

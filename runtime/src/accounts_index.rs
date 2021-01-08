@@ -809,23 +809,21 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         }
     }
 
-    fn purge_older_root_entries<F>(
+    fn purge_older_root_entries(
         &self,
         pubkey: &Pubkey,
         list: &mut SlotList<T>,
         reclaims: &mut SlotList<T>,
         max_clean_root: Option<Slot>,
         account_indexes: &HashSet<AccountIndex>,
-        should_purge: F,
-    ) where
-        F: Fn(&T) -> bool,
-    {
+        is_cached: impl Fn(&T) -> bool,
+    ) {
         let roots_traker = &self.roots_tracker.read().unwrap();
         let max_root = Self::get_max_root(&roots_traker.roots, &list, max_clean_root);
 
         let mut purged_slots: HashSet<Slot> = HashSet::new();
         list.retain(|(slot, value)| {
-            let should_purge = Self::can_purge(max_root, *slot) && should_purge(value);
+            let should_purge = Self::can_purge(max_root, *slot) && is_cached(value);
             if should_purge {
                 reclaims.push((*slot, value.clone()));
                 purged_slots.insert(*slot);
@@ -836,16 +834,15 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         self.purge_secondary_indexes_by_inner_key(pubkey, Some(&purged_slots), account_indexes);
     }
 
-    pub fn clean_rooted_entries<F>(
+    // `is_cached` closure is needed to work around the generic (`T`) indexed type.
+    pub fn clean_rooted_entries(
         &self,
         pubkey: &Pubkey,
         reclaims: &mut SlotList<T>,
         max_clean_root: Option<Slot>,
         account_indexes: &HashSet<AccountIndex>,
-        should_purge: F,
-    ) where
-        F: Fn(&T) -> bool,
-    {
+        is_cached: impl Fn(&T) -> bool,
+    ) {
         if let Some(mut locked_entry) = self.get_account_write_entry(pubkey) {
             locked_entry.slot_list_mut(|slot_list| {
                 self.purge_older_root_entries(
@@ -854,7 +851,7 @@ impl<T: 'static + Clone> AccountsIndex<T> {
                     reclaims,
                     max_clean_root,
                     account_indexes,
-                    should_purge,
+                    is_cached,
                 );
             });
         }
