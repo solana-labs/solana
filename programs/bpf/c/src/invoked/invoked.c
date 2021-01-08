@@ -17,7 +17,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
   }
 
   switch (params.data[0]) {
-  case TEST_VERIFY_TRANSLATIONS: {
+  case VERIFY_TRANSLATIONS: {
     sol_log("verify data translations");
 
     static const int ARGUMENT_INDEX = 0;
@@ -85,11 +85,15 @@ extern uint64_t entrypoint(const uint8_t *input) {
                accounts[INVOKED_PROGRAM_DUP_INDEX].executable);
     break;
   }
-  case TEST_RETURN_ERROR: {
+  case RETURN_OK: {
+    sol_log("return Ok");
+    return SUCCESS;
+  }
+  case RETURN_ERROR: {
     sol_log("return error");
     return 42;
   }
-  case TEST_DERIVED_SIGNERS: {
+  case DERIVED_SIGNERS: {
     sol_log("verify derived signers");
     static const int INVOKED_PROGRAM_INDEX = 0;
     static const int DERIVED_KEY1_INDEX = 1;
@@ -108,7 +112,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
         {accounts[DERIVED_KEY1_INDEX].key, true, false},
         {accounts[DERIVED_KEY2_INDEX].key, true, true},
         {accounts[DERIVED_KEY3_INDEX].key, false, true}};
-    uint8_t data[] = {TEST_VERIFY_NESTED_SIGNERS};
+    uint8_t data[] = {VERIFY_NESTED_SIGNERS};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                         arguments, SOL_ARRAY_SIZE(arguments),
                                         data, SOL_ARRAY_SIZE(data)};
@@ -130,7 +134,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     break;
   }
 
-  case TEST_VERIFY_NESTED_SIGNERS: {
+  case VERIFY_NESTED_SIGNERS: {
     sol_log("verify derived nested signers");
     static const int DERIVED_KEY1_INDEX = 0;
     static const int DERIVED_KEY2_INDEX = 1;
@@ -144,7 +148,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     break;
   }
 
-  case TEST_VERIFY_WRITER: {
+  case VERIFY_WRITER: {
     sol_log("verify writable");
     static const int ARGUMENT_INDEX = 0;
     sol_assert(sol_deserialize(input, &params, 1));
@@ -152,11 +156,11 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_assert(accounts[ARGUMENT_INDEX].is_writable);
     break;
   }
-  case TEST_VERIFY_PRIVILEGE_ESCALATION: {
+  case VERIFY_PRIVILEGE_ESCALATION: {
     sol_log("Success");
     break;
   }
-  case TEST_NESTED_INVOKE: {
+  case NESTED_INVOKE: {
     sol_log("invoke");
 
     static const int INVOKED_ARGUMENT_INDEX = 0;
@@ -179,7 +183,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
       SolAccountMeta arguments[] = {
           {accounts[INVOKED_ARGUMENT_INDEX].key, true, true},
           {accounts[ARGUMENT_INDEX].key, true, true}};
-      uint8_t data[] = {TEST_NESTED_INVOKE};
+      uint8_t data[] = {NESTED_INVOKE};
       const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                           arguments, SOL_ARRAY_SIZE(arguments),
                                           data, SOL_ARRAY_SIZE(data)};

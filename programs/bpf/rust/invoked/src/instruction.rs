@@ -5,13 +5,14 @@ use solana_program::{
     pubkey::Pubkey,
 };
 
-pub const TEST_VERIFY_TRANSLATIONS: u8 = 0;
-pub const TEST_RETURN_ERROR: u8 = 1;
-pub const TEST_DERIVED_SIGNERS: u8 = 2;
-pub const TEST_VERIFY_NESTED_SIGNERS: u8 = 3;
-pub const TEST_VERIFY_WRITER: u8 = 4;
-pub const TEST_VERIFY_PRIVILEGE_ESCALATION: u8 = 5;
-pub const TEST_NESTED_INVOKE: u8 = 6;
+pub const VERIFY_TRANSLATIONS: u8 = 0;
+pub const RETURN_ERROR: u8 = 1;
+pub const DERIVED_SIGNERS: u8 = 2;
+pub const VERIFY_NESTED_SIGNERS: u8 = 3;
+pub const VERIFY_WRITER: u8 = 4;
+pub const VERIFY_PRIVILEGE_ESCALATION: u8 = 5;
+pub const NESTED_INVOKE: u8 = 6;
+pub const RETURN_OK: u8 = 7;
 
 pub fn create_instruction(
     program_id: Pubkey,

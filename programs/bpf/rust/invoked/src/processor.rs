@@ -27,7 +27,7 @@ fn process_instruction(
     }
 
     match instruction_data[0] {
-        TEST_VERIFY_TRANSLATIONS => {
+        VERIFY_TRANSLATIONS => {
             msg!("verify data translations");
 
             const ARGUMENT_INDEX: usize = 0;
@@ -105,19 +105,15 @@ fn process_instruction(
                 msg!(data[0], 0, 0, 0, 0);
             }
         }
-        TEST_RETURN_ERROR => {
+        RETURN_OK => {
+            msg!("Ok");
+            return Ok(());
+        }
+        RETURN_ERROR => {
             msg!("return error");
-            const ARGUMENT_INDEX: usize = 0;
-
-            // modify lamports that should be dropped
-            assert_eq!(10, **accounts[ARGUMENT_INDEX].try_borrow_lamports()?);
-            **accounts[ARGUMENT_INDEX].try_borrow_mut_lamports()? += 1;
-            // modify data that should be dropped
-            assert_eq!(0, accounts[ARGUMENT_INDEX].try_borrow_mut_data()?[0]);
-            accounts[ARGUMENT_INDEX].try_borrow_mut_data()?[0] = 1;
             return Err(ProgramError::Custom(42));
         }
-        TEST_DERIVED_SIGNERS => {
+        DERIVED_SIGNERS => {
             msg!("verify derived signers");
             const INVOKED_PROGRAM_INDEX: usize = 0;
             const DERIVED_KEY1_INDEX: usize = 1;
@@ -137,7 +133,7 @@ fn process_instruction(
                     (accounts[DERIVED_KEY2_INDEX].key, true, true),
                     (accounts[DERIVED_KEY3_INDEX].key, false, true),
                 ],
-                vec![TEST_VERIFY_NESTED_SIGNERS],
+                vec![VERIFY_NESTED_SIGNERS],
             );
             invoke_signed(
                 &invoked_instruction,
@@ -148,7 +144,7 @@ fn process_instruction(
                 ],
             )?;
         }
-        TEST_VERIFY_NESTED_SIGNERS => {
+        VERIFY_NESTED_SIGNERS => {
             msg!("verify nested derived signers");
             const DERIVED_KEY1_INDEX: usize = 0;
             const DERIVED_KEY2_INDEX: usize = 1;
@@ -158,16 +154,16 @@ fn process_instruction(
             assert!(accounts[DERIVED_KEY2_INDEX].is_signer);
             assert!(accounts[DERIVED_KEY3_INDEX].is_signer);
         }
-        TEST_VERIFY_WRITER => {
+        VERIFY_WRITER => {
             msg!("verify writable");
             const ARGUMENT_INDEX: usize = 0;
 
             assert!(!accounts[ARGUMENT_INDEX].is_writable);
         }
-        TEST_VERIFY_PRIVILEGE_ESCALATION => {
+        VERIFY_PRIVILEGE_ESCALATION => {
             msg!("Success");
         }
-        TEST_NESTED_INVOKE => {
+        NESTED_INVOKE => {
             msg!("nested invoke");
 
             const ARGUMENT_INDEX: usize = 0;
@@ -186,7 +182,7 @@ fn process_instruction(
                         (accounts[ARGUMENT_INDEX].key, true, true),
                         (accounts[INVOKED_ARGUMENT_INDEX].key, true, true),
                     ],
-                    vec![TEST_NESTED_INVOKE],
+                    vec![NESTED_INVOKE],
                 );
                 invoke(&invoked_instruction, accounts)?;
             } else {
