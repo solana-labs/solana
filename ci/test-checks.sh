@@ -78,6 +78,12 @@ cargo_audit_ignores=(
   #
   # Blocked on multiple crates updating `time` to >= 0.2.23
   --ignore RUSTSEC-2020-0071
+
+  # difference is unmaintained
+  #
+  # Blocked on predicates v1.0.6 removing its dependency on `difference`
+  --ignore RUSTSEC-2020-0095
+
 )
 _ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit "${cargo_audit_ignores[@]}"
 
