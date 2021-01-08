@@ -422,6 +422,22 @@ impl CrdsValueLabel {
             CrdsValueLabel::NodeInstance(p, _ /*token*/) => *p,
         }
     }
+
+    /// Returns number of possible distinct labels of the same type for
+    /// a fixed pubkey, and None if that is practically unlimited.
+    pub(crate) fn value_space(&self) -> Option<usize> {
+        match self {
+            CrdsValueLabel::ContactInfo(_) => Some(1),
+            CrdsValueLabel::Vote(_, _) => Some(MAX_VOTES as usize),
+            CrdsValueLabel::LowestSlot(_) => Some(1),
+            CrdsValueLabel::SnapshotHashes(_) => Some(1),
+            CrdsValueLabel::EpochSlots(_, _) => Some(MAX_EPOCH_SLOTS as usize),
+            CrdsValueLabel::AccountsHashes(_) => Some(1),
+            CrdsValueLabel::LegacyVersion(_) => Some(1),
+            CrdsValueLabel::Version(_) => Some(1),
+            CrdsValueLabel::NodeInstance(_, _) => None,
+        }
+    }
 }
 
 impl CrdsValue {
