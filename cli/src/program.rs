@@ -80,6 +80,9 @@ pub enum ProgramCliCommand {
         upgrade_authority_index: Option<SignerIndex>,
         new_upgrade_authority: Option<Pubkey>,
     },
+    GetAuthority {
+        account_pubkey: Option<Pubkey>,
+    },
 }
 
 pub trait ProgramSubCommands {
@@ -222,7 +225,6 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .conflicts_with("new_buffer_authority")
                                 .help("The buffer will be immutable")
                         )
-                        .arg(commitment_arg_with_default("singleGossip")),
                 )
                 .subcommand(
                     SubCommand::with_name("set-upgrade-authority")
@@ -256,7 +258,18 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .conflicts_with("new_upgrade_authority")
                                 .help("The program will not be upgradeable")
                         )
-                        .arg(commitment_arg_with_default("singleGossip")),
+                )
+                .subcommand(
+                    SubCommand::with_name("get-authority")
+                        .about("Gets a buffer or program account's authority")
+                        .arg(
+                            Arg::with_name("account")
+                                .index(1)
+                                .value_name("ACCOUNT_ADDRESS")
+                                .takes_value(true)
+                                .required(true)
+                                .help("Public key of the account to query")
+                        )
                 )
         )
     }
@@ -462,6 +475,12 @@ pub fn parse_program_subcommand(
                 signers: signer_info.signers,
             }
         }
+        ("get-authority", Some(matches)) => CliCommandInfo {
+            command: CliCommand::Program(ProgramCliCommand::GetAuthority {
+                account_pubkey: pubkey_of(matches, "account"),
+            }),
+            signers: vec![],
+        },
         _ => unreachable!(),
     };
     Ok(response)
@@ -539,6 +558,9 @@ pub fn process_program_subcommand(
             *upgrade_authority_index,
             *new_upgrade_authority,
         ),
+        ProgramCliCommand::GetAuthority { account_pubkey } => {
+            process_get_authority(&rpc_client, config, *account_pubkey)
+        }
     }
 }
 
@@ -872,15 +894,59 @@ fn process_set_authority(
         )
         .map_err(|e| format!("Setting authority failed: {}", e))?;
 
-    match new_authority {
-        Some(pubkey) => Ok(json!({
-            "Authority": format!("{:?}", pubkey),
-        })
-        .to_string()),
-        None => Ok(json!({
-            "Authority": "None",
-        })
-        .to_string()),
+    Ok(option_pubkey_to_string("Authority", new_authority))
+}
+
+fn process_get_authority(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    account_pubkey: Option<Pubkey>,
+) -> ProcessResult {
+    if let Some(account_pubkey) = account_pubkey {
+        if let Some(account) = rpc_client
+            .get_account_with_commitment(&account_pubkey, config.commitment)?
+            .value
+        {
+            if let Ok(UpgradeableLoaderState::Program {
+                programdata_address,
+            }) = account.state()
+            {
+                if let Some(account) = rpc_client
+                    .get_account_with_commitment(&programdata_address, config.commitment)?
+                    .value
+                {
+                    if let Ok(UpgradeableLoaderState::ProgramData {
+                        upgrade_authority_address,
+                        ..
+                    }) = account.state()
+                    {
+                        Ok(option_pubkey_to_string(
+                            "Program upgrade authority",
+                            upgrade_authority_address,
+                        ))
+                    } else {
+                        Err("Invalid associated ProgramData account found for the program".into())
+                    }
+                } else {
+                    Err(
+                        "Failed to find associated ProgramData account for the provided program"
+                            .into(),
+                    )
+                }
+            } else if let Ok(UpgradeableLoaderState::Buffer { authority_address }) = account.state()
+            {
+                Ok(option_pubkey_to_string(
+                    "Buffer authority",
+                    authority_address,
+                ))
+            } else {
+                Err("Not a buffer or program account".into())
+            }
+        } else {
+            Err("Unable to find the account".into())
+        }
+    } else {
+        Err("No account specified".into())
     }
 }
 
@@ -1413,6 +1479,19 @@ fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
         "then pass it as the [BUFFER_SIGNER] argument to `solana upgrade ...`\n{}\n{}\n{}",
         divider, phrase, divider
     );
+}
+
+fn option_pubkey_to_string(tag: &str, option: Option<Pubkey>) -> String {
+    match option {
+        Some(pubkey) => json!({
+            tag: format!("{:?}", pubkey),
+        })
+        .to_string(),
+        None => json!({
+            tag: "None",
+        })
+        .to_string(),
+    }
 }
 
 fn send_and_confirm_transactions_with_spinner<T: Signers>(
@@ -2244,6 +2323,37 @@ mod tests {
                     read_keypair_file(&keypair_file).unwrap().into(),
                     read_keypair_file(&authority_keypair_file).unwrap().into(),
                 ],
+            }
+        );
+    }
+
+    #[test]
+    #[allow(clippy::cognitive_complexity)]
+    fn test_cli_parse_get_authority() {
+        let test_commands = app("test", "desc", "version");
+
+        let default_keypair = Keypair::new();
+        let keypair_file = make_tmp_path("keypair_file");
+        write_keypair_file(&default_keypair, &keypair_file).unwrap();
+        let default_signer = DefaultSigner {
+            path: keypair_file,
+            arg_name: "".to_string(),
+        };
+
+        let buffer_pubkey = Pubkey::new_unique();
+        let test_deploy = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program",
+            "get-authority",
+            &buffer_pubkey.to_string(),
+        ]);
+        assert_eq!(
+            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Program(ProgramCliCommand::GetAuthority {
+                    account_pubkey: Some(buffer_pubkey)
+                }),
+                signers: vec![],
             }
         );
     }
