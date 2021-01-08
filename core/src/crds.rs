@@ -272,8 +272,6 @@ impl Crds {
         now: u64,
         timeouts: &HashMap<Pubkey, u64>,
     ) -> Vec<CrdsValueLabel> {
-<<<<<<< HEAD
-=======
         #[rustversion::before(1.49.0)]
         fn select_nth<T: Ord>(xs: &mut Vec<T>, _nth: usize) {
             xs.sort_unstable();
@@ -282,7 +280,6 @@ impl Crds {
         fn select_nth<T: Ord>(xs: &mut Vec<T>, nth: usize) {
             xs.select_nth_unstable(nth);
         }
->>>>>>> 766195dde... limits number of crds values associated with a pubkey (#14467)
         let default_timeout = *timeouts
             .get(&Pubkey::default())
             .expect("must have default timeout");

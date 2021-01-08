@@ -436,7 +436,6 @@ impl CrdsValueLabel {
             CrdsValueLabel::LegacyVersion(_) => Some(1),
             CrdsValueLabel::Version(_) => Some(1),
             CrdsValueLabel::NodeInstance(_, _) => None,
-            CrdsValueLabel::DuplicateShred(_, _) => None,
         }
     }
 }
