@@ -112,7 +112,7 @@ impl SnapshotRequestHandler {
                     &self.snapshot_config.snapshot_path,
                     &self.snapshot_config.snapshot_package_output_path,
                     self.snapshot_config.snapshot_version,
-                    &self.snapshot_config.compression,
+                    &self.snapshot_config.archive_format,
                 );
                 if r.is_err() {
                     warn!(

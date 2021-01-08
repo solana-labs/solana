@@ -8,7 +8,7 @@ use {
     solana_client::rpc_client::RpcClient,
     solana_ledger::{blockstore::create_new_ledger, create_new_tmp_ledger},
     solana_runtime::{
-        bank_forks::{CompressionType, SnapshotConfig, SnapshotVersion},
+        bank_forks::{ArchiveFormat, SnapshotConfig, SnapshotVersion},
         genesis_utils::create_genesis_config_with_leader_ex,
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
     },
@@ -354,7 +354,7 @@ impl TestValidator {
                 snapshot_interval_slots: 100,
                 snapshot_path: ledger_path.join("snapshot"),
                 snapshot_package_output_path: ledger_path.to_path_buf(),
-                compression: CompressionType::NoCompression,
+                archive_format: ArchiveFormat::Tar,
                 snapshot_version: SnapshotVersion::default(),
             }),
             enforce_ulimit_nofile: false,

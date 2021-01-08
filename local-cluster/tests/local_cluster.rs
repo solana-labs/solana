@@ -32,7 +32,7 @@ use solana_local_cluster::{
     local_cluster::{ClusterConfig, LocalCluster},
 };
 use solana_runtime::{
-    bank_forks::{CompressionType, SnapshotConfig},
+    bank_forks::{ArchiveFormat, SnapshotConfig},
     snapshot_utils,
 };
 use solana_sdk::{
@@ -1054,7 +1054,7 @@ fn test_snapshot_download() {
     let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
         &validator_snapshot_test_config.snapshot_output_path,
         &archive_snapshot_hash,
-        &CompressionType::Bzip2,
+        &ArchiveFormat::TarBzip2,
     );
 
     // Download the snapshot, then boot a validator from it.
@@ -1124,7 +1124,7 @@ fn test_snapshot_restart_tower() {
     let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
         &validator_snapshot_test_config.snapshot_output_path,
         &archive_snapshot_hash,
-        &CompressionType::Bzip2,
+        &ArchiveFormat::TarBzip2,
     );
     fs::hard_link(archive_filename, &validator_archive_path).unwrap();
 
@@ -1189,7 +1189,7 @@ fn test_snapshots_blockstore_floor() {
     let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
         &validator_snapshot_test_config.snapshot_output_path,
         &(archive_slot, archive_hash),
-        &CompressionType::Bzip2,
+        &ArchiveFormat::TarBzip2,
     );
     fs::hard_link(archive_filename, &validator_archive_path).unwrap();
     let slot_floor = archive_slot;
@@ -2446,7 +2446,7 @@ fn setup_snapshot_validator_config(
         snapshot_interval_slots,
         snapshot_package_output_path: PathBuf::from(snapshot_output_path.path()),
         snapshot_path: PathBuf::from(snapshot_dir.path()),
-        compression: CompressionType::Bzip2,
+        archive_format: ArchiveFormat::TarBzip2,
         snapshot_version: snapshot_utils::SnapshotVersion::default(),
     };
 
