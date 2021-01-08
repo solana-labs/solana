@@ -18,11 +18,11 @@ use std::{
 pub use crate::snapshot_utils::SnapshotVersion;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum CompressionType {
-    Bzip2,
-    Gzip,
-    Zstd,
-    NoCompression,
+pub enum ArchiveFormat {
+    TarBzip2,
+    TarGzip,
+    TarZstd,
+    Tar,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -36,7 +36,7 @@ pub struct SnapshotConfig {
     // Where to place the snapshots for recent slots
     pub snapshot_path: PathBuf,
 
-    pub compression: CompressionType,
+    pub archive_format: ArchiveFormat,
 
     // Snapshot version to generate
     pub snapshot_version: SnapshotVersion,

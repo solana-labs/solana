@@ -439,9 +439,7 @@ mod tests {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     };
-    use solana_runtime::{
-        bank::Bank, bank_forks::CompressionType, snapshot_utils::SnapshotVersion,
-    };
+    use solana_runtime::{bank::Bank, bank_forks::ArchiveFormat, snapshot_utils::SnapshotVersion};
     use solana_sdk::{genesis_config::ClusterType, signature::Signer};
     use std::net::{IpAddr, Ipv4Addr};
 
@@ -534,7 +532,7 @@ mod tests {
                 snapshot_interval_slots: 0,
                 snapshot_package_output_path: PathBuf::from("/"),
                 snapshot_path: PathBuf::from("/"),
-                compression: CompressionType::Bzip2,
+                archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version: SnapshotVersion::default(),
             }),
             bank_forks,
