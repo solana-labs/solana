@@ -105,7 +105,7 @@ describe('load BPF Rust program', () => {
       programData,
       BPF_LOADER_PROGRAM_ID,
     );
-    await expect(failedLoad).rejects.toThrow('Transaction was not confirmed');
+    await expect(failedLoad).rejects.toThrow();
 
     // Second load will succeed
     await BpfLoader.load(
