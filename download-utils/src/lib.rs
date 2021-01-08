@@ -1,7 +1,7 @@
 use console::Emoji;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
-use solana_runtime::{bank_forks::CompressionType, snapshot_utils};
+use solana_runtime::{bank_forks::ArchiveFormat, snapshot_utils};
 use solana_sdk::clock::Slot;
 use solana_sdk::hash::Hash;
 use std::fs::{self, File};
@@ -175,9 +175,9 @@ pub fn download_snapshot(
     snapshot_utils::purge_old_snapshot_archives(ledger_path);
 
     for compression in &[
-        CompressionType::Zstd,
-        CompressionType::Gzip,
-        CompressionType::Bzip2,
+        ArchiveFormat::TarZstd,
+        ArchiveFormat::TarGzip,
+        ArchiveFormat::TarBzip2,
     ] {
         let desired_snapshot_package = snapshot_utils::get_snapshot_archive_path(
             ledger_path,

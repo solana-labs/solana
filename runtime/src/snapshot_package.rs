@@ -1,4 +1,4 @@
-use crate::bank_forks::CompressionType;
+use crate::bank_forks::ArchiveFormat;
 use crate::snapshot_utils::SnapshotVersion;
 use crate::{accounts_db::SnapshotStorages, bank::BankSlotDelta};
 use solana_sdk::clock::Slot;
@@ -22,7 +22,7 @@ pub struct AccountsPackage {
     pub storages: SnapshotStorages,
     pub tar_output_file: PathBuf,
     pub hash: Hash,
-    pub compression: CompressionType,
+    pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
 }
 
@@ -35,7 +35,7 @@ impl AccountsPackage {
         storages: SnapshotStorages,
         tar_output_file: PathBuf,
         hash: Hash,
-        compression: CompressionType,
+        archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
     ) -> Self {
         Self {
@@ -46,7 +46,7 @@ impl AccountsPackage {
             storages,
             tar_output_file,
             hash,
-            compression,
+            archive_format,
             snapshot_version,
         }
     }
