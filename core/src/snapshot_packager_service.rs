@@ -81,7 +81,7 @@ mod tests {
     use solana_runtime::{
         accounts_db::AccountStorageEntry,
         bank::BankSlotDelta,
-        bank_forks::CompressionType,
+        bank_forks::ArchiveFormat,
         snapshot_package::AccountsPackage,
         snapshot_utils::{self, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME},
     };
@@ -163,7 +163,7 @@ mod tests {
         let output_tar_path = snapshot_utils::get_snapshot_archive_path(
             &snapshot_package_output_path,
             &(42, Hash::default()),
-            &CompressionType::Bzip2,
+            &ArchiveFormat::TarBzip2,
         );
         let snapshot_package = AccountsPackage::new(
             5,
@@ -173,7 +173,7 @@ mod tests {
             vec![storage_entries],
             output_tar_path.clone(),
             Hash::default(),
-            CompressionType::Bzip2,
+            ArchiveFormat::TarBzip2,
             SnapshotVersion::default(),
         );
 
@@ -198,7 +198,7 @@ mod tests {
             output_tar_path,
             snapshots_dir,
             accounts_dir,
-            CompressionType::Bzip2,
+            ArchiveFormat::TarBzip2,
         );
     }
 }

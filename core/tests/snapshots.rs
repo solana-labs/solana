@@ -45,7 +45,7 @@ mod tests {
     use solana_runtime::{
         accounts_background_service::{ABSRequestSender, SnapshotRequestHandler},
         bank::{Bank, BankSlotDelta},
-        bank_forks::{BankForks, CompressionType, SnapshotConfig},
+        bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         snapshot_utils,
         snapshot_utils::SnapshotVersion,
@@ -106,7 +106,7 @@ mod tests {
                 snapshot_interval_slots,
                 snapshot_package_output_path: PathBuf::from(snapshot_output_path.path()),
                 snapshot_path: PathBuf::from(snapshot_dir.path()),
-                compression: CompressionType::Bzip2,
+                archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version,
             };
             bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
@@ -146,9 +146,9 @@ mod tests {
             snapshot_utils::get_snapshot_archive_path(
                 snapshot_package_output_path,
                 &(old_last_bank.slot(), old_last_bank.get_accounts_hash()),
-                &CompressionType::Bzip2,
+                &ArchiveFormat::TarBzip2,
             ),
-            CompressionType::Bzip2,
+            ArchiveFormat::TarBzip2,
             old_genesis_config,
             None,
             None,
@@ -226,7 +226,7 @@ mod tests {
             last_bank.src.slot_deltas(&last_bank.src.roots()),
             &snapshot_config.snapshot_package_output_path,
             last_bank.get_snapshot_storages(),
-            CompressionType::Bzip2,
+            ArchiveFormat::TarBzip2,
             snapshot_version,
         )
         .unwrap();
@@ -347,7 +347,7 @@ mod tests {
                 &snapshot_path,
                 &snapshot_package_output_path,
                 snapshot_config.snapshot_version,
-                &snapshot_config.compression,
+                &snapshot_config.archive_format,
             )
             .unwrap();
 
@@ -375,7 +375,7 @@ mod tests {
                 saved_archive_path = Some(snapshot_utils::get_snapshot_archive_path(
                     snapshot_package_output_path,
                     &(slot, accounts_hash),
-                    &CompressionType::Bzip2,
+                    &ArchiveFormat::TarBzip2,
                 ));
             }
         }
@@ -432,7 +432,7 @@ mod tests {
             saved_accounts_dir
                 .path()
                 .join(accounts_dir.path().file_name().unwrap()),
-            CompressionType::Bzip2,
+            ArchiveFormat::TarBzip2,
         );
     }
 

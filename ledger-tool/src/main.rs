@@ -25,7 +25,7 @@ use solana_ledger::{
 };
 use solana_runtime::{
     bank::{Bank, RewardCalculationEvent},
-    bank_forks::{BankForks, CompressionType, SnapshotConfig},
+    bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     snapshot_utils,
     snapshot_utils::SnapshotVersion,
@@ -667,7 +667,7 @@ fn load_bank_forks(
             snapshot_interval_slots: 0, // Value doesn't matter
             snapshot_package_output_path,
             snapshot_path,
-            compression: CompressionType::Bzip2,
+            archive_format: ArchiveFormat::TarBzip2,
             snapshot_version: SnapshotVersion::default(),
         })
     };
@@ -1947,7 +1947,7 @@ fn main() {
                                 bank.src.slot_deltas(&bank.src.roots()),
                                 output_directory,
                                 storages,
-                                CompressionType::Zstd,
+                                ArchiveFormat::TarZstd,
                                 snapshot_version,
                             )
                         })
