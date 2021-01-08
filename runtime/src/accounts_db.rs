@@ -907,7 +907,6 @@ impl AccountsDB {
 
         self.accounts_index
             .handle_dead_keys(&dead_keys, &self.account_indexes);
-
         reclaims
     }
 
@@ -1078,7 +1077,6 @@ impl AccountsDB {
             .collect();
 
         let reclaims = self.purge_keys_exact(pubkey_to_slot_set);
-
         self.handle_reclaims(&reclaims, None, false, None);
 
         reclaims_time.stop();
@@ -2380,23 +2378,22 @@ impl AccountsDB {
         );
     }
 
-    fn purge_slot_cache_keys(&self, slot: Slot, slot_cache: SlotCache) -> Vec<(u64, AccountInfo)> {
+    fn purge_slot_cache_keys(&self, dead_slot: Slot, slot_cache: SlotCache) {
         // Slot purged from cache should not exist in the backing store
-        assert!(self.storage.get_slot_stores(slot).is_none());
-        let dead_slot: HashSet<Slot> = vec![slot].into_iter().collect();
+        assert!(self.storage.get_slot_stores(dead_slot).is_none());
+        let dead_slots: HashSet<Slot> = vec![dead_slot].into_iter().collect();
         let mut purged_slot_pubkeys: HashSet<(Slot, Pubkey)> = HashSet::new();
         let pubkey_to_slot_set: Vec<(Pubkey, HashSet<Slot>)> = slot_cache
             .iter()
             .map(|account| {
-                purged_slot_pubkeys.insert((slot, *account.key()));
-                (*account.key(), dead_slot.clone())
+                purged_slot_pubkeys.insert((dead_slot, *account.key()));
+                (*account.key(), dead_slots.clone())
             })
             .collect();
         let num_purged_keys = pubkey_to_slot_set.len();
         let reclaims = self.purge_keys_exact(pubkey_to_slot_set);
         assert_eq!(reclaims.len(), num_purged_keys);
-        self.clean_dead_slots_common(&dead_slot, purged_slot_pubkeys, None);
-        reclaims
+        self.finalize_dead_slot_removal(&dead_slots, purged_slot_pubkeys, None);
     }
 
     fn purge_slots(&self, slots: &HashSet<Slot>) {
@@ -3474,7 +3471,7 @@ impl AccountsDB {
         dead_slots
     }
 
-    fn clean_dead_slots_common(
+    fn finalize_dead_slot_removal(
         &self,
         dead_slots: &HashSet<Slot>,
         purged_slot_pubkeys: HashSet<(Slot, Pubkey)>,
@@ -3529,7 +3526,7 @@ impl AccountsDB {
                     })
             })
         };
-        self.clean_dead_slots_common(dead_slots, purged_slot_pubkeys, purged_account_slots);
+        self.finalize_dead_slot_removal(dead_slots, purged_slot_pubkeys, purged_account_slots);
         measure.stop();
         inc_new_counter_info!("clean_stored_dead_slots-ms", measure.as_ms() as usize);
     }
@@ -3614,15 +3611,15 @@ impl AccountsDB {
     }
 
     pub fn store_cached(&self, slot: Slot, accounts: &[(&Pubkey, &Account)]) {
-        self.do_store(slot, accounts, self.caching_enabled);
+        self.store(slot, accounts, self.caching_enabled);
     }
 
     /// Store the account update.
     pub fn store_uncached(&self, slot: Slot, accounts: &[(&Pubkey, &Account)]) {
-        self.do_store(slot, accounts, false);
+        self.store(slot, accounts, false);
     }
 
-    fn do_store(&self, slot: Slot, accounts: &[(&Pubkey, &Account)], is_cached_store: bool) {
+    fn store(&self, slot: Slot, accounts: &[(&Pubkey, &Account)], is_cached_store: bool) {
         // If all transactions in a batch are errored,
         // it's possible to get a store with no accounts.
         if accounts.is_empty() {

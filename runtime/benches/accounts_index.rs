@@ -47,7 +47,7 @@ fn bench_accounts_index(bencher: &mut Bencher) {
             );
             reclaims.clear();
         }
-        index.add_root(root);
+        index.add_root(root, false);
         root += 1;
         fork += 1;
     });
