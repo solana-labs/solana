@@ -46,6 +46,7 @@ fn append_vec_sequential_read(bencher: &mut Bencher) {
     let vec = AppendVec::new(&path.path, true, 64 * 1024);
     let size = 1_000;
     let mut indexes = add_test_accounts(&vec, size);
+    indexes.pop();
     bencher.iter(|| {
         let (sample, pos) = indexes.pop().unwrap();
         let (account, _next) = vec.get_account(pos).unwrap();
@@ -60,6 +61,7 @@ fn append_vec_random_read(bencher: &mut Bencher) {
     let vec = AppendVec::new(&path.path, true, 64 * 1024);
     let size = 1_000;
     let indexes = add_test_accounts(&vec, size);
+    indexes.pop();
     bencher.iter(|| {
         let random_index: usize = thread_rng().gen_range(0, indexes.len());
         let (sample, pos) = &indexes[random_index];

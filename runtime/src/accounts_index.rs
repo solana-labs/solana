@@ -823,7 +823,7 @@ impl<T: 'static + Clone> AccountsIndex<T> {
 
         let mut purged_slots: HashSet<Slot> = HashSet::new();
         list.retain(|(slot, value)| {
-            let should_purge = Self::can_purge(max_root, *slot) && is_cached(value);
+            let should_purge = Self::can_purge(max_root, *slot) && !is_cached(value);
             if should_purge {
                 reclaims.push((*slot, value.clone()));
                 purged_slots.insert(*slot);
@@ -865,18 +865,13 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         self.roots_tracker.read().unwrap().roots.contains(&slot)
     }
 
-    pub fn add_root(&self, slot: Slot) {
+    pub fn add_root(&self, slot: Slot, caching_enabled: bool) {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
         w_roots_tracker.roots.insert(slot);
-        w_roots_tracker.uncleaned_roots.insert(slot);
-        // `AccountsDb::flush_accounts_cache()` relies on roots being added in order
-        assert!(slot >= w_roots_tracker.max_root);
-        w_roots_tracker.max_root = slot;
-    }
-
-    pub fn add_cache_root(&self, slot: Slot) {
-        let mut w_roots_tracker = self.roots_tracker.write().unwrap();
-        w_roots_tracker.roots.insert(slot);
+        // we delay cleaning until flushing!
+        if !caching_enabled {
+            w_roots_tracker.uncleaned_roots.insert(slot);
+        }
         // `AccountsDb::flush_accounts_cache()` relies on roots being added in order
         assert!(slot >= w_roots_tracker.max_root);
         w_roots_tracker.max_root = slot;
@@ -887,9 +882,7 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         I: IntoIterator<Item = Slot>,
     {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
-        for root in roots {
-            w_roots_tracker.uncleaned_roots.insert(root);
-        }
+        w_roots_tracker.uncleaned_roots.extend(roots);
     }
 
     fn max_root(&self) -> Slot {
@@ -1159,7 +1152,7 @@ pub mod tests {
             );
         }
 
-        index.add_root(root_slot);
+        index.add_root(root_slot, false);
 
         (index, pubkeys)
     }
@@ -1295,7 +1288,7 @@ pub mod tests {
     fn test_is_root() {
         let index = AccountsIndex::<bool>::default();
         assert!(!index.is_root(0));
-        index.add_root(0);
+        index.add_root(0, false);
         assert!(index.is_root(0));
     }
 
@@ -1315,7 +1308,7 @@ pub mod tests {
         );
         assert!(gc.is_empty());
 
-        index.add_root(0);
+        index.add_root(0, false);
         let (list, idx) = index.get(&key.pubkey(), None, None).unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
     }
@@ -1323,8 +1316,8 @@ pub mod tests {
     #[test]
     fn test_clean_first() {
         let index = AccountsIndex::<bool>::default();
-        index.add_root(0);
-        index.add_root(1);
+        index.add_root(0, false);
+        index.add_root(1, false);
         index.clean_dead_slot(0);
         assert!(index.is_root(1));
         assert!(!index.is_root(0));
@@ -1334,8 +1327,8 @@ pub mod tests {
     fn test_clean_last() {
         //this behavior might be undefined, clean up should only occur on older slots
         let index = AccountsIndex::<bool>::default();
-        index.add_root(0);
-        index.add_root(1);
+        index.add_root(0, false);
+        index.add_root(1, false);
         index.clean_dead_slot(1);
         assert!(!index.is_root(1));
         assert!(index.is_root(0));
@@ -1345,8 +1338,8 @@ pub mod tests {
     fn test_clean_and_unclean_slot() {
         let index = AccountsIndex::<bool>::default();
         assert_eq!(0, index.roots_tracker.read().unwrap().uncleaned_roots.len());
-        index.add_root(0);
-        index.add_root(1);
+        index.add_root(0, false);
+        index.add_root(1, false);
         assert_eq!(2, index.roots_tracker.read().unwrap().uncleaned_roots.len());
 
         assert_eq!(
@@ -1371,8 +1364,8 @@ pub mod tests {
                 .len()
         );
 
-        index.add_root(2);
-        index.add_root(3);
+        index.add_root(2, false);
+        index.add_root(3, false);
         assert_eq!(4, index.roots_tracker.read().unwrap().roots.len());
         assert_eq!(2, index.roots_tracker.read().unwrap().uncleaned_roots.len());
         assert_eq!(
@@ -1523,9 +1516,9 @@ pub mod tests {
             true,
             &mut gc,
         );
-        index.add_root(0);
-        index.add_root(1);
-        index.add_root(3);
+        index.add_root(0, false);
+        index.add_root(1, false);
+        index.add_root(3, false);
         index.upsert(
             4,
             &key.pubkey(),
@@ -1582,7 +1575,7 @@ pub mod tests {
 
         let purges = index.purge_roots(&key.pubkey());
         assert_eq!(purges, (vec![], false));
-        index.add_root(1);
+        index.add_root(1, false);
 
         let purges = index.purge_roots(&key.pubkey());
         assert_eq!(purges, (vec![(1, 10)], true));
@@ -1607,7 +1600,7 @@ pub mod tests {
         assert!(index.latest_slot(None, &slot_slice, None).is_none());
 
         // Given a root, should return the root
-        index.add_root(5);
+        index.add_root(5, false);
         assert_eq!(index.latest_slot(None, &slot_slice, None).unwrap(), 1);
 
         // Given a max_root == root, should still return the root
@@ -1745,9 +1738,9 @@ pub mod tests {
 
         // Add a later root, earlier slots should be reclaimed
         slot_list = vec![(1, true), (2, true), (5, true), (9, true)];
-        index.add_root(1);
+        index.add_root(1, false);
         // Note 2 is not a root
-        index.add_root(5);
+        index.add_root(5, false);
         reclaims = vec![];
         index.purge_older_root_entries(
             &Pubkey::default(),
@@ -1762,7 +1755,7 @@ pub mod tests {
 
         // Add a later root that is not in the list, should not affect the outcome
         slot_list = vec![(1, true), (2, true), (5, true), (9, true)];
-        index.add_root(6);
+        index.add_root(6, false);
         reclaims = vec![];
         index.purge_older_root_entries(
             &Pubkey::default(),
@@ -2029,7 +2022,7 @@ pub mod tests {
 
         // If we set a root at fork, and clean, then the secondary_key1 should no longer
         // be findable
-        index.add_root(fork);
+        index.add_root(fork, false);
         index
             .get_account_write_entry(&account_key)
             .unwrap()

@@ -27,7 +27,7 @@ use blake3::traits::digest::Digest;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use log::*;
-use rand::{thread_rng, Rng};
+use rand::{prelude::SliceRandom, thread_rng, Rng};
 use rayon::{prelude::*, ThreadPool};
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
@@ -796,7 +796,7 @@ impl AccountsDB {
                             &mut reclaims,
                             max_clean_root,
                             &self.account_indexes,
-                            |account_info| account_info.store_id != CACHE_VIRTUAL_STORAGE_ID,
+                            |account_info| account_info.store_id == CACHE_VIRTUAL_STORAGE_ID,
                         );
                     }
                     reclaims
@@ -2739,6 +2739,7 @@ impl AccountsDB {
                 &accounts_and_meta_to_store[infos.len()..],
                 &hashes[infos.len()..],
             );
+            assert!(!rvs.is_empty());
             append_accounts.stop();
             total_append_accounts_us += append_accounts.as_us();
             if rvs.len() == 1 {
@@ -2865,12 +2866,14 @@ impl AccountsDB {
             let mut frozen_slots = self.accounts_cache.find_older_frozen_slots(0);
             frozen_slots.retain(|s| *s > max_flushed_root);
             // Remove a random index 0 <= i < `frozen_slots.len()`
-            let rand_slot = frozen_slots[thread_rng().gen_range(0, frozen_slots.len())];
-            info!(
-                "Flushing random slot: {}, num_remaining: {}",
-                rand_slot, num_slots_remaining
-            );
-            self.flush_slot_cache(rand_slot);
+            let rand_slot = frozen_slots.choose(&mut thread_rng());
+            if let Some(rand_slot) = rand_slot {
+                info!(
+                    "Flushing random slot: {}, num_remaining: {}",
+                    *rand_slot, num_slots_remaining
+                );
+                self.flush_slot_cache(*rand_slot);
+            }
         }
 
         inc_new_counter_info!("flush_roots_elapsed", flush_roots_elapsed.as_us() as usize);
@@ -3616,15 +3619,15 @@ impl AccountsDB {
 
     /// Store the account update.
     pub fn store_uncached(&self, slot: Slot, accounts: &[(&Pubkey, &Account)]) {
+        self.do_store(slot, accounts, false);
+    }
+
+    fn do_store(&self, slot: Slot, accounts: &[(&Pubkey, &Account)], is_cached_store: bool) {
         // If all transactions in a batch are errored,
         // it's possible to get a store with no accounts.
         if accounts.is_empty() {
             return;
         }
-        self.do_store(slot, accounts, false);
-    }
-
-    fn do_store(&self, slot: Slot, accounts: &[(&Pubkey, &Account)], is_cached_store: bool) {
         self.assert_frozen_accounts(accounts);
         let mut hash_time = Measure::start("hash_accounts");
         let hashes = self.hash_accounts(
@@ -3831,11 +3834,7 @@ impl AccountsDB {
     }
 
     pub fn add_root(&self, slot: Slot) {
-        if self.caching_enabled {
-            self.accounts_index.add_cache_root(slot);
-        } else {
-            self.accounts_index.add_root(slot);
-        }
+        self.accounts_index.add_root(slot, self.caching_enabled);
         if self.caching_enabled {
             self.accounts_cache.add_root(slot);
         }
@@ -3956,7 +3955,7 @@ impl AccountsDB {
 
         // Need to add these last, otherwise older updates will be cleaned
         for slot in slots {
-            self.accounts_index.add_root(slot);
+            self.accounts_index.add_root(slot, false);
         }
 
         let mut stored_sizes_and_counts = HashMap::new();
@@ -6498,10 +6497,10 @@ pub mod tests {
             info3,
             &mut reclaims,
         );
-        accounts_index.add_root(0);
-        accounts_index.add_root(1);
-        accounts_index.add_root(2);
-        accounts_index.add_root(3);
+        accounts_index.add_root(0, false);
+        accounts_index.add_root(1, false);
+        accounts_index.add_root(2, false);
+        accounts_index.add_root(3, false);
         let mut purges = HashMap::new();
         let (key0_entry, _) = accounts_index.get(&key0, None, None).unwrap();
         purges.insert(key0, accounts_index.roots_and_ref_count(&key0_entry, None));
