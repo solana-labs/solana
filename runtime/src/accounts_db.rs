@@ -1758,16 +1758,12 @@ impl AccountsDB {
             HashMap::new(),
         );
         let num_candidates = shrink_slots.len();
-        self.thread_pool_clean.install(|| {
-            shrink_slots
-                .par_iter()
-                .for_each(|(slot, slot_shrink_candidates)| {
-                    let mut measure = Measure::start("shrink_candidate_slots-ms");
-                    self.do_shrink_slot_stores(*slot, slot_shrink_candidates.values());
-                    measure.stop();
-                    inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
-                })
-        });
+        for (slot, slot_shrink_candidates) in shrink_slots {
+            let mut measure = Measure::start("shrink_candidate_slots-ms");
+            self.do_shrink_slot_stores(slot, slot_shrink_candidates.values());
+            measure.stop();
+            inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
+        }
         num_candidates
     }
 
