@@ -7,6 +7,7 @@ use solana_client::rpc_client::RpcClient;
 use solana_core::test_validator::TestValidator;
 use solana_faucet::faucet::run_local_faucet;
 use solana_sdk::{
+    account_utils::StateMut,
     bpf_loader,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     commitment_config::CommitmentConfig,
@@ -64,7 +65,7 @@ fn test_cli_program_deploy_non_upgradeable() {
     let program_id_str = json
         .as_object()
         .unwrap()
-        .get("programId")
+        .get("ProgramId")
         .unwrap()
         .as_str()
         .unwrap();
@@ -191,13 +192,15 @@ fn test_cli_program_deploy_no_authority() {
     // Deploy a program with no authority
     config.signers = vec![&keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: Some(pathbuf.to_str().unwrap().to_string()),
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
+        buffer_pubkey: None,
         allow_excessive_balance: false,
         upgrade_authority_signer_index: None,
         upgrade_authority_pubkey: None,
+        is_final: false,
         max_len: None,
     });
     let response = process_command(&config);
@@ -205,7 +208,7 @@ fn test_cli_program_deploy_no_authority() {
     let program_id_str = json
         .as_object()
         .unwrap()
-        .get("programId")
+        .get("ProgramId")
         .unwrap()
         .as_str()
         .unwrap();
@@ -214,13 +217,15 @@ fn test_cli_program_deploy_no_authority() {
     // Attempt to upgrade the program
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: Some(pathbuf.to_str().unwrap().to_string()),
         program_signer_index: None,
         program_pubkey: Some(program_id),
         buffer_signer_index: None,
+        buffer_pubkey: None,
         allow_excessive_balance: false,
         upgrade_authority_signer_index: Some(1),
         upgrade_authority_pubkey: Some(upgrade_authority.pubkey()),
+        is_final: false,
         max_len: None,
     });
     process_command(&config).unwrap_err();
@@ -275,27 +280,29 @@ fn test_cli_program_deploy_with_authority() {
     let program_keypair = Keypair::new();
     config.signers = vec![&keypair, &upgrade_authority, &program_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: Some(pathbuf.to_str().unwrap().to_string()),
         program_signer_index: Some(2),
         program_pubkey: Some(program_keypair.pubkey()),
         buffer_signer_index: None,
+        buffer_pubkey: None,
         allow_excessive_balance: false,
         upgrade_authority_signer_index: Some(1),
         upgrade_authority_pubkey: Some(upgrade_authority.pubkey()),
+        is_final: false,
         max_len: Some(max_len),
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
-    let program_id_str = json
+    let program_pubkey_str = json
         .as_object()
         .unwrap()
-        .get("programId")
+        .get("ProgramId")
         .unwrap()
         .as_str()
         .unwrap();
     assert_eq!(
         program_keypair.pubkey(),
-        Pubkey::from_str(&program_id_str).unwrap()
+        Pubkey::from_str(&program_pubkey_str).unwrap()
     );
     let program_account = rpc_client
         .get_account_with_commitment(&program_keypair.pubkey(), CommitmentConfig::recent())
@@ -328,27 +335,29 @@ fn test_cli_program_deploy_with_authority() {
     // Deploy the upgradeable program
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: Some(pathbuf.to_str().unwrap().to_string()),
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
+        buffer_pubkey: None,
         allow_excessive_balance: false,
         upgrade_authority_signer_index: Some(1),
         upgrade_authority_pubkey: Some(upgrade_authority.pubkey()),
+        is_final: false,
         max_len: Some(max_len),
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
-    let program_id_str = json
+    let program_pubkey_str = json
         .as_object()
         .unwrap()
-        .get("programId")
+        .get("ProgramId")
         .unwrap()
         .as_str()
         .unwrap();
-    let program_id = Pubkey::from_str(&program_id_str).unwrap();
+    let program_pubkey = Pubkey::from_str(&program_pubkey_str).unwrap();
     let program_account = rpc_client
-        .get_account_with_commitment(&program_id, CommitmentConfig::recent())
+        .get_account_with_commitment(&program_pubkey, CommitmentConfig::recent())
         .unwrap()
         .value
         .unwrap();
@@ -356,7 +365,7 @@ fn test_cli_program_deploy_with_authority() {
     assert_eq!(program_account.owner, bpf_loader_upgradeable::id());
     assert_eq!(program_account.executable, true);
     let (programdata_pubkey, _) =
-        Pubkey::find_program_address(&[program_id.as_ref()], &bpf_loader_upgradeable::id());
+        Pubkey::find_program_address(&[program_pubkey.as_ref()], &bpf_loader_upgradeable::id());
     let programdata_account = rpc_client
         .get_account_with_commitment(&programdata_pubkey, CommitmentConfig::recent())
         .unwrap()
@@ -376,27 +385,20 @@ fn test_cli_program_deploy_with_authority() {
     // Upgrade the program
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: Some(pathbuf.to_str().unwrap().to_string()),
         program_signer_index: None,
-        program_pubkey: Some(program_id),
+        program_pubkey: Some(program_pubkey),
         buffer_signer_index: None,
+        buffer_pubkey: None,
         allow_excessive_balance: false,
         upgrade_authority_signer_index: Some(1),
         upgrade_authority_pubkey: Some(upgrade_authority.pubkey()),
+        is_final: false,
         max_len: Some(max_len),
     });
-    let response = process_command(&config);
-    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
-    let program_id_str = json
-        .as_object()
-        .unwrap()
-        .get("programId")
-        .unwrap()
-        .as_str()
-        .unwrap();
-    let program_id = Pubkey::from_str(&program_id_str).unwrap();
+    process_command(&config).unwrap();
     let program_account = rpc_client
-        .get_account_with_commitment(&program_id, CommitmentConfig::recent())
+        .get_account_with_commitment(&program_pubkey, CommitmentConfig::recent())
         .unwrap()
         .value
         .unwrap();
@@ -404,7 +406,7 @@ fn test_cli_program_deploy_with_authority() {
     assert_eq!(program_account.owner, bpf_loader_upgradeable::id());
     assert_eq!(program_account.executable, true);
     let (programdata_pubkey, _) =
-        Pubkey::find_program_address(&[program_id.as_ref()], &bpf_loader_upgradeable::id());
+        Pubkey::find_program_address(&[program_pubkey.as_ref()], &bpf_loader_upgradeable::id());
     let programdata_account = rpc_client
         .get_account_with_commitment(&programdata_pubkey, CommitmentConfig::recent())
         .unwrap()
@@ -425,7 +427,7 @@ fn test_cli_program_deploy_with_authority() {
     let new_upgrade_authority = Keypair::new();
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::SetUpgradeAuthority {
-        program: program_id,
+        program_pubkey,
         upgrade_authority_index: Some(1),
         new_upgrade_authority: Some(new_upgrade_authority.pubkey()),
     });
@@ -434,7 +436,7 @@ fn test_cli_program_deploy_with_authority() {
     let new_upgrade_authority_str = json
         .as_object()
         .unwrap()
-        .get("UpgradeAuthority")
+        .get("Authority")
         .unwrap()
         .as_str()
         .unwrap();
@@ -446,27 +448,20 @@ fn test_cli_program_deploy_with_authority() {
     // Upgrade with new authority
     config.signers = vec![&keypair, &new_upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: Some(pathbuf.to_str().unwrap().to_string()),
         program_signer_index: None,
-        program_pubkey: Some(program_id),
+        program_pubkey: Some(program_pubkey),
         buffer_signer_index: None,
+        buffer_pubkey: None,
         allow_excessive_balance: false,
         upgrade_authority_signer_index: Some(1),
         upgrade_authority_pubkey: Some(new_upgrade_authority.pubkey()),
+        is_final: false,
         max_len: None,
     });
-    let response = process_command(&config);
-    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
-    let program_id_str = json
-        .as_object()
-        .unwrap()
-        .get("programId")
-        .unwrap()
-        .as_str()
-        .unwrap();
-    let program_id = Pubkey::from_str(&program_id_str).unwrap();
+    process_command(&config).unwrap();
     let program_account = rpc_client
-        .get_account_with_commitment(&program_id, CommitmentConfig::recent())
+        .get_account_with_commitment(&program_pubkey, CommitmentConfig::recent())
         .unwrap()
         .value
         .unwrap();
@@ -474,7 +469,7 @@ fn test_cli_program_deploy_with_authority() {
     assert_eq!(program_account.owner, bpf_loader_upgradeable::id());
     assert_eq!(program_account.executable, true);
     let (programdata_pubkey, _) =
-        Pubkey::find_program_address(&[program_id.as_ref()], &bpf_loader_upgradeable::id());
+        Pubkey::find_program_address(&[program_pubkey.as_ref()], &bpf_loader_upgradeable::id());
     let programdata_account = rpc_client
         .get_account_with_commitment(&programdata_pubkey, CommitmentConfig::recent())
         .unwrap()
@@ -494,7 +489,7 @@ fn test_cli_program_deploy_with_authority() {
     // Set no authority
     config.signers = vec![&keypair, &new_upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::SetUpgradeAuthority {
-        program: program_id,
+        program_pubkey,
         upgrade_authority_index: Some(1),
         new_upgrade_authority: None,
     });
@@ -503,7 +498,7 @@ fn test_cli_program_deploy_with_authority() {
     let new_upgrade_authority_str = json
         .as_object()
         .unwrap()
-        .get("UpgradeAuthority")
+        .get("Authority")
         .unwrap()
         .as_str()
         .unwrap();
@@ -512,14 +507,452 @@ fn test_cli_program_deploy_with_authority() {
     // Upgrade with no authority
     config.signers = vec![&keypair, &new_upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: Some(pathbuf.to_str().unwrap().to_string()),
         program_signer_index: None,
-        program_pubkey: Some(program_id),
+        program_pubkey: Some(program_pubkey),
         buffer_signer_index: None,
+        buffer_pubkey: None,
         allow_excessive_balance: false,
         upgrade_authority_signer_index: Some(1),
         upgrade_authority_pubkey: Some(new_upgrade_authority.pubkey()),
+        is_final: false,
         max_len: None,
     });
     process_command(&config).unwrap_err();
+
+    // deploy with finality
+    config.signers = vec![&keypair, &new_upgrade_authority];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(pathbuf.to_str().unwrap().to_string()),
+        program_signer_index: None,
+        program_pubkey: None,
+        buffer_signer_index: None,
+        buffer_pubkey: None,
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: Some(1),
+        upgrade_authority_pubkey: Some(new_upgrade_authority.pubkey()),
+        is_final: true,
+        max_len: None,
+    });
+    let response = process_command(&config);
+    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
+    let program_pubkey_str = json
+        .as_object()
+        .unwrap()
+        .get("ProgramId")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    let program_pubkey = Pubkey::from_str(&program_pubkey_str).unwrap();
+    let (programdata_pubkey, _) =
+        Pubkey::find_program_address(&[program_pubkey.as_ref()], &bpf_loader_upgradeable::id());
+    let programdata_account = rpc_client
+        .get_account_with_commitment(&programdata_pubkey, CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
+    if let UpgradeableLoaderState::ProgramData {
+        slot: _,
+        upgrade_authority_address,
+    } = programdata_account.state().unwrap()
+    {
+        assert_eq!(upgrade_authority_address, None);
+    } else {
+        panic!("not a buffer account");
+    }
+}
+
+#[test]
+fn test_cli_program_write_buffer() {
+    solana_logger::setup();
+
+    let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    pathbuf.push("tests");
+    pathbuf.push("fixtures");
+    pathbuf.push("noop");
+    pathbuf.set_extension("so");
+
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+
+    let (sender, receiver) = channel();
+    run_local_faucet(mint_keypair, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
+
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
+
+    let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
+    let mut program_data = Vec::new();
+    file.read_to_end(&mut program_data).unwrap();
+    let max_len = program_data.len();
+    let minimum_balance_for_buffer = rpc_client
+        .get_minimum_balance_for_rent_exemption(
+            UpgradeableLoaderState::programdata_len(max_len).unwrap(),
+        )
+        .unwrap();
+    let minimum_balance_for_buffer_default = rpc_client
+        .get_minimum_balance_for_rent_exemption(
+            UpgradeableLoaderState::programdata_len(max_len * 2).unwrap(),
+        )
+        .unwrap();
+
+    let mut config = CliConfig::recent_for_tests();
+    let keypair = Keypair::new();
+    config.json_rpc_url = test_validator.rpc_url();
+    config.signers = vec![&keypair];
+    config.command = CliCommand::Airdrop {
+        faucet_host: None,
+        faucet_port: faucet_addr.port(),
+        pubkey: None,
+        lamports: 100 * minimum_balance_for_buffer,
+    };
+    process_command(&config).unwrap();
+
+    // Write a buffer with default params
+    config.signers = vec![&keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
+        program_location: pathbuf.to_str().unwrap().to_string(),
+        buffer_signer_index: None,
+        buffer_pubkey: None,
+        buffer_authority_signer_index: None,
+        is_final: false,
+        max_len: None,
+    });
+    let response = process_command(&config);
+    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
+    let buffer_pubkey_str = json
+        .as_object()
+        .unwrap()
+        .get("Buffer")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    let new_buffer_pubkey = Pubkey::from_str(&buffer_pubkey_str).unwrap();
+    let buffer_account = rpc_client
+        .get_account_with_commitment(&new_buffer_pubkey, CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
+    assert_eq!(buffer_account.lamports, minimum_balance_for_buffer_default);
+    assert_eq!(buffer_account.owner, bpf_loader_upgradeable::id());
+    if let UpgradeableLoaderState::Buffer { authority_address } = buffer_account.state().unwrap() {
+        assert_eq!(authority_address, Some(keypair.pubkey()));
+    } else {
+        panic!("not a buffer account");
+    }
+    assert_eq!(
+        buffer_account.data[UpgradeableLoaderState::buffer_data_offset().unwrap()..],
+        program_data[..]
+    );
+
+    // Specify buffer keypair and max_len
+    let buffer_keypair = Keypair::new();
+    config.signers = vec![&keypair, &buffer_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
+        program_location: pathbuf.to_str().unwrap().to_string(),
+        buffer_signer_index: Some(1),
+        buffer_pubkey: Some(buffer_keypair.pubkey()),
+        buffer_authority_signer_index: None,
+        is_final: false,
+        max_len: Some(max_len),
+    });
+    let response = process_command(&config);
+    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
+    let buffer_pubkey_str = json
+        .as_object()
+        .unwrap()
+        .get("Buffer")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    assert_eq!(
+        buffer_keypair.pubkey(),
+        Pubkey::from_str(&buffer_pubkey_str).unwrap()
+    );
+    let buffer_account = rpc_client
+        .get_account_with_commitment(&buffer_keypair.pubkey(), CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
+    assert_eq!(buffer_account.lamports, minimum_balance_for_buffer);
+    assert_eq!(buffer_account.owner, bpf_loader_upgradeable::id());
+    if let UpgradeableLoaderState::Buffer { authority_address } = buffer_account.state().unwrap() {
+        assert_eq!(authority_address, Some(keypair.pubkey()));
+    } else {
+        panic!("not a buffer account");
+    }
+    assert_eq!(
+        buffer_account.data[UpgradeableLoaderState::buffer_data_offset().unwrap()..],
+        program_data[..]
+    );
+
+    // Specify buffer authority
+    let buffer_keypair = Keypair::new();
+    let authority_keypair = Keypair::new();
+    config.signers = vec![&keypair, &buffer_keypair, &authority_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
+        program_location: pathbuf.to_str().unwrap().to_string(),
+        buffer_signer_index: Some(1),
+        buffer_pubkey: Some(buffer_keypair.pubkey()),
+        buffer_authority_signer_index: Some(2),
+        is_final: false,
+        max_len: None,
+    });
+    let response = process_command(&config);
+    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
+    let buffer_pubkey_str = json
+        .as_object()
+        .unwrap()
+        .get("Buffer")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    assert_eq!(
+        buffer_keypair.pubkey(),
+        Pubkey::from_str(&buffer_pubkey_str).unwrap()
+    );
+    let buffer_account = rpc_client
+        .get_account_with_commitment(&buffer_keypair.pubkey(), CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
+    assert_eq!(buffer_account.lamports, minimum_balance_for_buffer_default);
+    assert_eq!(buffer_account.owner, bpf_loader_upgradeable::id());
+    if let UpgradeableLoaderState::Buffer { authority_address } = buffer_account.state().unwrap() {
+        assert_eq!(authority_address, Some(authority_keypair.pubkey()));
+    } else {
+        panic!("not a buffer account");
+    }
+    assert_eq!(
+        buffer_account.data[UpgradeableLoaderState::buffer_data_offset().unwrap()..],
+        program_data[..]
+    );
+
+    // Specify authority only
+    let buffer_keypair = Keypair::new();
+    let authority_keypair = Keypair::new();
+    config.signers = vec![&keypair, &buffer_keypair, &authority_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
+        program_location: pathbuf.to_str().unwrap().to_string(),
+        buffer_signer_index: None,
+        buffer_pubkey: None,
+        buffer_authority_signer_index: Some(2),
+        is_final: false,
+        max_len: None,
+    });
+    let response = process_command(&config);
+    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
+    let buffer_pubkey_str = json
+        .as_object()
+        .unwrap()
+        .get("Buffer")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    let buffer_pubkey = Pubkey::from_str(&buffer_pubkey_str).unwrap();
+    let buffer_account = rpc_client
+        .get_account_with_commitment(&buffer_pubkey, CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
+    assert_eq!(buffer_account.lamports, minimum_balance_for_buffer_default);
+    assert_eq!(buffer_account.owner, bpf_loader_upgradeable::id());
+    if let UpgradeableLoaderState::Buffer { authority_address } = buffer_account.state().unwrap() {
+        assert_eq!(authority_address, Some(authority_keypair.pubkey()));
+    } else {
+        panic!("not a buffer account");
+    }
+    assert_eq!(
+        buffer_account.data[UpgradeableLoaderState::buffer_data_offset().unwrap()..],
+        program_data[..]
+    );
+
+    // Specify final
+    let buffer_keypair = Keypair::new();
+    let authority_keypair = Keypair::new();
+    config.signers = vec![&keypair, &buffer_keypair, &authority_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
+        program_location: pathbuf.to_str().unwrap().to_string(),
+        buffer_signer_index: None,
+        buffer_pubkey: None,
+        buffer_authority_signer_index: Some(2),
+        is_final: true,
+        max_len: None,
+    });
+    let response = process_command(&config);
+    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
+    let buffer_pubkey_str = json
+        .as_object()
+        .unwrap()
+        .get("Buffer")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    let buffer_pubkey = Pubkey::from_str(&buffer_pubkey_str).unwrap();
+    let buffer_account = rpc_client
+        .get_account_with_commitment(&buffer_pubkey, CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
+    if let UpgradeableLoaderState::Buffer { authority_address } = buffer_account.state().unwrap() {
+        assert_eq!(authority_address, None);
+    } else {
+        panic!("not a buffer account");
+    }
+}
+
+#[test]
+fn test_cli_program_set_buffer_authority() {
+    solana_logger::setup();
+
+    let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    pathbuf.push("tests");
+    pathbuf.push("fixtures");
+    pathbuf.push("noop");
+    pathbuf.set_extension("so");
+
+    let mint_keypair = Keypair::new();
+    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+
+    let (sender, receiver) = channel();
+    run_local_faucet(mint_keypair, sender, None);
+    let faucet_addr = receiver.recv().unwrap();
+
+    let rpc_client = RpcClient::new(test_validator.rpc_url());
+
+    let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
+    let mut program_data = Vec::new();
+    file.read_to_end(&mut program_data).unwrap();
+    let max_len = program_data.len();
+    let minimum_balance_for_buffer = rpc_client
+        .get_minimum_balance_for_rent_exemption(
+            UpgradeableLoaderState::programdata_len(max_len).unwrap(),
+        )
+        .unwrap();
+
+    let mut config = CliConfig::recent_for_tests();
+    let keypair = Keypair::new();
+    config.json_rpc_url = test_validator.rpc_url();
+    config.signers = vec![&keypair];
+    config.command = CliCommand::Airdrop {
+        faucet_host: None,
+        faucet_port: faucet_addr.port(),
+        pubkey: None,
+        lamports: 100 * minimum_balance_for_buffer,
+    };
+    process_command(&config).unwrap();
+
+    // Write a buffer
+    let buffer_keypair = Keypair::new();
+    config.signers = vec![&keypair, &buffer_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
+        program_location: pathbuf.to_str().unwrap().to_string(),
+        buffer_signer_index: Some(1),
+        buffer_pubkey: Some(buffer_keypair.pubkey()),
+        buffer_authority_signer_index: None,
+        is_final: false,
+        max_len: None,
+    });
+    process_command(&config).unwrap();
+    let buffer_account = rpc_client
+        .get_account_with_commitment(&buffer_keypair.pubkey(), CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
+    if let UpgradeableLoaderState::Buffer { authority_address } = buffer_account.state().unwrap() {
+        assert_eq!(authority_address, Some(keypair.pubkey()));
+    } else {
+        panic!("not a buffer account");
+    }
+
+    // Set new authority
+    let new_buffer_authority = Keypair::new();
+    config.signers = vec![&keypair, &buffer_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::SetBufferAuthority {
+        buffer_pubkey: buffer_keypair.pubkey(),
+        buffer_authority_index: Some(0),
+        new_buffer_authority: Some(new_buffer_authority.pubkey()),
+    });
+    let response = process_command(&config);
+    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
+    let new_buffer_authority_str = json
+        .as_object()
+        .unwrap()
+        .get("Authority")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    assert_eq!(
+        Pubkey::from_str(&new_buffer_authority_str).unwrap(),
+        new_buffer_authority.pubkey()
+    );
+    let buffer_account = rpc_client
+        .get_account_with_commitment(&buffer_keypair.pubkey(), CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
+    if let UpgradeableLoaderState::Buffer { authority_address } = buffer_account.state().unwrap() {
+        assert_eq!(authority_address, Some(new_buffer_authority.pubkey()));
+    } else {
+        panic!("not a buffer account");
+    }
+
+    // Set authority to buffer
+    config.signers = vec![&keypair, &new_buffer_authority];
+    config.command = CliCommand::Program(ProgramCliCommand::SetBufferAuthority {
+        buffer_pubkey: buffer_keypair.pubkey(),
+        buffer_authority_index: Some(1),
+        new_buffer_authority: Some(buffer_keypair.pubkey()),
+    });
+    let response = process_command(&config);
+    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
+    let buffer_authority_str = json
+        .as_object()
+        .unwrap()
+        .get("Authority")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    assert_eq!(
+        Pubkey::from_str(&buffer_authority_str).unwrap(),
+        buffer_keypair.pubkey()
+    );
+    let buffer_account = rpc_client
+        .get_account_with_commitment(&buffer_keypair.pubkey(), CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
+    if let UpgradeableLoaderState::Buffer { authority_address } = buffer_account.state().unwrap() {
+        assert_eq!(authority_address, Some(buffer_keypair.pubkey()));
+    } else {
+        panic!("not a buffer account");
+    }
+
+    // Set authority to None
+    config.signers = vec![&keypair, &buffer_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::SetBufferAuthority {
+        buffer_pubkey: buffer_keypair.pubkey(),
+        buffer_authority_index: Some(1),
+        new_buffer_authority: None,
+    });
+    let response = process_command(&config);
+    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
+    let buffer_authority_str = json
+        .as_object()
+        .unwrap()
+        .get("Authority")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    assert_eq!(buffer_authority_str, "None");
+    let buffer_account = rpc_client
+        .get_account_with_commitment(&buffer_keypair.pubkey(), CommitmentConfig::recent())
+        .unwrap()
+        .value
+        .unwrap();
+    if let UpgradeableLoaderState::Buffer { authority_address } = buffer_account.state().unwrap() {
+        assert_eq!(authority_address, None);
+    } else {
+        panic!("not a buffer account");
+    }
 }
