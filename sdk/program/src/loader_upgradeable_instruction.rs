@@ -16,12 +16,15 @@ pub enum UpgradeableLoaderInstruction {
     ///
     /// # Account references
     ///   0. [writable] source account to initialize.
+    ///   1. [] Buffer authority, optional, if omitted then the buffer will be
+    ///      immutable.
     InitializeBuffer,
 
     /// Write program data into a Buffer account.
     ///
     /// # Account references
-    ///   0. [writable, signer] Buffer account to write program data to.
+    ///   0. [writable] Buffer account to write program data to.
+    ///   1. [signer] Buffer authority
     Write {
         /// Offset at which to write the given bytes.
         offset: u32,
@@ -92,11 +95,13 @@ pub enum UpgradeableLoaderInstruction {
     ///   6. [signer] The program's authority.
     Upgrade,
 
-    /// Set a new authority that is allowed to upgrade the program.  To
-    /// permanently disable program updates omit the new authority.
+    /// Set a new authority that is allowed to write the buffer or upgrade the
+    /// program.  To permanently make the buffer immutable or disable program
+    /// updates omit the new authority.
     ///
     /// # Account references
-    ///   0. `[writable]` The ProgramData account to change the authority of.
+    ///   0. `[writable]` The Buffer or ProgramData account to change the
+    ///      authority of.
     ///   1. `[signer]` The current authority.
     ///   2. `[]` The new authority, optional, if omitted then the program will
     ///      not be upgradeable.

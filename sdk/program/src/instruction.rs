@@ -180,6 +180,12 @@ pub enum InstructionError {
 
     #[error("Program failed to compile")]
     ProgramFailedToCompile,
+
+    #[error("Account is immutable")]
+    Immutable,
+
+    #[error("Incorrect authority provided")]
+    IncorrectAuthority,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
