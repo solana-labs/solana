@@ -175,7 +175,7 @@ mod tests {
     use super::*;
     use crate::cluster_info::make_accounts_hashes_message;
     use crate::contact_info::ContactInfo;
-    use solana_runtime::bank_forks::CompressionType;
+    use solana_runtime::bank_forks::ArchiveFormat;
     use solana_runtime::snapshot_utils::SnapshotVersion;
     use solana_sdk::{
         hash::hash,
@@ -239,7 +239,7 @@ mod tests {
                 snapshot_links,
                 tar_output_file: PathBuf::from("."),
                 storages: vec![],
-                compression: CompressionType::Bzip2,
+                archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version: SnapshotVersion::default(),
             };
 
