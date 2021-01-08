@@ -297,7 +297,7 @@ impl Crds {
             let timeout = *timeouts.get(pubkey).unwrap_or(&default_timeout);
             let mut old_labels = Vec::new();
             // Buffer of crds values to be evicted based on their wallclock.
-            let mut buffer: Vec<(u64 /*wallclock*/, usize /*index*/)> = index
+            let mut recent_unlimited_labels: Vec<(u64 /*wallclock*/, usize /*index*/)> = index
                 .into_iter()
                 .filter_map(|ix| {
                     let (label, value) = self.table.get_index(*ix).unwrap();
@@ -313,13 +313,15 @@ impl Crds {
                 })
                 .collect();
             // Number of values to discard from the buffer:
-            let nth = buffer.len().saturating_sub(MAX_CRDS_VALUES_PER_PUBKEY);
+            let nth = recent_unlimited_labels
+                .len()
+                .saturating_sub(MAX_CRDS_VALUES_PER_PUBKEY);
             // Partition on wallclock to discard the older ones.
-            if nth > 0 && nth < buffer.len() {
-                select_nth(&mut buffer, nth);
+            if nth > 0 && nth < recent_unlimited_labels.len() {
+                select_nth(&mut recent_unlimited_labels, nth);
             }
             old_labels.extend(
-                buffer
+                recent_unlimited_labels
                     .split_at(nth)
                     .0
                     .iter()
