@@ -452,9 +452,12 @@ impl AppendVec {
         account: &Account,
         hash: Hash,
     ) -> Option<usize> {
-        self.append_accounts(&[(storage_meta, account)], &[hash])
-            .first()
-            .cloned()
+        let res = self.append_accounts(&[(storage_meta, account)], &[hash]);
+        if res.len() == 1 {
+            None
+        } else {
+            res.first().cloned()
+        }
     }
 }
 

@@ -1731,7 +1731,7 @@ pub mod tests {
             &mut reclaims,
             None,
             &HashSet::new(),
-            |_| true,
+            |_| false,
         );
         assert!(reclaims.is_empty());
         assert_eq!(slot_list, vec![(1, true), (2, true), (5, true), (9, true)]);
@@ -1748,7 +1748,7 @@ pub mod tests {
             &mut reclaims,
             None,
             &HashSet::new(),
-            |_| true,
+            |_| false,
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -1763,7 +1763,7 @@ pub mod tests {
             &mut reclaims,
             None,
             &HashSet::new(),
-            |_| true,
+            |_| false,
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -1778,7 +1778,7 @@ pub mod tests {
             &mut reclaims,
             Some(6),
             &HashSet::new(),
-            |_| true,
+            |_| false,
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -1792,7 +1792,7 @@ pub mod tests {
             &mut reclaims,
             Some(5),
             &HashSet::new(),
-            |_| true,
+            |_| false,
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -1807,7 +1807,7 @@ pub mod tests {
             &mut reclaims,
             Some(2),
             &HashSet::new(),
-            |_| true,
+            |_| false,
         );
         assert!(reclaims.is_empty());
         assert_eq!(slot_list, vec![(1, true), (2, true), (5, true), (9, true)]);
@@ -1822,7 +1822,7 @@ pub mod tests {
             &mut reclaims,
             Some(1),
             &HashSet::new(),
-            |_| true,
+            |_| false,
         );
         assert!(reclaims.is_empty());
         assert_eq!(slot_list, vec![(1, true), (2, true), (5, true), (9, true)]);
@@ -1837,7 +1837,7 @@ pub mod tests {
             &mut reclaims,
             Some(7),
             &HashSet::new(),
-            |_| true,
+            |_| false,
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -2006,7 +2006,7 @@ pub mod tests {
         assert!(secondary_index.get(&secondary_key1).is_empty());
         assert_eq!(secondary_index.get(&secondary_key2), vec![account_key]);
 
-        // If another fork reintroduces secondary_key1, then it should be readded to the
+        // If another fork reintroduces secondary_key1, then it should be re-added to the
         // index
         let fork = slot + 1;
         index.upsert(
@@ -2033,7 +2033,7 @@ pub mod tests {
                     &mut vec![],
                     None,
                     account_index,
-                    |_| true,
+                    |_| false,
                 )
             });
         assert!(secondary_index.get(&secondary_key2).is_empty());
