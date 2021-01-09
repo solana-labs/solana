@@ -118,13 +118,12 @@ pub mod limit_cpi_loader_invoke {
     solana_sdk::declare_id!("xGbcW7EEC7zMRJ6LaJCob65EJxKryWjwM4rv8f57SRM");
 }
 
-<<<<<<< HEAD
 pub mod try_find_program_address_syscall_enabled {
     solana_sdk::declare_id!("EMsMNadQNhCYDyGpYH5Tx6dGHxiUqKHk782PU5XaWfmi");
-=======
+}
+
 pub mod use_loaded_program_accounts {
     solana_sdk::declare_id!("FLjgLeg1PJkZimQCVa5sVFtaq6VmSDPw3NvH8iQ3nyHn");
->>>>>>> a8b5a32b5... Gate cpi program account passing (#14443)
 }
 
 lazy_static! {
@@ -158,11 +157,8 @@ lazy_static! {
         (bpf_loader_upgradeable_program::id(), "upgradeable bpf loader"),
         (max_cpi_instruction_size_ipv6_mtu::id(), "Max cross-program invocation size 1280"),
         (limit_cpi_loader_invoke::id(), "Loader not authorized via CPI"),
-<<<<<<< HEAD
         (try_find_program_address_syscall_enabled::id(), "add try_find_program_address syscall"),
-=======
         (use_loaded_program_accounts::id(), "Use loaded program accounts"),
->>>>>>> a8b5a32b5... Gate cpi program account passing (#14443)
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
