@@ -1,45 +1,8 @@
-<<<<<<< HEAD
 use crate::{
     cluster_info::Node,
     contact_info::ContactInfo,
     gossip_service::discover_cluster,
     validator::{Validator, ValidatorConfig},
-=======
-use {
-    crate::{
-        cluster_info::Node,
-        gossip_service::discover_cluster,
-        rpc::JsonRpcConfig,
-        validator::{Validator, ValidatorConfig},
-    },
-    solana_client::rpc_client::RpcClient,
-    solana_ledger::{blockstore::create_new_ledger, create_new_tmp_ledger},
-    solana_runtime::{
-        bank_forks::{ArchiveFormat, SnapshotConfig, SnapshotVersion},
-        genesis_utils::create_genesis_config_with_leader_ex,
-        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-    },
-    solana_sdk::{
-        account::Account,
-        clock::DEFAULT_MS_PER_SLOT,
-        commitment_config::CommitmentConfig,
-        fee_calculator::{FeeCalculator, FeeRateGovernor},
-        hash::Hash,
-        native_token::sol_to_lamports,
-        pubkey::Pubkey,
-        rent::Rent,
-        signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
-    },
-    std::{
-        collections::HashMap,
-        fs::remove_dir_all,
-        net::{IpAddr, Ipv4Addr, SocketAddr},
-        path::PathBuf,
-        sync::Arc,
-        thread::sleep,
-        time::Duration,
-    },
->>>>>>> 7be677080... Rename CompressionType to ArchiveFormat
 };
 use solana_ledger::create_new_tmp_ledger;
 use solana_runtime::genesis_utils::{
@@ -143,52 +106,8 @@ impl TestValidator {
 
         let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
 
-<<<<<<< HEAD
         let config = ValidatorConfig {
             rpc_addrs: Some((node.info.rpc, node.info.rpc_pubsub)),
-=======
-        let validator_identity =
-            read_keypair_file(ledger_path.join("validator-keypair.json").to_str().unwrap())?;
-        let validator_vote_account = read_keypair_file(
-            ledger_path
-                .join("vote-account-keypair.json")
-                .to_str()
-                .unwrap(),
-        )?;
-
-        let mut node = Node::new_localhost_with_pubkey(&validator_identity.pubkey());
-        if let Some((rpc, rpc_pubsub)) = config.rpc_ports {
-            node.info.rpc = SocketAddr::new(node.info.gossip.ip(), rpc);
-            node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), rpc_pubsub);
-        }
-
-        let vote_account_address = validator_vote_account.pubkey();
-        let rpc_url = format!("http://{}", node.info.rpc);
-        let rpc_pubsub_url = format!("ws://{}/", node.info.rpc_pubsub);
-        let tpu = node.info.tpu;
-        let gossip = node.info.gossip;
-
-        let validator_config = ValidatorConfig {
-            rpc_addrs: Some((
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
-                SocketAddr::new(
-                    IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-                    node.info.rpc_pubsub.port(),
-                ),
-            )),
-            rpc_config: config.rpc_config.clone(),
-            accounts_hash_interval_slots: 100,
-            account_paths: vec![ledger_path.join("accounts")],
-            poh_verify: false, // Skip PoH verification of ledger on startup for speed
-            snapshot_config: Some(SnapshotConfig {
-                snapshot_interval_slots: 100,
-                snapshot_path: ledger_path.join("snapshot"),
-                snapshot_package_output_path: ledger_path.to_path_buf(),
-                archive_format: ArchiveFormat::Tar,
-                snapshot_version: SnapshotVersion::default(),
-            }),
-            enforce_ulimit_nofile: false,
->>>>>>> 7be677080... Rename CompressionType to ArchiveFormat
             ..ValidatorConfig::default()
         };
         let vote_pubkey = voting_keypair.pubkey();
