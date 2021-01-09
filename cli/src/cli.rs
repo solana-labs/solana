@@ -1178,7 +1178,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::Inflation(inflation_subcommand) => {
             process_inflation_subcommand(&rpc_client, config, inflation_subcommand)
         }
-        CliCommand::LeaderSchedule { epoch } => process_leader_schedule(&rpc_client, *epoch),
+        CliCommand::LeaderSchedule { epoch } => {
+            process_leader_schedule(&rpc_client, config, *epoch)
+        }
         CliCommand::LiveSlots => process_live_slots(&config),
         CliCommand::Logs { filter } => process_logs(&config, filter),
         CliCommand::Ping {

@@ -1162,6 +1162,32 @@ impl fmt::Display for CliBlockTime {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliLeaderSchedule {
+    pub epoch: Epoch,
+    pub leader_schedule_entries: Vec<CliLeaderScheduleEntry>,
+}
+
+impl QuietDisplay for CliLeaderSchedule {}
+impl VerboseDisplay for CliLeaderSchedule {}
+
+impl fmt::Display for CliLeaderSchedule {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for entry in &self.leader_schedule_entries {
+            writeln!(f, "  {:<15} {:<44}", entry.slot, entry.leader)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliLeaderScheduleEntry {
+    pub slot: Slot,
+    pub leader: String,
+}
+
 #[derive(Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CliSignOnlyData {
