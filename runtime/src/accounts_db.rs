@@ -20,7 +20,9 @@
 
 use crate::{
     accounts_cache::{AccountsCache, CachedAccount, SlotCache},
-    accounts_index::{AccountIndex, AccountsIndex, Ancestors, IndexKey, SlotList, SlotSlice},
+    accounts_index::{
+        AccountIndex, AccountsIndex, Ancestors, IndexKey, IsCached, SlotList, SlotSlice,
+    },
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta},
 };
 use blake3::traits::digest::Digest;
@@ -124,6 +126,12 @@ pub struct AccountInfo {
     /// purposes to remove accounts with zero balance.
     lamports: u64,
 }
+impl IsCached for AccountInfo {
+    fn is_cached(&self) -> bool {
+        self.store_id == CACHE_VIRTUAL_STORAGE_ID
+    }
+}
+
 /// An offset into the AccountsDB::storage vector
 pub type AppendVecId = usize;
 pub type SnapshotStorage = Vec<Arc<AccountStorageEntry>>;
@@ -796,7 +804,6 @@ impl AccountsDB {
                             &mut reclaims,
                             max_clean_root,
                             &self.account_indexes,
-                            |account_info| account_info.store_id == CACHE_VIRTUAL_STORAGE_ID,
                         );
                     }
                     reclaims

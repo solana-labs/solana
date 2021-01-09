@@ -34,6 +34,22 @@ pub type AccountMap<K, V> = BTreeMap<K, V>;
 
 type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
 
+pub trait IsCached {
+    fn is_cached(&self) -> bool;
+}
+
+impl IsCached for bool {
+    fn is_cached(&self) -> bool {
+        false
+    }
+}
+
+impl IsCached for u64 {
+    fn is_cached(&self) -> bool {
+        false
+    }
+}
+
 enum ScanTypes<R: RangeBounds<Pubkey>> {
     Unindexed(Option<R>),
     Indexed(IndexKey),
@@ -220,7 +236,7 @@ pub struct AccountsIndex<T> {
     ongoing_scan_roots: RwLock<BTreeMap<Slot, u64>>,
 }
 
-impl<T: 'static + Clone> AccountsIndex<T> {
+impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
     fn iter<R>(&self, range: Option<R>) -> AccountsIndexIterator<T>
     where
         R: RangeBounds<Pubkey>,
@@ -816,14 +832,13 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         reclaims: &mut SlotList<T>,
         max_clean_root: Option<Slot>,
         account_indexes: &HashSet<AccountIndex>,
-        is_cached: impl Fn(&T) -> bool,
     ) {
         let roots_traker = &self.roots_tracker.read().unwrap();
         let max_root = Self::get_max_root(&roots_traker.roots, &list, max_clean_root);
 
         let mut purged_slots: HashSet<Slot> = HashSet::new();
         list.retain(|(slot, value)| {
-            let should_purge = Self::can_purge(max_root, *slot) && !is_cached(value);
+            let should_purge = Self::can_purge(max_root, *slot) && !value.is_cached();
             if should_purge {
                 reclaims.push((*slot, value.clone()));
                 purged_slots.insert(*slot);
@@ -841,7 +856,6 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         reclaims: &mut SlotList<T>,
         max_clean_root: Option<Slot>,
         account_indexes: &HashSet<AccountIndex>,
-        is_cached: impl Fn(&T) -> bool,
     ) {
         if let Some(mut locked_entry) = self.get_account_write_entry(pubkey) {
             locked_entry.slot_list_mut(|slot_list| {
@@ -851,7 +865,6 @@ impl<T: 'static + Clone> AccountsIndex<T> {
                     reclaims,
                     max_clean_root,
                     account_indexes,
-                    is_cached,
                 );
             });
         }
@@ -1731,7 +1744,6 @@ pub mod tests {
             &mut reclaims,
             None,
             &HashSet::new(),
-            |_| false,
         );
         assert!(reclaims.is_empty());
         assert_eq!(slot_list, vec![(1, true), (2, true), (5, true), (9, true)]);
@@ -1748,7 +1760,6 @@ pub mod tests {
             &mut reclaims,
             None,
             &HashSet::new(),
-            |_| false,
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -1763,7 +1774,6 @@ pub mod tests {
             &mut reclaims,
             None,
             &HashSet::new(),
-            |_| false,
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -1778,7 +1788,6 @@ pub mod tests {
             &mut reclaims,
             Some(6),
             &HashSet::new(),
-            |_| false,
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -1792,7 +1801,6 @@ pub mod tests {
             &mut reclaims,
             Some(5),
             &HashSet::new(),
-            |_| false,
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -1807,7 +1815,6 @@ pub mod tests {
             &mut reclaims,
             Some(2),
             &HashSet::new(),
-            |_| false,
         );
         assert!(reclaims.is_empty());
         assert_eq!(slot_list, vec![(1, true), (2, true), (5, true), (9, true)]);
@@ -1822,7 +1829,6 @@ pub mod tests {
             &mut reclaims,
             Some(1),
             &HashSet::new(),
-            |_| false,
         );
         assert!(reclaims.is_empty());
         assert_eq!(slot_list, vec![(1, true), (2, true), (5, true), (9, true)]);
@@ -1837,7 +1843,6 @@ pub mod tests {
             &mut reclaims,
             Some(7),
             &HashSet::new(),
-            |_| false,
         );
         assert_eq!(reclaims, vec![(1, true), (2, true)]);
         assert_eq!(slot_list, vec![(5, true), (9, true)]);
@@ -2033,7 +2038,6 @@ pub mod tests {
                     &mut vec![],
                     None,
                     account_index,
-                    |_| false,
                 )
             });
         assert!(secondary_index.get(&secondary_key2).is_empty());
