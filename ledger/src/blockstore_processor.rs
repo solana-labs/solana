@@ -6,6 +6,7 @@ use crate::{
     entry::{create_ticks, Entry, EntrySlice, EntryVerificationStatus, VerifyRecyclers},
     leader_schedule_cache::LeaderScheduleCache,
 };
+use chrono_humanize::{Accuracy, HumanTime, Tense};
 use crossbeam_channel::Sender;
 use itertools::Itertools;
 use log::*;
@@ -34,7 +35,6 @@ use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
     signature::{Keypair, Signature},
-    timing::duration_as_ms,
     transaction::{Result, Transaction, TransactionError},
 };
 use solana_transaction_status::token_balances::{
@@ -479,8 +479,8 @@ fn do_process_blockstore_from_root(
     let bank_forks = BankForks::new_from_banks(&initial_forks, root);
 
     info!(
-        "ledger processed in {}ms. {} MB allocated. root={}, {} fork{} at {}, with {} frozen bank{}",
-        duration_as_ms(&now.elapsed()),
+        "ledger processed in {}. {} MB allocated. root slot is {}, {} fork{} at {}, with {} frozen bank{}",
+        HumanTime::from(chrono::Duration::from_std(now.elapsed()).unwrap()).to_text_en(Accuracy::Precise, Tense::Present),
         allocated.since(initial_allocation) / 1_000_000,
         bank_forks.root(),
         initial_forks.len(),
