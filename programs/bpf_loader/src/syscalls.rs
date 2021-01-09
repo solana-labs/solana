@@ -17,8 +17,8 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     feature_set::{
-        limit_cpi_loader_invoke, pubkey_log_syscall_enabled, ristretto_mul_syscall_enabled,
-        sha256_syscall_enabled, sol_log_compute_units_syscall,
+        abort_on_all_cpi_failures, limit_cpi_loader_invoke, pubkey_log_syscall_enabled,
+        ristretto_mul_syscall_enabled, sha256_syscall_enabled, sol_log_compute_units_syscall,
         try_find_program_address_syscall_enabled, use_loaded_program_accounts,
     },
     hash::{Hasher, HASH_BYTES},
@@ -1503,10 +1503,16 @@ fn call<'a>(
         *(&mut *invoke_context),
     ) {
         Ok(()) => (),
-        Err(err) => match ProgramError::try_from(err) {
-            Ok(err) => return Ok(err.into()),
-            Err(err) => return Err(SyscallError::InstructionError(err).into()),
-        },
+        Err(err) => {
+            if invoke_context.is_feature_active(&abort_on_all_cpi_failures::id()) {
+                return Err(SyscallError::InstructionError(err).into());
+            } else {
+                match ProgramError::try_from(err) {
+                    Ok(err) => return Ok(err.into()),
+                    Err(err) => return Err(SyscallError::InstructionError(err).into()),
+                }
+            }
+        }
     }
 
     // Copy results back to caller
