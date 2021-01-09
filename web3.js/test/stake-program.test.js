@@ -369,6 +369,36 @@ test('live staking actions', async () => {
     }),
   ).rejects.toThrow();
 
+  // Deactivate stake
+  let deactivate = StakeProgram.deactivate({
+    stakePubkey: newAccountPubkey,
+    authorizedPubkey: authorized.publicKey,
+  });
+  await sendAndConfirmTransaction(connection, deactivate, [authorized], {
+    commitment: 'singleGossip',
+  });
+
+  let stakeActivationState;
+  do {
+    stakeActivationState = await connection.getStakeActivation(
+      newAccountPubkey,
+    );
+  } while (stakeActivationState.state != 'inactive');
+
+  // Test that withdraw succeeds after deactivation
+  withdraw = StakeProgram.withdraw({
+    stakePubkey: newAccountPubkey,
+    authorizedPubkey: authorized.publicKey,
+    toPubkey: recipient.publicKey,
+    lamports: minimumAmount + 20,
+  });
+
+  await sendAndConfirmTransaction(connection, withdraw, [authorized], {
+    commitment: 'singleGossip',
+  });
+  const recipientBalance = await connection.getBalance(recipient.publicKey);
+  expect(recipientBalance).toEqual(minimumAmount + 20);
+
   // Split stake
   const newStake = new Account();
   let split = StakeProgram.split({
@@ -380,6 +410,8 @@ test('live staking actions', async () => {
   await sendAndConfirmTransaction(connection, split, [authorized, newStake], {
     commitment: 'singleGossip',
   });
+  const balance = await connection.getBalance(newAccountPubkey);
+  expect(balance).toEqual(minimumAmount + 2);
 
   // Authorize to new account
   const newAuthorized = new Account();
@@ -404,44 +436,17 @@ test('live staking actions', async () => {
     commitment: 'singleGossip',
   });
 
-  // Test old authorized can't deactivate
-  let deactivateNotAuthorized = StakeProgram.deactivate({
+  // Test old authorized can't delegate
+  let delegateNotAuthorized = StakeProgram.delegate({
     stakePubkey: newAccountPubkey,
     authorizedPubkey: authorized.publicKey,
+    votePubkey,
   });
   await expect(
-    sendAndConfirmTransaction(
-      connection,
-      deactivateNotAuthorized,
-      [authorized],
-      {commitment: 'singleGossip', skipPreflight: true},
-    ),
+    sendAndConfirmTransaction(connection, delegateNotAuthorized, [authorized], {
+      commitment: 'singleGossip',
+    }),
   ).rejects.toThrow();
-
-  // Deactivate stake
-  let deactivate = StakeProgram.deactivate({
-    stakePubkey: newAccountPubkey,
-    authorizedPubkey: newAuthorized.publicKey,
-  });
-  await sendAndConfirmTransaction(connection, deactivate, [newAuthorized], {
-    commitment: 'singleGossip',
-  });
-
-  // Test that withdraw succeeds after deactivation
-  withdraw = StakeProgram.withdraw({
-    stakePubkey: newAccountPubkey,
-    authorizedPubkey: newAuthorized.publicKey,
-    toPubkey: recipient.publicKey,
-    lamports: minimumAmount + 20,
-  });
-
-  await sendAndConfirmTransaction(connection, withdraw, [newAuthorized], {
-    commitment: 'singleGossip',
-  });
-  const balance = await connection.getBalance(newAccountPubkey);
-  expect(balance).toEqual(minimumAmount + 2);
-  const recipientBalance = await connection.getBalance(recipient.publicKey);
-  expect(recipientBalance).toEqual(minimumAmount + 20);
 
   // Authorize a derived address
   authorize = StakeProgram.authorize({
