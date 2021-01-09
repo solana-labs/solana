@@ -151,8 +151,7 @@ fn main() {
             info!("Tuning the system now");
             #[cfg(target_os = "linux")]
             {
-                [cfg(target_os = "linux")]
-            { // tune_poh_service_priority(peer_uid);
+                // tune_poh_service_priority(peer_uid);
             }
         }
     }
