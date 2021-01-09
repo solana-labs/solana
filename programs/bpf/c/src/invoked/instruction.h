@@ -12,4 +12,3 @@ const uint8_t VERIFY_WRITER = 4;
 const uint8_t VERIFY_PRIVILEGE_ESCALATION = 5;
 const uint8_t NESTED_INVOKE = 6;
 const uint8_t RETURN_OK = 7;
-
