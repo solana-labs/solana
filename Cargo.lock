@@ -4270,6 +4270,7 @@ dependencies = [
  "bincode",
  "byteorder",
  "chrono",
+ "chrono-humanize",
  "crossbeam-channel",
  "dlopen",
  "dlopen_derive",
