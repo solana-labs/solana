@@ -621,13 +621,8 @@ impl Executor for BPFExecutor {
                 }
             };
 
-<<<<<<< HEAD
-            stable_log::program_invoke(&logger, program.unsigned_key(), invoke_depth);
-            let instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
-=======
             stable_log::program_invoke(&logger, program_id, invoke_depth);
-            let mut instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
->>>>>>> 9d53eca6e... Report correct program id (#14486)
+            let instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
             let before = compute_meter.borrow().get_remaining();
             let result = vm.execute_program_metered(
                 parameter_bytes.as_slice(),
