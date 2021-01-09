@@ -108,13 +108,9 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("BUFFER_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-<<<<<<< HEAD
-                                .help("Intermediate buffer account to write data to, can be used to resume a failed deploy [default: new random address]")
-=======
                                 .conflicts_with("program_location")
                                 .help("Intermediate buffer account to write data to, which can be used to resume a failed deploy \
                                       [default: random address]")
->>>>>>> 58487c636... Add buffer authority to upgradeable loader (#14482)
                         )
                         .arg(
                             pubkey!(Arg::with_name("upgrade_authority")

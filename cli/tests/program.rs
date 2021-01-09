@@ -171,13 +171,13 @@ fn test_cli_program_deploy_no_authority() {
     let TestValidator {
         server,
         leader_data,
-        alice: mint_keypair,
+        alice,
         ledger_path,
         ..
     } = TestValidator::run();
 
     let (sender, receiver) = channel();
-    run_local_faucet(mint_keypair, sender, None);
+    run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
@@ -547,10 +547,6 @@ fn test_cli_program_deploy_with_authority() {
     });
     process_command(&config).unwrap_err();
 
-<<<<<<< HEAD
-    server.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
-=======
     // deploy with finality
     config.signers = vec![&keypair, &new_upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
@@ -591,6 +587,9 @@ fn test_cli_program_deploy_with_authority() {
     } else {
         panic!("not a buffer account");
     }
+
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
 }
 
 #[test]
@@ -603,14 +602,19 @@ fn test_cli_program_write_buffer() {
     pathbuf.push("noop");
     pathbuf.set_extension("so");
 
-    let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let TestValidator {
+        server,
+        leader_data,
+        alice,
+        ledger_path,
+        ..
+    } = TestValidator::run();
 
     let (sender, receiver) = channel();
-    run_local_faucet(mint_keypair, sender, None);
+    run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new(test_validator.rpc_url());
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();
@@ -629,7 +633,7 @@ fn test_cli_program_write_buffer() {
 
     let mut config = CliConfig::recent_for_tests();
     let keypair = Keypair::new();
-    config.json_rpc_url = test_validator.rpc_url();
+    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.signers = vec![&keypair];
     config.command = CliCommand::Airdrop {
         faucet_host: None,
@@ -830,6 +834,9 @@ fn test_cli_program_write_buffer() {
     } else {
         panic!("not a buffer account");
     }
+
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
 }
 
 #[test]
@@ -842,14 +849,19 @@ fn test_cli_program_set_buffer_authority() {
     pathbuf.push("noop");
     pathbuf.set_extension("so");
 
-    let mint_keypair = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
+    let TestValidator {
+        server,
+        leader_data,
+        alice,
+        ledger_path,
+        ..
+    } = TestValidator::run();
 
     let (sender, receiver) = channel();
-    run_local_faucet(mint_keypair, sender, None);
+    run_local_faucet(alice, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new(test_validator.rpc_url());
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();
@@ -863,7 +875,7 @@ fn test_cli_program_set_buffer_authority() {
 
     let mut config = CliConfig::recent_for_tests();
     let keypair = Keypair::new();
-    config.json_rpc_url = test_validator.rpc_url();
+    config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
     config.signers = vec![&keypair];
     config.command = CliCommand::Airdrop {
         faucet_host: None,
@@ -986,5 +998,7 @@ fn test_cli_program_set_buffer_authority() {
     } else {
         panic!("not a buffer account");
     }
->>>>>>> 58487c636... Add buffer authority to upgradeable loader (#14482)
+
+    server.close().unwrap();
+    remove_dir_all(ledger_path).unwrap();
 }
