@@ -26,6 +26,7 @@ use solana_core::{
 };
 use solana_download_utils::{download_genesis_if_missing, download_snapshot};
 use solana_ledger::blockstore_db::BlockstoreRecoveryMode;
+use solana_measure::measure::Measure;
 use solana_perf::recycler::enable_recycler_warming;
 use solana_runtime::{
     accounts_index::AccountIndex,
@@ -760,6 +761,16 @@ fn rpc_bootstrap(
     }
 }
 
+// Cleanup anything that looks like an accounts append-vec
+fn cleanup_accounts_path(account_path: &std::path::Path) {
+    if std::fs::remove_dir_all(account_path).is_err() {
+        warn!(
+            "encountered error removing accounts path: {:?}",
+            account_path
+        );
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn create_validator(
     node: Node,
@@ -780,6 +791,19 @@ fn create_validator(
     }
     solana_ledger::entry::init_poh();
     solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(ledger_path);
+
+    info!("Cleaning accounts paths..");
+    let mut start = Measure::start("clean_accounts_paths");
+    for accounts_path in &validator_config.account_paths {
+        cleanup_accounts_path(accounts_path);
+    }
+    if let Some(ref shrink_paths) = validator_config.account_shrink_paths {
+        for accounts_path in shrink_paths {
+            cleanup_accounts_path(accounts_path);
+        }
+    }
+    start.stop();
+    info!("done. {}", start);
 
     if !cluster_entrypoints.is_empty() {
         rpc_bootstrap(

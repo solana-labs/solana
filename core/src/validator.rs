@@ -42,7 +42,6 @@ use solana_ledger::{
     leader_schedule_cache::LeaderScheduleCache,
     poh::compute_hash_time_ns,
 };
-use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
 use solana_runtime::{
     accounts_index::AccountIndex,
@@ -284,19 +283,6 @@ impl Validator {
                 );
             }
         }
-
-        info!("Cleaning accounts paths..");
-        let mut start = Measure::start("clean_accounts_paths");
-        for accounts_path in &config.account_paths {
-            cleanup_accounts_path(accounts_path);
-        }
-        if let Some(ref shrink_paths) = config.account_shrink_paths {
-            for accounts_path in shrink_paths {
-                cleanup_accounts_path(accounts_path);
-            }
-        }
-        start.stop();
-        info!("done. {}", start);
 
         let mut validator_exit = ValidatorExit::default();
         let exit = Arc::new(AtomicBool::new(false));
@@ -1289,16 +1275,6 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
     }
 
     online_stake * 100 / total_activated_stake
-}
-
-// Cleanup anything that looks like an accounts append-vec
-fn cleanup_accounts_path(account_path: &std::path::Path) {
-    if std::fs::remove_dir_all(account_path).is_err() {
-        warn!(
-            "encountered error removing accounts path: {:?}",
-            account_path
-        );
-    }
 }
 
 pub fn is_snapshot_config_invalid(
