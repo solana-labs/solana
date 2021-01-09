@@ -414,7 +414,7 @@ test('live staking actions', async () => {
       connection,
       deactivateNotAuthorized,
       [authorized],
-      {commitment: 'singleGossip', skipPreflight: true},
+      {commitment: 'singleGossip'},
     ),
   ).rejects.toThrow();
 
