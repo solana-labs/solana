@@ -546,7 +546,7 @@ impl MessageProcessor {
         let _ = keyed_accounts
             .iter()
             .find_map(|keyed_account| {
-                if &instruction.program_id == keyed_account.unsigned_key() {
+                if &program_id == keyed_account.unsigned_key() {
                     Some(keyed_account)
                 } else {
                     None

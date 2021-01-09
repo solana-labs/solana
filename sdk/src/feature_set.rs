@@ -122,6 +122,10 @@ pub mod try_find_program_address_syscall_enabled {
     solana_sdk::declare_id!("EMsMNadQNhCYDyGpYH5Tx6dGHxiUqKHk782PU5XaWfmi");
 }
 
+pub mod use_loaded_program_accounts {
+    solana_sdk::declare_id!("FLjgLeg1PJkZimQCVa5sVFtaq6VmSDPw3NvH8iQ3nyHn");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -154,6 +158,7 @@ lazy_static! {
         (max_cpi_instruction_size_ipv6_mtu::id(), "Max cross-program invocation size 1280"),
         (limit_cpi_loader_invoke::id(), "Loader not authorized via CPI"),
         (try_find_program_address_syscall_enabled::id(), "add try_find_program_address syscall"),
+        (use_loaded_program_accounts::id(), "Use loaded program accounts"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
