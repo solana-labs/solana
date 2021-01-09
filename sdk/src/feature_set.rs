@@ -130,6 +130,10 @@ pub mod use_loaded_program_accounts {
     solana_sdk::declare_id!("FLjgLeg1PJkZimQCVa5sVFtaq6VmSDPw3NvH8iQ3nyHn");
 }
 
+pub mod abort_on_all_cpi_failures {
+    solana_sdk::declare_id!("ED5D5a2hQaECHaMmKpnU48GdsfafdCjkb3pgAw5RKbb2");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -164,6 +168,7 @@ lazy_static! {
         (max_cpi_instruction_size_ipv6_mtu::id(), "Max cross-program invocation size 1280"),
         (limit_cpi_loader_invoke::id(), "Loader not authorized via CPI"),
         (use_loaded_program_accounts::id(), "Use loaded program accounts"),
+        (abort_on_all_cpi_failures::id(), "Abort on all CPI failures"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

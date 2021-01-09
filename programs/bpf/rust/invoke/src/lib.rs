@@ -26,6 +26,7 @@ const TEST_CAP_SIGNERS: u8 = 7;
 const TEST_ALLOC_ACCESS_VIOLATION: u8 = 8;
 const TEST_INSTRUCTION_DATA_TOO_LARGE: u8 = 9;
 const TEST_INSTRUCTION_META_TOO_LARGE: u8 = 10;
+const TEST_RETURN_ERROR: u8 = 11;
 
 // const MINT_INDEX: usize = 0;
 const ARGUMENT_INDEX: usize = 1;
@@ -122,7 +123,7 @@ fn process_instruction(
                         (accounts[INVOKED_PROGRAM_INDEX].key, false, false),
                         (accounts[INVOKED_PROGRAM_DUP_INDEX].key, false, false),
                     ],
-                    vec![TEST_VERIFY_TRANSLATIONS, 1, 2, 3, 4, 5],
+                    vec![VERIFY_TRANSLATIONS, 1, 2, 3, 4, 5],
                 );
                 invoke(&instruction, accounts)?;
             }
@@ -137,29 +138,6 @@ fn process_instruction(
                 invoke(&instruction, accounts)?;
             }
 
-            msg!("Test return error");
-            {
-                assert_eq!(
-                    10,
-                    **accounts[INVOKED_ARGUMENT_INDEX].try_borrow_lamports()?
-                );
-                assert_eq!(0, accounts[INVOKED_ARGUMENT_INDEX].try_borrow_data()?[0]);
-                let instruction = create_instruction(
-                    *accounts[INVOKED_PROGRAM_INDEX].key,
-                    &[(accounts[INVOKED_ARGUMENT_INDEX].key, false, true)],
-                    vec![TEST_RETURN_ERROR],
-                );
-                assert_eq!(
-                    invoke(&instruction, accounts),
-                    Err(ProgramError::Custom(42))
-                );
-                assert_eq!(
-                    10,
-                    **accounts[INVOKED_ARGUMENT_INDEX].try_borrow_lamports()?
-                );
-                assert_eq!(0, accounts[INVOKED_ARGUMENT_INDEX].try_borrow_data()?[0]);
-            }
-
             msg!("Test refcell usage");
             {
                 let writable = INVOKED_ARGUMENT_INDEX;
@@ -171,14 +149,11 @@ fn process_instruction(
                         (accounts[writable].key, true, true),
                         (accounts[readable].key, false, false),
                     ],
-                    vec![TEST_RETURN_ERROR, 1, 2, 3, 4, 5],
+                    vec![RETURN_OK, 1, 2, 3, 4, 5],
                 );
 
                 // success with this account configuration as a check
-                assert_eq!(
-                    invoke(&instruction, accounts),
-                    Err(ProgramError::Custom(42))
-                );
+                invoke(&instruction, accounts)?;
 
                 {
                     // writable but lamports borrow_mut'd
@@ -231,18 +206,12 @@ fn process_instruction(
                 {
                     // readable but lamports borrow'd
                     let _ref_mut = accounts[readable].try_borrow_lamports()?;
-                    assert_eq!(
-                        invoke(&instruction, accounts),
-                        Err(ProgramError::Custom(42))
-                    );
+                    invoke(&instruction, accounts)?;
                 }
                 {
                     // readable but data borrow'd
                     let _ref_mut = accounts[readable].try_borrow_data()?;
-                    assert_eq!(
-                        invoke(&instruction, accounts),
-                        Err(ProgramError::Custom(42))
-                    );
+                    invoke(&instruction, accounts)?;
                 }
             }
 
@@ -289,7 +258,7 @@ fn process_instruction(
                         (accounts[DERIVED_KEY2_INDEX].key, true, false),
                         (accounts[DERIVED_KEY3_INDEX].key, false, false),
                     ],
-                    vec![TEST_DERIVED_SIGNERS, bump_seed2, bump_seed3],
+                    vec![DERIVED_SIGNERS, bump_seed2, bump_seed3],
                 );
                 invoke_signed(
                     &invoked_instruction,
@@ -303,7 +272,7 @@ fn process_instruction(
                 let invoked_instruction = create_instruction(
                     *accounts[INVOKED_PROGRAM_INDEX].key,
                     &[(accounts[ARGUMENT_INDEX].key, false, true)],
-                    vec![TEST_VERIFY_WRITER],
+                    vec![VERIFY_WRITER],
                 );
                 invoke(&invoked_instruction, accounts)?;
             }
@@ -324,7 +293,7 @@ fn process_instruction(
                         (accounts[INVOKED_PROGRAM_DUP_INDEX].key, false, false),
                         (accounts[INVOKED_PROGRAM_DUP_INDEX].key, false, false),
                     ],
-                    vec![TEST_NESTED_INVOKE],
+                    vec![NESTED_INVOKE],
                 );
                 invoke(&instruction, accounts)?;
                 msg!("2nd invoke from first program");
@@ -354,7 +323,7 @@ fn process_instruction(
             let mut invoked_instruction = create_instruction(
                 *accounts[INVOKED_PROGRAM_INDEX].key,
                 &[(accounts[DERIVED_KEY3_INDEX].key, false, false)],
-                vec![TEST_VERIFY_PRIVILEGE_ESCALATION],
+                vec![VERIFY_PRIVILEGE_ESCALATION],
             );
             invoke(&invoked_instruction, accounts)?;
 
@@ -367,7 +336,7 @@ fn process_instruction(
             let mut invoked_instruction = create_instruction(
                 *accounts[INVOKED_PROGRAM_INDEX].key,
                 &[(accounts[DERIVED_KEY3_INDEX].key, false, false)],
-                vec![TEST_VERIFY_PRIVILEGE_ESCALATION],
+                vec![VERIFY_PRIVILEGE_ESCALATION],
             );
             invoke(&invoked_instruction, accounts)?;
 
@@ -381,7 +350,7 @@ fn process_instruction(
             let instruction = create_instruction(
                 *accounts[ARGUMENT_INDEX].key,
                 &[(accounts[ARGUMENT_INDEX].key, true, true)],
-                vec![TEST_RETURN_ERROR],
+                vec![RETURN_OK],
             );
             invoke(&instruction, accounts)?;
         }
@@ -513,6 +482,15 @@ fn process_instruction(
                 vec![],
             );
             invoke_signed(&instruction, &[], &[])?;
+        }
+        TEST_RETURN_ERROR => {
+            msg!("Test return error");
+            let instruction = create_instruction(
+                *accounts[INVOKED_PROGRAM_INDEX].key,
+                &[(accounts[INVOKED_ARGUMENT_INDEX].key, false, true)],
+                vec![RETURN_ERROR],
+            );
+            let _ = invoke(&instruction, accounts);
         }
         _ => panic!(),
     }
