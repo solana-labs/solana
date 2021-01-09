@@ -2661,7 +2661,7 @@ mod tests {
         let program_id = json
             .as_object()
             .unwrap()
-            .get("programId")
+            .get("ProgramId")
             .unwrap()
             .as_str()
             .unwrap();
