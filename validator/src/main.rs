@@ -29,7 +29,7 @@ use solana_ledger::blockstore_db::BlockstoreRecoveryMode;
 use solana_perf::recycler::enable_recycler_warming;
 use solana_runtime::{
     accounts_index::AccountIndex,
-    bank_forks::{CompressionType, SnapshotConfig, SnapshotVersion},
+    bank_forks::{ArchiveFormat, SnapshotConfig, SnapshotVersion},
     hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     snapshot_utils::get_highest_snapshot_archive_path,
 };
@@ -1359,13 +1359,14 @@ pub fn main() {
                        other than increasing the account balance"),
         )
         .arg(
-            Arg::with_name("snapshot_compression")
-                .long("snapshot-compression")
-                .possible_values(&["bz2", "gzip", "zstd", "none"])
+            Arg::with_name("snapshot_archive_format")
+                .long("snapshot-archive-format")
+                .alias("snapshot-compression") // Legacy name used by Solana v1.5.x and older
+                .possible_values(&["bz2", "gzip", "zstd", "tar", "none"])
                 .default_value("zstd")
-                .value_name("COMPRESSION_TYPE")
+                .value_name("ARCHIVE_TYPE")
                 .takes_value(true)
-                .help("Type of snapshot compression to use."),
+                .help("Snapshot archive format to use."),
         )
         .arg(
             Arg::with_name("max_genesis_archive_unpacked_size")
@@ -1670,14 +1671,14 @@ pub fn main() {
         exit(1);
     });
 
-    let snapshot_compression = {
-        let compression_str = value_t_or_exit!(matches, "snapshot_compression", String);
-        match compression_str.as_str() {
-            "bz2" => CompressionType::Bzip2,
-            "gzip" => CompressionType::Gzip,
-            "zstd" => CompressionType::Zstd,
-            "none" => CompressionType::NoCompression,
-            _ => panic!("Compression type not recognized: {}", compression_str),
+    let archive_format = {
+        let archive_format_str = value_t_or_exit!(matches, "snapshot_archive_format", String);
+        match archive_format_str.as_str() {
+            "bz2" => ArchiveFormat::TarBzip2,
+            "gzip" => ArchiveFormat::TarGzip,
+            "zstd" => ArchiveFormat::TarZstd,
+            "tar" | "none" => ArchiveFormat::Tar,
+            _ => panic!("Archive format not recognized: {}", archive_format_str),
         }
     };
 
@@ -1698,7 +1699,7 @@ pub fn main() {
         },
         snapshot_path,
         snapshot_package_output_path: ledger_path.clone(),
-        compression: snapshot_compression,
+        archive_format,
         snapshot_version,
     });
 

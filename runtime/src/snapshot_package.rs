@@ -1,4 +1,4 @@
-use crate::bank_forks::CompressionType;
+use crate::bank_forks::ArchiveFormat;
 use crate::snapshot_utils::SnapshotVersion;
 use crate::{accounts_db::SnapshotStorages, bank::BankSlotDelta};
 use solana_sdk::clock::Slot;
@@ -15,38 +15,38 @@ pub type AccountsPackageSendError = SendError<AccountsPackage>;
 
 #[derive(Debug)]
 pub struct AccountsPackage {
-    pub root: Slot,
+    pub slot: Slot,
     pub block_height: Slot,
     pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
     pub storages: SnapshotStorages,
     pub tar_output_file: PathBuf,
     pub hash: Hash,
-    pub compression: CompressionType,
+    pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
 }
 
 impl AccountsPackage {
     pub fn new(
-        root: Slot,
+        slot: Slot,
         block_height: u64,
         slot_deltas: Vec<BankSlotDelta>,
         snapshot_links: TempDir,
         storages: SnapshotStorages,
         tar_output_file: PathBuf,
         hash: Hash,
-        compression: CompressionType,
+        archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
     ) -> Self {
         Self {
-            root,
+            slot,
             block_height,
             slot_deltas,
             snapshot_links,
             storages,
             tar_output_file,
             hash,
-            compression,
+            archive_format,
             snapshot_version,
         }
     }
