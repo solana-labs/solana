@@ -138,22 +138,6 @@ fn process_instruction(
                 invoke(&instruction, accounts)?;
             }
 
-<<<<<<< HEAD
-            msg!("Test return error");
-            {
-                let instruction = create_instruction(
-                    *accounts[INVOKED_PROGRAM_INDEX].key,
-                    &[(accounts[ARGUMENT_INDEX].key, true, true)],
-                    vec![TEST_RETURN_ERROR],
-                );
-                assert_eq!(
-                    invoke(&instruction, accounts),
-                    Err(ProgramError::Custom(42))
-                );
-            }
-
-=======
->>>>>>> ec48631fc... Bail on all CPI errors (#14500)
             msg!("Test refcell usage");
             {
                 let writable = INVOKED_ARGUMENT_INDEX;
