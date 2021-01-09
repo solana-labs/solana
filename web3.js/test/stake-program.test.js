@@ -378,6 +378,13 @@ test('live staking actions', async () => {
     commitment: 'singleGossip',
   });
 
+  let stakeActivationState;
+  do {
+    stakeActivationState = await connection.getStakeActivation(
+      newAccountPubkey,
+    );
+  } while (stakeActivationState.state != 'inactive');
+
   // Test that withdraw succeeds after deactivation
   withdraw = StakeProgram.withdraw({
     stakePubkey: newAccountPubkey,
