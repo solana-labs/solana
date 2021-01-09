@@ -1033,6 +1033,15 @@ fn get_db_options(access_type: &AccessType) -> Options {
     // A good value for this is the number of cores on the machine
     options.increase_parallelism(num_cpus::get() as i32);
 
+    let mut env = rocksdb::Env::default().unwrap();
+
+    // While a compaction is ongoing, all the background threads
+    // could be used by the compaction. This can stall writes which
+    // need to flush the memtable. Add some high-priority background threads
+    // which can service these writes.
+    env.set_high_priority_background_threads(4);
+    options.set_env(&env);
+
     // Set max total wal size to 4G.
     options.set_max_total_wal_size(4 * 1024 * 1024 * 1024);
     if matches!(access_type, AccessType::PrimaryOnlyForMaintenance) {
