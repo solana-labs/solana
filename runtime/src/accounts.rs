@@ -1,6 +1,6 @@
 use crate::{
     accounts_db::{AccountsDB, AppendVecId, BankHashInfo, ErrorCounters},
-    accounts_index::{AccountIndex, Ancestors, IndexKey},
+    accounts_index::{AccountIndex, Ancestors, IndexKey, Shim},
     append_vec::StoredAccount,
     bank::{
         NonceRollbackFull, NonceRollbackInfo, TransactionCheckResult, TransactionExecutionResult,
@@ -32,12 +32,12 @@ use std::{
     collections::{HashMap, HashSet},
     ops::RangeBounds,
     path::PathBuf,
-    sync::{Arc, Mutex, RwLock},
+    sync::Arc,
 };
 
 #[derive(Default, Debug, AbiExample)]
 pub(crate) struct ReadonlyLock {
-    lock_count: Mutex<u64>,
+    lock_count: parking_lot::Mutex<u64>,
 }
 
 /// This structure handles synchronization for db
@@ -53,10 +53,10 @@ pub struct Accounts {
     pub accounts_db: Arc<AccountsDB>,
 
     /// set of writable accounts which are currently in the pipeline
-    pub(crate) account_locks: Mutex<HashSet<Pubkey>>,
+    pub(crate) account_locks: parking_lot::Mutex<HashSet<Pubkey>>,
 
     /// Set of read-only accounts which are currently in the pipeline, caching number of locks.
-    pub(crate) readonly_locks: Arc<RwLock<Option<HashMap<Pubkey, ReadonlyLock>>>>,
+    pub(crate) readonly_locks: Arc<parking_lot::RwLock<Option<HashMap<Pubkey, ReadonlyLock>>>>,
 }
 
 // for the load instructions
@@ -96,8 +96,8 @@ impl Accounts {
                 cluster_type,
                 account_indexes,
             )),
-            account_locks: Mutex::new(HashSet::new()),
-            readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
+            account_locks: parking_lot::Mutex::new(HashSet::new()),
+            readonly_locks: Arc::new(parking_lot::RwLock::new(Some(HashMap::new()))),
             ..Self::default()
         }
     }
@@ -109,16 +109,16 @@ impl Accounts {
             slot,
             epoch,
             accounts_db,
-            account_locks: Mutex::new(HashSet::new()),
-            readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
+            account_locks: parking_lot::Mutex::new(HashSet::new()),
+            readonly_locks: Arc::new(parking_lot::RwLock::new(Some(HashMap::new()))),
         }
     }
 
     pub(crate) fn new_empty(accounts_db: AccountsDB) -> Self {
         Self {
             accounts_db: Arc::new(accounts_db),
-            account_locks: Mutex::new(HashSet::new()),
-            readonly_locks: Arc::new(RwLock::new(Some(HashMap::new()))),
+            account_locks: parking_lot::Mutex::new(HashSet::new()),
+            readonly_locks: Arc::new(parking_lot::RwLock::new(Some(HashMap::new()))),
             ..Self::default()
         }
     }
@@ -757,7 +757,7 @@ impl Accounts {
             self.insert_readonly(
                 *k,
                 ReadonlyLock {
-                    lock_count: Mutex::new(1),
+                    lock_count: parking_lot::Mutex::new(1),
                 },
             );
         }
@@ -1924,7 +1924,7 @@ mod tests {
             readonly_locks.insert(
                 pubkey,
                 ReadonlyLock {
-                    lock_count: Mutex::new(1),
+                    lock_count: parking_lot::Mutex::new(1),
                 },
             );
         }

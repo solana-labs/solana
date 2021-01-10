@@ -19,7 +19,7 @@ use std::{
     },
     sync::{
         atomic::{AtomicU64, Ordering},
-        Arc, RwLock, RwLockReadGuard, RwLockWriteGuard,
+        Arc,
     },
 };
 
@@ -56,14 +56,43 @@ pub enum AccountIndex {
 #[derive(Debug)]
 pub struct AccountMapEntryInner<T> {
     ref_count: AtomicU64,
-    pub slot_list: RwLock<SlotList<T>>,
+    pub slot_list: parking_lot::RwLock<SlotList<T>>,
+}
+
+pub trait Shim {
+    fn unwrap(self) -> Self;
+}
+
+impl<'a, T: parking_lot::lock_api::RawRwLock, U> Shim
+    for parking_lot::lock_api::RwLockReadGuard<'a, T, U>
+{
+    fn unwrap(self) -> Self {
+        self
+    }
+}
+
+impl<'a, T: parking_lot::lock_api::RawRwLock, U> Shim
+    for parking_lot::lock_api::RwLockWriteGuard<'a, T, U>
+{
+    fn unwrap(self) -> Self {
+        self
+    }
+}
+
+impl<'a, T: parking_lot::lock_api::RawMutex, U> Shim
+    for parking_lot::lock_api::MutexGuard<'a, T, U>
+{
+    fn unwrap(self) -> Self {
+        self
+    }
 }
 
 #[self_referencing]
 pub struct ReadAccountMapEntry<T: 'static> {
     owned_entry: AccountMapEntry<T>,
     #[borrows(owned_entry)]
-    slot_list_guard: RwLockReadGuard<'this, SlotList<T>>,
+    slot_list_guard:
+        parking_lot::lock_api::RwLockReadGuard<'this, parking_lot::RawRwLock, SlotList<T>>,
 }
 
 impl<T: Clone> ReadAccountMapEntry<T> {
@@ -88,7 +117,8 @@ impl<T: Clone> ReadAccountMapEntry<T> {
 pub struct WriteAccountMapEntry<T: 'static> {
     owned_entry: AccountMapEntry<T>,
     #[borrows(owned_entry)]
-    slot_list_guard: RwLockWriteGuard<'this, SlotList<T>>,
+    slot_list_guard:
+        parking_lot::lock_api::RwLockWriteGuard<'this, parking_lot::RawRwLock, SlotList<T>>,
 }
 
 impl<T: 'static + Clone> WriteAccountMapEntry<T> {
@@ -106,7 +136,9 @@ impl<T: 'static + Clone> WriteAccountMapEntry<T> {
 
     pub fn slot_list_mut<RT>(
         &mut self,
-        user: impl for<'this> FnOnce(&mut RwLockWriteGuard<'this, SlotList<T>>) -> RT,
+        user: impl for<'this> FnOnce(
+            &mut parking_lot::lock_api::RwLockWriteGuard<'this, parking_lot::RawRwLock, SlotList<T>>,
+        ) -> RT,
     ) -> RT {
         self.with_slot_list_guard_mut(user)
     }
@@ -147,7 +179,7 @@ pub struct RootsTracker {
 }
 
 pub struct AccountsIndexIterator<'a, T> {
-    account_maps: &'a RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
+    account_maps: &'a parking_lot::RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
     start_bound: Bound<Pubkey>,
     end_bound: Bound<Pubkey>,
     is_finished: bool,
@@ -163,7 +195,7 @@ impl<'a, T> AccountsIndexIterator<'a, T> {
     }
 
     pub fn new<R>(
-        account_maps: &'a RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
+        account_maps: &'a parking_lot::RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
         range: Option<R>,
     ) -> Self
     where
@@ -212,12 +244,12 @@ impl<'a, T: 'static + Clone> Iterator for AccountsIndexIterator<'a, T> {
 
 #[derive(Debug, Default)]
 pub struct AccountsIndex<T> {
-    pub account_maps: RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
+    pub account_maps: parking_lot::RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
     program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_mint_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_owner_index: SecondaryIndex<RwLockSecondaryIndexEntry>,
-    roots_tracker: RwLock<RootsTracker>,
-    ongoing_scan_roots: RwLock<BTreeMap<Slot, u64>>,
+    roots_tracker: parking_lot::RwLock<RootsTracker>,
+    ongoing_scan_roots: parking_lot::RwLock<BTreeMap<Slot, u64>>,
 }
 
 impl<T: 'static + Clone> AccountsIndex<T> {
@@ -498,7 +530,7 @@ impl<T: 'static + Clone> AccountsIndex<T> {
         if w_account_entry.is_none() {
             let new_entry = Arc::new(AccountMapEntryInner {
                 ref_count: AtomicU64::new(0),
-                slot_list: RwLock::new(SlotList::with_capacity(1)),
+                slot_list: parking_lot::RwLock::new(SlotList::with_capacity(1)),
             });
             let mut w_account_maps = self.account_maps.write().unwrap();
             let account_entry = w_account_maps.entry(*pubkey).or_insert_with(|| {
@@ -1827,13 +1859,13 @@ pub mod tests {
         assert_eq!(secondary_index.index.len(), 1);
         let inner_key_map = secondary_index.index.get(key).unwrap();
         assert_eq!(inner_key_map.len(), 1);
-        inner_key_map
-            .value()
-            .get(account_key, &|slots_map: Option<&RwLock<HashSet<Slot>>>| {
-                let slots_map = slots_map.unwrap();
-                assert_eq!(slots_map.read().unwrap().len(), 1);
-                assert!(slots_map.read().unwrap().contains(&slot));
-            });
+        inner_key_map.value().get(account_key, &|slots_map: Option<
+            &parking_lot::RwLock<HashSet<Slot>>,
+        >| {
+            let slots_map = slots_map.unwrap();
+            assert_eq!(slots_map.read().unwrap().len(), 1);
+            assert!(slots_map.read().unwrap().contains(&slot));
+        });
 
         // Check reverse index is unique
         let slots_map = secondary_index.reverse_index.get(account_key).unwrap();

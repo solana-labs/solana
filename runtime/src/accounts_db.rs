@@ -19,7 +19,7 @@
 //! commit for each slot entry would be indexed.
 
 use crate::{
-    accounts_index::{AccountIndex, AccountsIndex, Ancestors, IndexKey, SlotList, SlotSlice},
+    accounts_index::{AccountIndex, AccountsIndex, Ancestors, IndexKey, Shim, SlotList, SlotSlice},
     append_vec::{AppendVec, StoredAccount, StoredMeta},
 };
 use blake3::traits::digest::Digest;

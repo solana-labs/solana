@@ -1,17 +1,22 @@
+use crate::accounts_index::Shim;
 use dashmap::{mapref::entry::Entry::Occupied, DashMap};
 use log::*;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::{
     collections::{hash_map, HashMap, HashSet},
     fmt::Debug,
-    sync::{Arc, RwLock},
+    sync::Arc,
 };
 
-pub type SecondaryReverseIndexEntry = RwLock<HashMap<Slot, Pubkey>>;
+pub type SecondaryReverseIndexEntry = parking_lot::RwLock<HashMap<Slot, Pubkey>>;
 
 pub trait SecondaryIndexEntry: Debug {
-    fn get_or_create(&self, key: &Pubkey, f: &dyn Fn(&RwLock<HashSet<Slot>>));
-    fn get<T>(&self, key: &Pubkey, f: &dyn Fn(Option<&RwLock<HashSet<Slot>>>) -> T) -> T;
+    fn get_or_create(&self, key: &Pubkey, f: &dyn Fn(&parking_lot::RwLock<HashSet<Slot>>));
+    fn get<T>(
+        &self,
+        key: &Pubkey,
+        f: &dyn Fn(Option<&parking_lot::RwLock<HashSet<Slot>>>) -> T,
+    ) -> T;
     fn remove_key_if_empty(&self, key: &Pubkey);
     fn is_empty(&self) -> bool;
     fn keys(&self) -> Vec<Pubkey>;
@@ -20,22 +25,26 @@ pub trait SecondaryIndexEntry: Debug {
 
 #[derive(Debug, Default)]
 pub struct DashMapSecondaryIndexEntry {
-    pubkey_to_slot_set: DashMap<Pubkey, RwLock<HashSet<Slot>>>,
+    pubkey_to_slot_set: DashMap<Pubkey, parking_lot::RwLock<HashSet<Slot>>>,
 }
 
 impl SecondaryIndexEntry for DashMapSecondaryIndexEntry {
-    fn get_or_create(&self, key: &Pubkey, f: &dyn Fn(&RwLock<HashSet<Slot>>)) {
+    fn get_or_create(&self, key: &Pubkey, f: &dyn Fn(&parking_lot::RwLock<HashSet<Slot>>)) {
         let slot_set = self.pubkey_to_slot_set.get(key).unwrap_or_else(|| {
             self.pubkey_to_slot_set
                 .entry(*key)
-                .or_insert(RwLock::new(HashSet::new()))
+                .or_insert(parking_lot::RwLock::new(HashSet::new()))
                 .downgrade()
         });
 
         f(&slot_set)
     }
 
-    fn get<T>(&self, key: &Pubkey, f: &dyn Fn(Option<&RwLock<HashSet<Slot>>>) -> T) -> T {
+    fn get<T>(
+        &self,
+        key: &Pubkey,
+        f: &dyn Fn(Option<&parking_lot::RwLock<HashSet<Slot>>>) -> T,
+    ) -> T {
         let slot_set = self.pubkey_to_slot_set.get(key);
 
         f(slot_set.as_ref().map(|entry_ref| entry_ref.value()))
@@ -73,11 +82,12 @@ impl SecondaryIndexEntry for DashMapSecondaryIndexEntry {
 
 #[derive(Debug, Default)]
 pub struct RwLockSecondaryIndexEntry {
-    pubkey_to_slot_set: RwLock<HashMap<Pubkey, Arc<RwLock<HashSet<Slot>>>>>,
+    pubkey_to_slot_set:
+        parking_lot::RwLock<HashMap<Pubkey, Arc<parking_lot::RwLock<HashSet<Slot>>>>>,
 }
 
 impl SecondaryIndexEntry for RwLockSecondaryIndexEntry {
-    fn get_or_create(&self, key: &Pubkey, f: &dyn Fn(&RwLock<HashSet<Slot>>)) {
+    fn get_or_create(&self, key: &Pubkey, f: &dyn Fn(&parking_lot::RwLock<HashSet<Slot>>)) {
         let slot_set = self.pubkey_to_slot_set.read().unwrap().get(key).cloned();
 
         let slot_set = {
@@ -88,7 +98,7 @@ impl SecondaryIndexEntry for RwLockSecondaryIndexEntry {
                     .write()
                     .unwrap()
                     .entry(*key)
-                    .or_insert_with(|| Arc::new(RwLock::new(HashSet::new())))
+                    .or_insert_with(|| Arc::new(parking_lot::RwLock::new(HashSet::new())))
                     .clone()
             }
         };
@@ -96,7 +106,11 @@ impl SecondaryIndexEntry for RwLockSecondaryIndexEntry {
         f(&slot_set)
     }
 
-    fn get<T>(&self, key: &Pubkey, f: &dyn Fn(Option<&RwLock<HashSet<Slot>>>) -> T) -> T {
+    fn get<T>(
+        &self,
+        key: &Pubkey,
+        f: &dyn Fn(Option<&parking_lot::RwLock<HashSet<Slot>>>) -> T,
+    ) -> T {
         let slot_set = self.pubkey_to_slot_set.read().unwrap().get(key).cloned();
         f(slot_set.as_deref())
     }
@@ -158,7 +172,9 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
                     .downgrade()
             });
 
-            pubkeys_map.get_or_create(inner_key, &|slots_set: &RwLock<HashSet<Slot>>| {
+            pubkeys_map.get_or_create(inner_key, &|slots_set: &parking_lot::RwLock<
+                HashSet<Slot>,
+            >| {
                 let contains_key = slots_set.read().unwrap().contains(&slot);
                 if !contains_key {
                     slots_set.write().unwrap().insert(slot);
@@ -170,7 +186,7 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
             let slots_map = self.reverse_index.get(inner_key).unwrap_or_else(|| {
                 self.reverse_index
                     .entry(*inner_key)
-                    .or_insert(RwLock::new(HashMap::new()))
+                    .or_insert(parking_lot::RwLock::new(HashMap::new()))
                     .downgrade()
             });
             let should_insert = {
@@ -209,7 +225,7 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
         let is_key_empty = if let Some(inner_key_map) = self.index.get(&key) {
             // Delete the slot from the slot set
             let is_inner_key_empty =
-                inner_key_map.get(&inner_key, &|slot_set: Option<&RwLock<HashSet<Slot>>>| {
+                inner_key_map.get(&inner_key, &|slot_set: Option<&parking_lot::RwLock<HashSet<Slot>>>| {
                     if let Some(slot_set) = slot_set {
                         let mut w_slot_set = slot_set.write().unwrap();
                         for slot in slots.iter() {
@@ -285,7 +301,7 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
                     .unwrap_or(false)
             } else {
                 if let Some((_, removed_slot_map)) = self.reverse_index.remove(inner_key) {
-                    for (slot, removed_key) in removed_slot_map.into_inner().unwrap().into_iter() {
+                    for (slot, removed_key) in removed_slot_map.into_inner().into_iter() {
                         key_to_removed_slots
                             .entry(removed_key)
                             .or_default()
