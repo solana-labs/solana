@@ -10,7 +10,8 @@ use serde_json::{Map, Value};
 use solana_account_decoder::parse_token::UiTokenAccount;
 use solana_clap_utils::keypair::SignOnly;
 use solana_client::rpc_response::{
-    RpcAccountBalance, RpcKeyedAccount, RpcSupply, RpcVoteAccountInfo,
+    RpcAccountBalance, RpcInflationGovernor, RpcInflationRate, RpcKeyedAccount, RpcSupply,
+    RpcVoteAccountInfo,
 };
 use solana_sdk::{
     clock::{self, Epoch, Slot, UnixTimestamp},
@@ -1159,6 +1160,104 @@ impl fmt::Display for CliBlockTime {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln_name_value(f, "Block:", &self.slot.to_string())?;
         writeln_name_value(f, "Date:", &unix_timestamp_to_string(self.timestamp))
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliLeaderSchedule {
+    pub epoch: Epoch,
+    pub leader_schedule_entries: Vec<CliLeaderScheduleEntry>,
+}
+
+impl QuietDisplay for CliLeaderSchedule {}
+impl VerboseDisplay for CliLeaderSchedule {}
+
+impl fmt::Display for CliLeaderSchedule {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for entry in &self.leader_schedule_entries {
+            writeln!(f, "  {:<15} {:<44}", entry.slot, entry.leader)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliLeaderScheduleEntry {
+    pub slot: Slot,
+    pub leader: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliInflation {
+    pub governor: RpcInflationGovernor,
+    pub current_rate: RpcInflationRate,
+}
+
+impl QuietDisplay for CliInflation {}
+impl VerboseDisplay for CliInflation {}
+
+impl fmt::Display for CliInflation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "{}", style("Inflation Governor:").bold())?;
+        if (self.governor.initial - self.governor.terminal).abs() < f64::EPSILON {
+            writeln!(
+                f,
+                "Fixed APR:               {:>5.2}%",
+                self.governor.terminal * 100.
+            )?;
+        } else {
+            writeln!(
+                f,
+                "Initial APR:             {:>5.2}%",
+                self.governor.initial * 100.
+            )?;
+            writeln!(
+                f,
+                "Terminal APR:            {:>5.2}%",
+                self.governor.terminal * 100.
+            )?;
+            writeln!(
+                f,
+                "Rate reduction per year: {:>5.2}%",
+                self.governor.taper * 100.
+            )?;
+        }
+        if self.governor.foundation_term > 0. {
+            writeln!(
+                f,
+                "Foundation percentage:   {:>5.2}%",
+                self.governor.foundation
+            )?;
+            writeln!(
+                f,
+                "Foundation term:         {:.1} years",
+                self.governor.foundation_term
+            )?;
+        }
+
+        writeln!(
+            f,
+            "\n{}",
+            style(format!("Inflation for Epoch {}:", self.current_rate.epoch)).bold()
+        )?;
+        writeln!(
+            f,
+            "Total APR:               {:>5.2}%",
+            self.current_rate.total * 100.
+        )?;
+        writeln!(
+            f,
+            "Staking APR:             {:>5.2}%",
+            self.current_rate.validator * 100.
+        )?;
+        writeln!(
+            f,
+            "Foundation APR:          {:>5.2}%",
+            self.current_rate.foundation * 100.
+        )
     }
 }
 
