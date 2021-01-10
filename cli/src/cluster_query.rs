@@ -837,7 +837,11 @@ pub fn parse_leader_schedule(matches: &ArgMatches<'_>) -> Result<CliCommandInfo,
     })
 }
 
-pub fn process_leader_schedule(rpc_client: &RpcClient, epoch: Option<Epoch>) -> ProcessResult {
+pub fn process_leader_schedule(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    epoch: Option<Epoch>,
+) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info()?;
     let epoch = epoch.unwrap_or(epoch_info.epoch);
     if epoch > epoch_info.epoch {
@@ -867,15 +871,18 @@ pub fn process_leader_schedule(rpc_client: &RpcClient, epoch: Option<Epoch>) -> 
         }
     }
 
+    let mut leader_schedule_entries = vec![];
     for (slot_index, leader) in leader_per_slot_index.iter().enumerate() {
-        println!(
-            "  {:<15} {:<44}",
-            first_slot_in_epoch + slot_index as u64,
-            leader
-        );
+        leader_schedule_entries.push(CliLeaderScheduleEntry {
+            slot: first_slot_in_epoch + slot_index as u64,
+            leader: leader.to_string(),
+        });
     }
 
-    Ok("".to_string())
+    Ok(config.output_format.formatted_string(&CliLeaderSchedule {
+        epoch,
+        leader_schedule_entries,
+    }))
 }
 
 pub fn process_get_block(
