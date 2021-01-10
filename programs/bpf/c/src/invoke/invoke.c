@@ -14,6 +14,7 @@ static const uint8_t TEST_CAP_SIGNERS = 7;
 static const uint8_t TEST_ALLOC_ACCESS_VIOLATION = 8;
 static const uint8_t TEST_INSTRUCTION_DATA_TOO_LARGE = 9;
 static const uint8_t TEST_INSTRUCTION_META_TOO_LARGE = 10;
+static const uint8_t TEST_RETURN_ERROR = 11;
 
 static const int MINT_INDEX = 0;
 static const int ARGUMENT_INDEX = 1;
@@ -112,7 +113,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
           {accounts[INVOKED_ARGUMENT_INDEX].key, true, true},
           {accounts[INVOKED_PROGRAM_INDEX].key, false, false},
           {accounts[INVOKED_PROGRAM_DUP_INDEX].key, false, false}};
-      uint8_t data[] = {TEST_VERIFY_TRANSLATIONS, 1, 2, 3, 4, 5};
+      uint8_t data[] = {VERIFY_TRANSLATIONS, 1, 2, 3, 4, 5};
       const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                           arguments, SOL_ARRAY_SIZE(arguments),
                                           data, SOL_ARRAY_SIZE(data)};
@@ -130,18 +131,6 @@ extern uint64_t entrypoint(const uint8_t *input) {
                                           data, SOL_ARRAY_SIZE(data)};
 
       sol_assert(SUCCESS ==
-                 sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
-    }
-
-    sol_log("Test return error");
-    {
-      SolAccountMeta arguments[] = {{accounts[ARGUMENT_INDEX].key, true, true}};
-      uint8_t data[] = {TEST_RETURN_ERROR};
-      const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                          arguments, SOL_ARRAY_SIZE(arguments),
-                                          data, SOL_ARRAY_SIZE(data)};
-
-      sol_assert(42 ==
                  sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
     }
 
@@ -183,7 +172,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
           {accounts[DERIVED_KEY1_INDEX].key, true, true},
           {accounts[DERIVED_KEY2_INDEX].key, true, false},
           {accounts[DERIVED_KEY3_INDEX].key, false, false}};
-      uint8_t data[] = {TEST_DERIVED_SIGNERS, bump_seed2, bump_seed3};
+      uint8_t data[] = {DERIVED_SIGNERS, bump_seed2, bump_seed3};
       const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                           arguments, SOL_ARRAY_SIZE(arguments),
                                           data, SOL_ARRAY_SIZE(data)};
@@ -202,7 +191,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     {
       SolAccountMeta arguments[] = {
           {accounts[INVOKED_ARGUMENT_INDEX].key, true, false}};
-      uint8_t data[] = {TEST_VERIFY_WRITER};
+      uint8_t data[] = {VERIFY_WRITER};
       const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                           arguments, SOL_ARRAY_SIZE(arguments),
                                           data, SOL_ARRAY_SIZE(data)};
@@ -222,7 +211,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
           {accounts[INVOKED_ARGUMENT_INDEX].key, true, true},
           {accounts[ARGUMENT_INDEX].key, true, true},
           {accounts[INVOKED_PROGRAM_DUP_INDEX].key, false, false}};
-      uint8_t data[] = {TEST_NESTED_INVOKE};
+      uint8_t data[] = {NESTED_INVOKE};
       const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                           arguments, SOL_ARRAY_SIZE(arguments),
                                           data, SOL_ARRAY_SIZE(data)};
@@ -252,7 +241,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_log("Test privilege escalation signer");
     SolAccountMeta arguments[] = {
         {accounts[DERIVED_KEY3_INDEX].key, false, false}};
-    uint8_t data[] = {TEST_VERIFY_PRIVILEGE_ESCALATION};
+    uint8_t data[] = {VERIFY_PRIVILEGE_ESCALATION};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                         arguments, SOL_ARRAY_SIZE(arguments),
                                         data, SOL_ARRAY_SIZE(data)};
@@ -268,7 +257,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_log("Test privilege escalation writable");
     SolAccountMeta arguments[] = {
         {accounts[DERIVED_KEY3_INDEX].key, false, false}};
-    uint8_t data[] = {TEST_VERIFY_PRIVILEGE_ESCALATION};
+    uint8_t data[] = {VERIFY_PRIVILEGE_ESCALATION};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                         arguments, SOL_ARRAY_SIZE(arguments),
                                         data, SOL_ARRAY_SIZE(data)};
@@ -284,7 +273,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_log("Test program not executable");
     SolAccountMeta arguments[] = {
         {accounts[DERIVED_KEY3_INDEX].key, false, false}};
-    uint8_t data[] = {TEST_VERIFY_PRIVILEGE_ESCALATION};
+    uint8_t data[] = {VERIFY_PRIVILEGE_ESCALATION};
     const SolInstruction instruction = {accounts[ARGUMENT_INDEX].key, arguments,
                                         SOL_ARRAY_SIZE(arguments), data,
                                         SOL_ARRAY_SIZE(data)};
@@ -435,6 +424,16 @@ extern uint64_t entrypoint(const uint8_t *input) {
                               &instruction, accounts, SOL_ARRAY_SIZE(accounts),
                               signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
 
+    break;
+  }
+  case TEST_RETURN_ERROR: {
+    SolAccountMeta arguments[] = {{accounts[ARGUMENT_INDEX].key, true, true}};
+    uint8_t data[] = {RETURN_ERROR};
+    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                        arguments, SOL_ARRAY_SIZE(arguments),
+                                        data, SOL_ARRAY_SIZE(data)};
+
+    sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
     break;
   }
   default:

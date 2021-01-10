@@ -110,6 +110,10 @@ pub mod bpf_loader_upgradeable_program {
     solana_sdk::declare_id!("FbhK8HN9qvNHvJcoFVHAEUCNkagHvu7DTWzdnLuVQ5u4");
 }
 
+pub mod try_find_program_address_syscall_enabled {
+    solana_sdk::declare_id!("EMsMNadQNhCYDyGpYH5Tx6dGHxiUqKHk782PU5XaWfmi");
+}
+
 pub mod max_cpi_instruction_size_ipv6_mtu {
     solana_sdk::declare_id!("5WLtuUJA5VVA1Cc28qULPfGs8anhoBev8uNqaaXeasnf");
 }
@@ -118,12 +122,12 @@ pub mod limit_cpi_loader_invoke {
     solana_sdk::declare_id!("xGbcW7EEC7zMRJ6LaJCob65EJxKryWjwM4rv8f57SRM");
 }
 
-pub mod try_find_program_address_syscall_enabled {
-    solana_sdk::declare_id!("EMsMNadQNhCYDyGpYH5Tx6dGHxiUqKHk782PU5XaWfmi");
-}
-
 pub mod use_loaded_program_accounts {
     solana_sdk::declare_id!("FLjgLeg1PJkZimQCVa5sVFtaq6VmSDPw3NvH8iQ3nyHn");
+}
+
+pub mod abort_on_all_cpi_failures {
+    solana_sdk::declare_id!("ED5D5a2hQaECHaMmKpnU48GdsfafdCjkb3pgAw5RKbb2");
 }
 
 lazy_static! {
@@ -155,10 +159,11 @@ lazy_static! {
         (simple_capitalization::id(), "simple capitalization"),
         (stake_program_v3::id(), "solana_stake_program v3"),
         (bpf_loader_upgradeable_program::id(), "upgradeable bpf loader"),
+        (try_find_program_address_syscall_enabled::id(), "add try_find_program_address syscall"),
         (max_cpi_instruction_size_ipv6_mtu::id(), "Max cross-program invocation size 1280"),
         (limit_cpi_loader_invoke::id(), "Loader not authorized via CPI"),
-        (try_find_program_address_syscall_enabled::id(), "add try_find_program_address syscall"),
         (use_loaded_program_accounts::id(), "Use loaded program accounts"),
+        (abort_on_all_cpi_failures::id(), "Abort on all CPI failures"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
