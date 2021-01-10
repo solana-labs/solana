@@ -1,107 +1,71 @@
 use crate::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
-use solana_runtime::{snapshot_package::AccountsPackageReceiver, snapshot_utils};
+use solana_runtime::{snapshot_package::AccountsPackage, snapshot_utils};
 use solana_sdk::{clock::Slot, hash::Hash};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc::RecvTimeoutError,
         Arc, Mutex,
     },
     thread::{self, Builder, JoinHandle},
     time::Duration,
 };
 
+pub type PendingSnapshotPackage = Arc<Mutex<Option<AccountsPackage>>>;
+
 pub struct SnapshotPackagerService {
-    t_package_receiver: JoinHandle<()>,
     t_snapshot_packager: JoinHandle<()>,
 }
 
 impl SnapshotPackagerService {
     pub fn new(
-        snapshot_package_receiver: AccountsPackageReceiver,
+        pending_snapshot_package: PendingSnapshotPackage,
         starting_snapshot_hash: Option<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<ClusterInfo>,
     ) -> Self {
-        let latest_package = Arc::new(Mutex::new(None));
-        let t_package_receiver = {
-            let exit = exit.clone();
-            let latest_package = latest_package.clone();
+        let exit = exit.clone();
+        let cluster_info = cluster_info.clone();
 
-            Builder::new()
-                .name("sps-receiver".to_string())
-                .spawn(move || {
-                    loop {
-                        if exit.load(Ordering::Relaxed) {
-                            break;
-                        }
-
-                        match snapshot_package_receiver.recv_timeout(Duration::from_secs(1)) {
-                            Ok(mut snapshot_package) => {
-                                // Only package the latest
-                                while let Ok(new_snapshot_package) =
-                                    snapshot_package_receiver.try_recv()
-                                {
-                                    snapshot_package = new_snapshot_package;
-                                }
-
-                                *latest_package.lock().unwrap() = Some(snapshot_package);
-                            }
-                            Err(RecvTimeoutError::Disconnected) => break,
-                            Err(RecvTimeoutError::Timeout) => (),
-                        }
+        let t_snapshot_packager = Builder::new()
+            .name("snapshot-packager".to_string())
+            .spawn(move || {
+                let mut hashes = vec![];
+                if let Some(starting_snapshot_hash) = starting_snapshot_hash {
+                    hashes.push(starting_snapshot_hash);
+                }
+                cluster_info.push_snapshot_hashes(hashes.clone());
+                loop {
+                    if exit.load(Ordering::Relaxed) {
+                        break;
                     }
-                })
-                .unwrap()
-        };
 
-        let t_snapshot_packager = {
-            let exit = exit.clone();
-            let latest_package = latest_package;
-            let cluster_info = cluster_info.clone();
-
-            Builder::new()
-                .name("sps-packager".to_string())
-                .spawn(move || {
-                    let mut hashes = vec![];
-                    if let Some(starting_snapshot_hash) = starting_snapshot_hash {
-                        hashes.push(starting_snapshot_hash);
-                    }
-                    cluster_info.push_snapshot_hashes(hashes.clone());
-                    loop {
-                        if exit.load(Ordering::Relaxed) {
-                            break;
-                        }
-
-                        let snapshot_package = latest_package.lock().unwrap().take();
-                        if let Some(snapshot_package) = snapshot_package {
-                            if let Err(err) =
-                                snapshot_utils::archive_snapshot_package(&snapshot_package)
-                            {
-                                warn!("Failed to create snapshot archive: {}", err);
-                            } else {
-                                hashes.push((snapshot_package.slot, snapshot_package.hash));
-                                while hashes.len() > MAX_SNAPSHOT_HASHES {
-                                    hashes.remove(0);
-                                }
-                                cluster_info.push_snapshot_hashes(hashes.clone());
-                            }
+                    let snapshot_package = pending_snapshot_package.lock().unwrap().take();
+                    if let Some(snapshot_package) = snapshot_package {
+                        if let Err(err) =
+                            snapshot_utils::archive_snapshot_package(&snapshot_package)
+                        {
+                            warn!("Failed to create snapshot archive: {}", err);
                         } else {
-                            std::thread::sleep(Duration::from_millis(100));
+                            hashes.push((snapshot_package.slot, snapshot_package.hash));
+                            while hashes.len() > MAX_SNAPSHOT_HASHES {
+                                hashes.remove(0);
+                            }
+                            cluster_info.push_snapshot_hashes(hashes.clone());
                         }
+                    } else {
+                        std::thread::sleep(Duration::from_millis(100));
                     }
-                })
-                .unwrap()
-        };
+                }
+            })
+            .unwrap();
+
         Self {
-            t_package_receiver,
             t_snapshot_packager,
         }
     }
 
     pub fn join(self) -> thread::Result<()> {
-        self.t_snapshot_packager.join()?;
-        self.t_package_receiver.join()
+        self.t_snapshot_packager.join()
     }
 }
 
