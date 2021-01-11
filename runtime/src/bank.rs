@@ -60,7 +60,9 @@ use solana_sdk::{
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
     stake_weighted_timestamp::{
-        calculate_stake_weighted_timestamp, EstimateType, DEPRECATED_TIMESTAMP_SLOT_RANGE,
+        calculate_stake_weighted_timestamp, EstimateType,
+        DEPRECATED_MAX_ALLOWABLE_DRIFT_PERCENTAGE, DEPRECATED_TIMESTAMP_SLOT_RANGE,
+        MAX_ALLOWABLE_DRIFT_PERCENTAGE,
     },
     system_transaction,
     sysvar::{self},
@@ -1332,12 +1334,10 @@ impl Bank {
                     // needed for timestamp bounding, but isn't yet corrected for the activation slot
                     let epoch_start_timestamp = if self.slot() > timestamp_bounding_activation_slot
                     {
-                        let warp_testnet_timestamp = self
+                        let warp_timestamp = self
                             .feature_set
-                            .activated_slot(&feature_set::warp_testnet_timestamp::id());
-                        if warp_testnet_timestamp == Some(self.slot())
-                            && self.cluster_type() == ClusterType::Testnet
-                        {
+                            .activated_slot(&feature_set::warp_timestamp::id());
+                        if warp_timestamp == Some(self.slot()) {
                             None
                         } else {
                             let epoch = if let Some(epoch) = parent_epoch {
@@ -1352,7 +1352,18 @@ impl Bank {
                     } else {
                         None
                     };
-                    (EstimateType::Bounded, epoch_start_timestamp)
+                    let max_allowable_drift = if self
+                        .feature_set
+                        .is_active(&feature_set::warp_timestamp::id())
+                    {
+                        MAX_ALLOWABLE_DRIFT_PERCENTAGE
+                    } else {
+                        DEPRECATED_MAX_ALLOWABLE_DRIFT_PERCENTAGE
+                    };
+                    (
+                        EstimateType::Bounded(max_allowable_drift),
+                        epoch_start_timestamp,
+                    )
                 } else {
                     (EstimateType::Unbounded, None)
                 };
@@ -11143,6 +11154,10 @@ pub(crate) mod tests {
         genesis_config
             .accounts
             .remove(&feature_set::timestamp_bounding::id())
+            .unwrap();
+        genesis_config
+            .accounts
+            .remove(&feature_set::warp_timestamp::id())
             .unwrap();
         genesis_config.epoch_schedule = EpochSchedule::new(slots_in_epoch);
         let bank = Bank::new(&genesis_config);
