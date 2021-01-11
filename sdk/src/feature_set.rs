@@ -110,7 +110,7 @@ pub mod try_find_program_address_syscall_enabled {
     solana_sdk::declare_id!("EMsMNadQNhCYDyGpYH5Tx6dGHxiUqKHk782PU5XaWfmi");
 }
 
-pub mod warp_testnet_timestamp {
+pub mod warp_timestamp {
     solana_sdk::declare_id!("Bfqm7fGk5MBptqa2WHXWFLH7uJvq8hkJcAQPipy2bAMk");
 }
 
@@ -163,7 +163,7 @@ lazy_static! {
         (simple_capitalization::id(), "simple capitalization"),
         (bpf_loader_upgradeable_program::id(), "upgradeable bpf loader"),
         (try_find_program_address_syscall_enabled::id(), "add try_find_program_address syscall"),
-        (warp_testnet_timestamp::id(), "warp testnet timestamp to current #14210"),
+        (warp_timestamp::id(), "warp timestamp to current, adjust bounding to 50% #14210 & #14531"),
         (stake_program_v3::id(), "solana_stake_program v3"),
         (max_cpi_instruction_size_ipv6_mtu::id(), "Max cross-program invocation size 1280"),
         (limit_cpi_loader_invoke::id(), "Loader not authorized via CPI"),
