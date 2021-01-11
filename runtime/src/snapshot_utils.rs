@@ -135,22 +135,6 @@ impl Ord for SlotSnapshotPaths {
     }
 }
 
-impl SlotSnapshotPaths {
-    fn copy_snapshot_directory<P: AsRef<Path>>(&self, snapshot_hardlink_dir: P) -> Result<()> {
-        // Create a new directory in snapshot_hardlink_dir
-        let new_slot_hardlink_dir = snapshot_hardlink_dir.as_ref().join(self.slot.to_string());
-        let _ = fs::remove_dir_all(&new_slot_hardlink_dir);
-        fs::create_dir_all(&new_slot_hardlink_dir)?;
-
-        // Copy the snapshot
-        fs::copy(
-            &self.snapshot_file_path,
-            &new_slot_hardlink_dir.join(self.slot.to_string()),
-        )?;
-        Ok(())
-    }
-}
-
 pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     bank: &Bank,
     snapshot_files: &SlotSnapshotPaths,
@@ -162,7 +146,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_version: SnapshotVersion,
 ) -> Result<AccountsPackage> {
     // Hard link all the snapshots we need for this package
-    let snapshot_hard_links_dir = tempfile::Builder::new()
+    let snapshot_tmpdir = tempfile::Builder::new()
         .prefix(&format!("{}{}-", TMP_SNAPSHOT_DIR_PREFIX, bank.slot()))
         .tempdir_in(snapshot_path)?;
 
@@ -173,9 +157,17 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         snapshot_storages.len()
     );
 
-    // Any errors from this point on will cause the above AccountsPackage to drop, clearing
-    // any temporary state created for the AccountsPackage (like the snapshot_hard_links_dir)
-    snapshot_files.copy_snapshot_directory(snapshot_hard_links_dir.path())?;
+    // Hard link the snapshot into a tmpdir, to ensure its not removed prior to packaging.
+    {
+        let snapshot_hardlink_dir = snapshot_tmpdir
+            .as_ref()
+            .join(snapshot_files.slot.to_string());
+        fs::create_dir_all(&snapshot_hardlink_dir)?;
+        fs::hard_link(
+            &snapshot_files.snapshot_file_path,
+            &snapshot_hardlink_dir.join(snapshot_files.slot.to_string()),
+        )?;
+    }
 
     let snapshot_package_output_file = get_snapshot_archive_path(
         &snapshot_package_output_path,
@@ -187,7 +179,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         bank.slot(),
         bank.block_height(),
         status_cache_slot_deltas,
-        snapshot_hard_links_dir,
+        snapshot_tmpdir,
         snapshot_storages,
         snapshot_package_output_file,
         bank.get_accounts_hash(),
