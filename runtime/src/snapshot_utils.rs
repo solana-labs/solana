@@ -38,7 +38,7 @@ pub const MAX_SNAPSHOTS: usize = 8; // Save some snapshots but not too many
 const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 const VERSION_STRING_V1_2_0: &str = "1.2.0";
 const DEFAULT_SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::V1_2_0;
-const TMP_SNAPSHOT_DIR_PREFIX: &str = "tmp-snapshot-";
+const TMP_SNAPSHOT_PREFIX: &str = "tmp-snapshot-";
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum SnapshotVersion {
@@ -162,8 +162,13 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_version: SnapshotVersion,
 ) -> Result<AccountsPackage> {
     // Hard link all the snapshots we need for this package
+<<<<<<< HEAD
     let snapshot_hard_links_dir = tempfile::Builder::new()
         .prefix(TMP_SNAPSHOT_DIR_PREFIX)
+=======
+    let snapshot_tmpdir = tempfile::Builder::new()
+        .prefix(&format!("{}{}-", TMP_SNAPSHOT_PREFIX, bank.slot()))
+>>>>>>> 4a66e3edd... Use standard tmp-snapshot- file prefix for the "new_state" archive for better cleanup/consistency
         .tempdir_in(snapshot_path)?;
 
     // Create a snapshot package
@@ -216,9 +221,14 @@ pub fn remove_tmp_snapshot_archives(snapshot_path: &Path) {
                 .file_name()
                 .into_string()
                 .unwrap_or_else(|_| String::new())
-                .starts_with(TMP_SNAPSHOT_DIR_PREFIX)
+                .starts_with(TMP_SNAPSHOT_PREFIX)
             {
-                fs::remove_dir_all(entry.path()).unwrap_or_else(|err| {
+                if entry.path().is_file() {
+                    fs::remove_file(entry.path())
+                } else {
+                    fs::remove_dir_all(entry.path())
+                }
+                .unwrap_or_else(|err| {
                     warn!("Failed to remove {}: {}", entry.path().display(), err)
                 });
             }
@@ -251,7 +261,14 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
 
     // Create the staging directories
     let staging_dir = tempfile::Builder::new()
+<<<<<<< HEAD
         .prefix(TMP_SNAPSHOT_DIR_PREFIX)
+=======
+        .prefix(&format!(
+            "{}{}-",
+            TMP_SNAPSHOT_PREFIX, snapshot_package.slot
+        ))
+>>>>>>> 4a66e3edd... Use standard tmp-snapshot- file prefix for the "new_state" archive for better cleanup/consistency
         .tempdir_in(tar_dir)?;
 
     let staging_accounts_dir = staging_dir.path().join(TAR_ACCOUNTS_DIR);
@@ -296,7 +313,10 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
     // Tar the staging directory into the archive at `archive_path`
     //
     // system `tar` program is used for -S (sparse file support)
-    let archive_path = tar_dir.join(format!("new_state{}", file_ext));
+    let archive_path = tar_dir.join(format!(
+        "{}{}{}",
+        TMP_SNAPSHOT_PREFIX, snapshot_package.slot, file_ext
+    ));
 
     let mut tar = process::Command::new("tar")
         .args(&[
@@ -591,7 +611,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
 ) -> Result<Bank> {
     // Untar the snapshot into a temporary directory
     let unpack_dir = tempfile::Builder::new()
-        .prefix(TMP_SNAPSHOT_DIR_PREFIX)
+        .prefix(TMP_SNAPSHOT_PREFIX)
         .tempdir_in(snapshot_path)?;
     untar_snapshot_in(&snapshot_tar, &unpack_dir, archive_format)?;
 
