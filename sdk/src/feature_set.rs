@@ -130,6 +130,10 @@ pub mod abort_on_all_cpi_failures {
     solana_sdk::declare_id!("ED5D5a2hQaECHaMmKpnU48GdsfafdCjkb3pgAw5RKbb2");
 }
 
+pub mod warp_timestamp {
+    solana_sdk::declare_id!("Bfqm7fGk5MBptqa2WHXWFLH7uJvq8hkJcAQPipy2bAMk");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -164,6 +168,7 @@ lazy_static! {
         (limit_cpi_loader_invoke::id(), "Loader not authorized via CPI"),
         (use_loaded_program_accounts::id(), "Use loaded program accounts"),
         (abort_on_all_cpi_failures::id(), "Abort on all CPI failures"),
+        (warp_timestamp::id(), "warp timestamp to current, adjust bounding to 50% #TODO"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
