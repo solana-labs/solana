@@ -39,8 +39,9 @@ mod tests {
     use fs_extra::dir::CopyOptions;
     use itertools::Itertools;
     use solana_core::{
-        cluster_info::ClusterInfo, contact_info::ContactInfo,
-        snapshot_packager_service::SnapshotPackagerService,
+        cluster_info::ClusterInfo,
+        contact_info::ContactInfo,
+        snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
     };
     use solana_runtime::{
         accounts_background_service::{ABSRequestSender, SnapshotRequestHandler},
@@ -60,8 +61,15 @@ mod tests {
         system_transaction,
     };
     use std::{
-        collections::HashSet, fs, path::PathBuf, sync::atomic::AtomicBool, sync::mpsc::channel,
-        sync::Arc,
+        collections::HashSet,
+        fs,
+        path::PathBuf,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            mpsc::channel,
+            Arc,
+        },
+        time::Duration,
     };
     use tempfile::TempDir;
 
@@ -398,10 +406,37 @@ mod tests {
 
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(ContactInfo::default()));
 
-        let snapshot_packager_service =
-            SnapshotPackagerService::new(receiver, None, &exit, &cluster_info);
+        let pending_snapshot_package = PendingSnapshotPackage::default();
+        let snapshot_packager_service = SnapshotPackagerService::new(
+            pending_snapshot_package.clone(),
+            None,
+            &exit,
+            &cluster_info,
+        );
 
-        // Close the channel so that the package service will exit after reading all the
+        let _package_receiver = std::thread::Builder::new()
+            .name("package-receiver".to_string())
+            .spawn(move || {
+                while let Ok(mut snapshot_package) = receiver.recv() {
+                    // Only package the latest
+                    while let Ok(new_snapshot_package) = receiver.try_recv() {
+                        snapshot_package = new_snapshot_package;
+                    }
+
+                    *pending_snapshot_package.lock().unwrap() = Some(snapshot_package);
+                }
+
+                // Wait until the package is consumed by SnapshotPackagerService
+                while pending_snapshot_package.lock().unwrap().is_some() {
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+
+                // Shutdown SnapshotPackagerService
+                exit.store(true, Ordering::Relaxed);
+            })
+            .unwrap();
+
+        // Close the channel so that the package receiver will exit after reading all the
         // packages off the channel
         drop(sender);
 

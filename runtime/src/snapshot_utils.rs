@@ -163,7 +163,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
 ) -> Result<AccountsPackage> {
     // Hard link all the snapshots we need for this package
     let snapshot_hard_links_dir = tempfile::Builder::new()
-        .prefix(TMP_SNAPSHOT_DIR_PREFIX)
+        .prefix(&format!("{}{}-", TMP_SNAPSHOT_DIR_PREFIX, bank.slot()))
         .tempdir_in(snapshot_path)?;
 
     // Create a snapshot package
@@ -251,7 +251,10 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
 
     // Create the staging directories
     let staging_dir = tempfile::Builder::new()
-        .prefix(TMP_SNAPSHOT_DIR_PREFIX)
+        .prefix(&format!(
+            "{}{}-",
+            TMP_SNAPSHOT_DIR_PREFIX, snapshot_package.slot
+        ))
         .tempdir_in(tar_dir)?;
 
     let staging_accounts_dir = staging_dir.path().join(TAR_ACCOUNTS_DIR);
