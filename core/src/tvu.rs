@@ -20,6 +20,7 @@ use crate::{
     shred_fetch_stage::ShredFetchStage,
     sigverify_shreds::ShredSigVerifier,
     sigverify_stage::SigVerifyStage,
+    snapshot_packager_service::PendingSnapshotPackage,
 };
 use crossbeam_channel::unbounded;
 use solana_ledger::{
@@ -34,7 +35,6 @@ use solana_runtime::{
     },
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
-    snapshot_package::AccountsPackageSender,
     vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{
@@ -107,7 +107,7 @@ impl Tvu {
         transaction_status_sender: Option<TransactionStatusSender>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
         cache_block_time_sender: Option<CacheBlockTimeSender>,
-        snapshot_config_and_package_sender: Option<(SnapshotConfig, AccountsPackageSender)>,
+        snapshot_config_and_pending_package: Option<(SnapshotConfig, PendingSnapshotPackage)>,
         vote_tracker: Arc<VoteTracker>,
         retransmit_slots_sender: RetransmitSlotsSender,
         verified_vote_receiver: VerifiedVoteReceiver,
@@ -179,15 +179,15 @@ impl Tvu {
             }
         };
         info!("snapshot_interval_slots: {}", snapshot_interval_slots);
-        let (snapshot_config, accounts_package_sender) = snapshot_config_and_package_sender
-            .map(|(snapshot_config, accounts_package_sender)| {
-                (Some(snapshot_config), Some(accounts_package_sender))
+        let (snapshot_config, pending_snapshot_package) = snapshot_config_and_pending_package
+            .map(|(snapshot_config, pending_snapshot_package)| {
+                (Some(snapshot_config), Some(pending_snapshot_package))
             })
             .unwrap_or((None, None));
         let (accounts_hash_sender, accounts_hash_receiver) = channel();
         let accounts_hash_verifier = AccountsHashVerifier::new(
             accounts_hash_receiver,
-            accounts_package_sender,
+            pending_snapshot_package,
             exit,
             &cluster_info,
             tvu_config.trusted_validators.clone(),

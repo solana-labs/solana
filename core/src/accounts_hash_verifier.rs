@@ -4,10 +4,11 @@
 // hash on gossip. Monitor gossip for messages from validators in the --trusted-validators
 // set and halt the node if a mismatch is detected.
 
-use crate::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
-use solana_runtime::snapshot_package::{
-    AccountsPackage, AccountsPackageReceiver, AccountsPackageSender,
+use crate::{
+    cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
+    snapshot_packager_service::PendingSnapshotPackage,
 };
+use solana_runtime::snapshot_package::{AccountsPackage, AccountsPackageReceiver};
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::collections::{HashMap, HashSet};
 use std::{
@@ -27,7 +28,7 @@ pub struct AccountsHashVerifier {
 impl AccountsHashVerifier {
     pub fn new(
         accounts_package_receiver: AccountsPackageReceiver,
-        accounts_package_sender: Option<AccountsPackageSender>,
+        pending_snapshot_package: Option<PendingSnapshotPackage>,
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<ClusterInfo>,
         trusted_validators: Option<HashSet<Pubkey>>,
@@ -53,7 +54,7 @@ impl AccountsHashVerifier {
                                 &cluster_info,
                                 &trusted_validators,
                                 halt_on_trusted_validators_accounts_hash_mismatch,
-                                &accounts_package_sender,
+                                &pending_snapshot_package,
                                 &mut hashes,
                                 &exit,
                                 fault_injection_rate_slots,
@@ -76,7 +77,7 @@ impl AccountsHashVerifier {
         cluster_info: &ClusterInfo,
         trusted_validators: &Option<HashSet<Pubkey>>,
         halt_on_trusted_validator_accounts_hash_mismatch: bool,
-        accounts_package_sender: &Option<AccountsPackageSender>,
+        pending_snapshot_package: &Option<PendingSnapshotPackage>,
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
@@ -111,8 +112,8 @@ impl AccountsHashVerifier {
         }
 
         if accounts_package.block_height % snapshot_interval_slots == 0 {
-            if let Some(sender) = accounts_package_sender.as_ref() {
-                if sender.send(accounts_package).is_err() {}
+            if let Some(pending_snapshot_package) = pending_snapshot_package.as_ref() {
+                *pending_snapshot_package.lock().unwrap() = Some(accounts_package);
             }
         }
 

@@ -26,7 +26,7 @@ use crate::{
     serve_repair::ServeRepair,
     serve_repair_service::ServeRepairService,
     sigverify,
-    snapshot_packager_service::SnapshotPackagerService,
+    snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
     tpu::Tpu,
     transaction_status_service::TransactionStatusService,
     tvu::{Sockets, Tvu, TvuConfig},
@@ -70,7 +70,7 @@ use std::{
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::Receiver,
-    sync::{mpsc::channel, Arc, Mutex, RwLock},
+    sync::{Arc, Mutex, RwLock},
     thread::sleep,
     time::Duration,
 };
@@ -518,7 +518,7 @@ impl Validator {
             &exit,
         );
 
-        let (snapshot_packager_service, snapshot_config_and_package_sender) =
+        let (snapshot_packager_service, snapshot_config_and_pending_package) =
             if let Some(snapshot_config) = config.snapshot_config.clone() {
                 if is_snapshot_config_invalid(
                     snapshot_config.snapshot_interval_slots,
@@ -528,12 +528,17 @@ impl Validator {
                 }
 
                 // Start a snapshot packaging service
-                let (sender, receiver) = channel();
-                let snapshot_packager_service =
-                    SnapshotPackagerService::new(receiver, snapshot_hash, &exit, &cluster_info);
+                let pending_snapshot_package = PendingSnapshotPackage::default();
+
+                let snapshot_packager_service = SnapshotPackagerService::new(
+                    pending_snapshot_package.clone(),
+                    snapshot_hash,
+                    &exit,
+                    &cluster_info,
+                );
                 (
                     Some(snapshot_packager_service),
-                    Some((snapshot_config, sender)),
+                    Some((snapshot_config, pending_snapshot_package)),
                 )
             } else {
                 (None, None)
@@ -609,7 +614,7 @@ impl Validator {
             transaction_status_sender.clone(),
             rewards_recorder_sender,
             cache_block_time_sender,
-            snapshot_config_and_package_sender,
+            snapshot_config_and_pending_package,
             vote_tracker.clone(),
             retransmit_slots_sender,
             verified_vote_receiver,
