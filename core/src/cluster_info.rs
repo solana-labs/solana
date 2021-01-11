@@ -27,10 +27,10 @@ use crate::{
     result::{Error, Result},
     weighted_shuffle::weighted_shuffle,
 };
-
 use rand::distributions::{Distribution, WeightedIndex};
 use rand::{CryptoRng, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
+use solana_ledger::shred::Shred;
 use solana_sdk::sanitize::{Sanitize, SanitizeError};
 
 use bincode::{serialize, serialized_size};
@@ -97,6 +97,7 @@ const MAX_GOSSIP_TRAFFIC: usize = 128_000_000 / PACKET_DATA_SIZE;
 /// is equal to PACKET_DATA_SIZE minus serialized size of an empty push
 /// message: Protocol::PushMessage(Pubkey::default(), Vec::default())
 const PUSH_MESSAGE_MAX_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - 44;
+const DUPLICATE_SHRED_MAX_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - 115;
 /// Maximum number of hashes in SnapshotHashes/AccountsHashes a node publishes
 /// such that the serialized size of the push/pull message stays below
 /// PACKET_DATA_SIZE.
@@ -404,7 +405,7 @@ pub fn make_accounts_hashes_message(
 type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "HAFjUDgiGthYTiAg6CYJxA8PqfwuhrC82NtHYYmee4vb")]
+#[frozen_abi(digest = "DdTxrwwnbe571Di4rLtrAQorFDE58vYnmzzbaeQ7sQMC")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 enum Protocol {
@@ -1163,6 +1164,17 @@ impl ClusterInfo {
             .unzip();
         inc_new_counter_info!("cluster_info-get_votes-count", txs.len());
         (labels, txs, max_ts)
+    }
+
+    pub(crate) fn push_duplicate_shred(&self, shred: &Shred, other_payload: &[u8]) -> Result<()> {
+        self.gossip.write().unwrap().push_duplicate_shred(
+            &self.keypair,
+            shred,
+            other_payload,
+            None::<fn(Slot) -> Option<Pubkey>>, // Leader schedule
+            DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
+        )?;
+        Ok(())
     }
 
     pub fn get_accounts_hash_for_node<F, Y>(&self, pubkey: &Pubkey, map: F) -> Option<Y>
@@ -3182,9 +3194,13 @@ pub fn stake_weight_peers<S: std::hash::BuildHasher>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crds_value::{CrdsValue, CrdsValueLabel, Vote as CrdsVote};
+    use crate::{
+        crds_value::{CrdsValue, CrdsValueLabel, Vote as CrdsVote},
+        duplicate_shred::{self, tests::new_rand_shred, MAX_DUPLICATE_SHREDS},
+    };
     use itertools::izip;
     use rand::seq::SliceRandom;
+    use solana_ledger::shred::Shredder;
     use solana_sdk::signature::{Keypair, Signer};
     use solana_vote_program::{vote_instruction, vote_state::Vote};
     use std::iter::repeat_with;
@@ -3469,6 +3485,53 @@ mod tests {
             PUSH_MESSAGE_MAX_PAYLOAD_SIZE,
             PACKET_DATA_SIZE - serialized_size(&header).unwrap() as usize
         );
+    }
+
+    #[test]
+    fn test_duplicate_shred_max_payload_size() {
+        let mut rng = rand::thread_rng();
+        let leader = Arc::new(Keypair::new());
+        let keypair = Keypair::new();
+        let (slot, parent_slot, fec_rate, reference_tick, version) =
+            (53084024, 53084023, 0.0, 0, 0);
+        let shredder = Shredder::new(
+            slot,
+            parent_slot,
+            fec_rate,
+            leader.clone(),
+            reference_tick,
+            version,
+        )
+        .unwrap();
+        let next_shred_index = rng.gen();
+        let shred = new_rand_shred(&mut rng, next_shred_index, &shredder);
+        let other_payload = new_rand_shred(&mut rng, next_shred_index, &shredder).payload;
+        let leader_schedule = |s| {
+            if s == slot {
+                Some(leader.pubkey())
+            } else {
+                None
+            }
+        };
+        let chunks: Vec<_> = duplicate_shred::from_shred(
+            shred,
+            keypair.pubkey(),
+            other_payload,
+            Some(leader_schedule),
+            timestamp(),
+            DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
+        )
+        .unwrap()
+        .collect();
+        assert!(chunks.len() > 1);
+        for chunk in chunks {
+            let data = CrdsData::DuplicateShred(MAX_DUPLICATE_SHREDS - 1, chunk);
+            let value = CrdsValue::new_signed(data, &keypair);
+            let pull_response = Protocol::PullResponse(keypair.pubkey(), vec![value.clone()]);
+            assert!(serialized_size(&pull_response).unwrap() < PACKET_DATA_SIZE as u64);
+            let push_message = Protocol::PushMessage(keypair.pubkey(), vec![value.clone()]);
+            assert!(serialized_size(&push_message).unwrap() < PACKET_DATA_SIZE as u64);
+        }
     }
 
     #[test]
