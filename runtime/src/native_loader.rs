@@ -10,6 +10,7 @@ use solana_sdk::{
     entrypoint_native::ProgramEntrypoint,
     instruction::InstructionError,
     keyed_account::{next_keyed_account, KeyedAccount},
+    native_loader,
     process_instruction::{InvokeContext, LoaderEntrypoint},
     pubkey::Pubkey,
 };
@@ -126,13 +127,22 @@ impl NativeLoader {
 
     pub fn process_instruction(
         &self,
-        _program_id: &Pubkey,
+        program_id: &Pubkey,
         keyed_accounts: &[KeyedAccount],
         instruction_data: &[u8],
         invoke_context: &dyn InvokeContext,
     ) -> Result<(), InstructionError> {
         let mut keyed_accounts_iter = keyed_accounts.iter();
         let program = next_keyed_account(&mut keyed_accounts_iter)?;
+        if native_loader::id() != *program_id {
+            error!("Program id mismatch");
+            return Err(InstructionError::IncorrectProgramId);
+        }
+        if program.owner()? != *program_id {
+            error!("Executable account now owned by loader");
+            return Err(InstructionError::IncorrectProgramId);
+        }
+
         let params = keyed_accounts_iter.as_slice();
         let name_vec = &program.try_account_ref()?.data;
         let name = match str::from_utf8(name_vec) {
