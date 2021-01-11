@@ -66,13 +66,8 @@ use std::{
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::Receiver,
-<<<<<<< HEAD
-    sync::{mpsc::channel, Arc, Mutex, RwLock},
-    thread::{sleep, Result},
-=======
     sync::{Arc, Mutex, RwLock},
-    thread::sleep,
->>>>>>> a95675a7c... Avoid tmp snapshot backlog in SnapshotPackagerService under high load (#14516)
+    thread::{sleep, Result},
     time::Duration,
 };
 
@@ -508,17 +503,13 @@ impl Validator {
             &exit,
         );
 
-<<<<<<< HEAD
         // Insert the entrypoint info, should only be None if this node
         // is the bootstrap validator
         if let Some(cluster_entrypoint) = cluster_entrypoint {
             cluster_info.set_entrypoint(cluster_entrypoint.clone());
         }
 
-        let (snapshot_packager_service, snapshot_config_and_package_sender) =
-=======
         let (snapshot_packager_service, snapshot_config_and_pending_package) =
->>>>>>> a95675a7c... Avoid tmp snapshot backlog in SnapshotPackagerService under high load (#14516)
             if let Some(snapshot_config) = config.snapshot_config.clone() {
                 // Start a snapshot packaging service
                 let pending_snapshot_package = PendingSnapshotPackage::default();
