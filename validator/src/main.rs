@@ -673,7 +673,7 @@ fn rpc_bootstrap(
                     {
                         info!(
                             "Reusing local snapshot at slot {} instead \
-                               of downloading a newer snapshot for slot {}",
+                               of downloading a snapshot for slot {}",
                             highest_local_snapshot_slot, snapshot_hash.0
                         );
                         use_local_snapshot = true;
