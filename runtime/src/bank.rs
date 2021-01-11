@@ -11672,7 +11672,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_store_scan_consistency_unrooted() {
-        for accounts_db_caching_enabled in &[true] {
+        for accounts_db_caching_enabled in &[false, true] {
             test_store_scan_consistency(
                 *accounts_db_caching_enabled,
                 |bank0, bank_to_scan_sender, pubkeys_to_modify, program_id, starting_lamports| {

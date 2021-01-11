@@ -2927,7 +2927,7 @@ impl AccountsDB {
 
             // Remove this slot from the cache, which will to AccountsDb readers should look like an
             // atomic switch from the cache to storage
-            self.accounts_cache.remove_slot(slot);
+            assert!(self.accounts_cache.remove_slot(slot).is_some());
         }
     }
 
@@ -7056,5 +7056,58 @@ pub mod tests {
         assert!(db
             .do_load(&scan_ancestors, &account_key, Some(max_scan_root))
             .is_none());
+    }
+
+    #[test]
+    fn test_alive_bytes() {
+        let caching_enabled = true;
+        let accounts_db = AccountsDB::new_with_config(
+            Vec::new(),
+            &ClusterType::Development,
+            HashSet::new(),
+            caching_enabled,
+        );
+        let slot: Slot = 0;
+        let num_keys = 10;
+
+        for data_size in 0..num_keys {
+            let account = Account::new(1, data_size, &Pubkey::default());
+            accounts_db.store_cached(slot, &[(&Pubkey::new_unique(), &account)]);
+        }
+
+        accounts_db.add_root(slot);
+        accounts_db.force_flush_accounts_cache();
+
+        let mut storage_maps: Vec<Arc<AccountStorageEntry>> = accounts_db
+            .storage
+            .get_slot_stores(slot)
+            .map(|res| res.read().unwrap().values().cloned().collect())
+            .unwrap_or_default();
+
+        // Flushing cache should only create one storage entry
+        assert_eq!(storage_maps.len(), 1);
+        let storage0 = storage_maps.pop().unwrap();
+        let accounts = storage0.accounts.accounts(0);
+
+        for account in accounts {
+            let before_size = storage0.alive_bytes.load(Ordering::Relaxed);
+            let account_info = accounts_db
+                .accounts_index
+                .get_account_read_entry(&account.meta.pubkey)
+                .map(|locked_entry| {
+                    // Should only be one entry per key, since every key was only stored to slot 0
+                    locked_entry.slot_list()[0].clone()
+                })
+                .unwrap();
+            let removed_data_size = account_info.1.stored_size;
+            // Fetching the account from storage should return the same
+            // stored size as in the index.
+            assert_eq!(removed_data_size, account.stored_size);
+            assert_eq!(account_info.0, slot);
+            let reclaims = vec![account_info];
+            accounts_db.remove_dead_accounts(&reclaims, None, None);
+            let after_size = storage0.alive_bytes.load(Ordering::Relaxed);
+            assert_eq!(before_size, after_size + account.stored_size);
+        }
     }
 }

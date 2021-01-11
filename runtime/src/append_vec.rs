@@ -442,7 +442,11 @@ impl AppendVec {
                 break;
             }
         }
-        rv.push(*offset);
+
+        // The last entry in this offset needs to be the u64 aligned offset, because that's
+        // where the *next* entry will begin to be stored.
+        rv.push(u64_align!(*offset));
+
         rv
     }
 

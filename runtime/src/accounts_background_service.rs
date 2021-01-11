@@ -286,7 +286,7 @@ impl AccountsBackgroundService {
                     if accounts_db_caching_enabled {
                         bank.shrink_candidate_slots();
                     } else {
-                        // under sustained writes, shrink can lag behind so cap to	                    bank.shrink_candidate_slots();
+                        // under sustained writes, shrink can lag behind so cap to
                         // SHRUNKEN_ACCOUNT_PER_INTERVAL (which is based on INTERVAL_MS,
                         // which in turn roughly asscociated block time)
                         consumed_budget = bank
