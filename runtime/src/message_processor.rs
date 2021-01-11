@@ -487,7 +487,7 @@ impl MessageProcessor {
                 }
                 // Call the program via the native loader
                 return self.native_loader.process_instruction(
-                    program_id,
+                    &native_loader::id(),
                     keyed_accounts,
                     instruction_data,
                     invoke_context,
