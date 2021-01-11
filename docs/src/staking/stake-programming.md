@@ -1,0 +1,25 @@
+---
+title: Stake Programming
+---
+
+To maximize stake distribution, decentralization, and censorship resistance on 
+the Solana network, staking can be performed programmatically. The team
+and community have developed several on-chain and off-chain programs to make
+stakes easier to manage.
+
+#### Stake-o-matic
+This off-chain program manages a large population of validators staked by a
+central authority. The Solana Foundation uses it to regularaly delegate its
+stake to "non-delinquent" validators. More information can be found on the
+[official announcement](https://forums.solana.com/t/stake-o-matic-delegation-matching-program/790).
+
+#### Stake Pools
+This on-chain program pools together SOL to be staked by a manager, allowing SOL
+holders to stake and earn rewards without managing stakes.
+Users deposit SOL in exchange for tokens representing ownership in the pool. The pool
+manager stakes deposited SOL according to their strategy, perhaps using a variant
+of the Stake-o-matic program. As stakes earn rewards, the pool and pool tokens 
+grow proportionally in value. Finally, pool token holders can provide pool
+tokens in exchange for SOL, thereby participating in decentralization with much
+less work required. More information can be found at the
+[SPL stake pool documentation](https://spl.solana.com/stake-pool).
