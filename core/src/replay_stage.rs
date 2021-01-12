@@ -111,6 +111,7 @@ pub struct ReplayStageConfig {
 #[derive(Default)]
 pub struct ReplayTiming {
     last_print: u64,
+    collect_frozen_banks_elapsed: u64,
     compute_bank_stats_elapsed: u64,
     select_vote_and_reset_forks_elapsed: u64,
     start_leader_elapsed: u64,
@@ -129,6 +130,7 @@ impl ReplayTiming {
     #[allow(clippy::too_many_arguments)]
     fn update(
         &mut self,
+        collect_frozen_banks_elapsed: u64,
         compute_bank_stats_elapsed: u64,
         select_vote_and_reset_forks_elapsed: u64,
         start_leader_elapsed: u64,
@@ -143,6 +145,7 @@ impl ReplayTiming {
         heaviest_fork_failures_elapsed: u64,
         bank_count: u64,
     ) {
+        self.collect_frozen_banks_elapsed += collect_frozen_banks_elapsed;
         self.compute_bank_stats_elapsed += compute_bank_stats_elapsed;
         self.select_vote_and_reset_forks_elapsed += select_vote_and_reset_forks_elapsed;
         self.start_leader_elapsed += start_leader_elapsed;
@@ -162,6 +165,11 @@ impl ReplayTiming {
             datapoint_info!(
                 "replay-loop-timing-stats",
                 ("total_elapsed_us", elapsed_ms * 1000, i64),
+                (
+                    "collect_frozen_banks_elapsed",
+                    self.collect_frozen_banks_elapsed as i64,
+                    i64
+                ),
                 (
                     "compute_bank_stats_elapsed",
                     self.compute_bank_stats_elapsed as i64,
@@ -599,6 +607,7 @@ impl ReplayStage {
                     }
 
                     replay_timing.update(
+                        collect_frozen_banks_time.as_us(),
                         compute_bank_stats_time.as_us(),
                         select_vote_and_reset_forks_time.as_us(),
                         start_leader_time.as_us(),
