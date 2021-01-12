@@ -70,6 +70,7 @@ where
         stream_append_vecs_path,
         &ClusterType::Development,
         HashSet::new(),
+        false,
     )
 }
 
@@ -121,7 +122,8 @@ where
 fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     solana_logger::setup();
     let (_accounts_dir, paths) = get_temp_accounts_paths(4).unwrap();
-    let accounts = Accounts::new(paths, &ClusterType::Development);
+    let accounts =
+        Accounts::new_with_config(paths, &ClusterType::Development, HashSet::new(), false);
 
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 100, 0);
@@ -181,7 +183,9 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
     let key3 = Keypair::new();
     bank2.deposit(&key3.pubkey(), 0);
 
+    bank2.freeze();
     bank2.squash();
+    bank2.force_flush_accounts_cache();
 
     let snapshot_storages = bank2.get_snapshot_storages();
     let mut buf = vec![];
@@ -214,6 +218,7 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
         None,
         None,
         HashSet::new(),
+        false,
     )
     .unwrap();
     dbank.src = ref_sc;

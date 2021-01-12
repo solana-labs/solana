@@ -50,6 +50,7 @@ fn test_accounts_create(bencher: &mut Bencher) {
         None,
         None,
         HashSet::new(),
+        false,
     );
     bencher.iter(|| {
         let mut pubkeys: Vec<Pubkey> = vec![];
@@ -61,35 +62,39 @@ fn test_accounts_create(bencher: &mut Bencher) {
 fn test_accounts_squash(bencher: &mut Bencher) {
     let (mut genesis_config, _) = create_genesis_config(100_000);
     genesis_config.rent.burn_percent = 100; // Avoid triggering an assert in Bank::distribute_rent_to_validators()
-    let bank1 = Arc::new(Bank::new_with_paths(
+    let mut prev_bank = Arc::new(Bank::new_with_paths(
         &genesis_config,
         vec![PathBuf::from("bench_a1")],
         &[],
         None,
         None,
         HashSet::new(),
+        false,
     ));
     let mut pubkeys: Vec<Pubkey> = vec![];
-    deposit_many(&bank1, &mut pubkeys, 250_000);
-    bank1.freeze();
+    deposit_many(&prev_bank, &mut pubkeys, 250_000);
+    prev_bank.freeze();
 
     // Measures the performance of the squash operation.
     // This mainly consists of the freeze operation which calculates the
     // merkle hash of the account state and distribution of fees and rent
     let mut slot = 1u64;
     bencher.iter(|| {
-        let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), slot));
-        bank2.deposit(&pubkeys[0], 1);
-        bank2.squash();
+        let next_bank = Arc::new(Bank::new_from_parent(&prev_bank, &Pubkey::default(), slot));
+        next_bank.deposit(&pubkeys[0], 1);
+        next_bank.squash();
         slot += 1;
+        prev_bank = next_bank;
     });
 }
 
 #[bench]
 fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
-    let accounts = Accounts::new(
+    let accounts = Accounts::new_with_config(
         vec![PathBuf::from("bench_accounts_hash_internal")],
         &ClusterType::Development,
+        HashSet::new(),
+        false,
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
     let num_accounts = 60_000;
@@ -107,9 +112,11 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
 #[bench]
 fn test_update_accounts_hash(bencher: &mut Bencher) {
     solana_logger::setup();
-    let accounts = Accounts::new(
+    let accounts = Accounts::new_with_config(
         vec![PathBuf::from("update_accounts_hash")],
         &ClusterType::Development,
+        HashSet::new(),
+        false,
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 50_000, 0);
@@ -124,9 +131,11 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
 #[bench]
 fn test_accounts_delta_hash(bencher: &mut Bencher) {
     solana_logger::setup();
-    let accounts = Accounts::new(
+    let accounts = Accounts::new_with_config(
         vec![PathBuf::from("accounts_delta_hash")],
         &ClusterType::Development,
+        HashSet::new(),
+        false,
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 100_000, 0);
@@ -138,17 +147,19 @@ fn test_accounts_delta_hash(bencher: &mut Bencher) {
 #[bench]
 fn bench_delete_dependencies(bencher: &mut Bencher) {
     solana_logger::setup();
-    let accounts = Accounts::new(
+    let accounts = Accounts::new_with_config(
         vec![PathBuf::from("accounts_delete_deps")],
         &ClusterType::Development,
+        HashSet::new(),
+        false,
     );
     let mut old_pubkey = Pubkey::default();
     let zero_account = Account::new(0, 0, &Account::default().owner);
     for i in 0..1000 {
         let pubkey = solana_sdk::pubkey::new_rand();
         let account = Account::new((i + 1) as u64, 0, &Account::default().owner);
-        accounts.store_slow(i, &pubkey, &account);
-        accounts.store_slow(i, &old_pubkey, &zero_account);
+        accounts.store_slow_uncached(i, &pubkey, &account);
+        accounts.store_slow_uncached(i, &old_pubkey, &zero_account);
         old_pubkey = pubkey;
         accounts.add_root(i);
     }
@@ -165,12 +176,14 @@ fn store_accounts_with_possible_contention<F: 'static>(
     F: Fn(&Accounts, &[Pubkey]) + Send + Copy,
 {
     let num_readers = 5;
-    let accounts = Arc::new(Accounts::new(
+    let accounts = Arc::new(Accounts::new_with_config(
         vec![
             PathBuf::from(std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string()))
                 .join(bench_name),
         ],
         &ClusterType::Development,
+        HashSet::new(),
+        false,
     ));
     let num_keys = 1000;
     let slot = 0;
@@ -180,7 +193,7 @@ fn store_accounts_with_possible_contention<F: 'static>(
             .map(|_| {
                 let pubkey = solana_sdk::pubkey::new_rand();
                 let account = Account::new(1, 0, &Account::default().owner);
-                accounts.store_slow(slot, &pubkey, &account);
+                accounts.store_slow_uncached(slot, &pubkey, &account);
                 pubkey
             })
             .collect(),
@@ -206,7 +219,7 @@ fn store_accounts_with_possible_contention<F: 'static>(
             // Write to a different slot than the one being read from. Because
             // there's a new account pubkey being written to every time, will
             // compete for the accounts index lock on every store
-            accounts.store_slow(slot + 1, &solana_sdk::pubkey::new_rand(), &account);
+            accounts.store_slow_uncached(slot + 1, &solana_sdk::pubkey::new_rand(), &account);
         }
     })
 }

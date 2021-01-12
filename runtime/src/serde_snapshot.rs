@@ -117,6 +117,7 @@ where
         .deserialize_from::<R, T>(reader)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn bank_from_stream<R, P>(
     serde_style: SerdeStyle,
     stream: &mut BufReader<R>,
@@ -127,6 +128,7 @@ pub(crate) fn bank_from_stream<R, P>(
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_indexes: HashSet<AccountIndex>,
+    caching_enabled: bool,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -146,6 +148,7 @@ where
                 debug_keys,
                 additional_builtins,
                 account_indexes,
+                caching_enabled,
             )?;
             Ok(bank)
         }};
@@ -223,6 +226,7 @@ impl<'a, C: TypeContext<'a>> Serialize for SerializableAccountsDB<'a, C> {
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl<'a, C> IgnoreAsHelper for SerializableAccountsDB<'a, C> {}
 
+#[allow(clippy::too_many_arguments)]
 fn reconstruct_bank_from_fields<E, P>(
     bank_fields: BankFieldsToDeserialize,
     accounts_db_fields: AccountsDbFields<E>,
@@ -233,6 +237,7 @@ fn reconstruct_bank_from_fields<E, P>(
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_indexes: HashSet<AccountIndex>,
+    caching_enabled: bool,
 ) -> Result<Bank, Error>
 where
     E: Into<AccountStorageEntry>,
@@ -244,6 +249,7 @@ where
         append_vecs_path,
         &genesis_config.cluster_type,
         account_indexes,
+        caching_enabled,
     )?;
     accounts_db.freeze_accounts(&bank_fields.ancestors, frozen_account_pubkeys);
 
@@ -265,13 +271,18 @@ fn reconstruct_accountsdb_from_fields<E, P>(
     stream_append_vecs_path: P,
     cluster_type: &ClusterType,
     account_indexes: HashSet<AccountIndex>,
+    caching_enabled: bool,
 ) -> Result<AccountsDB, Error>
 where
     E: Into<AccountStorageEntry>,
     P: AsRef<Path>,
 {
-    let mut accounts_db =
-        AccountsDB::new_with_indexes(account_paths.to_vec(), cluster_type, account_indexes);
+    let mut accounts_db = AccountsDB::new_with_config(
+        account_paths.to_vec(),
+        cluster_type,
+        account_indexes,
+        caching_enabled,
+    );
     let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
 
     // convert to two level map of slot -> id -> account storage entry
@@ -363,6 +374,10 @@ where
                 (slot, Arc::new(RwLock::new(slot_storage_entry)))
             }),
         );
+    }
+
+    if max_id > AppendVecId::MAX / 2 {
+        panic!("Storage id {} larger than allowed max", max_id);
     }
 
     accounts_db.next_id.store(max_id + 1, Ordering::Relaxed);

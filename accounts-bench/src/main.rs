@@ -2,13 +2,11 @@ use clap::{crate_description, crate_name, value_t, App, Arg};
 use rayon::prelude::*;
 use solana_measure::measure::Measure;
 use solana_runtime::{
-    accounts::{create_test_accounts, update_accounts, Accounts},
+    accounts::{create_test_accounts, update_accounts_bench, Accounts},
     accounts_index::Ancestors,
 };
 use solana_sdk::{genesis_config::ClusterType, pubkey::Pubkey};
-use std::env;
-use std::fs;
-use std::path::PathBuf;
+use std::{collections::HashSet, env, fs, path::PathBuf};
 
 fn main() {
     solana_logger::setup();
@@ -56,7 +54,8 @@ fn main() {
     if fs::remove_dir_all(path.clone()).is_err() {
         println!("Warning: Couldn't remove {:?}", path);
     }
-    let accounts = Accounts::new(vec![path], &ClusterType::Testnet);
+    let accounts =
+        Accounts::new_with_config(vec![path], &ClusterType::Testnet, HashSet::new(), false);
     println!("Creating {} accounts", num_accounts);
     let mut create_time = Measure::start("create accounts");
     let pubkeys: Vec<_> = (0..num_slots)
@@ -92,7 +91,7 @@ fn main() {
             time.stop();
             println!("{}", time);
             for slot in 0..num_slots {
-                update_accounts(&accounts, &pubkeys, ((x + 1) * num_slots + slot) as u64);
+                update_accounts_bench(&accounts, &pubkeys, ((x + 1) * num_slots + slot) as u64);
                 accounts.add_root((x * num_slots + slot) as u64);
             }
         } else {
