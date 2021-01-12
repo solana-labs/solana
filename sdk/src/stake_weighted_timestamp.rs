@@ -12,11 +12,12 @@ use std::{
 
 pub const TIMESTAMP_SLOT_RANGE: usize = 32;
 pub const DEPRECATED_TIMESTAMP_SLOT_RANGE: usize = 16; // Deprecated.  Remove in the Solana v1.6.0 timeframe
-const MAX_ALLOWABLE_DRIFT_PERCENTAGE: u32 = 25;
+pub const DEPRECATED_MAX_ALLOWABLE_DRIFT_PERCENTAGE: u32 = 25;
+pub const MAX_ALLOWABLE_DRIFT_PERCENTAGE: u32 = 50;
 
 pub enum EstimateType {
-    Bounded,
-    Unbounded, // Deprecated.  Remove in the Solana v1.6.0 timeframe
+    Bounded(u32), // Value represents max allowable drift percentage
+    Unbounded,    // Deprecated.  Remove in the Solana v1.6.0 timeframe
 }
 
 pub fn calculate_stake_weighted_timestamp<I, K, V, T>(
@@ -33,12 +34,13 @@ where
     V: Borrow<(Slot, UnixTimestamp)>,
 {
     match estimate_type {
-        EstimateType::Bounded => calculate_bounded_stake_weighted_timestamp(
+        EstimateType::Bounded(max_allowable_drift) => calculate_bounded_stake_weighted_timestamp(
             unique_timestamps,
             stakes,
             slot,
             slot_duration,
             epoch_start_timestamp,
+            max_allowable_drift,
         ),
         EstimateType::Unbounded => calculate_unbounded_stake_weighted_timestamp(
             unique_timestamps,
@@ -88,6 +90,7 @@ fn calculate_bounded_stake_weighted_timestamp<I, K, V, T>(
     slot: Slot,
     slot_duration: Duration,
     epoch_start_timestamp: Option<(Slot, UnixTimestamp)>,
+    max_allowable_drift_percentage: u32,
 ) -> Option<UnixTimestamp>
 where
     I: IntoIterator<Item = (K, V)>,
@@ -128,7 +131,7 @@ where
         let poh_estimate_offset = slot.saturating_sub(epoch_start_slot) as u32 * slot_duration;
         let estimate_offset =
             Duration::from_secs(estimate.saturating_sub(epoch_start_timestamp) as u64);
-        let max_allowable_drift = poh_estimate_offset * MAX_ALLOWABLE_DRIFT_PERCENTAGE / 100;
+        let max_allowable_drift = poh_estimate_offset * max_allowable_drift_percentage / 100;
         if estimate_offset > poh_estimate_offset
             && estimate_offset - poh_estimate_offset > max_allowable_drift
         {
@@ -271,6 +274,7 @@ pub mod tests {
         let pubkey2 = solana_sdk::pubkey::new_rand();
         let pubkey3 = solana_sdk::pubkey::new_rand();
         let pubkey4 = solana_sdk::pubkey::new_rand();
+        let max_allowable_drift = 25;
 
         // Test low-staked outlier(s)
         let stakes: HashMap<Pubkey, (u64, Account)> = [
@@ -333,6 +337,7 @@ pub mod tests {
             slot as Slot,
             slot_duration,
             None,
+            max_allowable_drift,
         )
         .unwrap();
         assert_eq!(bounded - unbounded, 527); // timestamp w/ 0.00003% of the stake can shift the timestamp backward 8min
@@ -363,6 +368,7 @@ pub mod tests {
             slot as Slot,
             slot_duration,
             None,
+            max_allowable_drift,
         )
         .unwrap();
         assert_eq!(unbounded - bounded, 3074455295455); // timestamp w/ 0.00003% of the stake can shift the timestamp forward 97k years!
@@ -385,6 +391,7 @@ pub mod tests {
             slot as Slot,
             slot_duration,
             None,
+            max_allowable_drift,
         )
         .unwrap();
         assert_eq!(bounded, recent_timestamp); // multiple low-staked outliers cannot affect bounded timestamp if they don't shift the median
@@ -432,6 +439,7 @@ pub mod tests {
             slot as Slot,
             slot_duration,
             None,
+            max_allowable_drift,
         )
         .unwrap();
         assert_eq!(bounded, recent_timestamp); // outlier(s) cannot affect bounded timestamp if they don't shift the median
@@ -468,6 +476,7 @@ pub mod tests {
             slot as Slot,
             slot_duration,
             None,
+            max_allowable_drift,
         )
         .unwrap();
         assert_eq!(recent_timestamp - bounded, 1578909061); // outliers > 1/2 of available stake can affect timestamp
@@ -479,7 +488,8 @@ pub mod tests {
         let slot = 20;
         let slot_duration = Duration::from_millis(400);
         let poh_offset = (slot * slot_duration).as_secs();
-        let acceptable_delta = (MAX_ALLOWABLE_DRIFT_PERCENTAGE * poh_offset as u32 / 100) as i64;
+        let max_allowable_drift = 25;
+        let acceptable_delta = (max_allowable_drift * poh_offset as u32 / 100) as i64;
         let poh_estimate = epoch_start_timestamp + poh_offset as i64;
         let pubkey0 = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
@@ -528,6 +538,7 @@ pub mod tests {
             slot as Slot,
             slot_duration,
             Some((0, epoch_start_timestamp)),
+            max_allowable_drift,
         )
         .unwrap();
         assert_eq!(bounded, poh_estimate + acceptable_delta);
@@ -548,6 +559,7 @@ pub mod tests {
             slot as Slot,
             slot_duration,
             Some((0, epoch_start_timestamp)),
+            max_allowable_drift,
         )
         .unwrap();
         assert_eq!(bounded, poh_estimate - acceptable_delta);
@@ -568,6 +580,7 @@ pub mod tests {
             slot as Slot,
             slot_duration,
             Some((0, epoch_start_timestamp)),
+            max_allowable_drift,
         )
         .unwrap();
         assert_eq!(bounded, poh_estimate + acceptable_delta);
@@ -587,8 +600,135 @@ pub mod tests {
             slot as Slot,
             slot_duration,
             Some((0, epoch_start_timestamp)),
+            max_allowable_drift,
         )
         .unwrap();
         assert_eq!(bounded, poh_estimate - acceptable_delta);
+    }
+
+    #[test]
+    fn test_calculate_bounded_stake_weighted_timestamp_levels() {
+        let epoch_start_timestamp: UnixTimestamp = 1_578_909_061;
+        let slot = 20;
+        let slot_duration = Duration::from_millis(400);
+        let poh_offset = (slot * slot_duration).as_secs();
+        let allowable_drift_25 = 25;
+        let allowable_drift_50 = 50;
+        let acceptable_delta_25 = (allowable_drift_25 * poh_offset as u32 / 100) as i64;
+        let acceptable_delta_50 = (allowable_drift_50 * poh_offset as u32 / 100) as i64;
+        assert!(acceptable_delta_50 > acceptable_delta_25 + 1);
+        let poh_estimate = epoch_start_timestamp + poh_offset as i64;
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+
+        let stakes: HashMap<Pubkey, (u64, Account)> = [
+            (
+                pubkey0,
+                (
+                    sol_to_lamports(1_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
+            ),
+            (
+                pubkey1,
+                (
+                    sol_to_lamports(1_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
+            ),
+            (
+                pubkey2,
+                (
+                    sol_to_lamports(1_000_000.0),
+                    Account::new(1, 0, &Pubkey::default()),
+                ),
+            ),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+
+        // Test when stake-weighted median is above 25% deviance but below 50% deviance
+        let unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = [
+            (
+                pubkey0,
+                (slot as u64, poh_estimate + acceptable_delta_25 + 1),
+            ),
+            (
+                pubkey1,
+                (slot as u64, poh_estimate + acceptable_delta_25 + 1),
+            ),
+            (
+                pubkey2,
+                (slot as u64, poh_estimate + acceptable_delta_25 + 1),
+            ),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+
+        let bounded = calculate_bounded_stake_weighted_timestamp(
+            &unique_timestamps,
+            &stakes,
+            slot as Slot,
+            slot_duration,
+            Some((0, epoch_start_timestamp)),
+            allowable_drift_25,
+        )
+        .unwrap();
+        assert_eq!(bounded, poh_estimate + acceptable_delta_25);
+
+        let bounded = calculate_bounded_stake_weighted_timestamp(
+            &unique_timestamps,
+            &stakes,
+            slot as Slot,
+            slot_duration,
+            Some((0, epoch_start_timestamp)),
+            allowable_drift_50,
+        )
+        .unwrap();
+        assert_eq!(bounded, poh_estimate + acceptable_delta_25 + 1);
+
+        // Test when stake-weighted median is above 50% deviance
+        let unique_timestamps: HashMap<Pubkey, (Slot, UnixTimestamp)> = [
+            (
+                pubkey0,
+                (slot as u64, poh_estimate + acceptable_delta_50 + 1),
+            ),
+            (
+                pubkey1,
+                (slot as u64, poh_estimate + acceptable_delta_50 + 1),
+            ),
+            (
+                pubkey2,
+                (slot as u64, poh_estimate + acceptable_delta_50 + 1),
+            ),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+
+        let bounded = calculate_bounded_stake_weighted_timestamp(
+            &unique_timestamps,
+            &stakes,
+            slot as Slot,
+            slot_duration,
+            Some((0, epoch_start_timestamp)),
+            allowable_drift_25,
+        )
+        .unwrap();
+        assert_eq!(bounded, poh_estimate + acceptable_delta_25);
+
+        let bounded = calculate_bounded_stake_weighted_timestamp(
+            &unique_timestamps,
+            &stakes,
+            slot as Slot,
+            slot_duration,
+            Some((0, epoch_start_timestamp)),
+            allowable_drift_50,
+        )
+        .unwrap();
+        assert_eq!(bounded, poh_estimate + acceptable_delta_50);
     }
 }

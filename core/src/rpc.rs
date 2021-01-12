@@ -2896,7 +2896,7 @@ pub mod tests {
     };
     use solana_vote_program::{
         vote_instruction,
-        vote_state::{Vote, VoteInit, MAX_LOCKOUT_HISTORY},
+        vote_state::{BlockTimestamp, Vote, VoteInit, VoteStateVersions, MAX_LOCKOUT_HISTORY},
     };
     use spl_token_v2_0::{
         solana_program::{program_option::COption, pubkey::Pubkey as SplTokenPubkey},
@@ -2931,6 +2931,18 @@ pub mod tests {
     ) -> RpcHandler {
         let (bank_forks, alice, leader_vote_keypair) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
+
+        let vote_pubkey = leader_vote_keypair.pubkey();
+        let mut vote_account = bank.get_account(&vote_pubkey).unwrap_or_default();
+        let mut vote_state = VoteState::from(&vote_account).unwrap_or_default();
+        vote_state.last_timestamp = BlockTimestamp {
+            slot: bank.slot(),
+            timestamp: bank.clock().unix_timestamp,
+        };
+        let versioned = VoteStateVersions::new_current(vote_state);
+        VoteState::to(&versioned, &mut vote_account).unwrap();
+        bank.store_account(&vote_pubkey, &vote_account);
+
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&ledger_path).unwrap();
         let blockstore = Arc::new(blockstore);
@@ -5127,7 +5139,7 @@ pub mod tests {
         let res = io.handle_request_sync(&req, meta.clone());
         let expected = format!(
             r#"{{"jsonrpc":"2.0","result":{},"id":1}}"#,
-            base_timestamp + (5 * slot_duration).as_secs() as i64
+            base_timestamp + (7 * slot_duration).as_secs() as i64
         );
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
