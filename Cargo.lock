@@ -3969,6 +3969,7 @@ dependencies = [
  "log 0.4.11",
  "rand 0.7.3",
  "rayon",
+ "solana-account-decoder",
  "solana-clap-utils",
  "solana-client",
  "solana-core",
@@ -3977,8 +3978,11 @@ dependencies = [
  "solana-logger 1.6.0",
  "solana-measure",
  "solana-net-utils",
+ "solana-runtime",
  "solana-sdk",
+ "solana-transaction-status",
  "solana-version",
+ "spl-token",
 ]
 
 [[package]]

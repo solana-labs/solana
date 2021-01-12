@@ -3,22 +3,34 @@ use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg};
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
+use solana_account_decoder::parse_token::spl_token_v2_0_pubkey;
+use solana_clap_utils::input_parsers::pubkey_of;
 use solana_client::rpc_client::RpcClient;
 use solana_core::gossip_service::discover;
 use solana_faucet::faucet::{request_airdrop_transaction, FAUCET_PORT};
 use solana_measure::measure::Measure;
-use solana_sdk::rpc_port::DEFAULT_RPC_PORT;
-use solana_sdk::signature::{read_keypair_file, Keypair, Signature, Signer};
-use solana_sdk::timing::timestamp;
-use solana_sdk::{message::Message, transaction::Transaction};
-use solana_sdk::{system_instruction, system_program};
-use std::net::SocketAddr;
-use std::process::exit;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
-use std::thread::{sleep, Builder, JoinHandle};
-use std::time::Duration;
-use std::time::Instant;
+use solana_runtime::inline_spl_token_v2_0;
+use solana_sdk::{
+    message::Message,
+    pubkey::Pubkey,
+    rpc_port::DEFAULT_RPC_PORT,
+    signature::{read_keypair_file, Keypair, Signature, Signer},
+    system_instruction, system_program,
+    timing::timestamp,
+    transaction::Transaction,
+};
+use solana_transaction_status::parse_token::spl_token_v2_0_instruction;
+use spl_token_v2_0::solana_program::pubkey::Pubkey as SplPubkey;
+use std::{
+    net::SocketAddr,
+    process::exit,
+    sync::{
+        atomic::{AtomicBool, AtomicU64, Ordering},
+        Arc, RwLock,
+    },
+    thread::{sleep, Builder, JoinHandle},
+    time::{Duration, Instant},
+};
 
 pub fn airdrop_lamports(
     client: &RpcClient,
@@ -44,8 +56,7 @@ pub fn airdrop_lamports(
                 let mut tries = 0;
                 loop {
                     tries += 1;
-                    let signature = client.send_transaction(&transaction).unwrap();
-                    let result = client.poll_for_signature(&signature);
+                    let result = client.send_and_confirm_transaction(&transaction);
 
                     if result.is_ok() {
                         break;
@@ -240,6 +251,7 @@ fn make_message(
     num_instructions: usize,
     balance: u64,
     maybe_space: Option<u64>,
+    mint: Option<Pubkey>,
 ) -> (Message, Vec<Keypair>) {
     let space = maybe_space.unwrap_or_else(|| thread_rng().gen_range(0, 1000));
 
@@ -248,18 +260,34 @@ fn make_message(
         .map(|_| {
             let new_keypair = Keypair::new();
 
-            (
-                system_instruction::create_account(
-                    &keypair.pubkey(),
-                    &new_keypair.pubkey(),
-                    balance,
-                    space,
-                    &system_program::id(),
-                ),
-                new_keypair,
-            )
+            let program_id = if mint.is_some() {
+                inline_spl_token_v2_0::id()
+            } else {
+                system_program::id()
+            };
+            let mut instructions = vec![system_instruction::create_account(
+                &keypair.pubkey(),
+                &new_keypair.pubkey(),
+                balance,
+                space,
+                &program_id,
+            )];
+            if let Some(mint_address) = mint {
+                instructions.push(spl_token_v2_0_instruction(
+                    spl_token_v2_0::instruction::initialize_account(
+                        &spl_token_v2_0::id(),
+                        &spl_token_v2_0_pubkey(&new_keypair.pubkey()),
+                        &spl_token_v2_0_pubkey(&mint_address),
+                        &SplPubkey::new_unique(),
+                    )
+                    .unwrap(),
+                ));
+            }
+
+            (instructions, new_keypair)
         })
         .unzip();
+    let instructions: Vec<_> = instructions.into_iter().flatten().collect();
 
     (
         Message::new(&instructions, Some(&keypair.pubkey())),
@@ -276,6 +304,7 @@ fn run_accounts_bench(
     batch_size: usize,
     maybe_lamports: Option<u64>,
     num_instructions: usize,
+    mint: Option<Pubkey>,
 ) {
     assert!(num_instructions > 0);
     let client = RpcClient::new_socket(entrypoint_addr);
@@ -310,7 +339,7 @@ fn run_accounts_bench(
         }
 
         let (message, _keypairs) =
-            make_message(keypair, num_instructions, min_balance, maybe_space);
+            make_message(keypair, num_instructions, min_balance, maybe_space, mint);
         let fee = recent_blockhash.1.calculate_fee(&message);
         let lamports = min_balance + fee;
 
@@ -339,7 +368,7 @@ fn run_accounts_bench(
                 .into_par_iter()
                 .map(|_| {
                     let (message, new_keypairs) =
-                        make_message(keypair, num_instructions, min_balance, maybe_space);
+                        make_message(keypair, num_instructions, min_balance, maybe_space, mint);
                     let signers: Vec<&Keypair> = new_keypairs
                         .iter()
                         .chain(std::iter::once(keypair))
@@ -433,9 +462,22 @@ fn main() {
                 .help("Number of accounts to create on each transaction"),
         )
         .arg(
+            Arg::with_name("iterations")
+                .long("iterations")
+                .takes_value(true)
+                .value_name("NUM")
+                .help("Number of iterations to make"),
+        )
+        .arg(
             Arg::with_name("check_gossip")
                 .long("check-gossip")
                 .help("Just use entrypoint address directly"),
+        )
+        .arg(
+            Arg::with_name("mint")
+                .long("mint")
+                .takes_value(true)
+                .help("Mint address to initialize account"),
         )
         .get_matches();
 
@@ -466,6 +508,8 @@ fn main() {
         eprintln!("bad num_instructions: {}", num_instructions);
         exit(1);
     }
+
+    let mint = pubkey_of(&matches, "mint");
 
     let keypair =
         read_keypair_file(&value_t_or_exit!(matches, "identity", String)).expect("bad keypair");
@@ -503,6 +547,7 @@ fn main() {
         batch_size,
         lamports,
         num_instructions,
+        mint,
     );
 }
 
@@ -543,6 +588,7 @@ pub mod test {
             batch_size,
             maybe_lamports,
             num_instructions,
+            None,
         );
         start.stop();
         info!("{}", start);
