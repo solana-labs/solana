@@ -121,6 +121,8 @@ pub struct ReplayTiming {
     generate_new_bank_forks_elapsed: u64,
     replay_active_banks_elapsed: u64,
     reset_duplicate_slots_elapsed: u64,
+    wait_receive_elapsed: u64,
+    heaviest_fork_failures_elapsed: u64,
 }
 impl ReplayTiming {
     #[allow(clippy::too_many_arguments)]
@@ -136,6 +138,8 @@ impl ReplayTiming {
         generate_new_bank_forks_elapsed: u64,
         replay_active_banks_elapsed: u64,
         reset_duplicate_slots_elapsed: u64,
+        wait_receive_elapsed: u64,
+        heaviest_fork_failures_elapsed: u64,
     ) {
         self.compute_bank_stats_elapsed += compute_bank_stats_elapsed;
         self.select_vote_and_reset_forks_elapsed += select_vote_and_reset_forks_elapsed;
@@ -147,6 +151,8 @@ impl ReplayTiming {
         self.generate_new_bank_forks_elapsed += generate_new_bank_forks_elapsed;
         self.replay_active_banks_elapsed += replay_active_banks_elapsed;
         self.reset_duplicate_slots_elapsed += reset_duplicate_slots_elapsed;
+        self.wait_receive_elapsed += wait_receive_elapsed;
+        self.heaviest_fork_failures_elapsed += heaviest_fork_failures_elapsed;
         let now = timestamp();
         let elapsed_ms = now - self.last_print;
         if elapsed_ms > 1000 {
@@ -193,6 +199,16 @@ impl ReplayTiming {
                 (
                     "reset_duplicate_slots_elapsed",
                     self.reset_duplicate_slots_elapsed as i64,
+                    i64
+                ),
+                (
+                    "wait_receive_elapsed",
+                    self.wait_receive_elapsed as i64,
+                    i64
+                ),
+                (
+                    "heaviest_fork_failures_elapsed",
+                    self.heaviest_fork_failures_elapsed as i64,
                     i64
                 ),
             );
@@ -268,6 +284,7 @@ impl ReplayStage {
                 let mut partition_exists = false;
                 let mut skipped_slots_info = SkippedSlotsInfo::default();
                 let mut replay_timing = ReplayTiming::default();
+
                 loop {
                     let allocated = thread_mem_usage::Allocatedp::default();
 
@@ -401,6 +418,7 @@ impl ReplayStage {
                     );
                     select_vote_and_reset_forks_time.stop();
 
+                    let mut heaviest_fork_failures_time = Measure::start("heaviest_fork_failures_time");
                     if tower.is_recent(heaviest_bank.slot()) && !heaviest_fork_failures.is_empty() {
                         info!(
                             "Couldn't vote on heaviest fork: {:?}, heaviest_fork_failures: {:?}",
@@ -418,6 +436,7 @@ impl ReplayStage {
                             }
                         }
                     }
+                    heaviest_fork_failures_time.stop();
 
                     let start = allocated.get();
 
@@ -561,6 +580,20 @@ impl ReplayStage {
                     start_leader_time.stop();
                     Self::report_memory(&allocated, "start_leader", start);
 
+                    let mut wait_receive_time = Measure::start("wait_receive_time");
+                    if !did_complete_bank {
+                        // only wait for the signal if we did not just process a bank; maybe there are more slots available
+
+                        let timer = Duration::from_millis(100);
+                        let result = ledger_signal_receiver.recv_timeout(timer);
+                        wait_receive_time.stop();
+                        match result {
+                            Err(RecvTimeoutError::Timeout) => (),
+                            Err(_) => break,
+                            Ok(_) => trace!("blockstore signal"),
+                        };
+                    }
+
                     replay_timing.update(
                         compute_bank_stats_time.as_us(),
                         select_vote_and_reset_forks_time.as_us(),
@@ -572,19 +605,9 @@ impl ReplayStage {
                         generate_new_bank_forks_time.as_us(),
                         replay_active_banks_time.as_us(),
                         reset_duplicate_slots_time.as_us(),
+                        wait_receive_time.as_us(),
+                        heaviest_fork_failures_time.as_us(),
                     );
-
-                    if did_complete_bank {
-                        //just processed a bank, skip the signal; maybe there's more slots available
-                        continue;
-                    }
-                    let timer = Duration::from_millis(100);
-                    let result = ledger_signal_receiver.recv_timeout(timer);
-                    match result {
-                        Err(RecvTimeoutError::Timeout) => continue,
-                        Err(_) => break,
-                        Ok(_) => trace!("blockstore signal"),
-                    };
                 }
                 Ok(())
             })
