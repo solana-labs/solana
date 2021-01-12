@@ -54,19 +54,31 @@ pub struct AccountMeta {
     pub rent_epoch: Epoch,
 }
 
+impl<'a> From<&'a Account> for AccountMeta {
+    fn from(account: &'a Account) -> Self {
+        Self {
+            lamports: account.lamports,
+            owner: account.owner,
+            executable: account.executable,
+            rent_epoch: account.rent_epoch,
+        }
+    }
+}
+
 /// References to Memory Mapped memory
 /// The Account is stored separately from its data, so getting the actual account requires a clone
 #[derive(PartialEq, Debug)]
-pub struct StoredAccount<'a> {
+pub struct StoredAccountMeta<'a> {
     pub meta: &'a StoredMeta,
     /// account data
     pub account_meta: &'a AccountMeta,
     pub data: &'a [u8],
     pub offset: usize,
+    pub stored_size: usize,
     pub hash: &'a Hash,
 }
 
-impl<'a> StoredAccount<'a> {
+impl<'a> StoredAccountMeta<'a> {
     pub fn clone_account(&self) -> Account {
         Account {
             lamports: self.account_meta.lamports,
@@ -366,17 +378,19 @@ impl AppendVec {
         Some((unsafe { &*ptr }, next))
     }
 
-    pub fn get_account<'a>(&'a self, offset: usize) -> Option<(StoredAccount<'a>, usize)> {
+    pub fn get_account<'a>(&'a self, offset: usize) -> Option<(StoredAccountMeta<'a>, usize)> {
         let (meta, next): (&'a StoredMeta, _) = self.get_type(offset)?;
         let (account_meta, next): (&'a AccountMeta, _) = self.get_type(next)?;
         let (hash, next): (&'a Hash, _) = self.get_type(next)?;
         let (data, next) = self.get_slice(next, meta.data_len as usize)?;
+        let stored_size = next - offset;
         Some((
-            StoredAccount {
+            StoredAccountMeta {
                 meta,
                 account_meta,
                 data,
                 offset,
+                stored_size,
                 hash,
             },
             next,
@@ -392,7 +406,7 @@ impl AppendVec {
         self.path.clone()
     }
 
-    pub fn accounts(&self, mut start: usize) -> Vec<StoredAccount> {
+    pub fn accounts(&self, mut start: usize) -> Vec<StoredAccountMeta> {
         let mut accounts = vec![];
         while let Some((account, next)) = self.get_account(start) {
             accounts.push(account);
@@ -411,12 +425,7 @@ impl AppendVec {
         let mut rv = Vec::with_capacity(accounts.len());
         for ((stored_meta, account), hash) in accounts.iter().zip(hashes) {
             let meta_ptr = stored_meta as *const StoredMeta;
-            let account_meta = AccountMeta {
-                lamports: account.lamports,
-                owner: account.owner,
-                executable: account.executable,
-                rent_epoch: account.rent_epoch,
-            };
+            let account_meta = AccountMeta::from(*account);
             let account_meta_ptr = &account_meta as *const AccountMeta;
             let data_len = stored_meta.data_len as usize;
             let data_ptr = account.data.as_ptr();
@@ -433,6 +442,11 @@ impl AppendVec {
                 break;
             }
         }
+
+        // The last entry in this offset needs to be the u64 aligned offset, because that's
+        // where the *next* entry will begin to be stored.
+        rv.push(u64_align!(*offset));
+
         rv
     }
 
@@ -442,9 +456,12 @@ impl AppendVec {
         account: &Account,
         hash: Hash,
     ) -> Option<usize> {
-        self.append_accounts(&[(storage_meta, account)], &[hash])
-            .first()
-            .cloned()
+        let res = self.append_accounts(&[(storage_meta, account)], &[hash]);
+        if res.len() == 1 {
+            None
+        } else {
+            res.first().cloned()
+        }
     }
 }
 
@@ -511,7 +528,7 @@ pub mod tests {
         }
     }
 
-    impl<'a> StoredAccount<'a> {
+    impl<'a> StoredAccountMeta<'a> {
         #[allow(clippy::cast_ref_to_mut)]
         fn set_data_len_unsafe(&self, new_data_len: u64) {
             // UNSAFE: cast away & (= const ref) to &mut to force to mutate append-only (=read-only) AppendVec

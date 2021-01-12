@@ -1423,6 +1423,11 @@ pub fn main() {
                 .value_name("INDEX")
                 .help("Enable an accounts index, indexed by the selected account field"),
         )
+        .arg(
+            Arg::with_name("accounts_db_caching_enabled")
+                .long("accounts-db-caching-enabled")
+                .help("Enable accounts caching"),
+        )
         .get_matches();
 
     let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(Keypair::new));
@@ -1593,6 +1598,7 @@ pub fn main() {
         poh_pinned_cpu_core: value_of(&matches, "poh_pinned_cpu_core")
             .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),
         account_indexes,
+        accounts_db_caching_enabled: matches.is_present("accounts_db_caching_enabled"),
         ..ValidatorConfig::default()
     };
 

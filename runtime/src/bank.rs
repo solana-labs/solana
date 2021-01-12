@@ -861,13 +861,22 @@ impl Default for BlockhashQueue {
 
 impl Bank {
     pub fn new(genesis_config: &GenesisConfig) -> Self {
-        Self::new_with_paths(&genesis_config, Vec::new(), &[], None, None, HashSet::new())
+        Self::new_with_paths(
+            &genesis_config,
+            Vec::new(),
+            &[],
+            None,
+            None,
+            HashSet::new(),
+            false,
+        )
     }
 
     #[cfg(test)]
-    pub(crate) fn new_with_indexes(
+    pub(crate) fn new_with_config(
         genesis_config: &GenesisConfig,
         account_indexes: HashSet<AccountIndex>,
+        accounts_db_caching_enabled: bool,
     ) -> Self {
         Self::new_with_paths(
             &genesis_config,
@@ -876,6 +885,7 @@ impl Bank {
             None,
             None,
             account_indexes,
+            accounts_db_caching_enabled,
         )
     }
 
@@ -886,16 +896,18 @@ impl Bank {
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
         account_indexes: HashSet<AccountIndex>,
+        accounts_db_caching_enabled: bool,
     ) -> Self {
         let mut bank = Self::default();
         bank.ancestors.insert(bank.slot(), 0);
         bank.transaction_debug_keys = debug_keys;
         bank.cluster_type = Some(genesis_config.cluster_type);
 
-        bank.rc.accounts = Arc::new(Accounts::new_with_indexes(
+        bank.rc.accounts = Arc::new(Accounts::new_with_config(
             paths,
             &genesis_config.cluster_type,
             account_indexes,
+            accounts_db_caching_enabled,
         ));
         bank.process_genesis_config(genesis_config);
         bank.finish_init(genesis_config, additional_builtins);
@@ -1998,7 +2010,6 @@ impl Bank {
         // record and commit are finished, those transactions will be
         // committed before this write lock can be obtained here.
         let mut hash = self.hash.write().unwrap();
-
         if *hash == Hash::default() {
             // finish up any deferred changes to account state
             self.collect_rent_eagerly();
@@ -2010,12 +2021,19 @@ impl Bank {
             // freeze is a one-way trip, idempotent
             self.freeze_started.store(true, Relaxed);
             *hash = self.hash_internal_state();
+            self.rc.accounts.accounts_db.mark_slot_frozen(self.slot());
         }
     }
 
     // Should not be called outside of startup, will race with
     // concurrent cleaning logic in AccountsBackgroundService
     pub fn exhaustively_free_unused_resource(&self) {
+        let mut flush = Measure::start("flush");
+        // Flush all the rooted accounts. Must be called after `squash()`,
+        // so that AccountsDb knows what the roots are.
+        self.force_flush_accounts_cache();
+        flush.stop();
+
         let mut clean = Measure::start("clean");
         // Don't clean the slot we're snapshotting because it may have zero-lamport
         // accounts that were included in the bank delta hash when the bank was frozen,
@@ -2030,9 +2048,10 @@ impl Bank {
 
         info!(
             "exhaustively_free_unused_resource()
+            flush: {},
             clean: {},
             shrink: {}",
-            clean, shrink,
+            flush, clean, shrink,
         );
     }
 
@@ -3144,7 +3163,7 @@ impl Bank {
         }
 
         let mut write_time = Measure::start("write_time");
-        self.rc.accounts.store_accounts(
+        self.rc.accounts.store_cached(
             self.slot(),
             txs,
             iteration_order,
@@ -3841,7 +3860,9 @@ impl Bank {
 
     pub fn store_account(&self, pubkey: &Pubkey, account: &Account) {
         assert!(!self.freeze_started());
-        self.rc.accounts.store_slow(self.slot(), pubkey, account);
+        self.rc
+            .accounts
+            .store_slow_cached(self.slot(), pubkey, account);
 
         if Stakes::is_stake(account) {
             self.stakes
@@ -3849,6 +3870,17 @@ impl Bank {
                 .unwrap()
                 .store(pubkey, account, self.stake_program_v2_enabled());
         }
+    }
+
+    pub fn force_flush_accounts_cache(&self) {
+        self.rc.accounts.accounts_db.force_flush_accounts_cache()
+    }
+
+    pub fn flush_accounts_cache_if_needed(&self) {
+        self.rc
+            .accounts
+            .accounts_db
+            .flush_accounts_cache_if_needed()
     }
 
     fn store_account_and_update_capitalization(&self, pubkey: &Pubkey, new_account: &Account) {
@@ -4538,7 +4570,7 @@ impl Bank {
         budget_recovery_delta: usize,
     ) -> usize {
         if consumed_budget == 0 {
-            let shrunken_account_count = self.rc.accounts.accounts_db.process_stale_slot();
+            let shrunken_account_count = self.rc.accounts.accounts_db.process_stale_slot_v1();
             if shrunken_account_count > 0 {
                 datapoint_info!(
                     "stale_slot_shrink",
@@ -4548,6 +4580,10 @@ impl Bank {
             }
         }
         consumed_budget.saturating_sub(budget_recovery_delta)
+    }
+
+    pub fn shrink_candidate_slots(&self) -> usize {
+        self.rc.accounts.accounts_db.shrink_candidate_slots()
     }
 
     pub fn secp256k1_program_enabled(&self) -> bool {
@@ -4874,6 +4910,7 @@ fn is_simple_vote_transaction(transaction: &Transaction) -> bool {
 pub(crate) mod tests {
     use super::*;
     use crate::{
+        accounts_db::SHRINK_RATIO,
         accounts_index::{AccountMap, Ancestors, ITER_BATCH_SIZE},
         genesis_utils::{
             activate_all_features, bootstrap_validator_stake_lamports,
@@ -6726,7 +6763,7 @@ pub(crate) mod tests {
             .accounts
             .accounts_db
             .accounts_index
-            .add_root(genesis_bank1.slot() + 1);
+            .add_root(genesis_bank1.slot() + 1, false);
         bank1_without_zero
             .rc
             .accounts
@@ -6997,10 +7034,14 @@ pub(crate) mod tests {
             let pubkey = solana_sdk::pubkey::new_rand();
             let tx = system_transaction::transfer(&mint_keypair, &pubkey, 0, blockhash);
             bank.process_transaction(&tx).unwrap();
+            bank.freeze();
             bank.squash();
             bank = Arc::new(new_from_parent(&bank));
         }
 
+        bank.freeze();
+        bank.squash();
+        bank.force_flush_accounts_cache();
         let hash = bank.update_accounts_hash();
         bank.clean_accounts(false);
         assert_eq!(bank.update_accounts_hash(), hash);
@@ -7037,9 +7078,11 @@ pub(crate) mod tests {
         assert!(bank0.verify_bank_hash());
 
         // Squash and then verify hash_internal value
+        bank0.freeze();
         bank0.squash();
         assert!(bank0.verify_bank_hash());
 
+        bank1.freeze();
         bank1.squash();
         bank1.update_accounts_hash();
         assert!(bank1.verify_bank_hash());
@@ -7047,6 +7090,7 @@ pub(crate) mod tests {
         // keypair should have 0 tokens on both forks
         assert_eq!(bank0.get_account(&keypair.pubkey()), None);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
+        bank1.force_flush_accounts_cache();
         bank1.clean_accounts(false);
 
         assert!(bank1.verify_bank_hash());
@@ -8714,7 +8758,11 @@ pub(crate) mod tests {
         let (genesis_config, _mint_keypair) = create_genesis_config(500);
         let mut account_indexes = HashSet::new();
         account_indexes.insert(AccountIndex::ProgramId);
-        let bank = Arc::new(Bank::new_with_indexes(&genesis_config, account_indexes));
+        let bank = Arc::new(Bank::new_with_config(
+            &genesis_config,
+            account_indexes,
+            false,
+        ));
 
         let address = Pubkey::new_unique();
         let program_id = Pubkey::new_unique();
@@ -10151,6 +10199,94 @@ pub(crate) mod tests {
         assert_eq!(42, bank.get_balance(&program2_pubkey));
     }
 
+    fn get_shrink_account_size() -> usize {
+        let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000_000);
+
+        // Set root for bank 0, with caching enabled
+        let mut bank0 = Arc::new(Bank::new_with_config(
+            &genesis_config,
+            HashSet::new(),
+            false,
+        ));
+        bank0.restore_old_behavior_for_fragile_tests();
+        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank0).unwrap());
+        bank0.freeze();
+        bank0.squash();
+
+        let sizes = bank0
+            .rc
+            .accounts
+            .scan_slot(0, |stored_account| Some(stored_account.stored_size()));
+
+        // Create an account such that it takes SHRINK_RATIO of the total account space for
+        // the slot, so when it gets pruned, the storage entry will become a shrink candidate.
+        let bank0_total_size: usize = sizes.into_iter().sum();
+        let pubkey0_size = (bank0_total_size as f64 / (1.0 - SHRINK_RATIO)).ceil();
+        assert!(pubkey0_size / (pubkey0_size + bank0_total_size as f64) > SHRINK_RATIO);
+        pubkey0_size as usize
+    }
+
+    #[test]
+    fn test_shrink_candidate_slots_cached() {
+        solana_logger::setup();
+
+        let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000_000);
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+
+        // Set root for bank 0, with caching enabled
+        let mut bank0 = Arc::new(Bank::new_with_config(&genesis_config, HashSet::new(), true));
+        bank0.restore_old_behavior_for_fragile_tests();
+
+        let pubkey0_size = get_shrink_account_size();
+        let account0 = Account::new(1000, pubkey0_size as usize, &Pubkey::new_unique());
+        bank0.store_account(&pubkey0, &account0);
+
+        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank0).unwrap());
+        bank0.freeze();
+        bank0.squash();
+
+        // Store some lamports in bank 1
+        let some_lamports = 123;
+        let mut bank1 = Arc::new(new_from_parent(&bank0));
+        bank1.deposit(&pubkey1, some_lamports);
+        bank1.deposit(&pubkey2, some_lamports);
+        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank1).unwrap());
+
+        // Store some lamports for pubkey1 in bank 2, root bank 2
+        let mut bank2 = Arc::new(new_from_parent(&bank1));
+        bank2.deposit(&pubkey1, some_lamports);
+        bank2.store_account(&pubkey0, &account0);
+        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank2).unwrap());
+        bank2.freeze();
+        bank2.squash();
+        bank2.force_flush_accounts_cache();
+
+        // Clean accounts, which should add earlier slots to the shrink
+        // candidate set
+        bank2.clean_accounts(false);
+
+        // Slots 0 and 1 should be candidates for shrinking, but slot 2
+        // shouldn't because none of its accounts are outdated by a later
+        // root
+        assert_eq!(bank2.shrink_candidate_slots(), 2);
+        let alive_counts: Vec<usize> = (0..3)
+            .map(|slot| {
+                bank2
+                    .rc
+                    .accounts
+                    .accounts_db
+                    .alive_account_count_in_slot(slot)
+            })
+            .collect();
+
+        // No more slots should be shrunk
+        assert_eq!(bank2.shrink_candidate_slots(), 0);
+        // alive_counts represents the count of alive accounts in the three slots 0,1,2
+        assert_eq!(alive_counts, vec![9, 1, 7]);
+    }
+
     #[test]
     fn test_process_stale_slot_with_budget() {
         solana_logger::setup();
@@ -11120,6 +11256,7 @@ pub(crate) mod tests {
             None,
             Some(&builtins),
             HashSet::new(),
+            false,
         ));
         // move to next epoch to create now deprecated rewards sysvar intentionally
         let bank1 = Arc::new(Bank::new_from_parent(
@@ -11347,100 +11484,6 @@ pub(crate) mod tests {
         );
     }
 
-    fn setup_bank_with_removable_zero_lamport_account() -> Arc<Bank> {
-        let (genesis_config, _mint_keypair) = create_genesis_config(2000);
-        let bank0 = Bank::new(&genesis_config);
-        bank0.freeze();
-
-        let bank1 = Arc::new(Bank::new_from_parent(
-            &Arc::new(bank0),
-            &Pubkey::default(),
-            1,
-        ));
-
-        let zero_lamport_pubkey = solana_sdk::pubkey::new_rand();
-
-        bank1.store_account_and_update_capitalization(
-            &zero_lamport_pubkey,
-            &Account::new(0, 0, &Pubkey::default()),
-        );
-        // Store another account in a separate AppendVec than `zero_lamport_pubkey`
-        // (guaranteed because of large file size). We need this to ensure slot is
-        // not cleaned up after clean is called, so that the bank hash still exists
-        // when we call rehash() later in this test.
-        let large_account_pubkey = solana_sdk::pubkey::new_rand();
-        bank1.store_account_and_update_capitalization(
-            &large_account_pubkey,
-            &Account::new(
-                1000,
-                bank1.rc.accounts.accounts_db.file_size() as usize,
-                &Pubkey::default(),
-            ),
-        );
-        assert_ne!(
-            bank1
-                .rc
-                .accounts
-                .accounts_db
-                .get_append_vec_id(&large_account_pubkey, 1)
-                .unwrap(),
-            bank1
-                .rc
-                .accounts
-                .accounts_db
-                .get_append_vec_id(&zero_lamport_pubkey, 1)
-                .unwrap()
-        );
-
-        // Make sure rent collection doesn't overwrite `large_account_pubkey`, which
-        // keeps slot 1 alive in the accounts database. Otherwise, slot 1 and it's bank
-        // hash would be removed from accounts, preventing `rehash()` from succeeding
-        bank1.restore_old_behavior_for_fragile_tests();
-        bank1.freeze();
-        let bank1_hash = bank1.hash();
-
-        let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
-        bank2.freeze();
-
-        // Set a root so clean will happen on this slot
-        bank1.squash();
-
-        // All accounts other than `zero_lamport_pubkey` should be updated, which
-        // means clean should be able to delete the `zero_lamport_pubkey`
-        bank2.squash();
-
-        // Bank 1 hash should not change
-        bank1.rehash();
-        let new_bank1_hash = bank1.hash();
-        assert_eq!(bank1_hash, new_bank1_hash);
-
-        bank1
-    }
-
-    #[test]
-    fn test_clean_zero_lamport_account_different_hash() {
-        let bank1 = setup_bank_with_removable_zero_lamport_account();
-        let old_hash = bank1.hash();
-
-        // `zero_lamport_pubkey` should have been deleted, hashes will not match
-        bank1.clean_accounts(false);
-        bank1.rehash();
-        let new_bank1_hash = bank1.hash();
-        assert_ne!(old_hash, new_bank1_hash);
-    }
-
-    #[test]
-    fn test_clean_zero_lamport_account_same_hash() {
-        let bank1 = setup_bank_with_removable_zero_lamport_account();
-        let old_hash = bank1.hash();
-
-        // `zero_lamport_pubkey` will not be deleted, hashes will match
-        bank1.clean_accounts(true);
-        bank1.rehash();
-        let new_bank1_hash = bank1.hash();
-        assert_eq!(old_hash, new_bank1_hash);
-    }
-
     #[test]
     fn test_program_is_native_loader() {
         let (genesis_config, mint_keypair) = create_genesis_config(50000);
@@ -11531,7 +11574,7 @@ pub(crate) mod tests {
         assert!(!debug.is_empty());
     }
 
-    fn test_store_scan_consistency<F: 'static>(update_f: F)
+    fn test_store_scan_consistency<F: 'static>(accounts_db_caching_enabled: bool, update_f: F)
     where
         F: Fn(Arc<Bank>, crossbeam_channel::Sender<Arc<Bank>>, Arc<HashSet<Pubkey>>, Pubkey, u64)
             + std::marker::Send,
@@ -11544,7 +11587,11 @@ pub(crate) mod tests {
         )
         .genesis_config;
         genesis_config.rent = Rent::free();
-        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let bank0 = Arc::new(Bank::new_with_config(
+            &genesis_config,
+            HashSet::new(),
+            accounts_db_caching_enabled,
+        ));
 
         // Set up pubkeys to write to
         let total_pubkeys = ITER_BATCH_SIZE * 10;
@@ -11590,7 +11637,7 @@ pub(crate) mod tests {
                     bank_to_scan_receiver.recv_timeout(Duration::from_millis(10))
                 {
                     let accounts = bank_to_scan.get_program_accounts(&program_id);
-                    // Should never seen empty accounts because no slot ever deleted
+                    // Should never see empty accounts because no slot ever deleted
                     // any of the original accounts, and the scan should reflect the
                     // account state at some frozen slot `X` (no partial updates).
                     assert!(!accounts.is_empty());
@@ -11640,87 +11687,91 @@ pub(crate) mod tests {
 
     #[test]
     fn test_store_scan_consistency_unrooted() {
-        test_store_scan_consistency(
-            |bank0, bank_to_scan_sender, pubkeys_to_modify, program_id, starting_lamports| {
-                let mut current_major_fork_bank = bank0;
-                loop {
-                    let mut current_minor_fork_bank = current_major_fork_bank.clone();
-                    let num_new_banks = 2;
-                    let lamports = current_minor_fork_bank.slot() + starting_lamports + 1;
-                    // Modify banks on the two banks on the minor fork
-                    for pubkeys_to_modify in &pubkeys_to_modify
-                        .iter()
-                        .chunks(pubkeys_to_modify.len() / num_new_banks)
-                    {
-                        current_minor_fork_bank = Arc::new(Bank::new_from_parent(
-                            &current_minor_fork_bank,
-                            &solana_sdk::pubkey::new_rand(),
-                            current_minor_fork_bank.slot() + 2,
-                        ));
-                        let account = Account::new(lamports, 0, &program_id);
-                        // Write partial updates to each of the banks in the minor fork so if any of them
-                        // get cleaned up, there will be keys with the wrong account value/missing.
-                        for key in pubkeys_to_modify {
-                            current_minor_fork_bank.store_account(key, &account);
+        for accounts_db_caching_enabled in &[false, true] {
+            test_store_scan_consistency(
+                *accounts_db_caching_enabled,
+                |bank0, bank_to_scan_sender, pubkeys_to_modify, program_id, starting_lamports| {
+                    let mut current_major_fork_bank = bank0;
+                    loop {
+                        let mut current_minor_fork_bank = current_major_fork_bank.clone();
+                        let num_new_banks = 2;
+                        let lamports = current_minor_fork_bank.slot() + starting_lamports + 1;
+                        // Modify banks on the two banks on the minor fork
+                        for pubkeys_to_modify in &pubkeys_to_modify
+                            .iter()
+                            .chunks(pubkeys_to_modify.len() / num_new_banks)
+                        {
+                            current_minor_fork_bank = Arc::new(Bank::new_from_parent(
+                                &current_minor_fork_bank,
+                                &solana_sdk::pubkey::new_rand(),
+                                current_minor_fork_bank.slot() + 2,
+                            ));
+                            let account = Account::new(lamports, 0, &program_id);
+                            // Write partial updates to each of the banks in the minor fork so if any of them
+                            // get cleaned up, there will be keys with the wrong account value/missing.
+                            for key in pubkeys_to_modify {
+                                current_minor_fork_bank.store_account(key, &account);
+                            }
+                            current_minor_fork_bank.freeze();
                         }
-                        current_minor_fork_bank.freeze();
+
+                        // All the parent banks made in this iteration of the loop
+                        // are currently discoverable, previous parents should have
+                        // been squashed
+                        assert_eq!(
+                            current_minor_fork_bank.clone().parents_inclusive().len(),
+                            num_new_banks + 1,
+                        );
+
+                        // `next_major_bank` needs to be sandwiched between the minor fork banks
+                        // That way, after the squash(), the minor fork has the potential to see a
+                        // *partial* clean of the banks < `next_major_bank`.
+                        current_major_fork_bank = Arc::new(Bank::new_from_parent(
+                            &current_major_fork_bank,
+                            &solana_sdk::pubkey::new_rand(),
+                            current_minor_fork_bank.slot() - 1,
+                        ));
+                        let lamports = current_major_fork_bank.slot() + starting_lamports + 1;
+                        let account = Account::new(lamports, 0, &program_id);
+                        for key in pubkeys_to_modify.iter() {
+                            // Store rooted updates to these pubkeys such that the minor
+                            // fork updates to the same keys will be deleted by clean
+                            current_major_fork_bank.store_account(key, &account);
+                        }
+
+                        // Send the last new bank to the scan thread to perform the scan.
+                        // Meanwhile this thread will continually set roots on a separate fork
+                        // and squash.
+                        /*
+                                    bank 0
+                                /         \
+                        minor bank 1       \
+                            /         current_major_fork_bank
+                        minor bank 2
+
+                        */
+                        // The capacity of the channel is 1 so that this thread will wait for the scan to finish before starting
+                        // the next iteration, allowing the scan to stay in sync with these updates
+                        // such that every scan will see this interruption.
+                        if bank_to_scan_sender.send(current_minor_fork_bank).is_err() {
+                            // Channel was disconnected, exit
+                            return;
+                        }
+                        current_major_fork_bank.freeze();
+                        current_major_fork_bank.squash();
+                        // Try to get cache flush/clean to overlap with the scan
+                        current_major_fork_bank.force_flush_accounts_cache();
+                        current_major_fork_bank.clean_accounts(false);
                     }
-
-                    // All the parent banks made in this iteration of the loop
-                    // are currently discoverable, previous parents should have
-                    // been squashed
-                    assert_eq!(
-                        current_minor_fork_bank.clone().parents_inclusive().len(),
-                        num_new_banks + 1,
-                    );
-
-                    // `next_major_bank` needs to be sandwiched between the minor fork banks
-                    // That way, after the squash(), the minor fork has the potential to see a
-                    // *partial* clean of the banks < `next_major_bank`.
-                    current_major_fork_bank = Arc::new(Bank::new_from_parent(
-                        &current_major_fork_bank,
-                        &solana_sdk::pubkey::new_rand(),
-                        current_minor_fork_bank.slot() - 1,
-                    ));
-                    let lamports = current_major_fork_bank.slot() + starting_lamports + 1;
-                    let account = Account::new(lamports, 0, &program_id);
-                    for key in pubkeys_to_modify.iter() {
-                        // Store rooted updates to these pubkeys such that the minor
-                        // fork updates to the same keys will be deleted by clean
-                        current_major_fork_bank.store_account(key, &account);
-                    }
-
-                    // Send the last new bank to the scan thread to perform the scan.
-                    // Meanwhile this thread will continually set roots on a separate fork
-                    // and squash.
-                    /*
-                                bank 0
-                             /         \
-                     minor bank 1       \
-                          /         current_major_fork_bank
-                     minor bank 2
-
-                    */
-                    // The capacity of the channel is 1 so that this thread will wait for the scan to finish before starting
-                    // the next iteration, allowing the scan to stay in sync with these updates
-                    // such that every scan will see this interruption.
-                    current_major_fork_bank.freeze();
-                    current_major_fork_bank.squash();
-                    if bank_to_scan_sender.send(current_minor_fork_bank).is_err() {
-                        // Channel was disconnected, exit
-                        return;
-                    }
-
-                    // Try to get clean to overlap with the scan
-                    current_major_fork_bank.clean_accounts(false);
-                }
-            },
-        )
+                },
+            )
+        }
     }
 
     #[test]
     fn test_store_scan_consistency_root() {
         test_store_scan_consistency(
+            false,
             |bank0, bank_to_scan_sender, pubkeys_to_modify, program_id, starting_lamports| {
                 let mut current_bank = bank0.clone();
                 let mut prev_bank = bank0;
@@ -11742,7 +11793,10 @@ pub(crate) mod tests {
                         // Channel was disconnected, exit
                         return;
                     }
+
+                    current_bank.freeze();
                     current_bank.squash();
+                    current_bank.force_flush_accounts_cache();
                     current_bank.clean_accounts(true);
                     prev_bank = current_bank.clone();
                     current_bank = Arc::new(Bank::new_from_parent(

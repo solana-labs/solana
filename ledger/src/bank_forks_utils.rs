@@ -69,6 +69,7 @@ pub fn load(
                     process_options.debug_keys.clone(),
                     Some(&crate::builtins::get(process_options.bpf_jit)),
                     process_options.account_indexes.clone(),
+                    process_options.accounts_db_caching_enabled,
                 )
                 .expect("Load from snapshot failed");
                 if let Some(shrink_paths) = shrink_paths {
