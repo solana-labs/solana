@@ -214,11 +214,7 @@ impl ReplayTiming {
                     self.heaviest_fork_failures_elapsed as i64,
                     i64
                 ),
-                (
-                    "bank_count",
-                    self.bank_count as i64,
-                    i64
-                ),
+                ("bank_count", self.bank_count as i64, i64),
             );
 
             *self = ReplayTiming::default();
