@@ -105,6 +105,7 @@ mod tests {
                 None,
                 None,
                 HashSet::new(),
+                false,
             );
             bank0.freeze();
             let mut bank_forks = BankForks::new(bank0);
@@ -161,6 +162,7 @@ mod tests {
             None,
             None,
             HashSet::new(),
+            false,
         )
         .unwrap();
 
@@ -216,7 +218,7 @@ mod tests {
             if slot % set_root_interval == 0 || slot == last_slot - 1 {
                 // set_root should send a snapshot request
                 bank_forks.set_root(bank.slot(), &request_sender, None);
-                snapshot_request_handler.handle_snapshot_requests();
+                snapshot_request_handler.handle_snapshot_requests(false);
             }
         }
 

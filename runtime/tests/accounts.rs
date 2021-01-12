@@ -25,7 +25,7 @@ fn test_shrink_and_clean() {
             if exit_for_shrink.load(Ordering::Relaxed) {
                 break;
             }
-            accounts_for_shrink.process_stale_slot();
+            accounts_for_shrink.process_stale_slot_v1();
         });
 
         let mut alive_accounts = vec![];
@@ -45,7 +45,7 @@ fn test_shrink_and_clean() {
 
             for (pubkey, account) in alive_accounts.iter_mut() {
                 account.lamports -= 1;
-                accounts.store(current_slot, &[(&pubkey, &account)]);
+                accounts.store_uncached(current_slot, &[(&pubkey, &account)]);
             }
             accounts.add_root(current_slot);
         }
@@ -108,7 +108,7 @@ fn test_bad_bank_hash() {
             .iter()
             .map(|idx| (&accounts_keys[*idx].0, &accounts_keys[*idx].1))
             .collect();
-        db.store(some_slot, &account_refs);
+        db.store_uncached(some_slot, &account_refs);
 
         for (key, account) in &account_refs {
             assert_eq!(
