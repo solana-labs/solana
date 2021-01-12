@@ -123,6 +123,7 @@ pub struct ReplayTiming {
     reset_duplicate_slots_elapsed: u64,
     wait_receive_elapsed: u64,
     heaviest_fork_failures_elapsed: u64,
+    bank_count: u64,
 }
 impl ReplayTiming {
     #[allow(clippy::too_many_arguments)]
@@ -140,6 +141,7 @@ impl ReplayTiming {
         reset_duplicate_slots_elapsed: u64,
         wait_receive_elapsed: u64,
         heaviest_fork_failures_elapsed: u64,
+        bank_count: u64,
     ) {
         self.compute_bank_stats_elapsed += compute_bank_stats_elapsed;
         self.select_vote_and_reset_forks_elapsed += select_vote_and_reset_forks_elapsed;
@@ -153,6 +155,7 @@ impl ReplayTiming {
         self.reset_duplicate_slots_elapsed += reset_duplicate_slots_elapsed;
         self.wait_receive_elapsed += wait_receive_elapsed;
         self.heaviest_fork_failures_elapsed += heaviest_fork_failures_elapsed;
+        self.bank_count += bank_count;
         let now = timestamp();
         let elapsed_ms = now - self.last_print;
         if elapsed_ms > 1000 {
@@ -209,6 +212,11 @@ impl ReplayTiming {
                 (
                     "heaviest_fork_failures_elapsed",
                     self.heaviest_fork_failures_elapsed as i64,
+                    i64
+                ),
+                (
+                    "bank_count",
+                    self.bank_count as i64,
                     i64
                 ),
             );
@@ -607,6 +615,7 @@ impl ReplayStage {
                         reset_duplicate_slots_time.as_us(),
                         wait_receive_time.as_us(),
                         heaviest_fork_failures_time.as_us(),
+                        if did_complete_bank {1} else {0},
                     );
                 }
                 Ok(())
