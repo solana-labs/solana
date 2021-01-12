@@ -296,7 +296,6 @@ impl ReplayStage {
                 let mut partition_exists = false;
                 let mut skipped_slots_info = SkippedSlotsInfo::default();
                 let mut replay_timing = ReplayTiming::default();
-
                 loop {
                     let allocated = thread_mem_usage::Allocatedp::default();
 
@@ -598,13 +597,13 @@ impl ReplayStage {
 
                         let timer = Duration::from_millis(100);
                         let result = ledger_signal_receiver.recv_timeout(timer);
-                        wait_receive_time.stop();
                         match result {
                             Err(RecvTimeoutError::Timeout) => (),
                             Err(_) => break,
                             Ok(_) => trace!("blockstore signal"),
                         };
                     }
+                    wait_receive_time.stop();
 
                     replay_timing.update(
                         collect_frozen_banks_time.as_us(),
