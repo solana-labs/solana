@@ -18,6 +18,9 @@ use thiserror::Error;
 
 const DUPLICATE_SHRED_HEADER_SIZE: usize = 63;
 
+pub(crate) type DuplicateShredIndex = u16;
+pub(crate) const MAX_DUPLICATE_SHREDS: DuplicateShredIndex = 512;
+
 /// Function returning leader at a given slot.
 pub trait LeaderScheduleFn: FnOnce(Slot) -> Option<Pubkey> {}
 impl<F> LeaderScheduleFn for F where F: FnOnce(Slot) -> Option<Pubkey> {}
@@ -34,15 +37,6 @@ pub struct DuplicateShred {
     chunk_index: u8,
     #[serde(with = "serde_bytes")]
     chunk: Vec<u8>,
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct DuplicateShredIndex {
-    slot: Slot,
-    shred_index: u32,
-    shred_type: ShredType,
-    num_chunks: u8,
-    chunk_index: u8,
 }
 
 #[derive(Debug, Error)]
@@ -251,18 +245,6 @@ impl Sanitize for DuplicateShred {
             return Err(SanitizeError::IndexOutOfBounds);
         }
         self.from.sanitize()
-    }
-}
-
-impl From<&DuplicateShred> for DuplicateShredIndex {
-    fn from(shred: &DuplicateShred) -> Self {
-        Self {
-            slot: shred.slot,
-            shred_index: shred.shred_index,
-            shred_type: shred.shred_type,
-            num_chunks: shred.num_chunks,
-            chunk_index: shred.chunk_index,
-        }
     }
 }
 
