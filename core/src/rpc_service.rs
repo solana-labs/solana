@@ -273,6 +273,7 @@ impl JsonRpcService {
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
+        let rpc_threads = 1.max(config.rpc_threads);
 
         let health = Arc::new(RpcHealth::new(
             cluster_info.clone(),
@@ -374,7 +375,7 @@ impl JsonRpcService {
                     io,
                     move |_req: &hyper::Request<hyper::Body>| request_processor.clone(),
                 )
-                .threads(num_cpus::get())
+                .threads(rpc_threads)
                 .cors(DomainsValidation::AllowOnly(vec![
                     AccessControlAllowOrigin::Any,
                 ]))
