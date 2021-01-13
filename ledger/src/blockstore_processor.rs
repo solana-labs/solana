@@ -804,7 +804,7 @@ fn load_frozen_forks(
     let mut last_status_report = Instant::now();
     let mut last_free = Instant::now();
     let mut pending_slots = vec![];
-    let mut last_root_slot = root_bank.slot();
+    let mut last_root = root_bank.slot();
     let mut slots_elapsed = 0;
     let mut txs = 0;
     let blockstore_max_root = blockstore.max_root();
@@ -823,6 +823,7 @@ fn load_frozen_forks(
     )?;
 
     let dev_halt_at_slot = opts.dev_halt_at_slot.unwrap_or(std::u64::MAX);
+<<<<<<< HEAD
     while !pending_slots.is_empty() {
         let (meta, bank, last_entry_hash) = pending_slots.pop().unwrap();
         let slot = bank.slot();
@@ -840,6 +841,26 @@ fn load_frozen_forks(
             slots_elapsed = 0;
             txs = 0;
         }
+=======
+    if root_bank.slot() != dev_halt_at_slot {
+        while !pending_slots.is_empty() {
+            let (meta, bank, last_entry_hash) = pending_slots.pop().unwrap();
+            let slot = bank.slot();
+            if last_status_report.elapsed() > Duration::from_secs(2) {
+                let secs = last_status_report.elapsed().as_secs() as f32;
+                last_status_report = Instant::now();
+                info!(
+                    "processing ledger: slot={}, last root slot={} slots={} slots/s={:?} txs/s={}",
+                    slot,
+                    last_root,
+                    slots_elapsed,
+                    slots_elapsed as f32 / secs,
+                    txs as f32 / secs,
+                );
+                slots_elapsed = 0;
+                txs = 0;
+            }
+>>>>>>> e95ebcf86... Don't stop to find newer cluster-confirmed roots (#14557)
 
         let allocated = thread_mem_usage::Allocatedp::default();
         let initial_allocation = allocated.get();
@@ -895,6 +916,7 @@ fn load_frozen_forks(
             } else {
                 None
             }
+<<<<<<< HEAD
         };
 
         if let Some(new_root_bank) = new_root_bank {
@@ -902,6 +924,60 @@ fn load_frozen_forks(
             last_root_slot = new_root_bank.slot();
             leader_schedule_cache.set_root(&new_root_bank);
             new_root_bank.squash();
+=======
+            txs += progress.num_txs;
+
+            // Block must be frozen by this point, otherwise `process_single_slot` would
+            // have errored above
+            assert!(bank.is_frozen());
+            all_banks.insert(bank.slot(), bank.clone());
+
+            // If we've reached the last known root in blockstore, start looking
+            // for newer cluster confirmed roots
+            let new_root_bank = {
+                if *root >= max_root {
+                    supermajority_root_from_vote_accounts(
+                        bank.slot(),
+                        bank.total_epoch_stake(),
+                        bank.vote_accounts(),
+                    ).and_then(|supermajority_root| {
+                        if supermajority_root > *root {
+                            // If there's a cluster confirmed root greater than our last
+                            // replayed root, then beccause the cluster confirmed root should
+                            // be descended from our last root, it must exist in `all_banks`
+                            let cluster_root_bank = all_banks.get(&supermajority_root).unwrap();
+
+                            // cluster root must be a descendant of our root, otherwise something
+                            // is drastically wrong
+                            assert!(cluster_root_bank.ancestors.contains_key(root));
+                            info!("blockstore processor found new cluster confirmed root: {}, observed in bank: {}", cluster_root_bank.slot(), bank.slot());
+                            Some(cluster_root_bank)
+                        } else {
+                            None
+                        }
+                    })
+                } else if blockstore.is_root(slot) {
+                    Some(&bank)
+                } else {
+                    None
+                }
+            };
+
+            if let Some(new_root_bank) = new_root_bank {
+                *root = new_root_bank.slot();
+                last_root = new_root_bank.slot();
+
+                leader_schedule_cache.set_root(&new_root_bank);
+                new_root_bank.squash();
+
+                if last_free.elapsed() > Duration::from_secs(10) {
+                    // Must be called after `squash()`, so that AccountsDb knows what
+                    // the roots are for the cache flushing in exhaustively_free_unused_resource().
+                    // This could take few secs; so update last_free later
+                    new_root_bank.exhaustively_free_unused_resource();
+                    last_free = Instant::now();
+                }
+>>>>>>> e95ebcf86... Don't stop to find newer cluster-confirmed roots (#14557)
 
             if last_free.elapsed() > Duration::from_secs(10) {
                 // This could take few secs; so update last_free later
@@ -915,7 +991,16 @@ fn load_frozen_forks(
             all_banks.retain(|_, bank| bank.ancestors.contains_key(root));
         }
 
+<<<<<<< HEAD
         slots_elapsed += 1;
+=======
+            trace!(
+                "Bank for {}slot {} is complete. {} bytes allocated",
+                if last_root == slot { "root " } else { "" },
+                slot,
+                allocated.since(initial_allocation)
+            );
+>>>>>>> e95ebcf86... Don't stop to find newer cluster-confirmed roots (#14557)
 
         trace!(
             "Bank for {}slot {} is complete. {} bytes allocated",
@@ -3051,6 +3136,8 @@ pub mod tests {
                   ...    minor fork
                   /
             `last_slot`
+                 |
+            `really_last_slot`
         */
         let starting_fork_slot = 5;
         let mut main_fork = tr(starting_fork_slot);
@@ -3058,10 +3145,12 @@ pub mod tests {
 
         // Make enough slots to make a root slot > blockstore_root
         let expected_root_slot = starting_fork_slot + blockstore_root.unwrap_or(0);
+        let really_expected_root_slot = expected_root_slot + 1;
         let last_main_fork_slot = expected_root_slot + MAX_LOCKOUT_HISTORY as u64 + 1;
+        let really_last_main_fork_slot = last_main_fork_slot + 1;
 
         // Make `minor_fork`
-        let last_minor_fork_slot = last_main_fork_slot + 1;
+        let last_minor_fork_slot = really_last_main_fork_slot + 1;
         let minor_fork = tr(last_minor_fork_slot);
 
         // Make 'main_fork`
@@ -3096,6 +3185,7 @@ pub mod tests {
         let (bank_forks, _leader_schedule) =
             process_blockstore(&genesis_config, &blockstore, Vec::new(), opts.clone()).unwrap();
 
+        // prepare to add votes
         let last_vote_bank_hash = bank_forks.get(last_main_fork_slot - 1).unwrap().hash();
         let last_vote_blockhash = bank_forks
             .get(last_main_fork_slot - 1)
@@ -3125,12 +3215,12 @@ pub mod tests {
         );
 
         let (bank_forks, _leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts.clone()).unwrap();
 
         assert_eq!(bank_forks.root(), expected_root_slot);
         assert_eq!(
             bank_forks.frozen_banks().len() as u64,
-            last_minor_fork_slot - expected_root_slot + 1
+            last_minor_fork_slot - really_expected_root_slot + 1
         );
 
         // Minor fork at `last_main_fork_slot + 1` was above the `expected_root_slot`
@@ -3138,6 +3228,10 @@ pub mod tests {
         //
         // Fork at slot 2 was purged because it was below the `expected_root_slot`
         for slot in 0..=last_minor_fork_slot {
+            // this slot will be created below
+            if slot == really_last_main_fork_slot {
+                continue;
+            }
             if slot >= expected_root_slot {
                 let bank = bank_forks.get(slot).unwrap();
                 assert_eq!(bank.slot(), slot);
@@ -3146,11 +3240,48 @@ pub mod tests {
                 assert!(bank_forks.get(slot).is_none());
             }
         }
+
+        // really prepare to add votes
+        let last_vote_bank_hash = bank_forks.get(last_main_fork_slot).unwrap().hash();
+        let last_vote_blockhash = bank_forks
+            .get(last_main_fork_slot)
+            .unwrap()
+            .last_blockhash();
+        let slots: Vec<_> = vec![last_main_fork_slot];
+        let vote_tx = vote_transaction::new_vote_transaction(
+            slots,
+            last_vote_bank_hash,
+            last_vote_blockhash,
+            &leader_keypair,
+            &validator_keypairs.vote_keypair,
+            &validator_keypairs.vote_keypair,
+            None,
+        );
+
+        // Add votes to `really_last_slot` so that `root` will be confirmed again
+        make_slot_with_vote_tx(
+            &blockstore,
+            ticks_per_slot,
+            really_last_main_fork_slot,
+            last_main_fork_slot,
+            &last_vote_blockhash,
+            vote_tx,
+            &leader_keypair,
+        );
+
+        let (bank_forks, _leader_schedule) =
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts).unwrap();
+
+        assert_eq!(bank_forks.root(), really_expected_root_slot);
     }
 
     #[test]
-    fn test_process_blockstore_with_supermajority_root() {
+    fn test_process_blockstore_with_supermajority_root_without_blockstore_root() {
         run_test_process_blockstore_with_supermajority_root(None);
+    }
+
+    #[test]
+    fn test_process_blockstore_with_supermajority_root_with_blockstore_root() {
         run_test_process_blockstore_with_supermajority_root(Some(1))
     }
 
