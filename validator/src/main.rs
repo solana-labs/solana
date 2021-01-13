@@ -826,6 +826,7 @@ pub fn main() {
     let default_rpc_send_transaction_leader_forward_count = ValidatorConfig::default()
         .send_transaction_leader_forward_count
         .to_string();
+    let default_rpc_threads = num_cpus::get().to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
@@ -1278,6 +1279,15 @@ pub fn main() {
                 .help("IP address to bind the RPC port [default: use --bind-address]"),
         )
         .arg(
+            Arg::with_name("rpc_threads")
+                .long("rpc-threads")
+                .value_name("NUMBER")
+                .validator(is_parsable::<usize>)
+                .takes_value(true)
+                .default_value(&default_rpc_threads)
+                .help("Number of threads to use for servicing RPC requests"),
+        )
+        .arg(
             Arg::with_name("rpc_pubsub_enable_vote_subscription")
                 .long("rpc-pubsub-enable-vote-subscription")
                 .takes_value(false)
@@ -1550,6 +1560,7 @@ pub fn main() {
                 "health_check_slot_distance",
                 u64
             ),
+            rpc_threads: value_t_or_exit!(matches, "rpc_threads", usize),
             account_indexes: account_indexes.clone(),
         },
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
