@@ -830,11 +830,11 @@ fn load_frozen_forks(
     let mut last_status_report = Instant::now();
     let mut last_free = Instant::now();
     let mut pending_slots = vec![];
-    let mut last_root_slot = root_bank.slot();
+    let mut last_root = root_bank.slot();
     let mut slots_elapsed = 0;
     let mut txs = 0;
     let blockstore_max_root = blockstore.max_root();
-    let max_root = std::cmp::max(root_bank.slot(), blockstore_max_root);
+    let mut max_root = std::cmp::max(root_bank.slot(), blockstore_max_root);
     info!(
         "load_frozen_forks() latest root from blockstore: {}, max_root: {}",
         blockstore_max_root, max_root,
@@ -859,7 +859,7 @@ fn load_frozen_forks(
                 info!(
                     "processing ledger: slot={}, last root slot={} slots={} slots/s={:?} txs/s={}",
                     slot,
-                    last_root_slot,
+                    last_root,
                     slots_elapsed,
                     slots_elapsed as f32 / secs,
                     txs as f32 / secs,
@@ -925,8 +925,11 @@ fn load_frozen_forks(
             };
 
             if let Some(new_root_bank) = new_root_bank {
+                // update various kinds of roots
                 *root = new_root_bank.slot();
-                last_root_slot = new_root_bank.slot();
+                last_root = new_root_bank.slot();
+                max_root = new_root_bank.slot();
+
                 leader_schedule_cache.set_root(&new_root_bank);
                 new_root_bank.squash();
 
@@ -949,7 +952,7 @@ fn load_frozen_forks(
 
             trace!(
                 "Bank for {}slot {} is complete. {} bytes allocated",
-                if last_root_slot == slot { "root " } else { "" },
+                if last_root == slot { "root " } else { "" },
                 slot,
                 allocated.since(initial_allocation)
             );
