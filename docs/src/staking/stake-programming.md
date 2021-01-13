@@ -16,7 +16,7 @@ stake to "non-delinquent" validators that meet specified performance requirement
 #### Stake Pools
 This on-chain program pools together SOL to be staked by a manager, allowing SOL
 holders to stake and earn rewards without managing stakes.
-Users deposit SOL in exchange for tokens representing ownership in the pool. The pool
+Users deposit SOL in exchange for SPL tokens (staking derivatives) that represent their ownership in the stake pool. The pool
 manager stakes deposited SOL according to their strategy, perhaps using a variant
 of the Stake-o-matic program. As stakes earn rewards, the pool and pool tokens 
 grow proportionally in value. Finally, pool token holders can provide pool
