@@ -66,6 +66,9 @@ struct Config {
     /// Don't ever unstake more than this percentage of the cluster at one time
     max_poor_block_producer_percentage: usize,
 
+    /// Vote accounts with a larger commission than this amount will not be staked.
+    max_commission: u8,
+
     address_labels: HashMap<String, String>,
 }
 
@@ -170,6 +173,15 @@ fn get_config() -> Config {
                 .default_value("50000")
                 .validator(is_amount)
         )
+        .arg(
+            Arg::with_name("max_commission")
+                .long("max-commission")
+                .value_name("PERCENTAGE")
+                .takes_value(true)
+                .default_value("100")
+                .validator(is_valid_percentage)
+                .help("Vote accounts with a larger commission than this amount will not be staked")
+        )
         .get_matches();
 
     let config = if let Some(config_file) = matches.value_of("config_file") {
@@ -184,6 +196,7 @@ fn get_config() -> Config {
     let cluster = value_t!(matches, "cluster", String).unwrap_or_else(|_| "unknown".into());
     let quality_block_producer_percentage =
         value_t_or_exit!(matches, "quality_block_producer_percentage", usize);
+    let max_commission = value_t_or_exit!(matches, "max_commission", u8);
     let max_poor_block_producer_percentage =
         value_t_or_exit!(matches, "max_poor_block_producer_percentage", usize);
     let baseline_stake_amount =
@@ -241,6 +254,7 @@ fn get_config() -> Config {
         bonus_stake_amount,
         delinquent_grace_slot_distance: 21600, // ~24 hours worth of slots at 2.5 slots per second
         quality_block_producer_percentage,
+        max_commission,
         max_poor_block_producer_percentage,
         address_labels: config.address_labels,
     };
@@ -611,9 +625,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut stake_activated_in_current_epoch: HashSet<Pubkey> = HashSet::new();
 
     for RpcVoteAccountInfo {
-        vote_pubkey,
+        commission,
         node_pubkey,
         root_slot,
+        vote_pubkey,
         ..
     } in &vote_account_info
     {
@@ -712,9 +727,46 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             ));
         }
 
+        if *commission > config.max_commission {
+            // Deactivate baseline stake
+            delegate_stake_transactions.push((
+                Transaction::new_unsigned(Message::new(
+                    &[stake_instruction::deactivate_stake(
+                        &baseline_stake_address,
+                        &config.authorized_staker.pubkey(),
+                    )],
+                    Some(&config.authorized_staker.pubkey()),
+                )),
+                format!(
+                    "⛔ `{}` commission of {}% is too high. Max commission is {}%. Removed ◎{} baseline stake",
+                    formatted_node_pubkey,
+                    commission,
+                    config.max_commission,
+                    lamports_to_sol(config.baseline_stake_amount),
+                ),
+            ));
+
+            // Deactivate bonus stake
+            delegate_stake_transactions.push((
+                Transaction::new_unsigned(Message::new(
+                    &[stake_instruction::deactivate_stake(
+                        &bonus_stake_address,
+                        &config.authorized_staker.pubkey(),
+                    )],
+                    Some(&config.authorized_staker.pubkey()),
+                )),
+                format!(
+                    "⛔ `{}` commission of {}% is too high. Max commission is {}%. Removed ◎{} bonus stake",
+                    formatted_node_pubkey,
+                    commission,
+                    config.max_commission,
+                    lamports_to_sol(config.bonus_stake_amount),
+                ),
+            ));
+
         // Validator is not considered delinquent if its root slot is less than 256 slots behind the current
         // slot.  This is very generous.
-        if *root_slot > epoch_info.absolute_slot - 256 {
+        } else if *root_slot > epoch_info.absolute_slot - 256 {
             datapoint_info!(
                 "validator-status",
                 ("cluster", config.cluster, String),
