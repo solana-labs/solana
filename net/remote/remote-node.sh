@@ -30,6 +30,8 @@ waitForNodeInit="${21}"
 extraPrimordialStakes="${22:=0}"
 set +x
 
+echo "Extra node args: $extraNodeArgs"
+
 missing() {
   echo "Error: $1 not specified"
   exit 1

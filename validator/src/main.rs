@@ -823,6 +823,7 @@ pub fn main() {
     let default_rpc_send_transaction_retry_ms = ValidatorConfig::default()
         .send_transaction_retry_ms
         .to_string();
+    let default_bad_vote_rate = ValidatorConfig::default().bad_vote_rate.to_string();
     let default_rpc_send_transaction_leader_forward_count = ValidatorConfig::default()
         .send_transaction_leader_forward_count
         .to_string();
@@ -1332,6 +1333,15 @@ pub fn main() {
                 .help("The rate at which transactions sent via rpc service are retried."),
         )
         .arg(
+            Arg::with_name("bad_vote_rate")
+                .long("bad-vote-rate")
+                .value_name("BAD_VOTE_RATE")
+                .takes_value(true)
+                .validator(is_parsable::<u64>)
+                .default_value(&default_bad_vote_rate)
+                .help("The % at which bad votes due to hash mismatch are created."),
+        )
+        .arg(
             Arg::with_name("rpc_send_transaction_leader_forward_count")
                 .long("rpc-send-leader-count")
                 .value_name("NUMBER")
@@ -1599,8 +1609,14 @@ pub fn main() {
             .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),
         account_indexes,
         accounts_db_caching_enabled: matches.is_present("accounts_db_caching_enabled"),
+        bad_vote_rate: value_t_or_exit!(matches, "bad_vote_rate", u64),
         ..ValidatorConfig::default()
     };
+
+    warn!(
+        "bad vote rate: {}",
+        value_t_or_exit!(matches, "bad_vote_rate", u64)
+    );
 
     let vote_account = pubkey_of(&matches, "vote_account").unwrap_or_else(|| {
         if !validator_config.voting_disabled {

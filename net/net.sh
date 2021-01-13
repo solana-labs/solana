@@ -289,7 +289,7 @@ startBootstrapLeader() {
          ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
          ${#clientIpList[@]} \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority\" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeBadVoteRate\" \
          \"$gpuMode\" \
          \"$maybeWarpSlot\" \
          \"$waitForNodeInit\" \
@@ -360,7 +360,7 @@ startNode() {
          ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
          ${#clientIpList[@]} \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority\" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeBadVoteRate\" \
          \"$gpuMode\" \
          \"$maybeWarpSlot\" \
          \"$waitForNodeInit\" \
@@ -761,6 +761,7 @@ maybeLimitLedgerSize=""
 maybeSkipLedgerVerify=""
 maybeDisableAirdrops=""
 maybeWaitForSupermajority=""
+maybeBadVoteRate=""
 debugBuild=false
 doBuild=true
 gpuMode=auto
@@ -872,6 +873,10 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 == --wait-for-supermajority ]]; then
       maybeWaitForSupermajority="$1 $2"
+      shift 2
+    elif [[ $1 == --bad-vote-rate ]]; then
+      maybeBadVoteRate="$1 $2"
+      echo "maybeBadVoteRate: $maybeBadVoteRate"
       shift 2
     elif [[ $1 == --warp-slot ]]; then
       maybeWarpSlot="$1 $2"

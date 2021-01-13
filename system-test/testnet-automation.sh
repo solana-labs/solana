@@ -131,6 +131,16 @@ function launch_testnet() {
     maybeAsyncNodeInit="--async-node-init"
   fi
 
+  echo "NUMBER_OF_VALIDATOR_NODES: $NUMBER_OF_VALIDATOR_NODES"
+  declare maybeTestVoteFailureRate
+  if [[ -z $TEST_VOTE_FAILURE_RATE ]]; then
+    TEST_VOTE_FAILURE_RATE=0
+  fi
+
+  if [[ $TEST_VOTE_FAILURE_RATE -gt 0 ]]; then
+    maybeTestVoteFailureRate="--bad-vote-rate $TEST_VOTE_FAILURE_RATE"
+  fi
+
   declare maybeExtraPrimordialStakes
   if [[ -n "$EXTRA_PRIMORDIAL_STAKES" ]]; then
     maybeExtraPrimordialStakes="--extra-primordial-stakes $EXTRA_PRIMORDIAL_STAKES"
@@ -140,7 +150,7 @@ function launch_testnet() {
   # shellcheck disable=SC2086
   "${REPO_ROOT}"/net/net.sh start $version_args \
     -c idle=$NUMBER_OF_CLIENT_NODES $maybeStartAllowBootFailures \
-    --gpu-mode $startGpuMode $maybeWarpSlot $maybeAsyncNodeInit $maybeExtraPrimordialStakes
+    --gpu-mode $startGpuMode $maybeWarpSlot $maybeAsyncNodeInit $maybeExtraPrimordialStakes $maybeTestVoteFailureRate
 
   execution_step "Waiting for bootstrap validator's stake to fall below ${BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD}%"
   wait_for_bootstrap_validator_stake_drop "$BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD"
@@ -202,8 +212,16 @@ function launch_testnet() {
     collect_performance_statistics
     echo "slots_per_second: $SLOTS_PER_SECOND" >>"$RESULT_FILE"
 
-    if [[ $dropped_vote_hash_count -gt 0 ]]; then
+    echo "Expect vote failures: $EXPECT_VOTE_FAILURES"
+    echo "TEST_VOTE_FAILURE_RATE: $TEST_VOTE_FAILURE_RATE"
+
+    if [[ ((! $EXPECT_VOTE_FAILURES) && $dropped_vote_hash_count -gt 0) ]]; then
       execution_step "Checking for dropped vote hash count"
+      exit 1
+    fi
+
+    if [[ ($EXPECT_VOTE_FAILURES && $dropped_vote_hash_count = 0) ]]; then
+      execution_step "Checking for expected dropped vote hash count"
       exit 1
     fi
   fi

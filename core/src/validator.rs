@@ -120,6 +120,7 @@ pub struct ValidatorConfig {
     pub poh_pinned_cpu_core: usize,
     pub account_indexes: HashSet<AccountIndex>,
     pub accounts_db_caching_enabled: bool,
+    pub bad_vote_rate: u64,
 }
 
 impl Default for ValidatorConfig {
@@ -166,6 +167,7 @@ impl Default for ValidatorConfig {
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
             account_indexes: HashSet::new(),
             accounts_db_caching_enabled: false,
+            bad_vote_rate: 0,
         }
     }
 }
@@ -241,6 +243,8 @@ impl Validator {
         cluster_entrypoints: Vec<ContactInfo>,
         config: &ValidatorConfig,
     ) -> Self {
+        warn!("validator bad vote rate: {}", config.bad_vote_rate);
+
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
 
@@ -632,6 +636,7 @@ impl Validator {
                 repair_validators: config.repair_validators.clone(),
                 accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
                 accounts_db_caching_enabled: config.accounts_db_caching_enabled,
+                bad_vote_rate: config.bad_vote_rate,
             },
         );
 
