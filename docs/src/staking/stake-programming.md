@@ -19,7 +19,7 @@ holders to stake and earn rewards without managing stakes.
 Users deposit SOL in exchange for SPL tokens (staking derivatives) that represent their ownership in the stake pool. The pool
 manager stakes deposited SOL according to their strategy, perhaps using a variant
 of an auto-delegation bot as described above. As stakes earn rewards, the pool and pool tokens 
-grow proportionally in value. Finally, pool token holders can provide pool
-tokens in exchange for SOL, thereby participating in decentralization with much
+grow proportionally in value. Finally, pool token holders can send SPL tokens
+back to the stake pool to redeem SOL, thereby participating in decentralization with much
 less work required. More information can be found at the
 [SPL stake pool documentation](https://spl.solana.com/stake-pool).
