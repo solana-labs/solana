@@ -823,7 +823,6 @@ fn load_frozen_forks(
     )?;
 
     let dev_halt_at_slot = opts.dev_halt_at_slot.unwrap_or(std::u64::MAX);
-<<<<<<< HEAD
     while !pending_slots.is_empty() {
         let (meta, bank, last_entry_hash) = pending_slots.pop().unwrap();
         let slot = bank.slot();
@@ -841,26 +840,6 @@ fn load_frozen_forks(
             slots_elapsed = 0;
             txs = 0;
         }
-=======
-    if root_bank.slot() != dev_halt_at_slot {
-        while !pending_slots.is_empty() {
-            let (meta, bank, last_entry_hash) = pending_slots.pop().unwrap();
-            let slot = bank.slot();
-            if last_status_report.elapsed() > Duration::from_secs(2) {
-                let secs = last_status_report.elapsed().as_secs() as f32;
-                last_status_report = Instant::now();
-                info!(
-                    "processing ledger: slot={}, last root slot={} slots={} slots/s={:?} txs/s={}",
-                    slot,
-                    last_root,
-                    slots_elapsed,
-                    slots_elapsed as f32 / secs,
-                    txs as f32 / secs,
-                );
-                slots_elapsed = 0;
-                txs = 0;
-            }
->>>>>>> e95ebcf86... Don't stop to find newer cluster-confirmed roots (#14557)
 
         let allocated = thread_mem_usage::Allocatedp::default();
         let initial_allocation = allocated.get();
@@ -890,7 +869,7 @@ fn load_frozen_forks(
         // If we've reached the last known root in blockstore, start looking
         // for newer cluster confirmed roots
         let new_root_bank = {
-            if *root == max_root {
+            if *root >= max_root {
                 supermajority_root_from_vote_accounts(
                     bank.slot(),
                     bank.total_epoch_stake(),
@@ -916,7 +895,6 @@ fn load_frozen_forks(
             } else {
                 None
             }
-<<<<<<< HEAD
         };
 
         if let Some(new_root_bank) = new_root_bank {
@@ -924,60 +902,6 @@ fn load_frozen_forks(
             last_root_slot = new_root_bank.slot();
             leader_schedule_cache.set_root(&new_root_bank);
             new_root_bank.squash();
-=======
-            txs += progress.num_txs;
-
-            // Block must be frozen by this point, otherwise `process_single_slot` would
-            // have errored above
-            assert!(bank.is_frozen());
-            all_banks.insert(bank.slot(), bank.clone());
-
-            // If we've reached the last known root in blockstore, start looking
-            // for newer cluster confirmed roots
-            let new_root_bank = {
-                if *root >= max_root {
-                    supermajority_root_from_vote_accounts(
-                        bank.slot(),
-                        bank.total_epoch_stake(),
-                        bank.vote_accounts(),
-                    ).and_then(|supermajority_root| {
-                        if supermajority_root > *root {
-                            // If there's a cluster confirmed root greater than our last
-                            // replayed root, then beccause the cluster confirmed root should
-                            // be descended from our last root, it must exist in `all_banks`
-                            let cluster_root_bank = all_banks.get(&supermajority_root).unwrap();
-
-                            // cluster root must be a descendant of our root, otherwise something
-                            // is drastically wrong
-                            assert!(cluster_root_bank.ancestors.contains_key(root));
-                            info!("blockstore processor found new cluster confirmed root: {}, observed in bank: {}", cluster_root_bank.slot(), bank.slot());
-                            Some(cluster_root_bank)
-                        } else {
-                            None
-                        }
-                    })
-                } else if blockstore.is_root(slot) {
-                    Some(&bank)
-                } else {
-                    None
-                }
-            };
-
-            if let Some(new_root_bank) = new_root_bank {
-                *root = new_root_bank.slot();
-                last_root = new_root_bank.slot();
-
-                leader_schedule_cache.set_root(&new_root_bank);
-                new_root_bank.squash();
-
-                if last_free.elapsed() > Duration::from_secs(10) {
-                    // Must be called after `squash()`, so that AccountsDb knows what
-                    // the roots are for the cache flushing in exhaustively_free_unused_resource().
-                    // This could take few secs; so update last_free later
-                    new_root_bank.exhaustively_free_unused_resource();
-                    last_free = Instant::now();
-                }
->>>>>>> e95ebcf86... Don't stop to find newer cluster-confirmed roots (#14557)
 
             if last_free.elapsed() > Duration::from_secs(10) {
                 // This could take few secs; so update last_free later
@@ -991,16 +915,7 @@ fn load_frozen_forks(
             all_banks.retain(|_, bank| bank.ancestors.contains_key(root));
         }
 
-<<<<<<< HEAD
         slots_elapsed += 1;
-=======
-            trace!(
-                "Bank for {}slot {} is complete. {} bytes allocated",
-                if last_root == slot { "root " } else { "" },
-                slot,
-                allocated.since(initial_allocation)
-            );
->>>>>>> e95ebcf86... Don't stop to find newer cluster-confirmed roots (#14557)
 
         trace!(
             "Bank for {}slot {} is complete. {} bytes allocated",
