@@ -832,7 +832,7 @@ fn load_frozen_forks(
             info!(
                 "processing ledger: slot={}, last root slot={} slots={} slots/s={:?} txs/s={}",
                 slot,
-                last_root_slot,
+                last_root,
                 slots_elapsed,
                 slots_elapsed as f32 / secs,
                 txs as f32 / secs,
@@ -899,7 +899,8 @@ fn load_frozen_forks(
 
         if let Some(new_root_bank) = new_root_bank {
             *root = new_root_bank.slot();
-            last_root_slot = new_root_bank.slot();
+            last_root = new_root_bank.slot();
+
             leader_schedule_cache.set_root(&new_root_bank);
             new_root_bank.squash();
 
@@ -919,7 +920,7 @@ fn load_frozen_forks(
 
         trace!(
             "Bank for {}slot {} is complete. {} bytes allocated",
-            if last_root_slot == slot { "root " } else { "" },
+            if last_root == slot { "root " } else { "" },
             slot,
             allocated.since(initial_allocation)
         );
