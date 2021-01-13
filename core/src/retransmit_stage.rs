@@ -336,14 +336,13 @@ fn retransmit(
             }
 
             let mut compute_turbine_peers = Measure::start("turbine_start");
-            let (my_index, mut shuffled_stakes_and_index) = ClusterInfo::shuffle_peers_and_index(
+            let (my_index, shuffled_stakes_and_index) = ClusterInfo::shuffle_peers_and_index(
                 &my_id,
                 &r_epoch_stakes_cache.peers,
                 &r_epoch_stakes_cache.stakes_and_index,
                 packet.meta.seed,
             );
             peers_len = cmp::max(peers_len, shuffled_stakes_and_index.len());
-            shuffled_stakes_and_index.remove(my_index);
             // split off the indexes, we don't need the stakes anymore
             let indexes = shuffled_stakes_and_index
                 .into_iter()
@@ -354,7 +353,14 @@ fn retransmit(
                 compute_retransmit_peers(DATA_PLANE_FANOUT, my_index, indexes);
             let neighbors: Vec<_> = neighbors
                 .into_iter()
-                .map(|index| &r_epoch_stakes_cache.peers[index])
+                .filter_map(|index| {
+                    let peer = &r_epoch_stakes_cache.peers[index];
+                    if peer.id == my_id {
+                        None
+                    } else {
+                        Some(peer)
+                    }
+                })
                 .collect();
             let children: Vec<_> = children
                 .into_iter()
