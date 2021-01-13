@@ -18,7 +18,7 @@ This on-chain program pools together SOL to be staked by a manager, allowing SOL
 holders to stake and earn rewards without managing stakes.
 Users deposit SOL in exchange for SPL tokens (staking derivatives) that represent their ownership in the stake pool. The pool
 manager stakes deposited SOL according to their strategy, perhaps using a variant
-of the Stake-o-matic program. As stakes earn rewards, the pool and pool tokens 
+of an auto-delegation bot as described above. As stakes earn rewards, the pool and pool tokens 
 grow proportionally in value. Finally, pool token holders can provide pool
 tokens in exchange for SOL, thereby participating in decentralization with much
 less work required. More information can be found at the
