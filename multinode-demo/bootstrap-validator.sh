@@ -67,12 +67,12 @@ while [[ -n $1 ]]; do
       args+=("$1" "$2")
       shift 2
     else
-      echo "Unknown argument: $1"
+      echo "Unknown argument:4 $1"
       $program --help
       exit 1
     fi
   else
-    echo "Unknown argument: $1"
+    echo "Unknown argument:5 $1"
     $program --help
     exit 1
   fi

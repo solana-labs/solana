@@ -1613,11 +1613,6 @@ pub fn main() {
         ..ValidatorConfig::default()
     };
 
-    warn!(
-        "bad vote rate: {}",
-        value_t_or_exit!(matches, "bad_vote_rate", u64)
-    );
-
     let vote_account = pubkey_of(&matches, "vote_account").unwrap_or_else(|| {
         if !validator_config.voting_disabled {
             warn!("--vote-account not specified, validator will not vote");

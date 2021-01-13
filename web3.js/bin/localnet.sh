@@ -135,7 +135,7 @@ logs)
     if [[ $1 = "-f" ]]; then
       follow=true
     else
-      usage "Unknown argument: $1"
+      usage "Unknown argument:3 $1"
     fi
   fi
 

@@ -69,7 +69,7 @@ while [[ -n $1 ]]; do
     elif [[ $1 = -h ]]; then
       usage "$@"
     else
-      echo "Unknown argument: $1"
+      echo "Unknown argument:6 $1"
       usage
       exit 1
     fi
