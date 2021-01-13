@@ -5035,12 +5035,8 @@ dependencies = [
  "console",
  "core_affinity",
  "libc",
-<<<<<<< HEAD
  "log 0.4.8",
-=======
- "log 0.4.11",
  "num_cpus",
->>>>>>> 11daaadc9... Add --rpc-threads argument
  "rand 0.7.3",
  "serde_json",
  "signal-hook",
