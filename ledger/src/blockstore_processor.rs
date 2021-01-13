@@ -3132,7 +3132,7 @@ pub mod tests {
         let really_last_main_fork_slot = last_main_fork_slot + 1;
 
         // Make `minor_fork`
-        let last_minor_fork_slot = last_main_fork_slot + 2;
+        let last_minor_fork_slot = really_last_main_fork_slot + 1;
         let minor_fork = tr(last_minor_fork_slot);
 
         // Make 'main_fork`
