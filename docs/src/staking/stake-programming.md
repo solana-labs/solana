@@ -9,7 +9,7 @@ stakes easier to manage.
 
 #### Stake-o-matic aka Auto-delegation Bots
 This off-chain program manages a large population of validators staked by a
-central authority. The Solana Foundation uses it to regularaly delegate its
+central authority. The Solana Foundation uses an auto-delegation bot to regularly delegate its
 stake to "non-delinquent" validators. More information can be found on the
 [official announcement](https://forums.solana.com/t/stake-o-matic-delegation-matching-program/790).
 
