@@ -37,7 +37,7 @@
     "react-dom": "^16.14.0",
     "react-router-dom": "^5.2.0",
     "react-scripts": "^4.0.1",
-    "react-select": "^3.1.1",
+    "react-select": "^3.2.0",
     "superstruct": "github:solana-labs/superstruct",
     "typescript": "^4.1.3"
   },
