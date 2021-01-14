@@ -45,6 +45,7 @@ module.exports = {
     "Staking": [
       "staking",
       "staking/stake-accounts",
+      "staking/stake-programming",
     ],
     "Command Line": [
       "cli",
