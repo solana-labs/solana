@@ -541,18 +541,19 @@ impl MessageProcessor {
             }
         }
 
-        // validate the caller has access to the program account
+        // validate the caller has access to the program account and that it is executable
         let program_id = instruction.program_id;
-        let _ = keyed_accounts
+        match keyed_accounts
             .iter()
-            .find_map(|keyed_account| {
-                if &program_id == keyed_account.unsigned_key() {
-                    Some(keyed_account)
-                } else {
-                    None
+            .find(|keyed_account| &program_id == keyed_account.unsigned_key())
+        {
+            Some(keyed_account) => {
+                if !keyed_account.executable()? {
+                    return Err(InstructionError::AccountNotExecutable);
                 }
-            })
-            .ok_or(InstructionError::MissingAccount)?;
+            }
+            None => return Err(InstructionError::MissingAccount),
+        }
 
         let message = Message::new(&[instruction.clone()], None);
         let program_id_index = message.instructions[0].program_id_index as usize;
