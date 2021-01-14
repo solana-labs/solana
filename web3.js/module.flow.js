@@ -899,6 +899,15 @@ declare module '@solana/web3.js' {
     lamports: number,
   |};
 
+  declare export type TransferWithSeedParams = {|
+    fromPubkey: PublicKey,
+    basePubkey: PublicKey,
+    toPubkey: PublicKey,
+    lamports: number,
+    seed: string,
+    programId: PublicKey,
+  |};
+
   declare export type CreateNonceAccountParams = {|
     fromPubkey: PublicKey,
     noncePubkey: PublicKey,
@@ -951,7 +960,9 @@ declare module '@solana/web3.js' {
     static assign(
       params: AssignParams | AssignWithSeedParams,
     ): TransactionInstruction;
-    static transfer(params: TransferParams): TransactionInstruction;
+    static transfer(
+      params: TransferParams | TransferWithSeedParams,
+    ): TransactionInstruction;
     static createNonceAccount(
       params: CreateNonceAccountParams | CreateNonceAccountWithSeedParams,
     ): Transaction;
@@ -968,6 +979,7 @@ declare module '@solana/web3.js' {
     | 'Assign'
     | 'AssignWithSeed'
     | 'Transfer'
+    | 'TransferWithSeed'
     | 'AdvanceNonceAccount'
     | 'WithdrawNonceAccount'
     | 'InitializeNonceAccount'
@@ -996,6 +1008,9 @@ declare module '@solana/web3.js' {
       instruction: TransactionInstruction,
     ): AssignWithSeedParams;
     static decodeTransfer(instruction: TransactionInstruction): TransferParams;
+    static decodeTransferWithSeed(
+      instruction: TransactionInstruction,
+    ): TransferWithSeedParams;
     static decodeNonceInitialize(
       instruction: TransactionInstruction,
     ): InitializeNonceParams;
