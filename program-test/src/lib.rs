@@ -13,7 +13,7 @@ use {
         rent::Rent,
     },
     solana_runtime::{
-        bank::{Bank, Builtin},
+        bank::{Bank, Builtin, ExecuteTimings},
         bank_forks::BankForks,
         genesis_utils::create_genesis_config_with_leader,
     },
@@ -627,7 +627,15 @@ impl ProgramTest {
         // `bank.commit_transactions()` so that the fee calculator in the child bank will be
         // initialized with a non-zero fee.
         assert_eq!(bank.signature_count(), 0);
-        bank.commit_transactions(&[], None, &mut [], &[], 0, 1);
+        bank.commit_transactions(
+            &[],
+            None,
+            &mut [],
+            &[],
+            0,
+            1,
+            &mut ExecuteTimings::default(),
+        );
         assert_eq!(bank.signature_count(), 1);
 
         // Advance beyond slot 0 for a slightly more realistic test environment

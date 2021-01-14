@@ -23,7 +23,10 @@ use solana_perf::{
 };
 use solana_runtime::{
     accounts_db::ErrorCounters,
-    bank::{Bank, TransactionBalancesSet, TransactionCheckResult, TransactionExecutionResult},
+    bank::{
+        Bank, ExecuteTimings, TransactionBalancesSet, TransactionCheckResult,
+        TransactionExecutionResult,
+    },
     bank_utils,
     transaction_batch::TransactionBatch,
     vote_sender_types::ReplayVoteSender,
@@ -544,6 +547,8 @@ impl BankingStage {
             vec![]
         };
 
+        let mut execute_timings = ExecuteTimings::default();
+
         let (
             mut loaded_accounts,
             results,
@@ -557,6 +562,7 @@ impl BankingStage {
             MAX_PROCESSING_AGE,
             transaction_status_sender.is_some(),
             transaction_status_sender.is_some(),
+            &mut execute_timings,
         );
         load_execute_time.stop();
 
@@ -583,6 +589,7 @@ impl BankingStage {
                 &results,
                 tx_count,
                 signature_count,
+                &mut execute_timings,
             );
 
             bank_utils::find_and_send_votes(txs, &tx_results, Some(gossip_vote_sender));
