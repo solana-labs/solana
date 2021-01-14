@@ -446,6 +446,7 @@ test('live withSeed actions', async () => {
     space,
   );
 
+  // Test CreateAccountWithSeed
   const createAccountWithSeedParams = {
     fromPubkey: basePubkey,
     newAccountPubkey: createAccountWithSeedAddress,
@@ -469,7 +470,7 @@ test('live withSeed actions', async () => {
   );
   expect(createAccountWithSeedBalance).toEqual(minimumAmount);
 
-  // Transfer to a derived address
+  // Transfer to a derived address to prep for TransferWithSeed
   const programId2 = new Account().publicKey;
   const transferWithSeedAddress = await PublicKey.createWithSeed(
     basePubkey,
