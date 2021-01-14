@@ -804,7 +804,7 @@ fn test_program_bpf_invoke() {
             .iter()
             .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
             .collect();
-        assert_eq!(invoked_programs, vec![argument_keypair.pubkey().clone()]);
+        assert_eq!(invoked_programs, vec![]);
         assert_eq!(
             result.unwrap_err(),
             TransactionError::InstructionError(0, InstructionError::AccountNotExecutable)
