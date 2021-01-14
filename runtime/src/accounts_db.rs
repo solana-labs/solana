@@ -21,7 +21,7 @@
 use crate::{
     accounts_cache::{AccountsCache, CachedAccount, SlotCache},
     accounts_index::{
-        AccountIndex, AccountsIndex, Ancestors, IndexKey, IsCached, SlotList, SlotSlice,
+        AccountIndex, AccountsIndex, Ancestors, IndexKey, IsCached, Shim, SlotList, SlotSlice,
     },
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta},
 };
