@@ -3301,6 +3301,7 @@ mod tests {
     use super::*;
     use crate::crds_value::{CrdsValue, CrdsValueLabel, Vote as CrdsVote};
     use itertools::izip;
+    use rand::seq::SliceRandom;
     use solana_perf::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, Signer};
     use solana_vote_program::{vote_instruction, vote_state::Vote};
@@ -4457,5 +4458,130 @@ mod tests {
         );
         assert!(entrypoints_processed);
         assert_eq!(cluster_info.my_shred_version(), 2); // <--- No change to shred version
+    }
+
+    #[test]
+    fn test_compute_retransmit_peers_small() {
+        const FANOUT: usize = 3;
+        let index = vec![
+            14, 15, 28, // 1st layer
+            // 2nd layer
+            29, 4, 5, // 1st neighborhood
+            9, 16, 7, // 2nd neighborhood
+            26, 23, 2, // 3rd neighborhood
+            // 3rd layer
+            31, 3, 17, // 1st neighborhood
+            20, 25, 0, // 2nd neighborhood
+            13, 30, 18, // 3rd neighborhood
+            19, 21, 22, // 4th neighborhood
+            6, 8, 11, // 5th neighborhood
+            27, 1, 10, // 6th neighborhood
+            12, 24, 34, // 7th neighborhood
+            33, 32, // 8th neighborhood
+        ];
+        // 1st layer
+        assert_eq!(
+            compute_retransmit_peers(FANOUT, 0, index.clone()),
+            (vec![14, 15, 28], vec![29, 9, 26])
+        );
+        assert_eq!(
+            compute_retransmit_peers(FANOUT, 1, index.clone()),
+            (vec![14, 15, 28], vec![4, 16, 23])
+        );
+        assert_eq!(
+            compute_retransmit_peers(FANOUT, 2, index.clone()),
+            (vec![14, 15, 28], vec![5, 7, 2])
+        );
+        // 2nd layer, 1st neighborhood
+        assert_eq!(
+            compute_retransmit_peers(FANOUT, 3, index.clone()),
+            (vec![29, 4, 5], vec![31, 20, 13])
+        );
+        assert_eq!(
+            compute_retransmit_peers(FANOUT, 4, index.clone()),
+            (vec![29, 4, 5], vec![3, 25, 30])
+        );
+        assert_eq!(
+            compute_retransmit_peers(FANOUT, 5, index.clone()),
+            (vec![29, 4, 5], vec![17, 0, 18])
+        );
+        // 2nd layer, 2nd neighborhood
+        assert_eq!(
+            compute_retransmit_peers(FANOUT, 6, index.clone()),
+            (vec![9, 16, 7], vec![19, 6, 27])
+        );
+        assert_eq!(
+            compute_retransmit_peers(FANOUT, 7, index.clone()),
+            (vec![9, 16, 7], vec![21, 8, 1])
+        );
+        assert_eq!(
+            compute_retransmit_peers(FANOUT, 8, index.clone()),
+            (vec![9, 16, 7], vec![22, 11, 10])
+        );
+        // 2nd layer, 3rd neighborhood
+        assert_eq!(
+            compute_retransmit_peers(FANOUT, 9, index.clone()),
+            (vec![26, 23, 2], vec![12, 33])
+        );
+        assert_eq!(
+            compute_retransmit_peers(FANOUT, 10, index.clone()),
+            (vec![26, 23, 2], vec![24, 32])
+        );
+        assert_eq!(
+            compute_retransmit_peers(FANOUT, 11, index.clone()),
+            (vec![26, 23, 2], vec![34])
+        );
+        // 3rd layer
+        let num_nodes = index.len();
+        for k in (12..num_nodes).step_by(3) {
+            let end = num_nodes.min(k + 3);
+            let neighbors = index[k..end].to_vec();
+            for i in k..end {
+                assert_eq!(
+                    compute_retransmit_peers(FANOUT, i, index.clone()),
+                    (neighbors.clone(), vec![])
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_compute_retransmit_peers_large() {
+        const FANOUT: usize = 7;
+        const NUM_NODES: usize = 512;
+        let mut rng = rand::thread_rng();
+        let mut index: Vec<_> = (0..NUM_NODES).collect();
+        index.shuffle(&mut rng);
+        let pos: HashMap<usize, usize> = index
+            .iter()
+            .enumerate()
+            .map(|(i, node)| (*node, i))
+            .collect();
+        let mut seen = vec![0; NUM_NODES];
+        for i in 0..NUM_NODES {
+            let node = index[i];
+            let (neighbors, children) = compute_retransmit_peers(FANOUT, i, index.clone());
+            assert!(neighbors.len() <= FANOUT);
+            assert!(children.len() <= FANOUT);
+            // If x is neighbor of y then y is also neighbor of x.
+            for other in &neighbors {
+                let j = pos[other];
+                let (other_neighbors, _) = compute_retransmit_peers(FANOUT, j, index.clone());
+                assert!(other_neighbors.contains(&node));
+            }
+            for i in children {
+                seen[i] += 1;
+            }
+        }
+        // Except for the first layer, each node
+        // is child of exactly one other node.
+        let (seed, _) = compute_retransmit_peers(FANOUT, 0, index.clone());
+        for (i, k) in seen.into_iter().enumerate() {
+            if seed.contains(&i) {
+                assert_eq!(k, 0);
+            } else {
+                assert_eq!(k, 1);
+            }
+        }
     }
 }
