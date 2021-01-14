@@ -2106,7 +2106,7 @@ mod tests {
                 confirmations: Some(15),
                 status: Ok(()),
                 err: None,
-                confirmation_status: Some(TransactionConfirmationStatus::Max),
+                confirmation_status: Some(TransactionConfirmationStatus::Finalized),
             })],
             &mut confirmations,
         )
@@ -2126,7 +2126,7 @@ mod tests {
                 confirmations: None,
                 status: Ok(()),
                 err: None,
-                confirmation_status: Some(TransactionConfirmationStatus::Max),
+                confirmation_status: Some(TransactionConfirmationStatus::Finalized),
             })],
             &mut confirmations,
         )

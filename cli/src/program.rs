@@ -1580,7 +1580,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
             for (signature, status) in pending_signatures.into_iter().zip(statuses.into_iter()) {
                 if let Some(status) = status {
                     if let Some(confirmation_status) = &status.confirmation_status {
-                        if *confirmation_status != TransactionConfirmationStatus::Recent {
+                        if *confirmation_status != TransactionConfirmationStatus::Processed {
                             let _ = pending_transactions.remove(&signature);
                         }
                     } else if status.confirmations.is_none() || status.confirmations.unwrap() > 1 {

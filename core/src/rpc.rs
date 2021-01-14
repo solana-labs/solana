@@ -859,7 +859,7 @@ impl JsonRpcRequestProcessor {
                             status: status_meta.status,
                             confirmations: None,
                             err,
-                            confirmation_status: Some(TransactionConfirmationStatus::Max),
+                            confirmation_status: Some(TransactionConfirmationStatus::Finalized),
                         }
                     })
                     .or_else(|| {
@@ -908,11 +908,11 @@ impl JsonRpcRequestProcessor {
             confirmations,
             err,
             confirmation_status: if confirmations.is_none() {
-                Some(TransactionConfirmationStatus::Max)
+                Some(TransactionConfirmationStatus::Finalized)
             } else if optimistically_confirmed.is_some() {
-                Some(TransactionConfirmationStatus::Optimistic)
+                Some(TransactionConfirmationStatus::OptimisticallyConfirmed)
             } else {
-                Some(TransactionConfirmationStatus::Recent)
+                Some(TransactionConfirmationStatus::Processed)
             },
         })
     }

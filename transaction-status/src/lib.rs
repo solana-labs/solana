@@ -263,9 +263,9 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TransactionConfirmationStatus {
-    Recent,
-    Optimistic,
-    Max,
+    Processed,
+    OptimisticallyConfirmed,
+    Finalized,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -284,7 +284,7 @@ impl TransactionStatus {
             CommitmentLevel::Max | CommitmentLevel::Root => self.confirmations.is_none(),
             CommitmentLevel::SingleGossip => {
                 if let Some(status) = &self.confirmation_status {
-                    *status != TransactionConfirmationStatus::Recent
+                    *status != TransactionConfirmationStatus::Processed
                 } else {
                     // These fallback cases handle TransactionStatus RPC responses from older software
                     self.confirmations.is_some() && self.confirmations.unwrap() > 1
@@ -569,7 +569,7 @@ mod test {
             confirmations: None,
             status: Ok(()),
             err: None,
-            confirmation_status: Some(TransactionConfirmationStatus::Max),
+            confirmation_status: Some(TransactionConfirmationStatus::Finalized),
         };
 
         assert!(status.satisfies_commitment(CommitmentConfig::default()));
@@ -583,7 +583,7 @@ mod test {
             confirmations: Some(10),
             status: Ok(()),
             err: None,
-            confirmation_status: Some(TransactionConfirmationStatus::Optimistic),
+            confirmation_status: Some(TransactionConfirmationStatus::OptimisticallyConfirmed),
         };
 
         assert!(!status.satisfies_commitment(CommitmentConfig::default()));
@@ -597,7 +597,7 @@ mod test {
             confirmations: Some(1),
             status: Ok(()),
             err: None,
-            confirmation_status: Some(TransactionConfirmationStatus::Recent),
+            confirmation_status: Some(TransactionConfirmationStatus::Processed),
         };
 
         assert!(!status.satisfies_commitment(CommitmentConfig::default()));

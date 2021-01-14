@@ -258,7 +258,7 @@ impl From<TransactionInfo> for TransactionStatus {
             confirmations: None,
             status,
             err,
-            confirmation_status: Some(TransactionConfirmationStatus::Max),
+            confirmation_status: Some(TransactionConfirmationStatus::Finalized),
         }
     }
 }

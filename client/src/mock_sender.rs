@@ -106,7 +106,7 @@ impl RpcSender for MockSender {
                         slot: 1,
                         confirmations: None,
                         err,
-                        confirmation_status: Some(TransactionConfirmationStatus::Max),
+                        confirmation_status: Some(TransactionConfirmationStatus::Finalized),
                     })
                 };
                 let statuses: Vec<Option<TransactionStatus>> = params.as_array().unwrap()[0]

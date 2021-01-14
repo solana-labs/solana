@@ -12,9 +12,9 @@ use solana_sdk::{
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum TransactionConfirmationStatus {
-    Recent,
-    Optimistic,
-    Max,
+    Processed,
+    OptimisticallyConfirmed,
+    Finalized,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

@@ -189,11 +189,11 @@ impl Banks for BanksServer {
             confirmations,
             err: status.err(),
             confirmation_status: if confirmations.is_none() {
-                Some(TransactionConfirmationStatus::Max)
+                Some(TransactionConfirmationStatus::Finalized)
             } else if optimistically_confirmed.is_some() {
-                Some(TransactionConfirmationStatus::Optimistic)
+                Some(TransactionConfirmationStatus::OptimisticallyConfirmed)
             } else {
-                Some(TransactionConfirmationStatus::Recent)
+                Some(TransactionConfirmationStatus::Processed)
             },
         })
     }
