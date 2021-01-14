@@ -127,9 +127,9 @@ extern uint64_t entrypoint(const uint8_t *input) {
     const SolSignerSeeds signers_seeds[] = {{seeds1, SOL_ARRAY_SIZE(seeds1)},
                                             {seeds2, SOL_ARRAY_SIZE(seeds2)}};
 
-    sol_assert(SUCCESS == sol_invoke_signed(
-                              &instruction, accounts, SOL_ARRAY_SIZE(accounts),
-                              signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
+    sol_assert(SUCCESS == sol_invoke_signed(&instruction, accounts,
+                                            params.ka_num, signers_seeds,
+                                            SOL_ARRAY_SIZE(signers_seeds)));
 
     break;
   }
@@ -189,8 +189,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
                                           data, SOL_ARRAY_SIZE(data)};
 
       sol_log("Invoke again");
-      sol_assert(SUCCESS ==
-                 sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+      sol_assert(SUCCESS == sol_invoke(&instruction, accounts, params.ka_num));
     } else {
       sol_log("Last invoked");
       for (int i = 0; i < accounts[INVOKED_ARGUMENT_INDEX].data_len; i++) {

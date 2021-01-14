@@ -134,6 +134,10 @@ pub mod abort_on_all_cpi_failures {
     solana_sdk::declare_id!("ED5D5a2hQaECHaMmKpnU48GdsfafdCjkb3pgAw5RKbb2");
 }
 
+pub mod use_loaded_executables {
+    solana_sdk::declare_id!("2SLL2KLakB83YAnF1TwFb1hpycrWeHAfHYyLhwk2JRGn");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -169,6 +173,7 @@ lazy_static! {
         (limit_cpi_loader_invoke::id(), "Loader not authorized via CPI"),
         (use_loaded_program_accounts::id(), "Use loaded program accounts"),
         (abort_on_all_cpi_failures::id(), "Abort on all CPI failures"),
+        (use_loaded_executables::id(), "Use loaded executable accounts"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
