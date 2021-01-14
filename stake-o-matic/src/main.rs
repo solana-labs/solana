@@ -97,7 +97,6 @@ fn get_config() -> Config {
                 .takes_value(true)
                 .validator(is_url)
                 .help("JSON RPC URL for the cluster")
-                .conflicts_with("cluster")
         )
         .arg(
             Arg::with_name("cluster")
@@ -205,11 +204,13 @@ fn get_config() -> Config {
 
     let (json_rpc_url, validator_list) = match cluster.as_str() {
         "mainnet-beta" => (
-            "http://api.mainnet-beta.solana.com".into(),
+            value_t!(matches, "json_rpc_url", String)
+                .unwrap_or_else(|_| "http://api.mainnet-beta.solana.com".into()),
             validator_list::mainnet_beta_validators(),
         ),
         "testnet" => (
-            "http://testnet.solana.com".into(),
+            value_t!(matches, "json_rpc_url", String)
+                .unwrap_or_else(|_| "http://testnet.solana.com".into()),
             validator_list::testnet_validators(),
         ),
         "unknown" => {
@@ -304,23 +305,51 @@ fn classify_block_producers(
     let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
     let last_slot_in_epoch = epoch_schedule.get_last_slot_in_epoch(epoch);
 
+    let first_available_block = rpc_client.get_first_available_block()?;
     let minimum_ledger_slot = rpc_client.minimum_ledger_slot()?;
-    if minimum_ledger_slot >= last_slot_in_epoch {
+    debug!(
+        "first_available_block: {}, minimum_ledger_slot: {}",
+        first_available_block, minimum_ledger_slot
+    );
+
+    if first_available_block >= last_slot_in_epoch {
         return Err(format!(
-            "Minimum ledger slot is newer than the last epoch: {} > {}",
-            minimum_ledger_slot, last_slot_in_epoch
+            "First available block is newer than the last epoch: {} > {}",
+            first_available_block, last_slot_in_epoch
         )
         .into());
     }
 
-    let first_slot = if minimum_ledger_slot > first_slot_in_epoch {
-        minimum_ledger_slot
+    let mut first_slot = if first_available_block > first_slot_in_epoch {
+        first_available_block
     } else {
         first_slot_in_epoch
     };
 
-    let confirmed_blocks = rpc_client.get_confirmed_blocks(first_slot, Some(last_slot_in_epoch))?;
-    let confirmed_blocks: HashSet<Slot> = confirmed_blocks.into_iter().collect();
+    let mut confirmed_blocks = vec![];
+    // Fetching a large number of blocks from BigTable can cause timeouts, break up the requests
+    const LONGTERM_STORAGE_STEP: u64 = 5_000;
+    while first_slot <= last_slot_in_epoch {
+        let last_slot = if first_slot >= minimum_ledger_slot {
+            last_slot_in_epoch
+        } else {
+            last_slot_in_epoch.min(first_slot + LONGTERM_STORAGE_STEP)
+        };
+        let slots_remaining = last_slot_in_epoch - last_slot;
+        info!(
+            "Fetching confirmed blocks between {} - {}{}",
+            first_slot,
+            last_slot,
+            if slots_remaining > 0 {
+                format!(" ({} remaining)", slots_remaining)
+            } else {
+                "".to_string()
+            }
+        );
+        confirmed_blocks.push(rpc_client.get_confirmed_blocks(first_slot, Some(last_slot))?);
+        first_slot += LONGTERM_STORAGE_STEP;
+    }
+    let confirmed_blocks: HashSet<Slot> = confirmed_blocks.into_iter().flatten().collect();
 
     let mut poor_block_producers = HashSet::new();
     let mut quality_block_producers = HashSet::new();
