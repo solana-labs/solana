@@ -112,6 +112,7 @@ pub struct JsonRpcConfig {
     pub enable_bigtable_ledger_upload: bool,
     pub max_multiple_accounts: Option<usize>,
     pub account_indexes: HashSet<AccountIndex>,
+    pub rpc_threads: usize,
 }
 
 #[derive(Clone)]

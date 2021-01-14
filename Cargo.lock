@@ -5036,6 +5036,7 @@ dependencies = [
  "core_affinity",
  "libc",
  "log 0.4.8",
+ "num_cpus",
  "rand 0.7.3",
  "serde_json",
  "signal-hook",
