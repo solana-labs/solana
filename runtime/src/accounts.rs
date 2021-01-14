@@ -467,19 +467,18 @@ impl Accounts {
             |accum: &DashMap<Pubkey, (u64, B)>, loaded_account: LoadedAccount| {
                 let loaded_account_pubkey = *loaded_account.pubkey();
                 let loaded_write_version = loaded_account.write_version();
-                let should_insert = if let Some(existing_entry) = accum.get(&loaded_account_pubkey)
-                {
-                    loaded_write_version > existing_entry.value().0
-                } else {
-                    true
-                };
+                let should_insert = accum
+                    .get(&loaded_account_pubkey)
+                    .map(|existing_entry| loaded_write_version > existing_entry.value().0)
+                    .unwrap_or(true);
                 if should_insert {
-                    let func_result = func(loaded_account);
-                    if let Some(val) = func_result {
+                    if let Some(val) = func(loaded_account) {
+                        // Detected insertion is necessary, grabs the write lock to commit the write,
                         match accum.entry(loaded_account_pubkey) {
-                            Occupied(mut key_entry) => {
-                                if loaded_write_version > key_entry.get().0 {
-                                    key_entry.insert((loaded_write_version, val));
+                            // Double check in case another thread interleaved a write between the read + write.
+                            Occupied(mut occupied_entry) => {
+                                if loaded_write_version > occupied_entry.get().0 {
+                                    occupied_entry.insert((loaded_write_version, val));
                                 }
                             }
 

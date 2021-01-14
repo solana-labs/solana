@@ -676,9 +676,9 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
         max_root: Option<Slot>,
     ) -> bool {
         ancestors.map_or(false, |ancestors| ancestors.contains_key(&slot)) ||
-    // If the slot is a root, it must be less than the maximum root specified. This
-    // allows scans on non-rooted slots to specify and read data from
-    // ancestors > max_root, while not seeing rooted data update during the scan
+        // If the slot is a root, it must be less than the maximum root specified. This
+        // allows scans on non-rooted slots to specify and read data from
+        // ancestors > max_root, while not seeing rooted data update during the scan
         (max_root.map_or(true, |max_root| slot <= max_root) && (self.is_root(slot)))
     }
 

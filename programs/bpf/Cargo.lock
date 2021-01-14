@@ -381,26 +381,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "const-random"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f1af9ac737b2dd2d577701e59fd09ba34822f6f2ebdb30a7647405d9e55e16a"
-dependencies = [
- "const-random-macro",
- "proc-macro-hack",
-]
-
-[[package]]
-name = "const-random-macro"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25e4c606eb459dd29f7c57b2e0879f2b6f14ee130918c2b78ccb58a9624e6c7a"
-dependencies = [
- "getrandom 0.1.14",
- "proc-macro-hack",
-]
-
-[[package]]
 name = "const_fn"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -595,9 +575,9 @@ dependencies = [
 
 [[package]]
 name = "dashmap"
-version = "4.0.1"
+version = "4.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b937cd1fbd1f194ac842196bd2529f21618088ee6d8bff6a46ece611451c96b"
+checksum = "e77a43b28d0668df09411cb0bc9a8c2adc40f9a048afe863e05fd43251e8e39c"
 dependencies = [
  "cfg-if 1.0.0",
  "num_cpus",

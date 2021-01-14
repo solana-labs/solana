@@ -1904,16 +1904,14 @@ impl AccountsDB {
     }
 
     /// Scan a specific slot through all the account storage in parallel
-    pub fn scan_account_storage<C, F, R, B>(
+    pub fn scan_account_storage<R, B>(
         &self,
         slot: Slot,
-        cache_map_func: C,
-        storage_scan_func: F,
+        cache_map_func: impl Fn(LoadedAccount) -> Option<R> + Sync,
+        storage_scan_func: impl Fn(&B, LoadedAccount) + Sync,
     ) -> ScanStorageResult<R, B>
     where
-        C: Fn(LoadedAccount) -> Option<R> + Sync,
         R: Send,
-        F: Fn(&B, LoadedAccount) + Sync,
         B: Send + Default + Sync,
     {
         if let Some(slot_cache) = self.accounts_cache.slot_cache(slot) {
@@ -2288,10 +2286,10 @@ impl AccountsDB {
 
     fn insert_store(&self, slot: Slot, store: Arc<AccountStorageEntry>) {
         let slot_storages: SlotStores = self.storage.get_slot_stores(slot).unwrap_or_else(||
-    // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
-    // which is dropped after this block ends, minimizing time held by the lock.
-    // However, we still want to persist the reference to the `SlotStores` behind
-    // the lock, hence we clone it out, (`SlotStores` is an Arc so is cheap to clone).
+        // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
+        // which is dropped after this block ends, minimizing time held by the lock.
+        // However, we still want to persist the reference to the `SlotStores` behind
+        // the lock, hence we clone it out, (`SlotStores` is an Arc so is cheap to clone).
             self.storage
                 .0
                 .entry(slot)
@@ -3370,32 +3368,36 @@ impl AccountsDB {
                 slot,
                 |loaded_account: LoadedAccount| {
                     // Cache only has one version per key, don't need to worry about versioning
-                    Some((*loaded_account.pubkey(), *loaded_account.loaded_hash(), 0))
+                    Some((
+                        *loaded_account.pubkey(),
+                        *loaded_account.loaded_hash(),
+                        CACHE_VIRTUAL_WRITE_VERSION,
+                    ))
                 },
                 |accum: &DashMap<Pubkey, (u64, Hash)>, loaded_account: LoadedAccount| {
-                    let write_version = loaded_account.write_version();
+                    let loaded_write_version = loaded_account.write_version();
                     let should_insert =
                         if let Some(existing_entry) = accum.get(loaded_account.pubkey()) {
-                            write_version > existing_entry.value().version()
+                            loaded_write_version > existing_entry.value().version()
                         } else {
                             true
                         };
                     if should_insert {
+                        // Detected insertion is necessary, grabs the write lock to commit the write,
                         match accum.entry(*loaded_account.pubkey()) {
+                            // Double check in case another thread interleaved a write between the read + write.
                             Occupied(mut key_entry) => {
-                                if write_version > key_entry.get().version() {
+                                if loaded_write_version > key_entry.get().version() {
                                     key_entry.insert((
-                                        loaded_account.write_version(),
+                                        loaded_write_version,
                                         *loaded_account.loaded_hash(),
                                     ));
                                 }
                             }
 
                             Vacant(vacant_entry) => {
-                                vacant_entry.insert((
-                                    loaded_account.write_version(),
-                                    *loaded_account.loaded_hash(),
-                                ));
+                                vacant_entry
+                                    .insert((loaded_write_version, *loaded_account.loaded_hash()));
                             }
                         }
                     }
