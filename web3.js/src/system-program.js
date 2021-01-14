@@ -703,6 +703,7 @@ export class SystemProgram {
     params: AssignParams | AssignWithSeedParams,
   ): TransactionInstruction {
     let data;
+    let keys;
     if (params.basePubkey) {
       const type = SYSTEM_INSTRUCTION_LAYOUTS.AssignWithSeed;
       data = encodeData(type, {
@@ -710,13 +711,18 @@ export class SystemProgram {
         seed: params.seed,
         programId: params.programId.toBuffer(),
       });
+      keys = [
+        {pubkey: params.accountPubkey, isSigner: false, isWritable: true},
+        {pubkey: params.basePubkey, isSigner: true, isWritable: false},
+      ];
     } else {
       const type = SYSTEM_INSTRUCTION_LAYOUTS.Assign;
       data = encodeData(type, {programId: params.programId.toBuffer()});
+      keys = [{pubkey: params.accountPubkey, isSigner: true, isWritable: true}];
     }
 
     return new TransactionInstruction({
-      keys: [{pubkey: params.accountPubkey, isSigner: true, isWritable: true}],
+      keys,
       programId: this.programId,
       data,
     });
@@ -891,6 +897,7 @@ export class SystemProgram {
     params: AllocateParams | AllocateWithSeedParams,
   ): TransactionInstruction {
     let data;
+    let keys;
     if (params.basePubkey) {
       const type = SYSTEM_INSTRUCTION_LAYOUTS.AllocateWithSeed;
       data = encodeData(type, {
@@ -899,15 +906,20 @@ export class SystemProgram {
         space: params.space,
         programId: params.programId.toBuffer(),
       });
+      keys = [
+        {pubkey: params.accountPubkey, isSigner: false, isWritable: true},
+        {pubkey: params.basePubkey, isSigner: true, isWritable: false},
+      ];
     } else {
       const type = SYSTEM_INSTRUCTION_LAYOUTS.Allocate;
       data = encodeData(type, {
         space: params.space,
       });
+      keys = [{pubkey: params.accountPubkey, isSigner: true, isWritable: true}];
     }
 
     return new TransactionInstruction({
-      keys: [{pubkey: params.accountPubkey, isSigner: true, isWritable: true}],
+      keys,
       programId: this.programId,
       data,
     });
