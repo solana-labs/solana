@@ -930,11 +930,12 @@ const GetConfirmedSignaturesForAddressRpcResult = jsonRpcResult(
 
 const GetConfirmedSignaturesForAddress2RpcResult = jsonRpcResult(
   struct.array([
-    struct({
+    struct.pick({
       signature: 'string',
       slot: 'number',
       err: TransactionErrorResult,
       memo: struct.union(['null', 'string']),
+      blockTime: struct.union(['undefined', 'null', 'number']),
     }),
   ]),
 );
@@ -1595,12 +1596,14 @@ export type SignatureStatus = {
  * @property {number} slot when the transaction was processed
  * @property {TransactionError | null} err error, if any
  * @property {string | null} memo memo associated with the transaction, if any
+ * @property {number | null | undefined} blockTime the blockTime when the transaction was processed
  */
 export type ConfirmedSignatureInfo = {
   signature: string,
   slot: number,
   err: TransactionError | null,
   memo: string | null,
+  blockTime?: number | null,
 };
 
 /**

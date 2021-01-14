@@ -110,6 +110,7 @@ declare module '@solana/web3.js' {
     slot: number;
     err: TransactionError | null;
     memo: string | null;
+    blockTime?: number | null;
   };
 
   export type BlockhashAndFeeCalculator = {
