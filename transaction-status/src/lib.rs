@@ -264,7 +264,7 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
 #[serde(rename_all = "camelCase")]
 pub enum TransactionConfirmationStatus {
     Processed,
-    OptimisticallyConfirmed,
+    Confirmed,
     Finalized,
 }
 
@@ -583,7 +583,7 @@ mod test {
             confirmations: Some(10),
             status: Ok(()),
             err: None,
-            confirmation_status: Some(TransactionConfirmationStatus::OptimisticallyConfirmed),
+            confirmation_status: Some(TransactionConfirmationStatus::Confirmed),
         };
 
         assert!(!status.satisfies_commitment(CommitmentConfig::default()));

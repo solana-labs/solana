@@ -308,7 +308,7 @@ mod tests {
             confirmations: Some(1),
             err: None,
             status: Ok(()),
-            confirmation_status: Some(TransactionConfirmationStatus::OptimisticallyConfirmed),
+            confirmation_status: Some(TransactionConfirmationStatus::Confirmed),
         };
         assert_eq!(
             update_finalized_transaction(&mut db, &signature, Some(transaction_status), 0, 0)

@@ -191,7 +191,7 @@ impl Banks for BanksServer {
             confirmation_status: if confirmations.is_none() {
                 Some(TransactionConfirmationStatus::Finalized)
             } else if optimistically_confirmed.is_some() {
-                Some(TransactionConfirmationStatus::OptimisticallyConfirmed)
+                Some(TransactionConfirmationStatus::Confirmed)
             } else {
                 Some(TransactionConfirmationStatus::Processed)
             },

@@ -13,7 +13,7 @@ use solana_sdk::{
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum TransactionConfirmationStatus {
     Processed,
-    OptimisticallyConfirmed,
+    Confirmed,
     Finalized,
 }
 
