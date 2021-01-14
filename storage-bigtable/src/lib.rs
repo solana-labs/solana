@@ -8,9 +8,10 @@ use solana_sdk::{
     transaction::{Transaction, TransactionError},
 };
 use solana_storage_proto::convert::generated;
+use solana_storage_proto::convert::tx_by_addr;
 use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Reward,
-    TransactionConfirmationStatus, TransactionStatus, TransactionStatusMeta,
+    TransactionByAddrInfo,TransactionConfirmationStatus, TransactionStatus, TransactionStatusMeta,
     TransactionWithStatusMeta,
 };
 use std::{collections::HashMap, convert::TryInto};
@@ -263,16 +264,6 @@ impl From<TransactionInfo> for TransactionStatus {
     }
 }
 
-// A serialized `Vec<TransactionByAddrInfo>` is stored in the `tx-by-addr` table.  The row keys are
-// the one's compliment of the slot so that rows may be listed in reverse order
-#[derive(Serialize, Deserialize)]
-struct TransactionByAddrInfo {
-    signature: Signature,          // The transaction signature
-    err: Option<TransactionError>, // None if the transaction executed successfully
-    index: u32,                    // Where the transaction is located in the block
-    memo: Option<String>,          // Transaction memo
-}
-
 #[derive(Clone)]
 pub struct LedgerStorage {
     connection: bigtable::BigTableConnection,
@@ -413,14 +404,17 @@ impl LedgerStorage {
 
         let mut infos = vec![];
 
-        let starting_slot_tx_len = bigtable
-            .get_bincode_cell::<Vec<TransactionByAddrInfo>>(
+        let starting_cell_data = bigtable
+            .get_protobuf_or_bincode_cell::<Vec<TransactionByAddrInfo>, tx_by_addr::TransactionByAddr>(
                 "tx-by-addr",
                 format!("{}{}", address_prefix, slot_to_key(!first_slot)),
             )
-            .await
-            .map(|txs| txs.len())
-            .unwrap_or(0);
+            .await?;
+
+        let starting_slot_tx_len = match starting_cell_data {
+            bigtable::CellData::Bincode(tx_by_addr) => tx_by_addr.len(),
+            bigtable::CellData::Protobuf(tx_by_addr) => tx_by_addr.tx_by_addrs.len(),
+        };
 
         // Return the next tx-by-addr data of amount `limit` plus extra to account for the largest
         // number that might be flitered out
@@ -440,8 +434,25 @@ impl LedgerStorage {
                     row_key
                 ))
             })?;
-            let mut cell_data: Vec<TransactionByAddrInfo> =
-                bigtable::deserialize_bincode_cell_data(&data, "tx-by-addr", row_key)?;
+
+            let deserialized_cell_data = bigtable::deserialize_protobuf_or_bincode_cell_data::<
+                Vec<TransactionByAddrInfo>,
+                tx_by_addr::TransactionByAddr,
+            >(&data, "tx-by-addr", row_key.clone())?;
+
+            let mut cell_data: Vec<TransactionByAddrInfo> = match deserialized_cell_data {
+                bigtable::CellData::Bincode(tx_by_addr) => tx_by_addr,
+                bigtable::CellData::Protobuf(tx_by_addr) => {
+                    tx_by_addr.try_into().map_err(|error| {
+                        bigtable::Error::ObjectCorrupt(format!(
+                            "Failed to deserialize: {}: tx-by-addr/{}",
+                            error,
+                            row_key.clone()
+                        ))
+                    })?
+                }
+            };
+
             cell_data.reverse();
             for tx_by_addr_info in cell_data.into_iter() {
                 // Filter out records before `before_transaction_index`
@@ -458,6 +469,7 @@ impl LedgerStorage {
                         slot,
                         err: tx_by_addr_info.err,
                         memo: tx_by_addr_info.memo,
+                        block_time: None,
                     },
                     tx_by_addr_info.index,
                 ));
@@ -497,6 +509,7 @@ impl LedgerStorage {
                             err: err.clone(),
                             index,
                             memo: None, // TODO
+                            block_time: confirmed_block.block_time,
                         });
                 }
             }
@@ -517,7 +530,12 @@ impl LedgerStorage {
             .map(|(address, transaction_info_by_addr)| {
                 (
                     format!("{}/{}", address, slot_to_key(!slot)),
-                    transaction_info_by_addr,
+                    tx_by_addr::TransactionByAddr {
+                        tx_by_addrs: transaction_info_by_addr
+                            .into_iter()
+                            .map(|by_addr| by_addr.into())
+                            .collect(),
+                    },
                 )
             })
             .collect();
@@ -532,7 +550,7 @@ impl LedgerStorage {
         if !tx_by_addr_cells.is_empty() {
             bytes_written += self
                 .connection
-                .put_bincode_cells_with_retry::<Vec<TransactionByAddrInfo>>(
+                .put_protobuf_cells_with_retry::<tx_by_addr::TransactionByAddr>(
                     "tx-by-addr",
                     &tx_by_addr_cells,
                 )

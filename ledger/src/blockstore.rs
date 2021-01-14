@@ -2323,11 +2323,13 @@ impl Blockstore {
                 None => None,
                 Some((_slot, status)) => status.status.err(),
             };
+            let block_time = self.get_block_time(slot)?;
             infos.push(ConfirmedTransactionStatusWithSignature {
                 signature,
                 slot,
                 err,
                 memo: None,
+                block_time,
             });
         }
         get_status_info_timer.stop();

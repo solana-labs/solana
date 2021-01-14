@@ -307,6 +307,7 @@ pub struct ConfirmedTransactionStatusWithSignature {
     pub slot: Slot,
     pub err: Option<TransactionError>,
     pub memo: Option<String>,
+    pub block_time: Option<UnixTimestamp>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -556,6 +557,17 @@ impl EncodedTransaction {
             },
         }
     }
+}
+
+// A serialized `Vec<TransactionByAddrInfo>` is stored in the `tx-by-addr` table.  The row keys are
+// the one's compliment of the slot so that rows may be listed in reverse order
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TransactionByAddrInfo {
+    pub signature: Signature,          // The transaction signature
+    pub err: Option<TransactionError>, // None if the transaction executed successfully
+    pub index: u32,                    // Where the transaction is located in the block
+    pub memo: Option<String>,          // Transaction memo
+    pub block_time: Option<UnixTimestamp>,
 }
 
 #[cfg(test)]
