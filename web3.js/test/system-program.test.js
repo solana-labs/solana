@@ -482,7 +482,7 @@ test('live withSeed actions', async () => {
       SystemProgram.transfer({
         fromPubkey: baseAccount.publicKey,
         toPubkey: transferWithSeedAddress,
-        lamports: 2 * minimumAmount,
+        lamports: 3 * minimumAmount,
       }),
     ),
     [baseAccount],
@@ -491,14 +491,20 @@ test('live withSeed actions', async () => {
   let transferWithSeedAddressBalance = await connection.getBalance(
     transferWithSeedAddress,
   );
-  expect(transferWithSeedAddressBalance).toEqual(2 * minimumAmount);
+  expect(transferWithSeedAddressBalance).toEqual(3 * minimumAmount);
 
-  const toPubkey = new Account().publicKey;
+  // Test TransferWithSeed
+  const programId3 = new Account();
+  const toPubkey = await PublicKey.createWithSeed(
+    basePubkey,
+    seed,
+    programId3.publicKey,
+  );
   const transferWithSeedParams = {
     fromPubkey: transferWithSeedAddress,
     basePubkey,
     toPubkey,
-    lamports: minimumAmount,
+    lamports: 2 * minimumAmount,
     seed,
     programId: programId2,
   };
@@ -512,9 +518,56 @@ test('live withSeed actions', async () => {
     {commitment: 'singleGossip', preflightCommitment: 'singleGossip'},
   );
   const toBalance = await connection.getBalance(toPubkey);
-  expect(toBalance).toEqual(minimumAmount);
+  expect(toBalance).toEqual(2 * minimumAmount);
   transferWithSeedAddressBalance = await connection.getBalance(
     createAccountWithSeedAddress,
   );
   expect(transferWithSeedAddressBalance).toEqual(minimumAmount);
+
+  // Test AllocateWithSeed
+  const allocateWithSeedParams = {
+    accountPubkey: toPubkey,
+    basePubkey,
+    seed,
+    space: 10,
+    programId: programId3.publicKey,
+  };
+  const allocateWithSeedTransaction = new Transaction().add(
+    SystemProgram.allocate(allocateWithSeedParams),
+  );
+  await sendAndConfirmTransaction(
+    connection,
+    allocateWithSeedTransaction,
+    [baseAccount],
+    {commitment: 'singleGossip', preflightCommitment: 'singleGossip'},
+  );
+  let account = await connection.getAccountInfo(toPubkey);
+  if (account === null) {
+    expect(account).not.toBeNull();
+    return;
+  }
+  expect(account.data).toHaveLength(10);
+
+  // Test AssignWithSeed
+  const assignWithSeedParams = {
+    accountPubkey: toPubkey,
+    basePubkey,
+    seed,
+    programId: programId3.publicKey,
+  };
+  const assignWithSeedTransaction = new Transaction().add(
+    SystemProgram.assign(assignWithSeedParams),
+  );
+  await sendAndConfirmTransaction(
+    connection,
+    assignWithSeedTransaction,
+    [baseAccount],
+    {commitment: 'singleGossip', preflightCommitment: 'singleGossip'},
+  );
+  account = await connection.getAccountInfo(toPubkey);
+  if (account === null) {
+    expect(account).not.toBeNull();
+    return;
+  }
+  expect(account.owner).toEqual(programId3.publicKey);
 });
