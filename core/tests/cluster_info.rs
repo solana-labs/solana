@@ -48,8 +48,8 @@ fn retransmit(
         }
     });
     seed[0..4].copy_from_slice(&shred.to_le_bytes());
-    let shuffled_indices = (0..shuffled_nodes.len()).collect();
-    let (neighbors, children) = compute_retransmit_peers(fanout, my_index, shuffled_indices);
+    let shuffled_indices: Vec<_> = (0..shuffled_nodes.len()).collect();
+    let (neighbors, children) = compute_retransmit_peers(fanout, my_index, &shuffled_indices);
     children.into_iter().for_each(|i| {
         let s = senders.get(&shuffled_nodes[i].id).unwrap();
         let _ = s.send((shred, retransmit));
