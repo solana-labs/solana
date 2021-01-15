@@ -169,7 +169,9 @@ impl Banks for BanksServer {
         let (slot, status) = bank.get_signature_status_slot(&signature)?;
         let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
 
-        let confirmations = if r_block_commitment_cache.root() >= slot {
+        let confirmations = if r_block_commitment_cache.root() >= slot
+            && r_block_commitment_cache.highest_confirmed_root() >= slot
+        {
             None
         } else {
             r_block_commitment_cache
