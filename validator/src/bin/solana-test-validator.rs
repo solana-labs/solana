@@ -11,7 +11,7 @@ use {
         account::Account,
         clock::{Slot, DEFAULT_TICKS_PER_SLOT, MS_PER_TICK},
         commitment_config::CommitmentConfig,
-        native_token::sol_to_lamports,
+        native_token::{sol_to_lamports, Sol},
         pubkey::Pubkey,
         rpc_port,
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
@@ -25,7 +25,7 @@ use {
         process::exit,
         sync::mpsc::channel,
         thread,
-        time::{Duration, SystemTime, UNIX_EPOCH},
+        time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     },
 };
 
@@ -271,6 +271,8 @@ fn main() {
             exit(1);
         });
 
+    let validator_start = Instant::now();
+
     let test_validator = {
         let _progress_bar = if output == Output::Dashboard {
             println_name_value("Mint address:", &mint_address.to_string());
@@ -284,7 +286,7 @@ fn main() {
         };
 
         TestValidatorGenesis::default()
-            .ledger_path(ledger_path)
+            .ledger_path(&ledger_path)
             .add_account(
                 faucet_keypair.pubkey(),
                 Account::new(faucet_lamports, 0, &system_program::id()),
@@ -311,6 +313,13 @@ fn main() {
     }
 
     if output == Output::Dashboard {
+        let rpc_client = test_validator.rpc_client().0;
+        let identity = &rpc_client.get_identity().expect("get_identity");
+        println_name_value("Identity:", &identity.to_string());
+        println_name_value(
+            "Version:",
+            &rpc_client.get_version().expect("get_version").solana_core,
+        );
         println_name_value("JSON RPC URL:", &test_validator.rpc_url());
         println_name_value(
             "JSON RPC PubSub Websocket:",
@@ -326,31 +335,63 @@ fn main() {
         }
 
         let progress_bar = new_spinner_progress_bar();
-        let rpc_client = test_validator.rpc_client().0;
 
-        fn get_validator_stats(rpc_client: &RpcClient) -> client_error::Result<(Slot, Slot, u64)> {
-            let max_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::max())?;
-            let recent_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::recent())?;
+        fn get_validator_stats(
+            rpc_client: &RpcClient,
+            identity: &Pubkey,
+        ) -> client_error::Result<(Slot, Slot, Slot, u64, Sol)> {
+            let processed_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::recent())?;
+            let confirmed_slot =
+                rpc_client.get_slot_with_commitment(CommitmentConfig::single_gossip())?;
+            let finalized_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::max())?;
             let transaction_count =
                 rpc_client.get_transaction_count_with_commitment(CommitmentConfig::recent())?;
-            Ok((recent_slot, max_slot, transaction_count))
+            let identity_balance = rpc_client
+                .get_balance_with_commitment(identity, CommitmentConfig::single_gossip())?
+                .value;
+
+            Ok((
+                processed_slot,
+                confirmed_slot,
+                finalized_slot,
+                transaction_count,
+                Sol(identity_balance),
+            ))
         }
 
         loop {
-            match get_validator_stats(&rpc_client) {
-                Ok((recent_slot, max_slot, transaction_count)) => {
-                    progress_bar.set_message(&format!(
-                        "Recent slot: {} | Max confirmed slot: {} | Transaction count: {}",
-                        recent_slot, max_slot, transaction_count,
-                    ));
+            let snapshot_slot =
+                solana_runtime::snapshot_utils::get_highest_snapshot_archive_path(&ledger_path)
+                    .map(|(_, (slot, _, _))| slot)
+                    .unwrap_or(0);
+
+            for _i in 0..10 {
+                match get_validator_stats(&rpc_client, &identity) {
+                    Ok((
+                        processed_slot,
+                        confirmed_slot,
+                        finalized_slot,
+                        transaction_count,
+                        identity_balance,
+                    )) => {
+                        let uptime = chrono::Duration::from_std(validator_start.elapsed()).unwrap();
+                        progress_bar.set_message(&format!(
+                            "{:02}:{:02}:{:02} | \
+                            Processed Slot: {} | Confirmed Slot: {} | Finalized Slot: {} | Snapshot Slot: {} | \
+                            Transactions: {} | {}",
+                            uptime.num_hours(), uptime.num_minutes() % 60, uptime.num_seconds() % 60,
+                            processed_slot, confirmed_slot, finalized_slot, snapshot_slot,
+                            transaction_count, identity_balance
+                        ));
+                    }
+                    Err(err) => {
+                        progress_bar.set_message(&format!("{}", err));
+                    }
                 }
-                Err(err) => {
-                    progress_bar.set_message(&format!("{}", err));
-                }
+                thread::sleep(Duration::from_millis(
+                    MS_PER_TICK * DEFAULT_TICKS_PER_SLOT / 2,
+                ));
             }
-            thread::sleep(Duration::from_millis(
-                MS_PER_TICK * DEFAULT_TICKS_PER_SLOT / 2,
-            ));
         }
     }
 
