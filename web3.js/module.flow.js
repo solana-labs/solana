@@ -218,6 +218,7 @@ declare module '@solana/web3.js' {
     slot: number,
     transaction: Transaction,
     meta: ConfirmedTransactionMeta | null,
+    blockTime?: number | null,
   };
 
   declare export type ParsedAccountData = {
