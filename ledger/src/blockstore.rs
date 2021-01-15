@@ -2023,12 +2023,14 @@ impl Blockstore {
             let transaction = self
                 .find_transaction_in_slot(slot, signature)?
                 .ok_or(BlockstoreError::TransactionStatusSlotMismatch)?; // Should not happen
+            let block_time = self.get_block_time(slot)?;
             Ok(Some(ConfirmedTransaction {
                 slot,
                 transaction: TransactionWithStatusMeta {
                     transaction,
                     meta: Some(status),
                 },
+                block_time,
             }))
         } else {
             Ok(None)
@@ -6529,6 +6531,7 @@ pub mod tests {
     #[test]
     fn test_get_confirmed_transaction() {
         let slot = 2;
+        let block_time = Some(1610700052);
         let entries = make_slot_entries_with_transactions(5);
         let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
         let ledger_path = get_tmp_ledger_path!();
@@ -6592,7 +6595,11 @@ pub mod tests {
             let signature = transaction.transaction.signatures[0];
             assert_eq!(
                 blockstore.get_confirmed_transaction(signature).unwrap(),
-                Some(ConfirmedTransaction { slot, transaction })
+                Some(ConfirmedTransaction {
+                    slot,
+                    transaction,
+                    block_time
+                })
             );
         }
 

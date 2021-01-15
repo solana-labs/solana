@@ -352,6 +352,7 @@ impl LedgerStorage {
                     Ok(Some(ConfirmedTransaction {
                         slot,
                         transaction: bucket_block_transaction,
+                        block_time: block.block_time,
                     }))
                 }
             }

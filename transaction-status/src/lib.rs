@@ -366,6 +366,7 @@ pub struct ConfirmedTransaction {
     pub slot: Slot,
     #[serde(flatten)]
     pub transaction: TransactionWithStatusMeta,
+    pub block_time: Option<UnixTimestamp>,
 }
 
 impl ConfirmedTransaction {
@@ -373,6 +374,7 @@ impl ConfirmedTransaction {
         EncodedConfirmedTransaction {
             slot: self.slot,
             transaction: self.transaction.encode(encoding),
+            block_time: self.block_time,
         }
     }
 }
@@ -383,6 +385,7 @@ pub struct EncodedConfirmedTransaction {
     pub slot: Slot,
     #[serde(flatten)]
     pub transaction: EncodedTransactionWithStatusMeta,
+    pub block_time: Option<UnixTimestamp>,
 }
 
 /// A duplicate representation of a Transaction for pretty JSON serialization
