@@ -10,7 +10,7 @@ publish = false
 
 [dependencies]
 log = "0.4.11"
-rayon = "1.4.0"
+rayon = "1.5.0"
 solana-logger = { path = "../logger", version = "1.6.0" }
 solana-runtime = { path = "../runtime", version = "1.6.0" }
 solana-measure = { path = "../measure", version = "1.6.0" }
