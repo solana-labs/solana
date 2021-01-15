@@ -320,25 +320,28 @@ fn classify_block_producers(
         .into());
     }
 
-    let mut first_slot = if first_available_block > first_slot_in_epoch {
+    let first_slot = if first_available_block > first_slot_in_epoch {
         first_available_block
     } else {
         first_slot_in_epoch
     };
 
+    let leader_schedule = rpc_client.get_leader_schedule(Some(first_slot))?.unwrap();
+
     let mut confirmed_blocks = vec![];
     // Fetching a large number of blocks from BigTable can cause timeouts, break up the requests
     const LONGTERM_STORAGE_STEP: u64 = 5_000;
-    while first_slot <= last_slot_in_epoch {
-        let last_slot = if first_slot >= minimum_ledger_slot {
+    let mut next_slot = first_slot;
+    while next_slot < last_slot_in_epoch {
+        let last_slot = if next_slot >= minimum_ledger_slot {
             last_slot_in_epoch
         } else {
-            last_slot_in_epoch.min(first_slot + LONGTERM_STORAGE_STEP)
+            last_slot_in_epoch.min(next_slot + LONGTERM_STORAGE_STEP)
         };
         let slots_remaining = last_slot_in_epoch - last_slot;
         info!(
             "Fetching confirmed blocks between {} - {}{}",
-            first_slot,
+            next_slot,
             last_slot,
             if slots_remaining > 0 {
                 format!(" ({} remaining)", slots_remaining)
@@ -346,15 +349,14 @@ fn classify_block_producers(
                 "".to_string()
             }
         );
-        confirmed_blocks.push(rpc_client.get_confirmed_blocks(first_slot, Some(last_slot))?);
-        first_slot += LONGTERM_STORAGE_STEP;
+        confirmed_blocks.push(rpc_client.get_confirmed_blocks(next_slot, Some(last_slot))?);
+        next_slot += LONGTERM_STORAGE_STEP;
     }
     let confirmed_blocks: HashSet<Slot> = confirmed_blocks.into_iter().flatten().collect();
 
     let mut poor_block_producers = HashSet::new();
     let mut quality_block_producers = HashSet::new();
 
-    let leader_schedule = rpc_client.get_leader_schedule(Some(first_slot))?.unwrap();
     for (validator_identity, relative_slots) in leader_schedule {
         let mut validator_blocks = 0;
         let mut validator_slots = 0;
@@ -683,7 +685,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         // Transactions to create the baseline and bonus stake accounts
         if let Ok((balance, stake_state)) = get_stake_account(&rpc_client, &baseline_stake_address)
         {
-            if balance != config.baseline_stake_amount {
+            if balance <= config.baseline_stake_amount {
                 info!(
                     "Unexpected balance in stake account {}: {}, expected {}",
                     baseline_stake_address, balance, config.baseline_stake_amount
@@ -720,7 +722,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
 
         if let Ok((balance, stake_state)) = get_stake_account(&rpc_client, &bonus_stake_address) {
-            if balance != config.bonus_stake_amount {
+            if balance <= config.bonus_stake_amount {
                 info!(
                     "Unexpected balance in stake account {}: {}, expected {}",
                     bonus_stake_address, balance, config.bonus_stake_amount
