@@ -10,7 +10,8 @@ use solana_sdk::{
 use solana_storage_proto::convert::generated;
 use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Reward,
-    TransactionStatus, TransactionStatusMeta, TransactionWithStatusMeta,
+    TransactionConfirmationStatus, TransactionStatus, TransactionStatusMeta,
+    TransactionWithStatusMeta,
 };
 use std::{collections::HashMap, convert::TryInto};
 use thiserror::Error;
@@ -257,6 +258,7 @@ impl From<TransactionInfo> for TransactionStatus {
             confirmations: None,
             status,
             err,
+            confirmation_status: Some(TransactionConfirmationStatus::Finalized),
         }
     }
 }
