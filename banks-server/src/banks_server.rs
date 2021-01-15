@@ -4,7 +4,9 @@ use futures::{
     future,
     prelude::stream::{self, StreamExt},
 };
-use solana_banks_interface::{Banks, BanksRequest, BanksResponse, TransactionStatus};
+use solana_banks_interface::{
+    Banks, BanksRequest, BanksResponse, TransactionConfirmationStatus, TransactionStatus,
+};
 use solana_runtime::{bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache};
 use solana_sdk::{
     account::Account,
@@ -169,6 +171,10 @@ impl Banks for BanksServer {
         let (slot, status) = bank.get_signature_status_slot(&signature)?;
         let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
 
+        let optimistically_confirmed_bank = self.bank(CommitmentLevel::SingleGossip);
+        let optimistically_confirmed =
+            optimistically_confirmed_bank.get_signature_status_slot(&signature);
+
         let confirmations = if r_block_commitment_cache.root() >= slot
             && r_block_commitment_cache.highest_confirmed_root() >= slot
         {
@@ -182,6 +188,13 @@ impl Banks for BanksServer {
             slot,
             confirmations,
             err: status.err(),
+            confirmation_status: if confirmations.is_none() {
+                Some(TransactionConfirmationStatus::Finalized)
+            } else if optimistically_confirmed.is_some() {
+                Some(TransactionConfirmationStatus::Confirmed)
+            } else {
+                Some(TransactionConfirmationStatus::Processed)
+            },
         })
     }
 
