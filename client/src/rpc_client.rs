@@ -37,6 +37,7 @@ use solana_transaction_status::{
 };
 use solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY;
 use std::{
+    cmp::min,
     net::SocketAddr,
     sync::RwLock,
     thread::sleep,
@@ -1359,29 +1360,20 @@ impl RpcClient {
         }
         let now = Instant::now();
         loop {
-            match commitment.commitment {
-                CommitmentLevel::Max | CommitmentLevel::Root =>
-                // Return when default (max) commitment is reached
-                // Failed transactions have already been eliminated, `is_some` check is sufficient
-                {
-                    if self.get_signature_status(&signature)?.is_some() {
-                        progress_bar.set_message("Transaction confirmed");
-                        progress_bar.finish_and_clear();
-                        return Ok(signature);
-                    }
-                }
-                _ => {
-                    // Return when one confirmation has been reached
-                    if confirmations >= desired_confirmations {
-                        progress_bar.set_message("Transaction reached commitment");
-                        progress_bar.finish_and_clear();
-                        return Ok(signature);
-                    }
-                }
+            // Return when specified commitment is reached
+            // Failed transactions have already been eliminated, `is_some` check is sufficient
+            if self
+                .get_signature_status_with_commitment(&signature, commitment)?
+                .is_some()
+            {
+                progress_bar.set_message("Transaction confirmed");
+                progress_bar.finish_and_clear();
+                return Ok(signature);
             }
+
             progress_bar.set_message(&format!(
                 "[{}/{}] Finalizing transaction {}",
-                confirmations + 1,
+                min(confirmations + 1, desired_confirmations),
                 desired_confirmations,
                 signature,
             ));
