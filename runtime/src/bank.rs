@@ -93,6 +93,21 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
+#[derive(Default)]
+pub struct ExecuteTimings {
+    pub load_us: u64,
+    pub execute_us: u64,
+    pub store_us: u64,
+}
+
+impl ExecuteTimings {
+    pub fn accumulate(&mut self, other: &ExecuteTimings) {
+        self.load_us += other.load_us;
+        self.execute_us += other.execute_us;
+        self.store_us += other.store_us;
+    }
+}
+
 type BankStatusCache = StatusCache<Result<()>>;
 #[frozen_abi(digest = "MUmkgPsCRrWL2HEsMEvpkWMis35kbBnaEZtrph5P6bk")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
@@ -2369,6 +2384,7 @@ impl Bank {
             MAX_PROCESSING_AGE - MAX_TRANSACTION_FORWARDING_DELAY,
             false,
             true,
+            &mut ExecuteTimings::default(),
         );
 
         let transaction_result = executed[0].0.clone().map(|_| ());
@@ -2779,6 +2795,7 @@ impl Bank {
         max_age: usize,
         enable_cpi_recording: bool,
         enable_log_recording: bool,
+        timings: &mut ExecuteTimings,
     ) -> (
         Vec<TransactionLoadResult>,
         Vec<TransactionExecutionResult>,
@@ -2920,6 +2937,8 @@ impl Bank {
             execution_time.as_us(),
             txs.len(),
         );
+        timings.load_us += load_time.as_us();
+        timings.execute_us += execution_time.as_us();
 
         let mut tx_count: u64 = 0;
         let err_count = &mut error_counters.total;
@@ -3075,6 +3094,7 @@ impl Bank {
         executed: &[TransactionExecutionResult],
         tx_count: u64,
         signature_count: u64,
+        timings: &mut ExecuteTimings,
     ) -> TransactionResults {
         assert!(
             !self.freeze_started(),
@@ -3114,6 +3134,7 @@ impl Bank {
         // once committed there is no way to unroll
         write_time.stop();
         debug!("store: {}us txs_len={}", write_time.as_us(), txs.len(),);
+        timings.store_us += write_time.as_us();
         self.update_transaction_statuses(txs, iteration_order, &executed);
         let fee_collection_results =
             self.filter_program_errors_and_collect_fee(txs, iteration_order, executed);
@@ -3697,6 +3718,7 @@ impl Bank {
         collect_balances: bool,
         enable_cpi_recording: bool,
         enable_log_recording: bool,
+        timings: &mut ExecuteTimings,
     ) -> (
         TransactionResults,
         TransactionBalancesSet,
@@ -3722,6 +3744,7 @@ impl Bank {
             max_age,
             enable_cpi_recording,
             enable_log_recording,
+            timings,
         );
 
         let results = self.commit_transactions(
@@ -3731,6 +3754,7 @@ impl Bank {
             &executed,
             tx_count,
             signature_count,
+            timings,
         );
         let post_balances = if collect_balances {
             self.collect_balances(batch)
@@ -3748,9 +3772,16 @@ impl Bank {
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let batch = self.prepare_batch(txs, None);
-        self.load_execute_and_commit_transactions(&batch, MAX_PROCESSING_AGE, false, false, false)
-            .0
-            .fee_collection_results
+        self.load_execute_and_commit_transactions(
+            &batch,
+            MAX_PROCESSING_AGE,
+            false,
+            false,
+            false,
+            &mut ExecuteTimings::default(),
+        )
+        .0
+        .fee_collection_results
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -7551,6 +7582,7 @@ pub(crate) mod tests {
                 false,
                 false,
                 false,
+                &mut ExecuteTimings::default(),
             )
             .0
             .fee_collection_results;
@@ -9526,6 +9558,7 @@ pub(crate) mod tests {
                 true,
                 false,
                 false,
+                &mut ExecuteTimings::default(),
             );
 
         assert!(inner_instructions[0].iter().all(|ix| ix.is_empty()));
