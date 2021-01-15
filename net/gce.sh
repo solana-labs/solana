@@ -69,6 +69,8 @@ failOnValidatorBootupFailure=true
 preemptible=true
 evalInfo=false
 tmpfsAccounts=false
+defaultCustomMemoryGB="$(cloud_DefaultCustomMemoryGB)"
+customMemoryGB="$defaultCustomMemoryGB"
 
 publicNetwork=false
 letsEncryptDomainName=
@@ -138,6 +140,12 @@ Manage testnet instances
    --custom-machine-type [type]
                     - Set a custom machine type without assuming whether or not
                       GPU is enabled.  Set this explicitly with --enable-gpu/-g to call out the presence of GPUs.
+$(
+  if [[ -n "$defaultCustomMemoryGB" ]]; then
+    echo "   --custom-memory-gb"
+    echo "                    - Set memory size for custom machine type in GB (default: $defaultCustomMemoryGB)"
+  fi
+)
    --enable-gpu     - Use with --custom-machine-type to specify whether or not GPUs should be used/enabled
    --validator-additional-disk-size-gb [number]
                     - Add an additional [number] GB SSD to all validators to store the config directory.
@@ -233,6 +241,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --tmpfs-accounts ]]; then
       tmpfsAccounts=true
       shift
+    elif [[ $1 == --custom-memory-gb ]]; then
+      customMemoryGB=$2
+      shift 2
     else
       usage "Unknown long option: $1"
     fi
@@ -302,21 +313,26 @@ fi
 
 case $cloudProvider in
 gce)
-  customMemoryGB="$(cloud_DefaultCustomMemoryGB)"
   if [[ "$tmpfsAccounts" = "true" ]]; then
-    customMemoryGB=$(( customMemoryGB * 2 ))
     cpuBootstrapLeaderMachineType+=" --local-ssd interface=nvme"
     gpuBootstrapLeaderMachineType+=" --local-ssd interface=nvme"
+    if [[ $customMemoryGB -lt 100 ]]; then
+      # shellcheck disable=SC2016 # We don't want expression expansion on these backticks
+      echo -e '\nWarning: At least 100GB of system RAM is recommending with `--tmpfs-accounts` (see `--custom-memory-gb`)\n'
+    fi
   fi
   cpuBootstrapLeaderMachineType+=" --custom-memory ${customMemoryGB}GB"
   gpuBootstrapLeaderMachineType+=" --custom-memory ${customMemoryGB}GB"
   ;;
 ec2|azure|colo)
   if [[ -n $validatorAdditionalDiskSizeInGb ]] ; then
-    usage "Error: --validator-additional-disk-size-gb currently only supported with cloud provider: gce"
+    usage "--validator-additional-disk-size-gb currently only supported with cloud provider: gce"
   fi
   if [[ "$tmpfsAccounts" = "true" ]]; then
-    usage "Error: --tmpfs-accounts only supported on cloud provider: gce"
+    usage "--tmpfs-accounts only supported on cloud provider: gce"
+  fi
+  if [[ "$customMemoryGB" != "$defaultCustomMemoryGB" ]]; then
+    usage "--custom-memory-gb only supported on cloud provider: gce"
   fi
   ;;
 *)
