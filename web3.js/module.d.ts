@@ -93,10 +93,16 @@ declare module '@solana/web3.js' {
     searchTransactionHistory: boolean;
   };
 
+  export type TransactionConfirmationStatus =
+    | 'processed'
+    | 'confirmed'
+    | 'finalized';
+
   export type SignatureStatus = {
     slot: number;
     err: TransactionError | null;
     confirmations: number | null;
+    confirmationStatus: TransactionConfirmationStatus | null;
   };
 
   export type ConfirmedSignatureInfo = {

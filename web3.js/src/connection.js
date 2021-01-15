@@ -1090,6 +1090,7 @@ const GetSignatureStatusesRpcResult = jsonRpcResultAndContext(
         slot: 'number',
         confirmations: struct.union(['number', 'null']),
         err: TransactionErrorResult,
+        confirmationStatus: 'string?',
       }),
     ]),
   ]),
@@ -1577,11 +1578,13 @@ export type TransactionError = {};
  * @property {number} slot when the transaction was processed
  * @property {number | null} confirmations the number of blocks that have been confirmed and voted on in the fork containing `slot` (TODO)
  * @property {TransactionError | null} err error, if any
+ * @property {string | null} confirmationStatus the transaction's cluster confirmation status, if data available. Possible non-null responses: `processed`, `confirmed`, `finalized`
  */
 export type SignatureStatus = {
   slot: number,
   confirmations: number | null,
   err: TransactionError | null,
+  confirmationStatus: string | null,
 };
 
 /**
