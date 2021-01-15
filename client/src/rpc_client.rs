@@ -274,6 +274,10 @@ impl RpcClient {
         )
     }
 
+    pub fn get_snapshot_slot(&self) -> ClientResult<Slot> {
+        self.send(RpcRequest::GetSnapshotSlot, Value::Null)
+    }
+
     pub fn get_signature_status(
         &self,
         signature: &Signature,

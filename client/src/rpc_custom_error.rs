@@ -11,6 +11,7 @@ pub const JSON_RPC_SERVER_ERROR_BLOCK_NOT_AVAILABLE: i64 = -32004;
 pub const JSON_RPC_SERVER_ERROR_NODE_UNHEALTHLY: i64 = -32005;
 pub const JSON_RPC_SERVER_ERROR_TRANSACTION_PRECOMPILE_VERIFICATION_FAILURE: i64 = -32006;
 pub const JSON_RPC_SERVER_ERROR_SLOT_SKIPPED: i64 = -32007;
+pub const JSON_RPC_SERVER_ERROR_NO_SNAPSHOT: i64 = -32008;
 
 pub enum RpcCustomError {
     BlockCleanedUp {
@@ -32,6 +33,7 @@ pub enum RpcCustomError {
     SlotSkipped {
         slot: Slot,
     },
+    NoSnapshot,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -93,6 +95,11 @@ impl From<RpcCustomError> for Error {
                     "Slot {} was skipped, or missing due to ledger jump to recent snapshot",
                     slot
                 ),
+                data: None,
+            },
+            RpcCustomError::NoSnapshot => Self {
+                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_NO_SNAPSHOT),
+                message: "No snapshot".to_string(),
                 data: None,
             },
         }

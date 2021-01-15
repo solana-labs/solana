@@ -41,9 +41,10 @@ use solana_runtime::{
     accounts::AccountAddressFilter,
     accounts_index::{AccountIndex, IndexKey},
     bank::Bank,
-    bank_forks::BankForks,
+    bank_forks::{BankForks, SnapshotConfig},
     commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
     inline_spl_token_v2_0::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
+    snapshot_utils::get_highest_snapshot_archive_path,
 };
 use solana_sdk::{
     account::Account,
@@ -122,6 +123,7 @@ pub struct JsonRpcRequestProcessor {
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     blockstore: Arc<Blockstore>,
     config: JsonRpcConfig,
+    snapshot_config: Option<SnapshotConfig>,
     validator_exit: Arc<RwLock<Option<ValidatorExit>>>,
     health: Arc<RpcHealth>,
     cluster_info: Arc<ClusterInfo>,
@@ -199,6 +201,7 @@ impl JsonRpcRequestProcessor {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         config: JsonRpcConfig,
+        snapshot_config: Option<SnapshotConfig>,
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         blockstore: Arc<Blockstore>,
@@ -214,6 +217,7 @@ impl JsonRpcRequestProcessor {
         (
             Self {
                 config,
+                snapshot_config,
                 bank_forks,
                 block_commitment_cache,
                 blockstore,
@@ -246,6 +250,7 @@ impl JsonRpcRequestProcessor {
 
         Self {
             config: JsonRpcConfig::default(),
+            snapshot_config: None,
             bank_forks,
             block_commitment_cache: Arc::new(RwLock::new(BlockCommitmentCache::new(
                 HashMap::new(),
@@ -463,7 +468,7 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    fn get_slot(&self, commitment: Option<CommitmentConfig>) -> u64 {
+    fn get_slot(&self, commitment: Option<CommitmentConfig>) -> Slot {
         self.bank(commitment).slot()
     }
 
@@ -1799,6 +1804,9 @@ pub trait RpcSol {
         meta: Self::Metadata,
     ) -> Result<RpcResponse<RpcFeeRateGovernor>>;
 
+    #[rpc(meta, name = "getSnapshotSlot")]
+    fn get_snapshot_slot(&self, meta: Self::Metadata) -> Result<Slot>;
+
     #[rpc(meta, name = "getSignatureStatuses")]
     fn get_signature_statuses(
         &self,
@@ -1808,7 +1816,7 @@ pub trait RpcSol {
     ) -> Result<RpcResponse<Vec<Option<TransactionStatus>>>>;
 
     #[rpc(meta, name = "getSlot")]
-    fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64>;
+    fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<Slot>;
 
     #[rpc(meta, name = "getTransactionCount")]
     fn get_transaction_count(
@@ -2354,6 +2362,17 @@ impl RpcSol for RpcSolImpl {
         Ok(meta.get_signature_status(signature, commitment))
     }
 
+    fn get_snapshot_slot(&self, meta: Self::Metadata) -> Result<Slot> {
+        debug!("get_snapshot_slot rpc request received");
+
+        meta.snapshot_config
+            .and_then(|snapshot_config| {
+                get_highest_snapshot_archive_path(&snapshot_config.snapshot_package_output_path)
+                    .map(|(_, (slot, _, _))| slot)
+            })
+            .ok_or_else(|| RpcCustomError::NoSnapshot.into())
+    }
+
     fn get_signature_statuses(
         &self,
         meta: Self::Metadata,
@@ -2377,7 +2396,7 @@ impl RpcSol for RpcSolImpl {
         meta.get_signature_statuses(signatures, config)
     }
 
-    fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<u64> {
+    fn get_slot(&self, meta: Self::Metadata, commitment: Option<CommitmentConfig>) -> Result<Slot> {
         debug!("get_slot rpc request received");
         Ok(meta.get_slot(commitment))
     }
@@ -3080,6 +3099,7 @@ pub mod tests {
                 identity_pubkey: *pubkey,
                 ..JsonRpcConfig::default()
             },
+            None,
             bank_forks.clone(),
             block_commitment_cache.clone(),
             blockstore,
@@ -4480,6 +4500,7 @@ pub mod tests {
         let tpu_address = cluster_info.my_contact_info().tpu;
         let (meta, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
+            None,
             bank_forks.clone(),
             block_commitment_cache,
             blockstore,
@@ -4676,6 +4697,7 @@ pub mod tests {
         let bank_forks = new_bank_forks().0;
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
+            None,
             bank_forks.clone(),
             block_commitment_cache,
             blockstore,
@@ -4708,6 +4730,7 @@ pub mod tests {
         let tpu_address = cluster_info.my_contact_info().tpu;
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             config,
+            None,
             bank_forks.clone(),
             block_commitment_cache,
             blockstore,
@@ -4799,6 +4822,7 @@ pub mod tests {
         let tpu_address = cluster_info.my_contact_info().tpu;
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             config,
+            None,
             bank_forks.clone(),
             block_commitment_cache,
             blockstore,
@@ -6027,6 +6051,7 @@ pub mod tests {
 
         let (meta, _receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
+            None,
             bank_forks.clone(),
             block_commitment_cache,
             blockstore,
