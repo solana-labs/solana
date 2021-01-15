@@ -1,6 +1,6 @@
 use crate::rpc_response::RpcSimulateTransactionResult;
 use serde_json::{json, Value};
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::fmt;
 use thiserror::Error;
 
@@ -25,6 +25,7 @@ pub enum RpcRequest {
     GetFees,
     GetFirstAvailableBlock,
     GetGenesisHash,
+    GetHealth,
     GetIdentity,
     GetInflationGovernor,
     GetInflationRate,
@@ -80,6 +81,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetFees => "getFees",
             RpcRequest::GetFirstAvailableBlock => "getFirstAvailableBlock",
             RpcRequest::GetGenesisHash => "getGenesisHash",
+            RpcRequest::GetHealth => "getHealth",
             RpcRequest::GetIdentity => "getIdentity",
             RpcRequest::GetInflationGovernor => "getInflationGovernor",
             RpcRequest::GetInflationRate => "getInflationRate",
@@ -143,6 +145,7 @@ impl RpcRequest {
 pub enum RpcResponseErrorData {
     Empty,
     SendTransactionPreflightFailure(RpcSimulateTransactionResult),
+    NodeUnhealthy { num_slots_behind: Slot },
 }
 
 impl fmt::Display for RpcResponseErrorData {

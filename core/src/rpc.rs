@@ -1760,6 +1760,9 @@ pub trait RpcSol {
     #[rpc(meta, name = "getGenesisHash")]
     fn get_genesis_hash(&self, meta: Self::Metadata) -> Result<String>;
 
+    #[rpc(meta, name = "getHealth")]
+    fn get_health(&self, meta: Self::Metadata) -> Result<String>;
+
     #[rpc(meta, name = "getLeaderSchedule")]
     fn get_leader_schedule(
         &self,
@@ -2247,6 +2250,15 @@ impl RpcSol for RpcSolImpl {
         Ok(meta.genesis_hash.to_string())
     }
 
+    fn get_health(&self, meta: Self::Metadata) -> Result<String> {
+        match meta.health.check() {
+            RpcHealthStatus::Ok => Ok("ok".to_string()),
+            RpcHealthStatus::Behind {
+                num_slots: num_slots_behind,
+            } => Err(RpcCustomError::RpcNodeUnhealthy { num_slots_behind }.into()),
+        }
+    }
+
     fn get_leader_schedule(
         &self,
         meta: Self::Metadata,
@@ -2486,9 +2498,15 @@ impl RpcSol for RpcSolImpl {
                 return Err(e);
             }
 
-            if meta.health.check() != RpcHealthStatus::Ok {
-                return Err(RpcCustomError::RpcNodeUnhealthy.into());
+            match meta.health.check() {
+                RpcHealthStatus::Ok => (),
+                RpcHealthStatus::Behind {
+                    num_slots: num_slots_behind,
+                } => {
+                    return Err(RpcCustomError::RpcNodeUnhealthy { num_slots_behind }.into());
+                }
             }
+
             if let (Err(err), logs) = preflight_bank.simulate_transaction(transaction.clone()) {
                 return Err(RpcCustomError::SendTransactionPreflightFailure {
                     message: format!("Transaction simulation failed: {}", err),
@@ -4518,7 +4536,7 @@ pub mod tests {
         );
 
         // sendTransaction will fail due to poor node health
-        health.stub_set_health_status(Some(RpcHealthStatus::Behind));
+        health.stub_set_health_status(Some(RpcHealthStatus::Behind { num_slots: 42 }));
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}"]}}"#,
             bs58::encode(serialize(&bad_transaction).unwrap()).into_string()
@@ -4527,7 +4545,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32005,"message":"RPC node is unhealthy"},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32005,"message":"RPC node is behind by 42 slots","data":{"numSlotsBehind":42}},"id":1}"#.to_string(),
             )
         );
         health.stub_set_health_status(None);
