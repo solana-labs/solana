@@ -329,6 +329,7 @@ impl JsonRpcService {
 
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             config,
+            snapshot_config.clone(),
             bank_forks.clone(),
             block_commitment_cache,
             blockstore,

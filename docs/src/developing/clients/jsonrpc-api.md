@@ -1968,6 +1968,38 @@ Result:
 }
 ```
 
+
+### getSnapshotSlot
+
+Returns the highest slot that the node has a snapshot for
+
+#### Parameters:
+
+None
+
+#### Results:
+
+- `<u64>` - Snapshot slot
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getSnapshotSlot"}
+'
+```
+
+Result:
+```json
+{"jsonrpc":"2.0","result":100,"id":1}
+```
+
+Result when the node has no snapshot:
+```json
+{"jsonrpc":"2.0","error":{"code":-32008,"message":"No snapshot"},"id":1}
+```
+
 ### getSignatureStatuses
 
 Returns the statuses of a list of signatures. Unless the
