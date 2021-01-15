@@ -13,4 +13,5 @@ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v1.0.0/install/so
 export PATH="$PWD/solana-install/releases/$solana_version/solana-release/bin/:$PATH"
 
 set -x
+solana --version
 exec solana-stake-o-matic "$@"
