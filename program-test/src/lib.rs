@@ -71,7 +71,7 @@ thread_local! {
 fn set_invoke_context(new: &mut dyn InvokeContext) {
     INVOKE_CONTEXT.with(|invoke_context| {
         if unsafe { invoke_context.replace(Some(transmute::<_, (usize, usize)>(new))) }.is_some() {
-            panic!("Overriting invoke context!")
+            panic!("Overwiting invoke context!")
         }
     });
 }
