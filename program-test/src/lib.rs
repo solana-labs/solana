@@ -20,8 +20,9 @@ use {
     solana_sdk::{
         account::Account,
         keyed_account::KeyedAccount,
-        process_instruction::BpfComputeBudget,
-        process_instruction::{InvokeContext, MockInvokeContext, ProcessInstructionWithContext},
+        process_instruction::{
+            stable_log, BpfComputeBudget, InvokeContext, ProcessInstructionWithContext,
+        },
         signature::{Keypair, Signer},
     },
     std::{
@@ -30,6 +31,7 @@ use {
         convert::TryFrom,
         fs::File,
         io::{self, Read},
+        mem::transmute,
         path::{Path, PathBuf},
         rc::Rc,
         sync::{Arc, RwLock},
@@ -64,7 +66,21 @@ pub fn to_instruction_error(error: ProgramError) -> InstructionError {
 }
 
 thread_local! {
-    static INVOKE_CONTEXT:RefCell<Rc<MockInvokeContext>> = RefCell::new(Rc::new(MockInvokeContext::default()));
+    static INVOKE_CONTEXT:RefCell<Option<(usize, usize)>> = RefCell::new(None);
+}
+fn set_invoke_context(new: &mut dyn InvokeContext) {
+    INVOKE_CONTEXT.with(|invoke_context| {
+        if unsafe { invoke_context.replace(Some(transmute::<_, (usize, usize)>(new))) }.is_some() {
+            panic!("Overwiting invoke context!")
+        }
+    });
+}
+fn get_invoke_context<'a>() -> &'a mut dyn InvokeContext {
+    let fat = INVOKE_CONTEXT.with(|invoke_context| match *invoke_context.borrow() {
+        Some(val) => val,
+        None => panic!("Invoke context not set!"),
+    });
+    unsafe { transmute::<(usize, usize), &mut dyn InvokeContext>(fat) }
 }
 
 pub fn builtin_process_instruction(
@@ -74,15 +90,7 @@ pub fn builtin_process_instruction(
     input: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    let mock_invoke_context = MockInvokeContext {
-        programs: invoke_context.get_programs().to_vec(),
-        key: *program_id,
-        ..MockInvokeContext::default()
-    };
-    // TODO: Populate MockInvokeContext more, or rework to avoid MockInvokeContext entirely.
-    //       The context being passed into the program is incomplete...
-    let local_invoke_context = RefCell::new(Rc::new(mock_invoke_context));
-    swap_invoke_context(&local_invoke_context);
+    set_invoke_context(invoke_context);
 
     // Copy all the accounts into a HashMap to ensure there are no duplicates
     let mut accounts: HashMap<Pubkey, Account> = keyed_accounts
@@ -139,18 +147,6 @@ pub fn builtin_process_instruction(
         }
     }
 
-    swap_invoke_context(&local_invoke_context);
-
-    // Propagate logs back to caller's invoke context
-    // (TODO: This goes away if MockInvokeContext usage can be removed)
-    let logger = invoke_context.get_logger();
-    let logger = logger.borrow_mut();
-    for message in local_invoke_context.borrow().logger.log.borrow_mut().iter() {
-        if logger.log_enabled() {
-            logger.log(message);
-        }
-    }
-
     result
 }
 
@@ -176,24 +172,15 @@ macro_rules! processor {
     };
 }
 
-pub fn swap_invoke_context(other_invoke_context: &RefCell<Rc<MockInvokeContext>>) {
-    INVOKE_CONTEXT.with(|invoke_context| {
-        invoke_context.swap(&other_invoke_context);
-    });
-}
-
 struct SyscallStubs {}
 impl program_stubs::SyscallStubs for SyscallStubs {
     fn sol_log(&self, message: &str) {
-        INVOKE_CONTEXT.with(|invoke_context| {
-            let invoke_context = invoke_context.borrow_mut();
-            let logger = invoke_context.get_logger();
-            let logger = logger.borrow_mut();
-
-            if logger.log_enabled() {
-                logger.log(&format!("Program log: {}", message));
-            }
-        });
+        let invoke_context = get_invoke_context();
+        let logger = invoke_context.get_logger();
+        let logger = logger.borrow_mut();
+        if logger.log_enabled() {
+            logger.log(&format!("Program log: {}", message));
+        }
     }
 
     fn sol_invoke_signed(
@@ -206,21 +193,11 @@ impl program_stubs::SyscallStubs for SyscallStubs {
         // TODO: Merge the business logic below with the BPF invoke path in
         //       programs/bpf_loader/src/syscalls.rs
         //
-        info!("SyscallStubs::sol_invoke_signed()");
 
-        let mut caller = Pubkey::default();
-        let mut mock_invoke_context = MockInvokeContext::default();
+        let invoke_context = get_invoke_context();
+        let logger = invoke_context.get_logger();
 
-        INVOKE_CONTEXT.with(|invoke_context| {
-            let invoke_context = invoke_context.borrow_mut();
-            caller = *invoke_context.get_caller().expect("get_caller");
-            invoke_context.record_instruction(&instruction);
-
-            mock_invoke_context.programs = invoke_context.get_programs().to_vec();
-            // TODO: Populate MockInvokeContext more, or rework to avoid MockInvokeContext entirely.
-            //       The context being passed into the program is incomplete...
-        });
-
+        let caller = *invoke_context.get_caller().expect("get_caller");
         if instruction.accounts.len() + 1 != account_infos.len() {
             panic!(
                 "Instruction accounts mismatch.  Instruction contains {} accounts, with {}
@@ -230,17 +207,11 @@ impl program_stubs::SyscallStubs for SyscallStubs {
             );
         }
         let message = Message::new(&[instruction.clone()], None);
-
         let program_id_index = message.instructions[0].program_id_index as usize;
         let program_id = message.account_keys[program_id_index];
-
         let program_account_info = &account_infos[program_id_index];
-        if !program_account_info.executable {
-            panic!("Program account is not executable");
-        }
-        if program_account_info.is_writable {
-            panic!("Program account is writable");
-        }
+
+        stable_log::program_invoke(&logger, &program_id, invoke_context.invoke_depth());
 
         fn ai_to_a(ai: &AccountInfo) -> Account {
             Account {
@@ -251,54 +222,55 @@ impl program_stubs::SyscallStubs for SyscallStubs {
                 rent_epoch: ai.rent_epoch,
             }
         }
-        let executable_accounts = vec![(program_id, RefCell::new(ai_to_a(program_account_info)))];
+        let executables = vec![(program_id, RefCell::new(ai_to_a(program_account_info)))];
 
+        // Convert AccountInfos into Accounts
         let mut accounts = vec![];
-        for instruction_account in &instruction.accounts {
+        for key in &message.account_keys {
             for account_info in account_infos {
-                if *account_info.unsigned_key() == instruction_account.pubkey {
-                    if instruction_account.is_writable && !account_info.is_writable {
-                        panic!("Writeable mismatch for {}", instruction_account.pubkey);
-                    }
-                    if instruction_account.is_signer && !account_info.is_signer {
-                        let mut program_signer = false;
-                        for seeds in signers_seeds.iter() {
-                            let signer = Pubkey::create_program_address(&seeds, &caller).unwrap();
-                            if instruction_account.pubkey == signer {
-                                program_signer = true;
-                                break;
-                            }
-                        }
-                        if !program_signer {
-                            panic!("Signer mismatch for {}", instruction_account.pubkey);
-                        }
-                    }
+                if account_info.unsigned_key() == key {
                     accounts.push(Rc::new(RefCell::new(ai_to_a(account_info))));
                     break;
                 }
             }
         }
-        assert_eq!(accounts.len(), instruction.accounts.len());
+        assert_eq!(
+            accounts.len(),
+            message.account_keys.len(),
+            "Missing or not enough accounts passed to invoke"
+        );
+
+        // Check Signers
+        for account_info in account_infos {
+            for instruction_account in &instruction.accounts {
+                if *account_info.unsigned_key() == instruction_account.pubkey
+                    && instruction_account.is_signer
+                    && !account_info.is_signer
+                {
+                    let mut program_signer = false;
+                    for seeds in signers_seeds.iter() {
+                        let signer = Pubkey::create_program_address(&seeds, &caller).unwrap();
+                        if instruction_account.pubkey == signer {
+                            program_signer = true;
+                            break;
+                        }
+                    }
+                    if !program_signer {
+                        panic!("Missing signer for {}", instruction_account.pubkey);
+                    }
+                }
+            }
+        }
+
+        invoke_context.record_instruction(&instruction);
 
         solana_runtime::message_processor::MessageProcessor::process_cross_program_instruction(
             &message,
-            &executable_accounts,
+            &executables,
             &accounts,
-            &mut mock_invoke_context,
+            invoke_context,
         )
         .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
-
-        // Propagate logs back to caller's invoke context
-        // (TODO: This goes away if MockInvokeContext usage can be removed)
-        INVOKE_CONTEXT.with(|invoke_context| {
-            let logger = invoke_context.borrow().get_logger();
-            let logger = logger.borrow_mut();
-            for message in mock_invoke_context.logger.log.borrow_mut().iter() {
-                if logger.log_enabled() {
-                    logger.log(message);
-                }
-            }
-        });
 
         // Copy writeable account modifications back into the caller's AccountInfos
         for (i, instruction_account) in instruction.accounts.iter().enumerate() {
@@ -314,13 +286,12 @@ impl program_stubs::SyscallStubs for SyscallStubs {
                     let mut data = account_info.try_borrow_mut_data()?;
                     let new_data = &account.borrow().data;
                     if *account_info.owner != account.borrow().owner {
-                        // TODO: Figure out how to allow the System Program to change the account owner
-                        panic!(
-                            "Account ownership change not supported yet: {} -> {}. \
-                            Consider making this test conditional on `#[cfg(feature = \"test-bpf\")]`",
-                            *account_info.owner,
-                            account.borrow().owner
-                        );
+                        // TODO Figure out a better way to allow the System Program to set the account owner
+                        #[allow(clippy::transmute_ptr_to_ptr)]
+                        #[allow(mutable_transmutes)]
+                        let account_info_mut =
+                            unsafe { transmute::<&Pubkey, &mut Pubkey>(account_info.owner) };
+                        *account_info_mut = account.borrow().owner;
                     }
                     if data.len() != new_data.len() {
                         // TODO: Figure out how to allow the System Program to resize the account data
@@ -336,6 +307,7 @@ impl program_stubs::SyscallStubs for SyscallStubs {
             }
         }
 
+        stable_log::program_success(&logger, &program_id);
         Ok(())
     }
 }
