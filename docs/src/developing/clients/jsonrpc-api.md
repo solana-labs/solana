@@ -36,6 +36,7 @@ gives a convenient interface for the RPC methods.
 - [getFees](jsonrpc-api.md#getfees)
 - [getFirstAvailableBlock](jsonrpc-api.md#getfirstavailableblock)
 - [getGenesisHash](jsonrpc-api.md#getgenesishash)
+- [getHealth](jsonrpc-api.md#gethealth)
 - [getIdentity](jsonrpc-api.md#getidentity)
 - [getInflationGovernor](jsonrpc-api.md#getinflationgovernor)
 - [getInflationRate](jsonrpc-api.md#getinflationrate)
@@ -1274,6 +1275,54 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 Result:
 ```json
 {"jsonrpc":"2.0","result":"GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC","id":1}
+```
+
+### getHealth
+
+Returns the current health of the node.
+
+If one or more `--trusted-validator` arguments are provided to
+`solana-validator`, "ok" is returned when the node has within
+`HEALTH_CHECK_SLOT_DISTANCE` slots of the highest trusted validator, otherwise
+an error is returned.  "ok" is always returned if no trusted validators are
+provided.
+
+#### Parameters:
+
+None
+
+#### Results:
+
+If the node is healthy: "ok"
+If the node is unhealthy, a JSON RPC error response is returned indicating how far behind the node is.
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getHealth"}
+'
+```
+
+Healthy Result:
+```json
+{"jsonrpc":"2.0","result": "ok","id":1}
+```
+
+Unhealthy Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32005,
+    "message": "RPC node is behind by 42 slots",
+    "data": {
+      "numSlotsBehind": 42
+    }
+  },
+  "id": 1
+}
 ```
 
 ### getIdentity

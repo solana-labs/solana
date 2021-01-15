@@ -928,6 +928,11 @@ impl RpcClient {
         Ok(hash)
     }
 
+    pub fn get_health(&self) -> ClientResult<()> {
+        self.send::<String>(RpcRequest::GetHealth, Value::Null)
+            .map(|_| ())
+    }
+
     pub fn get_token_account(&self, pubkey: &Pubkey) -> ClientResult<Option<UiTokenAccount>> {
         Ok(self
             .get_token_account_with_commitment(pubkey, self.commitment_config)?

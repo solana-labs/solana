@@ -159,7 +159,7 @@ impl RpcRequestMiddleware {
     fn health_check(&self) -> &'static str {
         let response = match self.health.check() {
             RpcHealthStatus::Ok => "ok",
-            RpcHealthStatus::Behind => "behind",
+            RpcHealthStatus::Behind { num_slots: _ } => "behind",
         };
         info!("health check: {}", response);
         response

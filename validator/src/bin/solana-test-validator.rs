@@ -4,7 +4,7 @@ use {
     fd_lock::FdLock,
     indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle},
     solana_clap_utils::{input_parsers::pubkey_of, input_validators::is_pubkey},
-    solana_client::{client_error, rpc_client::RpcClient},
+    solana_client::{client_error, rpc_client::RpcClient, rpc_request},
     solana_core::rpc::JsonRpcConfig,
     solana_faucet::faucet::{run_local_faucet_with_port, FAUCET_PORT},
     solana_sdk::{
@@ -339,7 +339,7 @@ fn main() {
         fn get_validator_stats(
             rpc_client: &RpcClient,
             identity: &Pubkey,
-        ) -> client_error::Result<(Slot, Slot, Slot, u64, Sol)> {
+        ) -> client_error::Result<(Slot, Slot, Slot, u64, Sol, String)> {
             let processed_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::recent())?;
             let confirmed_slot =
                 rpc_client.get_slot_with_commitment(CommitmentConfig::single_gossip())?;
@@ -350,12 +350,32 @@ fn main() {
                 .get_balance_with_commitment(identity, CommitmentConfig::single_gossip())?
                 .value;
 
+            let health = match rpc_client.get_health() {
+                Ok(()) => "ok".to_string(),
+                Err(err) => {
+                    if let client_error::ClientErrorKind::RpcError(
+                        rpc_request::RpcError::RpcResponseError {
+                            code: _,
+                            message: _,
+                            data:
+                                rpc_request::RpcResponseErrorData::NodeUnhealthy { num_slots_behind },
+                        },
+                    ) = &err.kind
+                    {
+                        format!("{} slots behind", num_slots_behind)
+                    } else {
+                        "unhealthy".to_string()
+                    }
+                }
+            };
+
             Ok((
                 processed_slot,
                 confirmed_slot,
                 finalized_slot,
                 transaction_count,
                 Sol(identity_balance),
+                health,
             ))
         }
 
@@ -373,13 +393,21 @@ fn main() {
                         finalized_slot,
                         transaction_count,
                         identity_balance,
+                        health,
                     )) => {
                         let uptime = chrono::Duration::from_std(validator_start.elapsed()).unwrap();
+
                         progress_bar.set_message(&format!(
-                            "{:02}:{:02}:{:02} | \
+                            "{:02}:{:02}:{:02} \
+                            {}| \
                             Processed Slot: {} | Confirmed Slot: {} | Finalized Slot: {} | Snapshot Slot: {} | \
                             Transactions: {} | {}",
                             uptime.num_hours(), uptime.num_minutes() % 60, uptime.num_seconds() % 60,
+                            if health == "ok" {
+                                "".to_string()
+                            } else {
+                                format!("| {} ", style(health).bold().red())
+                            },
                             processed_slot, confirmed_slot, finalized_slot, snapshot_slot,
                             transaction_count, identity_balance
                         ));
