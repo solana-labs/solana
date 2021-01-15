@@ -723,8 +723,7 @@ checkPremptibleInstances() {
   # immediately after its successfully pinged.
   for ipAddress in "${validatorIpList[@]}"; do
     (
-      set -x
-      timeout 5s ping -c 1 "$ipAddress" | tr - _
+      timeout 5s ping -c 1 "$ipAddress" | tr - _ &>/dev/null
     ) || {
       cat <<EOF
 
