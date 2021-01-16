@@ -358,6 +358,14 @@ impl JsonRpcService {
 
         let ledger_path = ledger_path.to_path_buf();
 
+        let runtime01 = {
+            use tokio_01::runtime::{Builder as RuntimeBuilder, Runtime, TaskExecutor};
+            RuntimeBuilder::new()
+                .name_prefix("rpc")
+                .build()
+                .unwrap()
+        };
+
         let (close_handle_sender, close_handle_receiver) = channel();
         let thread_hdl = Builder::new()
             .name("solana-jsonrpc".to_string())
@@ -376,7 +384,8 @@ impl JsonRpcService {
                     io,
                     move |_req: &hyper::Request<hyper::Body>| request_processor.clone(),
                 )
-                .threads(rpc_threads)
+                .event_loop_executor(runtime01.executor())
+                .threads(1)
                 .cors(DomainsValidation::AllowOnly(vec![
                     AccessControlAllowOrigin::Any,
                 ]))
