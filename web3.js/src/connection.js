@@ -438,7 +438,7 @@ type ConfirmedTransactionMeta = {
  * @property {number} slot The slot during which the transaction was processed
  * @property {Transaction} transaction The details of the transaction
  * @property {ConfirmedTransactionMeta|null} meta Metadata produced from the transaction
- * @property {number} blockTime The unix timestamp of when the transaction was processed
+ * @property {number|null|undefined} blockTime The unix timestamp of when the transaction was processed
  */
 type ConfirmedTransaction = {
   slot: number,
