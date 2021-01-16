@@ -24,16 +24,20 @@ use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_error;
 use solana_perf::packet::{Packet, Packets};
 use solana_runtime::bank_forks::BankForks;
-use solana_sdk::clock::{Epoch, Slot};
-use solana_sdk::epoch_schedule::EpochSchedule;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::timing::timestamp;
+use solana_sdk::{
+    clock::{Epoch, Slot},
+    epoch_schedule::EpochSchedule,
+    feature_set,
+    pubkey::Pubkey,
+    timing::timestamp,
+};
 use solana_streamer::streamer::PacketReceiver;
 use std::{
     cmp,
     collections::hash_set::HashSet,
     collections::{BTreeMap, HashMap},
     net::UdpSocket,
+    ops::{Deref, DerefMut},
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     sync::mpsc::channel,
     sync::mpsc::RecvTimeoutError,
@@ -68,7 +72,7 @@ struct RetransmitStats {
 
 #[allow(clippy::too_many_arguments)]
 fn update_retransmit_stats(
-    stats: &Arc<RetransmitStats>,
+    stats: &RetransmitStats,
     total_time: u64,
     total_packets: usize,
     retransmit_total: u64,
@@ -209,49 +213,46 @@ pub type ShredFilter = LruCache<(Slot, u32, bool), Vec<u64>>;
 
 pub type ShredFilterAndHasher = (ShredFilter, PacketHasher);
 
-// Return true if shred is already received and should skip retransmit
+// Returns None if shred is already received and should skip retransmit.
+// Otherwise returns shred's slot.
 fn check_if_already_received(
     packet: &Packet,
-    shreds_received: &Arc<Mutex<ShredFilterAndHasher>>,
-) -> bool {
-    match get_shred_slot_index_type(packet, &mut ShredFetchStats::default()) {
-        Some(slot_index) => {
-            let mut received = shreds_received.lock().unwrap();
-            let hasher = received.1.clone();
-            if let Some(sent) = received.0.get_mut(&slot_index) {
-                if sent.len() < MAX_DUPLICATE_COUNT {
-                    let hash = hasher.hash_packet(packet);
-                    if sent.contains(&hash) {
-                        return true;
-                    }
-
-                    sent.push(hash);
-                } else {
-                    return true;
-                }
+    shreds_received: &Mutex<ShredFilterAndHasher>,
+) -> Option<Slot> {
+    let shred = get_shred_slot_index_type(packet, &mut ShredFetchStats::default())?;
+    let mut shreds_received = shreds_received.lock().unwrap();
+    let (cache, hasher) = shreds_received.deref_mut();
+    match cache.get_mut(&shred) {
+        Some(sent) if sent.len() >= MAX_DUPLICATE_COUNT => None,
+        Some(sent) => {
+            let hash = hasher.hash_packet(packet);
+            if sent.contains(&hash) {
+                None
             } else {
-                let hash = hasher.hash_packet(&packet);
-                received.0.put(slot_index, vec![hash]);
+                sent.push(hash);
+                Some(shred.0)
             }
-
-            false
         }
-        None => true,
+        None => {
+            let hash = hasher.hash_packet(packet);
+            cache.put(shred, vec![hash]);
+            Some(shred.0)
+        }
     }
 }
 
 #[allow(clippy::too_many_arguments)]
 fn retransmit(
-    bank_forks: &Arc<RwLock<BankForks>>,
-    leader_schedule_cache: &Arc<LeaderScheduleCache>,
+    bank_forks: &RwLock<BankForks>,
+    leader_schedule_cache: &LeaderScheduleCache,
     cluster_info: &ClusterInfo,
-    r: &Arc<Mutex<PacketReceiver>>,
+    r: &Mutex<PacketReceiver>,
     sock: &UdpSocket,
     id: u32,
-    stats: &Arc<RetransmitStats>,
-    epoch_stakes_cache: &Arc<RwLock<EpochStakesCache>>,
-    last_peer_update: &Arc<AtomicU64>,
-    shreds_received: &Arc<Mutex<ShredFilterAndHasher>>,
+    stats: &RetransmitStats,
+    epoch_stakes_cache: &RwLock<EpochStakesCache>,
+    last_peer_update: &AtomicU64,
+    shreds_received: &Mutex<ShredFilterAndHasher>,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
     let r_lock = r.lock().unwrap();
@@ -330,19 +331,29 @@ fn retransmit(
                 repair_total += 1;
                 continue;
             }
-
-            if check_if_already_received(packet, shreds_received) {
-                continue;
-            }
-
+            let shred_slot = match check_if_already_received(packet, shreds_received) {
+                Some(slot) => slot,
+                None => continue,
+            };
+            let feature_set = {
+                let bank_forks = bank_forks.read().unwrap();
+                match bank_forks.get(shred_slot) {
+                    Some(bank) => bank.feature_set.clone(),
+                    None => bank_forks.root_bank().deref().feature_set.clone(),
+                }
+            };
             let mut compute_turbine_peers = Measure::start("turbine_start");
-            let (my_index, shuffled_stakes_and_index) = ClusterInfo::shuffle_peers_and_index(
+            let (my_index, mut shuffled_stakes_and_index) = ClusterInfo::shuffle_peers_and_index(
                 &my_id,
                 &r_epoch_stakes_cache.peers,
                 &r_epoch_stakes_cache.stakes_and_index,
                 packet.meta.seed,
             );
             peers_len = cmp::max(peers_len, shuffled_stakes_and_index.len());
+            // Until the feature is enabled, do the old buggy thing.
+            if !feature_set.is_active(&feature_set::turbine_retransmit_peers_patch::id()) {
+                shuffled_stakes_and_index.remove(my_index);
+            }
             // split off the indexes, we don't need the stakes anymore
             let indexes = shuffled_stakes_and_index
                 .into_iter()
@@ -671,41 +682,53 @@ mod tests {
         shred.copy_to_packet(&mut packet);
         let shreds_received = Arc::new(Mutex::new((LruCache::new(100), PacketHasher::default())));
         // unique shred for (1, 5) should pass
-        assert!(!check_if_already_received(&packet, &shreds_received));
+        assert_eq!(
+            check_if_already_received(&packet, &shreds_received),
+            Some(slot)
+        );
         // duplicate shred for (1, 5) blocked
-        assert!(check_if_already_received(&packet, &shreds_received));
+        assert_eq!(check_if_already_received(&packet, &shreds_received), None);
 
         let shred = Shred::new_from_data(slot, index, 2, None, true, true, 0, version, 0);
         shred.copy_to_packet(&mut packet);
         // first duplicate shred for (1, 5) passed
-        assert!(!check_if_already_received(&packet, &shreds_received));
+        assert_eq!(
+            check_if_already_received(&packet, &shreds_received),
+            Some(slot)
+        );
         // then blocked
-        assert!(check_if_already_received(&packet, &shreds_received));
+        assert_eq!(check_if_already_received(&packet, &shreds_received), None);
 
         let shred = Shred::new_from_data(slot, index, 8, None, true, true, 0, version, 0);
         shred.copy_to_packet(&mut packet);
         // 2nd duplicate shred for (1, 5) blocked
-        assert!(check_if_already_received(&packet, &shreds_received));
-        assert!(check_if_already_received(&packet, &shreds_received));
+        assert_eq!(check_if_already_received(&packet, &shreds_received), None);
+        assert_eq!(check_if_already_received(&packet, &shreds_received), None);
 
         let shred = Shred::new_empty_coding(slot, index, 0, 1, 1, 0, version);
         shred.copy_to_packet(&mut packet);
         // Coding at (1, 5) passes
-        assert!(!check_if_already_received(&packet, &shreds_received));
+        assert_eq!(
+            check_if_already_received(&packet, &shreds_received),
+            Some(slot)
+        );
         // then blocked
-        assert!(check_if_already_received(&packet, &shreds_received));
+        assert_eq!(check_if_already_received(&packet, &shreds_received), None);
 
         let shred = Shred::new_empty_coding(slot, index, 2, 1, 1, 0, version);
         shred.copy_to_packet(&mut packet);
         // 2nd unique coding at (1, 5) passes
-        assert!(!check_if_already_received(&packet, &shreds_received));
+        assert_eq!(
+            check_if_already_received(&packet, &shreds_received),
+            Some(slot)
+        );
         // same again is blocked
-        assert!(check_if_already_received(&packet, &shreds_received));
+        assert_eq!(check_if_already_received(&packet, &shreds_received), None);
 
         let shred = Shred::new_empty_coding(slot, index, 3, 1, 1, 0, version);
         shred.copy_to_packet(&mut packet);
         // Another unique coding at (1, 5) always blocked
-        assert!(check_if_already_received(&packet, &shreds_received));
-        assert!(check_if_already_received(&packet, &shreds_received));
+        assert_eq!(check_if_already_received(&packet, &shreds_received), None);
+        assert_eq!(check_if_already_received(&packet, &shreds_received), None);
     }
 }
