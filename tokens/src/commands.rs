@@ -1042,6 +1042,7 @@ mod tests {
         signature::{read_keypair_file, write_keypair_file},
     };
     use solana_stake_program::stake_instruction::StakeInstruction;
+    use solana_transaction_status::TransactionConfirmationStatus;
     use std::fs::remove_dir_all;
 
     // This is a quick hack until TestValidator can be initialized with fees from block 0
@@ -2191,6 +2192,7 @@ mod tests {
                 confirmations: Some(15),
                 status: Ok(()),
                 err: None,
+                confirmation_status: Some(TransactionConfirmationStatus::Finalized),
             })],
             &mut confirmations,
         )
@@ -2210,6 +2212,7 @@ mod tests {
                 confirmations: None,
                 status: Ok(()),
                 err: None,
+                confirmation_status: Some(TransactionConfirmationStatus::Finalized),
             })],
             &mut confirmations,
         )

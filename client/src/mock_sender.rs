@@ -12,7 +12,7 @@ use solana_sdk::{
     signature::Signature,
     transaction::{self, Transaction, TransactionError},
 };
-use solana_transaction_status::TransactionStatus;
+use solana_transaction_status::{TransactionConfirmationStatus, TransactionStatus};
 use solana_version::Version;
 use std::{collections::HashMap, sync::RwLock};
 
@@ -106,6 +106,7 @@ impl RpcSender for MockSender {
                         slot: 1,
                         confirmations: None,
                         err,
+                        confirmation_status: Some(TransactionConfirmationStatus::Finalized),
                     })
                 };
                 let statuses: Vec<Option<TransactionStatus>> = params.as_array().unwrap()[0]
