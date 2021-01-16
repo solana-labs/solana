@@ -28,6 +28,7 @@ gpuMode="${19:-auto}"
 maybeWarpSlot="${20}"
 waitForNodeInit="${21}"
 extraPrimordialStakes="${22:=0}"
+tmpfsAccounts="${23:false}"
 set +x
 
 missing() {
@@ -275,6 +276,10 @@ EOF
       --init-complete-file "$initCompleteFile"
     )
 
+    if [[ "$tmpfsAccounts" = "true" ]]; then
+      args+=(--accounts /mnt/solana-accounts)
+    fi
+
     if [[ $airdropsEnabled = true ]]; then
 cat >> ~/solana/on-reboot <<EOF
       ./multinode-demo/faucet.sh > faucet.log 2>&1 &
@@ -390,6 +395,10 @@ EOF
     maybeSkipAccountsCreation=
     if [[ $nodeIndex -le $extraPrimordialStakes ]]; then
       maybeSkipAccountsCreation="export SKIP_ACCOUNTS_CREATION=1"
+    fi
+
+    if [[ "$tmpfsAccounts" = "true" ]]; then
+      args+=(--accounts /mnt/solana-accounts)
     fi
 
 cat >> ~/solana/on-reboot <<EOF
