@@ -1042,7 +1042,7 @@ mod tests {
         signature::{read_keypair_file, write_keypair_file},
     };
     use solana_stake_program::stake_instruction::StakeInstruction;
-<<<<<<< HEAD
+    use solana_transaction_status::TransactionConfirmationStatus;
     use std::fs::remove_dir_all;
 
     // This is a quick hack until TestValidator can be initialized with fees from block 0
@@ -1057,9 +1057,6 @@ mod tests {
             sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
         }
     }
-=======
-    use solana_transaction_status::TransactionConfirmationStatus;
->>>>>>> 9a89689ad... Use optimistic confirmation in getSignatureStatuses, and various downstream client methods (#14430)
 
     #[test]
     fn test_process_token_allocations() {
