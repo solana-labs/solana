@@ -125,6 +125,7 @@ declare module '@solana/web3.js' {
     slot: number,
     err: TransactionError | null,
     memo: string | null,
+    blockTime?: number | null,
   };
 
   declare export type BlockhashAndFeeCalculator = {
@@ -204,6 +205,12 @@ declare module '@solana/web3.js' {
       transaction: Transaction,
       meta: ConfirmedTransactionMeta | null,
     }>,
+    rewards: Array<{
+      pubkey: string,
+      lamports: number,
+      postBalance: number | null,
+      rewardType: string | null,
+    }>,
   };
 
   declare export type PerfSample = {
@@ -217,6 +224,7 @@ declare module '@solana/web3.js' {
     slot: number,
     transaction: Transaction,
     meta: ConfirmedTransactionMeta | null,
+    blockTime?: number | null,
   };
 
   declare export type ParsedAccountData = {

@@ -438,11 +438,13 @@ type ConfirmedTransactionMeta = {
  * @property {number} slot The slot during which the transaction was processed
  * @property {Transaction} transaction The details of the transaction
  * @property {ConfirmedTransactionMeta|null} meta Metadata produced from the transaction
+ * @property {number|null|undefined} blockTime The unix timestamp of when the transaction was processed
  */
 type ConfirmedTransaction = {
   slot: number,
   transaction: Transaction,
   meta: ConfirmedTransactionMeta | null,
+  blockTime?: number | null,
 };
 
 /**
@@ -520,11 +522,13 @@ type ParsedTransaction = {
  * @property {number} slot The slot during which the transaction was processed
  * @property {ParsedTransaction} transaction The details of the transaction
  * @property {ConfirmedTransactionMeta|null} meta Metadata produced from the transaction
+ * @property {number|null|undefined} blockTime The unix timestamp of when the transaction was processed
  */
 type ParsedConfirmedTransaction = {
   slot: number,
   transaction: ParsedTransaction,
   meta: ParsedConfirmedTransactionMeta | null,
+  blockTime?: number | null,
 };
 
 /**
@@ -930,11 +934,12 @@ const GetConfirmedSignaturesForAddressRpcResult = jsonRpcResult(
 
 const GetConfirmedSignaturesForAddress2RpcResult = jsonRpcResult(
   struct.array([
-    struct({
+    struct.pick({
       signature: 'string',
       slot: 'number',
       err: TransactionErrorResult,
       memo: struct.union(['null', 'string']),
+      blockTime: struct.union(['undefined', 'null', 'number']),
     }),
   ]),
 );
@@ -1332,6 +1337,7 @@ const GetConfirmedTransactionRpcResult = jsonRpcResult(
       slot: 'number',
       transaction: ConfirmedTransactionResult,
       meta: ConfirmedTransactionMetaResult,
+      blockTime: struct.union(['number', 'null', 'undefined']),
     }),
   ]),
 );
@@ -1346,6 +1352,7 @@ const GetParsedConfirmedTransactionRpcResult = jsonRpcResult(
       slot: 'number',
       transaction: ParsedConfirmedTransactionResult,
       meta: ParsedConfirmedTransactionMetaResult,
+      blockTime: struct.union(['number', 'null', 'undefined']),
     }),
   ]),
 );
@@ -1595,12 +1602,14 @@ export type SignatureStatus = {
  * @property {number} slot when the transaction was processed
  * @property {TransactionError | null} err error, if any
  * @property {string | null} memo memo associated with the transaction, if any
+ * @property {number | null | undefined} blockTime The unix timestamp of when the transaction was processed
  */
 export type ConfirmedSignatureInfo = {
   signature: string,
   slot: number,
   err: TransactionError | null,
   memo: string | null,
+  blockTime?: number | null,
 };
 
 /**
