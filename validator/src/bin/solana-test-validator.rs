@@ -380,10 +380,7 @@ fn main() {
         }
 
         loop {
-            let snapshot_slot =
-                solana_runtime::snapshot_utils::get_highest_snapshot_archive_path(&ledger_path)
-                    .map(|(_, (slot, _, _))| slot)
-                    .unwrap_or(0);
+            let snapshot_slot = rpc_client.get_snapshot_slot().ok();
 
             for _i in 0..10 {
                 match get_validator_stats(&rpc_client, &identity) {
@@ -400,16 +397,25 @@ fn main() {
                         progress_bar.set_message(&format!(
                             "{:02}:{:02}:{:02} \
                             {}| \
-                            Processed Slot: {} | Confirmed Slot: {} | Finalized Slot: {} | Snapshot Slot: {} | \
+                            Processed Slot: {} | Confirmed Slot: {} | Finalized Slot: {} | \
+                            Snapshot Slot: {} | \
                             Transactions: {} | {}",
-                            uptime.num_hours(), uptime.num_minutes() % 60, uptime.num_seconds() % 60,
+                            uptime.num_hours(),
+                            uptime.num_minutes() % 60,
+                            uptime.num_seconds() % 60,
                             if health == "ok" {
                                 "".to_string()
                             } else {
                                 format!("| {} ", style(health).bold().red())
                             },
-                            processed_slot, confirmed_slot, finalized_slot, snapshot_slot,
-                            transaction_count, identity_balance
+                            processed_slot,
+                            confirmed_slot,
+                            finalized_slot,
+                            snapshot_slot
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| "-".to_string()),
+                            transaction_count,
+                            identity_balance
                         ));
                     }
                     Err(err) => {
