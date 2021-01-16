@@ -37,7 +37,7 @@ use std::{
     collections::hash_set::HashSet,
     collections::{BTreeMap, HashMap},
     net::UdpSocket,
-    ops::{Deref, DerefMut},
+    ops::DerefMut,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     sync::mpsc::channel,
     sync::mpsc::RecvTimeoutError,
@@ -241,6 +241,29 @@ fn check_if_already_received(
     }
 }
 
+// Returns true if turbine retransmit peers patch (#14565) is enabled.
+fn enable_turbine_retransmit_peers_patch(bank_forks: &RwLock<BankForks>, shred_slot: Slot) -> bool {
+    let bank = {
+        let bank_forks = bank_forks.read().unwrap();
+        match bank_forks.get(shred_slot) {
+            Some(bank) => bank.clone(),
+            None => bank_forks.root_bank(),
+        }
+    };
+    let feature_slot = bank
+        .feature_set
+        .activated_slot(&feature_set::turbine_retransmit_peers_patch::id());
+    match feature_slot {
+        None => false,
+        Some(feature_slot) => {
+            let epoch_schedule = bank.epoch_schedule();
+            let feature_epoch = epoch_schedule.get_epoch(feature_slot);
+            let shred_epoch = epoch_schedule.get_epoch(shred_slot);
+            feature_epoch < shred_epoch
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn retransmit(
     bank_forks: &RwLock<BankForks>,
@@ -335,13 +358,6 @@ fn retransmit(
                 Some(slot) => slot,
                 None => continue,
             };
-            let feature_set = {
-                let bank_forks = bank_forks.read().unwrap();
-                match bank_forks.get(shred_slot) {
-                    Some(bank) => bank.feature_set.clone(),
-                    None => bank_forks.root_bank().deref().feature_set.clone(),
-                }
-            };
             let mut compute_turbine_peers = Measure::start("turbine_start");
             let (my_index, mut shuffled_stakes_and_index) = ClusterInfo::shuffle_peers_and_index(
                 &my_id,
@@ -350,8 +366,8 @@ fn retransmit(
                 packet.meta.seed,
             );
             peers_len = cmp::max(peers_len, shuffled_stakes_and_index.len());
-            // Until the feature is enabled, do the old buggy thing.
-            if !feature_set.is_active(&feature_set::turbine_retransmit_peers_patch::id()) {
+            // Until the patch is activated, do the old buggy thing.
+            if !enable_turbine_retransmit_peers_patch(bank_forks, shred_slot) {
                 shuffled_stakes_and_index.remove(my_index);
             }
             // split off the indexes, we don't need the stakes anymore
