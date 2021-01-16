@@ -1528,7 +1528,14 @@ fn call<'a>(
     signers_seeds_len: u64,
     memory_mapping: &MemoryMapping,
 ) -> Result<u64, EbpfError<BPFError>> {
-    let (message, executables, accounts, account_refs, abort_on_all_cpi_failures) = {
+    let (
+        message,
+        executables,
+        accounts,
+        account_refs,
+        caller_privileges,
+        abort_on_all_cpi_failures,
+    ) = {
         let invoke_context = syscall.get_context()?;
 
         invoke_context
@@ -1555,6 +1562,20 @@ fn call<'a>(
         let (message, callee_program_id, callee_program_id_index) =
             MessageProcessor::create_message(&instruction, &keyed_account_refs, &signers)
                 .map_err(SyscallError::InstructionError)?;
+        let caller_privileges = message
+            .account_keys
+            .iter()
+            .map(|key| {
+                if let Some(keyed_account) = keyed_account_refs
+                    .iter()
+                    .find(|keyed_account| key == keyed_account.unsigned_key())
+                {
+                    keyed_account.is_writable()
+                } else {
+                    false
+                }
+            })
+            .collect::<Vec<bool>>();
         if invoke_context.is_feature_active(&limit_cpi_loader_invoke::id()) {
             check_authorized_program(&callee_program_id, &instruction.data)?;
         }
@@ -1590,6 +1611,7 @@ fn call<'a>(
             executables,
             accounts,
             account_refs,
+            caller_privileges,
             invoke_context.is_feature_active(&abort_on_all_cpi_failures::id()),
         )
     };
@@ -1601,6 +1623,7 @@ fn call<'a>(
         &message,
         &executables,
         &accounts,
+        &caller_privileges,
         *(&mut *(syscall.get_context_mut()?)),
     ) {
         Ok(()) => (),
