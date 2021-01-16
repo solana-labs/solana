@@ -155,6 +155,7 @@ impl PreAccount {
 
         pre.lamports = account.lamports;
         pre.owner = account.owner;
+        pre.executable = account.executable;
         if pre.data.len() != account.data.len() {
             // Only system account can change data size, copy with alloc
             pre.data = account.data.clone();
