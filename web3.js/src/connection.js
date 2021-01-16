@@ -522,7 +522,7 @@ type ParsedTransaction = {
  * @property {number} slot The slot during which the transaction was processed
  * @property {ParsedTransaction} transaction The details of the transaction
  * @property {ConfirmedTransactionMeta|null} meta Metadata produced from the transaction
- * @property {number} blockTime The unix timestamp of when the transaction was processed
+ * @property {number|null|undefined} blockTime The unix timestamp of when the transaction was processed
  */
 type ParsedConfirmedTransaction = {
   slot: number,
@@ -1602,7 +1602,7 @@ export type SignatureStatus = {
  * @property {number} slot when the transaction was processed
  * @property {TransactionError | null} err error, if any
  * @property {string | null} memo memo associated with the transaction, if any
- * @property {number | null | undefined} blockTime the blockTime when the transaction was processed
+ * @property {number | null | undefined} blockTime The unix timestamp of when the transaction was processed
  */
 export type ConfirmedSignatureInfo = {
   signature: string,
