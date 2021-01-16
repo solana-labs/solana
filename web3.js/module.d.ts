@@ -190,6 +190,12 @@ declare module '@solana/web3.js' {
       transaction: Transaction;
       meta: ConfirmedTransactionMeta | null;
     }>;
+    rewards: Array<{
+      pubkey: string,
+      lamports: number,
+      postBalance: number | null,
+      rewardType: string | null,
+    }>;
   };
 
   export type PerfSample = {
