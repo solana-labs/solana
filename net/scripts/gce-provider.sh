@@ -8,6 +8,10 @@ cloud_DefaultZone() {
   echo "us-west1-b"
 }
 
+cloud_DefaultCustomMemoryGB() {
+  echo 64
+}
+
 #
 # cloud_RestartPreemptedInstances [namePrefix]
 #
