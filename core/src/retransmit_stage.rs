@@ -23,7 +23,7 @@ use solana_ledger::{
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_error;
 use solana_perf::packet::{Packet, Packets};
-use solana_runtime::bank_forks::BankForks;
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{
     clock::{Epoch, Slot},
     epoch_schedule::EpochSchedule,
@@ -242,14 +242,21 @@ fn check_if_already_received(
 }
 
 // Returns true if turbine retransmit peers patch (#14565) is enabled.
-fn enable_turbine_retransmit_peers_patch(bank_forks: &RwLock<BankForks>, shred_slot: Slot) -> bool {
-    let bank = {
-        let bank_forks = bank_forks.read().unwrap();
-        match bank_forks.get(shred_slot) {
-            Some(bank) => bank.clone(),
-            None => bank_forks.root_bank(),
-        }
-    };
+fn enable_turbine_retransmit_peers_patch(
+    shred_slot: Slot,
+    bank_forks: &RwLock<BankForks>,
+    cache: &mut HashMap<Slot, Arc<Bank>>,
+) -> bool {
+    let bank: Arc<Bank> = cache
+        .entry(shred_slot)
+        .or_insert_with(|| {
+            let bank_forks = bank_forks.read().unwrap();
+            match bank_forks.get(shred_slot) {
+                Some(bank) => bank.clone(),
+                None => bank_forks.root_bank(),
+            }
+        })
+        .clone();
     let feature_slot = bank
         .feature_set
         .activated_slot(&feature_set::turbine_retransmit_peers_patch::id());
@@ -338,6 +345,7 @@ fn retransmit(
     let mut discard_total = 0;
     let mut repair_total = 0;
     let mut retransmit_total = 0;
+    let mut banks_cache = HashMap::new();
     let mut compute_turbine_peers_total = 0;
     let mut packets_by_slot: HashMap<Slot, usize> = HashMap::new();
     let mut packets_by_source: HashMap<String, usize> = HashMap::new();
@@ -367,7 +375,7 @@ fn retransmit(
             );
             peers_len = cmp::max(peers_len, shuffled_stakes_and_index.len());
             // Until the patch is activated, do the old buggy thing.
-            if !enable_turbine_retransmit_peers_patch(bank_forks, shred_slot) {
+            if !enable_turbine_retransmit_peers_patch(shred_slot, bank_forks, &mut banks_cache) {
                 shuffled_stakes_and_index.remove(my_index);
             }
             // split off the indexes, we don't need the stakes anymore
