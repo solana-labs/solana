@@ -49,6 +49,7 @@ use std::{
 
 const MAX_DUPLICATE_COUNT: usize = 2;
 const DEFAULT_LRU_SIZE: usize = 10_000;
+const BANKS_LRU_CACHE_CAP: usize = 100;
 
 // Limit a given thread to consume about this many packets so that
 // it doesn't pull up too much work.
@@ -245,18 +246,21 @@ fn check_if_already_received(
 fn enable_turbine_retransmit_peers_patch(
     shred_slot: Slot,
     bank_forks: &RwLock<BankForks>,
-    cache: &mut HashMap<Slot, Arc<Bank>>,
+    cache: &mut LruCache<Slot, Arc<Bank>>,
 ) -> bool {
-    let bank: Arc<Bank> = cache
-        .entry(shred_slot)
-        .or_insert_with(|| {
+    let bank: Arc<Bank> = match cache.get(&shred_slot) {
+        Some(bank) => bank.clone(),
+        None => {
             let bank_forks = bank_forks.read().unwrap();
             match bank_forks.get(shred_slot) {
-                Some(bank) => bank.clone(),
+                Some(bank) => {
+                    cache.put(shred_slot, bank.clone());
+                    bank.clone()
+                }
                 None => bank_forks.root_bank(),
             }
-        })
-        .clone();
+        }
+    };
     let feature_slot = bank
         .feature_set
         .activated_slot(&feature_set::turbine_retransmit_peers_patch::id());
@@ -283,6 +287,7 @@ fn retransmit(
     epoch_stakes_cache: &RwLock<EpochStakesCache>,
     last_peer_update: &AtomicU64,
     shreds_received: &Mutex<ShredFilterAndHasher>,
+    banks_cache: &mut LruCache<Slot, Arc<Bank>>,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
     let r_lock = r.lock().unwrap();
@@ -345,7 +350,6 @@ fn retransmit(
     let mut discard_total = 0;
     let mut repair_total = 0;
     let mut retransmit_total = 0;
-    let mut banks_cache = HashMap::new();
     let mut compute_turbine_peers_total = 0;
     let mut packets_by_slot: HashMap<Slot, usize> = HashMap::new();
     let mut packets_by_source: HashMap<String, usize> = HashMap::new();
@@ -375,7 +379,7 @@ fn retransmit(
             );
             peers_len = cmp::max(peers_len, shuffled_stakes_and_index.len());
             // Until the patch is activated, do the old buggy thing.
-            if !enable_turbine_retransmit_peers_patch(shred_slot, bank_forks, &mut banks_cache) {
+            if !enable_turbine_retransmit_peers_patch(shred_slot, bank_forks, banks_cache) {
                 shuffled_stakes_and_index.remove(my_index);
             }
             // split off the indexes, we don't need the stakes anymore
@@ -479,6 +483,7 @@ pub fn retransmitter(
             let epoch_stakes_cache = Arc::new(RwLock::new(EpochStakesCache::default()));
             let last_peer_update = Arc::new(AtomicU64::new(0));
             let shreds_received = shreds_received.clone();
+            let mut banks_cache = LruCache::new(BANKS_LRU_CACHE_CAP);
 
             Builder::new()
                 .name("solana-retransmitter".to_string())
@@ -496,6 +501,7 @@ pub fn retransmitter(
                             &epoch_stakes_cache,
                             &last_peer_update,
                             &shreds_received,
+                            &mut banks_cache,
                         ) {
                             match e {
                                 Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
