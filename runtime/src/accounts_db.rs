@@ -19,8 +19,17 @@
 //! commit for each slot entry would be indexed.
 
 use crate::{
+<<<<<<< HEAD
     accounts_index::{AccountIndex, AccountsIndex, Ancestors, IndexKey, SlotList, SlotSlice},
     append_vec::{AppendVec, StoredAccount, StoredMeta},
+=======
+    accounts_cache::{AccountsCache, CachedAccount, SlotCache},
+    accounts_index::{
+        AccountIndex, AccountsIndex, Ancestors, IndexKey, IsCached, SlotList, SlotSlice,
+    },
+    append_vec::{AppendVec, StoredAccountMeta, StoredMeta},
+    contains::Contains,
+>>>>>>> 5f14f4528... More generic accounts purge functions (#14595)
 };
 use blake3::traits::digest::Digest;
 use dashmap::DashMap;
@@ -733,17 +742,36 @@ impl AccountsDB {
         }
     }
 
+<<<<<<< HEAD
     fn purge_keys_exact(
         &self,
         pubkey_to_slot_set: Vec<(Pubkey, HashSet<Slot>)>,
     ) -> (Vec<(u64, AccountInfo)>, Vec<Pubkey>) {
+=======
+    fn purge_keys_exact<'a, C: 'a>(
+        &'a self,
+        pubkey_to_slot_set: &'a [(Pubkey, C)],
+    ) -> Vec<(u64, AccountInfo)>
+    where
+        C: Contains<'a, Slot>,
+    {
+>>>>>>> 5f14f4528... More generic accounts purge functions (#14595)
         let mut reclaims = Vec::new();
         let mut dead_keys = Vec::new();
 
         for (pubkey, slots_set) in pubkey_to_slot_set {
+<<<<<<< HEAD
             let (new_reclaims, is_empty) =
                 self.accounts_index
                     .purge_exact(&pubkey, slots_set, &self.account_indexes);
+=======
+            let is_empty = self.accounts_index.purge_exact(
+                &pubkey,
+                slots_set,
+                &mut reclaims,
+                &self.account_indexes,
+            );
+>>>>>>> 5f14f4528... More generic accounts purge functions (#14595)
             if is_empty {
                 dead_keys.push(pubkey);
             }
@@ -912,15 +940,26 @@ impl AccountsDB {
             .map(|(key, (slots_list, _ref_count))| {
                 (
                     key,
+<<<<<<< HEAD
                     HashSet::from_iter(slots_list.into_iter().map(|(slot, _)| slot)),
+=======
+                    slots_list
+                        .into_iter()
+                        .map(|(slot, _)| slot)
+                        .collect::<HashSet<Slot>>(),
+>>>>>>> 5f14f4528... More generic accounts purge functions (#14595)
                 )
             })
             .collect();
 
+<<<<<<< HEAD
         let (reclaims, dead_keys) = self.purge_keys_exact(pubkey_to_slot_set);
 
         self.accounts_index
             .handle_dead_keys(&dead_keys, &self.account_indexes);
+=======
+        let reclaims = self.purge_keys_exact(&pubkey_to_slot_set);
+>>>>>>> 5f14f4528... More generic accounts purge functions (#14595)
 
         self.handle_reclaims(&reclaims, None, false, None);
 
@@ -1584,6 +1623,125 @@ impl AccountsDB {
         self.purge_slots(&slots);
     }
 
+<<<<<<< HEAD
+=======
+    fn recycle_slot_stores(
+        &self,
+        total_removed_storage_entries: usize,
+        slot_stores: &[SlotStores],
+    ) -> u64 {
+        let mut recycled_count = 0;
+
+        let mut recycle_stores_write_time = Measure::start("recycle_stores_write_time");
+        let mut recycle_stores = self.recycle_stores.write().unwrap();
+        recycle_stores_write_time.stop();
+
+        for slot_entries in slot_stores {
+            let entry = slot_entries.read().unwrap();
+            for (_store_id, stores) in entry.iter() {
+                if recycle_stores.len() > MAX_RECYCLE_STORES {
+                    let dropped_count = total_removed_storage_entries - recycled_count;
+                    self.stats
+                        .dropped_stores
+                        .fetch_add(dropped_count as u64, Ordering::Relaxed);
+                    return recycle_stores_write_time.as_us();
+                }
+                recycle_stores.push(stores.clone());
+                recycled_count += 1;
+            }
+        }
+        recycle_stores_write_time.as_us()
+    }
+
+    /// # Arguments
+    /// * `removed_slots` - Slots that were previously rooted but just removed
+    fn purge_removed_slots_from_store(&self, removed_slots: &HashSet<Slot>) {
+        // Check all slots `removed_slots` are no longer rooted
+        let mut safety_checks_elapsed = Measure::start("safety_checks_elapsed");
+        for slot in removed_slots.iter() {
+            assert!(!self.accounts_index.is_root(*slot))
+        }
+        safety_checks_elapsed.stop();
+
+        // Purge the storage entries of the removed slots
+        let mut remove_storages_elapsed = Measure::start("remove_storages_elapsed");
+        let mut all_removed_slot_storages = vec![];
+        let mut total_removed_storage_entries = 0;
+        let mut total_removed_bytes = 0;
+        for slot in removed_slots {
+            // The removed slot must alrady have been flushed from the cache
+            assert!(self.accounts_cache.slot_cache(*slot).is_none());
+            if let Some((_, slot_removed_storages)) = self.storage.0.remove(&slot) {
+                {
+                    let r_slot_removed_storages = slot_removed_storages.read().unwrap();
+                    total_removed_storage_entries += r_slot_removed_storages.len();
+                    total_removed_bytes += r_slot_removed_storages
+                        .values()
+                        .map(|i| i.accounts.capacity())
+                        .sum::<u64>();
+                }
+                all_removed_slot_storages.push(slot_removed_storages.clone());
+            }
+        }
+        remove_storages_elapsed.stop();
+
+        let num_slots_removed = all_removed_slot_storages.len();
+
+        let recycle_stores_write_time =
+            self.recycle_slot_stores(total_removed_storage_entries, &all_removed_slot_storages);
+
+        let mut drop_storage_entries_elapsed = Measure::start("drop_storage_entries_elapsed");
+        // Backing mmaps for removed storages entries explicitly dropped here outside
+        // of any locks
+        drop(all_removed_slot_storages);
+        drop_storage_entries_elapsed.stop();
+
+        datapoint_info!(
+            "purge_slots_time",
+            ("safety_checks_elapsed", safety_checks_elapsed.as_us(), i64),
+            (
+                "remove_storages_elapsed",
+                remove_storages_elapsed.as_us(),
+                i64
+            ),
+            (
+                "drop_storage_entries_elapsed",
+                drop_storage_entries_elapsed.as_us(),
+                i64
+            ),
+            ("num_slots_removed", num_slots_removed, i64),
+            (
+                "total_removed_storage_entries",
+                total_removed_storage_entries,
+                i64
+            ),
+            ("total_removed_bytes", total_removed_bytes, i64),
+            (
+                "recycle_stores_write_elapsed",
+                recycle_stores_write_time,
+                i64
+            ),
+        );
+    }
+
+    fn purge_slot_cache_keys(&self, dead_slot: Slot, slot_cache: SlotCache) {
+        // Slot purged from cache should not exist in the backing store
+        assert!(self.storage.get_slot_stores(dead_slot).is_none());
+        let mut purged_slot_pubkeys: HashSet<(Slot, Pubkey)> = HashSet::new();
+        let pubkey_to_slot_set: Vec<(Pubkey, Slot)> = slot_cache
+            .iter()
+            .map(|account| {
+                purged_slot_pubkeys.insert((dead_slot, *account.key()));
+                (*account.key(), dead_slot)
+            })
+            .collect();
+        let num_purged_keys = pubkey_to_slot_set.len();
+        let reclaims = self.purge_keys_exact(&pubkey_to_slot_set);
+        assert_eq!(reclaims.len(), num_purged_keys);
+        self.finalize_dead_slot_removal(std::iter::once(&dead_slot), purged_slot_pubkeys, None);
+    }
+
+>>>>>>> 5f14f4528... More generic accounts purge functions (#14595)
     fn purge_slots(&self, slots: &HashSet<Slot>) {
         //add_root should be called first
         let non_roots: Vec<_> = slots
@@ -2345,12 +2503,45 @@ impl AccountsDB {
         dead_slots
     }
 
+<<<<<<< HEAD
     fn clean_dead_slots(
         &self,
         dead_slots: &HashSet<Slot>,
         mut purged_account_slots: Option<&mut AccountSlots>,
     ) {
         let mut measure = Measure::start("clean_dead_slots-ms");
+=======
+    fn finalize_dead_slot_removal<'a>(
+        &'a self,
+        dead_slots_iter: impl Iterator<Item = &'a Slot> + Clone,
+        purged_slot_pubkeys: HashSet<(Slot, Pubkey)>,
+        mut purged_account_slots: Option<&mut AccountSlots>,
+    ) {
+        for (slot, pubkey) in purged_slot_pubkeys {
+            if let Some(ref mut purged_account_slots) = purged_account_slots {
+                purged_account_slots.entry(pubkey).or_default().insert(slot);
+            }
+            self.accounts_index.unref_from_storage(&pubkey);
+        }
+
+        for slot in dead_slots_iter.clone() {
+            self.accounts_index.clean_dead_slot(*slot);
+        }
+        {
+            let mut bank_hashes = self.bank_hashes.write().unwrap();
+            for slot in dead_slots_iter {
+                bank_hashes.remove(slot);
+            }
+        }
+    }
+
+    fn clean_stored_dead_slots(
+        &self,
+        dead_slots: &HashSet<Slot>,
+        purged_account_slots: Option<&mut AccountSlots>,
+    ) {
+        let mut measure = Measure::start("clean_stored_dead_slots-ms");
+>>>>>>> 5f14f4528... More generic accounts purge functions (#14595)
         let mut stores: Vec<Arc<AccountStorageEntry>> = vec![];
         for slot in dead_slots.iter() {
             if let Some(slot_storage) = self.storage.get_slot_stores(*slot) {
@@ -2377,12 +2568,20 @@ impl AccountsDB {
                     })
             })
         };
+<<<<<<< HEAD
         for (slot, pubkey) in slot_pubkeys {
             if let Some(ref mut purged_account_slots) = purged_account_slots {
                 purged_account_slots.entry(pubkey).or_default().insert(slot);
             }
             self.accounts_index.unref_from_storage(&pubkey);
         }
+=======
+        self.finalize_dead_slot_removal(
+            dead_slots.iter(),
+            purged_slot_pubkeys,
+            purged_account_slots,
+        );
+>>>>>>> 5f14f4528... More generic accounts purge functions (#14595)
         measure.stop();
         inc_new_counter_info!("clean_dead_slots-unref-ms", measure.as_ms() as usize);
 
@@ -4287,7 +4486,11 @@ pub mod tests {
 
         let slots: HashSet<Slot> = HashSet::from_iter(vec![1].into_iter());
         let purge_keys = vec![(key1, slots)];
+<<<<<<< HEAD
         let (_reclaims, dead_keys) = db.purge_keys_exact(purge_keys);
+=======
+        db.purge_keys_exact(&purge_keys);
+>>>>>>> 5f14f4528... More generic accounts purge functions (#14595)
 
         let account2 = Account::new(3, 0, &key);
         db.store(2, &[(&key1, &account2)]);
