@@ -11,7 +11,7 @@ use solana_storage_proto::convert::generated;
 use solana_storage_proto::convert::tx_by_addr;
 use solana_transaction_status::{
     ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Reward,
-    TransactionByAddrInfo,TransactionConfirmationStatus, TransactionStatus, TransactionStatusMeta,
+    TransactionByAddrInfo, TransactionConfirmationStatus, TransactionStatus, TransactionStatusMeta,
     TransactionWithStatusMeta,
 };
 use std::{collections::HashMap, convert::TryInto};

@@ -6531,7 +6531,6 @@ pub mod tests {
     #[test]
     fn test_get_confirmed_transaction() {
         let slot = 2;
-        let block_time = Some(1610700052);
         let entries = make_slot_entries_with_transactions(5);
         let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
         let ledger_path = get_tmp_ledger_path!();
@@ -6598,7 +6597,7 @@ pub mod tests {
                 Some(ConfirmedTransaction {
                     slot,
                     transaction,
-                    block_time
+                    block_time: None
                 })
             );
         }
