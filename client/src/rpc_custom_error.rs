@@ -26,8 +26,8 @@ pub enum RpcCustomError {
     BlockNotAvailable {
         slot: Slot,
     },
-    RpcNodeUnhealthy {
-        num_slots_behind: Slot,
+    NodeUnhealthy {
+        num_slots_behind: Option<Slot>,
     },
     TransactionPrecompileVerificationFailure(solana_sdk::transaction::TransactionError),
     SlotSkipped {
@@ -38,8 +38,8 @@ pub enum RpcCustomError {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcNodeUnhealthyErrorData {
-    pub num_slots_behind: Slot,
+pub struct NodeUnhealthyErrorData {
+    pub num_slots_behind: Option<Slot>,
 }
 
 impl From<RpcCustomError> for Error {
@@ -75,10 +75,14 @@ impl From<RpcCustomError> for Error {
                 message: format!("Block not available for slot {}", slot),
                 data: None,
             },
-            RpcCustomError::RpcNodeUnhealthy { num_slots_behind } => Self {
+            RpcCustomError::NodeUnhealthy { num_slots_behind } => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_NODE_UNHEALTHLY),
-                message: format!("RPC node is behind by {} slots", num_slots_behind),
-                data: Some(serde_json::json!(RpcNodeUnhealthyErrorData {
+                message: if let Some(num_slots_behind) = num_slots_behind {
+                    format!("Node is behind by {} slots", num_slots_behind)
+                } else {
+                    "Node is unhealthy".to_string()
+                },
+                data: Some(serde_json::json!(NodeUnhealthyErrorData {
                     num_slots_behind
                 })),
             },

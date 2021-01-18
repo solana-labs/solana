@@ -2265,9 +2265,10 @@ impl RpcSol for RpcSolImpl {
     fn get_health(&self, meta: Self::Metadata) -> Result<String> {
         match meta.health.check() {
             RpcHealthStatus::Ok => Ok("ok".to_string()),
-            RpcHealthStatus::Behind {
-                num_slots: num_slots_behind,
-            } => Err(RpcCustomError::RpcNodeUnhealthy { num_slots_behind }.into()),
+            RpcHealthStatus::Behind { num_slots } => Err(RpcCustomError::NodeUnhealthy {
+                num_slots_behind: Some(num_slots),
+            }
+            .into()),
         }
     }
 
@@ -2523,10 +2524,11 @@ impl RpcSol for RpcSolImpl {
 
             match meta.health.check() {
                 RpcHealthStatus::Ok => (),
-                RpcHealthStatus::Behind {
-                    num_slots: num_slots_behind,
-                } => {
-                    return Err(RpcCustomError::RpcNodeUnhealthy { num_slots_behind }.into());
+                RpcHealthStatus::Behind { num_slots } => {
+                    return Err(RpcCustomError::NodeUnhealthy {
+                        num_slots_behind: Some(num_slots),
+                    }
+                    .into());
                 }
             }
 
@@ -4570,7 +4572,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32005,"message":"RPC node is behind by 42 slots","data":{"numSlotsBehind":42}},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32005,"message":"Node is behind by 42 slots","data":{"numSlotsBehind":42}},"id":1}"#.to_string(),
             )
         );
         health.stub_set_health_status(None);

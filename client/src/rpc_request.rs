@@ -147,7 +147,7 @@ impl RpcRequest {
 pub enum RpcResponseErrorData {
     Empty,
     SendTransactionPreflightFailure(RpcSimulateTransactionResult),
-    NodeUnhealthy { num_slots_behind: Slot },
+    NodeUnhealthy { num_slots_behind: Option<Slot> },
 }
 
 impl fmt::Display for RpcResponseErrorData {

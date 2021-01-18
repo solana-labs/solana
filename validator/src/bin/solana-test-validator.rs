@@ -358,7 +358,9 @@ fn main() {
                             code: _,
                             message: _,
                             data:
-                                rpc_request::RpcResponseErrorData::NodeUnhealthy { num_slots_behind },
+                                rpc_request::RpcResponseErrorData::NodeUnhealthy {
+                                    num_slots_behind: Some(num_slots_behind),
+                                },
                         },
                     ) = &err.kind
                     {

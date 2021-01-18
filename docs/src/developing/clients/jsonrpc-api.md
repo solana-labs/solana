@@ -1294,7 +1294,9 @@ None
 #### Results:
 
 If the node is healthy: "ok"
-If the node is unhealthy, a JSON RPC error response is returned indicating how far behind the node is.
+If the node is unhealthy, a JSON RPC error response is returned.  The specifics
+of the error response are **UNSTABLE** and may change in the future
+
 
 #### Example:
 
@@ -1310,13 +1312,26 @@ Healthy Result:
 {"jsonrpc":"2.0","result": "ok","id":1}
 ```
 
-Unhealthy Result:
+Unhealthy Result (generic):
 ```json
 {
   "jsonrpc": "2.0",
   "error": {
     "code": -32005,
-    "message": "RPC node is behind by 42 slots",
+    "message": "Node is unhealthy",
+    "data": {}
+  },
+  "id": 1
+}
+```
+
+Unhealthy Result (if additional information is available)
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32005,
+    "message": "Node is behind by 42 slots",
     "data": {
       "numSlotsBehind": 42
     }
