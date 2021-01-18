@@ -361,6 +361,10 @@ impl RpcClient {
         self.send(RpcRequest::GetSlot, json!([commitment_config]))
     }
 
+    pub fn supply(&self) -> RpcResult<RpcSupply> {
+        self.supply_with_commitment(self.commitment_config)
+    }
+
     pub fn supply_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
@@ -782,6 +786,7 @@ impl RpcClient {
                 filters: None,
                 account_config: RpcAccountInfoConfig {
                     encoding: Some(UiAccountEncoding::Base64),
+                    commitment: Some(self.commitment_config),
                     ..RpcAccountInfoConfig::default()
                 },
             },
