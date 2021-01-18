@@ -522,7 +522,7 @@ impl Default for CliConfig<'_> {
             rpc_timeout: Duration::from_secs(u64::from_str(DEFAULT_RPC_TIMEOUT_SECONDS).unwrap()),
             verbose: false,
             output_format: OutputFormat::Display,
-            commitment: CommitmentConfig::default(),
+            commitment: CommitmentConfig::single_gossip(),
             send_transaction_config: RpcSendTransactionConfig::default(),
             address_labels: HashMap::new(),
         }
@@ -1123,8 +1123,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
 
     let mut _rpc_client;
     let rpc_client = if config.rpc_client.is_none() {
-        _rpc_client =
-            RpcClient::new_with_timeout(config.json_rpc_url.to_string(), config.rpc_timeout);
+        _rpc_client = RpcClient::new_with_timeout_and_commitment(
+            config.json_rpc_url.to_string(),
+            config.rpc_timeout,
+            config.commitment,
+        );
         &_rpc_client
     } else {
         // Primarily for testing
@@ -1856,7 +1859,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL"),
                 )
-                .arg(commitment_arg_with_default("max")),
+                .arg(commitment_arg_with_default("singleGossip")),
         )
         .subcommand(
             SubCommand::with_name("confirm")

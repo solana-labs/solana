@@ -97,6 +97,17 @@ impl RpcClient {
         )
     }
 
+    pub fn new_with_timeout_and_commitment(
+        url: String,
+        timeout: Duration,
+        commitment_config: CommitmentConfig,
+    ) -> Self {
+        Self::new_sender(
+            HttpSender::new_with_timeout(url, timeout),
+            commitment_config,
+        )
+    }
+
     pub fn new_mock(url: String) -> Self {
         Self::new_sender(MockSender::new(url), CommitmentConfig::default())
     }
