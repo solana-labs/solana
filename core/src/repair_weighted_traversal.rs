@@ -3,27 +3,9 @@ use crate::{
     serve_repair::RepairType, tree_diff::TreeDiff,
 };
 use solana_ledger::blockstore::Blockstore;
+use solana_runtime::contains::Contains;
 use solana_sdk::clock::Slot;
-use std::{
-    cmp::Eq,
-    collections::{HashMap, HashSet},
-    hash::Hash,
-};
-
-pub trait Contains<T: Eq + Hash> {
-    fn contains(&self, key: &T) -> bool;
-}
-
-impl<T: Eq + Hash, U> Contains<T> for HashMap<T, U> {
-    fn contains(&self, key: &T) -> bool {
-        self.contains_key(key)
-    }
-}
-impl<T: Eq + Hash> Contains<T> for HashSet<T> {
-    fn contains(&self, key: &T) -> bool {
-        self.contains(key)
-    }
-}
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, PartialEq)]
 enum Visit {
@@ -84,12 +66,12 @@ impl<'a> Iterator for RepairWeightTraversal<'a> {
 }
 
 // Generate shred repairs for main subtree rooted at `self.slot`
-pub fn get_best_repair_shreds(
+pub fn get_best_repair_shreds<'a>(
     tree: &HeaviestSubtreeForkChoice,
     blockstore: &Blockstore,
     repairs: &mut Vec<RepairType>,
     max_new_shreds: usize,
-    ignore_slots: &dyn Contains<Slot>,
+    ignore_slots: &impl Contains<'a, Slot>,
 ) {
     let initial_len = repairs.len();
     let max_repairs = initial_len + max_new_shreds;
