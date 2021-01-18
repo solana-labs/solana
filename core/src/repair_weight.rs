@@ -1,13 +1,10 @@
 use crate::{
-    heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
-    repair_service::RepairTiming,
-    repair_weighted_traversal::{self, Contains},
-    serve_repair::RepairType,
-    tree_diff::TreeDiff,
+    heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice, repair_service::RepairTiming,
+    repair_weighted_traversal, serve_repair::RepairType, tree_diff::TreeDiff,
 };
 use solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore};
 use solana_measure::measure::Measure;
-use solana_runtime::epoch_stakes::EpochStakes;
+use solana_runtime::{contains::Contains, epoch_stakes::EpochStakes};
 use solana_sdk::{
     clock::Slot,
     epoch_schedule::{Epoch, EpochSchedule},
@@ -129,14 +126,14 @@ impl RepairWeight {
         }
     }
 
-    pub fn get_best_weighted_repairs(
+    pub fn get_best_weighted_repairs<'a>(
         &mut self,
         blockstore: &Blockstore,
         epoch_stakes: &HashMap<Epoch, EpochStakes>,
         epoch_schedule: &EpochSchedule,
         max_new_orphans: usize,
         max_new_shreds: usize,
-        ignore_slots: &dyn Contains<Slot>,
+        ignore_slots: &impl Contains<'a, Slot>,
         repair_timing: Option<&mut RepairTiming>,
     ) -> Vec<RepairType> {
         let mut repairs = vec![];
@@ -228,12 +225,12 @@ impl RepairWeight {
     }
 
     // Generate shred repairs for main subtree rooted at `self.slot`
-    fn get_best_shreds(
+    fn get_best_shreds<'a>(
         &mut self,
         blockstore: &Blockstore,
         repairs: &mut Vec<RepairType>,
         max_new_shreds: usize,
-        ignore_slots: &dyn Contains<Slot>,
+        ignore_slots: &impl Contains<'a, Slot>,
     ) {
         let root_tree = self.trees.get(&self.root).expect("Root tree must exist");
         repair_weighted_traversal::get_best_repair_shreds(

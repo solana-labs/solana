@@ -1,4 +1,5 @@
 use crate::{
+    contains::Contains,
     inline_spl_token_v2_0::{self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
     secondary_index::*,
 };
@@ -529,11 +530,11 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
         (w_account_entry.unwrap(), is_newly_inserted)
     }
 
-    pub fn handle_dead_keys(&self, dead_keys: &[Pubkey], account_indexes: &HashSet<AccountIndex>) {
+    pub fn handle_dead_keys(&self, dead_keys: &[&Pubkey], account_indexes: &HashSet<AccountIndex>) {
         if !dead_keys.is_empty() {
             for key in dead_keys.iter() {
                 let mut w_index = self.account_maps.write().unwrap();
-                if let btree_map::Entry::Occupied(index_entry) = w_index.entry(*key) {
+                if let btree_map::Entry::Occupied(index_entry) = w_index.entry(**key) {
                     if index_entry.get().slot_list.read().unwrap().is_empty() {
                         index_entry.remove();
 
@@ -541,7 +542,11 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
                         // is only safe because we have the lock for this key's entry
                         // in the AccountsIndex, so no other thread is also updating
                         // the index
-                        self.purge_secondary_indexes_by_inner_key(key, None, account_indexes);
+                        self.purge_secondary_indexes_by_inner_key(
+                            key,
+                            None::<&Slot>,
+                            account_indexes,
+                        );
                     }
                 }
             }
@@ -605,13 +610,16 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
         )
     }
 
-    pub fn purge_exact(
-        &self,
+    pub fn purge_exact<'a, C>(
+        &'a self,
         pubkey: &Pubkey,
-        slots_to_purge: &HashSet<Slot>,
+        slots_to_purge: &'a C,
         reclaims: &mut SlotList<T>,
         account_indexes: &HashSet<AccountIndex>,
-    ) -> bool {
+    ) -> bool
+    where
+        C: Contains<'a, Slot>,
+    {
         let res = {
             let mut write_account_map_entry = self.get_account_write_entry(pubkey).unwrap();
             write_account_map_entry.slot_list_mut(|slot_list| {
@@ -625,7 +633,7 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
                 slot_list.is_empty()
             })
         };
-        self.purge_secondary_indexes_by_inner_key(pubkey, Some(&slots_to_purge), account_indexes);
+        self.purge_secondary_indexes_by_inner_key(pubkey, Some(slots_to_purge), account_indexes);
         res
     }
 
@@ -803,12 +811,14 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
         }
     }
 
-    fn purge_secondary_indexes_by_inner_key(
-        &self,
+    fn purge_secondary_indexes_by_inner_key<'a, C>(
+        &'a self,
         inner_key: &Pubkey,
-        slots_to_remove: Option<&HashSet<Slot>>,
+        slots_to_remove: Option<&'a C>,
         account_indexes: &HashSet<AccountIndex>,
-    ) {
+    ) where
+        C: Contains<'a, Slot>,
+    {
         if account_indexes.contains(&AccountIndex::ProgramId) {
             self.program_id_index
                 .remove_by_inner_key(inner_key, slots_to_remove);
@@ -1697,7 +1707,7 @@ pub mod tests {
 
         index.purge_exact(
             &account_key,
-            &slots.into_iter().collect(),
+            &slots.into_iter().collect::<HashSet<Slot>>(),
             &mut vec![],
             account_index,
         );
@@ -1933,7 +1943,7 @@ pub mod tests {
             .slot_list_mut(|slot_list| slot_list.clear());
 
         // Everything should be deleted
-        index.handle_dead_keys(&[account_key], account_index);
+        index.handle_dead_keys(&[&account_key], account_index);
         assert!(index.spl_token_mint_index.index.is_empty());
         assert!(index.spl_token_mint_index.reverse_index.is_empty());
     }
