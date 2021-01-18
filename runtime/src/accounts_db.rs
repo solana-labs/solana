@@ -24,6 +24,7 @@ use crate::{
         AccountIndex, AccountsIndex, Ancestors, IndexKey, IsCached, SlotList, SlotSlice,
     },
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta},
+    contains::Contains,
 };
 use blake3::traits::digest::Digest;
 use dashmap::DashMap;
@@ -893,17 +894,20 @@ impl AccountsDB {
         }
     }
 
-    fn purge_keys_exact(
-        &self,
-        pubkey_to_slot_set: Vec<(Pubkey, HashSet<Slot>)>,
-    ) -> Vec<(u64, AccountInfo)> {
+    fn purge_keys_exact<'a, C: 'a>(
+        &'a self,
+        pubkey_to_slot_set: &'a [(Pubkey, C)],
+    ) -> Vec<(u64, AccountInfo)>
+    where
+        C: Contains<'a, Slot>,
+    {
         let mut reclaims = Vec::new();
         let mut dead_keys = Vec::new();
 
         for (pubkey, slots_set) in pubkey_to_slot_set {
             let is_empty = self.accounts_index.purge_exact(
                 &pubkey,
-                &slots_set,
+                slots_set,
                 &mut reclaims,
                 &self.account_indexes,
             );
@@ -1079,11 +1083,18 @@ impl AccountsDB {
         let pubkey_to_slot_set: Vec<_> = purges
             .into_iter()
             .map(|(key, (slots_list, _ref_count))| {
-                (key, slots_list.into_iter().map(|(slot, _)| slot).collect())
+                (
+                    key,
+                    slots_list
+                        .into_iter()
+                        .map(|(slot, _)| slot)
+                        .collect::<HashSet<Slot>>(),
+                )
             })
             .collect();
 
-        let reclaims = self.purge_keys_exact(pubkey_to_slot_set);
+        let reclaims = self.purge_keys_exact(&pubkey_to_slot_set);
+
         self.handle_reclaims(&reclaims, None, false, None);
 
         reclaims_time.stop();
@@ -2388,19 +2399,18 @@ impl AccountsDB {
     fn purge_slot_cache_keys(&self, dead_slot: Slot, slot_cache: SlotCache) {
         // Slot purged from cache should not exist in the backing store
         assert!(self.storage.get_slot_stores(dead_slot).is_none());
-        let dead_slots: HashSet<Slot> = vec![dead_slot].into_iter().collect();
         let mut purged_slot_pubkeys: HashSet<(Slot, Pubkey)> = HashSet::new();
-        let pubkey_to_slot_set: Vec<(Pubkey, HashSet<Slot>)> = slot_cache
+        let pubkey_to_slot_set: Vec<(Pubkey, Slot)> = slot_cache
             .iter()
             .map(|account| {
                 purged_slot_pubkeys.insert((dead_slot, *account.key()));
-                (*account.key(), dead_slots.clone())
+                (*account.key(), dead_slot)
             })
             .collect();
         let num_purged_keys = pubkey_to_slot_set.len();
-        let reclaims = self.purge_keys_exact(pubkey_to_slot_set);
+        let reclaims = self.purge_keys_exact(&pubkey_to_slot_set);
         assert_eq!(reclaims.len(), num_purged_keys);
-        self.finalize_dead_slot_removal(&dead_slots, purged_slot_pubkeys, None);
+        self.finalize_dead_slot_removal(std::iter::once(&dead_slot), purged_slot_pubkeys, None);
     }
 
     fn purge_slots(&self, slots: &HashSet<Slot>) {
@@ -3478,9 +3488,9 @@ impl AccountsDB {
         dead_slots
     }
 
-    fn finalize_dead_slot_removal(
-        &self,
-        dead_slots: &HashSet<Slot>,
+    fn finalize_dead_slot_removal<'a>(
+        &'a self,
+        dead_slots_iter: impl Iterator<Item = &'a Slot> + Clone,
         purged_slot_pubkeys: HashSet<(Slot, Pubkey)>,
         mut purged_account_slots: Option<&mut AccountSlots>,
     ) {
@@ -3491,12 +3501,12 @@ impl AccountsDB {
             self.accounts_index.unref_from_storage(&pubkey);
         }
 
-        for slot in dead_slots.iter() {
+        for slot in dead_slots_iter.clone() {
             self.accounts_index.clean_dead_slot(*slot);
         }
         {
             let mut bank_hashes = self.bank_hashes.write().unwrap();
-            for slot in dead_slots.iter() {
+            for slot in dead_slots_iter {
                 bank_hashes.remove(slot);
             }
         }
@@ -3533,7 +3543,11 @@ impl AccountsDB {
                     })
             })
         };
-        self.finalize_dead_slot_removal(dead_slots, purged_slot_pubkeys, purged_account_slots);
+        self.finalize_dead_slot_removal(
+            dead_slots.iter(),
+            purged_slot_pubkeys,
+            purged_account_slots,
+        );
         measure.stop();
         inc_new_counter_info!("clean_stored_dead_slots-ms", measure.as_ms() as usize);
     }
@@ -5492,7 +5506,7 @@ pub mod tests {
 
         let slots: HashSet<Slot> = vec![1].into_iter().collect();
         let purge_keys = vec![(key1, slots)];
-        db.purge_keys_exact(purge_keys);
+        db.purge_keys_exact(&purge_keys);
 
         let account2 = Account::new(3, 0, &key);
         db.store_uncached(2, &[(&key1, &account2)]);
