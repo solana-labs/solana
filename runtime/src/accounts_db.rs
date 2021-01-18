@@ -3885,12 +3885,17 @@ impl AccountsDB {
         X: Versioned + Clone,
     {
         for (key, source_item) in source.iter() {
-            if let Some(dest_item) = dest.get(key) {
-                if dest_item.version() > source_item.version() {
-                    continue;
+            match dest.entry(*key) {
+                std::collections::hash_map::Entry::Occupied(mut dest_item) => {
+                    if dest_item.get_mut().version() <= source_item.version() {
+                        // replace the item
+                        dest_item.insert(source_item.clone());
+                    }
                 }
-            }
-            dest.insert(*key, source_item.clone());
+                std::collections::hash_map::Entry::Vacant(v) => {
+                    v.insert(source_item.clone());
+                }
+            };
         }
     }
 
