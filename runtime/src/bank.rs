@@ -4302,14 +4302,28 @@ impl Bank {
         self.rc.accounts.accounts_db.get_accounts_hash(self.slot)
     }
 
-    pub fn update_accounts_hash(&self) -> Hash {
-        let (hash, total_lamports) = self.rc.accounts.accounts_db.update_accounts_hash(
-            self.slot(),
-            &self.ancestors,
-            self.simple_capitalization_enabled(),
-        );
+    pub fn update_accounts_hash_with_store_option(
+        &self,
+        use_store: bool,
+        debug_verify_store: bool,
+    ) -> Hash {
+        let (hash, total_lamports) = self
+            .rc
+            .accounts
+            .accounts_db
+            .update_accounts_hash_with_store_option(
+                use_store,
+                debug_verify_store,
+                self.slot(),
+                &self.ancestors,
+                self.simple_capitalization_enabled(),
+            );
         assert_eq!(total_lamports, self.capitalization());
         hash
+    }
+
+    pub fn update_accounts_hash(&self) -> Hash {
+        self.update_accounts_hash_with_store_option(false, false)
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
@@ -7943,6 +7957,8 @@ pub(crate) mod tests {
 
     #[test]
     fn test_verify_snapshot_bank() {
+        // fails because there are no stores
+        solana_logger::setup();
         let pubkey = solana_sdk::pubkey::new_rand();
         let (genesis_config, mint_keypair) = create_genesis_config(2_000);
         let bank = Bank::new(&genesis_config);

@@ -147,11 +147,19 @@ type ReclaimResult = (AccountSlots, AppendVecOffsets);
 type StorageFinder<'a> = Box<dyn Fn(Slot, usize) -> Arc<AccountStorageEntry> + 'a>;
 type ShrinkCandidates = HashMap<Slot, HashMap<AppendVecId, Arc<AccountStorageEntry>>>;
 
+type CalculateHashIntermediate = (u64, Hash, u64, u64);
+
 trait Versioned {
     fn version(&self) -> u64;
 }
 
 impl Versioned for (u64, Hash) {
+    fn version(&self) -> u64 {
+        self.0
+    }
+}
+
+impl Versioned for CalculateHashIntermediate {
     fn version(&self) -> u64 {
         self.0
     }
@@ -256,6 +264,18 @@ impl<'a> LoadedAccount<'a> {
             LoadedAccount::Cached((_, cached_account)) => match cached_account {
                 Cow::Owned(cached_account) => cached_account.account,
                 Cow::Borrowed(cached_account) => cached_account.account.clone(),
+            },
+        }
+    }
+
+    pub fn lamports(&self) -> u64 {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => {
+                stored_account_meta.clone_account().lamports
+            }
+            LoadedAccount::Cached((_, cached_account)) => match cached_account {
+                Cow::Owned(cached_account) => cached_account.account.lamports,
+                Cow::Borrowed(cached_account) => cached_account.account.lamports,
             },
         }
     }
@@ -3193,6 +3213,126 @@ impl AccountsDB {
         }
     }
 
+    // get accounts using slots
+    fn get_accounts(
+        &self,
+        slot: Slot,
+        ancestors: &Ancestors,
+        simple_capitalization_enabled: bool,
+    ) -> HashMap<Pubkey, CalculateHashIntermediate> {
+        let mut scanned_slots = HashSet::<Slot>::new();
+
+        scanned_slots.insert(slot);
+
+        for storage_slot in self.storage.all_slots() {
+            if !self.accounts_index.is_root(storage_slot) {
+                continue;
+            }
+
+            scanned_slots.insert(storage_slot);
+        }
+
+        // scan ancestors
+        for ancestor_slot in ancestors.keys() {
+            if scanned_slots.contains(ancestor_slot) {
+                continue;
+            }
+            scanned_slots.insert(*ancestor_slot);
+        }
+
+        // scan all slots
+        let len = AtomicUsize::new(0);
+        let accumulators: Vec<_> = scanned_slots
+            .into_par_iter()
+            .map(|slot| {
+                let accumulator = self.scan_slot(slot, simple_capitalization_enabled);
+                len.fetch_add(accumulator.len(), Ordering::Relaxed);
+                accumulator
+            })
+            .collect();
+
+        let mut account_maps = HashMap::with_capacity(len.load(Ordering::Relaxed));
+        for accumulator in accumulators {
+            for item in accumulator {
+                AccountsDB::merge_array(&mut account_maps, &item);
+            }
+        }
+
+        account_maps
+    }
+
+    fn scan_slot(
+        &self,
+        slot: Slot,
+        simple_capitalization_enabled: bool,
+    ) -> Vec<Vec<(Pubkey, CalculateHashIntermediate)>> {
+        let accumulator: Vec<Vec<(Pubkey, CalculateHashIntermediate)>> = self.scan_account_storage(
+            slot,
+            |loaded_account: LoadedAccount,
+             _store_id: AppendVecId,
+             accum: &mut Vec<(Pubkey, CalculateHashIntermediate)>| {
+                let lamports = loaded_account.lamports();
+                let balance = Self::account_balance_for_capitalization(
+                    lamports,
+                    loaded_account.owner(),
+                    loaded_account.executable(),
+                    simple_capitalization_enabled,
+                );
+
+                accum.push((
+                    *loaded_account.pubkey(),
+                    (
+                        loaded_account.write_version(),
+                        *loaded_account.loaded_hash(),
+                        balance,
+                        lamports,
+                    ),
+                ));
+            },
+        );
+        accumulator
+    }
+
+    // modeled after get_accounts_delta_hash
+    // intended to be faster than calculate_accounts_hash
+    pub fn calculate_accounts_hash_using_store(
+        &self,
+        slot: Slot,
+        ancestors: &Ancestors,
+        simple_capitalization_enabled: bool,
+    ) -> (Hash, u64) {
+        let mut scan = Measure::start("accumulate");
+        let account_maps = self.get_accounts(slot, ancestors, simple_capitalization_enabled);
+        scan.stop();
+
+        let mut zeros = Measure::start("eliminate zeros");
+        let hashes: Vec<_> = account_maps
+            .into_iter()
+            .filter_map(|(pubkey, (_, hash, lamports, original_lamports))| {
+                if original_lamports != 0 {
+                    Some((pubkey, hash, lamports))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        zeros.stop();
+        let hash_total = hashes.len();
+        let mut accumulate = Measure::start("accumulate");
+        let ret = Self::accumulate_account_hashes_and_capitalization(hashes, slot, false);
+
+        accumulate.stop();
+        datapoint_info!(
+            "calculate_accounts_hash_using_store",
+            ("accounts_scan", scan.as_us(), i64),
+            ("hash_accumulate", accumulate.as_us(), i64),
+            ("eliminate_zeros", zeros.as_us(), i64),
+            ("hash_total", hash_total, i64),
+        );
+
+        ret
+    }
+
     fn calculate_accounts_hash(
         &self,
         slot: Slot,
@@ -3298,9 +3438,55 @@ impl AccountsDB {
         ancestors: &Ancestors,
         simple_capitalization_enabled: bool,
     ) -> (Hash, u64) {
-        let (hash, total_lamports) = self
-            .calculate_accounts_hash(slot, ancestors, false, simple_capitalization_enabled)
-            .unwrap();
+        self.update_accounts_hash_with_store_option(
+            false,
+            false,
+            slot,
+            ancestors,
+            simple_capitalization_enabled,
+        )
+    }
+
+    fn calculate_accounts_hash_helper(
+        &self,
+        use_store: bool,
+        slot: Slot,
+        ancestors: &Ancestors,
+        simple_capitalization_enabled: bool,
+    ) -> (Hash, u64) {
+        if use_store {
+            self.calculate_accounts_hash_using_store(slot, ancestors, simple_capitalization_enabled)
+        } else {
+            self.calculate_accounts_hash(slot, ancestors, false, simple_capitalization_enabled)
+                .unwrap()
+        }
+    }
+
+    pub fn update_accounts_hash_with_store_option(
+        &self,
+        use_store: bool,
+        debug_verify_store: bool,
+        slot: Slot,
+        ancestors: &Ancestors,
+        simple_capitalization_enabled: bool,
+    ) -> (Hash, u64) {
+        let (hash, total_lamports) = self.calculate_accounts_hash_helper(
+            use_store,
+            slot,
+            ancestors,
+            simple_capitalization_enabled,
+        );
+        if debug_verify_store {
+            // calculate the other way (store or non-store) and verify results match.
+            let (hash_other, total_lamports_other) = self.calculate_accounts_hash_helper(
+                !use_store,
+                slot,
+                ancestors,
+                simple_capitalization_enabled,
+            );
+            assert_eq!(hash, hash_other);
+            assert_eq!(total_lamports, total_lamports_other);
+        }
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
         bank_hash_info.snapshot_hash = hash;
@@ -3878,6 +4064,25 @@ impl AccountsDB {
             })
             .filter(|snapshot_storage: &SnapshotStorage| !snapshot_storage.is_empty())
             .collect()
+    }
+
+    fn merge_array<X>(dest: &mut HashMap<Pubkey, X>, source: &[(Pubkey, X)])
+    where
+        X: Versioned + Clone,
+    {
+        for (key, source_item) in source.iter() {
+            match dest.entry(*key) {
+                std::collections::hash_map::Entry::Occupied(mut dest_item) => {
+                    if dest_item.get_mut().version() <= source_item.version() {
+                        // replace the item
+                        dest_item.insert(source_item.clone());
+                    }
+                }
+                std::collections::hash_map::Entry::Vacant(v) => {
+                    v.insert(source_item.clone());
+                }
+            };
+        }
     }
 
     fn merge<X>(dest: &mut HashMap<Pubkey, X>, source: &HashMap<Pubkey, X>)
