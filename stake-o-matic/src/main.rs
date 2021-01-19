@@ -621,6 +621,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let notifier = Notifier::default();
     let rpc_client = RpcClient::new(config.json_rpc_url.clone());
 
+    if !config.dry_run && notifier.is_empty() {
+        error!("A notifier must be active with --confirm");
+        process::exit(1);
+    }
+
     let source_stake_balance = validate_source_stake_account(&rpc_client, &config)?;
 
     let epoch_info = rpc_client.get_epoch_info()?;
