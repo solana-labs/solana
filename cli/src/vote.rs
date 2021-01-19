@@ -8,7 +8,7 @@ use crate::{
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{
-    commitment::commitment_arg,
+    commitment::commitment_arg_with_default,
     input_parsers::*,
     input_validators::*,
     keypair::{DefaultSigner, SignerIndex},
@@ -209,7 +209,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL"),
                 )
-                .arg(commitment_arg()),
+                .arg(commitment_arg_with_default("singleGossip")),
         )
         .subcommand(
             SubCommand::with_name("withdraw-from-vote-account")
@@ -494,9 +494,7 @@ pub fn process_create_vote_account(
         }
     }
 
-    let (recent_blockhash, fee_calculator, _) = rpc_client
-        .get_recent_blockhash_with_commitment(config.commitment)?
-        .value;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let (message, _) = resolve_spend_tx_and_check_account_balance(
         rpc_client,
@@ -509,11 +507,7 @@ pub fn process_create_vote_account(
     )?;
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-        &tx,
-        config.commitment,
-        config.send_transaction_config,
-    );
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<SystemError>(result, &config)
 }
 
@@ -536,9 +530,7 @@ pub fn process_vote_authorize(
         (&authorized.pubkey(), "authorized_account".to_string()),
         (new_authorized_pubkey, "new_authorized_pubkey".to_string()),
     )?;
-    let (recent_blockhash, fee_calculator, _) = rpc_client
-        .get_recent_blockhash_with_commitment(config.commitment)?
-        .value;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![vote_instruction::authorize(
         vote_account_pubkey,   // vote account to update
         &authorized.pubkey(),  // current authorized
@@ -556,11 +548,7 @@ pub fn process_vote_authorize(
         &tx.message,
         config.commitment,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-        &tx,
-        config.commitment,
-        config.send_transaction_config,
-    );
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<VoteError>(result, &config)
 }
 
@@ -578,9 +566,7 @@ pub fn process_vote_update_validator(
         (vote_account_pubkey, "vote_account_pubkey".to_string()),
         (&new_identity_pubkey, "new_identity_account".to_string()),
     )?;
-    let (recent_blockhash, fee_calculator, _) = rpc_client
-        .get_recent_blockhash_with_commitment(config.commitment)?
-        .value;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![vote_instruction::update_validator_identity(
         vote_account_pubkey,
         &authorized_withdrawer.pubkey(),
@@ -597,11 +583,7 @@ pub fn process_vote_update_validator(
         &tx.message,
         config.commitment,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-        &tx,
-        config.commitment,
-        config.send_transaction_config,
-    );
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<VoteError>(result, &config)
 }
 
@@ -613,9 +595,7 @@ pub fn process_vote_update_commission(
     withdraw_authority: SignerIndex,
 ) -> ProcessResult {
     let authorized_withdrawer = config.signers[withdraw_authority];
-    let (recent_blockhash, fee_calculator, _) = rpc_client
-        .get_recent_blockhash_with_commitment(config.commitment)?
-        .value;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![vote_instruction::update_commission(
         vote_account_pubkey,
         &authorized_withdrawer.pubkey(),
@@ -632,11 +612,7 @@ pub fn process_vote_update_commission(
         &tx.message,
         config.commitment,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-        &tx,
-        config.commitment,
-        config.send_transaction_config,
-    );
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<VoteError>(result, &config)
 }
 
@@ -733,14 +709,10 @@ pub fn process_withdraw_from_vote_account(
     withdraw_amount: SpendAmount,
     destination_account_pubkey: &Pubkey,
 ) -> ProcessResult {
-    let (recent_blockhash, fee_calculator, _) = rpc_client
-        .get_recent_blockhash_with_commitment(config.commitment)?
-        .value;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let withdraw_authority = config.signers[withdraw_authority];
 
-    let current_balance = rpc_client
-        .get_balance_with_commitment(&vote_account_pubkey, config.commitment)?
-        .value;
+    let current_balance = rpc_client.get_balance(&vote_account_pubkey)?;
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(VoteState::size_of())?;
 
     let lamports = match withdraw_amount {
@@ -773,11 +745,7 @@ pub fn process_withdraw_from_vote_account(
         &transaction.message,
         config.commitment,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-        &transaction,
-        config.commitment,
-        config.send_transaction_config,
-    );
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&transaction);
     log_instruction_custom_error::<VoteError>(result, &config)
 }
 

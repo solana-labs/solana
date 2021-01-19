@@ -10,6 +10,7 @@ use crate::{
 use chrono::{Local, TimeZone};
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
 use solana_clap_utils::{
+    commitment::commitment_arg_with_default,
     fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
     input_parsers::*,
     input_validators::*,
@@ -404,6 +405,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL")
                 )
+                .arg(commitment_arg_with_default("singleGossip")),
         )
         .subcommand(
             SubCommand::with_name("stake-history")
@@ -959,11 +961,7 @@ pub fn process_create_stake_account(
         return_signers(&tx, &config.output_format)
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-            &tx,
-            config.commitment,
-            config.send_transaction_config,
-        );
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
         log_instruction_custom_error::<SystemError>(result, &config)
     }
 }
@@ -1033,11 +1031,7 @@ pub fn process_stake_authorize(
             &tx.message,
             config.commitment,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-            &tx,
-            config.commitment,
-            config.send_transaction_config,
-        );
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
         log_instruction_custom_error::<StakeError>(result, &config)
     }
 }
@@ -1096,11 +1090,7 @@ pub fn process_deactivate_stake_account(
             &tx.message,
             config.commitment,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-            &tx,
-            config.commitment,
-            config.send_transaction_config,
-        );
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
         log_instruction_custom_error::<StakeError>(result, &config)
     }
 }
@@ -1168,11 +1158,7 @@ pub fn process_withdraw_stake(
             &tx.message,
             config.commitment,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-            &tx,
-            config.commitment,
-            config.send_transaction_config,
-        );
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
         log_instruction_custom_error::<SystemError>(result, &config)
     }
 }
@@ -1311,11 +1297,7 @@ pub fn process_split_stake(
             &tx.message,
             config.commitment,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-            &tx,
-            config.commitment,
-            config.send_transaction_config,
-        );
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
         log_instruction_custom_error::<StakeError>(result, &config)
     }
 }
@@ -1479,11 +1461,7 @@ pub fn process_stake_set_lockup(
             &tx.message,
             config.commitment,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-            &tx,
-            config.commitment,
-            config.send_transaction_config,
-        );
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
         log_instruction_custom_error::<StakeError>(result, &config)
     }
 }
@@ -1792,23 +1770,15 @@ pub fn process_delegate_stake(
     if !sign_only {
         // Sanity check the vote account to ensure it is attached to a validator that has recently
         // voted at the tip of the ledger
-        let vote_account = rpc_client
-            .get_account_with_commitment(vote_account_pubkey, config.commitment)
+        let vote_account_data = rpc_client
+            .get_account(vote_account_pubkey)
             .map_err(|_| {
                 CliError::RpcRequestError(format!(
                     "Vote account not found: {}",
                     vote_account_pubkey
                 ))
-            })?;
-        let vote_account_data = if let Some(account) = vote_account.value {
-            account.data
-        } else {
-            return Err(CliError::RpcRequestError(format!(
-                "Vote account not found: {}",
-                vote_account_pubkey
-            ))
-            .into());
-        };
+            })?
+            .data;
 
         let vote_state = VoteState::deserialize(&vote_account_data).map_err(|_| {
             CliError::RpcRequestError(
@@ -1888,11 +1858,7 @@ pub fn process_delegate_stake(
             &tx.message,
             config.commitment,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-            &tx,
-            config.commitment,
-            config.send_transaction_config,
-        );
+        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
         log_instruction_custom_error::<StakeError>(result, &config)
     }
 }

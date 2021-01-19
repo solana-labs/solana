@@ -63,7 +63,8 @@ fn full_battery_tests(
     run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new(test_validator.rpc_url());
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
     let json_rpc_url = test_validator.rpc_url();
 
     let mut config_payer = CliConfig::recent_for_tests();
@@ -228,7 +229,8 @@ fn test_create_account_with_seed() {
     let config = CliConfig::recent_for_tests();
 
     // Setup accounts
-    let rpc_client = RpcClient::new(test_validator.rpc_url());
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
     request_and_confirm_airdrop(
         &rpc_client,
         &faucet_addr,

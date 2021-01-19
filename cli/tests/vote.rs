@@ -25,7 +25,8 @@ fn test_vote_authorize_and_withdraw() {
     run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new(test_validator.rpc_url());
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
     let default_signer = Keypair::new();
 
     let mut config = CliConfig::recent_for_tests();
@@ -55,9 +56,7 @@ fn test_vote_authorize_and_withdraw() {
     };
     process_command(&config).unwrap();
     let vote_account = rpc_client
-        .get_account_with_commitment(&vote_account_keypair.pubkey(), CommitmentConfig::recent())
-        .unwrap()
-        .value
+        .get_account(&vote_account_keypair.pubkey())
         .unwrap();
     let vote_state: VoteStateVersions = vote_account.state().unwrap();
     let authorized_withdrawer = vote_state.convert_to_current().authorized_withdrawer;
@@ -95,9 +94,7 @@ fn test_vote_authorize_and_withdraw() {
     };
     process_command(&config).unwrap();
     let vote_account = rpc_client
-        .get_account_with_commitment(&vote_account_keypair.pubkey(), CommitmentConfig::recent())
-        .unwrap()
-        .value
+        .get_account(&vote_account_keypair.pubkey())
         .unwrap();
     let vote_state: VoteStateVersions = vote_account.state().unwrap();
     let authorized_withdrawer = vote_state.convert_to_current().authorized_withdrawer;

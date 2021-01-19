@@ -32,7 +32,8 @@ fn test_stake_delegation_force() {
     run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new(test_validator.rpc_url());
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
     let default_signer = Keypair::new();
 
     let mut config = CliConfig::recent_for_tests();
@@ -120,7 +121,8 @@ fn test_seed_stake_delegation_and_deactivation() {
     run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new(test_validator.rpc_url());
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
 
     let validator_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let mut config_validator = CliConfig::recent_for_tests();
@@ -199,7 +201,8 @@ fn test_stake_delegation_and_deactivation() {
     run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new(test_validator.rpc_url());
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
     let validator_keypair = Keypair::new();
 
     let mut config_validator = CliConfig::recent_for_tests();
@@ -274,7 +277,8 @@ fn test_offline_stake_delegation_and_deactivation() {
     run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new(test_validator.rpc_url());
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
 
     let mut config_validator = CliConfig::recent_for_tests();
     config_validator.json_rpc_url = test_validator.rpc_url();
@@ -406,7 +410,8 @@ fn test_nonced_stake_delegation_and_deactivation() {
     run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new(test_validator.rpc_url());
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
 
     let config_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let mut config = CliConfig::recent_for_tests();
@@ -520,7 +525,8 @@ fn test_stake_authorize() {
     run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new(test_validator.rpc_url());
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
     let default_signer = Keypair::new();
 
     let mut config = CliConfig::recent_for_tests();
@@ -588,11 +594,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    let stake_account = rpc_client
-        .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent())
-        .unwrap()
-        .value
-        .unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
     let stake_state: StakeState = stake_account.state().unwrap();
     let current_authority = match stake_state {
         StakeState::Initialized(meta) => meta.authorized.staker,
@@ -619,11 +621,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    let stake_account = rpc_client
-        .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent())
-        .unwrap()
-        .value
-        .unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
     let stake_state: StakeState = stake_account.state().unwrap();
     let (current_staker, current_withdrawer) = match stake_state {
         StakeState::Initialized(meta) => (meta.authorized.staker, meta.authorized.withdrawer),
@@ -645,11 +643,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    let stake_account = rpc_client
-        .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent())
-        .unwrap()
-        .value
-        .unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
     let stake_state: StakeState = stake_account.state().unwrap();
     let current_authority = match stake_state {
         StakeState::Initialized(meta) => meta.authorized.staker,
@@ -660,10 +654,7 @@ fn test_stake_authorize() {
     // Offline assignment of new nonced stake authority
     let nonced_authority = Keypair::new();
     let nonced_authority_pubkey = nonced_authority.pubkey();
-    let (blockhash, _, _) = rpc_client
-        .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
-        .unwrap()
-        .value;
+    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     config_offline.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorizations: vec![(StakeAuthorize::Staker, nonced_authority_pubkey, 0)],
@@ -689,11 +680,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    let stake_account = rpc_client
-        .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent())
-        .unwrap()
-        .value
-        .unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
     let stake_state: StakeState = stake_account.state().unwrap();
     let current_authority = match stake_state {
         StakeState::Initialized(meta) => meta.authorized.staker,
@@ -758,11 +745,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    let stake_account = rpc_client
-        .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent())
-        .unwrap()
-        .value
-        .unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
     let stake_state: StakeState = stake_account.state().unwrap();
     let current_authority = match stake_state {
         StakeState::Initialized(meta) => meta.authorized.staker,
@@ -792,7 +775,8 @@ fn test_stake_authorize_with_fee_payer() {
     run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new(test_validator.rpc_url());
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
     let default_signer = Keypair::new();
     let default_pubkey = default_signer.pubkey();
 
@@ -870,10 +854,7 @@ fn test_stake_authorize_with_fee_payer() {
     check_recent_balance(100_000 - SIG_FEE - SIG_FEE, &rpc_client, &payer_pubkey);
 
     // Assign authority with offline fee payer
-    let (blockhash, _, _) = rpc_client
-        .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
-        .unwrap()
-        .value;
+    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     config_offline.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorizations: vec![(StakeAuthorize::Staker, payer_pubkey, 0)],
@@ -916,7 +897,8 @@ fn test_stake_split() {
     run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new(test_validator.rpc_url());
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
     let default_signer = Keypair::new();
     let offline_signer = Keypair::new();
 
@@ -1059,7 +1041,8 @@ fn test_stake_set_lockup() {
     run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new(test_validator.rpc_url());
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
     let default_signer = Keypair::new();
     let offline_signer = Keypair::new();
 
@@ -1142,11 +1125,7 @@ fn test_stake_set_lockup() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    let stake_account = rpc_client
-        .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent())
-        .unwrap()
-        .value
-        .unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
     let stake_state: StakeState = stake_account.state().unwrap();
     let current_lockup = match stake_state {
         StakeState::Initialized(meta) => meta.lockup,
@@ -1197,11 +1176,7 @@ fn test_stake_set_lockup() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    let stake_account = rpc_client
-        .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent())
-        .unwrap()
-        .value
-        .unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
     let stake_state: StakeState = stake_account.state().unwrap();
     let current_lockup = match stake_state {
         StakeState::Initialized(meta) => meta.lockup,
@@ -1294,11 +1269,7 @@ fn test_stake_set_lockup() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    let stake_account = rpc_client
-        .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent())
-        .unwrap()
-        .value
-        .unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
     let stake_state: StakeState = stake_account.state().unwrap();
     let current_lockup = match stake_state {
         StakeState::Initialized(meta) => meta.lockup,
@@ -1322,7 +1293,8 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new(test_validator.rpc_url());
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
     let mut config = CliConfig::recent_for_tests();
     let default_signer = keypair_from_seed(&[1u8; 32]).unwrap();
     config.signers = vec![&default_signer];
