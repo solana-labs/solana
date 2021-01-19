@@ -75,12 +75,16 @@ fn get_twilio_config() -> Result<Option<TwilioWebHook>, String> {
     Ok(Some(config))
 }
 
+enum NotificationType {
+    Discord(String),
+    Slack(String),
+    Telegram(TelegramWebHook),
+    Twilio(TwilioWebHook),
+}
+
 pub struct Notifier {
     client: Client,
-    discord_webhook: Option<String>,
-    slack_webhook: Option<String>,
-    telegram_webhook: Option<TelegramWebHook>,
-    twilio_webhook: Option<TwilioWebHook>,
+    notifiers: Vec<NotificationType>,
 }
 
 impl Notifier {
@@ -91,98 +95,102 @@ impl Notifier {
     pub fn new(env_prefix: &str) -> Self {
         info!("Initializing {}Notifier", env_prefix);
 
-        let discord_webhook = env::var(format!("{}DISCORD_WEBHOOK", env_prefix))
-            .map_err(|_| {
-                info!("Discord notifications disabled");
-            })
-            .ok();
-        let slack_webhook = env::var(format!("{}SLACK_WEBHOOK", env_prefix))
-            .map_err(|_| {
-                info!("Slack notifications disabled");
-            })
-            .ok();
+        let mut notifiers = vec![];
 
-        let telegram_webhook = if let (Ok(bot_token), Ok(chat_id)) = (
+        if let Ok(webhook) = env::var(format!("{}DISCORD_WEBHOOK", env_prefix)) {
+            notifiers.push(NotificationType::Discord(webhook));
+        }
+        if let Ok(webhook) = env::var(format!("{}SLACK_WEBHOOK", env_prefix)) {
+            notifiers.push(NotificationType::Slack(webhook));
+        }
+
+        if let (Ok(bot_token), Ok(chat_id)) = (
             env::var(format!("{}TELEGRAM_BOT_TOKEN", env_prefix)),
             env::var(format!("{}TELEGRAM_CHAT_ID", env_prefix)),
         ) {
-            Some(TelegramWebHook { bot_token, chat_id })
-        } else {
-            info!("Telegram notifications disabled");
-            None
-        };
-        let twilio_webhook = get_twilio_config()
-            .map_err(|err| panic!("Twilio config error: {}", err))
-            .unwrap();
+            notifiers.push(NotificationType::Telegram(TelegramWebHook {
+                bot_token,
+                chat_id,
+            }));
+        }
+
+        if let Ok(Some(webhook)) = get_twilio_config() {
+            notifiers.push(NotificationType::Twilio(webhook));
+        }
+
+        info!("{} notifiers", notifiers.len());
 
         Notifier {
             client: Client::new(),
-            discord_webhook,
-            slack_webhook,
-            telegram_webhook,
-            twilio_webhook,
+            notifiers,
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.notifiers.is_empty()
+    }
+
     pub fn send(&self, msg: &str) {
-        if let Some(webhook) = &self.discord_webhook {
-            for line in msg.split('\n') {
-                // Discord rate limiting is aggressive, limit to 1 message a second
-                sleep(Duration::from_millis(1000));
+        for notifier in &self.notifiers {
+            match notifier {
+                NotificationType::Discord(webhook) => {
+                    for line in msg.split('\n') {
+                        // Discord rate limiting is aggressive, limit to 1 message a second
+                        sleep(Duration::from_millis(1000));
 
-                info!("Sending {}", line);
-                let data = json!({ "content": line });
+                        info!("Sending {}", line);
+                        let data = json!({ "content": line });
 
-                loop {
-                    let response = self.client.post(webhook).json(&data).send();
+                        loop {
+                            let response = self.client.post(webhook).json(&data).send();
 
-                    if let Err(err) = response {
-                        warn!("Failed to send Discord message: \"{}\": {:?}", line, err);
-                        break;
-                    } else if let Ok(response) = response {
-                        info!("response status: {}", response.status());
-                        if response.status() == StatusCode::TOO_MANY_REQUESTS {
-                            warn!("rate limited!...");
-                            warn!("response text: {:?}", response.text());
-                            sleep(Duration::from_secs(2));
-                        } else {
-                            break;
+                            if let Err(err) = response {
+                                warn!("Failed to send Discord message: \"{}\": {:?}", line, err);
+                                break;
+                            } else if let Ok(response) = response {
+                                info!("response status: {}", response.status());
+                                if response.status() == StatusCode::TOO_MANY_REQUESTS {
+                                    warn!("rate limited!...");
+                                    warn!("response text: {:?}", response.text());
+                                    sleep(Duration::from_secs(2));
+                                } else {
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
-            }
-        }
+                NotificationType::Slack(webhook) => {
+                    let data = json!({ "text": msg });
+                    if let Err(err) = self.client.post(webhook).json(&data).send() {
+                        warn!("Failed to send Slack message: {:?}", err);
+                    }
+                }
 
-        if let Some(webhook) = &self.slack_webhook {
-            let data = json!({ "text": msg });
-            if let Err(err) = self.client.post(webhook).json(&data).send() {
-                warn!("Failed to send Slack message: {:?}", err);
-            }
-        }
+                NotificationType::Telegram(TelegramWebHook { chat_id, bot_token }) => {
+                    let data = json!({ "chat_id": chat_id, "text": msg });
+                    let url = format!("https://api.telegram.org/bot{}/sendMessage", bot_token);
 
-        if let Some(TelegramWebHook { chat_id, bot_token }) = &self.telegram_webhook {
-            let data = json!({ "chat_id": chat_id, "text": msg });
-            let url = format!("https://api.telegram.org/bot{}/sendMessage", bot_token);
+                    if let Err(err) = self.client.post(&url).json(&data).send() {
+                        warn!("Failed to send Telegram message: {:?}", err);
+                    }
+                }
 
-            if let Err(err) = self.client.post(&url).json(&data).send() {
-                warn!("Failed to send Telegram message: {:?}", err);
-            }
-        }
-
-        if let Some(TwilioWebHook {
-            account,
-            token,
-            to,
-            from,
-        }) = &self.twilio_webhook
-        {
-            let url = format!(
-                "https://{}:{}@api.twilio.com/2010-04-01/Accounts/{}/Messages.json",
-                account, token, account
-            );
-            let params = [("To", to), ("From", from), ("Body", &msg.to_string())];
-            if let Err(err) = self.client.post(&url).form(&params).send() {
-                warn!("Failed to send Twilio message: {:?}", err);
+                NotificationType::Twilio(TwilioWebHook {
+                    account,
+                    token,
+                    to,
+                    from,
+                }) => {
+                    let url = format!(
+                        "https://{}:{}@api.twilio.com/2010-04-01/Accounts/{}/Messages.json",
+                        account, token, account
+                    );
+                    let params = [("To", to), ("From", from), ("Body", &msg.to_string())];
+                    if let Err(err) = self.client.post(&url).form(&params).send() {
+                        warn!("Failed to send Twilio message: {:?}", err);
+                    }
+                }
             }
         }
     }
