@@ -732,8 +732,12 @@ impl JsonRpcRequestProcessor {
                     .runtime_handle
                     .block_on(
                         bigtable_ledger_storage
-                            .get_confirmed_blocks(start_slot, (end_slot - start_slot) as usize),
+                            .get_confirmed_blocks(start_slot, (end_slot - start_slot) as usize + 1), // increment limit by 1 to ensure returned range is inclusive of both start_slot and end_slot
                     )
+                    .map(|mut bigtable_blocks| {
+                        bigtable_blocks.retain(|&slot| slot <= end_slot);
+                        bigtable_blocks
+                    })
                     .unwrap_or_else(|_| vec![]));
             }
         }
