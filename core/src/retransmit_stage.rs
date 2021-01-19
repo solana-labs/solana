@@ -270,7 +270,7 @@ fn retransmit(
     let mut epoch_fetch = Measure::start("retransmit_epoch_fetch");
     let (r_bank, root_bank) = {
         let bank_forks = bank_forks.read().unwrap();
-        (bank_forks.working_bank(), bank_forks.root_bank())
+        (bank_forks.working_bank(), bank_forks.root_bank().clone())
     };
     let bank_epoch = r_bank.get_leader_schedule_epoch(r_bank.slot());
     epoch_fetch.stop();
