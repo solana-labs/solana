@@ -934,9 +934,7 @@ fn process_balance(
     } else {
         config.pubkey()?
     };
-    let balance = rpc_client
-        .get_balance_with_commitment(&pubkey, config.commitment)?
-        .value;
+    let balance = rpc_client.get_balance(&pubkey)?;
     Ok(build_balance_message(balance, use_lamports_unit, true))
 }
 
@@ -1102,11 +1100,7 @@ fn process_transfer(
         let result = if no_wait {
             rpc_client.send_transaction(&tx)
         } else {
-            rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-                &tx,
-                config.commitment,
-                config.send_transaction_config,
-            )
+            rpc_client.send_and_confirm_transaction_with_spinner(&tx)
         };
         log_instruction_custom_error::<SystemError>(result, &config)
     }
@@ -1755,8 +1749,7 @@ pub fn request_and_confirm_airdrop(
         }
     }?;
     let tx = keypair.airdrop_transaction();
-    let result =
-        rpc_client.send_and_confirm_transaction_with_spinner_and_commitment(&tx, config.commitment);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<SystemError>(result, &config)
 }
 
