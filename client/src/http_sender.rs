@@ -86,8 +86,8 @@ impl RpcSender for HttpSender {
                                         }
                                     },
                                     rpc_custom_error::JSON_RPC_SERVER_ERROR_NODE_UNHEALTHLY => {
-                                        match serde_json::from_value::<rpc_custom_error::RpcNodeUnhealthyErrorData>(json["error"]["data"].clone()) {
-                                            Ok(rpc_custom_error::RpcNodeUnhealthyErrorData { num_slots_behind}) => RpcResponseErrorData::NodeUnhealthy {num_slots_behind},
+                                        match serde_json::from_value::<rpc_custom_error::NodeUnhealthyErrorData>(json["error"]["data"].clone()) {
+                                            Ok(rpc_custom_error::NodeUnhealthyErrorData {num_slots_behind}) => RpcResponseErrorData::NodeUnhealthy {num_slots_behind},
                                             Err(_err) => {
                                                 RpcResponseErrorData::Empty
                                             }
