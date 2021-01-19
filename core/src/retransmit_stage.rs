@@ -252,7 +252,7 @@ fn enable_turbine_retransmit_peers_patch(shred_slot: Slot, root_bank: &Bank) -> 
             let epoch_schedule = root_bank.epoch_schedule();
             let feature_epoch = epoch_schedule.get_epoch(feature_slot);
             let shred_epoch = epoch_schedule.get_epoch(shred_slot);
-            feature_epoch + 1 < shred_epoch
+            feature_epoch < shred_epoch
         }
     }
 }
