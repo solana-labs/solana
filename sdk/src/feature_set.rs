@@ -172,12 +172,8 @@ lazy_static! {
         (limit_cpi_loader_invoke::id(), "Loader not authorized via CPI"),
         (use_loaded_program_accounts::id(), "Use loaded program accounts"),
         (abort_on_all_cpi_failures::id(), "Abort on all CPI failures"),
-<<<<<<< HEAD
         (warp_timestamp::id(), "warp timestamp to current, adjust bounding to 50% #14532"),
-=======
-        (use_loaded_executables::id(), "Use loaded executable accounts"),
         (turbine_retransmit_peers_patch::id(), "turbine retransmit peers patch #14631"),
->>>>>>> c6ae0667e... feature gates turbine retransmit peers patch (#14631)
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
