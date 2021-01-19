@@ -81,6 +81,7 @@ use std::{
         mpsc::{channel, Receiver, Sender},
         Arc, Mutex, RwLock,
     },
+    time::Duration,
 };
 use tokio::runtime;
 
@@ -115,6 +116,7 @@ pub struct JsonRpcConfig {
     pub max_multiple_accounts: Option<usize>,
     pub account_indexes: HashSet<AccountIndex>,
     pub rpc_threads: usize,
+    pub rpc_bigtable_timeout: Option<Duration>,
 }
 
 #[derive(Clone)]
@@ -738,7 +740,12 @@ impl JsonRpcRequestProcessor {
                         bigtable_blocks.retain(|&slot| slot <= end_slot);
                         bigtable_blocks
                     })
-                    .unwrap_or_else(|_| vec![]));
+                    .map_err(|_| {
+                        Error::invalid_params(
+                            "BigTable query failed (maybe timeout due to too large range?)"
+                                .to_string(),
+                        )
+                    })?);
             }
         }
 

@@ -297,6 +297,7 @@ impl JsonRpcService {
                 runtime
                     .block_on(solana_storage_bigtable::LedgerStorage::new(
                         !config.enable_bigtable_ledger_upload,
+                        config.rpc_bigtable_timeout,
                     ))
                     .map(|bigtable_ledger_storage| {
                         info!("BigTable ledger storage initialized");
