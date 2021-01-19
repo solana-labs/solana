@@ -15,7 +15,7 @@ use rayon::slice::ParallelSliceMut;
 use solana_sdk::{
     account::Account,
     account_utils::StateMut,
-    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+    bpf_loader_upgradeable::{self, get_upgraded_program_ids, UpgradeableLoaderState},
     clock::{Epoch, Slot},
     feature_set::{self, FeatureSet},
     fee_calculator::{FeeCalculator, FeeConfig},
@@ -774,7 +774,11 @@ impl Accounts {
             Err(TransactionError::SanitizeFailure) => (),
             Err(TransactionError::AccountLoadedTwice) => (),
             _ => {
-                let (writable_keys, readonly_keys) = &tx.message().get_account_keys_by_lock_type();
+                let (mut writable_keys, readonly_keys) =
+                    tx.message().get_account_keys_by_lock_type();
+                if let Some(mut keys) = get_upgraded_program_ids(&tx.message).unwrap_or_default() {
+                    writable_keys.append(&mut keys);
+                }
                 for k in writable_keys {
                     locks.remove(k);
                 }
@@ -817,7 +821,15 @@ impl Accounts {
                     return Err(TransactionError::AccountLoadedTwice);
                 }
 
-                Ok(tx.message().get_account_keys_by_lock_type())
+                let (mut writable_keys, readonly_keys) =
+                    tx.message().get_account_keys_by_lock_type();
+                if let Some(mut keys) = get_upgraded_program_ids(&tx.message)
+                    .map_err(|_| TransactionError::CannotInvokeAndUpgrade)?
+                {
+                    writable_keys.append(&mut keys);
+                }
+
+                Ok((writable_keys, readonly_keys))
             })
             .collect();
         let mut account_locks = &mut self.account_locks.lock().unwrap();
@@ -831,7 +843,7 @@ impl Accounts {
             .collect()
     }
 
-    /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
+    /// Once accounts are unlocked, new transactions that modify the state can enter the pipeline
     pub fn unlock_accounts(
         &self,
         txs: &[Transaction],

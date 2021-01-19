@@ -92,6 +92,10 @@ pub enum TransactionError {
 
     #[error("Transactions are currently disabled due to cluster maintenance")]
     ClusterMaintenance,
+
+    /// Cannot invoke and upgrade a program in the same transaction
+    #[error("Cannot invoke and upgrade a program in the same transaction")]
+    CannotInvokeAndUpgrade,
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;
