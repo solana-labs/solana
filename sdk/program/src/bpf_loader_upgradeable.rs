@@ -11,12 +11,10 @@
 use crate::{
     instruction::{AccountMeta, Instruction, InstructionError},
     loader_upgradeable_instruction::UpgradeableLoaderInstruction,
-    message::Message,
     pubkey::Pubkey,
     system_instruction, sysvar,
 };
 use bincode::serialized_size;
-use thiserror::Error;
 
 crate::declare_id!("BPFLoaderUpgradeab1e11111111111111111111111");
 
@@ -83,13 +81,6 @@ impl UpgradeableLoaderState {
     pub fn programdata_data_offset() -> Result<usize, InstructionError> {
         Self::programdata_len(0)
     }
-}
-
-#[derive(Error, Debug, Clone, PartialEq)]
-pub enum UpgradeableLoaderError {
-    /// Cannot invoke and upgrade a program in the same transaction
-    #[error("Cannot invoke and upgrade a program in the same transaction")]
-    CannotInvokeAndUpgrade,
 }
 
 /// Returns the instructions required to initialize a Buffer account.
@@ -191,7 +182,7 @@ pub fn upgrade(
         &UpgradeableLoaderInstruction::Upgrade,
         vec![
             AccountMeta::new(programdata_address, false),
-            AccountMeta::new_readonly(*program_address, false),
+            AccountMeta::new(*program_address, false),
             AccountMeta::new(*buffer_address, false),
             AccountMeta::new(*spill_address, false),
             AccountMeta::new_readonly(sysvar::rent::id(), false),
@@ -202,41 +193,7 @@ pub fn upgrade(
 }
 
 pub fn is_upgrade_instruction(instruction_data: &[u8]) -> bool {
-    instruction_data[0] == 3
-}
-
-pub fn get_upgraded_program_ids(
-    message: &Message,
-) -> Result<Option<Vec<&Pubkey>>, UpgradeableLoaderError> {
-    pub const PROGRAM_ID_INDEX_IN_UPGRADE_INSTRUCTION: usize = 1;
-    let program_ids = message.program_ids();
-    let mut upgraded_ids = vec![];
-    for instruction in &message.instructions {
-        if let Some(&program_id) = &message
-            .account_keys
-            .get(instruction.program_id_index as usize)
-        {
-            if id() == program_id && is_upgrade_instruction(&instruction.data) {
-                if let Some(i) = instruction
-                    .accounts
-                    .get(PROGRAM_ID_INDEX_IN_UPGRADE_INSTRUCTION)
-                {
-                    if let Some(key) = message.account_keys.get(*i as usize) {
-                        if program_ids.contains(&key) {
-                            // Invalid message, invoke and upgrade of the same program not supported
-                            return Err(UpgradeableLoaderError::CannotInvokeAndUpgrade);
-                        }
-                        upgraded_ids.push(key);
-                    }
-                }
-            }
-        }
-    }
-    if upgraded_ids.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(upgraded_ids))
-    }
+    3 == instruction_data[0]
 }
 
 /// Returns the instructions required to set a buffers's authority.
@@ -332,54 +289,6 @@ mod tests {
             is_upgrade_instruction(
                 &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap()
             )
-        );
-    }
-
-    #[test]
-    fn test_invoke_and_upgrade() {
-        let program_id = Pubkey::new_unique();
-        let buffer_pubkey = Pubkey::new_unique();
-        let authority_pubkey = Pubkey::new_unique();
-        let mint_pubkey = Pubkey::new_unique();
-
-        let message = Message::new(
-            &deploy_with_max_program_len(
-                &mint_pubkey,
-                &program_id,
-                &buffer_pubkey,
-                Some(&mint_pubkey),
-                0,
-                0,
-            )
-            .unwrap(),
-            Some(&mint_pubkey),
-        );
-        assert_eq!(Ok(None), get_upgraded_program_ids(&message));
-
-        let message = Message::new(
-            &[upgrade(
-                &program_id,
-                &buffer_pubkey,
-                &authority_pubkey,
-                &mint_pubkey,
-            )],
-            Some(&mint_pubkey),
-        );
-        assert_eq!(
-            Ok(Some(vec![&program_id])),
-            get_upgraded_program_ids(&message)
-        );
-
-        let message = Message::new(
-            &[
-                upgrade(&program_id, &buffer_pubkey, &authority_pubkey, &mint_pubkey),
-                Instruction::new(program_id, &[0u8; 0], vec![]),
-            ],
-            Some(&mint_pubkey),
-        );
-        assert_eq!(
-            Err(UpgradeableLoaderError::CannotInvokeAndUpgrade),
-            get_upgraded_program_ids(&message)
         );
     }
 }

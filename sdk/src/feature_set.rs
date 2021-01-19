@@ -142,6 +142,10 @@ pub mod turbine_retransmit_peers_patch {
     solana_sdk::declare_id!("5Lu3JnWSFwRYpXzwDMkanWSk6XqSuF2i5fpnVhzB5CTc");
 }
 
+pub mod prevent_upgrade_and_invoke {
+    solana_sdk::declare_id!("BiNjYd8jCYDgAwMqP91uwZs6skWpuHtKrZbckuKESs8N");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -179,6 +183,7 @@ lazy_static! {
         (abort_on_all_cpi_failures::id(), "Abort on all CPI failures"),
         (use_loaded_executables::id(), "Use loaded executable accounts"),
         (turbine_retransmit_peers_patch::id(), "turbine retransmit peers patch #14631"),
+        (prevent_upgrade_and_invoke::id(), "Prevent upgrade and invoke in same tx batch"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
