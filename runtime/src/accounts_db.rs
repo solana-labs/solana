@@ -2140,12 +2140,21 @@ impl AccountsDB {
 
         // scan all slots
         let len = AtomicUsize::new(0);
+        let num_threads = std::cmp::max(2, num_cpus::get() / 4);
+        let num_units_of_work = num_threads * 100;
+        let chunk_size = std::cmp::max(1, scanned_slots.len() / num_units_of_work);
+        let scanned_slots: Vec<Slot> = scanned_slots.into_iter().collect();
+        let scanned_slots: Vec<Vec<Slot>> = scanned_slots.chunks(chunk_size).map(|x| x.to_vec()).collect();
         let accumulators: Vec<_> = scanned_slots
             .into_par_iter()
-            .map(|slot| {
-                let accumulator = self.scan_slot(slot, simple_capitalization_enabled);
-                len.fetch_add(accumulator.len(), Ordering::Relaxed);
-                accumulator
+            .map(|slots| {
+                let mut master_accumulator: Vec<Vec<(Pubkey, CalculateHashIntermediate)>> = Vec::new();
+                for slot in slots {
+                    let accumulator = self.scan_slot(slot, simple_capitalization_enabled);
+                    master_accumulator.extend(accumulator);
+                }
+                len.fetch_add(master_accumulator.len(), Ordering::Relaxed);
+                master_accumulator
             })
             .collect();
 
