@@ -1085,8 +1085,9 @@ impl ClusterInfo {
         // deque, or recent vote which has expired before getting enough
         // confirmations.
         // If all votes are still in the tower, add a new vote-index. If more
-        // than one vote is evicted, the one with most recent wallclock is
-        // returned because that had got fewer confirmations.
+        // than one vote is evicted, the oldest one by wallclock is returned in
+        // order to allow more recent votes more time to propagate through
+        // gossip.
         // TODO: When there are more than one vote evicted from the tower, only
         // one crds vote is overwritten here. Decide what to do with the rest.
         let mut num_crds_votes = 0;
@@ -1117,7 +1118,7 @@ impl ClusterInfo {
                         _ => panic!("this should not happen!"),
                     }
                 })
-                .max() // Take the evicted vote with the most recent wallclock.
+                .min() // Boot the oldest evicted vote by wallclock.
                 .map(|(_ /*wallclock*/, ix)| ix)
         };
         let vote_index = vote_index.unwrap_or(num_crds_votes);
