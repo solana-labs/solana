@@ -295,6 +295,28 @@ fn get_stake_account(
         .map(|stake_state| (account.lamports, stake_state))
 }
 
+fn retry_rpc_operation<T, F>(mut retries: usize, op: F) -> client_error::Result<T>
+where
+    F: Fn() -> client_error::Result<T>,
+{
+    loop {
+        let result = op();
+
+        if let Err(client_error::ClientError {
+            kind: client_error::ClientErrorKind::Reqwest(ref reqwest_error),
+            ..
+        }) = result
+        {
+            if reqwest_error.is_timeout() && retries > 0 {
+                info!("RPC request timeout, {} retries remaining", retries);
+                retries -= 1;
+                continue;
+            }
+        }
+        return result;
+    }
+}
+
 /// Split validators into quality/poor lists based on their block production over the given `epoch`
 fn classify_block_producers(
     rpc_client: &RpcClient,
@@ -349,8 +371,11 @@ fn classify_block_producers(
                 "".to_string()
             }
         );
-        confirmed_blocks.push(rpc_client.get_confirmed_blocks(next_slot, Some(last_slot))?);
-        next_slot += LONGTERM_STORAGE_STEP;
+
+        confirmed_blocks.push(retry_rpc_operation(10, || {
+            rpc_client.get_confirmed_blocks(next_slot, Some(last_slot))
+        })?);
+        next_slot = last_slot + 1;
     }
     let confirmed_blocks: HashSet<Slot> = confirmed_blocks.into_iter().flatten().collect();
 
