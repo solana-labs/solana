@@ -1352,13 +1352,6 @@ impl Bank {
                     }
                 }
             }
-            datapoint_info!(
-                "bank-timestamp-correction",
-                ("slot", self.slot(), i64),
-                ("from_genesis", self.unix_timestamp_from_genesis(), i64),
-                ("corrected", unix_timestamp, i64),
-                ("ancestor_timestamp", ancestor_timestamp, i64),
-            );
         }
         let epoch_start_timestamp = if self
             .feature_set
@@ -1891,14 +1884,6 @@ impl Bank {
             epoch_start_timestamp,
         );
         get_timestamp_estimate_time.stop();
-        datapoint_info!(
-            "bank-timestamp",
-            (
-                "get_timestamp_estimate_us",
-                get_timestamp_estimate_time.as_us(),
-                i64
-            ),
-        );
         stake_weighted_timestamp
     }
 
@@ -3104,8 +3089,8 @@ impl Bank {
         self.increment_transaction_count(tx_count);
         self.increment_signature_count(signature_count);
 
-        inc_new_counter_info!("bank-process_transactions-txs", tx_count as usize);
-        inc_new_counter_info!("bank-process_transactions-sigs", signature_count as usize);
+        //inc_new_counter_info!("bank-process_transactions-txs", tx_count as usize);
+        //inc_new_counter_info!("bank-process_transactions-sigs", signature_count as usize);
 
         if executed
             .iter()
