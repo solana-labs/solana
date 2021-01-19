@@ -152,13 +152,7 @@ impl BigTableConnection {
                         )?;
 
                     if let Some(timeout) = timeout {
-                        if read_only {
-                            // apply timeout only when thre is no write queries!
-                            endpoint.timeout(timeout)
-                        } else {
-                            warn!("BigTableConnection's requested timeout configuration is ignored because it's not read-only.");
-                            endpoint
-                        }
+                        endpoint.timeout(timeout)
                     } else {
                         endpoint
                     }
