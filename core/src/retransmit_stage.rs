@@ -37,7 +37,7 @@ use std::{
     collections::hash_set::HashSet,
     collections::{BTreeMap, HashMap},
     net::UdpSocket,
-    ops::DerefMut,
+    ops::{Deref, DerefMut},
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     sync::mpsc::channel,
     sync::mpsc::RecvTimeoutError,
@@ -49,7 +49,6 @@ use std::{
 
 const MAX_DUPLICATE_COUNT: usize = 2;
 const DEFAULT_LRU_SIZE: usize = 10_000;
-const BANKS_LRU_CACHE_CAP: usize = 100;
 
 // Limit a given thread to consume about this many packets so that
 // it doesn't pull up too much work.
@@ -243,34 +242,17 @@ fn check_if_already_received(
 }
 
 // Returns true if turbine retransmit peers patch (#14565) is enabled.
-fn enable_turbine_retransmit_peers_patch(
-    shred_slot: Slot,
-    bank_forks: &RwLock<BankForks>,
-    cache: &mut LruCache<Slot, Arc<Bank>>,
-) -> bool {
-    let bank: Arc<Bank> = match cache.get(&shred_slot) {
-        Some(bank) => bank.clone(),
-        None => {
-            let bank_forks = bank_forks.read().unwrap();
-            match bank_forks.get(shred_slot) {
-                Some(bank) => {
-                    cache.put(shred_slot, bank.clone());
-                    bank.clone()
-                }
-                None => bank_forks.root_bank(),
-            }
-        }
-    };
-    let feature_slot = bank
+fn enable_turbine_retransmit_peers_patch(shred_slot: Slot, root_bank: &Bank) -> bool {
+    let feature_slot = root_bank
         .feature_set
         .activated_slot(&feature_set::turbine_retransmit_peers_patch::id());
     match feature_slot {
         None => false,
         Some(feature_slot) => {
-            let epoch_schedule = bank.epoch_schedule();
+            let epoch_schedule = root_bank.epoch_schedule();
             let feature_epoch = epoch_schedule.get_epoch(feature_slot);
             let shred_epoch = epoch_schedule.get_epoch(shred_slot);
-            feature_epoch < shred_epoch
+            feature_epoch + 1 < shred_epoch
         }
     }
 }
@@ -287,7 +269,6 @@ fn retransmit(
     epoch_stakes_cache: &RwLock<EpochStakesCache>,
     last_peer_update: &AtomicU64,
     shreds_received: &Mutex<ShredFilterAndHasher>,
-    banks_cache: &mut LruCache<Slot, Arc<Bank>>,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
     let r_lock = r.lock().unwrap();
@@ -305,7 +286,10 @@ fn retransmit(
     drop(r_lock);
 
     let mut epoch_fetch = Measure::start("retransmit_epoch_fetch");
-    let r_bank = bank_forks.read().unwrap().working_bank();
+    let (r_bank, root_bank) = {
+        let bank_forks = bank_forks.read().unwrap();
+        (bank_forks.working_bank(), bank_forks.root_bank())
+    };
     let bank_epoch = r_bank.get_leader_schedule_epoch(r_bank.slot());
     epoch_fetch.stop();
 
@@ -379,7 +363,7 @@ fn retransmit(
             );
             peers_len = cmp::max(peers_len, shuffled_stakes_and_index.len());
             // Until the patch is activated, do the old buggy thing.
-            if !enable_turbine_retransmit_peers_patch(shred_slot, bank_forks, banks_cache) {
+            if !enable_turbine_retransmit_peers_patch(shred_slot, root_bank.deref()) {
                 shuffled_stakes_and_index.remove(my_index);
             }
             // split off the indexes, we don't need the stakes anymore
@@ -483,7 +467,6 @@ pub fn retransmitter(
             let epoch_stakes_cache = Arc::new(RwLock::new(EpochStakesCache::default()));
             let last_peer_update = Arc::new(AtomicU64::new(0));
             let shreds_received = shreds_received.clone();
-            let mut banks_cache = LruCache::new(BANKS_LRU_CACHE_CAP);
 
             Builder::new()
                 .name("solana-retransmitter".to_string())
@@ -501,7 +484,6 @@ pub fn retransmitter(
                             &epoch_stakes_cache,
                             &last_peer_update,
                             &shreds_received,
-                            &mut banks_cache,
                         ) {
                             match e {
                                 Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
