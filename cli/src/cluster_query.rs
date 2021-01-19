@@ -127,12 +127,15 @@ impl ClusterQuerySubCommands for App<'_, '_> {
         .subcommand(
             SubCommand::with_name("cluster-date")
                 .about("Get current cluster date, computed from genesis creation time and network time")
+                .arg(commitment_arg()),
         )
         .subcommand(
             SubCommand::with_name("cluster-version")
                 .about("Get the version of the cluster entrypoint"),
         )
-        .subcommand(SubCommand::with_name("fees").about("Display current cluster fees"))
+        .subcommand(SubCommand::with_name("fees").about("Display current cluster fees")
+            .arg(commitment_arg()),
+        )
         .subcommand(
             SubCommand::with_name("first-available-block")
                 .about("Get the first available block in the storage"),
@@ -786,8 +789,7 @@ pub fn process_catchup(
 }
 
 pub fn process_cluster_date(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
-    let result = rpc_client
-        .get_account_with_commitment(&sysvar::clock::id(), CommitmentConfig::default())?;
+    let result = rpc_client.get_account_with_commitment(&sysvar::clock::id(), config.commitment)?;
     if let Some(clock_account) = result.value {
         let clock: Clock = from_account(&clock_account).ok_or_else(|| {
             CliError::RpcRequestError("Failed to deserialize clock sysvar".to_string())
@@ -813,7 +815,7 @@ pub fn process_cluster_version(rpc_client: &RpcClient, config: &CliConfig) -> Pr
 }
 
 pub fn process_fees(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
-    let result = rpc_client.get_recent_blockhash_with_commitment(CommitmentConfig::default())?;
+    let result = rpc_client.get_recent_blockhash_with_commitment(config.commitment)?;
     let (recent_blockhash, fee_calculator, last_valid_slot) = result.value;
     let fees = CliFees {
         slot: result.context.slot,
@@ -978,15 +980,13 @@ pub fn process_get_block_time(
     Ok(config.output_format.formatted_string(&block_time))
 }
 
-pub fn process_get_epoch(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
-    let epoch_info = rpc_client.get_epoch_info_with_commitment(config.commitment)?;
+pub fn process_get_epoch(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
+    let epoch_info = rpc_client.get_epoch_info()?;
     Ok(epoch_info.epoch.to_string())
 }
 
 pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
-    let epoch_info: CliEpochInfo = rpc_client
-        .get_epoch_info_with_commitment(config.commitment)?
-        .into();
+    let epoch_info: CliEpochInfo = rpc_client.get_epoch_info()?.into();
     Ok(config.output_format.formatted_string(&epoch_info))
 }
 
@@ -995,15 +995,13 @@ pub fn process_get_genesis_hash(rpc_client: &RpcClient) -> ProcessResult {
     Ok(genesis_hash.to_string())
 }
 
-pub fn process_get_slot(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
-    let slot = rpc_client.get_slot_with_commitment(config.commitment)?;
+pub fn process_get_slot(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
+    let slot = rpc_client.get_slot()?;
     Ok(slot.to_string())
 }
 
-pub fn process_get_block_height(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
-    let epoch_info: CliEpochInfo = rpc_client
-        .get_epoch_info_with_commitment(config.commitment)?
-        .into();
+pub fn process_get_block_height(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
+    let epoch_info: CliEpochInfo = rpc_client.get_epoch_info()?.into();
     Ok(epoch_info.epoch_info.block_height.to_string())
 }
 
@@ -1189,19 +1187,19 @@ pub fn process_supply(
     config: &CliConfig,
     print_accounts: bool,
 ) -> ProcessResult {
-    let supply_response = rpc_client.supply_with_commitment(config.commitment)?;
+    let supply_response = rpc_client.supply()?;
     let mut supply: CliSupply = supply_response.value.into();
     supply.print_accounts = print_accounts;
     Ok(config.output_format.formatted_string(&supply))
 }
 
-pub fn process_total_supply(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
-    let total_supply = rpc_client.total_supply_with_commitment(config.commitment)?;
+pub fn process_total_supply(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
+    let total_supply = rpc_client.total_supply()?;
     Ok(format!("{} SOL", lamports_to_sol(total_supply)))
 }
 
-pub fn process_get_transaction_count(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
-    let transaction_count = rpc_client.get_transaction_count_with_commitment(config.commitment)?;
+pub fn process_get_transaction_count(rpc_client: &RpcClient, _config: &CliConfig) -> ProcessResult {
+    let transaction_count = rpc_client.get_transaction_count()?;
     Ok(transaction_count.to_string())
 }
 
@@ -1292,8 +1290,7 @@ pub fn process_ping(
             Ok(signature) => {
                 let transaction_sent = Instant::now();
                 loop {
-                    let signature_status = rpc_client
-                        .get_signature_status_with_commitment(&signature, config.commitment)?;
+                    let signature_status = rpc_client.get_signature_status(&signature)?;
                     let elapsed_time = Instant::now().duration_since(transaction_sent);
                     if let Some(transaction_status) = signature_status {
                         match transaction_status {
@@ -1695,8 +1692,8 @@ pub fn process_show_validators(
     config: &CliConfig,
     use_lamports_unit: bool,
 ) -> ProcessResult {
-    let epoch_info = rpc_client.get_epoch_info_with_commitment(config.commitment)?;
-    let vote_accounts = rpc_client.get_vote_accounts_with_commitment(config.commitment)?;
+    let epoch_info = rpc_client.get_epoch_info()?;
+    let vote_accounts = rpc_client.get_vote_accounts()?;
 
     let mut node_version = HashMap::new();
     let unknown_version = "unknown".to_string();

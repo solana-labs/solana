@@ -97,6 +97,17 @@ impl RpcClient {
         )
     }
 
+    pub fn new_with_timeout_and_commitment(
+        url: String,
+        timeout: Duration,
+        commitment_config: CommitmentConfig,
+    ) -> Self {
+        Self::new_sender(
+            HttpSender::new_with_timeout(url, timeout),
+            commitment_config,
+        )
+    }
+
     pub fn new_mock(url: String) -> Self {
         Self::new_sender(MockSender::new(url), CommitmentConfig::default())
     }
@@ -348,6 +359,10 @@ impl RpcClient {
         commitment_config: CommitmentConfig,
     ) -> ClientResult<Slot> {
         self.send(RpcRequest::GetSlot, json!([commitment_config]))
+    }
+
+    pub fn supply(&self) -> RpcResult<RpcSupply> {
+        self.supply_with_commitment(self.commitment_config)
     }
 
     pub fn supply_with_commitment(
@@ -771,6 +786,7 @@ impl RpcClient {
                 filters: None,
                 account_config: RpcAccountInfoConfig {
                     encoding: Some(UiAccountEncoding::Base64),
+                    commitment: Some(self.commitment_config),
                     ..RpcAccountInfoConfig::default()
                 },
             },

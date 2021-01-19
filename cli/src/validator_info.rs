@@ -20,7 +20,6 @@ use solana_config_program::{config_instruction, get_config_data, ConfigKeys, Con
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account::Account,
-    commitment_config::CommitmentConfig,
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
@@ -288,9 +287,7 @@ pub fn process_set_validator_info(
     };
 
     // Check existence of validator-info account
-    let balance = rpc_client
-        .poll_get_balance_with_commitment(&info_pubkey, CommitmentConfig::default())
-        .unwrap_or(0);
+    let balance = rpc_client.get_balance(&info_pubkey).unwrap_or(0);
 
     let lamports =
         rpc_client.get_minimum_balance_for_rent_exemption(ValidatorInfo::max_space() as usize)?;

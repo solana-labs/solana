@@ -332,9 +332,7 @@ pub fn process_authorize_nonce_account(
     nonce_authority: SignerIndex,
     new_authority: &Pubkey,
 ) -> ProcessResult {
-    let (recent_blockhash, fee_calculator, _) = rpc_client
-        .get_recent_blockhash_with_commitment(config.commitment)?
-        .value;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let nonce_authority = config.signers[nonce_authority];
     let ix = authorize_nonce_account(nonce_account, &nonce_authority.pubkey(), new_authority);
@@ -349,11 +347,7 @@ pub fn process_authorize_nonce_account(
         &tx.message,
         config.commitment,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-        &tx,
-        config.commitment,
-        config.send_transaction_config,
-    );
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<NonceError>(result, &config)
 }
 
@@ -400,9 +394,7 @@ pub fn process_create_nonce_account(
         Message::new(&ixs, Some(&config.signers[0].pubkey()))
     };
 
-    let (recent_blockhash, fee_calculator, _) = rpc_client
-        .get_recent_blockhash_with_commitment(config.commitment)?
-        .value;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let (message, lamports) = resolve_spend_tx_and_check_account_balance(
         rpc_client,
@@ -414,9 +406,7 @@ pub fn process_create_nonce_account(
         config.commitment,
     )?;
 
-    if let Ok(nonce_account) =
-        get_account_with_commitment(rpc_client, &nonce_account_address, config.commitment)
-    {
+    if let Ok(nonce_account) = get_account(rpc_client, &nonce_account_address) {
         let err_msg = if state_from_account(&nonce_account).is_ok() {
             format!("Nonce account {} already exists", nonce_account_address)
         } else {
@@ -439,11 +429,7 @@ pub fn process_create_nonce_account(
 
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-        &tx,
-        config.commitment,
-        config.send_transaction_config,
-    );
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<SystemError>(result, &config)
 }
 
@@ -471,9 +457,8 @@ pub fn process_new_nonce(
         (&nonce_account, "nonce_account_pubkey".to_string()),
     )?;
 
-    let nonce_account_check =
-        rpc_client.get_account_with_commitment(&nonce_account, config.commitment);
-    if nonce_account_check.is_err() || nonce_account_check.unwrap().value.is_none() {
+    let nonce_account_check = rpc_client.get_account(&nonce_account);
+    if nonce_account_check.is_err() {
         return Err(CliError::BadParameter(
             "Unable to create new nonce, no nonce account found".to_string(),
         )
@@ -482,9 +467,7 @@ pub fn process_new_nonce(
 
     let nonce_authority = config.signers[nonce_authority];
     let ix = advance_nonce_account(&nonce_account, &nonce_authority.pubkey());
-    let (recent_blockhash, fee_calculator, _) = rpc_client
-        .get_recent_blockhash_with_commitment(config.commitment)?
-        .value;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let message = Message::new(&[ix], Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, recent_blockhash)?;
@@ -495,11 +478,7 @@ pub fn process_new_nonce(
         &tx.message,
         config.commitment,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-        &tx,
-        config.commitment,
-        config.send_transaction_config,
-    );
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<SystemError>(result, &config)
 }
 
@@ -541,9 +520,7 @@ pub fn process_withdraw_from_nonce_account(
     destination_account_pubkey: &Pubkey,
     lamports: u64,
 ) -> ProcessResult {
-    let (recent_blockhash, fee_calculator, _) = rpc_client
-        .get_recent_blockhash_with_commitment(config.commitment)?
-        .value;
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let nonce_authority = config.signers[nonce_authority];
     let ix = withdraw_nonce_account(
@@ -562,11 +539,7 @@ pub fn process_withdraw_from_nonce_account(
         &tx.message,
         config.commitment,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-        &tx,
-        config.commitment,
-        config.send_transaction_config,
-    );
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<NonceError>(result, &config)
 }
 
