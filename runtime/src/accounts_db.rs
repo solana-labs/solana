@@ -3246,11 +3246,15 @@ impl AccountsDB {
         let num_units_of_work = num_threads * 100;
         let chunk_size = std::cmp::max(1, scanned_slots.len() / num_units_of_work);
         let scanned_slots: Vec<Slot> = scanned_slots.into_iter().collect();
-        let scanned_slots: Vec<Vec<Slot>> = scanned_slots.chunks(chunk_size).map(|x| x.to_vec()).collect();
+        let scanned_slots: Vec<Vec<Slot>> = scanned_slots
+            .chunks(chunk_size)
+            .map(|x| x.to_vec())
+            .collect();
         let accumulators: Vec<_> = scanned_slots
             .into_par_iter()
             .map(|slots| {
-                let mut master_accumulator: Vec<Vec<(Pubkey, CalculateHashIntermediate)>> = Vec::new();
+                let mut master_accumulator: Vec<Vec<(Pubkey, CalculateHashIntermediate)>> =
+                    Vec::new();
                 for slot in slots {
                     let accumulator = self.scan_slot(slot, simple_capitalization_enabled);
                     master_accumulator.extend(accumulator);
