@@ -134,6 +134,10 @@ pub mod warp_timestamp {
     solana_sdk::declare_id!("Bfqm7fGk5MBptqa2WHXWFLH7uJvq8hkJcAQPipy2bAMk");
 }
 
+pub mod turbine_retransmit_peers_patch {
+    solana_sdk::declare_id!("5Lu3JnWSFwRYpXzwDMkanWSk6XqSuF2i5fpnVhzB5CTc");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -168,7 +172,12 @@ lazy_static! {
         (limit_cpi_loader_invoke::id(), "Loader not authorized via CPI"),
         (use_loaded_program_accounts::id(), "Use loaded program accounts"),
         (abort_on_all_cpi_failures::id(), "Abort on all CPI failures"),
+<<<<<<< HEAD
         (warp_timestamp::id(), "warp timestamp to current, adjust bounding to 50% #14532"),
+=======
+        (use_loaded_executables::id(), "Use loaded executable accounts"),
+        (turbine_retransmit_peers_patch::id(), "turbine retransmit peers patch #14631"),
+>>>>>>> c6ae0667e... feature gates turbine retransmit peers patch (#14631)
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
