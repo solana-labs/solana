@@ -313,7 +313,8 @@ impl BigTable {
     /// Otherwise the listing will start from the start of the table.
     ///
     /// If `end_at` is provided, the row key listing will end at the key. Otherwise it will
-    /// continue until the `limit` is reached or the end of the table, whichever comes first.
+    /// continue until the `rows_limit` is reached or the end of the table, whichever comes first.
+    /// If `rows_limit` is zero, the listing will continue until the end of the table.
     pub async fn get_row_keys(
         &mut self,
         table_name: &str,
@@ -374,7 +375,8 @@ impl BigTable {
     /// of the table.
     ///
     /// If `end_at` is provided, the row key listing will end at the key. Otherwise it will
-    /// continue until the `limit` is reached or the end of the table, whichever comes first.
+    /// continue until the `rows_limit` is reached or the end of the table, whichever comes first.
+    /// If `rows_limit` is zero, the listing will continue until the end of the table.
     pub async fn get_row_data(
         &mut self,
         table_name: &str,
