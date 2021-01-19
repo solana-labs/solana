@@ -323,7 +323,7 @@ fn check_vote_account(
     authorized_voter_pubkeys: &[Pubkey],
 ) -> Result<(), String> {
     let vote_account = rpc_client
-        .get_account_with_commitment(vote_account_address, CommitmentConfig::root())
+        .get_account_with_commitment(vote_account_address, CommitmentConfig::single_gossip())
         .map_err(|err| format!("failed to fetch vote account: {}", err.to_string()))?
         .value
         .ok_or_else(|| format!("vote account does not exist: {}", vote_account_address))?;
@@ -336,7 +336,7 @@ fn check_vote_account(
     }
 
     let identity_account = rpc_client
-        .get_account_with_commitment(identity_pubkey, CommitmentConfig::root())
+        .get_account_with_commitment(identity_pubkey, CommitmentConfig::single_gossip())
         .map_err(|err| format!("failed to fetch identity account: {}", err.to_string()))?
         .value
         .ok_or_else(|| format!("identity account does not exist: {}", identity_pubkey))?;
