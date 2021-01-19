@@ -6,6 +6,7 @@ use crate::{
     root_ca_certificate,
 };
 use log::*;
+use std::time::{Duration, Instant};
 use thiserror::Error;
 use tonic::{metadata::MetadataValue, transport::ClientTlsConfig, Request};
 
@@ -68,6 +69,9 @@ pub enum Error {
 
     #[error("RPC error: {0}")]
     RpcError(tonic::Status),
+
+    #[error("Timeout error")]
+    TimeoutError,
 }
 
 impl std::convert::From<std::io::Error> for Error {
@@ -95,6 +99,7 @@ pub struct BigTableConnection {
     access_token: Option<AccessToken>,
     channel: tonic::transport::Channel,
     table_prefix: String,
+    timeout: Option<Duration>,
 }
 
 impl BigTableConnection {
@@ -106,7 +111,11 @@ impl BigTableConnection {
     ///
     /// The BIGTABLE_EMULATOR_HOST environment variable is also respected.
     ///
-    pub async fn new(instance_name: &str, read_only: bool) -> Result<Self> {
+    pub async fn new(
+        instance_name: &str,
+        read_only: bool,
+        timeout: Option<Duration>,
+    ) -> Result<Self> {
         match std::env::var("BIGTABLE_EMULATOR_HOST") {
             Ok(endpoint) => {
                 info!("Connecting to bigtable emulator at {}", endpoint);
@@ -117,6 +126,7 @@ impl BigTableConnection {
                         .map_err(|err| Error::InvalidUri(endpoint, err.to_string()))?
                         .connect_lazy()?,
                     table_prefix: format!("projects/emulator/instances/{}/tables/", instance_name),
+                    timeout,
                 })
             }
 
@@ -135,20 +145,29 @@ impl BigTableConnection {
                     instance_name
                 );
 
+                let endpoint = {
+                    let endpoint =
+                        tonic::transport::Channel::from_static("https://bigtable.googleapis.com")
+                            .tls_config(
+                            ClientTlsConfig::new()
+                                .ca_certificate(
+                                    root_ca_certificate::load().map_err(Error::CertificateError)?,
+                                )
+                                .domain_name("bigtable.googleapis.com"),
+                        )?;
+
+                    if let Some(timeout) = timeout {
+                        endpoint.timeout(timeout)
+                    } else {
+                        endpoint
+                    }
+                };
+
                 Ok(Self {
                     access_token: Some(access_token),
-                    channel: tonic::transport::Channel::from_static(
-                        "https://bigtable.googleapis.com",
-                    )
-                    .tls_config(
-                        ClientTlsConfig::new()
-                            .ca_certificate(
-                                root_ca_certificate::load().map_err(Error::CertificateError)?,
-                            )
-                            .domain_name("bigtable.googleapis.com"),
-                    )?
-                    .connect_lazy()?,
+                    channel: endpoint.connect_lazy()?,
                     table_prefix,
+                    timeout,
                 })
             }
         }
@@ -183,6 +202,7 @@ impl BigTableConnection {
             access_token: self.access_token.clone(),
             client,
             table_prefix: self.table_prefix.clone(),
+            timeout: self.timeout,
         }
     }
 
@@ -225,10 +245,12 @@ pub struct BigTable {
     access_token: Option<AccessToken>,
     client: bigtable_client::BigtableClient<tonic::transport::Channel>,
     table_prefix: String,
+    timeout: Option<Duration>,
 }
 
 impl BigTable {
     async fn decode_read_rows_response(
+        &self,
         mut rrr: tonic::codec::Streaming<ReadRowsResponse>,
     ) -> Result<Vec<(RowKey, RowData)>> {
         let mut rows: Vec<(RowKey, RowData)> = vec![];
@@ -240,7 +262,14 @@ impl BigTable {
         let mut cell_timestamp = 0;
         let mut cell_value = vec![];
         let mut cell_version_ok = true;
+        let started = Instant::now();
+
         while let Some(res) = rrr.message().await? {
+            if let Some(timeout) = self.timeout {
+                if Instant::now().duration_since(started) > timeout {
+                    return Err(Error::TimeoutError);
+                }
+            }
             for (i, mut chunk) in res.chunks.into_iter().enumerate() {
                 // The comments for `read_rows_response::CellChunk` provide essential details for
                 // understanding how the below decoding works...
@@ -361,7 +390,7 @@ impl BigTable {
             .await?
             .into_inner();
 
-        let rows = Self::decode_read_rows_response(response).await?;
+        let rows = self.decode_read_rows_response(response).await?;
         Ok(rows.into_iter().map(|r| r.0).collect())
     }
 
@@ -410,7 +439,7 @@ impl BigTable {
             .await?
             .into_inner();
 
-        Self::decode_read_rows_response(response).await
+        self.decode_read_rows_response(response).await
     }
 
     /// Get latest data from a single row of `table`, if that row exists. Returns an error if that
@@ -443,7 +472,7 @@ impl BigTable {
             .await?
             .into_inner();
 
-        let rows = Self::decode_read_rows_response(response).await?;
+        let rows = self.decode_read_rows_response(response).await?;
         rows.into_iter()
             .next()
             .map(|r| r.1)

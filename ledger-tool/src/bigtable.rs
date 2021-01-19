@@ -21,7 +21,7 @@ async fn upload(
     ending_slot: Option<Slot>,
     allow_missing_metadata: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let bigtable = solana_storage_bigtable::LedgerStorage::new(false)
+    let bigtable = solana_storage_bigtable::LedgerStorage::new(false, None)
         .await
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
@@ -37,7 +37,7 @@ async fn upload(
 }
 
 async fn first_available_block() -> Result<(), Box<dyn std::error::Error>> {
-    let bigtable = solana_storage_bigtable::LedgerStorage::new(true).await?;
+    let bigtable = solana_storage_bigtable::LedgerStorage::new(true, None).await?;
     match bigtable.get_first_available_block().await? {
         Some(block) => println!("{}", block),
         None => println!("No blocks available"),
@@ -47,7 +47,7 @@ async fn first_available_block() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn block(slot: Slot) -> Result<(), Box<dyn std::error::Error>> {
-    let bigtable = solana_storage_bigtable::LedgerStorage::new(false)
+    let bigtable = solana_storage_bigtable::LedgerStorage::new(false, None)
         .await
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
@@ -75,7 +75,7 @@ async fn block(slot: Slot) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn blocks(starting_slot: Slot, limit: usize) -> Result<(), Box<dyn std::error::Error>> {
-    let bigtable = solana_storage_bigtable::LedgerStorage::new(false)
+    let bigtable = solana_storage_bigtable::LedgerStorage::new(false, None)
         .await
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
@@ -87,7 +87,7 @@ async fn blocks(starting_slot: Slot, limit: usize) -> Result<(), Box<dyn std::er
 }
 
 async fn confirm(signature: &Signature, verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
-    let bigtable = solana_storage_bigtable::LedgerStorage::new(false)
+    let bigtable = solana_storage_bigtable::LedgerStorage::new(false, None)
         .await
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
@@ -127,7 +127,7 @@ pub async fn transaction_history(
     show_transactions: bool,
     query_chunk_size: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let bigtable = solana_storage_bigtable::LedgerStorage::new(true).await?;
+    let bigtable = solana_storage_bigtable::LedgerStorage::new(true, None).await?;
 
     let mut loaded_block: Option<(Slot, ConfirmedBlock)> = None;
     while limit > 0 {
