@@ -1288,6 +1288,14 @@ pub fn main() {
                 .help("Number of threads to use for servicing RPC requests"),
         )
         .arg(
+            Arg::with_name("rpc_timeout")
+                .long("rpc-timeout")
+                .value_name("NUMBER")
+                .validator(is_parsable::<u64>)
+                .takes_value(true)
+                .help("Number of seconds to time out rpc requests (not applied to all kinds of methods)"),
+        )
+        .arg(
             Arg::with_name("rpc_pubsub_enable_vote_subscription")
                 .long("rpc-pubsub-enable-vote-subscription")
                 .takes_value(false)
@@ -1561,6 +1569,9 @@ pub fn main() {
                 u64
             ),
             rpc_threads: value_t_or_exit!(matches, "rpc_threads", usize),
+            rpc_timeout: value_t!(matches, "rpc_timeout", u64)
+                .ok()
+                .map(Duration::from_secs),
             account_indexes: account_indexes.clone(),
         },
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {

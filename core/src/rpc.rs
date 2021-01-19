@@ -81,6 +81,7 @@ use std::{
         mpsc::{channel, Receiver, Sender},
         Arc, Mutex, RwLock,
     },
+    time::Duration,
 };
 use tokio::runtime;
 
@@ -115,6 +116,7 @@ pub struct JsonRpcConfig {
     pub max_multiple_accounts: Option<usize>,
     pub account_indexes: HashSet<AccountIndex>,
     pub rpc_threads: usize,
+    pub rpc_timeout: Option<Duration>,
 }
 
 #[derive(Clone)]

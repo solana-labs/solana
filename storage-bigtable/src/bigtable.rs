@@ -6,6 +6,7 @@ use crate::{
     root_ca_certificate,
 };
 use log::*;
+use std::time::Duration;
 use thiserror::Error;
 use tonic::{metadata::MetadataValue, transport::ClientTlsConfig, Request};
 
@@ -106,7 +107,11 @@ impl BigTableConnection {
     ///
     /// The BIGTABLE_EMULATOR_HOST environment variable is also respected.
     ///
-    pub async fn new(instance_name: &str, read_only: bool) -> Result<Self> {
+    pub async fn new(
+        instance_name: &str,
+        read_only: bool,
+        timeout: Option<Duration>,
+    ) -> Result<Self> {
         match std::env::var("BIGTABLE_EMULATOR_HOST") {
             Ok(endpoint) => {
                 info!("Connecting to bigtable emulator at {}", endpoint);
@@ -135,19 +140,33 @@ impl BigTableConnection {
                     instance_name
                 );
 
+                let endpoint = {
+                    let endpoint =
+                        tonic::transport::Channel::from_static("https://bigtable.googleapis.com")
+                            .tls_config(
+                            ClientTlsConfig::new()
+                                .ca_certificate(
+                                    root_ca_certificate::load().map_err(Error::CertificateError)?,
+                                )
+                                .domain_name("bigtable.googleapis.com"),
+                        )?;
+
+                    if let Some(timeout) = timeout {
+                        if read_only {
+                            // apply timeout only when thre is no write queries!
+                            endpoint.timeout(timeout)
+                        } else {
+                            warn!("BigTableConnection's requested timeout configuration is ignored because it's not read-only.");
+                            endpoint
+                        }
+                    } else {
+                        endpoint
+                    }
+                };
+
                 Ok(Self {
                     access_token: Some(access_token),
-                    channel: tonic::transport::Channel::from_static(
-                        "https://bigtable.googleapis.com",
-                    )
-                    .tls_config(
-                        ClientTlsConfig::new()
-                            .ca_certificate(
-                                root_ca_certificate::load().map_err(Error::CertificateError)?,
-                            )
-                            .domain_name("bigtable.googleapis.com"),
-                    )?
-                    .connect_lazy()?,
+                    channel: endpoint.connect_lazy()?,
                     table_prefix,
                 })
             }
