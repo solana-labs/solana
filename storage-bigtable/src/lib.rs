@@ -297,7 +297,8 @@ impl LedgerStorage {
     /// Fetch the next slots after the provided slot that contains a block
     ///
     /// start_slot: slot to start the search from (inclusive)
-    /// limit: stop after this many slots have been found.
+    /// limit: stop after this many slots have been found; if limit==0, all records in the table
+    /// after start_slot will be read
     pub async fn get_confirmed_blocks(&self, start_slot: Slot, limit: usize) -> Result<Vec<Slot>> {
         let mut bigtable = self.connection.client();
         let blocks = bigtable
@@ -371,7 +372,8 @@ impl LedgerStorage {
     ///
     /// address: address to search for
     /// before_signature: start with the first signature older than this one
-    /// limit: stop after this many signatures.
+    /// until_signature: end with the last signature more recent than this one
+    /// limit: stop after this many signatures; if limit==0, all records in the table will be read
     pub async fn get_confirmed_signatures_for_address(
         &self,
         address: &Pubkey,
