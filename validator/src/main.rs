@@ -1290,11 +1290,11 @@ pub fn main() {
         .arg(
             Arg::with_name("rpc_bigtable_timeout")
                 .long("rpc-bigtable-timeout")
-                .value_name("NUMBER")
+                .value_name("SECONDS")
                 .validator(is_parsable::<u64>)
                 .takes_value(true)
                 .default_value("30")
-                .help("Number of seconds to time out rpc requests backed by BigTable"),
+                .help("Number of seconds before timing out RPC requests backed by BigTable"),
         )
         .arg(
             Arg::with_name("rpc_pubsub_enable_vote_subscription")
