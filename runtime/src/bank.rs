@@ -4238,6 +4238,23 @@ impl Bank {
                 &self.ancestors,
                 self.simple_capitalization_enabled(),
             );
+        if !debug_verify_store {
+            if (total_lamports != self.capitalization()){
+                error!("Cap is different: {}, {}", total_lamports, self.capitalization());
+                error!("Differs: slot: {}, ancestors len: {}, simple_cap: {}", self.slot(), self.ancestors.len(), self.simple_capitalization_enabled());
+                let (hash, total_lamports) = self
+                    .rc
+                    .accounts
+                    .accounts_db
+                    .update_accounts_hash_with_store_option(
+                        use_store,
+                        true,
+                        self.slot(),
+                        &self.ancestors,
+                        self.simple_capitalization_enabled(),
+                    );
+            }
+        }
         assert_eq!(total_lamports, self.capitalization());
         hash
     }

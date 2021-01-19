@@ -2059,6 +2059,9 @@ impl AccountsDB {
         let mut sort_time = Measure::start("sort");
         hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
         sort_time.stop();
+        if (hashes.len() > 0){
+            info!("First sorted hash: {:?} out of: {}", hashes[0], hashes.len());
+        }
 
         let mut sum_time = Measure::start("cap");
         let cap = if calculate_cap {
@@ -2138,6 +2141,8 @@ impl AccountsDB {
             scanned_slots.insert(*ancestor_slot);
         }
 
+        info!("Looking in {} slots", scanned_slots.len());
+        
         // scan all slots
         let len = AtomicUsize::new(0);
         let num_threads = std::cmp::max(2, num_cpus::get() / 4);
@@ -2164,6 +2169,8 @@ impl AccountsDB {
                 AccountsDB::merge_array(&mut account_maps, &item);
             }
         }
+
+        info!("Found {} accounts including zeros", account_maps.len());
 
         account_maps
     }
@@ -2212,6 +2219,7 @@ impl AccountsDB {
         let account_maps = self.get_accounts(slot, ancestors, simple_capitalization_enabled);
         scan.stop();
 
+        let account_len = account_maps.len();
         let mut zeros = Measure::start("eliminate zeros");
         let hashes: Vec<_> = account_maps
             .into_iter()
@@ -2225,6 +2233,8 @@ impl AccountsDB {
             .collect();
         zeros.stop();
         let hash_total = hashes.len();
+        let accounts_with_zero = hash_total - account_len;
+        info!("non-zero accounts: {}, zero accounts:{}", hash_total, accounts_with_zero);
         let mut accumulate = Measure::start("accumulate");
         let ret = Self::accumulate_account_hashes_and_capitalization(hashes);
 
@@ -2257,6 +2267,9 @@ impl AccountsDB {
             .keys()
             .cloned()
             .collect();
+        let key_len = keys.len();
+        info!("possible account keys: {}", key_len);
+
         let mismatch_found = AtomicU64::new(0);
         let hashes: Vec<(Pubkey, Hash, u64)> = {
             self.thread_pool_clean.install(|| {
@@ -2315,6 +2328,7 @@ impl AccountsDB {
 
         scan.stop();
         let hash_total = hashes.len();
+        info!("non-zero accounts keys: {}, zero: {}", hash_total, key_len - hash_total);
 
         let mut accumulate = Measure::start("accumulate");
         let (accumulated_hash, total_lamports) =
@@ -2402,6 +2416,13 @@ impl AccountsDB {
                 ancestors,
                 simple_capitalization_enabled,
             );
+
+            if hash != hash_other || total_lamports != total_lamports_other {
+                error!("Differs: slot: {}, ancestors len: {}, simple_cap: {}", slot, ancestors.len(), simple_capitalization_enabled);
+                let account_maps = self.get_accounts(slot, ancestors, simple_capitalization_enabled);
+                error!("account count: {}", account_maps.len());
+            }
+
             assert_eq!(hash, hash_other);
             assert_eq!(total_lamports, total_lamports_other);
         }
