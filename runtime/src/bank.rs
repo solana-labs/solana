@@ -4241,7 +4241,7 @@ impl Bank {
         if !debug_verify_store {
             if (total_lamports != self.capitalization()){
                 error!("Cap is different: {}, {}", total_lamports, self.capitalization());
-                error!("Differs: slot: {}, ancestors len: {}, simple_cap: {}", self.slot(), self.ancestors.len(), self.simple_capitalization_enabled());
+                error!("bank.Differs: slot: {}, ancestors len: {}, simple_cap: {}", self.slot(), self.ancestors.len(), self.simple_capitalization_enabled());
                 let (hash, total_lamports) = self
                     .rc
                     .accounts

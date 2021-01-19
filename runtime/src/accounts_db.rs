@@ -1977,7 +1977,7 @@ impl AccountsDB {
                 oldest_slot = *slot;
             }
         }
-        info!("total_stores: {}, newest_slot: {}, oldest_slot: {}, max_slot: {} (num={}), min_slot: {} (num={})",
+        warn!("total_stores: {}, newest_slot: {}, oldest_slot: {}, max_slot: {} (num={}), min_slot: {} (num={})",
               total_count, newest_slot, oldest_slot, max_slot, max, min_slot, min);
         datapoint_info!("accounts_db-stores", ("total_count", total_count, i64));
         datapoint_info!(
@@ -2030,7 +2030,7 @@ impl AccountsDB {
                 })
                 .collect();
             time.stop();
-            debug!("hashing {} {}", hashes.len(), time);
+            warn!("hashing {} {}", hashes.len(), time);
             hashes = new_hashes.chunks(fanout).map(|x| x.to_vec()).collect();
         }
         let mut hasher = Hasher::default();
@@ -2060,7 +2060,7 @@ impl AccountsDB {
         hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
         sort_time.stop();
         if (hashes.len() > 0){
-            info!("First sorted hash: {:?} out of: {}", hashes[0], hashes.len());
+            warn!("First sorted hash: {:?} out of: {}", hashes[0], hashes.len());
         }
 
         let mut sum_time = Measure::start("cap");
@@ -2078,7 +2078,7 @@ impl AccountsDB {
         let res = Self::compute_merkle_root(hashes, fanout);
         hash_time.stop();
 
-        debug!("{} {} {}", sort_time, hash_time, sum_time);
+        warn!("do_accumulate_account_hashes_and_capitalization times: {} {} {}", sort_time, hash_time, sum_time);
 
         (res, cap)
     }
@@ -2141,13 +2141,14 @@ impl AccountsDB {
             scanned_slots.insert(*ancestor_slot);
         }
 
-        info!("Looking in {} slots", scanned_slots.len());
+        warn!("Looking in {} slots", scanned_slots.len());
         
         // scan all slots
         let len = AtomicUsize::new(0);
         let num_threads = std::cmp::max(2, num_cpus::get() / 4);
         let num_units_of_work = num_threads * 100;
         let chunk_size = std::cmp::max(1, scanned_slots.len() / num_units_of_work);
+        warn!("threads: {}, unis of works: {}, chunk size: {}", num_threads, num_units_of_work, chunk_size);
         let scanned_slots: Vec<Slot> = scanned_slots.into_iter().collect();
         let scanned_slots: Vec<Vec<Slot>> = scanned_slots.chunks(chunk_size).map(|x| x.to_vec()).collect();
         let accumulators: Vec<_> = scanned_slots
@@ -2170,7 +2171,7 @@ impl AccountsDB {
             }
         }
 
-        info!("Found {} accounts including zeros", account_maps.len());
+        warn!("Found {} accounts including zeros", account_maps.len());
 
         account_maps
     }
@@ -2234,7 +2235,7 @@ impl AccountsDB {
         zeros.stop();
         let hash_total = hashes.len();
         let accounts_with_zero = hash_total - account_len;
-        info!("non-zero accounts: {}, zero accounts:{}", hash_total, accounts_with_zero);
+        warn!("non-zero accounts: {}, zero accounts:{}", hash_total, accounts_with_zero);
         let mut accumulate = Measure::start("accumulate");
         let ret = Self::accumulate_account_hashes_and_capitalization(hashes);
 
@@ -2268,7 +2269,7 @@ impl AccountsDB {
             .cloned()
             .collect();
         let key_len = keys.len();
-        info!("possible account keys: {}", key_len);
+        warn!("possible account keys: {}", key_len);
 
         let mismatch_found = AtomicU64::new(0);
         let hashes: Vec<(Pubkey, Hash, u64)> = {
@@ -2328,7 +2329,7 @@ impl AccountsDB {
 
         scan.stop();
         let hash_total = hashes.len();
-        info!("non-zero accounts keys: {}, zero: {}", hash_total, key_len - hash_total);
+        warn!("non-zero accounts keys: {}, zero: {}", hash_total, key_len - hash_total);
 
         let mut accumulate = Measure::start("accumulate");
         let (accumulated_hash, total_lamports) =
@@ -2418,7 +2419,7 @@ impl AccountsDB {
             );
 
             if hash != hash_other || total_lamports != total_lamports_other {
-                error!("Differs: slot: {}, ancestors len: {}, simple_cap: {}", slot, ancestors.len(), simple_capitalization_enabled);
+                error!("accounts.Differs: slot: {}, ancestors len: {}, simple_cap: {}", slot, ancestors.len(), simple_capitalization_enabled);
                 let account_maps = self.get_accounts(slot, ancestors, simple_capitalization_enabled);
                 error!("account count: {}", account_maps.len());
             }
