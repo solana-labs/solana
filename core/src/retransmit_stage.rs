@@ -367,13 +367,13 @@ fn retransmit(
                 shuffled_stakes_and_index.remove(my_index);
             }
             // split off the indexes, we don't need the stakes anymore
-            let indexes = shuffled_stakes_and_index
+            let indexes: Vec<_> = shuffled_stakes_and_index
                 .into_iter()
                 .map(|(_, index)| index)
                 .collect();
 
             let (neighbors, children) =
-                compute_retransmit_peers(DATA_PLANE_FANOUT, my_index, indexes);
+                compute_retransmit_peers(DATA_PLANE_FANOUT, my_index, &indexes);
             let neighbors: Vec<_> = neighbors
                 .into_iter()
                 .filter_map(|index| {
