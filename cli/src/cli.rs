@@ -522,7 +522,7 @@ impl Default for CliConfig<'_> {
             rpc_timeout: Duration::from_secs(u64::from_str(DEFAULT_RPC_TIMEOUT_SECONDS).unwrap()),
             verbose: false,
             output_format: OutputFormat::Display,
-            commitment: CommitmentConfig::default(),
+            commitment: CommitmentConfig::single_gossip(),
             send_transaction_config: RpcSendTransactionConfig::default(),
             address_labels: HashMap::new(),
         }
@@ -934,9 +934,7 @@ fn process_balance(
     } else {
         config.pubkey()?
     };
-    let balance = rpc_client
-        .get_balance_with_commitment(&pubkey, config.commitment)?
-        .value;
+    let balance = rpc_client.get_balance(&pubkey)?;
     Ok(build_balance_message(balance, use_lamports_unit, true))
 }
 
@@ -1102,11 +1100,7 @@ fn process_transfer(
         let result = if no_wait {
             rpc_client.send_transaction(&tx)
         } else {
-            rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-                &tx,
-                config.commitment,
-                config.send_transaction_config,
-            )
+            rpc_client.send_and_confirm_transaction_with_spinner(&tx)
         };
         log_instruction_custom_error::<SystemError>(result, &config)
     }
@@ -1123,8 +1117,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
 
     let mut _rpc_client;
     let rpc_client = if config.rpc_client.is_none() {
-        _rpc_client =
-            RpcClient::new_with_timeout(config.json_rpc_url.to_string(), config.rpc_timeout);
+        _rpc_client = RpcClient::new_with_timeout_and_commitment(
+            config.json_rpc_url.to_string(),
+            config.rpc_timeout,
+            config.commitment,
+        );
         &_rpc_client
     } else {
         // Primarily for testing
@@ -1752,8 +1749,7 @@ pub fn request_and_confirm_airdrop(
         }
     }?;
     let tx = keypair.airdrop_transaction();
-    let result =
-        rpc_client.send_and_confirm_transaction_with_spinner_and_commitment(&tx, config.commitment);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<SystemError>(result, &config)
 }
 
@@ -1856,7 +1852,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL"),
                 )
-                .arg(commitment_arg_with_default("max")),
+                .arg(commitment_arg_with_default("singleGossip")),
         )
         .subcommand(
             SubCommand::with_name("confirm")
