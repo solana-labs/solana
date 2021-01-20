@@ -8,12 +8,8 @@ use solana_bpf_loader_program::{
     create_vm,
     serialization::{deserialize_parameters, serialize_parameters},
 };
-<<<<<<< HEAD
-use solana_rbpf::vm::EbpfVm;
-=======
 use solana_cli_output::display::println_transaction;
-use solana_rbpf::vm::{Config, Executable, Tracer};
->>>>>>> e3bd9e530... Prevent the invoke and upgrade of programs in the same tx batch (#14653)
+use solana_rbpf::vm::EbpfVm;
 use solana_runtime::{
     bank::{Bank, ExecuteTimings, NonceRollbackInfo, TransactionBalancesSet, TransactionResults},
     bank_client::BankClient,
@@ -40,10 +36,10 @@ use solana_sdk::{
     transaction::{Transaction, TransactionError},
 };
 use solana_transaction_status::{
-    token_balances::collect_token_balances, ConfirmedTransaction, InnerInstructions,
-    TransactionStatusMeta, TransactionWithStatusMeta, UiTransactionEncoding,
+    ConfirmedTransaction, InnerInstructions, TransactionStatusMeta, TransactionWithStatusMeta,
+    UiTransactionEncoding,
 };
-use std::{cell::RefCell, collections::HashMap, env, fs::File, io::Read, path::PathBuf, sync::Arc};
+use std::{cell::RefCell, env, fs::File, io::Read, path::PathBuf, sync::Arc};
 
 /// BPF program file extension
 const PLATFORM_FILE_EXTENSION_BPF: &str = "so";
@@ -222,8 +218,6 @@ fn process_transaction_and_record_inner(
 fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransaction> {
     let batch = bank.prepare_batch(txs, None);
     let mut timings = ExecuteTimings::default();
-    let mut mint_decimals = HashMap::new();
-    let tx_pre_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
     let (
         TransactionResults {
             execution_results, ..
@@ -243,7 +237,6 @@ fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransa
         true,
         &mut timings,
     );
-    let tx_post_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
 
     for _ in 0..(txs.len() - transaction_logs.len()) {
         transaction_logs.push(vec![]);
@@ -258,8 +251,6 @@ fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransa
         inner_instructions.into_iter(),
         pre_balances.into_iter(),
         post_balances.into_iter(),
-        tx_pre_token_balances.into_iter(),
-        tx_post_token_balances.into_iter(),
         transaction_logs.into_iter(),
     )
     .map(
@@ -269,8 +260,6 @@ fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransa
             inner_instructions,
             pre_balances,
             post_balances,
-            pre_token_balances,
-            post_token_balances,
             log_messages,
         )| {
             let fee_calculator = nonce_rollback
@@ -296,8 +285,6 @@ fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransa
                 fee,
                 pre_balances,
                 post_balances,
-                pre_token_balances: Some(pre_token_balances),
-                post_token_balances: Some(post_token_balances),
                 inner_instructions,
                 log_messages: Some(log_messages),
             };
