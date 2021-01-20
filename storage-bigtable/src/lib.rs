@@ -10,9 +10,9 @@ use solana_sdk::{
 use solana_storage_proto::convert::generated;
 use solana_storage_proto::convert::tx_by_addr;
 use solana_transaction_status::{
-    ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Reward,
-    TransactionByAddrInfo, TransactionConfirmationStatus, TransactionStatus, TransactionStatusMeta,
-    TransactionWithStatusMeta,
+    ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature,
+    LegacyTransactionByAddrInfo, Reward, TransactionByAddrInfo, TransactionConfirmationStatus,
+    TransactionStatus, TransactionStatusMeta, TransactionWithStatusMeta,
 };
 use std::{collections::HashMap, convert::TryInto};
 use thiserror::Error;
@@ -405,17 +405,19 @@ impl LedgerStorage {
 
         let mut infos = vec![];
 
-        let starting_cell_data = bigtable
-            .get_protobuf_or_bincode_cell::<Vec<TransactionByAddrInfo>, tx_by_addr::TransactionByAddr>(
+        let starting_slot_tx_len = bigtable
+            .get_protobuf_or_bincode_cell::<Vec<LegacyTransactionByAddrInfo>, tx_by_addr::TransactionByAddr>(
                 "tx-by-addr",
                 format!("{}{}", address_prefix, slot_to_key(!first_slot)),
             )
-            .await?;
-
-        let starting_slot_tx_len = match starting_cell_data {
-            bigtable::CellData::Bincode(tx_by_addr) => tx_by_addr.len(),
-            bigtable::CellData::Protobuf(tx_by_addr) => tx_by_addr.tx_by_addrs.len(),
-        };
+            .await
+            .map(|cell_data| {
+                match cell_data {
+                    bigtable::CellData::Bincode(tx_by_addr) => tx_by_addr.len(),
+                    bigtable::CellData::Protobuf(tx_by_addr) => tx_by_addr.tx_by_addrs.len(),
+                }
+            })
+            .unwrap_or(0);
 
         // Return the next tx-by-addr data of amount `limit` plus extra to account for the largest
         // number that might be flitered out
@@ -437,12 +439,14 @@ impl LedgerStorage {
             })?;
 
             let deserialized_cell_data = bigtable::deserialize_protobuf_or_bincode_cell_data::<
-                Vec<TransactionByAddrInfo>,
+                Vec<LegacyTransactionByAddrInfo>,
                 tx_by_addr::TransactionByAddr,
             >(&data, "tx-by-addr", row_key.clone())?;
 
             let mut cell_data: Vec<TransactionByAddrInfo> = match deserialized_cell_data {
-                bigtable::CellData::Bincode(tx_by_addr) => tx_by_addr,
+                bigtable::CellData::Bincode(tx_by_addr) => {
+                    tx_by_addr.into_iter().map(|legacy| legacy.into()).collect()
+                }
                 bigtable::CellData::Protobuf(tx_by_addr) => {
                     tx_by_addr.try_into().map_err(|error| {
                         bigtable::Error::ObjectCorrupt(format!(
@@ -470,7 +474,7 @@ impl LedgerStorage {
                         slot,
                         err: tx_by_addr_info.err,
                         memo: tx_by_addr_info.memo,
-                        block_time: None,
+                        block_time: tx_by_addr_info.block_time,
                     },
                     tx_by_addr_info.index,
                 ));

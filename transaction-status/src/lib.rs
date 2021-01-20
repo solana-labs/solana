@@ -562,6 +562,14 @@ impl EncodedTransaction {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct LegacyTransactionByAddrInfo {
+    pub signature: Signature,          // The transaction signature
+    pub err: Option<TransactionError>, // None if the transaction executed successfully
+    pub index: u32,                    // Where the transaction is located in the block
+    pub memo: Option<String>,          // Transaction memo
+}
+
 // A serialized `Vec<TransactionByAddrInfo>` is stored in the `tx-by-addr` table.  The row keys are
 // the one's compliment of the slot so that rows may be listed in reverse order
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -571,6 +579,25 @@ pub struct TransactionByAddrInfo {
     pub index: u32,                    // Where the transaction is located in the block
     pub memo: Option<String>,          // Transaction memo
     pub block_time: Option<UnixTimestamp>,
+}
+
+impl From<LegacyTransactionByAddrInfo> for TransactionByAddrInfo {
+    fn from(legacy: LegacyTransactionByAddrInfo) -> Self {
+        let LegacyTransactionByAddrInfo {
+            signature,
+            err,
+            index,
+            memo,
+        } = legacy;
+
+        Self {
+            signature,
+            err,
+            index,
+            memo,
+            block_time: None,
+        }
+    }
 }
 
 #[cfg(test)]
