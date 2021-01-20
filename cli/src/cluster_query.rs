@@ -880,7 +880,7 @@ pub fn process_get_block(
     let slot = if let Some(slot) = slot {
         slot
     } else {
-        rpc_client.get_slot()?
+        rpc_client.get_slot_with_commitment(CommitmentConfig::max())?
     };
 
     let mut block =
@@ -958,7 +958,7 @@ pub fn process_get_block_time(
     let slot = if let Some(slot) = slot {
         slot
     } else {
-        rpc_client.get_slot()?
+        rpc_client.get_slot_with_commitment(CommitmentConfig::max())?
     };
     let timestamp = rpc_client.get_block_time(slot)?;
     let block_time = CliBlockTime { slot, timestamp };
