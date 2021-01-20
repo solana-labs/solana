@@ -7,7 +7,6 @@ use chrono::{Local, TimeZone};
 use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
 use solana_clap_utils::{
-    commitment::{commitment_arg, commitment_arg_with_default},
     input_parsers::*,
     input_validators::*,
     keypair::DefaultSigner,
@@ -121,20 +120,17 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .long("log")
                         .takes_value(false)
                         .help("Don't update the progress inplace; instead show updates with its own new lines"),
-                )
-                .arg(commitment_arg()),
+                ),
         )
         .subcommand(
             SubCommand::with_name("cluster-date")
-                .about("Get current cluster date, computed from genesis creation time and network time")
-                .arg(commitment_arg()),
+                .about("Get current cluster date, computed from genesis creation time and network time"),
         )
         .subcommand(
             SubCommand::with_name("cluster-version")
                 .about("Get the version of the cluster entrypoint"),
         )
-        .subcommand(SubCommand::with_name("fees").about("Display current cluster fees")
-            .arg(commitment_arg()),
+        .subcommand(SubCommand::with_name("fees").about("Display current cluster fees"),
         )
         .subcommand(
             SubCommand::with_name("first-available-block")
@@ -165,8 +161,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
         .subcommand(
             SubCommand::with_name("epoch-info")
             .about("Get information about the current epoch")
-            .alias("get-epoch-info")
-            .arg(commitment_arg()),
+            .alias("get-epoch-info"),
         )
         .subcommand(
             SubCommand::with_name("genesis-hash")
@@ -175,16 +170,13 @@ impl ClusterQuerySubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("slot").about("Get current slot")
-            .alias("get-slot")
-            .arg(commitment_arg()),
+            .alias("get-slot"),
         )
         .subcommand(
-            SubCommand::with_name("block-height").about("Get current block height")
-            .arg(commitment_arg()),
+            SubCommand::with_name("block-height").about("Get current block height"),
         )
         .subcommand(
-            SubCommand::with_name("epoch").about("Get current epoch")
-            .arg(commitment_arg()),
+            SubCommand::with_name("epoch").about("Get current epoch"),
         )
         .subcommand(
             SubCommand::with_name("largest-accounts").about("Get addresses of largest cluster accounts")
@@ -200,8 +192,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                     .takes_value(false)
                     .conflicts_with("circulating")
                     .help("Filter address list to only non-circulating accounts")
-            )
-            .arg(commitment_arg()),
+            ),
         )
         .subcommand(
             SubCommand::with_name("supply").about("Get information about the cluster supply of SOL")
@@ -210,18 +201,15 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                     .long("print-accounts")
                     .takes_value(false)
                     .help("Print list of non-circualting account addresses")
-            )
-            .arg(commitment_arg()),
+            ),
         )
         .subcommand(
             SubCommand::with_name("total-supply").about("Get total number of SOL")
-            .setting(AppSettings::Hidden)
-            .arg(commitment_arg()),
+            .setting(AppSettings::Hidden),
         )
         .subcommand(
             SubCommand::with_name("transaction-count").about("Get current transaction count")
-            .alias("get-transaction-count")
-            .arg(commitment_arg()),
+            .alias("get-transaction-count"),
         )
         .subcommand(
             SubCommand::with_name("ping")
@@ -268,8 +256,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .default_value("15")
                         .help("Wait up to timeout seconds for transaction confirmation"),
                 )
-                .arg(blockhash_arg())
-                .arg(commitment_arg()),
+                .arg(blockhash_arg()),
         )
         .subcommand(
             SubCommand::with_name("live-slots")
@@ -292,8 +279,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .takes_value(false)
                         .conflicts_with("address")
                         .help("Include vote transactions when monitoring all transactions")
-                )
-                .arg(commitment_arg_with_default("singleGossip")),
+                ),
         )
         .subcommand(
             SubCommand::with_name("block-production")
@@ -343,8 +329,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .long("lamports")
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL"),
-                )
-                .arg(commitment_arg()),
+                ),
         )
         .subcommand(
             SubCommand::with_name("transaction-history")
@@ -1984,8 +1969,6 @@ mod tests {
             "-t",
             "3",
             "-D",
-            "--commitment",
-            "max",
             "--blockhash",
             "4CCNp28j6AhGq7PkjPDP4wbQWBS8LLbQin2xV5n8frKX",
         ]);
