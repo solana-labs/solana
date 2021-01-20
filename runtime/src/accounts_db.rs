@@ -2082,6 +2082,49 @@ impl AccountsDB {
             verify.par_sort_by(|a, b| a.0.cmp(&b.0));
             warn!("jwash:First sorted hash: {:?} out of: {}", hashes[0], hashes.len());
             
+            let mut i = 0;
+            let mut j = 0;
+            loop {
+                let donei = i > hashes.len();
+                let donej = j > verify.len();
+                if donei && donej {
+                    break;
+                }
+
+                if !donei {
+                    warn!("jwash: in left: {:?}", hashes[i]);
+                    i += 1;
+                }
+                else if !donej {
+                    warn!("jwash: in right: {:?}", verify[j]);
+                    j += 1;
+                }
+                else{
+                    let vali = hashes[i];
+                    let valj = verify[j];
+                    if vali == valj {
+                        i += 1;
+                        j += 1;
+                    }
+                    else {
+                        let publ = vali.0 == valj.0;
+                        if !publ {
+                            if (vali > valj){
+                                j += 1;
+                                warn!("jwash: in right: {:?}", valj);
+                            }
+                            else {
+                                i += 1;
+                                warn!("jwash: in left: {:?}", vali);
+                            }
+                        }
+                        else{
+                            warn!("jwash: different: {:?}, {:?}", vali, valj);
+                        }
+                    }
+                }
+                let l = hashes[i];
+            };
         }
 
         let mut sum_time = Measure::start("cap");
@@ -2472,6 +2515,9 @@ impl AccountsDB {
                 error!("jwash:accounts.Differs: slot: {}, ancestors len: {}, simple_cap: {}", slot, ancestors.len(), simple_capitalization_enabled);
                 let account_maps = self.get_accounts(slot, ancestors, simple_capitalization_enabled);
                 error!("jwash:account count: {}", account_maps.len());
+                let account_maps:Vec<_> = account_maps.into_iter().map(|(p, (_version, hash, _balance, lamports))| (p, hash, lamports)).collect();
+                self.calculate_accounts_hash_verify(slot, ancestors, false, simple_capitalization_enabled, account_maps).unwrap();
+
             }
             else{
                 error!("jwash: these are the same");
