@@ -4,6 +4,7 @@ extern crate test;
 
 use dashmap::DashMap;
 use rand::Rng;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use solana_runtime::{
     accounts::{create_test_accounts, Accounts},
     bank::*,
@@ -11,6 +12,7 @@ use solana_runtime::{
 use solana_sdk::{
     account::Account,
     genesis_config::{create_genesis_config, ClusterType},
+    hash::Hash,
     pubkey::Pubkey,
 };
 use std::{
@@ -296,4 +298,60 @@ fn bench_rwlock_hashmap_single_reader_with_n_writers(bencher: &mut Bencher) {
             test::black_box(map.read().unwrap().get(&5));
         }
     })
+}
+
+fn setup_bench_dashmap_iter() -> (Arc<Accounts>, DashMap<Pubkey, (Account, Hash)>) {
+    let accounts = Arc::new(Accounts::new_with_config(
+        vec![
+            PathBuf::from(std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string()))
+                .join("bench_dashmap_par_iter"),
+        ],
+        &ClusterType::Development,
+        HashSet::new(),
+        false,
+    ));
+
+    let dashmap = DashMap::new();
+    let num_keys = std::env::var("NUM_BENCH_KEYS")
+        .map(|num_keys| num_keys.parse::<usize>().unwrap())
+        .unwrap_or_else(|_| 10000);
+    for _ in 0..num_keys {
+        dashmap.insert(
+            Pubkey::new_unique(),
+            (
+                Account::new(1, 0, &Account::default().owner),
+                Hash::new_unique(),
+            ),
+        );
+    }
+
+    (accounts, dashmap)
+}
+
+#[bench]
+fn bench_dashmap_par_iter(bencher: &mut Bencher) {
+    let (accounts, dashmap) = setup_bench_dashmap_iter();
+
+    bencher.iter(|| {
+        test::black_box(accounts.accounts_db.thread_pool.install(|| {
+            dashmap
+                .par_iter()
+                .map(|cached_account| (*cached_account.key(), cached_account.value().1))
+                .collect::<Vec<(Pubkey, Hash)>>()
+        }));
+    });
+}
+
+#[bench]
+fn bench_dashmap_iter(bencher: &mut Bencher) {
+    let (_accounts, dashmap) = setup_bench_dashmap_iter();
+
+    bencher.iter(|| {
+        test::black_box(
+            dashmap
+                .iter()
+                .map(|cached_account| (*cached_account.key(), cached_account.value().1))
+                .collect::<Vec<(Pubkey, Hash)>>(),
+        );
+    });
 }

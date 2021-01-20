@@ -27,7 +27,10 @@ use crate::{
     contains::Contains,
 };
 use blake3::traits::digest::Digest;
-use dashmap::DashMap;
+use dashmap::{
+    mapref::entry::Entry::{Occupied, Vacant},
+    DashMap, DashSet,
+};
 use lazy_static::lazy_static;
 use log::*;
 use rand::{prelude::SliceRandom, thread_rng, Rng};
@@ -62,6 +65,7 @@ const MAX_RECYCLE_STORES: usize = 1000;
 const STORE_META_OVERHEAD: usize = 256;
 const MAX_CACHE_SLOTS: usize = 200;
 const FLUSH_CACHE_RANDOM_THRESHOLD: usize = MAX_LOCKOUT_HISTORY;
+const SCAN_SLOT_PAR_ITER_THRESHOLD: usize = 4000;
 
 pub const DEFAULT_FILE_SIZE: u64 = PAGE_SIZE * 1024;
 pub const DEFAULT_NUM_THREADS: u32 = 8;
@@ -87,10 +91,17 @@ const CACHE_VIRTUAL_WRITE_VERSION: u64 = 0;
 const CACHE_VIRTUAL_OFFSET: usize = 0;
 const CACHE_VIRTUAL_STORED_SIZE: usize = 0;
 
+type DashMapVersionHash = DashMap<Pubkey, (u64, Hash)>;
+
 lazy_static! {
     // FROZEN_ACCOUNT_PANIC is used to signal local_cluster that an AccountsDB panic has occurred,
     // as |cargo test| cannot observe panics in other threads
     pub static ref FROZEN_ACCOUNT_PANIC: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
+}
+
+pub enum ScanStorageResult<R, B> {
+    Cached(Vec<R>),
+    Stored(B),
 }
 
 #[derive(Debug, Default)]
@@ -623,7 +634,6 @@ pub struct AccountsDB {
 struct AccountsStats {
     delta_hash_scan_time_total_us: AtomicU64,
     delta_hash_accumulate_time_total_us: AtomicU64,
-    delta_hash_merge_time_total_us: AtomicU64,
     delta_hash_num: AtomicU64,
 
     last_store_report: AtomicU64,
@@ -1894,35 +1904,46 @@ impl AccountsDB {
     }
 
     /// Scan a specific slot through all the account storage in parallel
-    pub fn scan_account_storage<F, B>(&self, slot: Slot, scan_func: F) -> Vec<B>
+    pub fn scan_account_storage<R, B>(
+        &self,
+        slot: Slot,
+        cache_map_func: impl Fn(LoadedAccount) -> Option<R> + Sync,
+        storage_scan_func: impl Fn(&B, LoadedAccount) + Sync,
+    ) -> ScanStorageResult<R, B>
     where
-        F: Fn(LoadedAccount, AppendVecId, &mut B) + Send + Sync,
-        B: Send + Default,
-    {
-        self.scan_account_storage_inner(slot, scan_func)
-    }
-
-    fn scan_account_storage_inner<F, B>(&self, slot: Slot, scan_func: F) -> Vec<B>
-    where
-        F: Fn(LoadedAccount, AppendVecId, &mut B) + Send + Sync,
-        B: Send + Default,
+        R: Send,
+        B: Send + Default + Sync,
     {
         if let Some(slot_cache) = self.accounts_cache.slot_cache(slot) {
             // If we see the slot in the cache, then all the account information
             // is in this cached slot
-            let mut retval = B::default();
-            for cached_account in slot_cache.iter() {
-                scan_func(
-                    LoadedAccount::Cached((
-                        *cached_account.key(),
-                        Cow::Borrowed(cached_account.value()),
-                    )),
-                    CACHE_VIRTUAL_STORAGE_ID,
-                    &mut retval,
-                );
+            if slot_cache.len() > SCAN_SLOT_PAR_ITER_THRESHOLD {
+                ScanStorageResult::Cached(self.thread_pool.install(|| {
+                    slot_cache
+                        .par_iter()
+                        .filter_map(|cached_account| {
+                            cache_map_func(LoadedAccount::Cached((
+                                *cached_account.key(),
+                                Cow::Borrowed(cached_account.value()),
+                            )))
+                        })
+                        .collect()
+                }))
+            } else {
+                ScanStorageResult::Cached(
+                    slot_cache
+                        .iter()
+                        .filter_map(|cached_account| {
+                            cache_map_func(LoadedAccount::Cached((
+                                *cached_account.key(),
+                                Cow::Borrowed(cached_account.value()),
+                            )))
+                        })
+                        .collect(),
+                )
             }
-            vec![retval]
         } else {
+            let retval = B::default();
             // If the slot is not in the cache, then all the account information must have
             // been flushed. This is guaranteed because we only remove the rooted slot from
             // the cache *after* we've finished flushing in `flush_slot_cache`.
@@ -1933,21 +1954,12 @@ impl AccountsDB {
                 .unwrap_or_default();
             self.thread_pool.install(|| {
                 storage_maps
-                    .into_par_iter()
-                    .map(|storage| {
-                        let accounts = storage.accounts.accounts(0);
-                        let mut retval = B::default();
-                        accounts.into_iter().for_each(|stored_account| {
-                            scan_func(
-                                LoadedAccount::Stored(stored_account),
-                                storage.append_vec_id(),
-                                &mut retval,
-                            )
-                        });
-                        retval
-                    })
-                    .collect()
-            })
+                    .par_iter()
+                    .flat_map(|storage| storage.accounts.accounts(0))
+                    .for_each(|account| storage_scan_func(&retval, LoadedAccount::Stored(account)));
+            });
+
+            ScanStorageResult::Stored(retval)
         }
     }
 
@@ -2518,9 +2530,10 @@ impl AccountsDB {
         // Reads will then always read the latest version of a slot. Scans will also know
         // which version their parents because banks will also be augmented with this version,
         // which handles cases where a deletion of one version happens in the middle of the scan.
-        let pubkey_sets: Vec<HashSet<Pubkey>> = self.scan_account_storage(
+        let scan_result: ScanStorageResult<Pubkey, DashSet<Pubkey>> = self.scan_account_storage(
             remove_slot,
-            |loaded_account: LoadedAccount, _, accum: &mut HashSet<Pubkey>| {
+            |loaded_account: LoadedAccount| Some(*loaded_account.pubkey()),
+            |accum: &DashSet<Pubkey>, loaded_account: LoadedAccount| {
                 accum.insert(*loaded_account.pubkey());
             },
         );
@@ -2528,15 +2541,26 @@ impl AccountsDB {
         // Purge this slot from the accounts index
         let purge_slot: HashSet<Slot> = vec![remove_slot].into_iter().collect();
         let mut reclaims = vec![];
-        {
-            let pubkeys = pubkey_sets.iter().flatten();
-            for pubkey in pubkeys {
-                self.accounts_index.purge_exact(
-                    pubkey,
-                    &purge_slot,
-                    &mut reclaims,
-                    &self.account_indexes,
-                );
+        match scan_result {
+            ScanStorageResult::Cached(cached_keys) => {
+                for pubkey in cached_keys.iter() {
+                    self.accounts_index.purge_exact(
+                        pubkey,
+                        &purge_slot,
+                        &mut reclaims,
+                        &self.account_indexes,
+                    );
+                }
+            }
+            ScanStorageResult::Stored(stored_keys) => {
+                for set_ref in stored_keys.iter() {
+                    self.accounts_index.purge_exact(
+                        set_ref.key(),
+                        &purge_slot,
+                        &mut reclaims,
+                        &self.account_indexes,
+                    );
+                }
             }
         }
 
@@ -3062,13 +3086,6 @@ impl AccountsDB {
                 i64
             ),
             (
-                "delta_hash_merge_us",
-                self.stats
-                    .delta_hash_merge_time_total_us
-                    .swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
                 "delta_hash_accumulate_us",
                 self.stats
                     .delta_hash_accumulate_time_total_us
@@ -3345,41 +3362,59 @@ impl AccountsDB {
 
     pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
         let mut scan = Measure::start("scan");
-        let mut accumulator: Vec<HashMap<Pubkey, (u64, Hash)>> = self.scan_account_storage(
-            slot,
-            |loaded_account: LoadedAccount,
-             _store_id: AppendVecId,
-             accum: &mut HashMap<Pubkey, (u64, Hash)>| {
-                accum.insert(
-                    *loaded_account.pubkey(),
-                    (
-                        loaded_account.write_version(),
+
+        let scan_result: ScanStorageResult<(Pubkey, Hash, u64), DashMapVersionHash> = self
+            .scan_account_storage(
+                slot,
+                |loaded_account: LoadedAccount| {
+                    // Cache only has one version per key, don't need to worry about versioning
+                    Some((
+                        *loaded_account.pubkey(),
                         *loaded_account.loaded_hash(),
-                    ),
-                );
-            },
-        );
+                        CACHE_VIRTUAL_WRITE_VERSION,
+                    ))
+                },
+                |accum: &DashMap<Pubkey, (u64, Hash)>, loaded_account: LoadedAccount| {
+                    let loaded_write_version = loaded_account.write_version();
+                    let loaded_hash = *loaded_account.loaded_hash();
+                    let should_insert =
+                        if let Some(existing_entry) = accum.get(loaded_account.pubkey()) {
+                            loaded_write_version > existing_entry.value().version()
+                        } else {
+                            true
+                        };
+                    if should_insert {
+                        // Detected insertion is necessary, grabs the write lock to commit the write,
+                        match accum.entry(*loaded_account.pubkey()) {
+                            // Double check in case another thread interleaved a write between the read + write.
+                            Occupied(mut occupied_entry) => {
+                                if loaded_write_version > occupied_entry.get().version() {
+                                    occupied_entry.insert((loaded_write_version, loaded_hash));
+                                }
+                            }
+
+                            Vacant(vacant_entry) => {
+                                vacant_entry.insert((loaded_write_version, loaded_hash));
+                            }
+                        }
+                    }
+                },
+            );
         scan.stop();
-        let mut merge = Measure::start("merge");
-        let mut account_maps = HashMap::new();
-        while let Some(maps) = accumulator.pop() {
-            AccountsDB::merge(&mut account_maps, &maps);
-        }
-        merge.stop();
 
         let mut accumulate = Measure::start("accumulate");
-        let hashes: Vec<_> = account_maps
-            .into_iter()
-            .map(|(pubkey, (_, hash))| (pubkey, hash, 0))
-            .collect();
+        let hashes: Vec<_> = match scan_result {
+            ScanStorageResult::Cached(cached_result) => cached_result,
+            ScanStorageResult::Stored(stored_result) => stored_result
+                .into_iter()
+                .map(|(pubkey, (_latest_write_version, hash))| (pubkey, hash, 0))
+                .collect(),
+        };
         let ret = Self::accumulate_account_hashes(hashes, slot, false);
         accumulate.stop();
         self.stats
             .delta_hash_scan_time_total_us
             .fetch_add(scan.as_us(), Ordering::Relaxed);
-        self.stats
-            .delta_hash_merge_time_total_us
-            .fetch_add(merge.as_us(), Ordering::Relaxed);
         self.stats
             .delta_hash_accumulate_time_total_us
             .fetch_add(accumulate.as_us(), Ordering::Relaxed);
@@ -3878,20 +3913,6 @@ impl AccountsDB {
             })
             .filter(|snapshot_storage: &SnapshotStorage| !snapshot_storage.is_empty())
             .collect()
-    }
-
-    fn merge<X>(dest: &mut HashMap<Pubkey, X>, source: &HashMap<Pubkey, X>)
-    where
-        X: Versioned + Clone,
-    {
-        for (key, source_item) in source.iter() {
-            if let Some(dest_item) = dest.get(key) {
-                if dest_item.version() > source_item.version() {
-                    continue;
-                }
-            }
-            dest.insert(*key, source_item.clone());
-        }
     }
 
     pub fn generate_index(&self) {

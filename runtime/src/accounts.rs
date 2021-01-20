@@ -1,5 +1,5 @@
 use crate::{
-    accounts_db::{AccountsDB, AppendVecId, BankHashInfo, ErrorCounters, LoadedAccount},
+    accounts_db::{AccountsDB, BankHashInfo, ErrorCounters, LoadedAccount, ScanStorageResult},
     accounts_index::{AccountIndex, Ancestors, IndexKey},
     bank::{
         NonceRollbackFull, NonceRollbackInfo, TransactionCheckResult, TransactionExecutionResult,
@@ -9,9 +9,12 @@ use crate::{
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
     transaction_utils::OrderedIterator,
 };
+use dashmap::{
+    mapref::entry::Entry::{Occupied, Vacant},
+    DashMap,
+};
 use log::*;
 use rand::{thread_rng, Rng};
-use rayon::slice::ParallelSliceMut;
 use solana_sdk::{
     account::Account,
     account_utils::StateMut,
@@ -453,28 +456,48 @@ impl Accounts {
     pub fn scan_slot<F, B>(&self, slot: Slot, func: F) -> Vec<B>
     where
         F: Fn(LoadedAccount) -> Option<B> + Send + Sync,
-        B: Send + Default,
+        B: Sync + Send + Default + std::cmp::Eq,
     {
-        let accumulator: Vec<Vec<(Pubkey, u64, B)>> = self.accounts_db.scan_account_storage(
+        let scan_result = self.accounts_db.scan_account_storage(
             slot,
-            |loaded_account: LoadedAccount, _id: AppendVecId, accum: &mut Vec<(Pubkey, u64, B)>| {
-                let pubkey = *loaded_account.pubkey();
-                let write_version = loaded_account.write_version();
-                if let Some(val) = func(loaded_account) {
-                    accum.push((pubkey, std::u64::MAX - write_version, val));
+            |loaded_account: LoadedAccount| {
+                // Cache only has one version per key, don't need to worry about versioning
+                func(loaded_account)
+            },
+            |accum: &DashMap<Pubkey, (u64, B)>, loaded_account: LoadedAccount| {
+                let loaded_account_pubkey = *loaded_account.pubkey();
+                let loaded_write_version = loaded_account.write_version();
+                let should_insert = accum
+                    .get(&loaded_account_pubkey)
+                    .map(|existing_entry| loaded_write_version > existing_entry.value().0)
+                    .unwrap_or(true);
+                if should_insert {
+                    if let Some(val) = func(loaded_account) {
+                        // Detected insertion is necessary, grabs the write lock to commit the write,
+                        match accum.entry(loaded_account_pubkey) {
+                            // Double check in case another thread interleaved a write between the read + write.
+                            Occupied(mut occupied_entry) => {
+                                if loaded_write_version > occupied_entry.get().0 {
+                                    occupied_entry.insert((loaded_write_version, val));
+                                }
+                            }
+
+                            Vacant(vacant_entry) => {
+                                vacant_entry.insert((loaded_write_version, val));
+                            }
+                        }
+                    }
                 }
             },
         );
 
-        let mut versions: Vec<(Pubkey, u64, B)> = accumulator.into_iter().flatten().collect();
-        self.accounts_db.thread_pool.install(|| {
-            versions.par_sort_by_key(|s| (s.0, s.1));
-        });
-        versions.dedup_by_key(|s| s.0);
-        versions
-            .into_iter()
-            .map(|(_pubkey, _version, val)| val)
-            .collect()
+        match scan_result {
+            ScanStorageResult::Cached(cached_result) => cached_result,
+            ScanStorageResult::Stored(stored_result) => stored_result
+                .into_iter()
+                .map(|(_pubkey, (_latest_write_version, val))| val)
+                .collect(),
+        }
     }
 
     pub fn load_by_program_slot(
