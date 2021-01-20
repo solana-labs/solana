@@ -86,13 +86,8 @@ pub enum UpgradeableLoaderInstruction {
     ///
     /// # Account references
     ///   0. [writable] The ProgramData account.
-<<<<<<< HEAD
-    ///   1. [] The Program account.
-    ///   2. [Writable] The Buffer account where the program data has been
-=======
     ///   1. [writable] The Program account.
     ///   2. [writable] The Buffer account where the program data has been
->>>>>>> a480b6323... Bail on small deploy buffers (#14677)
     ///      written.
     ///   3. [writable] The spill account.
     ///   4. [] Rent sysvar.
