@@ -3718,6 +3718,81 @@ mod tests {
         assert_eq!(max_ts, new_max_ts);
     }
 
+    fn new_vote_transaction<R: Rng>(rng: &mut R, slots: Vec<Slot>) -> Transaction {
+        let vote = Vote::new(slots, solana_sdk::hash::new_rand(rng));
+        let ix = vote_instruction::vote(
+            &Pubkey::new_unique(), // vote_pubkey
+            &Pubkey::new_unique(), // authorized_voter_pubkey
+            vote,
+        );
+        Transaction::new_with_payer(
+            &[ix], // instructions
+            None,  // payer
+        )
+    }
+
+    #[test]
+    fn test_push_votes_with_tower() {
+        let get_vote_slots = |cluster_info: &ClusterInfo, now| -> Vec<Slot> {
+            let (labels, _, _) = cluster_info.get_votes(now);
+            let gossip = cluster_info.gossip.read().unwrap();
+            let mut vote_slots = HashSet::new();
+            for label in labels {
+                match &gossip.crds.lookup(&label).unwrap().data {
+                    CrdsData::Vote(_, vote) => {
+                        assert!(vote_slots.insert(vote.slot().unwrap()));
+                    }
+                    _ => panic!("this should not happen!"),
+                }
+            }
+            vote_slots.into_iter().collect()
+        };
+        let mut rng = rand::thread_rng();
+        let now = timestamp();
+        let keys = Keypair::new();
+        let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
+        let mut tower = Vec::new();
+        for k in 0..MAX_LOCKOUT_HISTORY {
+            let slot = k as Slot;
+            tower.push(slot);
+            let vote = new_vote_transaction(&mut rng, vec![slot]);
+            cluster_info.push_vote(&tower, vote);
+        }
+        let vote_slots = get_vote_slots(&cluster_info, now);
+        assert_eq!(vote_slots.len(), MAX_LOCKOUT_HISTORY);
+        for vote_slot in vote_slots {
+            assert!(vote_slot < MAX_LOCKOUT_HISTORY as u64);
+        }
+        // Push a new vote evicting one.
+        let slot = MAX_LOCKOUT_HISTORY as Slot;
+        tower.push(slot);
+        tower.remove(23);
+        let vote = new_vote_transaction(&mut rng, vec![slot]);
+        cluster_info.push_vote(&tower, vote);
+        let vote_slots = get_vote_slots(&cluster_info, now);
+        assert_eq!(vote_slots.len(), MAX_LOCKOUT_HISTORY);
+        for vote_slot in vote_slots {
+            assert!(vote_slot <= slot);
+            assert!(vote_slot != 23);
+        }
+        // Push a new vote evicting two.
+        // Older one should be evicted from the crds table.
+        let slot = slot + 1;
+        tower.push(slot);
+        tower.remove(17);
+        tower.remove(5);
+        let vote = new_vote_transaction(&mut rng, vec![slot]);
+        cluster_info.push_vote(&tower, vote);
+        let vote_slots = get_vote_slots(&cluster_info, now);
+        assert_eq!(vote_slots.len(), MAX_LOCKOUT_HISTORY);
+        for vote_slot in vote_slots {
+            assert!(vote_slot <= slot);
+            assert!(vote_slot != 23);
+            assert!(vote_slot != 5);
+        }
+    }
+
     #[test]
     fn test_push_epoch_slots() {
         let keys = Keypair::new();
