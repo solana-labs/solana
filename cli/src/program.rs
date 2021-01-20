@@ -12,10 +12,7 @@ use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use serde_json::{self, json};
 use solana_bpf_loader_program::bpf_verifier;
-use solana_clap_utils::{
-    self, commitment::commitment_arg_with_default, input_parsers::*, input_validators::*,
-    keypair::*,
-};
+use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
 use solana_cli_output::display::new_spinner_progress_bar;
 use solana_client::{
     rpc_client::RpcClient, rpc_config::RpcSendTransactionConfig,
@@ -145,8 +142,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .long("allow-excessive-deploy-account-balance")
                                 .takes_value(false)
                                 .help("Use the designated program id even if the account already holds a large balance of SOL")
-                        )
-                        .arg(commitment_arg_with_default("singleGossip")),
+                        ),
                 )
                 .subcommand(
                     SubCommand::with_name("write-buffer")
@@ -188,8 +184,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .required(false)
                                 .help("Maximum length of the upgradeable program \
                                       [default: twice the length of the original deployed program]")
-                        )
-                        .arg(commitment_arg_with_default("singleGossip")),
+                        ),
                 )
                 .subcommand(
                     SubCommand::with_name("set-buffer-authority")
@@ -223,7 +218,6 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .conflicts_with("new_buffer_authority")
                                 .help("The buffer will be immutable")
                         )
-                        .arg(commitment_arg_with_default("singleGossip")),
                 )
                 .subcommand(
                     SubCommand::with_name("set-upgrade-authority")
@@ -257,7 +251,6 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .conflicts_with("new_upgrade_authority")
                                 .help("The program will not be upgradeable")
                         )
-                        .arg(commitment_arg_with_default("singleGossip")),
                 )
         )
     }
