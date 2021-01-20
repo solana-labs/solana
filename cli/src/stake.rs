@@ -10,7 +10,6 @@ use crate::{
 use chrono::{Local, TimeZone};
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
 use solana_clap_utils::{
-    commitment::commitment_arg_with_default,
     fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
     input_parsers::*,
     input_validators::*,
@@ -404,8 +403,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .long("lamports")
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL")
-                )
-                .arg(commitment_arg_with_default("singleGossip")),
+                ),
         )
         .subcommand(
             SubCommand::with_name("stake-history")

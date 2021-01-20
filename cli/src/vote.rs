@@ -8,7 +8,6 @@ use crate::{
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{
-    commitment::commitment_arg_with_default,
     input_parsers::*,
     input_validators::*,
     keypair::{DefaultSigner, SignerIndex},
@@ -208,8 +207,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .long("lamports")
                         .takes_value(false)
                         .help("Display balance in lamports instead of SOL"),
-                )
-                .arg(commitment_arg_with_default("singleGossip")),
+                ),
         )
         .subcommand(
             SubCommand::with_name("withdraw-from-vote-account")

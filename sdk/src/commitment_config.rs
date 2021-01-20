@@ -1,3 +1,6 @@
+use std::str::FromStr;
+use thiserror::Error;
+
 #[derive(Serialize, Deserialize, Default, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CommitmentConfig {
@@ -44,6 +47,14 @@ impl CommitmentConfig {
     }
 }
 
+impl FromStr for CommitmentConfig {
+    type Err = ParseCommitmentLevelError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        CommitmentLevel::from_str(s).map(|commitment| Self { commitment })
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 /// An attribute of a slot. It describes how finalized a block is at some point in time. For example, a slot
@@ -78,4 +89,38 @@ impl Default for CommitmentLevel {
     fn default() -> Self {
         Self::Max
     }
+}
+
+impl FromStr for CommitmentLevel {
+    type Err = ParseCommitmentLevelError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "max" => Ok(CommitmentLevel::Max),
+            "recent" => Ok(CommitmentLevel::Recent),
+            "root" => Ok(CommitmentLevel::Root),
+            "single" => Ok(CommitmentLevel::Single),
+            "singleGossip" => Ok(CommitmentLevel::SingleGossip),
+            _ => Err(ParseCommitmentLevelError::Invalid),
+        }
+    }
+}
+
+impl std::fmt::Display for CommitmentLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let s = match self {
+            CommitmentLevel::Max => "max",
+            CommitmentLevel::Recent => "recent",
+            CommitmentLevel::Root => "root",
+            CommitmentLevel::Single => "single",
+            CommitmentLevel::SingleGossip => "singleGossip",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum ParseCommitmentLevelError {
+    #[error("invalid variant")]
+    Invalid,
 }

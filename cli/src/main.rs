@@ -3,10 +3,7 @@ use clap::{
     SubCommand,
 };
 use console::style;
-
 use solana_clap_utils::{
-    commitment::COMMITMENT_ARG,
-    input_parsers::commitment_of,
     input_validators::{is_url, is_url_or_moniker},
     keypair::{CliSigners, DefaultSigner, SKIP_SEED_PHRASE_VALIDATION_ARG},
     DisplayError,
@@ -19,7 +16,6 @@ use solana_cli_config::{Config, CONFIG_FILE};
 use solana_cli_output::{display::println_name_value, OutputFormat};
 use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::commitment_config::CommitmentConfig;
 use std::{collections::HashMap, error, path::PathBuf, sync::Arc, time::Duration};
 
 pub fn println_name_value_or(name: &str, value: &str, setting_type: SettingType) {
@@ -64,12 +60,19 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                     );
                     let (keypair_setting_type, keypair_path) =
                         CliConfig::compute_keypair_path_setting("", &config.keypair_path);
+                    let (commitment_setting_type, commitment) =
+                        CliConfig::compute_commitment_config("", &config.commitment);
 
                     if let Some(field) = subcommand_matches.value_of("specific_setting") {
                         let (field_name, value, setting_type) = match field {
                             "json_rpc_url" => ("RPC URL", json_rpc_url, url_setting_type),
                             "websocket_url" => ("WebSocket URL", websocket_url, ws_setting_type),
                             "keypair" => ("Key Path", keypair_path, keypair_setting_type),
+                            "commitment" => (
+                                "Commitment",
+                                commitment.commitment.to_string(),
+                                commitment_setting_type,
+                            ),
                             _ => unreachable!(),
                         };
                         println_name_value_or(&format!("{}:", field_name), &value, setting_type);
@@ -78,6 +81,11 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                         println_name_value_or("RPC URL:", &json_rpc_url, url_setting_type);
                         println_name_value_or("WebSocket URL:", &websocket_url, ws_setting_type);
                         println_name_value_or("Keypair Path:", &keypair_path, keypair_setting_type);
+                        println_name_value_or(
+                            "Commitment:",
+                            &commitment.commitment.to_string(),
+                            commitment_setting_type,
+                        );
                     }
                 }
                 ("set", Some(subcommand_matches)) => {
@@ -93,6 +101,9 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                     if let Some(keypair) = subcommand_matches.value_of("keypair") {
                         config.keypair_path = keypair.to_string();
                     }
+                    if let Some(commitment) = subcommand_matches.value_of("commitment") {
+                        config.commitment = commitment.to_string();
+                    }
 
                     config.save(config_file)?;
 
@@ -106,11 +117,18 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                     );
                     let (keypair_setting_type, keypair_path) =
                         CliConfig::compute_keypair_path_setting("", &config.keypair_path);
+                    let (commitment_setting_type, commitment) =
+                        CliConfig::compute_commitment_config("", &config.commitment);
 
                     println_name_value("Config File:", config_file);
                     println_name_value_or("RPC URL:", &json_rpc_url, url_setting_type);
                     println_name_value_or("WebSocket URL:", &websocket_url, ws_setting_type);
                     println_name_value_or("Keypair Path:", &keypair_path, keypair_setting_type);
+                    println_name_value_or(
+                        "Commitment:",
+                        &commitment.commitment.to_string(),
+                        commitment_setting_type,
+                    );
                 }
                 ("import-address-labels", Some(subcommand_matches)) => {
                     let filename = value_t_or_exit!(subcommand_matches, "filename", PathBuf);
@@ -183,16 +201,10 @@ pub fn parse_args<'a>(
             OutputFormat::Display
         });
 
-    let commitment = {
-        let mut sub_matches = matches;
-        while let Some(subcommand_name) = sub_matches.subcommand_name() {
-            sub_matches = sub_matches
-                .subcommand_matches(subcommand_name)
-                .expect("subcommand_matches");
-        }
-        commitment_of(sub_matches, COMMITMENT_ARG.long)
-    }
-    .unwrap_or_else(CommitmentConfig::single_gossip);
+    let (_, commitment) = CliConfig::compute_commitment_config(
+        matches.value_of("commitment").unwrap_or(""),
+        &config.commitment,
+    );
 
     let address_labels = if matches.is_present("no_address_labels") {
         HashMap::new()
@@ -275,6 +287,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .help("Filepath or URL to a keypair"),
     )
     .arg(
+        Arg::with_name("commitment")
+            .long("commitment")
+            .takes_value(true)
+            .possible_values(&["recent", "single", "singleGossip", "root", "max"])
+            .value_name("COMMITMENT_LEVEL")
+            .global(true)
+            .help("Return information at the selected commitment level"),
+    )
+    .arg(
         Arg::with_name("verbose")
             .long("verbose")
             .short("v")
@@ -325,7 +346,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             .index(1)
                             .value_name("CONFIG_FIELD")
                             .takes_value(true)
-                            .possible_values(&["json_rpc_url", "websocket_url", "keypair"])
+                            .possible_values(&[
+                                "json_rpc_url",
+                                "websocket_url",
+                                "keypair",
+                                "commitment",
+                            ])
                             .help("Return a specific config setting"),
                     ),
             )
@@ -334,7 +360,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     .about("Set a config setting")
                     .group(
                         ArgGroup::with_name("config_settings")
-                            .args(&["json_rpc_url", "websocket_url", "keypair"])
+                            .args(&["json_rpc_url", "websocket_url", "keypair", "commitment"])
                             .multiple(true)
                             .required(true),
                     ),
