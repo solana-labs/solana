@@ -34,7 +34,8 @@ fn test_transfer() {
     run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client =
+        RpcClient::new_socket_with_commitment(leader_data.rpc, CommitmentConfig::recent());
 
     let default_signer = Keypair::new();
     let default_offline_signer = Keypair::new();
@@ -97,10 +98,7 @@ fn test_transfer() {
     check_recent_balance(50, &rpc_client, &offline_pubkey);
 
     // Offline transfer
-    let (blockhash, _, _) = rpc_client
-        .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
-        .unwrap()
-        .value;
+    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     offline.command = CliCommand::Transfer {
         amount: SpendAmount::Some(10),
         to: recipient_pubkey,
@@ -269,7 +267,8 @@ fn test_transfer_multisession_signing() {
     let config = CliConfig::recent_for_tests();
 
     // Setup accounts
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client =
+        RpcClient::new_socket_with_commitment(leader_data.rpc, CommitmentConfig::recent());
     request_and_confirm_airdrop(
         &rpc_client,
         &faucet_addr,
@@ -292,10 +291,7 @@ fn test_transfer_multisession_signing() {
 
     check_ready(&rpc_client);
 
-    let (blockhash, _, _) = rpc_client
-        .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
-        .unwrap()
-        .value;
+    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
 
     // Offline fee-payer signs first
     let mut fee_payer_config = CliConfig::recent_for_tests();
@@ -389,7 +385,8 @@ fn test_transfer_all() {
     run_local_faucet(mint_keypair, sender, None);
     let faucet_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client =
+        RpcClient::new_socket_with_commitment(leader_data.rpc, CommitmentConfig::recent());
 
     let default_signer = Keypair::new();
 

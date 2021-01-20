@@ -32,12 +32,12 @@ fn test_cli_request_airdrop() {
     let sig_response = process_command(&bob_config);
     sig_response.unwrap();
 
-    let rpc_client = RpcClient::new_socket(leader_data.rpc);
+    let rpc_client =
+        RpcClient::new_socket_with_commitment(leader_data.rpc, CommitmentConfig::recent());
 
     let balance = rpc_client
-        .get_balance_with_commitment(&bob_config.signers[0].pubkey(), CommitmentConfig::recent())
-        .unwrap()
-        .value;
+        .get_balance(&bob_config.signers[0].pubkey())
+        .unwrap();
     assert_eq!(balance, 50);
 
     server.close().unwrap();

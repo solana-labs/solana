@@ -123,7 +123,8 @@ impl ProgramSubCommands for App<'_, '_> {
                             pubkey!(Arg::with_name("program_id")
                                 .long("program-id")
                                 .value_name("PROGRAM_ID"),
-                                "Executable program's address, must be a signer for initial deploys, can be a pubkey for upgrades [default: new random address or the address of keypair file /path/to/program.json]"),
+                                "Executable program's address, must be a signer for initial deploys, can be a pubkey for upgrades \
+                                [default: address of keypair at /path/to/program-keypair.json if present, otherwise a random address]"),
                         )
                         .arg(
                             Arg::with_name("final")
@@ -136,13 +137,14 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("max_len")
                                 .takes_value(true)
                                 .required(false)
-                                .help("Maximum length of the upgradeable program, [default: twice the length of the original deployed program]")
+                                .help("Maximum length of the upgradeable program \
+                                      [default: twice the length of the original deployed program]")
                         )
                         .arg(
                             Arg::with_name("allow_excessive_balance")
                                 .long("allow-excessive-deploy-account-balance")
                                 .takes_value(false)
-                                .help("Use the designated program id, even if the account already holds a large balance of SOL")
+                                .help("Use the designated program id even if the account already holds a large balance of SOL")
                         )
                         .arg(commitment_arg_with_default("singleGossip")),
                 )
@@ -255,7 +257,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .conflicts_with("new_upgrade_authority")
                                 .help("The program will not be upgradeable")
                         )
-                        .arg(commitment_arg_with_default("max")),
+                        .arg(commitment_arg_with_default("singleGossip")),
                 )
         )
     }
@@ -832,9 +834,7 @@ fn process_set_authority(
     };
 
     trace!("Set a new authority");
-    let (blockhash, _, _) = rpc_client
-        .get_recent_blockhash_with_commitment(config.commitment)?
-        .value;
+    let (blockhash, _) = rpc_client.get_recent_blockhash()?;
 
     let mut tx = if let Some(pubkey) = program_pubkey {
         Transaction::new_unsigned(Message::new(
@@ -1277,9 +1277,7 @@ fn check_payer(
     balance_needed: u64,
     messages: &[&Message],
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (_, fee_calculator, _) = rpc_client
-        .get_recent_blockhash_with_commitment(config.commitment)?
-        .value;
+    let (_, fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     // Does the payer have enough?
     check_account_for_spend_multiple_fees_with_commitment(
@@ -1307,9 +1305,7 @@ fn send_deploy_messages(
     if let Some(message) = initial_message {
         if let Some(initial_signer) = initial_signer {
             trace!("Preparing the required accounts");
-            let (blockhash, _, _) = rpc_client
-                .get_recent_blockhash_with_commitment(config.commitment)?
-                .value;
+            let (blockhash, _) = rpc_client.get_recent_blockhash()?;
 
             let mut initial_transaction = Transaction::new_unsigned(message.clone());
             // Most of the initial_transaction combinations require both the fee-payer and new program
@@ -1321,11 +1317,7 @@ fn send_deploy_messages(
             } else {
                 initial_transaction.try_sign(&[payer_signer], blockhash)?;
             }
-            let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
-                &initial_transaction,
-                config.commitment,
-                config.send_transaction_config,
-            );
+            let result = rpc_client.send_and_confirm_transaction_with_spinner(&initial_transaction);
             log_instruction_custom_error::<SystemError>(result, &config)
                 .map_err(|err| format!("Account allocation failed: {}", err))?;
         } else {
@@ -1360,9 +1352,7 @@ fn send_deploy_messages(
     if let Some(message) = final_message {
         if let Some(final_signer) = final_signer {
             trace!("Deploying program");
-            let (blockhash, _, _) = rpc_client
-                .get_recent_blockhash_with_commitment(config.commitment)?
-                .value;
+            let (blockhash, _) = rpc_client.get_recent_blockhash()?;
 
             let mut final_tx = Transaction::new_unsigned(message.clone());
             final_tx.try_sign(&[payer_signer, final_signer], blockhash)?;
@@ -1428,10 +1418,9 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
         let mut status_retries = 15;
 
         progress_bar.set_message("Finding leader node...");
-        let epoch_info = rpc_client.get_epoch_info_with_commitment(commitment)?;
+        let epoch_info = rpc_client.get_epoch_info()?;
         if epoch_info.epoch > leader_schedule_epoch || leader_schedule.is_none() {
-            leader_schedule = rpc_client
-                .get_leader_schedule_with_commitment(Some(epoch_info.absolute_slot), commitment)?;
+            leader_schedule = rpc_client.get_leader_schedule(Some(epoch_info.absolute_slot))?;
             leader_schedule_epoch = epoch_info.epoch;
         }
         let tpu_address = get_leader_tpu(
@@ -1513,7 +1502,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                 return Ok(());
             }
 
-            let slot = rpc_client.get_slot_with_commitment(commitment)?;
+            let slot = rpc_client.get_slot()?;
             if slot > last_valid_slot {
                 break;
             }

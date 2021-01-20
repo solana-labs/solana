@@ -19,6 +19,7 @@ use solana_cli_config::{Config, CONFIG_FILE};
 use solana_cli_output::{display::println_name_value, OutputFormat};
 use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
+use solana_sdk::commitment_config::CommitmentConfig;
 use std::{collections::HashMap, error, path::PathBuf, sync::Arc, time::Duration};
 
 pub fn println_name_value_or(name: &str, value: &str, setting_type: SettingType) {
@@ -182,11 +183,16 @@ pub fn parse_args<'a>(
             OutputFormat::Display
         });
 
-    let commitment = matches
-        .subcommand_name()
-        .and_then(|name| matches.subcommand_matches(name))
-        .and_then(|sub_matches| commitment_of(sub_matches, COMMITMENT_ARG.long))
-        .unwrap_or_default();
+    let commitment = {
+        let mut sub_matches = matches;
+        while let Some(subcommand_name) = sub_matches.subcommand_name() {
+            sub_matches = sub_matches
+                .subcommand_matches(subcommand_name)
+                .expect("subcommand_matches");
+        }
+        commitment_of(sub_matches, COMMITMENT_ARG.long)
+    }
+    .unwrap_or_else(CommitmentConfig::single_gossip);
 
     let address_labels = if matches.is_present("no_address_labels") {
         HashMap::new()
