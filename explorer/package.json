@@ -23,7 +23,7 @@
     "@types/react-select": "^3.1.2",
     "@types/socket.io-client": "^1.4.35",
     "bn.js": "^5.1.3",
-    "bootstrap": "^4.5.3",
+    "bootstrap": "^4.6.0",
     "bs58": "^4.0.1",
     "chai": "^4.2.0",
     "chart.js": "^2.9.4",
