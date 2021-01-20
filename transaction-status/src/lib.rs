@@ -359,7 +359,7 @@ pub struct EncodedConfirmedBlock {
     pub block_time: Option<UnixTimestamp>,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfirmedTransaction {
     pub slot: Slot,
