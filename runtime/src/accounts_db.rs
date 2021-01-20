@@ -47,6 +47,7 @@ use std::{
     iter::FromIterator,
     ops::RangeBounds,
     path::{Path, PathBuf},
+    str::FromStr,
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     sync::{Arc, Mutex, MutexGuard, RwLock},
     time::Instant,
@@ -62,6 +63,10 @@ lazy_static! {
     // FROZEN_ACCOUNT_PANIC is used to signal local_cluster that an AccountsDB panic has occurred,
     // as |cargo test| cannot observe panics in other threads
     pub static ref FROZEN_ACCOUNT_PANIC: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
+}
+
+lazy_static! {
+    pub static ref bad_hash_1:Pubkey = Pubkey::from_str("HHD2XhroHL96SAcmWYptserHcxhSTfXGxABHGgdU9R4E").unwrap();
 }
 
 #[derive(Debug, Default)]
@@ -2061,7 +2066,7 @@ impl AccountsDB {
     }
 
     fn do_accumulate_account_hashes_and_capitalization(
-        mut hashes: Vec<(Pubkey, Hash, u64)>,
+        hashes: Vec<(Pubkey, Hash, u64)>,
         calculate_cap: bool,
     ) -> (Hash, Option<u64>) {
         let verify: Vec<(Pubkey, Hash, u64)> = Vec::new();
@@ -2088,20 +2093,20 @@ impl AccountsDB {
             let mut different_values = 0;
             let max = 100;
             loop {
-                let donei = i > hashes.len();
-                let donej = j > verify.len();
+                let donei = i >= hashes.len();
+                let donej = j >= verify.len();
                 if donei && donej {
                     break;
                 }
 
                 failures += 1;
-                if !donei && donej {
+                if donej {
                     if failures < max {
                         warn!("jwash: in left: {:?}", hashes[i]);
                     }
                     i += 1;
                 }
-                else if !donej && donei{
+                else if donei {
                     if failures < max {
                         warn!("jwash: in right: {:?}", verify[j]);
                     }
@@ -2118,7 +2123,7 @@ impl AccountsDB {
                     else {
                         let publ = vali.0 == valj.0;
                         if !publ {
-                            if (vali > valj){
+                            if vali > valj{
                                 j += 1;
                                 if failures < max {
                                     warn!("jwash: in right: {:?}", valj);
@@ -2160,7 +2165,9 @@ impl AccountsDB {
         let res = Self::compute_merkle_root(hashes, fanout);
         hash_time.stop();
 
-        warn!("jwash:do_accumulate_account_hashes_and_capitalization times: {} {} {}", sort_time, hash_time, sum_time);
+        if sort_time.as_ms() > 20 {
+            warn!("jwash:do_accumulate_account_hashes_and_capitalization times: {} {} {}", sort_time, hash_time, sum_time);
+        }
 
         (res, cap)
     }
@@ -2276,14 +2283,20 @@ impl AccountsDB {
                     simple_capitalization_enabled,
                 );
 
+                let data = 
+                (
+                    loaded_account.meta.write_version,
+                    *loaded_account.hash,
+                    balance,
+                    lamports,
+                );
+                if loaded_account.meta.pubkey == *bad_hash_1 {
+                    warn!("jwash:scanning slot: {}, {}, Found {:?}", slot, inloaded_account.meta.pubkey, data);
+                }
+
                 accum.push((
                     loaded_account.meta.pubkey,
-                    (
-                        loaded_account.meta.write_version,
-                        *loaded_account.hash,
-                        balance,
-                        lamports,
-                    ),
+                    data,
                 ));
             },
         );
@@ -2300,22 +2313,9 @@ impl AccountsDB {
         self.calculate_accounts_hash_using_store_check(slot, ancestors, simple_capitalization_enabled, verify)
     }
 
-    // modeled after get_accounts_delta_hash
-    // intended to be faster than calculate_accounts_hash
-    pub fn calculate_accounts_hash_using_store_check(
-        &self,
-        slot: Slot,
-        ancestors: &Ancestors,
-        simple_capitalization_enabled: bool,
-        verify: Vec<(Pubkey, Hash, u64)>,
-    ) -> (Hash, u64) {
-        warn!("jwash:calculate_accounts_hash_using_store: {}, {}, {}", slot, ancestors.len(), simple_capitalization_enabled);
-        let mut scan = Measure::start("accumulate");
-        let account_maps = self.get_accounts(slot, ancestors, simple_capitalization_enabled);
-        scan.stop();
-
-        let account_len = account_maps.len();
-        let mut zeros = Measure::start("eliminate zeros");
+    fn remove_zero_balance_accounts(
+        account_maps: HashMap<Pubkey, CalculateHashIntermediate>,
+    ) -> Vec<(Pubkey, Hash, u64)> {
         let hashes: Vec<_> = account_maps
             .into_iter()
             .filter_map(|(pubkey, (_, hash, lamports, original_lamports))| {
@@ -2326,6 +2326,26 @@ impl AccountsDB {
                 }
             })
             .collect();
+        hashes
+    }
+
+    // modeled after get_accounts_delta_hash
+    // intended to be faster than calculate_accounts_hash
+    pub fn calculate_accounts_hash_using_store_check(
+        &self,
+        slot: Slot,
+        ancestors: &Ancestors,
+        simple_capitalization_enabled: bool,
+        _verify: Vec<(Pubkey, Hash, u64)>,
+    ) -> (Hash, u64) {
+        warn!("jwash:calculate_accounts_hash_using_store: {}, {}, {}", slot, ancestors.len(), simple_capitalization_enabled);
+        let mut scan = Measure::start("accumulate");
+        let account_maps = self.get_accounts(slot, ancestors, simple_capitalization_enabled);
+        scan.stop();
+
+        let account_len = account_maps.len();
+        let mut zeros = Measure::start("eliminate zeros");
+        let hashes = Self::remove_zero_balance_accounts(account_maps);
         zeros.stop();
         let hash_total = hashes.len();
         let accounts_with_zero = account_len - hash_total;
@@ -2533,8 +2553,8 @@ impl AccountsDB {
                 error!("jwash:accounts.Differs: slot: {}, ancestors len: {}, simple_cap: {}", slot, ancestors.len(), simple_capitalization_enabled);
                 let account_maps = self.get_accounts(slot, ancestors, simple_capitalization_enabled);
                 error!("jwash:account count: {}", account_maps.len());
-                let account_maps:Vec<_> = account_maps.into_iter().map(|(p, (_version, hash, _balance, lamports))| (p, hash, lamports)).collect();
-                self.calculate_accounts_hash_verify(slot, ancestors, false, simple_capitalization_enabled, account_maps).unwrap();
+                let hashes = Self::remove_zero_balance_accounts(account_maps);
+                self.calculate_accounts_hash_verify(slot, ancestors, false, simple_capitalization_enabled, hashes).unwrap();
 
             }
             else{
@@ -3011,17 +3031,23 @@ impl AccountsDB {
 
     fn merge_array<X>(dest: &mut HashMap<Pubkey, X>, source: &[(Pubkey, X)])
     where
-        X: Versioned + Clone,
+        X: Versioned + Clone + std::fmt::Debug,
     {
         for (key, source_item) in source.iter() {
             match dest.entry(*key) {
                 std::collections::hash_map::Entry::Occupied(mut dest_item) => {
+                    if *key == *bad_hash_1 {
+                        warn!("jwash:Found {}, {:?}, existing: {:?}", *key, source_item, dest_item.get_mut());
+                    }
                     if dest_item.get_mut().version() <= source_item.version() {
                         // replace the item
                         dest_item.insert(source_item.clone());
                     }
                 }
                 std::collections::hash_map::Entry::Vacant(v) => {
+                    if *key == *bad_hash_1 {
+                        warn!("jwash:inserting {:?}, version: {:?}", *key, source_item);
+                    }
                     v.insert(source_item.clone());
                 }
             };
