@@ -5,7 +5,6 @@ use clap::{
 use console::style;
 
 use solana_clap_utils::{
-    commitment::COMMITMENT_ARG,
     input_parsers::commitment_of,
     input_validators::{is_url, is_url_or_moniker},
     keypair::{CliSigners, DefaultSigner, SKIP_SEED_PHRASE_VALIDATION_ARG},
@@ -19,7 +18,6 @@ use solana_cli_config::{Config, CONFIG_FILE};
 use solana_cli_output::{display::println_name_value, OutputFormat};
 use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
-use solana_sdk::commitment_config::CommitmentConfig;
 use std::{collections::HashMap, error, path::PathBuf, sync::Arc, time::Duration};
 
 pub fn println_name_value_or(name: &str, value: &str, setting_type: SettingType) {
@@ -183,16 +181,8 @@ pub fn parse_args<'a>(
             OutputFormat::Display
         });
 
-    let commitment = {
-        let mut sub_matches = matches;
-        while let Some(subcommand_name) = sub_matches.subcommand_name() {
-            sub_matches = sub_matches
-                .subcommand_matches(subcommand_name)
-                .expect("subcommand_matches");
-        }
-        commitment_of(sub_matches, COMMITMENT_ARG.long)
-    }
-    .unwrap_or_else(CommitmentConfig::single_gossip);
+    let commitment = commitment_of(matches, "commitment")
+        .expect("clap should ensure commitment arg is populated correctly");
 
     let address_labels = if matches.is_present("no_address_labels") {
         HashMap::new()
@@ -273,6 +263,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             .global(true)
             .takes_value(true)
             .help("Filepath or URL to a keypair"),
+    )
+    .arg(
+        Arg::with_name("commitment")
+            .long("commitment")
+            .takes_value(true)
+            .possible_values(&["recent", "single", "singleGossip", "root", "max"])
+            .default_value("singleGossip")
+            .value_name("COMMITMENT_LEVEL")
+            .global(true)
+            .help("Return information at the selected commitment level"),
     )
     .arg(
         Arg::with_name("verbose")
