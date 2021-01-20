@@ -2084,6 +2084,9 @@ impl AccountsDB {
             
             let mut i = 0;
             let mut j = 0;
+            let mut failures = 0;
+            let mut different_values = 0;
+            let max = 100;
             loop {
                 let donei = i > hashes.len();
                 let donej = j > verify.len();
@@ -2091,12 +2094,17 @@ impl AccountsDB {
                     break;
                 }
 
-                if !donei {
-                    warn!("jwash: in left: {:?}", hashes[i]);
+                failures += 1;
+                if !donei && donej {
+                    if failures < max {
+                        warn!("jwash: in left: {:?}", hashes[i]);
+                    }
                     i += 1;
                 }
-                else if !donej {
-                    warn!("jwash: in right: {:?}", verify[j]);
+                else if !donej && donei{
+                    if failures < max {
+                        warn!("jwash: in right: {:?}", verify[j]);
+                    }
                     j += 1;
                 }
                 else{
@@ -2105,26 +2113,36 @@ impl AccountsDB {
                     if vali == valj {
                         i += 1;
                         j += 1;
+                        failures -= 1;
                     }
                     else {
                         let publ = vali.0 == valj.0;
                         if !publ {
                             if (vali > valj){
                                 j += 1;
-                                warn!("jwash: in right: {:?}", valj);
+                                if failures < max {
+                                    warn!("jwash: in right: {:?}", valj);
+                                }
                             }
                             else {
                                 i += 1;
-                                warn!("jwash: in left: {:?}", vali);
+                                if failures < max {
+                                    warn!("jwash: in left: {:?}", vali);
+                                }
                             }
                         }
                         else{
-                            warn!("jwash: different: {:?}, {:?}", vali, valj);
+                            if failures < max {
+                                warn!("jwash: different: {:?}, {:?}", vali, valj);
+                            }
+                            i += 1;
+                            j += 1;
+                            different_values+= 1;
                         }
                     }
                 }
-                let l = hashes[i];
             };
+            warn!("jwash: different values: {}, total different: {}", different_values, failures);
         }
 
         let mut sum_time = Measure::start("cap");
