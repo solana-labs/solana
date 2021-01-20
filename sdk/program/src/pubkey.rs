@@ -9,6 +9,8 @@ pub const PUBKEY_BYTES: usize = 32;
 pub const MAX_SEED_LEN: usize = 32;
 /// Maximum number of seeds
 pub const MAX_SEEDS: usize = 16;
+/// Maximum string length of a base58 encoded pubkey
+const MAX_BASE58_LEN: usize = 44;
 
 #[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum PubkeyError {
@@ -58,6 +60,9 @@ impl FromStr for Pubkey {
     type Err = ParsePubkeyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() > MAX_BASE58_LEN {
+            return Err(ParsePubkeyError::WrongSize);
+        }
         let pubkey_vec = bs58::decode(s)
             .into_vec()
             .map_err(|_| ParsePubkeyError::Invalid)?;
@@ -336,6 +341,13 @@ mod tests {
             pubkey_base58_str.parse::<Pubkey>(),
             Err(ParsePubkeyError::Invalid)
         );
+
+        // too long input string
+        // longest valid encoding
+        let mut too_long = bs58::encode(&[255u8; PUBKEY_BYTES]).into_string();
+        // and one to grow on
+        too_long.push('1');
+        assert_eq!(too_long.parse::<Pubkey>(), Err(ParsePubkeyError::WrongSize));
     }
 
     #[test]
