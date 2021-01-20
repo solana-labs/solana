@@ -58,6 +58,11 @@ impl Keypair {
     }
 }
 
+/// Number of bytes in a signature
+pub const SIGNATURE_BYTES: usize = 64;
+/// Maximum string length of a base58 encoded signature
+const MAX_BASE58_SIGNATURE_LEN: usize = 88;
+
 #[repr(transparent)]
 #[derive(
     Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash, AbiExample,
@@ -138,6 +143,9 @@ impl FromStr for Signature {
     type Err = ParseSignatureError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() > MAX_BASE58_SIGNATURE_LEN {
+            return Err(ParseSignatureError::WrongSize);
+        }
         let bytes = bs58::decode(s)
             .into_vec()
             .map_err(|_| ParseSignatureError::Invalid)?;
@@ -520,6 +528,16 @@ mod tests {
         assert_eq!(
             signature_base58_str.parse::<Signature>(),
             Err(ParseSignatureError::Invalid)
+        );
+
+        // too long input string
+        // longest valid encoding
+        let mut too_long = bs58::encode(&[255u8; SIGNATURE_BYTES]).into_string();
+        // and one to grow on
+        too_long.push('1');
+        assert_eq!(
+            too_long.parse::<Signature>(),
+            Err(ParseSignatureError::WrongSize)
         );
     }
 
