@@ -2059,8 +2059,8 @@ impl AccountsDB {
         let mut sort_time = Measure::start("sort");
         hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
         sort_time.stop();
-        if (hashes.len() > 0){
-            warn!("First sorted hash: {:?} out of: {}", hashes[0], hashes.len());
+        if (hashes.len() > 0 && calculate_cap && hashes.len > 1000000){
+            warn!("jwash:First sorted hash: {:?} out of: {}", hashes[0], hashes.len());
         }
 
         let mut sum_time = Measure::start("cap");
@@ -2078,7 +2078,7 @@ impl AccountsDB {
         let res = Self::compute_merkle_root(hashes, fanout);
         hash_time.stop();
 
-        warn!("do_accumulate_account_hashes_and_capitalization times: {} {} {}", sort_time, hash_time, sum_time);
+        warn!("jwash:do_accumulate_account_hashes_and_capitalization times: {} {} {}", sort_time, hash_time, sum_time);
 
         (res, cap)
     }
@@ -2141,14 +2141,14 @@ impl AccountsDB {
             scanned_slots.insert(*ancestor_slot);
         }
 
-        warn!("Looking in {} slots", scanned_slots.len());
+        warn!("jwash:Looking in {} slots", scanned_slots.len());
         
         // scan all slots
         let len = AtomicUsize::new(0);
         let num_threads = std::cmp::max(2, num_cpus::get() / 4);
         let num_units_of_work = num_threads * 100;
         let chunk_size = std::cmp::max(1, scanned_slots.len() / num_units_of_work);
-        warn!("threads: {}, unis of works: {}, chunk size: {}", num_threads, num_units_of_work, chunk_size);
+        warn!("jwash:threads: {}, unis of works: {}, chunk size: {}", num_threads, num_units_of_work, chunk_size);
         let scanned_slots: Vec<Slot> = scanned_slots.into_iter().collect();
         let scanned_slots: Vec<Vec<Slot>> = scanned_slots.chunks(chunk_size).map(|x| x.to_vec()).collect();
         let accumulators: Vec<_> = scanned_slots
@@ -2171,7 +2171,7 @@ impl AccountsDB {
             }
         }
 
-        warn!("Found {} accounts including zeros", account_maps.len());
+        warn!("jwash:Found {} accounts including zeros", account_maps.len());
 
         account_maps
     }
@@ -2235,13 +2235,13 @@ impl AccountsDB {
         zeros.stop();
         let hash_total = hashes.len();
         let accounts_with_zero = hash_total - account_len;
-        warn!("non-zero accounts: {}, zero accounts:{}", hash_total, accounts_with_zero);
+        warn!("jwash:non-zero accounts: {}, zero accounts:{}", hash_total, accounts_with_zero);
         let mut accumulate = Measure::start("accumulate");
         let ret = Self::accumulate_account_hashes_and_capitalization(hashes);
 
         accumulate.stop();
         datapoint_info!(
-            "calculate_accounts_hash_using_store",
+            "jwash:calculate_accounts_hash_using_store",
             ("accounts_scan", scan.as_us(), i64),
             ("hash_accumulate", accumulate.as_us(), i64),
             ("eliminate_zeros", zeros.as_us(), i64),
@@ -2269,7 +2269,7 @@ impl AccountsDB {
             .cloned()
             .collect();
         let key_len = keys.len();
-        warn!("possible account keys: {}", key_len);
+        warn!("jwash:possible account keys: {}", key_len);
 
         let mismatch_found = AtomicU64::new(0);
         let hashes: Vec<(Pubkey, Hash, u64)> = {
@@ -2329,14 +2329,14 @@ impl AccountsDB {
 
         scan.stop();
         let hash_total = hashes.len();
-        warn!("non-zero accounts keys: {}, zero: {}", hash_total, key_len - hash_total);
+        warn!("jwash:non-zero accounts keys: {}, zero: {}", hash_total, key_len - hash_total);
 
         let mut accumulate = Measure::start("accumulate");
         let (accumulated_hash, total_lamports) =
             Self::accumulate_account_hashes_and_capitalization(hashes);
         accumulate.stop();
         datapoint_info!(
-            "update_accounts_hash",
+            "jwash:update_accounts_hash",
             ("accounts_scan", scan.as_us(), i64),
             ("hash_accumulate", accumulate.as_us(), i64),
             ("hash_total", hash_total, i64),
@@ -2419,9 +2419,9 @@ impl AccountsDB {
             );
 
             if hash != hash_other || total_lamports != total_lamports_other {
-                error!("accounts.Differs: slot: {}, ancestors len: {}, simple_cap: {}", slot, ancestors.len(), simple_capitalization_enabled);
+                error!("jwash:accounts.Differs: slot: {}, ancestors len: {}, simple_cap: {}", slot, ancestors.len(), simple_capitalization_enabled);
                 let account_maps = self.get_accounts(slot, ancestors, simple_capitalization_enabled);
-                error!("account count: {}", account_maps.len());
+                error!("jwash:account count: {}", account_maps.len());
             }
 
             assert_eq!(hash, hash_other);
