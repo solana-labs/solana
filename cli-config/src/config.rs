@@ -17,9 +17,10 @@ pub struct Config {
     pub json_rpc_url: String,
     pub websocket_url: String,
     pub keypair_path: String,
-
     #[serde(default)]
     pub address_labels: HashMap<String, String>,
+    #[serde(default)]
+    pub commitment: String,
 }
 
 impl Default for Config {
@@ -41,11 +42,14 @@ impl Default for Config {
             "System Program".to_string(),
         );
 
+        let commitment = "singleGossip".to_string();
+
         Self {
             json_rpc_url,
             websocket_url,
             keypair_path,
             address_labels,
+            commitment,
         }
     }
 }

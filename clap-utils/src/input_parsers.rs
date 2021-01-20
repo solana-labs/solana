@@ -184,14 +184,9 @@ pub fn cluster_type_of(matches: &ArgMatches<'_>, name: &str) -> Option<ClusterTy
 }
 
 pub fn commitment_of(matches: &ArgMatches<'_>, name: &str) -> Option<CommitmentConfig> {
-    matches.value_of(name).map(|value| match value {
-        "max" => CommitmentConfig::max(),
-        "recent" => CommitmentConfig::recent(),
-        "root" => CommitmentConfig::root(),
-        "single" => CommitmentConfig::single(),
-        "singleGossip" => CommitmentConfig::single_gossip(),
-        _ => CommitmentConfig::default(),
-    })
+    matches
+        .value_of(name)
+        .map(|value| CommitmentConfig::from_str(value).unwrap_or_default())
 }
 
 #[cfg(test)]
