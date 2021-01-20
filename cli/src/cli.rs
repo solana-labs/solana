@@ -1049,7 +1049,9 @@ fn process_show_account(
 
     let mut account_string = config.output_format.formatted_string(&cli_account);
 
-    if config.output_format == OutputFormat::Display {
+    if config.output_format == OutputFormat::Display
+        || config.output_format == OutputFormat::DisplayVerbose
+    {
         if let Some(output_file) = output_file {
             let mut f = File::create(output_file)?;
             f.write_all(&data)?;
@@ -1137,7 +1139,7 @@ fn process_transfer(
 }
 
 pub fn process_command(config: &CliConfig) -> ProcessResult {
-    if config.verbose && config.output_format == OutputFormat::Display {
+    if config.verbose && config.output_format == OutputFormat::DisplayVerbose {
         println_name_value("RPC URL:", &config.json_rpc_url);
         println_name_value("Default Signer Path:", &config.keypair_path);
         if config.keypair_path.starts_with("usb://") {
