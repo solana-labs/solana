@@ -1600,13 +1600,18 @@ impl Bank {
     // `pico_inflation` be enabled 2nd, the incorrect start slot provided here should have no
     // effect on the inflation calculation.
     fn get_inflation_start_slot(&self) -> Slot {
-        self.feature_set
-            .activated_slot(&feature_set::full_inflation::id())
-            .unwrap_or_else(|| {
-                self.feature_set
-                    .activated_slot(&feature_set::pico_inflation::id())
-                    .unwrap_or(0)
-            })
+        let mut slots = self
+            .feature_set
+            .full_inflation_features_enabled()
+            .iter()
+            .filter_map(|id| self.feature_set.activated_slot(&id))
+            .collect::<Vec<_>>();
+        slots.sort_unstable();
+        slots.get(0).cloned().unwrap_or_else(|| {
+            self.feature_set
+                .activated_slot(&feature_set::pico_inflation::id())
+                .unwrap_or(0)
+        })
     }
 
     fn get_inflation_num_slots(&self) -> u64 {
@@ -4669,7 +4674,8 @@ impl Bank {
             self.rent_collector.rent.burn_percent = 50; // 50% rent burn
         }
 
-        if new_feature_activations.contains(&feature_set::full_inflation::id()) {
+        if !new_feature_activations.is_disjoint(&self.feature_set.full_inflation_features_enabled())
+        {
             *self.inflation.write().unwrap() = Inflation::full();
             self.fee_rate_governor.burn_percent = 50; // 50% fee burn
             self.rent_collector.rent.burn_percent = 50; // 50% rent burn
@@ -11863,7 +11869,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_get_inflation_start_slot() {
+    fn test_get_inflation_start_slot_devnet_testnet() {
         let GenesisConfigInfo {
             mut genesis_config, ..
         } = create_genesis_config_with_leader(42, &solana_sdk::pubkey::new_rand(), 42);
@@ -11873,51 +11879,156 @@ pub(crate) mod tests {
             .unwrap();
         genesis_config
             .accounts
-            .remove(&feature_set::full_inflation::id())
+            .remove(&feature_set::full_inflation::devnet_and_testnet::id())
             .unwrap();
+        for pair in feature_set::FULL_INFLATION_FEATURE_PAIRS.iter() {
+            genesis_config.accounts.remove(&pair.vote_id).unwrap();
+            genesis_config.accounts.remove(&pair.enable_id).unwrap();
+        }
+
         let bank = Bank::new(&genesis_config);
 
-        // Advance to slot 1
+        // Advance slot
         let mut bank = new_from_parent(&Arc::new(bank));
         bank = new_from_parent(&Arc::new(bank));
         assert_eq!(bank.get_inflation_start_slot(), 0);
+        assert_eq!(bank.slot(), 2);
 
-        // Request `full_inflation` activation
-        let pico_inflation_activation_slot = 1;
+        // Request `pico_inflation` activation
         bank.store_account(
             &feature_set::pico_inflation::id(),
             &feature::create_account(
                 &Feature {
-                    activated_at: Some(pico_inflation_activation_slot),
+                    activated_at: Some(1),
                 },
                 42,
             ),
         );
         bank.compute_active_feature_set(true);
-        assert_eq!(
-            bank.get_inflation_start_slot(),
-            pico_inflation_activation_slot
-        );
+        assert_eq!(bank.get_inflation_start_slot(), 1);
 
-        // Advance to slot 2
+        // Advance slot
         bank = new_from_parent(&Arc::new(bank));
+        assert_eq!(bank.slot(), 3);
 
-        // Request `full_inflation` activation, which takes priority over pico_inflation
-        let full_inflation_activation_slot = 2;
+        // Request `full_inflation::devnet_and_testnet` activation, which takes priority over pico_inflation
         bank.store_account(
-            &feature_set::full_inflation::id(),
+            &feature_set::full_inflation::devnet_and_testnet::id(),
             &feature::create_account(
                 &Feature {
-                    activated_at: Some(full_inflation_activation_slot),
+                    activated_at: Some(2),
                 },
                 42,
             ),
         );
         bank.compute_active_feature_set(true);
-        assert_eq!(
-            bank.get_inflation_start_slot(),
-            full_inflation_activation_slot
+        assert_eq!(bank.get_inflation_start_slot(), 2);
+
+        // Request `full_inflation::candidate_example` activation, which should have no effect on `get_inflation_start_slot`
+        bank.store_account(
+            &feature_set::full_inflation::candidate_example::vote::id(),
+            &feature::create_account(
+                &Feature {
+                    activated_at: Some(3),
+                },
+                42,
+            ),
         );
+        bank.store_account(
+            &feature_set::full_inflation::candidate_example::enable::id(),
+            &feature::create_account(
+                &Feature {
+                    activated_at: Some(3),
+                },
+                42,
+            ),
+        );
+        bank.compute_active_feature_set(true);
+        assert_eq!(bank.get_inflation_start_slot(), 2);
+    }
+
+    #[test]
+    fn test_get_inflation_start_slot_mainnet() {
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config_with_leader(42, &solana_sdk::pubkey::new_rand(), 42);
+        genesis_config
+            .accounts
+            .remove(&feature_set::pico_inflation::id())
+            .unwrap();
+        genesis_config
+            .accounts
+            .remove(&feature_set::full_inflation::devnet_and_testnet::id())
+            .unwrap();
+        for pair in feature_set::FULL_INFLATION_FEATURE_PAIRS.iter() {
+            genesis_config.accounts.remove(&pair.vote_id).unwrap();
+            genesis_config.accounts.remove(&pair.enable_id).unwrap();
+        }
+
+        let bank = Bank::new(&genesis_config);
+
+        // Advance slot
+        let mut bank = new_from_parent(&Arc::new(bank));
+        bank = new_from_parent(&Arc::new(bank));
+        assert_eq!(bank.get_inflation_start_slot(), 0);
+        assert_eq!(bank.slot(), 2);
+
+        // Request `pico_inflation` activation
+        bank.store_account(
+            &feature_set::pico_inflation::id(),
+            &feature::create_account(
+                &Feature {
+                    activated_at: Some(1),
+                },
+                42,
+            ),
+        );
+        bank.compute_active_feature_set(true);
+        assert_eq!(bank.get_inflation_start_slot(), 1);
+
+        // Advance slot
+        bank = new_from_parent(&Arc::new(bank));
+        assert_eq!(bank.slot(), 3);
+
+        // Request `full_inflation::candidate_example` activation, which takes priority over pico_inflation
+        bank.store_account(
+            &feature_set::full_inflation::candidate_example::vote::id(),
+            &feature::create_account(
+                &Feature {
+                    activated_at: Some(2),
+                },
+                42,
+            ),
+        );
+        bank.store_account(
+            &feature_set::full_inflation::candidate_example::enable::id(),
+            &feature::create_account(
+                &Feature {
+                    activated_at: Some(2),
+                },
+                42,
+            ),
+        );
+        bank.compute_active_feature_set(true);
+        assert_eq!(bank.get_inflation_start_slot(), 2);
+
+        // Advance slot
+        bank = new_from_parent(&Arc::new(bank));
+        assert_eq!(bank.slot(), 4);
+
+        // Request `full_inflation::devnet_and_testnet` activation, which should have no effect on
+        // `get_inflation_start_slot`
+        bank.store_account(
+            &feature_set::full_inflation::devnet_and_testnet::id(),
+            &feature::create_account(
+                &Feature {
+                    activated_at: Some(bank.slot()),
+                },
+                42,
+            ),
+        );
+        bank.compute_active_feature_set(true);
+        assert_eq!(bank.get_inflation_start_slot(), 2);
     }
 
     #[test]
@@ -11933,8 +12044,13 @@ pub(crate) mod tests {
             .unwrap();
         genesis_config
             .accounts
-            .remove(&feature_set::full_inflation::id())
+            .remove(&feature_set::full_inflation::devnet_and_testnet::id())
             .unwrap();
+        for pair in feature_set::FULL_INFLATION_FEATURE_PAIRS.iter() {
+            genesis_config.accounts.remove(&pair.vote_id).unwrap();
+            genesis_config.accounts.remove(&pair.enable_id).unwrap();
+        }
+
         let mut bank = Bank::new(&genesis_config);
         assert_eq!(bank.get_inflation_num_slots(), 0);
         for _ in 0..2 * slots_per_epoch {
@@ -11960,10 +12076,10 @@ pub(crate) mod tests {
         }
         assert_eq!(bank.get_inflation_num_slots(), 2 * slots_per_epoch);
 
-        // Activate full_inflation
+        // Activate full_inflation::devnet_and_testnet
         let full_inflation_activation_slot = bank.slot();
         bank.store_account(
-            &feature_set::full_inflation::id(),
+            &feature_set::full_inflation::devnet_and_testnet::id(),
             &feature::create_account(
                 &Feature {
                     activated_at: Some(full_inflation_activation_slot),
