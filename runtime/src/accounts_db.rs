@@ -2059,7 +2059,7 @@ impl AccountsDB {
         let mut sort_time = Measure::start("sort");
         hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
         sort_time.stop();
-        if (hashes.len() > 0 && calculate_cap && hashes.len > 1000000){
+        if (hashes.len() > 0 && calculate_cap && hashes.len() > 1000000){
             warn!("jwash:First sorted hash: {:?} out of: {}", hashes[0], hashes.len());
         }
 
