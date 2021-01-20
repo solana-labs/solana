@@ -430,6 +430,10 @@ impl CliConfig<'_> {
         solana_cli_config::Config::default().websocket_url
     }
 
+    fn default_commitment() -> CommitmentConfig {
+        CommitmentConfig::single_gossip()
+    }
+
     fn first_nonempty_setting(
         settings: std::vec::Vec<(SettingType, String)>,
     ) -> (SettingType, String) {
@@ -437,6 +441,16 @@ impl CliConfig<'_> {
             .into_iter()
             .find(|(_, value)| !value.is_empty())
             .expect("no nonempty setting")
+    }
+
+    fn first_setting_is_some<T>(
+        settings: std::vec::Vec<(SettingType, Option<T>)>,
+    ) -> (SettingType, T) {
+        let (setting_type, setting_option) = settings
+            .into_iter()
+            .find(|(_, value)| value.is_some())
+            .expect("all settings none");
+        (setting_type, setting_option.unwrap())
     }
 
     pub fn compute_websocket_url_setting(
@@ -480,6 +494,23 @@ impl CliConfig<'_> {
             (SettingType::Explicit, keypair_cmd_path.to_string()),
             (SettingType::Explicit, keypair_cfg_path.to_string()),
             (SettingType::SystemDefault, Self::default_keypair_path()),
+        ])
+    }
+
+    pub fn compute_commitment_config(
+        commitment_cmd: &str,
+        commitment_cfg: &str,
+    ) -> (SettingType, CommitmentConfig) {
+        Self::first_setting_is_some(vec![
+            (
+                SettingType::Explicit,
+                CommitmentConfig::from_str(commitment_cmd).ok(),
+            ),
+            (
+                SettingType::Explicit,
+                CommitmentConfig::from_str(commitment_cfg).ok(),
+            ),
+            (SettingType::SystemDefault, Some(Self::default_commitment())),
         ])
     }
 
@@ -1112,6 +1143,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         if config.keypair_path.starts_with("usb://") {
             println_name_value("Pubkey:", &format!("{:?}", config.pubkey()?));
         }
+        println_name_value("Commitment:", &config.commitment.commitment.to_string());
     }
 
     let mut _rpc_client;
