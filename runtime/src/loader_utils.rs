@@ -57,9 +57,9 @@ pub fn load_program<T: Client>(
 pub fn load_buffer_account<T: Client>(
     bank_client: &T,
     from_keypair: &Keypair,
+    buffer_keypair: &Keypair,
     program: &[u8],
-) -> Pubkey {
-    let buffer_keypair = Keypair::new();
+) {
     let buffer_pubkey = buffer_keypair.pubkey();
 
     bank_client
@@ -100,26 +100,26 @@ pub fn load_buffer_account<T: Client>(
             .unwrap();
         offset += chunk_size as u32;
     }
-    buffer_keypair.pubkey()
 }
 
 pub fn load_upgradeable_program<T: Client>(
     bank_client: &T,
     from_keypair: &Keypair,
+    buffer_keypair: &Keypair,
+    executable_keypair: &Keypair,
+    authority_keypair: &Keypair,
     program: Vec<u8>,
-) -> (Pubkey, Keypair) {
-    let executable_keypair = Keypair::new();
+) {
     let program_pubkey = executable_keypair.pubkey();
-    let authority_keypair = Keypair::new();
     let authority_pubkey = authority_keypair.pubkey();
 
-    let buffer_pubkey = load_buffer_account(bank_client, &from_keypair, &program);
+    load_buffer_account(bank_client, &from_keypair, buffer_keypair, &program);
 
     let message = Message::new(
         &bpf_loader_upgradeable::deploy_with_max_program_len(
             &from_keypair.pubkey(),
             &program_pubkey,
-            &buffer_pubkey,
+            &buffer_keypair.pubkey(),
             Some(&authority_pubkey),
             1.max(
                 bank_client
@@ -136,8 +136,6 @@ pub fn load_upgradeable_program<T: Client>(
     bank_client
         .send_and_confirm_message(&[from_keypair, &executable_keypair], message)
         .unwrap();
-
-    (executable_keypair.pubkey(), authority_keypair)
 }
 
 pub fn upgrade_program<T: Client>(

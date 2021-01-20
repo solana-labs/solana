@@ -23,7 +23,7 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
     entrypoint::SUCCESS,
-    feature_set::bpf_compute_budget_balancing,
+    feature_set::{bpf_compute_budget_balancing, prevent_upgrade_and_invoke},
     instruction::InstructionError,
     keyed_account::{from_keyed_account, next_keyed_account, KeyedAccount},
     loader_instruction::LoaderInstruction,
@@ -400,6 +400,12 @@ fn process_loader_upgradeable_instruction(
             if !program.executable()? {
                 log!(logger, "Program account not executable");
                 return Err(InstructionError::AccountNotExecutable);
+            }
+            if !program.is_writable()
+                && invoke_context.is_feature_active(&prevent_upgrade_and_invoke::id())
+            {
+                log!(logger, "Program account not writeable");
+                return Err(InstructionError::InvalidArgument);
             }
             if &program.owner()? != program_id {
                 log!(logger, "Program account not owned by loader");
@@ -1920,7 +1926,7 @@ mod tests {
                 &bpf_loader_upgradeable::id(),
                 &[
                     KeyedAccount::new(&programdata_address, false, &programdata_account),
-                    KeyedAccount::new_readonly(&program_address, false, &program_account),
+                    KeyedAccount::new(&program_address, false, &program_account),
                     KeyedAccount::new(&buffer_address, false, &buffer_account),
                     KeyedAccount::new(&spill_address, false, &spill_account),
                     KeyedAccount::new_readonly(&sysvar::rent::id(), false, &rent_account),
@@ -1982,7 +1988,7 @@ mod tests {
                 &bpf_loader_upgradeable::id(),
                 &[
                     KeyedAccount::new(&programdata_address, false, &programdata_account),
-                    KeyedAccount::new_readonly(&program_address, false, &program_account),
+                    KeyedAccount::new(&program_address, false, &program_account),
                     KeyedAccount::new(&buffer_address, false, &buffer_account),
                     KeyedAccount::new(&spill_address, false, &spill_account),
                     KeyedAccount::new_readonly(&sysvar::rent::id(), false, &rent_account),
@@ -2015,7 +2021,7 @@ mod tests {
                 &bpf_loader_upgradeable::id(),
                 &[
                     KeyedAccount::new(&programdata_address, false, &programdata_account),
-                    KeyedAccount::new_readonly(&program_address, false, &program_account),
+                    KeyedAccount::new(&program_address, false, &program_account),
                     KeyedAccount::new(&buffer_address, false, &buffer_account),
                     KeyedAccount::new(&spill_address, false, &spill_account),
                     KeyedAccount::new_readonly(&sysvar::rent::id(), false, &rent_account),
@@ -2048,7 +2054,7 @@ mod tests {
                 &bpf_loader_upgradeable::id(),
                 &[
                     KeyedAccount::new(&programdata_address, false, &programdata_account),
-                    KeyedAccount::new_readonly(&program_address, false, &program_account),
+                    KeyedAccount::new(&program_address, false, &program_account),
                     KeyedAccount::new(&buffer_address, false, &buffer_account),
                     KeyedAccount::new(&spill_address, false, &spill_account),
                     KeyedAccount::new_readonly(&sysvar::rent::id(), false, &rent_account),
@@ -2082,7 +2088,7 @@ mod tests {
                 &bpf_loader_upgradeable::id(),
                 &[
                     KeyedAccount::new(&programdata_address, false, &programdata_account),
-                    KeyedAccount::new_readonly(&program_address, false, &program_account),
+                    KeyedAccount::new(&program_address, false, &program_account),
                     KeyedAccount::new(&buffer_address, false, &buffer_account),
                     KeyedAccount::new(&spill_address, false, &spill_account),
                     KeyedAccount::new_readonly(&sysvar::rent::id(), false, &rent_account),
@@ -2112,6 +2118,39 @@ mod tests {
         program_account.borrow_mut().owner = Pubkey::new_unique();
         assert_eq!(
             Err(InstructionError::IncorrectProgramId),
+            process_instruction(
+                &bpf_loader_upgradeable::id(),
+                &[
+                    KeyedAccount::new(&programdata_address, false, &programdata_account),
+                    KeyedAccount::new(&program_address, false, &program_account),
+                    KeyedAccount::new(&buffer_address, false, &buffer_account),
+                    KeyedAccount::new(&spill_address, false, &spill_account),
+                    KeyedAccount::new_readonly(&sysvar::rent::id(), false, &rent_account),
+                    KeyedAccount::new_readonly(&sysvar::clock::id(), false, &clock_account),
+                    KeyedAccount::new_readonly(
+                        &upgrade_authority_address,
+                        true,
+                        &upgrade_authority_account
+                    )
+                ],
+                &instruction,
+                &mut MockInvokeContext::default()
+            )
+        );
+
+        // Case: Program account not writable
+        let (buffer_account, program_account, programdata_account, spill_account) = get_accounts(
+            &buffer_address,
+            &programdata_address,
+            &upgrade_authority_address,
+            slot,
+            &elf_orig,
+            &elf_new,
+            min_program_balance,
+            min_programdata_balance,
+        );
+        assert_eq!(
+            Err(InstructionError::InvalidArgument),
             process_instruction(
                 &bpf_loader_upgradeable::id(),
                 &[
@@ -2153,7 +2192,7 @@ mod tests {
                 &bpf_loader_upgradeable::id(),
                 &[
                     KeyedAccount::new(&programdata_address, false, &programdata_account),
-                    KeyedAccount::new_readonly(&program_address, false, &program_account),
+                    KeyedAccount::new(&program_address, false, &program_account),
                     KeyedAccount::new(&buffer_address, false, &buffer_account),
                     KeyedAccount::new(&spill_address, false, &spill_account),
                     KeyedAccount::new_readonly(&sysvar::rent::id(), false, &rent_account),
@@ -2190,7 +2229,7 @@ mod tests {
                 &bpf_loader_upgradeable::id(),
                 &[
                     KeyedAccount::new(&programdata_address, false, &programdata_account),
-                    KeyedAccount::new_readonly(&program_address, false, &program_account),
+                    KeyedAccount::new(&program_address, false, &program_account),
                     KeyedAccount::new(&buffer_address, false, &buffer_account),
                     KeyedAccount::new(&spill_address, false, &spill_account),
                     KeyedAccount::new_readonly(&sysvar::rent::id(), false, &rent_account),
@@ -2223,7 +2262,7 @@ mod tests {
                 &bpf_loader_upgradeable::id(),
                 &[
                     KeyedAccount::new(&Pubkey::new_unique(), false, &programdata_account),
-                    KeyedAccount::new_readonly(&program_address, false, &program_account),
+                    KeyedAccount::new(&program_address, false, &program_account),
                     KeyedAccount::new(&buffer_address, false, &buffer_account),
                     KeyedAccount::new(&spill_address, false, &spill_account),
                     KeyedAccount::new_readonly(&sysvar::rent::id(), false, &rent_account),
@@ -2260,7 +2299,7 @@ mod tests {
                 &bpf_loader_upgradeable::id(),
                 &[
                     KeyedAccount::new(&programdata_address, false, &programdata_account),
-                    KeyedAccount::new_readonly(&program_address, false, &program_account),
+                    KeyedAccount::new(&program_address, false, &program_account),
                     KeyedAccount::new(&buffer_address, false, &buffer_account),
                     KeyedAccount::new(&spill_address, false, &spill_account),
                     KeyedAccount::new_readonly(&sysvar::rent::id(), false, &rent_account),
@@ -2304,7 +2343,7 @@ mod tests {
                 &bpf_loader_upgradeable::id(),
                 &[
                     KeyedAccount::new(&programdata_address, false, &programdata_account),
-                    KeyedAccount::new_readonly(&program_address, false, &program_account),
+                    KeyedAccount::new(&program_address, false, &program_account),
                     KeyedAccount::new(&buffer_address, false, &buffer_account),
                     KeyedAccount::new(&spill_address, false, &spill_account),
                     KeyedAccount::new_readonly(&sysvar::rent::id(), false, &rent_account),
@@ -2339,7 +2378,7 @@ mod tests {
                 &bpf_loader_upgradeable::id(),
                 &[
                     KeyedAccount::new(&programdata_address, false, &programdata_account),
-                    KeyedAccount::new_readonly(&program_address, false, &program_account),
+                    KeyedAccount::new(&program_address, false, &program_account),
                     KeyedAccount::new(&buffer_address, false, &buffer_account),
                     KeyedAccount::new(&spill_address, false, &spill_account),
                     KeyedAccount::new_readonly(&sysvar::rent::id(), false, &rent_account),
