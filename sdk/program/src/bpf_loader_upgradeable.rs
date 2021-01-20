@@ -182,7 +182,7 @@ pub fn upgrade(
         &UpgradeableLoaderInstruction::Upgrade,
         vec![
             AccountMeta::new(programdata_address, false),
-            AccountMeta::new_readonly(*program_address, false),
+            AccountMeta::new(*program_address, false),
             AccountMeta::new(*buffer_address, false),
             AccountMeta::new(*spill_address, false),
             AccountMeta::new_readonly(sysvar::rent::id(), false),
@@ -248,6 +248,47 @@ mod tests {
         assert_eq!(
             45 + 42,
             UpgradeableLoaderState::programdata_len(42).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_is_upgrade_instruction() {
+        assert_eq!(
+            false,
+            is_upgrade_instruction(
+                &bincode::serialize(&UpgradeableLoaderInstruction::InitializeBuffer).unwrap()
+            )
+        );
+        assert_eq!(
+            false,
+            is_upgrade_instruction(
+                &bincode::serialize(&UpgradeableLoaderInstruction::Write {
+                    offset: 0,
+                    bytes: vec![],
+                })
+                .unwrap()
+            )
+        );
+        assert_eq!(
+            false,
+            is_upgrade_instruction(
+                &bincode::serialize(&UpgradeableLoaderInstruction::DeployWithMaxDataLen {
+                    max_data_len: 0,
+                })
+                .unwrap()
+            )
+        );
+        assert_eq!(
+            true,
+            is_upgrade_instruction(
+                &bincode::serialize(&UpgradeableLoaderInstruction::Upgrade).unwrap()
+            )
+        );
+        assert_eq!(
+            false,
+            is_upgrade_instruction(
+                &bincode::serialize(&UpgradeableLoaderInstruction::SetAuthority).unwrap()
+            )
         );
     }
 }
