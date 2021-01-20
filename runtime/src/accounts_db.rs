@@ -2286,10 +2286,10 @@ impl AccountsDB {
 
     fn insert_store(&self, slot: Slot, store: Arc<AccountStorageEntry>) {
         let slot_storages: SlotStores = self.storage.get_slot_stores(slot).unwrap_or_else(||
-        // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
-        // which is dropped after this block ends, minimizing time held by the lock.
-        // However, we still want to persist the reference to the `SlotStores` behind
-        // the lock, hence we clone it out, (`SlotStores` is an Arc so is cheap to clone).
+            // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
+            // which is dropped after this block ends, minimizing time held by the lock.
+            // However, we still want to persist the reference to the `SlotStores` behind
+            // the lock, hence we clone it out, (`SlotStores` is an Arc so is cheap to clone).
             self.storage
                 .0
                 .entry(slot)
@@ -3376,6 +3376,7 @@ impl AccountsDB {
                 },
                 |accum: &DashMap<Pubkey, (u64, Hash)>, loaded_account: LoadedAccount| {
                     let loaded_write_version = loaded_account.write_version();
+                    let loaded_hash = *loaded_account.loaded_hash();
                     let should_insert =
                         if let Some(existing_entry) = accum.get(loaded_account.pubkey()) {
                             loaded_write_version > existing_entry.value().version()
@@ -3386,18 +3387,14 @@ impl AccountsDB {
                         // Detected insertion is necessary, grabs the write lock to commit the write,
                         match accum.entry(*loaded_account.pubkey()) {
                             // Double check in case another thread interleaved a write between the read + write.
-                            Occupied(mut key_entry) => {
-                                if loaded_write_version > key_entry.get().version() {
-                                    key_entry.insert((
-                                        loaded_write_version,
-                                        *loaded_account.loaded_hash(),
-                                    ));
+                            Occupied(mut occupied_entry) => {
+                                if loaded_write_version > occupied_entry.get().version() {
+                                    occupied_entry.insert((loaded_write_version, loaded_hash));
                                 }
                             }
 
                             Vacant(vacant_entry) => {
-                                vacant_entry
-                                    .insert((loaded_write_version, *loaded_account.loaded_hash()));
+                                vacant_entry.insert((loaded_write_version, loaded_hash));
                             }
                         }
                     }
@@ -3410,7 +3407,7 @@ impl AccountsDB {
             ScanStorageResult::Cached(cached_result) => cached_result,
             ScanStorageResult::Stored(stored_result) => stored_result
                 .into_iter()
-                .map(|(pubkey, (_, hash))| (pubkey, hash, 0))
+                .map(|(pubkey, (_latest_write_version, hash))| (pubkey, hash, 0))
                 .collect(),
         };
         let ret = Self::accumulate_account_hashes(hashes, slot, false);

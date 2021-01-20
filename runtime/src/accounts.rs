@@ -495,7 +495,7 @@ impl Accounts {
             ScanStorageResult::Cached(cached_result) => cached_result,
             ScanStorageResult::Stored(stored_result) => stored_result
                 .into_iter()
-                .map(|(_pubkey, (_version, val))| val)
+                .map(|(_pubkey, (_latest_write_version, val))| val)
                 .collect(),
         }
     }
