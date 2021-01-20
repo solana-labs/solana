@@ -27,7 +27,27 @@ pub mod pico_inflation {
 }
 
 pub mod full_inflation {
-    solana_sdk::declare_id!("DT4n6ABDqs6w4bnfwrXT9rsprcPf6cdDga1egctaPkLC");
+    pub mod devnet_and_testnet {
+        solana_sdk::declare_id!("DT4n6ABDqs6w4bnfwrXT9rsprcPf6cdDga1egctaPkLC");
+    }
+
+    // `candidate_example` is an example to follow by a candidate that wishes to enable full
+    // inflation.  There are multiple references to `candidate_example` in this file that need to
+    // be touched in addition to the following block.
+    //
+    // The candidate provides the `enable::id` address and contacts the Solana Foundation to
+    // receive a `vote::id` address.
+    //
+    pub mod candidate_example {
+        pub mod vote {
+            // The private key for this address is held by the Solana Foundation
+            solana_sdk::declare_id!("DummyVoteAddress111111111111111111111111111");
+        }
+        pub mod enable {
+            // The private key for this address is held by candidate_example
+            solana_sdk::declare_id!("DummyEnab1eAddress1111111111111111111111111");
+        }
+    }
 }
 
 pub mod spl_token_v2_multisig_fix {
@@ -153,8 +173,8 @@ lazy_static! {
         (secp256k1_program_enabled::id(), "secp256k1 program"),
         (consistent_recent_blockhashes_sysvar::id(), "consistent recentblockhashes sysvar"),
         (deprecate_rewards_sysvar::id(), "deprecate unused rewards sysvar"),
-        (pico_inflation::id(), "pico-inflation"),
-        (full_inflation::id(), "full-inflation"),
+        (pico_inflation::id(), "pico inflation"),
+        (full_inflation::devnet_and_testnet::id(), "full inflation on devnet and testnet"),
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
         (bpf_loader2_program::id(), "bpf_loader2 program"),
         (bpf_compute_budget_balancing::id(), "compute budget balancing"),
@@ -184,6 +204,8 @@ lazy_static! {
         (use_loaded_executables::id(), "Use loaded executable accounts"),
         (turbine_retransmit_peers_patch::id(), "turbine retransmit peers patch #14631"),
         (prevent_upgrade_and_invoke::id(), "Prevent upgrade and invoke in same tx batch"),
+        (full_inflation::candidate_example::vote::id(), "Community vote allowing candidate_example to enable full inflation"),
+        (full_inflation::candidate_example::enable::id(), "Full inflation enabled by candidate_example"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
@@ -200,6 +222,25 @@ lazy_static! {
         }
         hasher.result()
     };
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct FullInflationFeaturePair {
+    pub vote_id: Pubkey, // Feature that grants the candidate the ability to enable full inflation
+    pub enable_id: Pubkey, // Feature to enable full inflation by the candidate
+}
+
+lazy_static! {
+    /// Set of feature pairs that once enabled will trigger full inflation
+    pub static ref FULL_INFLATION_FEATURE_PAIRS: HashSet<FullInflationFeaturePair> = [
+        FullInflationFeaturePair {
+            vote_id: full_inflation::candidate_example::vote::id(),
+            enable_id: full_inflation::candidate_example::enable::id(),
+        },
+    ]
+    .iter()
+    .cloned()
+    .collect();
 }
 
 /// `FeatureSet` holds the set of currently active/inactive runtime features
@@ -230,11 +271,90 @@ impl FeatureSet {
         self.is_active(&cumulative_rent_related_fixes::id())
     }
 
+    /// List of enabled features that trigger full inflation
+    pub fn full_inflation_features_enabled(&self) -> HashSet<Pubkey> {
+        let mut hash_set = FULL_INFLATION_FEATURE_PAIRS
+            .iter()
+            .filter_map(|pair| {
+                if self.is_active(&pair.vote_id) && self.is_active(&pair.enable_id) {
+                    Some(pair.enable_id)
+                } else {
+                    None
+                }
+            })
+            .collect::<HashSet<_>>();
+
+        if self.is_active(&full_inflation::devnet_and_testnet::id()) {
+            hash_set.insert(full_inflation::devnet_and_testnet::id());
+        }
+        hash_set
+    }
+
     /// All features enabled, useful for testing
     pub fn all_enabled() -> Self {
         Self {
             active: FEATURE_NAMES.keys().cloned().map(|key| (key, 0)).collect(),
             inactive: HashSet::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_full_inflation_features_enabled_devnet_and_testnet() {
+        let mut feature_set = FeatureSet::default();
+        assert!(feature_set.full_inflation_features_enabled().is_empty());
+        feature_set
+            .active
+            .insert(full_inflation::devnet_and_testnet::id(), 42);
+        assert_eq!(
+            feature_set.full_inflation_features_enabled(),
+            [full_inflation::devnet_and_testnet::id()]
+                .iter()
+                .cloned()
+                .collect()
+        );
+    }
+
+    #[test]
+    fn test_full_inflation_features_enabled() {
+        // Normal sequence: vote_id then enable_id
+        let mut feature_set = FeatureSet::default();
+        assert!(feature_set.full_inflation_features_enabled().is_empty());
+        feature_set
+            .active
+            .insert(full_inflation::candidate_example::vote::id(), 42);
+        assert!(feature_set.full_inflation_features_enabled().is_empty());
+        feature_set
+            .active
+            .insert(full_inflation::candidate_example::enable::id(), 42);
+        assert_eq!(
+            feature_set.full_inflation_features_enabled(),
+            [full_inflation::candidate_example::enable::id()]
+                .iter()
+                .cloned()
+                .collect()
+        );
+
+        // Backwards sequence: enable_id and then vote_id
+        let mut feature_set = FeatureSet::default();
+        assert!(feature_set.full_inflation_features_enabled().is_empty());
+        feature_set
+            .active
+            .insert(full_inflation::candidate_example::enable::id(), 42);
+        assert!(feature_set.full_inflation_features_enabled().is_empty());
+        feature_set
+            .active
+            .insert(full_inflation::candidate_example::vote::id(), 42);
+        assert_eq!(
+            feature_set.full_inflation_features_enabled(),
+            [full_inflation::candidate_example::enable::id()]
+                .iter()
+                .cloned()
+                .collect()
+        );
     }
 }
