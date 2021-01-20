@@ -392,6 +392,12 @@ fn process_loader_upgradeable_instruction(
             let buffer_data_len = buffer.data_len()?.saturating_sub(buffer_data_offset);
             let programdata_data_offset = UpgradeableLoaderState::programdata_data_offset()?;
 
+            if buffer.data_len()? < UpgradeableLoaderState::buffer_data_offset()?
+                || buffer_data_len == 0
+            {
+                log!(logger, "Buffer account too small");
+                return Err(InstructionError::InvalidAccountData);
+            }
             if max_data_len < buffer_data_len {
                 log!(logger, "Max data length is too small to hold Buffer data");
                 return Err(InstructionError::AccountDataTooSmall);
@@ -508,6 +514,13 @@ fn process_loader_upgradeable_instruction(
             let buffer_data_len = buffer.data_len()?.saturating_sub(buffer_data_offset);
             let programdata_data_offset = UpgradeableLoaderState::programdata_data_offset()?;
             let programdata_balance_required = 1.max(rent.minimum_balance(programdata.data_len()?));
+
+            if buffer.data_len()? < UpgradeableLoaderState::buffer_data_offset()?
+                || buffer_data_len == 0
+            {
+                log!(logger, "Buffer account too small");
+                return Err(InstructionError::InvalidAccountData);
+            }
 
             // Verify ProgramData account
 
@@ -1890,6 +1903,44 @@ mod tests {
                 .unwrap_err()
                 .unwrap()
         );
+
+        // Test small buffer account
+        bank.clear_signatures();
+        let mut modified_buffer_account = Account::new(
+            min_programdata_balance,
+            UpgradeableLoaderState::buffer_len(elf.len()).unwrap(),
+            &bpf_loader_upgradeable::id(),
+        );
+        modified_buffer_account
+            .set_state(&UpgradeableLoaderState::Buffer {
+                authority_address: None,
+            })
+            .unwrap();
+        modified_buffer_account.data[UpgradeableLoaderState::buffer_data_offset().unwrap()..]
+            .copy_from_slice(&elf);
+        modified_buffer_account.data.truncate(5);
+        bank.store_account(&buffer_address, &modified_buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &Account::default());
+        bank.store_account(&programdata_address, &Account::default());
+        let message = Message::new(
+            &bpf_loader_upgradeable::deploy_with_max_program_len(
+                &mint_keypair.pubkey(),
+                &program_keypair.pubkey(),
+                &buffer_address,
+                None,
+                min_program_balance,
+                elf.len(),
+            )
+            .unwrap(),
+            Some(&mint_keypair.pubkey()),
+        );
+        assert_eq!(
+            TransactionError::InstructionError(1, InstructionError::InvalidAccountData),
+            bank_client
+                .send_and_confirm_message(&[&mint_keypair, &program_keypair], message)
+                .unwrap_err()
+                .unwrap()
+        );
     }
 
     #[test]
@@ -2439,7 +2490,7 @@ mod tests {
             )
         );
 
-        // Case: bad elf data
+        // Test small buffer account
         let (buffer_account, program_account, programdata_account, spill_account) = get_accounts(
             &buffer_address,
             &programdata_address,
@@ -2450,8 +2501,13 @@ mod tests {
             min_program_balance,
             min_programdata_balance,
         );
-        buffer_account.borrow_mut().data[UpgradeableLoaderState::buffer_data_offset().unwrap()..]
-            .copy_from_slice(&vec![0; elf_new.len()]);
+        buffer_account
+            .borrow_mut()
+            .set_state(&UpgradeableLoaderState::Buffer {
+                authority_address: None,
+            })
+            .unwrap();
+        buffer_account.borrow_mut().data.truncate(5);
         assert_eq!(
             Err(InstructionError::InvalidAccountData),
             process_instruction(
