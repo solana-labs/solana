@@ -50,7 +50,9 @@ use solana_stake_program::{
     stake_instruction::LockupArgs,
     stake_state::{Lockup, StakeAuthorize},
 };
-use solana_transaction_status::{EncodedTransaction, UiTransactionEncoding};
+use solana_transaction_status::{
+    EncodedTransaction, TransactionConfirmationStatus, UiTransactionEncoding,
+};
 use solana_vote_program::vote_state::VoteAuthorize;
 use std::{
     collections::HashMap,
@@ -973,13 +975,9 @@ fn process_confirm(
     config: &CliConfig,
     signature: &Signature,
 ) -> ProcessResult {
-    match rpc_client.get_signature_status_with_commitment_and_history(
-        &signature,
-        CommitmentConfig::max(),
-        true,
-    ) {
+    match rpc_client.get_signature_statuses_with_history(&[*signature]) {
         Ok(status) => {
-            if let Some(transaction_status) = status {
+            if let Some(transaction_status) = &status.value[0] {
                 if config.verbose {
                     match rpc_client
                         .get_confirmed_transaction(signature, UiTransactionEncoding::Base64)
@@ -1000,15 +998,24 @@ fn process_confirm(
                             );
                         }
                         Err(err) => {
-                            println!("Unable to get confirmed transaction details: {}", err)
+                            if transaction_status.confirmation_status()
+                                != TransactionConfirmationStatus::Finalized
+                            {
+                                println!();
+                                println!("Unable to get finalized transaction details: not yet finalized")
+                            } else {
+                                println!();
+                                println!("Unable to get finalized transaction details: {}", err)
+                            }
                         }
                     }
                     println!();
                 }
 
-                match transaction_status {
-                    Ok(_) => Ok("Confirmed".to_string()),
-                    Err(err) => Ok(format!("Transaction failed: {}", err)),
+                if let Some(err) = &transaction_status.err {
+                    Ok(format!("Transaction failed: {}", err))
+                } else {
+                    Ok(format!("{:?}", transaction_status.confirmation_status()))
                 }
             } else {
                 Ok("Not found".to_string())
@@ -2436,7 +2443,10 @@ mod tests {
 
         let good_signature = Signature::new(&bs58::decode(SIGNATURE).into_vec().unwrap());
         config.command = CliCommand::Confirm(good_signature);
-        assert_eq!(process_command(&config).unwrap(), "Confirmed");
+        assert_eq!(
+            process_command(&config).unwrap(),
+            format!("{:?}", TransactionConfirmationStatus::Finalized)
+        );
 
         let bob_keypair = Keypair::new();
         let bob_pubkey = bob_keypair.pubkey();
