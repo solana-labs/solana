@@ -2052,15 +2052,36 @@ impl AccountsDB {
         (hash, cap.unwrap())
     }
 
+    fn accumulate_account_hashes_and_capitalization_verify(
+        hashes: Vec<(Pubkey, Hash, u64)>,
+        verify: Vec<(Pubkey, Hash, u64)>,
+    ) -> (Hash, u64) {
+        let (hash, cap) = Self::do_accumulate_account_hashes_and_capitalization_verify(hashes, true, verify);
+        (hash, cap.unwrap())
+    }
+
     fn do_accumulate_account_hashes_and_capitalization(
         mut hashes: Vec<(Pubkey, Hash, u64)>,
         calculate_cap: bool,
     ) -> (Hash, Option<u64>) {
+        let verify: Vec<(Pubkey, Hash, u64)> = Vec::new();
+        Self::do_accumulate_account_hashes_and_capitalization_verify(hashes, calculate_cap, verify)
+    }
+
+    fn do_accumulate_account_hashes_and_capitalization_verify(
+        mut hashes: Vec<(Pubkey, Hash, u64)>,
+        calculate_cap: bool,
+        verify: Vec<(Pubkey, Hash, u64)>,
+    ) -> (Hash, Option<u64>) {
         let mut sort_time = Measure::start("sort");
         hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
         sort_time.stop();
-        if (hashes.len() > 0 && calculate_cap && hashes.len() > 1000000){
+        if verify.len() > 0 {
+            warn!("jwash: verifying: {}, {}", hashes.len(), verify.len());
+            let mut verify = verify.clone();
+            verify.par_sort_by(|a, b| a.0.cmp(&b.0));
             warn!("jwash:First sorted hash: {:?} out of: {}", hashes[0], hashes.len());
+            
         }
 
         let mut sum_time = Measure::start("cap");
@@ -2184,8 +2205,8 @@ impl AccountsDB {
         let accumulator: Vec<Vec<(Pubkey, CalculateHashIntermediate)>> = self.scan_account_storage(
             slot,
             |loaded_account: &StoredAccount,
-             _store_id: AppendVecId,
-             accum: &mut Vec<(Pubkey, CalculateHashIntermediate)>| {
+            _store_id: AppendVecId,
+            accum: &mut Vec<(Pubkey, CalculateHashIntermediate)>| {
                 let lamports = loaded_account.account_meta.lamports;
                 let balance = Self::account_balance_for_capitalization(
                     lamports,
@@ -2208,14 +2229,26 @@ impl AccountsDB {
         accumulator
     }
 
-    // modeled after get_accounts_delta_hash
-    // intended to be faster than calculate_accounts_hash
     pub fn calculate_accounts_hash_using_store(
         &self,
         slot: Slot,
         ancestors: &Ancestors,
         simple_capitalization_enabled: bool,
     ) -> (Hash, u64) {
+        let verify: Vec<(Pubkey, Hash, u64)> = Vec::new();
+        self.calculate_accounts_hash_using_store_check(slot, ancestors, simple_capitalization_enabled, verify)
+    }
+
+    // modeled after get_accounts_delta_hash
+    // intended to be faster than calculate_accounts_hash
+    pub fn calculate_accounts_hash_using_store_check(
+        &self,
+        slot: Slot,
+        ancestors: &Ancestors,
+        simple_capitalization_enabled: bool,
+        verify: Vec<(Pubkey, Hash, u64)>,
+    ) -> (Hash, u64) {
+        warn!("jwash:calculate_accounts_hash_using_store: {}, {}, {}", slot, ancestors.len(), simple_capitalization_enabled);
         let mut scan = Measure::start("accumulate");
         let account_maps = self.get_accounts(slot, ancestors, simple_capitalization_enabled);
         scan.stop();
@@ -2234,7 +2267,7 @@ impl AccountsDB {
             .collect();
         zeros.stop();
         let hash_total = hashes.len();
-        let accounts_with_zero = hash_total - account_len;
+        let accounts_with_zero = account_len - hash_total;
         warn!("jwash:non-zero accounts: {}, zero accounts:{}", hash_total, accounts_with_zero);
         let mut accumulate = Measure::start("accumulate");
         let ret = Self::accumulate_account_hashes_and_capitalization(hashes);
@@ -2248,6 +2281,7 @@ impl AccountsDB {
             ("hash_total", hash_total, i64),
         );
 
+        warn!("jwash:calculate_accounts_hash_using_store - end");
         ret
     }
 
@@ -2257,6 +2291,18 @@ impl AccountsDB {
         ancestors: &Ancestors,
         check_hash: bool,
         simple_capitalization_enabled: bool,
+    ) -> Result<(Hash, u64), BankHashVerificationError> {
+        let verify: Vec<(Pubkey, Hash, u64)> = Vec::new();
+        self.calculate_accounts_hash_verify(slot, ancestors, check_hash, simple_capitalization_enabled, verify)
+    }
+
+    fn calculate_accounts_hash_verify(
+        &self,
+        slot: Slot,
+        ancestors: &Ancestors,
+        check_hash: bool,
+        simple_capitalization_enabled: bool,
+        verify: Vec<(Pubkey, Hash, u64)>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         use BankHashVerificationError::*;
         let mut scan = Measure::start("scan");
@@ -2269,7 +2315,7 @@ impl AccountsDB {
             .cloned()
             .collect();
         let key_len = keys.len();
-        warn!("jwash:possible account keys: {}", key_len);
+        warn!("jwash:calculate_accounts_hash, possible account keys: {}", key_len);
 
         let mismatch_found = AtomicU64::new(0);
         let hashes: Vec<(Pubkey, Hash, u64)> = {
@@ -2333,7 +2379,7 @@ impl AccountsDB {
 
         let mut accumulate = Measure::start("accumulate");
         let (accumulated_hash, total_lamports) =
-            Self::accumulate_account_hashes_and_capitalization(hashes);
+            Self::accumulate_account_hashes_and_capitalization_verify(hashes, verify);
         accumulate.stop();
         datapoint_info!(
             "jwash:update_accounts_hash",
@@ -2341,6 +2387,8 @@ impl AccountsDB {
             ("hash_accumulate", accumulate.as_us(), i64),
             ("hash_total", hash_total, i64),
         );
+        warn!("jwash:done with calculate_accounts_hash, key_len: {}", key_len);
+
         Ok((accumulated_hash, total_lamports))
     }
 
@@ -2403,6 +2451,7 @@ impl AccountsDB {
         ancestors: &Ancestors,
         simple_capitalization_enabled: bool,
     ) -> (Hash, u64) {
+        warn!("jwash:update_accounts_hash_with_store_option");
         let (hash, total_lamports) = self.calculate_accounts_hash_helper(
             use_store,
             slot,
@@ -2410,6 +2459,7 @@ impl AccountsDB {
             simple_capitalization_enabled,
         );
         if debug_verify_store {
+            warn!("jwash:debug verify start");
             // calculate the other way (store or non-store) and verify results match.
             let (hash_other, total_lamports_other) = self.calculate_accounts_hash_helper(
                 !use_store,
@@ -2423,6 +2473,9 @@ impl AccountsDB {
                 let account_maps = self.get_accounts(slot, ancestors, simple_capitalization_enabled);
                 error!("jwash:account count: {}", account_maps.len());
             }
+            else{
+                error!("jwash: these are the same");
+            }
 
             assert_eq!(hash, hash_other);
             assert_eq!(total_lamports, total_lamports_other);
@@ -2430,6 +2483,7 @@ impl AccountsDB {
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
         bank_hash_info.snapshot_hash = hash;
+        warn!("jwash:update_accounts_hash_with_store_option - done");
         (hash, total_lamports)
     }
 
