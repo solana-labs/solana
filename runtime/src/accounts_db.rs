@@ -3449,15 +3449,39 @@ impl AccountsDB {
     fn remove_zero_balance_accounts(
         account_maps: DashMap<Pubkey, CalculateHashIntermediate>,
     ) -> Vec<(Pubkey, Hash, u64)> {
-        let hashes: Vec<_> = account_maps
+        let shards: Vec<_> =account_maps
+        .shards()
+        .into_iter()
+        .map(|x| x.clone()).collect();
+
+        let hashes: Vec<_> = shards
             .into_iter()
-            .filter_map(|(pubkey, (_, hash, lamports, original_lamports))| {
-                if original_lamports != 0 {
-                    Some((pubkey, hash, lamports))
-                } else {
-                    None
-                }
+            .map(|x| {
+                //let abc: u32 = x.read().deref();
+                let a: dashmap::lock::RwLockReadGuard<HashMap<_, _>> = x.read();
+                //let b= a.borrow();
+                let res: Vec<_> = a.iter()
+                .filter_map(//|(pubkey, (_, hash, lamports, original_lamports))| {
+                    |inp| {
+                    let (pubkey, sv) = inp;
+                    let (_, hash, lamports, original_lamports) = sv.get();
+                    if *original_lamports != 0 {
+                        Some((*pubkey, *hash, *lamports))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+                res
             })
+        //.into_iter()
+            /*
+            .map(|x| {
+                let a:HashMap<_,_> = x;
+                a.into_iter().collect::<Vec<_>>()
+                //x
+            })*/
+            .flatten()
             .collect();
         hashes
     }
