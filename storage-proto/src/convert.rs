@@ -11,13 +11,8 @@ use solana_sdk::{
     transaction::TransactionError,
 };
 use solana_transaction_status::{
-<<<<<<< HEAD
     ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionByAddrInfo,
-    TransactionStatusMeta, TransactionWithStatusMeta,
-=======
-    ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionStatusMeta,
-    TransactionTokenBalance, TransactionWithStatusMeta,
->>>>>>> 13db3eca9... SPL token balance in transaction metadata  (#13673)
+    TransactionStatusMeta, TransactionTokenBalance, TransactionWithStatusMeta,
 };
 use std::convert::{TryFrom, TryInto};
 

@@ -539,9 +539,7 @@ impl BankingStage {
             vec![]
         };
 
-<<<<<<< HEAD
         let mut execute_timings = ExecuteTimings::default();
-=======
         let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
 
         let pre_token_balances = if transaction_status_sender.is_some() {
@@ -550,7 +548,6 @@ impl BankingStage {
             vec![]
         };
 
->>>>>>> 13db3eca9... SPL token balance in transaction metadata  (#13673)
         let (
             mut loaded_accounts,
             results,
