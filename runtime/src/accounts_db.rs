@@ -3369,8 +3369,8 @@ impl AccountsDB {
             ("hash_accumulate", accumulate.as_us(), i64),
             ("eliminate_zeros", zeros.as_us(), i64),
             ("hash_total", hash_total, i64),
-            ("scan", scan.as_us(), i64),
-            ("scan_accumulate", time_scan.as_us(), i64),
+            ("scan", time_scan.as_us(), i64),
+            ("scan_accumulate", time_accumulate.as_us(), i64),
         );
 
         ret
