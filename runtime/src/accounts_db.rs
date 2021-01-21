@@ -3316,12 +3316,11 @@ impl AccountsDB {
         slot: Slot,
         simple_capitalization_enabled: bool,
     ) -> ScanStorageResult<CalculateHashIntermediateForCache, DashMapVersionHash2> {
-        let accumulator = self.scan_account_storage(
+        self.scan_account_storage(
             slot,
-            |x| Self::scan_cache_2(x),
+            |x| Some(Self::scan_cache_2(x)),
             |a, l| Self::scan_accounts_hash_function_lamports(a, l, simple_capitalization_enabled),
-        );
-        accumulator
+        )
     }
 
     fn remove_zero_balance_accounts(
@@ -3654,24 +3653,24 @@ impl AccountsDB {
         }
     }
 
-    fn scan_cache(loaded_account: LoadedAccount) -> Option<(Pubkey, Hash, u64)> {
+    fn scan_cache(loaded_account: LoadedAccount) -> (Pubkey, Hash, u64) {
         // Cache only has one version per key, don't need to worry about versioning
-        Some((
+        (
             *loaded_account.pubkey(),
             *loaded_account.loaded_hash(),
             CACHE_VIRTUAL_WRITE_VERSION,
-        ))
+        )
     }
 
     fn scan_cache_2(loaded_account: LoadedAccount) -> Option<CalculateHashIntermediateForCache> {
         // Cache only has one version per key, don't need to worry about versioning
-        Some((
+        (
             *loaded_account.pubkey(),
             CACHE_VIRTUAL_WRITE_VERSION, // ??? todo what to put here?
             *loaded_account.loaded_hash(),
             0,                         // balance
             loaded_account.lamports(), // raw lamports
-        ))
+        )
     }
 
     pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
@@ -3680,7 +3679,7 @@ impl AccountsDB {
         let scan_result: ScanStorageResult<(Pubkey, Hash, u64), DashMapVersionHash> = self
             .scan_account_storage(
                 slot,
-                |x| Self::scan_cache(x),
+                |x| Some(Self::scan_cache(x)),
                 Self::scan_accounts_hash_function,
             );
         scan.stop();
@@ -4209,11 +4208,11 @@ impl AccountsDB {
                 let source_version = source_item.version();
                 if dest_version <= source_version {
                     // replace the item
-                    dest_item.insert(source_item.clone());
+                    dest_item.insert(source_item);
                 }
             }
             std::collections::hash_map::Entry::Vacant(v) => {
-                v.insert(source_item.clone());
+                v.insert(source_item);
             }
         };
     }
