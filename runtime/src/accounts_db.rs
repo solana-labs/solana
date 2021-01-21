@@ -3294,11 +3294,6 @@ impl AccountsDB {
                         ScanStorageResult::Stored(stored_result) => {
                             master_accumulator.extend(stored_result);
                         }
-                        /*
-                        .into_iter()
-                        .map(|(pubkey, (latest_write_version, hash, l1, l2))| (pubkey, (latest_write_version, hash, l1, l2)))
-                        .collect(),
-                        */
                     };
                 }
                 len.fetch_add(master_accumulator.len(), Ordering::Relaxed);
