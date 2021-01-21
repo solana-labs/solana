@@ -107,11 +107,19 @@ type AppendVecOffsets = HashMap<AppendVecId, HashSet<usize>>;
 type ReclaimResult = (AccountSlots, AppendVecOffsets);
 type StorageFinder<'a> = Box<dyn Fn(Slot) -> Arc<AccountStorageEntry> + 'a>;
 
+type CalculateHashIntermediate = (u64, Hash, u64, u64);
+
 trait Versioned {
     fn version(&self) -> u64;
 }
 
 impl Versioned for (u64, Hash) {
+    fn version(&self) -> u64 {
+        self.0
+    }
+}
+
+impl Versioned for CalculateHashIntermediate {
     fn version(&self) -> u64 {
         self.0
     }
@@ -123,6 +131,19 @@ impl Versioned for (u64, AccountInfo) {
     }
 }
 
+/* needed for merge
+pub fn lamports(&self) -> u64 {
+    match self {
+        LoadedAccount::Stored(stored_account_meta) => {
+            stored_account_meta.clone_account().lamports
+        }
+        LoadedAccount::Cached((_, cached_account)) => match cached_account {
+            Cow::Owned(cached_account) => cached_account.account.lamports,
+            Cow::Borrowed(cached_account) => cached_account.account.lamports,
+        },
+    }
+}
+*/
 #[derive(Clone, Default, Debug)]
 pub struct AccountStorage(pub DashMap<Slot, SlotStores>);
 
@@ -2020,25 +2041,32 @@ impl AccountsDB {
     }
 
     fn accumulate_account_hashes(hashes: Vec<(Pubkey, Hash, u64)>) -> Hash {
-        let (hash, ..) = Self::do_accumulate_account_hashes_and_capitalization(hashes, false);
+        let (hash, ..) =
+            Self::do_accumulate_account_hashes_and_capitalization(hashes, false, false);
         hash
     }
 
     fn accumulate_account_hashes_and_capitalization(
         hashes: Vec<(Pubkey, Hash, u64)>,
+        unstable_sort: bool,
     ) -> (Hash, u64) {
-        let (hash, cap) = Self::do_accumulate_account_hashes_and_capitalization(hashes, true);
+        let (hash, cap) =
+            Self::do_accumulate_account_hashes_and_capitalization(hashes, true, unstable_sort);
         (hash, cap.unwrap())
     }
 
     fn do_accumulate_account_hashes_and_capitalization(
         mut hashes: Vec<(Pubkey, Hash, u64)>,
         calculate_cap: bool,
+        unstable_sort: bool,
     ) -> (Hash, Option<u64>) {
         let mut sort_time = Measure::start("sort");
-        hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
+        if unstable_sort {
+            hashes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        } else {
+            hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
+        }
         sort_time.stop();
-
         let mut sum_time = Measure::start("cap");
         let cap = if calculate_cap {
             Some(Self::checked_sum_for_capitalization(
@@ -2088,6 +2116,138 @@ impl AccountsDB {
         } else {
             lamports
         }
+    }
+
+    fn get_accounts_using_stores(
+        &self,
+        slot: Slot,
+        ancestors: &Ancestors,
+        simple_capitalization_enabled: bool,
+    ) -> HashMap<Pubkey, CalculateHashIntermediate> {
+        let mut scanned_slots = HashSet::<Slot>::new();
+
+        scanned_slots.insert(slot);
+
+        for storage_slot in self.storage.all_slots() {
+            if storage_slot > slot || !self.accounts_index.is_root(storage_slot) {
+                continue;
+            }
+
+            scanned_slots.insert(storage_slot);
+        }
+
+        scanned_slots.extend(ancestors.keys());
+
+        let len = AtomicUsize::new(0);
+        // scan all slots
+        // this chunking is necessary so we don't overflow the stack in the par_iter below.
+        let num_threads = std::cmp::max(2, num_cpus::get() / 4); // stolen from make_min_priority_thread_pool, which is the thread pool I assume we're running in
+        let num_chunks_per_thread = 100;
+        let num_units_of_work = num_threads * num_chunks_per_thread;
+        let chunk_size = std::cmp::max(1, scanned_slots.len() / num_units_of_work);
+        let scanned_slots: Vec<Slot> = scanned_slots.into_iter().collect();
+        let scanned_slots: Vec<Vec<Slot>> = scanned_slots
+            .chunks(chunk_size)
+            .map(|x| x.to_vec())
+            .collect();
+        let accumulators: Vec<_> = scanned_slots
+            .into_par_iter()
+            .map(|slots| {
+                let mut master_accumulator: Vec<Vec<(Pubkey, CalculateHashIntermediate)>> = Vec::new();
+                for slot in slots {
+                    let accumulator = self.scan_slot(slot, simple_capitalization_enabled);
+                    master_accumulator.extend(accumulator);
+                }
+                len.fetch_add(master_accumulator.len(), Ordering::Relaxed);
+                master_accumulator
+            })
+            .collect();
+
+        let mut account_maps = HashMap::with_capacity(len.load(Ordering::Relaxed));
+        for accumulator in accumulators {
+            for item in accumulator {
+                AccountsDB::merge_array(&mut account_maps, &item);
+            }
+        }
+
+        account_maps
+    }
+
+    fn scan_slot(
+        &self,
+        slot: Slot,
+        simple_capitalization_enabled: bool,
+    ) -> Vec<Vec<(Pubkey, CalculateHashIntermediate)>> {
+        let accumulator: Vec<Vec<(Pubkey, CalculateHashIntermediate)>> = self.scan_account_storage(
+            slot,
+            |loaded_account: &StoredAccount,
+             _store_id: AppendVecId,
+             accum: &mut Vec<(Pubkey, CalculateHashIntermediate)>| {
+                let lamports = loaded_account.account_meta.lamports;
+                let balance = Self::account_balance_for_capitalization(
+                    lamports,
+                    &loaded_account.account_meta.owner,
+                    loaded_account.account_meta.executable,
+                    simple_capitalization_enabled,
+                );
+
+                let data = (
+                    loaded_account.meta.write_version,
+                    *loaded_account.hash,
+                    balance,
+                    lamports,
+                );
+
+                accum.push((loaded_account.meta.pubkey, data));
+            },
+        );
+        accumulator
+    }
+
+    fn remove_zero_balance_accounts(
+        account_maps: HashMap<Pubkey, CalculateHashIntermediate>,
+    ) -> Vec<(Pubkey, Hash, u64)> {
+        let hashes: Vec<_> = account_maps
+            .into_iter()
+            .filter_map(|(pubkey, (_, hash, lamports, original_lamports))| {
+                if original_lamports != 0 {
+                    Some((pubkey, hash, lamports))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        hashes
+    }
+
+    // modeled after get_accounts_delta_hash
+    // intended to be faster than calculate_accounts_hash
+    pub fn calculate_accounts_hash_using_stores(
+        &self,
+        slot: Slot,
+        ancestors: &Ancestors,
+        simple_capitalization_enabled: bool,
+    ) -> (Hash, u64) {
+        let mut scan = Measure::start("accumulate");
+        let account_maps = self.get_accounts_using_stores(slot, ancestors, simple_capitalization_enabled);
+        scan.stop();
+
+        let mut zeros = Measure::start("eliminate zeros");
+        let hashes = Self::remove_zero_balance_accounts(account_maps);
+        zeros.stop();
+        let hash_total = hashes.len();
+        let mut accumulate = Measure::start("accumulate");
+        let ret = Self::accumulate_account_hashes_and_capitalization(hashes, true);
+        accumulate.stop();
+        datapoint_info!(
+            "calculate_accounts_hash_using_stores",
+            ("accounts_scan", scan.as_us(), i64),
+            ("hash_accumulate", accumulate.as_us(), i64),
+            ("eliminate_zeros", zeros.as_us(), i64),
+            ("hash_total", hash_total, i64),
+        );
+
+        ret
     }
 
     fn calculate_accounts_hash(
@@ -2168,14 +2328,15 @@ impl AccountsDB {
 
         let mut accumulate = Measure::start("accumulate");
         let (accumulated_hash, total_lamports) =
-            Self::accumulate_account_hashes_and_capitalization(hashes);
+            Self::accumulate_account_hashes_and_capitalization(hashes, false);
         accumulate.stop();
         datapoint_info!(
-            "update_accounts_hash",
+            "jwash:update_accounts_hash",
             ("accounts_scan", scan.as_us(), i64),
             ("hash_accumulate", accumulate.as_us(), i64),
             ("hash_total", hash_total, i64),
         );
+
         Ok((accumulated_hash, total_lamports))
     }
 
@@ -2191,12 +2352,76 @@ impl AccountsDB {
         ancestors: &Ancestors,
         simple_capitalization_enabled: bool,
     ) -> (Hash, u64) {
-        let (hash, total_lamports) = self
-            .calculate_accounts_hash(slot, ancestors, false, simple_capitalization_enabled)
-            .unwrap();
+        self.update_accounts_hash_with_store_option(
+            false,
+            false,
+            slot,
+            ancestors,
+            simple_capitalization_enabled,
+        )
+    }
+
+    pub fn update_accounts_hash_test(
+        &self,
+        slot: Slot,
+        ancestors: &Ancestors,
+        simple_capitalization_enabled: bool,
+    ) -> (Hash, u64) {
+        self.update_accounts_hash_with_store_option(
+            false,
+            true,
+            slot,
+            ancestors,
+            simple_capitalization_enabled,
+        )
+    }
+
+    fn calculate_accounts_hash_helper(
+        &self,
+        use_store: bool,
+        slot: Slot,
+        ancestors: &Ancestors,
+        simple_capitalization_enabled: bool,
+    ) -> (Hash, u64) {
+        if use_store {
+            self.calculate_accounts_hash_using_stores(slot, ancestors, simple_capitalization_enabled)
+        } else {
+            self.calculate_accounts_hash(slot, ancestors, false, simple_capitalization_enabled)
+                .unwrap()
+        }
+    }
+
+    pub fn update_accounts_hash_with_store_option(
+        &self,
+        use_store: bool,
+        debug_verify_store: bool,
+        slot: Slot,
+        ancestors: &Ancestors,
+        simple_capitalization_enabled: bool,
+    ) -> (Hash, u64) {
+        warn!("jwash:update_accounts_hash_with_store_option");
+        let (hash, total_lamports) = self.calculate_accounts_hash_helper(
+            use_store,
+            slot,
+            ancestors,
+            simple_capitalization_enabled,
+        );
+        if debug_verify_store {
+            // calculate the other way (store or non-store) and verify results match.
+            let (hash_other, total_lamports_other) = self.calculate_accounts_hash_helper(
+                !use_store,
+                slot,
+                ancestors,
+                simple_capitalization_enabled,
+            );
+
+            assert_eq!(hash, hash_other);
+            assert_eq!(total_lamports, total_lamports_other);
+        }
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
         bank_hash_info.snapshot_hash = hash;
+        warn!("jwash:update_accounts_hash_with_store_option - done");
         (hash, total_lamports)
     }
 
@@ -2656,6 +2881,27 @@ impl AccountsDB {
             })
             .filter(|snapshot_storage: &SnapshotStorage| !snapshot_storage.is_empty())
             .collect()
+    }
+
+    fn merge_array<X>(dest: &mut HashMap<Pubkey, X>, source: &[(Pubkey, X)])
+    where
+        X: Versioned + Clone + std::fmt::Debug,
+    {
+        for (key, source_item) in source.iter() {
+            match dest.entry(*key) {
+                std::collections::hash_map::Entry::Occupied(mut dest_item) => {
+                    let dest_version = dest_item.get_mut().version();
+                    let source_version = source_item.version();
+                    if dest_version <= source_version {
+                        // replace the item
+                        dest_item.insert(source_item.clone());
+                    }
+                }
+                std::collections::hash_map::Entry::Vacant(v) => {
+                    v.insert(source_item.clone());
+                }
+            };
+        }
     }
 
     fn merge<X>(dest: &mut HashMap<Pubkey, X>, source: &HashMap<Pubkey, X>)
@@ -3879,8 +4125,8 @@ pub mod tests {
 
         let ancestors = linear_ancestors(latest_slot);
         assert_eq!(
-            daccounts.update_accounts_hash(latest_slot, &ancestors, true),
-            accounts.update_accounts_hash(latest_slot, &ancestors, true)
+            daccounts.update_accounts_hash_test(latest_slot, &ancestors, true),
+            accounts.update_accounts_hash_test(latest_slot, &ancestors, true)
         );
     }
 
@@ -4033,12 +4279,12 @@ pub mod tests {
 
         let ancestors = linear_ancestors(current_slot);
         info!("ancestors: {:?}", ancestors);
-        let hash = accounts.update_accounts_hash(current_slot, &ancestors, true);
+        let hash = accounts.update_accounts_hash_test(current_slot, &ancestors, true);
 
         accounts.clean_accounts(None);
 
         assert_eq!(
-            accounts.update_accounts_hash(current_slot, &ancestors, true),
+            accounts.update_accounts_hash_test(current_slot, &ancestors, true),
             hash
         );
 
@@ -4155,7 +4401,7 @@ pub mod tests {
         accounts.add_root(current_slot);
 
         accounts.print_accounts_stats("pre_f");
-        accounts.update_accounts_hash(4, &HashMap::default(), true);
+        accounts.update_accounts_hash_test(4, &HashMap::default(), true);
 
         let accounts = f(accounts, current_slot);
 
@@ -4566,7 +4812,7 @@ pub mod tests {
 
         db.store(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
-        db.update_accounts_hash(some_slot, &ancestors, true);
+        db.update_accounts_hash_test(some_slot, &ancestors, true);
         assert_matches!(
             db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true),
             Ok(_)
@@ -4608,7 +4854,7 @@ pub mod tests {
 
         db.store(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
-        db.update_accounts_hash(some_slot, &ancestors, true);
+        db.update_accounts_hash_test(some_slot, &ancestors, true);
         assert_matches!(
             db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true),
             Ok(_)
@@ -4622,7 +4868,7 @@ pub mod tests {
                 &solana_sdk::native_loader::create_loadable_account("foo", 1),
             )],
         );
-        db.update_accounts_hash(some_slot, &ancestors, true);
+        db.update_accounts_hash_test(some_slot, &ancestors, true);
         assert_matches!(
             db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, false),
             Ok(_)
@@ -4651,7 +4897,7 @@ pub mod tests {
             .unwrap()
             .insert(some_slot, BankHashInfo::default());
         db.add_root(some_slot);
-        db.update_accounts_hash(some_slot, &ancestors, true);
+        db.update_accounts_hash_test(some_slot, &ancestors, true);
         assert_matches!(
             db.verify_bank_hash_and_lamports(some_slot, &ancestors, 0, true),
             Ok(_)
@@ -5117,7 +5363,7 @@ pub mod tests {
         );
 
         let no_ancestors = HashMap::default();
-        accounts.update_accounts_hash(current_slot, &no_ancestors, true);
+        accounts.update_accounts_hash_test(current_slot, &no_ancestors, true);
         accounts
             .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300, true)
             .unwrap();
