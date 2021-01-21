@@ -336,8 +336,8 @@ pub fn sign_shreds_gpu_pinned_keypair(keypair: &Keypair, cache: &RecyclerCache) 
     let pubkey = keypair.pubkey().to_bytes();
     let secret = keypair.secret().to_bytes();
     let mut hasher = Sha512::default();
-    hasher.input(&secret);
-    let mut result = hasher.result();
+    hasher.update(&secret);
+    let mut result = hasher.finalize();
     result[0] &= 248;
     result[31] &= 63;
     result[31] |= 64;
