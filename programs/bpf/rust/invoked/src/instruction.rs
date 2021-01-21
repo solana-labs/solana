@@ -13,6 +13,9 @@ pub const VERIFY_WRITER: u8 = 4;
 pub const VERIFY_PRIVILEGE_ESCALATION: u8 = 5;
 pub const NESTED_INVOKE: u8 = 6;
 pub const RETURN_OK: u8 = 7;
+pub const VERIFY_PRIVILEGE_DEESCALATION: u8 = 8;
+pub const VERIFY_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER: u8 = 9;
+pub const VERIFY_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE: u8 = 10;
 
 pub fn create_instruction(
     program_id: Pubkey,
