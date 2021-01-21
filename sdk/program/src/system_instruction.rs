@@ -115,7 +115,7 @@ pub enum SystemInstruction {
     /// Consumes a stored nonce, replacing it with a successor
     ///
     /// # Account references
-    ///   0. [WRITE, SIGNER] Nonce account
+    ///   0. [WRITE] Nonce account
     ///   1. [] RecentBlockhashes sysvar
     ///   2. [SIGNER] Nonce authority
     AdvanceNonceAccount,
