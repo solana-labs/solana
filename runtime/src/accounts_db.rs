@@ -3583,6 +3583,8 @@ impl AccountsDB {
     ) -> (Hash, u64) {
         let (account_maps, time_scan, time_accumulate) = accounts;
 
+        let len = account_maps.len();
+
         let mut zeros = Measure::start("eliminate zeros");
         let hashes = Self::remove_zero_balance_accounts(account_maps);
         zeros.stop();
@@ -3600,6 +3602,7 @@ impl AccountsDB {
             ("scan", time_scan.as_us(), i64),
             ("scan_accumulate", time_accumulate.as_us(), i64),
         );
+        warn!("hashes including zeros: {}, after removal: {}, lamports: {}, hash: {}", len,hash_total, ret.1, ret.0 );
 
         ret
     }
