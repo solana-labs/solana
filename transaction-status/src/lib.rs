@@ -25,6 +25,7 @@ use solana_sdk::{
     instruction::CompiledInstruction,
     message::{Message, MessageHeader},
     pubkey::Pubkey,
+    sanitize::Sanitize,
     signature::Signature,
     transaction::{Result, Transaction, TransactionError},
 };
@@ -557,7 +558,7 @@ impl EncodedTransaction {
         }
     }
     pub fn decode(&self) -> Option<Transaction> {
-        match self {
+        let transaction: Option<Transaction> = match self {
             EncodedTransaction::Json(_) => None,
             EncodedTransaction::LegacyBinary(blob) => bs58::decode(blob)
                 .into_vec()
@@ -575,7 +576,8 @@ impl EncodedTransaction {
                 | UiTransactionEncoding::Json
                 | UiTransactionEncoding::JsonParsed => None,
             },
-        }
+        };
+        transaction.filter(|transaction| transaction.sanitize().is_ok())
     }
 }
 
@@ -593,6 +595,20 @@ pub struct TransactionByAddrInfo {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_decode_invalid_transaction() {
+        // This transaction will not pass sanitization
+        let unsanitary_transaction = EncodedTransaction::Binary(
+            "ju9xZWuDBX4pRxX2oZkTjxU5jB4SSTgEGhX8bQ8PURNzyzqKMPPpNvWihx8zUe\
+             FfrbVNoAaEsNKZvGzAnTDy5bhNT9kt6KFCTBixpvrLCzg4M5UdFUQYrn1gdgjX\
+             pLHxcaShD81xBNaFDgnA2nkkdHnKtZt4hVSfKAmw3VRZbjrZ7L2fKZBx21CwsG\
+             hD6onjM2M3qZW5C8J6d1pj41MxKmZgPBSha3MyKkNLkAGFASK"
+                .to_string(),
+            UiTransactionEncoding::Base58,
+        );
+        assert!(unsanitary_transaction.decode().is_none());
+    }
 
     #[test]
     fn test_satisfies_commitment() {
