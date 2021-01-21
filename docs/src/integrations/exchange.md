@@ -107,9 +107,11 @@ possible to boot the node all the way from the genesis block.  Instead boot from
 a snapshot first and then add the `--no-snapshot-fetch` parameter for reboots.
 
 It is important to note that the amount of historical ledger available to your
-nodes is limited to what your trusted validators retain. You will need to ensure
-your nodes do not experience downtimes longer than this span, if ledger
-continuity is crucial for you.
+nodes from the rest of the network is limited at any point in time.  Once
+operational if your validators experience significant downtime they may not be
+able to catch up to the network and will need to download a new snapshot from a
+trusted validator.  In doing so your validators will now have a gap in its
+historical ledger data that cannot be filled.
 
 
 ### Minimizing Validator Port Exposure
