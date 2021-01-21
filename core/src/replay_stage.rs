@@ -1088,7 +1088,7 @@ impl ReplayStage {
             inc_new_counter_info!("replay_stage-voted_empty_bank", 1);
         }
         trace!("handle votable bank {}", bank.slot());
-        let (vote, tower_index) = tower.new_vote_from_bank(bank, vote_account_pubkey);
+        let (vote, tower_slots) = tower.new_vote_from_bank(bank, vote_account_pubkey);
         let new_root = tower.record_bank_vote(vote);
         let last_vote = tower.last_vote_and_timestamp();
 
@@ -1163,7 +1163,7 @@ impl ReplayStage {
             vote_account_pubkey,
             authorized_voter_keypairs,
             last_vote,
-            tower_index,
+            &tower_slots,
             switch_fork_decision,
         );
     }
@@ -1174,7 +1174,7 @@ impl ReplayStage {
         vote_account_pubkey: &Pubkey,
         authorized_voter_keypairs: &[Arc<Keypair>],
         vote: Vote,
-        tower_index: usize,
+        tower: &[Slot],
         switch_fork_decision: &SwitchForkDecision,
     ) {
         if authorized_voter_keypairs.is_empty() {
@@ -1249,7 +1249,7 @@ impl ReplayStage {
         vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
         vote_tx.partial_sign(&[authorized_voter_keypair.as_ref()], blockhash);
         let _ = cluster_info.send_vote(&vote_tx);
-        cluster_info.push_vote(tower_index, vote_tx);
+        cluster_info.push_vote(tower, vote_tx);
     }
 
     fn update_commitment_cache(
