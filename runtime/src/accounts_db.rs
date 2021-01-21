@@ -3279,23 +3279,26 @@ impl AccountsDB {
         let accumulators: Vec<_> = scanned_slots
             .into_par_iter()
             .map(|slots| {
-                let mut master_accumulator: Vec<(Pubkey, CalculateHashIntermediate)> =
-                    Vec::new();
+                let mut master_accumulator: Vec<(Pubkey, CalculateHashIntermediate)> = Vec::new();
                 for slot in slots {
                     let scan_result = self.scan_slot(slot, simple_capitalization_enabled);
                     match scan_result {
                         ScanStorageResult::Cached(cached_result) => {
-                            let hashes = cached_result.into_iter().map(|(pubkey, latest_write_version, hash, l1, l2)| (pubkey, (latest_write_version, hash, l1, l2)));
+                            let hashes = cached_result.into_iter().map(
+                                |(pubkey, latest_write_version, hash, l1, l2)| {
+                                    (pubkey, (latest_write_version, hash, l1, l2))
+                                },
+                            );
                             master_accumulator.extend(hashes);
-                        },
+                        }
                         ScanStorageResult::Stored(stored_result) => {
-                        master_accumulator.extend(stored_result);
-                        },
+                            master_accumulator.extend(stored_result);
+                        }
                         /*
-                            .into_iter()
-                            .map(|(pubkey, (latest_write_version, hash, l1, l2))| (pubkey, (latest_write_version, hash, l1, l2)))
-                            .collect(),
-                            */
+                        .into_iter()
+                        .map(|(pubkey, (latest_write_version, hash, l1, l2))| (pubkey, (latest_write_version, hash, l1, l2)))
+                        .collect(),
+                        */
                     };
                 }
                 len.fetch_add(master_accumulator.len(), Ordering::Relaxed);
@@ -3656,31 +3659,27 @@ impl AccountsDB {
         }
     }
 
-    fn scan_cache(
-        loaded_account: LoadedAccount
-    ) -> Option<(Pubkey, Hash, u64)> {
-            // Cache only has one version per key, don't need to worry about versioning
-            Some((
-                *loaded_account.pubkey(),
-                *loaded_account.loaded_hash(),
-                CACHE_VIRTUAL_WRITE_VERSION,
-            ))
-        }
+    fn scan_cache(loaded_account: LoadedAccount) -> Option<(Pubkey, Hash, u64)> {
+        // Cache only has one version per key, don't need to worry about versioning
+        Some((
+            *loaded_account.pubkey(),
+            *loaded_account.loaded_hash(),
+            CACHE_VIRTUAL_WRITE_VERSION,
+        ))
+    }
 
-        fn scan_cache_2(
-            loaded_account: LoadedAccount
-        ) -> Option<CalculateHashIntermediateForCache> {
-                // Cache only has one version per key, don't need to worry about versioning
-                Some((
-                    *loaded_account.pubkey(),
-                    CACHE_VIRTUAL_WRITE_VERSION, // ??? todo what to put here?
-                    *loaded_account.loaded_hash(),
-                    0, // balance
-                    loaded_account.lamports(), // raw lamports
-                ))
-            }
-    
-        pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
+    fn scan_cache_2(loaded_account: LoadedAccount) -> Option<CalculateHashIntermediateForCache> {
+        // Cache only has one version per key, don't need to worry about versioning
+        Some((
+            *loaded_account.pubkey(),
+            CACHE_VIRTUAL_WRITE_VERSION, // ??? todo what to put here?
+            *loaded_account.loaded_hash(),
+            0,                         // balance
+            loaded_account.lamports(), // raw lamports
+        ))
+    }
+
+    pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
         let mut scan = Measure::start("scan");
 
         let scan_result: ScanStorageResult<(Pubkey, Hash, u64), DashMapVersionHash> = self
