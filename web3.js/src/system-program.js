@@ -108,8 +108,8 @@ export type CreateNonceAccountWithSeedParams = {|
 /**
  * Initialize nonce account system instruction params
  * @typedef {Object} InitializeNonceParams
- * @property {PublicKey} fromPubkey
- * @property {PublicKey} programId
+ * @property {PublicKey} noncePubkey
+ * @property {PublicKey} authorizedPubkey
  */
 export type InitializeNonceParams = {|
   noncePubkey: PublicKey,
@@ -119,8 +119,8 @@ export type InitializeNonceParams = {|
 /**
  * Advance nonce account system instruction params
  * @typedef {Object} AdvanceNonceParams
- * @property {PublicKey} fromPubkey
- * @property {PublicKey} programId
+ * @property {PublicKey} noncePubkey
+ * @property {PublicKey} authorizedPubkey
  */
 export type AdvanceNonceParams = {|
   noncePubkey: PublicKey,
@@ -201,8 +201,10 @@ export type AssignWithSeedParams = {|
 /**
  * Transfer with seed system transaction params
  * @typedef {Object} TransferWithSeedParams
- * @property {PublicKey} accountPubkey
+ * @property {PublicKey} fromPubkey
  * @property {PublicKey} basePubkey
+ * @property {PublicKey} toPubkey
+ * @property {number} lamports
  * @property {string} seed
  * @property {PublicKey} programId
  */
