@@ -463,7 +463,7 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &[KeyedAccount],
     data: &[u8],
-    _invoke_context: &mut dyn InvokeContext,
+    invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
@@ -514,6 +514,7 @@ pub fn process_instruction(
         StakeInstruction::Merge => {
             let source_stake = &next_keyed_account(keyed_accounts)?;
             me.merge(
+                invoke_context,
                 source_stake,
                 &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
                 &from_keyed_account::<StakeHistory>(next_keyed_account(keyed_accounts)?)?,

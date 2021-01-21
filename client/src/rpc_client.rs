@@ -256,6 +256,7 @@ impl RpcClient {
                         for (i, log) in logs.iter().enumerate() {
                             debug!("{:>3}: {}", i + 1, log);
                         }
+                        debug!("");
                     }
                 }
                 return Err(err);
