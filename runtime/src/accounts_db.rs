@@ -3813,6 +3813,7 @@ impl AccountsDB {
         }
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
+        warn!("bank setting hash to: {}", hash);
         bank_hash_info.snapshot_hash = hash;
         (hash, total_lamports)
     }
