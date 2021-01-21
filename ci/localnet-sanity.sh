@@ -80,7 +80,7 @@ nodes=(
   "multinode-demo/validator.sh \
     --enable-rpc-exit \
     --no-restart \
-    --dynamic-port-range 8050-8100
+    --dynamic-port-range 8050-8100 \
     --init-complete-file init-complete-node1.log \
     --rpc-port 18899"
 )
