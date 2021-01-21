@@ -3249,7 +3249,8 @@ impl AccountsDB {
         );
     }
 
-    pub fn compute_merkle_root(hashes: Vec<(Pubkey, Hash, u64)>, fanout: usize) -> Hash {
+    // TODO: remove pub. bench uses it for now.
+    pub fn compute_merkle_root_legacy(hashes: Vec<(Pubkey, Hash, u64)>, fanout: usize) -> Hash {
         let hashes: Vec<_> = hashes
             .into_iter()
             .map(|(_pubkey, hash, _lamports)| hash)
@@ -3278,34 +3279,97 @@ impl AccountsDB {
         hasher.result()
     }
 
+    pub fn compute_merkle_root_and_capitalization(
+        hashes: Vec<(Pubkey, Hash, u64)>,
+        fanout: usize,
+    ) -> (Hash, u64) {
+        Self::compute_merkle_root_and_capitalization_loop(hashes, fanout, |t| (t.1, t.2))
+    }
+
+    // this function avoids an infinite recursion compiler error
+    fn compute_merkle_root_and_capitalization_recurse(
+        hashes: Vec<(Hash, u64)>,
+        fanout: usize,
+    ) -> (Hash, u64) {
+        Self::compute_merkle_root_and_capitalization_loop(hashes, fanout, |t: &(Hash, u64)| {
+            (t.0, t.1)
+        })
+    }
+
+    // For the first iteration, there could be more items in the tuple than just hash and lamports.
+    // Using extractor allows us to avoid an unnecessary array copy on the first iteration.
+    fn compute_merkle_root_and_capitalization_loop<T, F>(
+        hashes: Vec<T>,
+        fanout: usize,
+        extractor: F,
+    ) -> (Hash, u64)
+    where
+        F: Fn(&T) -> (Hash, u64) + std::marker::Sync,
+        T: std::marker::Sync,
+    {
+        if hashes.is_empty() {
+            return (Hasher::default().result(), 0);
+        }
+
+        let mut time = Measure::start("time");
+
+        let total_hashes = hashes.len();
+        // we need div_ceil here
+        let mut chunks = total_hashes / fanout;
+        if total_hashes % fanout != 0 {
+            chunks += 1;
+        }
+
+        let result: Vec<_> = (0..chunks)
+            .into_par_iter()
+            .map(|i| {
+                let start_index = i * fanout;
+                let end_index = std::cmp::min(start_index + fanout, total_hashes);
+
+                let mut hasher = Hasher::default();
+                let mut this_sum = 0u128;
+                for item in hashes.iter().take(end_index).skip(start_index) {
+                    let (h, l) = extractor(&item);
+                    this_sum += l as u128;
+                    hasher.hash(h.as_ref());
+                }
+
+                (
+                    hasher.result(),
+                    Self::checked_cast_for_capitalization(this_sum),
+                )
+            })
+            .collect();
+        time.stop();
+        debug!("hashing {} {}", total_hashes, time);
+
+        if result.len() == 1 {
+            result[0]
+        } else {
+            Self::compute_merkle_root_and_capitalization_recurse(result, fanout)
+        }
+    }
+
     fn accumulate_account_hashes(
         hashes: Vec<(Pubkey, Hash, u64)>,
         slot: Slot,
         debug: bool,
     ) -> Hash {
-        let (hash, ..) =
-            Self::do_accumulate_account_hashes_and_capitalization(hashes, false, slot, debug);
+        let (hash, ..) = Self::accumulate_account_hashes_and_capitalization(hashes, slot, debug);
         hash
     }
 
+    fn sort_hashes_by_pubkey(hashes: &mut Vec<(Pubkey, Hash, u64)>) {
+        hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
+    }
+
     fn accumulate_account_hashes_and_capitalization(
-        hashes: Vec<(Pubkey, Hash, u64)>,
+        mut hashes: Vec<(Pubkey, Hash, u64)>,
         slot: Slot,
         debug: bool,
     ) -> (Hash, u64) {
-        let (hash, cap) =
-            Self::do_accumulate_account_hashes_and_capitalization(hashes, true, slot, debug);
-        (hash, cap.unwrap())
-    }
-
-    fn do_accumulate_account_hashes_and_capitalization(
-        mut hashes: Vec<(Pubkey, Hash, u64)>,
-        calculate_cap: bool,
-        slot: Slot,
-        debug: bool,
-    ) -> (Hash, Option<u64>) {
         let mut sort_time = Measure::start("sort");
-        hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
+        Self::sort_hashes_by_pubkey(&mut hashes);
         sort_time.stop();
 
         if debug {
@@ -3313,32 +3377,28 @@ impl AccountsDB {
                 info!("slot: {} key {} hash {}", slot, key, hash);
             }
         }
-        let mut sum_time = Measure::start("cap");
-        let cap = if calculate_cap {
-            Some(Self::checked_sum_for_capitalization(
-                hashes.iter().map(|(_, _, lamports)| *lamports),
-            ))
-        } else {
-            None
-        };
-        sum_time.stop();
 
         let mut hash_time = Measure::start("hash");
         let fanout = 16;
-        let res = Self::compute_merkle_root(hashes, fanout);
+        let res = Self::compute_merkle_root_and_capitalization(hashes, fanout);
         hash_time.stop();
 
-        debug!("{} {} {}", sort_time, hash_time, sum_time);
+        debug!(
+            "accumulate_account_hashes_and_capitalization: {},{}",
+            sort_time, hash_time
+        );
 
-        (res, cap)
+        res
+    }
+
+    pub fn checked_cast_for_capitalization(balance: u128) -> u64 {
+        balance
+            .try_into()
+            .expect("overflow is detected while summing capitalization")
     }
 
     pub fn checked_sum_for_capitalization<T: Iterator<Item = u64>>(balances: T) -> u64 {
-        balances
-            .map(|b| b as u128)
-            .sum::<u128>()
-            .try_into()
-            .expect("overflow is detected while summing capitalization")
+        Self::checked_cast_for_capitalization(balances.map(|b| b as u128).sum::<u128>())
     }
 
     pub fn account_balance_for_capitalization(
@@ -4287,6 +4347,69 @@ pub mod tests {
             ancestors.insert(i, (i - 1) as usize);
         }
         ancestors
+    }
+
+    #[test]
+    fn test_accountsdb_compute_merkle_root_and_capitalization() {
+        solana_logger::setup();
+
+        let start = 0;
+        let default_fanout = 2;
+        let fanout_in_accumulate = 16;
+        // test 0..3 recursions (at fanout = 2) and 1 item remainder. The internals have 1 special case first loop and subsequent loops are the same types.
+        let iterations = default_fanout * default_fanout * default_fanout + 2;
+        for pass in 0..2 {
+            let fanout = if pass == 0 {
+                default_fanout
+            } else {
+                fanout_in_accumulate
+            };
+            for count in start..iterations {
+                let mut input: Vec<_> = (0..count)
+                    .map(|i| (Pubkey::new_unique(), Hash::new_unique(), i as u64))
+                    .collect();
+                let result;
+                if pass == 0 {
+                    result =
+                        AccountsDB::compute_merkle_root_and_capitalization(input.clone(), fanout);
+                } else {
+                    result = AccountsDB::accumulate_account_hashes_and_capitalization(
+                        input.clone(),
+                        0,
+                        false,
+                    );
+                    AccountsDB::sort_hashes_by_pubkey(&mut input);
+                }
+                let mut expected = 0;
+                if count > 0 {
+                    let count = count as u64;
+                    let last_number = count - 1;
+                    expected = count * last_number / 2;
+                }
+                assert_eq!(
+                    result.1,
+                    expected,
+                    "failed at size: {}, with inputs: {:?}",
+                    count,
+                    input.into_iter().map(|x| x.2).collect::<Vec<u64>>()
+                );
+                let hash_result_legacy = AccountsDB::compute_merkle_root_legacy(input, fanout);
+                assert_eq!(result.0, hash_result_legacy, "failed at size: {}", count);
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "overflow is detected while summing capitalization")]
+    fn test_accountsdb_compute_merkle_root_and_capitalization_overflow() {
+        solana_logger::setup();
+
+        let fanout = 2;
+        let input = vec![
+            (Pubkey::new_unique(), Hash::new_unique(), u64::MAX),
+            (Pubkey::new_unique(), Hash::new_unique(), 1),
+        ];
+        AccountsDB::compute_merkle_root_and_capitalization(input, fanout);
     }
 
     #[test]
