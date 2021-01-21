@@ -334,7 +334,11 @@ impl LedgerStorage {
                 "blocks",
                 slot_to_key(slot),
             )
-            .await?;
+            .await
+            .map_err(|err| match err {
+                bigtable::Error::RowNotFound => Error::BlockNotFound(slot),
+                _ => err.into(),
+            })?;
         Ok(match block_cell_data {
             bigtable::CellData::Bincode(block) => block.into(),
             bigtable::CellData::Protobuf(block) => block.try_into().map_err(|_err| {
@@ -347,7 +351,11 @@ impl LedgerStorage {
         let mut bigtable = self.connection.client();
         let transaction_info = bigtable
             .get_bincode_cell::<TransactionInfo>("tx", signature.to_string())
-            .await?;
+            .await
+            .map_err(|err| match err {
+                bigtable::Error::RowNotFound => Error::SignatureNotFound,
+                _ => err.into(),
+            })?;
         Ok(transaction_info.into())
     }
 
@@ -361,7 +369,11 @@ impl LedgerStorage {
         // Figure out which block the transaction is located in
         let TransactionInfo { slot, index, .. } = bigtable
             .get_bincode_cell("tx", signature.to_string())
-            .await?;
+            .await
+            .map_err(|err| match err {
+                bigtable::Error::RowNotFound => Error::SignatureNotFound,
+                _ => err.into(),
+            })?;
 
         // Load the block and return the transaction
         let block = self.get_confirmed_block(slot).await?;
