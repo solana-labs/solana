@@ -3454,7 +3454,7 @@ impl AccountsDB {
         .into_iter()
         .map(|x| x.clone()).collect();
 
-        warn!("# shards: {}", shareds.len());
+        warn!("# shards: {}", shards.len());
         let hashes: Vec<_> = shards
             .par_iter()
             .map(|x| {
