@@ -48,6 +48,15 @@ pub mod full_inflation {
             solana_sdk::declare_id!("DummyEnab1eAddress1111111111111111111111111");
         }
     }
+
+	pub mod nam {
+        pub mod vote {
+            solana_sdk::declare_id!("Hb6tvjY81EmgapxNS4dos1v8Q2RSjQABphu7cnzM4ELa");
+        }
+        pub mod enable {
+            solana_sdk::declare_id!("NamwT9ejvrfcPXrCHEwp7BvUUFKPgVznu66HZUgFD9w");
+        }
+    }
 }
 
 pub mod spl_token_v2_multisig_fix {
@@ -221,6 +230,8 @@ lazy_static! {
         (track_writable_deescalation::id(), "track account writable deescalation"),
         (spl_token_v2_self_transfer_fix::id(), "spl-token self-transfer fix"),
         (matching_buffer_upgrade_authorities::id(), "Upgradeable buffer and program authorities must match"),
+		(full_inflation::nam::vote::id(), "community vote allowing Nam to enable full inflation"),
+        (full_inflation::nam::enable::id(), "full inflation enabled by Nam"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
@@ -251,6 +262,10 @@ lazy_static! {
         FullInflationFeaturePair {
             vote_id: full_inflation::candidate_example::vote::id(),
             enable_id: full_inflation::candidate_example::enable::id(),
+        },
+        FullInflationFeaturePair {
+            vote_id: full_inflation::nam::vote::id(),
+            enable_id: full_inflation::nam::enable::id(),
         },
     ]
     .iter()
