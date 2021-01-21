@@ -663,13 +663,9 @@ pub(crate) fn sanitize_wallclock(wallclock: u64) -> Result<(), SanitizeError> {
 mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
-<<<<<<< HEAD
     use bincode::deserialize;
-=======
-    use bincode::{deserialize, Options};
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
->>>>>>> e4da6761a... fixes test_filter_current flakiness (#14749)
     use solana_perf::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, Signer};
     use solana_sdk::timing::timestamp;
