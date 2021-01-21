@@ -10,13 +10,8 @@ use solana_sdk::{
     transaction::TransactionError,
 };
 use solana_transaction_status::{
-<<<<<<< HEAD
-    ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionStatusMeta,
-    TransactionWithStatusMeta,
-=======
     ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionByAddrInfo,
-    TransactionStatusMeta, TransactionTokenBalance, TransactionWithStatusMeta,
->>>>>>> 1de6d28ea... Add block_time to getConfirmedSignaturesForAddress2 and getConfirmedTransaction (#14572)
+    TransactionStatusMeta, TransactionWithStatusMeta,
 };
 use std::convert::{TryFrom, TryInto};
 
