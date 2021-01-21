@@ -111,5 +111,5 @@ export const SystemInstructionType = enums([
   "withdrawNonce",
   "authorizeNonce",
   "initializeNonce",
-  // "transferWithSeed", TODO: Add support for transfer with seed
+  "transferWithSeed",
 ]);
