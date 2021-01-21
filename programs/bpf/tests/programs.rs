@@ -822,43 +822,10 @@ fn test_program_bpf_invoke_sanity() {
             &[invoked_program_id.clone()],
         );
 
-<<<<<<< HEAD
-        let instruction = Instruction::new(
-            invoke_program_id,
-            &[
-                TEST_PPROGRAM_NOT_EXECUTABLE,
-                bump_seed1,
-                bump_seed2,
-                bump_seed3,
-            ],
-            account_metas.clone(),
-        );
-        let message = Message::new(&[instruction], Some(&mint_pubkey));
-        let tx = Transaction::new(
-            &[
-                &mint_keypair,
-                &argument_keypair,
-                &invoked_argument_keypair,
-                &from_keypair,
-            ],
-            message.clone(),
-            bank.last_blockhash(),
-        );
-        let (result, inner_instructions) = process_transaction_and_record_inner(&bank, tx);
-        let invoked_programs: Vec<Pubkey> = inner_instructions[0]
-            .iter()
-            .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
-            .collect();
-        assert_eq!(invoked_programs, vec![argument_keypair.pubkey().clone()]);
-        assert_eq!(
-            result.unwrap_err(),
-            TransactionError::InstructionError(0, InstructionError::AccountNotExecutable)
-=======
         do_invoke_failure_test_local(
             TEST_PPROGRAM_NOT_EXECUTABLE,
             TransactionError::InstructionError(0, InstructionError::AccountNotExecutable),
-            &[],
->>>>>>> aa96ad042... Add signer/writable de/escalation tests (#14726)
+            &[argument_keypair.pubkey().clone()],
         );
 
         do_invoke_failure_test_local(
@@ -960,20 +927,6 @@ fn test_program_bpf_invoke_sanity() {
     }
 }
 
-<<<<<<< HEAD
-    // Check the caller has access to cpi program
-    {
-        let GenesisConfigInfo {
-            genesis_config,
-            mint_keypair,
-            ..
-        } = create_genesis_config(50);
-        let mut bank = Bank::new(&genesis_config);
-        let (name, id, entrypoint) = solana_bpf_loader_program!();
-        bank.add_builtin(&name, id, entrypoint);
-        let bank = Arc::new(bank);
-        let bank_client = BankClient::new_shared(&bank);
-=======
 #[cfg(feature = "bpf_rust")]
 #[test]
 fn test_program_bpf_program_id_spoofing() {
@@ -1039,7 +992,6 @@ fn test_program_bpf_caller_has_access_to_cpi_program() {
     bank.add_builtin(&name, id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
->>>>>>> aa96ad042... Add signer/writable de/escalation tests (#14726)
 
     let caller_pubkey = load_bpf_program(
         &bank_client,
