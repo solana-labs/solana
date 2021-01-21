@@ -3249,7 +3249,7 @@ impl AccountsDB {
         slot: Slot,
         ancestors: &Ancestors,
         simple_capitalization_enabled: bool,
-    ) -> HashMap<Pubkey, CalculateHashIntermediate> {
+    ) -> (HashMap<Pubkey, CalculateHashIntermediate>, Measure, Measure) {
         let mut scanned_slots = HashSet::<Slot>::new();
 
         scanned_slots.insert(slot);
@@ -3276,6 +3276,7 @@ impl AccountsDB {
             .chunks(chunk_size)
             .map(|x| x.to_vec())
             .collect();
+        let mut time = Measure::start("scan all accounts");
         let accumulators: Vec<_> = scanned_slots
             .into_par_iter()
             .map(|slots| {
@@ -3300,15 +3301,18 @@ impl AccountsDB {
                 master_accumulator
             })
             .collect();
+        time.stop();
 
+        let mut time_accumulate = Measure::start("accumulate");
         let mut account_maps = HashMap::with_capacity(len.load(Ordering::Relaxed));
         for accumulator in accumulators {
             for item in accumulator {
                 AccountsDB::merge_array(&mut account_maps, item);
             }
         }
+        time_accumulate.stop();
 
-        account_maps
+        (account_maps, time, time_accumulate)
     }
 
     fn scan_slot(
@@ -3348,7 +3352,7 @@ impl AccountsDB {
         simple_capitalization_enabled: bool,
     ) -> (Hash, u64) {
         let mut scan = Measure::start("accumulate");
-        let account_maps =
+        let (account_maps, time_scan, time_accumulate) =
             self.get_accounts_using_stores(slot, ancestors, simple_capitalization_enabled);
         scan.stop();
 
@@ -3365,6 +3369,8 @@ impl AccountsDB {
             ("hash_accumulate", accumulate.as_us(), i64),
             ("eliminate_zeros", zeros.as_us(), i64),
             ("hash_total", hash_total, i64),
+            ("scan", scan.as_us(), i64),
+            ("scan_accumulate", time_scan.as_us(), i64),
         );
 
         ret
@@ -3662,7 +3668,7 @@ impl AccountsDB {
         )
     }
 
-    fn scan_cache_2(loaded_account: LoadedAccount) -> Option<CalculateHashIntermediateForCache> {
+    fn scan_cache_2(loaded_account: LoadedAccount) -> CalculateHashIntermediateForCache {
         // Cache only has one version per key, don't need to worry about versioning
         (
             *loaded_account.pubkey(),
