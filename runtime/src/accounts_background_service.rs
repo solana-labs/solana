@@ -11,6 +11,7 @@ use crate::{
 use crossbeam_channel::{Receiver, SendError, Sender};
 use log::*;
 use rand::{thread_rng, Rng};
+use rayon::prelude::*;
 use solana_measure::measure::Measure;
 use solana_sdk::clock::Slot;
 use std::{
@@ -87,10 +88,6 @@ impl SnapshotRequestHandler {
                     status_cache_slot_deltas,
                 } = snapshot_request;
 
-                let mut hash_time = Measure::start("hash_time");
-                snapshot_root_bank.update_accounts_hash_with_store_option(true, false);
-                hash_time.stop();
-
                 let mut shrink_time = Measure::start("shrink_time");
                 if !accounts_db_caching_enabled {
                     snapshot_root_bank
@@ -105,13 +102,26 @@ impl SnapshotRequestHandler {
                 }
                 flush_accounts_cache_time.stop();
 
-                let mut clean_time = Measure::start("clean_time");
-                // Don't clean the slot we're snapshotting because it may have zero-lamport
-                // accounts that were included in the bank delta hash when the bank was frozen,
-                // and if we clean them here, the newly created snapshot's hash may not match
-                // the frozen hash.
-                snapshot_root_bank.clean_accounts(true);
-                clean_time.stop();
+                let times: Vec<_> = (0..2u32).into_par_iter().map(|x| {
+                    if x == 0 {
+                        let mut clean_time = Measure::start("clean_time");
+                        // Don't clean the slot we're snapshotting because it may have zero-lamport
+                        // accounts that were included in the bank delta hash when the bank was frozen,
+                        // and if we clean them here, the newly created snapshot's hash may not match
+                        // the frozen hash.
+                        snapshot_root_bank.clean_accounts(true);
+                        clean_time.stop();
+                        clean_time
+                    }
+                    else {
+                        let mut hash_time = Measure::start("hash_time");
+                        snapshot_root_bank.update_accounts_hash_with_store_option(true, false);
+                        hash_time.stop();
+                        hash_time
+                    }
+                }).collect();
+                let clean_time = times[0].as_us();
+                let hash_time = times[1].as_us();
 
                 if accounts_db_caching_enabled {
                     shrink_time = Measure::start("shrink_time");
@@ -146,14 +156,14 @@ impl SnapshotRequestHandler {
 
                 datapoint_info!(
                     "handle_snapshot_requests-timing",
-                    ("hash_time", hash_time.as_us(), i64),
+                    ("hash_time", hash_time, i64),
                     (
                         "flush_accounts_cache_time",
                         flush_accounts_cache_time.as_us(),
                         i64
                     ),
                     ("shrink_time", shrink_time.as_us(), i64),
-                    ("clean_time", clean_time.as_us(), i64),
+                    ("clean_time", clean_time, i64),
                     ("snapshot_time", snapshot_time.as_us(), i64),
                     (
                         "purge_old_snapshots_time",
