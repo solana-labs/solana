@@ -83,6 +83,7 @@ impl SnapshotRequestHandler {
             .try_iter()
             .last()
             .map(|snapshot_request| {
+                let mut total_time = Measure::start("total");
                 let SnapshotRequest {
                     snapshot_root_bank,
                     status_cache_slot_deltas,
@@ -153,6 +154,7 @@ impl SnapshotRequestHandler {
                 let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
                 snapshot_utils::purge_old_snapshots(&self.snapshot_config.snapshot_path);
                 purge_old_snapshots_time.stop();
+                total_time.stop();
 
                 datapoint_info!(
                     "handle_snapshot_requests-timing",
@@ -170,6 +172,7 @@ impl SnapshotRequestHandler {
                         purge_old_snapshots_time.as_us(),
                         i64
                     ),
+                    ("total_time", total_time.as_us(), i64),
                 );
                 snapshot_root_bank.block_height()
             })
