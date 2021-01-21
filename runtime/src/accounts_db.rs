@@ -3388,6 +3388,43 @@ impl AccountsDB {
         accumulator
     }
 
+    /// Scan through all the account storage in parallel
+    fn scan_account_storage_no_bank_2<F, B>(snapshot_storages: SnapshotStorages, scan_func: F) -> Vec<B>
+    where
+        F: Fn(LoadedAccount, AppendVecId, &mut B) + Send + Sync,
+        B: Send + Default,
+    {
+
+        // If the slot is not in the cache, then all the account information must have
+        // been flushed. This is guaranteed because we only remove the rooted slot from
+        // the cache *after* we've finished flushing in `flush_slot_cache`.
+        let storage_maps: Vec<Arc<AccountStorageEntry>> = snapshot_storages
+        .into_iter()
+        .flatten()
+        .into_iter()
+        .map(|x| x.clone())
+        .collect();
+//            .map(|res| res.clone.unwrap().values().cloned().collect())
+  //          .unwrap_or_default();
+        //self.thread_pool.install(|| {
+            storage_maps
+                .into_par_iter()
+                .map(|storage| {
+                    let accounts = storage.accounts.accounts(0);
+                    let mut retval = B::default();
+                    accounts.into_iter().for_each(|stored_account| {
+                        scan_func(
+                            LoadedAccount::Stored(stored_account),
+                            storage.append_vec_id(),
+                            &mut retval,
+                        )
+                    });
+                    retval
+                })
+                .collect()
+        //})
+    }
+
     /// Scan a specific slot through all the account storage in parallel
     pub fn scan_account_storage_old<F, B>(&self, slot: Slot, scan_func: F) -> Vec<B>
     where
@@ -3421,28 +3458,14 @@ impl AccountsDB {
             // If the slot is not in the cache, then all the account information must have
             // been flushed. This is guaranteed because we only remove the rooted slot from
             // the cache *after* we've finished flushing in `flush_slot_cache`.
+
             let storage_maps: Vec<Arc<AccountStorageEntry>> = self
                 .storage
                 .get_slot_stores(slot)
                 .map(|res| res.read().unwrap().values().cloned().collect())
                 .unwrap_or_default();
-            self.thread_pool.install(|| {
-                storage_maps
-                    .into_par_iter()
-                    .map(|storage| {
-                        let accounts = storage.accounts.accounts(0);
-                        let mut retval = B::default();
-                        accounts.into_iter().for_each(|stored_account| {
-                            scan_func(
-                                LoadedAccount::Stored(stored_account),
-                                storage.append_vec_id(),
-                                &mut retval,
-                            )
-                        });
-                        retval
-                    })
-                    .collect()
-            })
+            let combined_maps = vec![storage_maps];
+            Self::scan_account_storage_no_bank_2(combined_maps, scan_func)
         }
     }
 
