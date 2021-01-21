@@ -3280,22 +3280,10 @@ impl AccountsDB {
         let accumulators: Vec<_> = scanned_slots
             .into_par_iter()
             .map(|slots| {
-                let mut master_accumulator: Vec<(Pubkey, CalculateHashIntermediate)> = Vec::new();
+                let mut master_accumulator: Vec<Vec<(Pubkey, CalculateHashIntermediate)>> = Vec::new();
                 for slot in slots {
-                    let scan_result = self.scan_slot(slot, simple_capitalization_enabled);
-                    match scan_result {
-                        ScanStorageResult::Cached(cached_result) => {
-                            let hashes = cached_result.into_iter().map(
-                                |(pubkey, latest_write_version, hash, l1, l2)| {
-                                    (pubkey, (latest_write_version, hash, l1, l2))
-                                },
-                            );
-                            master_accumulator.extend(hashes);
-                        }
-                        ScanStorageResult::Stored(stored_result) => {
-                            master_accumulator.extend(stored_result);
-                        }
-                    };
+                    let accumulator = self.scan_slot(slot, simple_capitalization_enabled);
+                    master_accumulator.extend(accumulator);
                 }
                 len.fetch_add(master_accumulator.len(), Ordering::Relaxed);
                 master_accumulator
@@ -3307,7 +3295,7 @@ impl AccountsDB {
         let mut account_maps = HashMap::with_capacity(len.load(Ordering::Relaxed));
         for accumulator in accumulators {
             for item in accumulator {
-                AccountsDB::merge_array(&mut account_maps, item);
+                AccountsDB::merge_array_old(&mut account_maps, &item);
             }
         }
         time_accumulate.stop();
@@ -3315,6 +3303,26 @@ impl AccountsDB {
         (account_maps, time, time_accumulate)
     }
 
+    fn merge_array_old<X>(dest: &mut HashMap<Pubkey, X>, source: &[(Pubkey, X)])
+    where
+        X: Versioned + Clone,
+    {
+        for (key, source_item) in source.iter() {
+            match dest.entry(*key) {
+                std::collections::hash_map::Entry::Occupied(mut dest_item) => {
+                    if dest_item.get_mut().version() <= source_item.version() {
+                        // replace the item
+                        dest_item.insert(source_item.clone());
+                    }
+                }
+                std::collections::hash_map::Entry::Vacant(v) => {
+                    v.insert(source_item.clone());
+                }
+            };
+        }
+    }
+
+    /* new
     fn scan_slot(
         &self,
         slot: Slot,
@@ -3325,6 +3333,94 @@ impl AccountsDB {
             |x| Some(Self::scan_cache_2(x)),
             |a, l| Self::scan_accounts_hash_function_lamports(a, l, simple_capitalization_enabled),
         )
+    }
+    */
+
+    fn scan_slot(
+        &self,
+        slot: Slot,
+        simple_capitalization_enabled: bool,
+    ) -> Vec<Vec<(Pubkey, CalculateHashIntermediate)>> {
+        let accumulator: Vec<Vec<(Pubkey, CalculateHashIntermediate)>> = self.scan_account_storage_old(
+            slot,
+            |loaded_account: LoadedAccount,
+             _store_id: AppendVecId,
+             accum: &mut Vec<(Pubkey, CalculateHashIntermediate)>| {
+                let public_key = loaded_account.pubkey();
+                let version = loaded_account.write_version();
+                let lamports = loaded_account.lamports();
+                let balance = Self::account_balance_for_capitalization(
+                    lamports,
+                    loaded_account.owner(),
+                    loaded_account.executable(),
+                    simple_capitalization_enabled,
+                );
+
+                accum.push((
+                    *public_key,
+                    (version, *loaded_account.loaded_hash(), balance, lamports),
+                ));
+            },
+        );
+        accumulator
+    }
+
+    /// Scan a specific slot through all the account storage in parallel
+    pub fn scan_account_storage_old<F, B>(&self, slot: Slot, scan_func: F) -> Vec<B>
+    where
+        F: Fn(LoadedAccount, AppendVecId, &mut B) + Send + Sync,
+        B: Send + Default,
+    {
+        self.scan_account_storage_inner_old(slot, scan_func)
+    }
+
+    fn scan_account_storage_inner_old<F, B>(&self, slot: Slot, scan_func: F) -> Vec<B>
+    where
+        F: Fn(LoadedAccount, AppendVecId, &mut B) + Send + Sync,
+        B: Send + Default,
+    {
+        if let Some(slot_cache) = self.accounts_cache.slot_cache(slot) {
+            // If we see the slot in the cache, then all the account information
+            // is in this cached slot
+            let mut retval = B::default();
+            for cached_account in slot_cache.iter() {
+                scan_func(
+                    LoadedAccount::Cached((
+                        *cached_account.key(),
+                        Cow::Borrowed(cached_account.value()),
+                    )),
+                    CACHE_VIRTUAL_STORAGE_ID,
+                    &mut retval,
+                );
+            }
+            vec![retval]
+        } else {
+            // If the slot is not in the cache, then all the account information must have
+            // been flushed. This is guaranteed because we only remove the rooted slot from
+            // the cache *after* we've finished flushing in `flush_slot_cache`.
+            let storage_maps: Vec<Arc<AccountStorageEntry>> = self
+                .storage
+                .get_slot_stores(slot)
+                .map(|res| res.read().unwrap().values().cloned().collect())
+                .unwrap_or_default();
+            self.thread_pool.install(|| {
+                storage_maps
+                    .into_par_iter()
+                    .map(|storage| {
+                        let accounts = storage.accounts.accounts(0);
+                        let mut retval = B::default();
+                        accounts.into_iter().for_each(|stored_account| {
+                            scan_func(
+                                LoadedAccount::Stored(stored_account),
+                                storage.append_vec_id(),
+                                &mut retval,
+                            )
+                        });
+                        retval
+                    })
+                    .collect()
+            })
+        }
     }
 
     fn remove_zero_balance_accounts(
