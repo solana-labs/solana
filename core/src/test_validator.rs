@@ -84,6 +84,30 @@ impl TestValidatorGenesis {
         self
     }
 
+    pub fn add_accounts<T>(&mut self, accounts: T) -> &mut Self
+    where
+        T: IntoIterator<Item = (Pubkey, Account)>,
+    {
+        for (address, account) in accounts {
+            self.add_account(address, account);
+        }
+        self
+    }
+
+    pub fn clone_accounts<T>(&mut self, addresses: T, rpc_client: &RpcClient) -> &mut Self
+    where
+        T: IntoIterator<Item = Pubkey>,
+    {
+        for address in addresses {
+            info!("Fetching {}...", address);
+            let account = rpc_client.get_account(&address).unwrap_or_else(|err| {
+                panic!("Failed to fetch {}: {}", address, err);
+            });
+            self.add_account(address, account);
+        }
+        self
+    }
+
     /// Add an account to the test environment with the account data in the provided `filename`
     pub fn add_account_with_file_data(
         &mut self,
