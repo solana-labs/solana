@@ -3278,7 +3278,7 @@ impl AccountsDB {
             .collect();
         let mut time = Measure::start("scan all accounts");
 
-        let mut map:DashMap<Pubkey, CalculateHashIntermediate> = DashMap::new();
+        let mut map: DashMap<Pubkey, CalculateHashIntermediate> = DashMap::new();
 
         let accumulators: Vec<_> = scanned_slots
             .into_par_iter()
@@ -3317,11 +3317,11 @@ impl AccountsDB {
         time_accumulate.stop();
 
         /*
-        let account_maps: Vec<_> = map.into_iter().map(|x| {
-            let (pubkey, (version, hash, balance, raw_lamports)) = x;
-            (pubkey, hash, balance, raw_lamports)
-        });
-*/
+                let account_maps: Vec<_> = map.into_iter().map(|x| {
+                    let (pubkey, (version, hash, balance, raw_lamports)) = x;
+                    (pubkey, hash, balance, raw_lamports)
+                });
+        */
         (map, time, time_accumulate)
     }
 
@@ -3358,6 +3358,64 @@ impl AccountsDB {
     }
     */
 
+    fn scan_slot_using_snapshot(
+        storage: SnapshotStorages,
+        simple_capitalization_enabled: bool,
+    ) -> (DashMap<Pubkey, CalculateHashIntermediate>, Measure, Measure) {
+        let mut map: DashMap<Pubkey, CalculateHashIntermediate> = DashMap::new();
+        let mut time = Measure::start("scan all accounts");
+        let accumulator: Vec<Vec<(Pubkey, CalculateHashIntermediate)>> =
+            Self::scan_account_storage_no_bank_2(
+                storage,
+                |loaded_account: LoadedAccount,
+                 _store_id: AppendVecId,
+                 accum: &mut Vec<(Pubkey, CalculateHashIntermediate)>| {
+                    let public_key = loaded_account.pubkey();
+                    let version = loaded_account.write_version();
+                    let lamports = loaded_account.lamports();
+                    let balance = Self::account_balance_for_capitalization(
+                        lamports,
+                        loaded_account.owner(),
+                        loaded_account.executable(),
+                        simple_capitalization_enabled,
+                    );
+
+                    let key = public_key;
+                    let source_item = (version, *loaded_account.loaded_hash(), balance, lamports);
+                    match map.entry(*key) {
+                        Occupied(mut dest_item) => {
+                            if dest_item.get_mut().version() <= source_item.version() {
+                                // replace the item
+                                dest_item.insert(source_item.clone());
+                            }
+                        }
+                        Vacant(v) => {
+                            v.insert(source_item.clone());
+                        }
+                    };
+                },
+            );
+
+        let mut time_accumulate = Measure::start("accumulate");
+        /*
+        let mut account_maps = DashMap::with_capacity(len.load(Ordering::Relaxed));
+        for accumulator in accumulators {
+            for item in accumulator {
+                AccountsDB::merge_array_old(&mut account_maps, &item);
+            }
+        }
+        */
+        time_accumulate.stop();
+
+        /*
+            let account_maps: Vec<_> = map.into_iter().map(|x| {
+                let (pubkey, (version, hash, balance, raw_lamports)) = x;
+                (pubkey, hash, balance, raw_lamports)
+            });
+        */
+        (map, time, time_accumulate)
+    }
+
     fn scan_slot(
         &self,
         slot: Slot,
@@ -3389,39 +3447,41 @@ impl AccountsDB {
     }
 
     /// Scan through all the account storage in parallel
-    fn scan_account_storage_no_bank_2<F, B>(snapshot_storages: SnapshotStorages, scan_func: F) -> Vec<B>
+    fn scan_account_storage_no_bank_2<F, B>(
+        snapshot_storages: SnapshotStorages,
+        scan_func: F,
+    ) -> Vec<B>
     where
         F: Fn(LoadedAccount, AppendVecId, &mut B) + Send + Sync,
         B: Send + Default,
     {
-
         // If the slot is not in the cache, then all the account information must have
         // been flushed. This is guaranteed because we only remove the rooted slot from
         // the cache *after* we've finished flushing in `flush_slot_cache`.
         let storage_maps: Vec<Arc<AccountStorageEntry>> = snapshot_storages
-        .into_iter()
-        .flatten()
-        .into_iter()
-        .map(|x| x.clone())
-        .collect();
-//            .map(|res| res.clone.unwrap().values().cloned().collect())
-  //          .unwrap_or_default();
+            .into_iter()
+            .flatten()
+            .into_iter()
+            .map(|x| x.clone())
+            .collect();
+        //            .map(|res| res.clone.unwrap().values().cloned().collect())
+        //          .unwrap_or_default();
         //self.thread_pool.install(|| {
-            storage_maps
-                .into_par_iter()
-                .map(|storage| {
-                    let accounts = storage.accounts.accounts(0);
-                    let mut retval = B::default();
-                    accounts.into_iter().for_each(|stored_account| {
-                        scan_func(
-                            LoadedAccount::Stored(stored_account),
-                            storage.append_vec_id(),
-                            &mut retval,
-                        )
-                    });
-                    retval
-                })
-                .collect()
+        storage_maps
+            .into_par_iter()
+            .map(|storage| {
+                let accounts = storage.accounts.accounts(0);
+                let mut retval = B::default();
+                accounts.into_iter().for_each(|stored_account| {
+                    scan_func(
+                        LoadedAccount::Stored(stored_account),
+                        storage.append_vec_id(),
+                        &mut retval,
+                    )
+                });
+                retval
+            })
+            .collect()
         //})
     }
 
@@ -3432,6 +3492,15 @@ impl AccountsDB {
         B: Send + Default,
     {
         self.scan_account_storage_inner_old(slot, scan_func)
+    }
+
+    fn get_storage_maps(&self, slot: Slot) -> Vec<Arc<AccountStorageEntry>> {
+        let storage_maps: Vec<Arc<AccountStorageEntry>> = self
+            .storage
+            .get_slot_stores(slot)
+            .map(|res| res.read().unwrap().values().cloned().collect())
+            .unwrap_or_default();
+        storage_maps
     }
 
     fn scan_account_storage_inner_old<F, B>(&self, slot: Slot, scan_func: F) -> Vec<B>
@@ -3459,12 +3528,7 @@ impl AccountsDB {
             // been flushed. This is guaranteed because we only remove the rooted slot from
             // the cache *after* we've finished flushing in `flush_slot_cache`.
 
-            let storage_maps: Vec<Arc<AccountStorageEntry>> = self
-                .storage
-                .get_slot_stores(slot)
-                .map(|res| res.read().unwrap().values().cloned().collect())
-                .unwrap_or_default();
-            let combined_maps = vec![storage_maps];
+            let combined_maps = vec![self.get_storage_maps(slot)];
             Self::scan_account_storage_no_bank_2(combined_maps, scan_func)
         }
     }
@@ -3472,10 +3536,11 @@ impl AccountsDB {
     fn remove_zero_balance_accounts(
         account_maps: DashMap<Pubkey, CalculateHashIntermediate>,
     ) -> Vec<(Pubkey, Hash, u64)> {
-        let shards: Vec<_> =account_maps
-        .shards()
-        .into_iter()
-        .map(|x| x.clone()).collect();
+        let shards: Vec<_> = account_maps
+            .shards()
+            .into_iter()
+            .map(|x| x.clone())
+            .collect();
 
         warn!("# shards: {}", shards.len());
         let hashes: Vec<_> = shards
@@ -3484,21 +3549,24 @@ impl AccountsDB {
                 //let abc: u32 = x.read().deref();
                 let a: dashmap::lock::RwLockReadGuard<HashMap<_, _>> = x.read();
                 //let b= a.borrow();
-                let res: Vec<_> = a.iter()
-                .filter_map(//|(pubkey, (_, hash, lamports, original_lamports))| {
-                    |inp| {
-                    let (pubkey, sv) = inp;
-                    let (_, hash, lamports, original_lamports) = sv.get();
-                    if *original_lamports != 0 {
-                        Some((*pubkey, *hash, *lamports))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+                let res: Vec<_> = a
+                    .iter()
+                    .filter_map(
+                        //|(pubkey, (_, hash, lamports, original_lamports))| {
+                        |inp| {
+                            let (pubkey, sv) = inp;
+                            let (_, hash, lamports, original_lamports) = sv.get();
+                            if *original_lamports != 0 {
+                                Some((*pubkey, *hash, *lamports))
+                            } else {
+                                None
+                            }
+                        },
+                    )
+                    .collect();
                 res
             })
-        //.into_iter()
+            //.into_iter()
             /*
             .map(|x| {
                 let a:HashMap<_,_> = x;
@@ -3510,29 +3578,22 @@ impl AccountsDB {
         hashes
     }
 
-    // modeled after get_accounts_delta_hash
-    // intended to be faster than calculate_accounts_hash
-    pub fn calculate_accounts_hash_using_stores(
-        &self,
-        slot: Slot,
-        ancestors: &Ancestors,
-        simple_capitalization_enabled: bool,
+    pub fn rest_of_hash_calculation(
+        accounts: (DashMap<Pubkey, CalculateHashIntermediate>, Measure, Measure),
     ) -> (Hash, u64) {
-        let mut scan = Measure::start("accumulate");
-        let (account_maps, time_scan, time_accumulate) =
-            self.get_accounts_using_stores(slot, ancestors, simple_capitalization_enabled);
-        scan.stop();
+        let (account_maps, time_scan, time_accumulate) = accounts;
 
         let mut zeros = Measure::start("eliminate zeros");
         let hashes = Self::remove_zero_balance_accounts(account_maps);
         zeros.stop();
         let hash_total = hashes.len();
         let mut accumulate = Measure::start("accumulate");
-        let ret = Self::accumulate_account_hashes_and_capitalization(hashes, slot, false, true);
+        let ret = Self::accumulate_account_hashes_and_capitalization(hashes, 0, false, true);
         accumulate.stop();
+        let scan_time = time_scan.as_us() + time_accumulate.as_us();
         datapoint_info!(
             "calculate_accounts_hash_using_stores",
-            ("accounts_scan", scan.as_us(), i64),
+            ("accounts_scan", scan_time, i64),
             ("hash_accumulate", accumulate.as_us(), i64),
             ("eliminate_zeros", zeros.as_us(), i64),
             ("hash_total", hash_total, i64),
@@ -3541,6 +3602,35 @@ impl AccountsDB {
         );
 
         ret
+    }
+
+    // modeled after get_accounts_delta_hash
+    // intended to be faster than calculate_accounts_hash
+    pub fn calculate_accounts_hash_using_stores_only(
+        storages: SnapshotStorages,
+        simple_capitalization_enabled: bool,
+    ) -> (Hash, u64) {
+        let result = Self::scan_slot_using_snapshot(storages, simple_capitalization_enabled);
+
+        Self::rest_of_hash_calculation(result)
+    }
+
+    // modeled after get_accounts_delta_hash
+    // intended to be faster than calculate_accounts_hash
+    pub fn calculate_accounts_hash_using_stores(
+        &self,
+        slot: Slot,
+        ancestors: &Ancestors,
+        simple_capitalization_enabled: bool,
+    ) -> (Hash, u64) {
+        let result = if true {
+            self.get_accounts_using_stores(slot, ancestors, simple_capitalization_enabled)
+        } else {
+            let combined_maps = vec![self.get_storage_maps(slot)];
+            Self::scan_slot_using_snapshot(combined_maps, simple_capitalization_enabled)
+        };
+
+        Self::rest_of_hash_calculation(result)
     }
 
     fn calculate_accounts_hash(
