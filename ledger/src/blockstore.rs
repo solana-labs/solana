@@ -2019,12 +2019,14 @@ impl Blockstore {
             let transaction = self
                 .find_transaction_in_slot(slot, signature)?
                 .ok_or(BlockstoreError::TransactionStatusSlotMismatch)?; // Should not happen
+            let block_time = self.get_block_time(slot)?;
             Ok(Some(ConfirmedTransaction {
                 slot,
                 transaction: TransactionWithStatusMeta {
                     transaction,
                     meta: Some(status),
                 },
+                block_time,
             }))
         } else {
             Ok(None)
@@ -2319,11 +2321,13 @@ impl Blockstore {
                 None => None,
                 Some((_slot, status)) => status.status.err(),
             };
+            let block_time = self.get_block_time(slot)?;
             infos.push(ConfirmedTransactionStatusWithSignature {
                 signature,
                 slot,
                 err,
                 memo: None,
+                block_time,
             });
         }
         get_status_info_timer.stop();
@@ -6560,7 +6564,11 @@ pub mod tests {
             let signature = transaction.transaction.signatures[0];
             assert_eq!(
                 blockstore.get_confirmed_transaction(signature).unwrap(),
-                Some(ConfirmedTransaction { slot, transaction })
+                Some(ConfirmedTransaction {
+                    slot,
+                    transaction,
+                    block_time: None
+                })
             );
         }
 
