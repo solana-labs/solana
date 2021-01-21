@@ -298,6 +298,23 @@ impl TransactionStatus {
             CommitmentLevel::Recent => true,
         }
     }
+
+    // Returns `confirmation_status`, or if is_none, determines the status from confirmations.
+    // Facilitates querying nodes on older software
+    pub fn confirmation_status(&self) -> TransactionConfirmationStatus {
+        match &self.confirmation_status {
+            Some(status) => status.clone(),
+            None => {
+                if self.confirmations.is_none() {
+                    TransactionConfirmationStatus::Finalized
+                } else if self.confirmations.unwrap() > 0 {
+                    TransactionConfirmationStatus::Confirmed
+                } else {
+                    TransactionConfirmationStatus::Processed
+                }
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
