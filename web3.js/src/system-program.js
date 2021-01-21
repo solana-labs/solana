@@ -108,8 +108,8 @@ export type CreateNonceAccountWithSeedParams = {|
 /**
  * Initialize nonce account system instruction params
  * @typedef {Object} InitializeNonceParams
- * @property {PublicKey} fromPubkey
- * @property {PublicKey} programId
+ * @property {PublicKey} noncePubkey
+ * @property {PublicKey} authorizedPubkey
  */
 export type InitializeNonceParams = {|
   noncePubkey: PublicKey,
@@ -119,8 +119,8 @@ export type InitializeNonceParams = {|
 /**
  * Advance nonce account system instruction params
  * @typedef {Object} AdvanceNonceParams
- * @property {PublicKey} fromPubkey
- * @property {PublicKey} programId
+ * @property {PublicKey} noncePubkey
+ * @property {PublicKey} authorizedPubkey
  */
 export type AdvanceNonceParams = {|
   noncePubkey: PublicKey,
@@ -199,6 +199,28 @@ export type AssignWithSeedParams = {|
 |};
 
 /**
+<<<<<<< HEAD
+=======
+ * Transfer with seed system transaction params
+ * @typedef {Object} TransferWithSeedParams
+ * @property {PublicKey} fromPubkey
+ * @property {PublicKey} basePubkey
+ * @property {PublicKey} toPubkey
+ * @property {number} lamports
+ * @property {string} seed
+ * @property {PublicKey} programId
+ */
+export type TransferWithSeedParams = {|
+  fromPubkey: PublicKey,
+  basePubkey: PublicKey,
+  toPubkey: PublicKey,
+  lamports: number,
+  seed: string,
+  programId: PublicKey,
+|};
+
+/**
+>>>>>>> 7c4874366... fix(web3): align doc comments with class field names
  * System Instruction class
  */
 export class SystemInstruction {
