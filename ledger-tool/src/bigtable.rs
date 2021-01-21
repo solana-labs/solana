@@ -106,14 +106,15 @@ async fn confirm(signature: &Signature, verbose: bool) -> Result<(), Box<dyn std
                     "  ",
                 );
             }
-            Ok(None) => println!("Confirmed transaction details not available"),
-            Err(err) => println!("Unable to get confirmed transaction details: {}", err),
+            Ok(None) => println!("Finalized transaction details not available"),
+            Err(err) => println!("Unable to get finalized transaction details: {}", err),
         }
         println!();
     }
-    match transaction_status.status {
-        Ok(_) => println!("Confirmed"),
-        Err(err) => println!("Transaction failed: {}", err),
+    if let Some(err) = &transaction_status.err {
+        println!("Transaction failed: {}", err);
+    } else {
+        println!("{:?}", transaction_status.confirmation_status());
     }
     Ok(())
 }
