@@ -10,9 +10,9 @@ use solana_sdk::{
 use solana_storage_proto::convert::generated;
 use solana_storage_proto::convert::tx_by_addr;
 use solana_transaction_status::{
-    ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature,
-    LegacyTransactionByAddrInfo, Reward, TransactionByAddrInfo, TransactionConfirmationStatus,
-    TransactionStatus, TransactionStatusMeta, TransactionWithStatusMeta,
+    ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Reward,
+    TransactionByAddrInfo, TransactionConfirmationStatus, TransactionStatus, TransactionStatusMeta,
+    TransactionWithStatusMeta,
 };
 use std::{collections::HashMap, convert::TryInto};
 use thiserror::Error;
@@ -260,6 +260,33 @@ impl From<TransactionInfo> for TransactionStatus {
             status,
             err,
             confirmation_status: Some(TransactionConfirmationStatus::Finalized),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+struct LegacyTransactionByAddrInfo {
+    pub signature: Signature,          // The transaction signature
+    pub err: Option<TransactionError>, // None if the transaction executed successfully
+    pub index: u32,                    // Where the transaction is located in the block
+    pub memo: Option<String>,          // Transaction memo
+}
+
+impl From<LegacyTransactionByAddrInfo> for TransactionByAddrInfo {
+    fn from(legacy: LegacyTransactionByAddrInfo) -> Self {
+        let LegacyTransactionByAddrInfo {
+            signature,
+            err,
+            index,
+            memo,
+        } = legacy;
+
+        Self {
+            signature,
+            err,
+            index,
+            memo,
+            block_time: None,
         }
     }
 }
