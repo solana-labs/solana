@@ -21,8 +21,8 @@
 use crate::{
     accounts_cache::{AccountsCache, CachedAccount, SlotCache},
     accounts_index::{
-        AccountIndex, AccountsIndex, Ancestors, IndexKey, IsCached, SlotList, SlotSlice,
-        ZeroLamport,
+        AccountIndex, AccountsIndex, AccountsIndexRootsStats, Ancestors, IndexKey, IsCached,
+        SlotList, SlotSlice, ZeroLamport,
     },
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta},
     contains::Contains,
@@ -643,6 +643,13 @@ pub struct AccountsDB {
 
     stats: AccountsStats,
 
+    clean_accounts_stats: CleanAccountsStats,
+
+    // Stats for purges called outside of clean_accounts()
+    purge_slots_stats: PurgeStats,
+
+    shrink_stats: ShrinkStats,
+
     pub cluster_type: Option<ClusterType>,
 
     pub account_indexes: HashSet<AccountIndex>,
@@ -676,6 +683,166 @@ struct AccountsStats {
     store_find_existing: AtomicU64,
     dropped_stores: AtomicU64,
     store_uncleaned_update: AtomicU64,
+}
+
+#[derive(Debug, Default)]
+struct PurgeStats {
+    last_report: AtomicU64,
+    safety_checks_elapsed: AtomicU64,
+    remove_storages_elapsed: AtomicU64,
+    drop_storage_entries_elapsed: AtomicU64,
+    num_slots_removed: AtomicUsize,
+    total_removed_storage_entries: AtomicUsize,
+    total_removed_bytes: AtomicU64,
+    recycle_stores_write_elapsed: AtomicU64,
+}
+
+impl PurgeStats {
+    fn report(&self, metric_name: &'static str, report_interval_ms: Option<usize>) {
+        let should_report = report_interval_ms
+            .map(|report_interval| {
+                let last = self.last_report.load(Ordering::Relaxed);
+                let now = solana_sdk::timing::timestamp();
+                now.saturating_sub(last) > report_interval_ms
+                    && self
+                        .last_store_report
+                        .compare_and_swap(last, now, Ordering::Relaxed)
+                        == last
+            })
+            .unwrap_or(true);
+
+        if should_report {
+            datapoint_info!(
+                metric_name,
+                (
+                    "safety_checks_elapsed",
+                    self.safety_checks_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "remove_storages_elapsed",
+                    self.remove_storages_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "drop_storage_entries_elapsed",
+                    self.drop_storage_entries_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "num_slots_removed",
+                    self.num_slots_removed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "total_removed_storage_entries",
+                    self.total_removed_storage_entries
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "total_removed_bytes",
+                    self.total_removed_bytes.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "recycle_stores_write_elapsed",
+                    self.recycle_stores_write_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+            );
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct LatestAccountsIndexRootsStats {
+    roots_len: AtomicUsize,
+    uncleaned_roots_len: AtomicUsize,
+    previous_uncleaned_roots_len: AtomicUsize,
+}
+
+impl LatestAccountsIndexRootsStats {
+    fn update(&self, accounts_index_roots_stats: &AccountsIndexRootsStats) {
+        self.roots_len
+            .store(accounts_index_roots_stats.roots_len, Ordering::Relaxed);
+        self.uncleaned_roots_len.store(
+            accounts_index_roots_stats.uncleaned_roots_len,
+            Ordering::Relaxed,
+        );
+        self.previous_uncleaned_roots_len.store(
+            accounts_index_roots_stats.previous_uncleaned_roots_len,
+            Ordering::Relaxed,
+        );
+    }
+
+    fn report(&self) {
+        datapoint_info!(
+            "accounts_index_roots_len",
+            (
+                "roots_len",
+                self.roots_len.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "uncleaned_roots_len",
+                self.uncleaned_roots_len.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "previous_uncleaned_roots_len",
+                self.previous_uncleaned_roots_len.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+        );
+
+        // Don't need to reset since this tracks the latest updates, not a cumulative total
+    }
+}
+
+#[derive(Debug, Default)]
+struct CleanAccountsStats {
+    purge_stats: PurgeStats,
+    latest_accounts_index_roots_stats: LatestAccountsIndexRootsStats,
+}
+
+impl CleanAccountsStats {
+    fn report(&self) {
+        self.purge_stats.report("clean_purge_slots_stats", None);
+        self.latest_accounts_index_roots_stats.report();
+    }
+}
+
+#[derive(Debug, Default)]
+struct ShrinkStatsV1 {
+    last_report: AtomicU64,
+    storage_read_elapsed: AtomicU64,
+    index_read_elapsed: AtomicU64,
+    find_alive_elapsed: AtomicU64,
+    create_and_insert_store_elapsed: AtomicU64,
+    store_accounts_elapsed: AtomicU64,
+    update_index_elapsed: AtomicU64,
+    handle_reclaims_elapsed: AtomicU64,
+    write_storage_elapsed: AtomicU64,
+    rewrite_elapsed: AtomicU64,
+    drop_storage_entries_elapsed: AtomicU64,
+    recycle_stores_write_time: AtomicU64,
+}
+
+#[derive(Debug, Default)]
+struct ShrinkStats {
+    last_report: AtomicU64,
+    index_read_elapsed: AtomicU64,
+    find_alive_elapsed: AtomicU64,
+    create_and_insert_store_elapsed: AtomicU64,
+    store_accounts_elapsed: AtomicU64,
+    update_index_elapsed: AtomicU64,
+    handle_reclaims_elapsed: AtomicU64,
+    write_storage_elapsed: AtomicU64,
+    rewrite_elapsed: AtomicU64,
+    drop_storage_entries_elapsed: AtomicU64,
+    recycle_stores_write_time: AtomicU64,
+    accounts_removed: AtomicU64,
 }
 
 fn make_min_priority_thread_pool() -> ThreadPool {
@@ -732,6 +899,8 @@ impl Default for AccountsDB {
             min_num_stores: num_threads,
             bank_hashes: RwLock::new(bank_hashes),
             frozen_accounts: HashMap::new(),
+            clean_accounts_stats: CleanAccountsStats::default(),
+            shrink_stats: ShrinkStats::default(),
             stats: AccountsStats::default(),
             cluster_type: None,
             account_indexes: HashSet::new(),
@@ -1231,6 +1400,8 @@ impl AccountsDB {
         self.handle_reclaims(&reclaims, None, false, None);
 
         reclaims_time.stop();
+
+        self.clean_accounts_stats.report();
         datapoint_info!(
             "clean_accounts",
             (
@@ -2516,32 +2687,34 @@ impl AccountsDB {
         drop(all_removed_slot_storages);
         drop_storage_entries_elapsed.stop();
 
-        datapoint_info!(
-            "purge_slots_time",
-            ("safety_checks_elapsed", safety_checks_elapsed.as_us(), i64),
-            (
-                "remove_storages_elapsed",
-                remove_storages_elapsed.as_us(),
-                i64
-            ),
-            (
-                "drop_storage_entries_elapsed",
-                drop_storage_entries_elapsed.as_us(),
-                i64
-            ),
-            ("num_slots_removed", num_slots_removed, i64),
-            (
-                "total_removed_storage_entries",
-                total_removed_storage_entries,
-                i64
-            ),
-            ("total_removed_bytes", total_removed_bytes, i64),
-            (
-                "recycle_stores_write_elapsed",
-                recycle_stores_write_time,
-                i64
-            ),
-        );
+        self.clean_accounts_stats
+            .purge_stats
+            .safety_checks_elapsed
+            .fetch_add(safety_checks_elapsed.as_us(), Ordering::Relaxed);
+        self.clean_accounts_stats
+            .purge_stats
+            .remove_storages_elapsed
+            .fetch_add(remove_storages_elapsed.as_us(), Ordering::Relaxed);
+        self.clean_accounts_stats
+            .purge_stats
+            .drop_storage_entries_elapsed
+            .fetch_add(drop_storage_entries_elapsed.as_us(), Ordering::Relaxed);
+        self.clean_accounts_stats
+            .purge_stats
+            .num_slots_removed
+            .fetch_add(num_slots_removed, Ordering::Relaxed);
+        self.clean_accounts_stats
+            .purge_stats
+            .total_removed_storage_entries
+            .fetch_add(total_removed_storage_entries, Ordering::Relaxed);
+        self.clean_accounts_stats
+            .purge_stats
+            .total_removed_bytes
+            .fetch_add(total_removed_bytes, Ordering::Relaxed);
+        self.clean_accounts_stats
+            .purge_stats
+            .recycle_stores_write_elapsed
+            .fetch_add(recycle_stores_write_time, Ordering::Relaxed);
     }
 
     fn purge_slot_cache(&self, purged_slot: Slot, slot_cache: SlotCache) {
@@ -2637,31 +2810,22 @@ impl AccountsDB {
         drop(all_removed_slot_storages);
         drop_storage_entries_elapsed.stop();
 
-        datapoint_info!(
-            "purge_slots_time",
-            (
-                "remove_storages_elapsed",
-                remove_storages_elapsed.as_us(),
-                i64
-            ),
-            (
-                "drop_storage_entries_elapsed",
-                drop_storage_entries_elapsed.as_us(),
-                i64
-            ),
-            ("num_slots_removed", num_slots_removed, i64),
-            (
-                "total_removed_storage_entries",
-                total_removed_storage_entries,
-                i64
-            ),
-            ("total_removed_bytes", total_removed_bytes, i64),
-            (
-                "recycle_stores_write_elapsed",
-                recycle_stores_write_time,
-                i64
-            ),
-        );
+        self.external_purge_slots
+            .fetch_add(safety_checks_elapsed.as_us(), Ordering::Relaxed);
+        self.external_purge_slots
+            .fetch_add(remove_storages_elapsed.as_us(), Ordering::Relaxed);
+        self.external_purge_slots
+            .fetch_add(drop_storage_entries_elapsed.as_us(), Ordering::Relaxed);
+        self.external_purge_slots
+            .fetch_add(num_slots_removed, Ordering::Relaxed);
+        self.external_purge_slots
+            .fetch_add(total_removed_storage_entries, Ordering::Relaxed);
+        self.external_purge_slots
+            .fetch_add(total_removed_bytes, Ordering::Relaxed);
+        self.external_purge_slots
+            .fetch_add(recycle_stores_write_time, Ordering::Relaxed);
+
+        self.external_purge_slots.report();
     }
 
     // TODO: This is currently:
@@ -3867,9 +4031,17 @@ impl AccountsDB {
             self.accounts_index.unref_from_storage(&pubkey);
         }
 
+        let mut accounts_index_root_stats = AccountsIndexRootsStats::default();
         for slot in dead_slots_iter.clone() {
-            self.accounts_index.clean_dead_slot(*slot);
+            if let Some(latest) = self.accounts_index.clean_dead_slot(*slot) {
+                accounts_index_root_stats = latest;
+            }
         }
+
+        self.clean_accounts_stats
+            .latest_accounts_index_roots_stats
+            .update(&accounts_index_root_stats);
+
         {
             let mut bank_hashes = self.bank_hashes.write().unwrap();
             for slot in dead_slots_iter {

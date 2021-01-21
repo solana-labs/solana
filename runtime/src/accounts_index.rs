@@ -164,6 +164,13 @@ pub struct RootsTracker {
     previous_uncleaned_roots: HashSet<Slot>,
 }
 
+#[derive(Debug, Default)]
+pub struct AccountsIndexRootsStats {
+    pub roots_len: usize,
+    pub uncleaned_roots_len: usize,
+    pub previous_uncleaned_roots_len: usize,
+}
+
 pub struct AccountsIndexIterator<'a, T> {
     account_maps: &'a RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
     start_bound: Bound<Pubkey>,
@@ -964,7 +971,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
 
     /// Remove the slot when the storage for the slot is freed
     /// Accounts no longer reference this slot.
-    pub fn clean_dead_slot(&self, slot: Slot) {
+    pub fn clean_dead_slot(&self, slot: Slot) -> Option<AccountsIndexRootsStats> {
         if self.is_root(slot) {
             let (roots_len, uncleaned_roots_len, previous_uncleaned_roots_len) = {
                 let mut w_roots_tracker = self.roots_tracker.write().unwrap();
@@ -977,16 +984,13 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                     w_roots_tracker.previous_uncleaned_roots.len(),
                 )
             };
-            datapoint_info!(
-                "accounts_index_roots_len",
-                ("roots_len", roots_len as i64, i64),
-                ("uncleaned_roots_len", uncleaned_roots_len as i64, i64),
-                (
-                    "previous_uncleaned_roots_len",
-                    previous_uncleaned_roots_len as i64,
-                    i64
-                ),
-            );
+            Some(AccountsIndexRootsStats {
+                roots_len,
+                uncleaned_roots_len,
+                previous_uncleaned_roots_len,
+            })
+        } else {
+            None
         }
     }
 
