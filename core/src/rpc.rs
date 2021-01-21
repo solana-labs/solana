@@ -55,6 +55,7 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     hash::Hash,
     pubkey::Pubkey,
+    sanitize::Sanitize,
     signature::Signature,
     stake_history::StakeHistory,
     system_instruction,
@@ -2907,6 +2908,16 @@ fn deserialize_transaction(
             info!("transaction deserialize error: {:?}", err);
             Error::invalid_params(&err.to_string())
         })
+        .and_then(|transaction: Transaction| {
+            if let Err(err) = transaction.sanitize() {
+                Err(Error::invalid_params(format!(
+                    "invalid transaction: {}",
+                    err
+                )))
+            } else {
+                Ok(transaction)
+            }
+        })
         .map(|transaction| (wire_transaction, transaction))
 }
 
@@ -4559,7 +4570,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Transaction failed to sanitize accounts offsets correctly","data":{"err":"SanitizeFailure","logs":[]}},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid transaction: index out of bounds"},"id":1}"#.to_string(),
             )
         );
         let mut bad_transaction = system_transaction::transfer(
@@ -4613,18 +4624,17 @@ pub mod tests {
             )
         );
 
-        // sendTransaction will fail due to no signer. Skip preflight so signature verification
-        // doesn't catch it
+        // sendTransaction will fail due to sanitization failure
         bad_transaction.signatures.clear();
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}", {{"skipPreflight": true}}]}}"#,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":["{}"]}}"#,
             bs58::encode(serialize(&bad_transaction).unwrap()).into_string()
         );
         let res = io.handle_request_sync(&req, meta);
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32003,"message":"Transaction signature verification failure"},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid transaction: index out of bounds"},"id":1}"#.to_string(),
             )
         );
     }
@@ -6153,7 +6163,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_deserialize_transacion_too_large_payloads_fail() {
+    fn test_deserialize_transaction_too_large_payloads_fail() {
         // +2 because +1 still fits in base64 encoded worst-case
         let too_big = PACKET_DATA_SIZE + 2;
         let tx_ser = vec![0xffu8; too_big];
@@ -6192,6 +6202,22 @@ pub mod tests {
         assert_eq!(
             deserialize_transaction(tx64, UiTransactionEncoding::Base64).unwrap_err(),
             expect
+        );
+    }
+
+    #[test]
+    fn test_deserialize_transaction_unsanitary() {
+        let unsanitary_tx58 = "ju9xZWuDBX4pRxX2oZkTjxU5jB4SSTgEGhX8bQ8PURNzyzqKMPPpNvWihx8zUe\
+             FfrbVNoAaEsNKZvGzAnTDy5bhNT9kt6KFCTBixpvrLCzg4M5UdFUQYrn1gdgjX\
+             pLHxcaShD81xBNaFDgnA2nkkdHnKtZt4hVSfKAmw3VRZbjrZ7L2fKZBx21CwsG\
+             hD6onjM2M3qZW5C8J6d1pj41MxKmZgPBSha3MyKkNLkAGFASK"
+            .to_string();
+
+        let expect58 =
+            Error::invalid_params("invalid transaction: index out of bounds".to_string());
+        assert_eq!(
+            deserialize_transaction(unsanitary_tx58, UiTransactionEncoding::Base58).unwrap_err(),
+            expect58
         );
     }
 }
