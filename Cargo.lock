@@ -5017,6 +5017,7 @@ name = "solana-storage-proto"
 version = "1.6.0"
 dependencies = [
  "bincode",
+ "bs58",
  "prost",
  "serde",
  "serde_derive",

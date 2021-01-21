@@ -324,6 +324,7 @@ pub struct ConfirmedTransactionStatusWithSignature {
     pub slot: Slot,
     pub err: Option<TransactionError>,
     pub memo: Option<String>,
+    pub block_time: Option<UnixTimestamp>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -382,6 +383,7 @@ pub struct ConfirmedTransaction {
     pub slot: Slot,
     #[serde(flatten)]
     pub transaction: TransactionWithStatusMeta,
+    pub block_time: Option<UnixTimestamp>,
 }
 
 impl ConfirmedTransaction {
@@ -389,6 +391,7 @@ impl ConfirmedTransaction {
         EncodedConfirmedTransaction {
             slot: self.slot,
             transaction: self.transaction.encode(encoding),
+            block_time: self.block_time,
         }
     }
 }
@@ -399,6 +402,7 @@ pub struct EncodedConfirmedTransaction {
     pub slot: Slot,
     #[serde(flatten)]
     pub transaction: EncodedTransactionWithStatusMeta,
+    pub block_time: Option<UnixTimestamp>,
 }
 
 /// A duplicate representation of a Transaction for pretty JSON serialization
@@ -573,6 +577,17 @@ impl EncodedTransaction {
             },
         }
     }
+}
+
+// A serialized `Vec<TransactionByAddrInfo>` is stored in the `tx-by-addr` table.  The row keys are
+// the one's compliment of the slot so that rows may be listed in reverse order
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TransactionByAddrInfo {
+    pub signature: Signature,          // The transaction signature
+    pub err: Option<TransactionError>, // None if the transaction executed successfully
+    pub index: u32,                    // Where the transaction is located in the block
+    pub memo: Option<String>,          // Transaction memo
+    pub block_time: Option<UnixTimestamp>,
 }
 
 #[cfg(test)]

@@ -10,6 +10,7 @@ edition = "2018"
 
 [dependencies]
 bincode = "1.2.1"
+bs58 = "0.3.1"
 prost = "0.6.1"
 serde = "1.0.112"
 serde_derive = "1.0.103"
