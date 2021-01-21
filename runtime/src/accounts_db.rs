@@ -3249,7 +3249,7 @@ impl AccountsDB {
         slot: Slot,
         ancestors: &Ancestors,
         simple_capitalization_enabled: bool,
-    ) -> (HashMap<Pubkey, CalculateHashIntermediate>, Measure, Measure) {
+    ) -> (DashMap<Pubkey, CalculateHashIntermediate>, Measure, Measure) {
         let mut scanned_slots = HashSet::<Slot>::new();
 
         scanned_slots.insert(slot);
@@ -3277,30 +3277,52 @@ impl AccountsDB {
             .map(|x| x.to_vec())
             .collect();
         let mut time = Measure::start("scan all accounts");
+
+        let mut map:DashMap<Pubkey, CalculateHashIntermediate> = DashMap::new();
+
         let accumulators: Vec<_> = scanned_slots
             .into_par_iter()
             .map(|slots| {
-                let mut master_accumulator: Vec<Vec<(Pubkey, CalculateHashIntermediate)>> = Vec::new();
                 for slot in slots {
                     let accumulator = self.scan_slot(slot, simple_capitalization_enabled);
-                    master_accumulator.extend(accumulator);
+                    accumulator.into_iter().for_each(|accumulator| {
+                        for (key, source_item) in accumulator.iter() {
+                            match map.entry(*key) {
+                                Occupied(mut dest_item) => {
+                                    if dest_item.get_mut().version() <= source_item.version() {
+                                        // replace the item
+                                        dest_item.insert(source_item.clone());
+                                    }
+                                }
+                                Vacant(v) => {
+                                    v.insert(source_item.clone());
+                                }
+                            };
+                        }
+                    })
                 }
-                len.fetch_add(master_accumulator.len(), Ordering::Relaxed);
-                master_accumulator
+                ()
             })
             .collect();
         time.stop();
-
         let mut time_accumulate = Measure::start("accumulate");
-        let mut account_maps = HashMap::with_capacity(len.load(Ordering::Relaxed));
+        /*
+        let mut account_maps = DashMap::with_capacity(len.load(Ordering::Relaxed));
         for accumulator in accumulators {
             for item in accumulator {
                 AccountsDB::merge_array_old(&mut account_maps, &item);
             }
         }
+        */
         time_accumulate.stop();
 
-        (account_maps, time, time_accumulate)
+        /*
+        let account_maps: Vec<_> = map.into_iter().map(|x| {
+            let (pubkey, (version, hash, balance, raw_lamports)) = x;
+            (pubkey, hash, balance, raw_lamports)
+        });
+*/
+        (map, time, time_accumulate)
     }
 
     fn merge_array_old<X>(dest: &mut HashMap<Pubkey, X>, source: &[(Pubkey, X)])
@@ -3341,27 +3363,28 @@ impl AccountsDB {
         slot: Slot,
         simple_capitalization_enabled: bool,
     ) -> Vec<Vec<(Pubkey, CalculateHashIntermediate)>> {
-        let accumulator: Vec<Vec<(Pubkey, CalculateHashIntermediate)>> = self.scan_account_storage_old(
-            slot,
-            |loaded_account: LoadedAccount,
-             _store_id: AppendVecId,
-             accum: &mut Vec<(Pubkey, CalculateHashIntermediate)>| {
-                let public_key = loaded_account.pubkey();
-                let version = loaded_account.write_version();
-                let lamports = loaded_account.lamports();
-                let balance = Self::account_balance_for_capitalization(
-                    lamports,
-                    loaded_account.owner(),
-                    loaded_account.executable(),
-                    simple_capitalization_enabled,
-                );
+        let accumulator: Vec<Vec<(Pubkey, CalculateHashIntermediate)>> = self
+            .scan_account_storage_old(
+                slot,
+                |loaded_account: LoadedAccount,
+                 _store_id: AppendVecId,
+                 accum: &mut Vec<(Pubkey, CalculateHashIntermediate)>| {
+                    let public_key = loaded_account.pubkey();
+                    let version = loaded_account.write_version();
+                    let lamports = loaded_account.lamports();
+                    let balance = Self::account_balance_for_capitalization(
+                        lamports,
+                        loaded_account.owner(),
+                        loaded_account.executable(),
+                        simple_capitalization_enabled,
+                    );
 
-                accum.push((
-                    *public_key,
-                    (version, *loaded_account.loaded_hash(), balance, lamports),
-                ));
-            },
-        );
+                    accum.push((
+                        *public_key,
+                        (version, *loaded_account.loaded_hash(), balance, lamports),
+                    ));
+                },
+            );
         accumulator
     }
 
@@ -3424,7 +3447,7 @@ impl AccountsDB {
     }
 
     fn remove_zero_balance_accounts(
-        account_maps: HashMap<Pubkey, CalculateHashIntermediate>,
+        account_maps: DashMap<Pubkey, CalculateHashIntermediate>,
     ) -> Vec<(Pubkey, Hash, u64)> {
         let hashes: Vec<_> = account_maps
             .into_iter()
