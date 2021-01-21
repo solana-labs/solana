@@ -6,6 +6,7 @@ use crate::{
 use chrono::{Local, TimeZone};
 use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
+use serde::{Deserialize, Serialize};
 use solana_clap_utils::{
     input_parsers::*,
     input_validators::*,
@@ -14,7 +15,8 @@ use solana_clap_utils::{
 };
 use solana_cli_output::{
     display::{
-        format_labeled_address, new_spinner_progress_bar, println_name_value, println_transaction,
+        build_balance_message, format_labeled_address, new_spinner_progress_bar,
+        println_name_value, println_transaction, writeln_name_value,
     },
     *,
 };
@@ -40,6 +42,7 @@ use solana_sdk::{
     message::Message,
     native_token::lamports_to_sol,
     pubkey::{self, Pubkey},
+    rent::Rent,
     rpc_port::DEFAULT_RPC_PORT_STR,
     signature::Signature,
     system_instruction, system_program,
@@ -47,11 +50,13 @@ use solana_sdk::{
         self,
         stake_history::{self},
     },
+    timing,
     transaction::Transaction,
 };
 use solana_transaction_status::UiTransactionEncoding;
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
+    fmt,
     net::SocketAddr,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -374,6 +379,23 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .value_name("PERCENT")
                         .takes_value(true)
                         .index(1),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("rent")
+                .about("Calculate per-epoch and rent-exempt-minimum values for a given account data length.")
+                .arg(
+                    Arg::with_name("data_length")
+                        .index(1)
+                        .value_name("DATA_LENGTH")
+                        .required(true)
+                        .help("Length of data in the account to calculate rent for"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .long("lamports")
+                        .takes_value(false)
+                        .help("Display rent in lamports instead of SOL"),
                 ),
         )
     }
@@ -1825,6 +1847,62 @@ pub fn process_transaction_history(
         }
     }
     Ok(transactions_found)
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CliRentCalculation {
+    pub lamports_per_byte_year: u64,
+    pub lamports_per_epoch: u64,
+    pub rent_exempt_minimum_lamports: u64,
+    #[serde(skip)]
+    pub use_lamports_unit: bool,
+}
+
+impl CliRentCalculation {
+    fn build_balance_message(&self, lamports: u64) -> String {
+        build_balance_message(lamports, self.use_lamports_unit, true)
+    }
+}
+
+impl fmt::Display for CliRentCalculation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let per_byte_year = self.build_balance_message(self.lamports_per_byte_year);
+        let per_epoch = self.build_balance_message(self.lamports_per_epoch);
+        let exempt_minimum = self.build_balance_message(self.rent_exempt_minimum_lamports);
+        writeln_name_value(f, "Rent per byte-year:", &per_byte_year)?;
+        writeln_name_value(f, "Rent per epoch:", &per_epoch)?;
+        writeln_name_value(f, "Rent-exempt minimum:", &exempt_minimum)
+    }
+}
+
+impl QuietDisplay for CliRentCalculation {}
+impl VerboseDisplay for CliRentCalculation {}
+
+pub fn process_calculate_rent(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    data_length: usize,
+    use_lamports_unit: bool,
+) -> ProcessResult {
+    let epoch_schedule = rpc_client.get_epoch_schedule()?;
+    let rent_account = rpc_client.get_account(&sysvar::rent::id())?;
+    let rent: Rent = rent_account.deserialize_data()?;
+    let rent_exempt_minimum_lamports = rent.minimum_balance(data_length);
+    let seconds_per_tick = Duration::from_secs_f64(1.0 / clock::DEFAULT_TICKS_PER_SECOND as f64);
+    let slots_per_year =
+        timing::years_as_slots(1.0, &seconds_per_tick, clock::DEFAULT_TICKS_PER_SLOT);
+    let slots_per_epoch = epoch_schedule.slots_per_epoch as f64;
+    let years_per_epoch = slots_per_epoch / slots_per_year;
+    let (lamports_per_epoch, _) = rent.due(0, data_length, years_per_epoch);
+    let cli_rent_calculation = CliRentCalculation {
+        lamports_per_byte_year: rent.lamports_per_byte_year,
+        lamports_per_epoch,
+        rent_exempt_minimum_lamports,
+        use_lamports_unit,
+    };
+
+    Ok(config.output_format.formatted_string(&cli_rent_calculation))
 }
 
 #[cfg(test)]
