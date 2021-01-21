@@ -88,7 +88,7 @@ impl SnapshotRequestHandler {
                 } = snapshot_request;
 
                 let mut hash_time = Measure::start("hash_time");
-                snapshot_root_bank.update_accounts_hash();
+                snapshot_root_bank.update_accounts_hash_with_store_option(true, false);
                 hash_time.stop();
 
                 let mut shrink_time = Measure::start("shrink_time");
