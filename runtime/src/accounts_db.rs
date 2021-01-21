@@ -3454,8 +3454,9 @@ impl AccountsDB {
         .into_iter()
         .map(|x| x.clone()).collect();
 
+        warn!("# shards: {}", shareds.len());
         let hashes: Vec<_> = shards
-            .into_iter()
+            .par_iter()
             .map(|x| {
                 //let abc: u32 = x.read().deref();
                 let a: dashmap::lock::RwLockReadGuard<HashMap<_, _>> = x.read();
