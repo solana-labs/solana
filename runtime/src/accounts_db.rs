@@ -3472,6 +3472,8 @@ impl AccountsDB {
             .into_iter()
             .map(|x| x.clone())
             .collect();
+        warn!("scan_account_storage_no_bank_2, storages: {}", storage_maps.len());
+
         //            .map(|res| res.clone.unwrap().values().cloned().collect())
         //          .unwrap_or_default();
         //self.thread_pool.install(|| {

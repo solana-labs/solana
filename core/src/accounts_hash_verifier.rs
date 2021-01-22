@@ -91,7 +91,7 @@ impl AccountsHashVerifier {
         let simple_capitalization_enabled = true; // ??? TODO
         let hash = AccountsDB::calculate_accounts_hash_using_stores_only(accounts_package.storages.clone(), simple_capitalization_enabled, accounts_package.slot);
         start.stop();
-        warn!("process_accounts_package - calculate hash - equal: {:?}, took(ms): {}", hash, start.as_ms());
+        warn!("process_accounts_package - calculate hash: {:?}, took(ms): {}", hash, start.as_ms());
         assert_eq!(hash.0, accounts_package.hash);
 
         if fault_injection_rate_slots != 0

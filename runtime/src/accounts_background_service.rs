@@ -134,6 +134,10 @@ impl SnapshotRequestHandler {
                     shrink_time.stop();
                 }
 
+                warn!("extra time before");
+                snapshot_root_bank.update_accounts_hash_with_store_option(true, true);
+                warn!("extra time before done");
+
                 // Generate an accounts package
                 let mut snapshot_time = Measure::start("snapshot_time");
                 let r = snapshot_utils::snapshot_bank(
