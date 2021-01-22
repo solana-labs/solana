@@ -3,6 +3,7 @@
 // This can be expensive since we have to walk the append vecs being cleaned up.
 
 use crate::{
+    accounts_db::{AccountsDB, AccountStorageEntry},
     bank::{Bank, BankSlotDelta, DropCallback},
     bank_forks::{BankForks, SnapshotConfig},
     snapshot_package::AccountsPackageSender,
@@ -114,7 +115,29 @@ impl SnapshotRequestHandler {
                         // accounts that were included in the bank delta hash when the bank was frozen,
                         // and if we clean them here, the newly created snapshot's hash may not match
                         // the frozen hash.
+                        {
+                            let storage_maps: Vec<Arc<AccountStorageEntry>> = snapshot_root_bank.get_snapshot_storages()
+                            .into_iter()
+                            .flatten()
+                            .into_iter()
+                            .map(|x| x.clone())
+                            .collect();
+                            warn!("scan_account_storage_no_bank_2 after cleanup storages: {}, line: {}", storage_maps.len(), line!());
+                            }
+                            
+        
                         snapshot_root_bank.clean_accounts(true);
+                        {
+                            let storage_maps: Vec<Arc<AccountStorageEntry>> = snapshot_root_bank.get_snapshot_storages()
+                            .into_iter()
+                            .flatten()
+                            .into_iter()
+                            .map(|x| x.clone())
+                            .collect();
+                            warn!("scan_account_storage_no_bank_2 after cleanup storages: {}, line: {}", storage_maps.len(), line!());
+                            }
+                            
+        
                         clean_time.stop();
                         clean_time
                     }
@@ -133,6 +156,16 @@ impl SnapshotRequestHandler {
                     snapshot_root_bank.shrink_candidate_slots();
                     shrink_time.stop();
                 }
+
+                {
+                    let storage_maps: Vec<Arc<AccountStorageEntry>> = snapshot_root_bank.get_snapshot_storages()
+                    .into_iter()
+                    .flatten()
+                    .into_iter()
+                    .map(|x| x.clone())
+                    .collect();
+                    warn!("scan_account_storage_no_bank_2 after cleanup storages: {}, line: {}", storage_maps.len(), line!());
+                    }
 
                 //warn!("extra time before");
                 //snapshot_root_bank.update_accounts_hash_with_store_option(true, false, true);
@@ -162,11 +195,31 @@ impl SnapshotRequestHandler {
                 //snapshot_root_bank.update_accounts_hash_with_store_option(true, false, true);
                 warn!("extra time before done");
 
+                {
+                    let storage_maps: Vec<Arc<AccountStorageEntry>> = snapshot_root_bank.get_snapshot_storages()
+                    .into_iter()
+                    .flatten()
+                    .into_iter()
+                    .map(|x| x.clone())
+                    .collect();
+                    warn!("scan_account_storage_no_bank_2 after cleanup storages: {}, line: {}", storage_maps.len(), line!());
+                    }
+
                 // Cleanup outdated snapshots
                 let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
                 snapshot_utils::purge_old_snapshots(&self.snapshot_config.snapshot_path);
                 purge_old_snapshots_time.stop();
                 total_time.stop();
+
+                {
+                let storage_maps: Vec<Arc<AccountStorageEntry>> = snapshot_root_bank.get_snapshot_storages()
+                .into_iter()
+                .flatten()
+                .into_iter()
+                .map(|x| x.clone())
+                .collect();
+                warn!("scan_account_storage_no_bank_2 after cleanup storages: {}, line: {}", storage_maps.len(), line!());
+                }
 
                 warn!("extra time before");
                 //snapshot_root_bank.update_accounts_hash_with_store_option(true, false, true);

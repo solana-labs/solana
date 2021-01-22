@@ -869,6 +869,7 @@ pub fn purge_old_snapshots(snapshot_path: &Path) {
     // Remove outdated snapshots
     let slot_snapshot_paths = get_snapshot_paths(snapshot_path);
     let num_to_remove = slot_snapshot_paths.len().saturating_sub(MAX_SNAPSHOTS);
+    warn!("Removing {} snapshots", num_to_remove);
     for slot_files in &slot_snapshot_paths[..num_to_remove] {
         let r = remove_snapshot(slot_files.slot, snapshot_path);
         if r.is_err() {
