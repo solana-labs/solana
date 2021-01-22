@@ -115,27 +115,11 @@ impl SnapshotRequestHandler {
                         // accounts that were included in the bank delta hash when the bank was frozen,
                         // and if we clean them here, the newly created snapshot's hash may not match
                         // the frozen hash.
-                        {
-                            let storage_maps: Vec<Arc<AccountStorageEntry>> = snapshot_root_bank.get_snapshot_storages()
-                            .into_iter()
-                            .flatten()
-                            .into_iter()
-                            .map(|x| x.clone())
-                            .collect();
-                            warn!("scan_account_storage_no_bank_2 after cleanup storages: {}, line: {}", storage_maps.len(), line!());
-                            }
+                        log(&snapshot_root_bank, line!());
                             
         
                         snapshot_root_bank.clean_accounts(true);
-                        {
-                            let storage_maps: Vec<Arc<AccountStorageEntry>> = snapshot_root_bank.get_snapshot_storages()
-                            .into_iter()
-                            .flatten()
-                            .into_iter()
-                            .map(|x| x.clone())
-                            .collect();
-                            warn!("scan_account_storage_no_bank_2 after cleanup storages: {}, line: {}", storage_maps.len(), line!());
-                            }
+                        log(&snapshot_root_bank, line!());
                             
         
                         clean_time.stop();
@@ -157,15 +141,7 @@ impl SnapshotRequestHandler {
                     shrink_time.stop();
                 }
 
-                {
-                    let storage_maps: Vec<Arc<AccountStorageEntry>> = snapshot_root_bank.get_snapshot_storages()
-                    .into_iter()
-                    .flatten()
-                    .into_iter()
-                    .map(|x| x.clone())
-                    .collect();
-                    warn!("scan_account_storage_no_bank_2 after cleanup storages: {}, line: {}", storage_maps.len(), line!());
-                    }
+                log(&snapshot_root_bank, line!());
 
                 //warn!("extra time before");
                 //snapshot_root_bank.update_accounts_hash_with_store_option(true, false, true);
@@ -195,15 +171,7 @@ impl SnapshotRequestHandler {
                 //snapshot_root_bank.update_accounts_hash_with_store_option(true, false, true);
                 warn!("extra time before done");
 
-                {
-                    let storage_maps: Vec<Arc<AccountStorageEntry>> = snapshot_root_bank.get_snapshot_storages()
-                    .into_iter()
-                    .flatten()
-                    .into_iter()
-                    .map(|x| x.clone())
-                    .collect();
-                    warn!("scan_account_storage_no_bank_2 after cleanup storages: {}, line: {}", storage_maps.len(), line!());
-                    }
+                log(&snapshot_root_bank, line!());
 
                 // Cleanup outdated snapshots
                 let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
@@ -211,15 +179,8 @@ impl SnapshotRequestHandler {
                 purge_old_snapshots_time.stop();
                 total_time.stop();
 
-                {
-                let storage_maps: Vec<Arc<AccountStorageEntry>> = snapshot_root_bank.get_snapshot_storages()
-                .into_iter()
-                .flatten()
-                .into_iter()
-                .map(|x| x.clone())
-                .collect();
-                warn!("scan_account_storage_no_bank_2 after cleanup storages: {}, line: {}", storage_maps.len(), line!());
-                }
+
+                log(&snapshot_root_bank, line!());
 
                 warn!("extra time before");
                 //snapshot_root_bank.update_accounts_hash_with_store_option(true, false, true);
@@ -246,6 +207,24 @@ impl SnapshotRequestHandler {
                 snapshot_root_bank.block_height()
             })
     }
+}
+
+fn log(bank: &Arc<Bank>, line: u32){
+        let storage_maps: Vec<Arc<AccountStorageEntry>> = bank.get_snapshot_storages()
+        .into_iter()
+        .flatten()
+        .into_iter()
+        .map(|x| x.clone())
+        .collect();
+let mut sum = 0;
+    let mut size = 0;
+    let len = storage_maps.len();
+    for s in storage_maps {
+        sum += s.accounts.accounts(0).len();
+        size += s.accounts.file_size;
+    }
+    warn!("scan_account_storage_no_bank_2 after cleanup storages: {}, line: {}", len, line);
+
 }
 
 #[derive(Default)]
