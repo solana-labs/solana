@@ -187,14 +187,8 @@ lazy_static! {
         (abort_on_all_cpi_failures::id(), "abort on all CPI failures"),
         (use_loaded_executables::id(), "use loaded executable accounts"),
         (turbine_retransmit_peers_patch::id(), "turbine retransmit peers patch #14631"),
-<<<<<<< HEAD
-        (prevent_upgrade_and_invoke::id(), "Prevent upgrade and invoke in same tx batch"),
-=======
         (prevent_upgrade_and_invoke::id(), "prevent upgrade and invoke in same tx batch"),
-        (full_inflation::candidate_example::vote::id(), "community vote allowing candidate_example to enable full inflation"),
-        (full_inflation::candidate_example::enable::id(), "full inflation enabled by candidate_example"),
-        (track_writable_deescalation::id(), "Track account writable deescalation"),
->>>>>>> 77572a7c5... Track account writable deescalation (#14626)
+        (track_writable_deescalation::id(), "track account writable deescalation"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
