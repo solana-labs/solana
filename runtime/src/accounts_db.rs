@@ -3814,10 +3814,11 @@ impl AccountsDB {
 
             assert_eq!(hash, hash_other);
             assert_eq!(total_lamports, total_lamports_other);
+            warn!("Verified: {}, {}", hash, total_lamports_other);
         }
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
-        warn!("bank setting hash to: {}", hash);
+        warn!("bank setting hash to: {}, slot: {}, lamports: {}, using_store: {}, debug: {}", hash, slot, total_lamports, use_store, debug_verify_store);
         bank_hash_info.snapshot_hash = hash;
         (hash, total_lamports)
     }
@@ -4487,7 +4488,7 @@ impl AccountsDB {
             .filter(|snapshot_storage: &SnapshotStorage| !snapshot_storage.is_empty())
             .collect();
 
-        warn!("get_snapshot_storages: raw: {}, after: {}, is root: {}", result_raw.len(), result.len(), self.accounts_index.is_root(snapshot_slot));
+        warn!("get_snapshot_storages: raw: {}, after: {}, is root: {}, slot: {}", result_raw.len(), result.len(), self.accounts_index.is_root(snapshot_slot), snapshot_slot);
 
         result
     }
