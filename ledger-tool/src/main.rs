@@ -1131,13 +1131,6 @@ fn main() {
             )
             .arg(&hashes_per_tick)
             .arg(
-                Arg::with_name("rehash")
-                    .required(false)
-                    .long("rehash")
-                    .takes_value(false)
-                    .help("Re-calculate the bank hash and overwrite the original bank hash."),
-            )
-            .arg(
                 Arg::with_name("accounts_to_remove")
                     .required(false)
                     .long("remove-account")
@@ -1712,7 +1705,6 @@ fn main() {
             let snapshot_slot = value_t_or_exit!(arg_matches, "snapshot_slot", Slot);
             let output_directory = value_t_or_exit!(arg_matches, "output_directory", String);
             let mut warp_slot = value_t!(arg_matches, "warp_slot", Slot).ok();
-            let mut rehash = arg_matches.is_present("rehash");
             let remove_stake_accounts = arg_matches.is_present("remove_stake_accounts");
             let new_hard_forks = hardforks_of(arg_matches, "hard_forks");
 
@@ -1790,7 +1782,6 @@ fn main() {
                     }
 
                     if let Some(faucet_pubkey) = faucet_pubkey {
-                        rehash = true;
                         bank.store_account(
                             &faucet_pubkey,
                             &Account::new(faucet_lamports, 0, &system_program::id()),
@@ -1809,15 +1800,12 @@ fn main() {
 
                     for address in accounts_to_remove {
                         if let Some(mut account) = bank.get_account(&address) {
-                            rehash = true;
                             account.lamports = 0;
                             bank.store_account(&address, &account);
                         }
                     }
 
                     if let Some(bootstrap_validator_pubkeys) = bootstrap_validator_pubkeys {
-                        rehash = true;
-
                         assert_eq!(bootstrap_validator_pubkeys.len() % 3, 0);
 
                         // Ensure there are no duplicated pubkeys in the --bootstrap-validator list
@@ -1924,56 +1912,31 @@ fn main() {
                         snapshot_version,
                         bank.slot(),
                     );
-                    assert!(bank.is_complete());
-                    bank.squash();
-                    bank.force_flush_accounts_cache();
-                    bank.clean_accounts(true);
-                    bank.update_accounts_hash();
-                    if rehash {
-                        bank.rehash();
-                    }
 
-                    let temp_dir = tempfile::tempdir_in(ledger_path).unwrap_or_else(|err| {
-                        eprintln!("Unable to create temporary directory: {}", err);
+                    let archive_file = snapshot_utils::bank_to_snapshot_archive(
+                        ledger_path,
+                        &bank,
+                        Some(snapshot_version),
+                        output_directory,
+                    )
+                    .unwrap_or_else(|err| {
+                        eprintln!("Unable to create snapshot: {}", err);
                         exit(1);
                     });
 
-                    let storages: Vec<_> = bank.get_snapshot_storages();
-                    snapshot_utils::add_snapshot(&temp_dir, &bank, &storages, snapshot_version)
-                        .and_then(|slot_snapshot_paths| {
-                            snapshot_utils::package_snapshot(
-                                &bank,
-                                &slot_snapshot_paths,
-                                &temp_dir,
-                                bank.src.slot_deltas(&bank.src.roots()),
-                                output_directory,
-                                storages,
-                                ArchiveFormat::TarZstd,
-                                snapshot_version,
-                            )
-                        })
-                        .and_then(|package| {
-                            snapshot_utils::archive_snapshot_package(&package).map(|ok| {
-                                println!(
-                                    "Successfully created snapshot for slot {}, hash {}: {:?}",
-                                    bank.slot(),
-                                    bank.hash(),
-                                    package.tar_output_file
-                                );
-                                println!(
-                                    "Shred version: {}",
-                                    compute_shred_version(
-                                        &genesis_config.hash(),
-                                        Some(&bank.hard_forks().read().unwrap())
-                                    )
-                                );
-                                ok
-                            })
-                        })
-                        .unwrap_or_else(|err| {
-                            eprintln!("Unable to create snapshot archive: {}", err);
-                            exit(1);
-                        });
+                    println!(
+                        "Successfully created snapshot for slot {}, hash {}: {}",
+                        bank.slot(),
+                        bank.hash(),
+                        archive_file.display(),
+                    );
+                    println!(
+                        "Shred version: {}",
+                        compute_shred_version(
+                            &genesis_config.hash(),
+                            Some(&bank.hard_forks().read().unwrap())
+                        )
+                    );
                 }
                 Err(err) => {
                     eprintln!("Failed to load ledger: {:?}", err);
