@@ -89,6 +89,10 @@ impl SnapshotRequestHandler {
                     status_cache_slot_deltas,
                 } = snapshot_request;
 
+                warn!("extra time before");
+                snapshot_root_bank.update_accounts_hash_with_store_option(true, true);
+                warn!("extra time before done");
+
                 let mut shrink_time = Measure::start("shrink_time");
                 if !accounts_db_caching_enabled {
                     snapshot_root_bank
