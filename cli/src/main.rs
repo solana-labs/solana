@@ -242,7 +242,6 @@ pub fn parse_args<'a>(
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    solana_logger::setup();
     let matches = app(
         crate_name!(),
         crate_description!(),
