@@ -3764,6 +3764,7 @@ impl AccountsDB {
             slot,
             ancestors,
             simple_capitalization_enabled,
+            false,
         )
     }
 
@@ -3779,6 +3780,7 @@ impl AccountsDB {
             slot,
             ancestors,
             simple_capitalization_enabled,
+            false,
         )
     }
 
@@ -3808,6 +3810,7 @@ impl AccountsDB {
         slot: Slot,
         ancestors: &Ancestors,
         simple_capitalization_enabled: bool,
+        skip_update: bool,
     ) -> (Hash, u64) {
         let (hash, total_lamports) = self.calculate_accounts_hash_helper(
             use_store,
@@ -3830,8 +3833,14 @@ impl AccountsDB {
         }
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
-        warn!("bank setting hash to: {}, slot: {}, lamports: {}, using_store: {}, debug: {}", hash, slot, total_lamports, use_store, debug_verify_store);
-        bank_hash_info.snapshot_hash = hash;
+        if !skip_update {
+            warn!("maybe bank setting hash to: {}, slot: {}, lamports: {}, using_store: {}, debug: {}, skip: {}, old: {}", hash, slot, total_lamports, use_store, debug_verify_store, skip_update, bank_hash_info.snapshot_hash);
+            bank_hash_info.snapshot_hash = hash;
+        }
+        else {
+            assert_eq!(bank_hash_info.snapshot_hash, hash);
+        }
+        warn!("maybe bank setting hash to: {}, slot: {}, lamports: {}, using_store: {}, debug: {}, skip: {}", hash, slot, total_lamports, use_store, debug_verify_store, skip_update);
         (hash, total_lamports)
     }
 

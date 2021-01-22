@@ -4311,6 +4311,7 @@ impl Bank {
         &self,
         use_store: bool,
         debug_verify_store: bool,
+        skip_update:bool,
     ) -> Hash {
         let (hash, total_lamports) = self
             .rc
@@ -4322,17 +4323,18 @@ impl Bank {
                 self.slot(),
                 &self.ancestors,
                 self.simple_capitalization_enabled(),
+                skip_update,
             );
         assert_eq!(total_lamports, self.capitalization());
         hash
     }
 
     pub fn update_accounts_hash(&self) -> Hash {
-        self.update_accounts_hash_with_store_option(false, false)
+        self.update_accounts_hash_with_store_option(false, false,false)
     }
 
     pub fn update_accounts_hash_with_store_test(&self) -> Hash {
-        self.update_accounts_hash_with_store_option(false, true)
+        self.update_accounts_hash_with_store_option(false, true, false)
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
