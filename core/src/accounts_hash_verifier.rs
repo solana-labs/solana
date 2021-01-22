@@ -9,7 +9,7 @@ use crate::{
     snapshot_packager_service::PendingSnapshotPackage,
 };
 use solana_measure::measure::Measure;
-use solana_runtime::accounts_db::AccountsDB;
+use solana_runtime::accounts_db::{AccountsDB, AccountStorageEntry};
 use solana_runtime::snapshot_package::{AccountsPackage, AccountsPackageReceiver};
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::collections::{HashMap, HashSet};
