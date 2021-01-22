@@ -42,7 +42,7 @@ fn main() {
         })
         .collect();
 
-    for result in elapsed {
+    for result in elapsed.clone() {
         println!("compute_merkle_root_and_capitalization(us),{}", result);
     }
     println!(
