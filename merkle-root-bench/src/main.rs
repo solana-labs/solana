@@ -47,6 +47,6 @@ fn main() {
     }
     println!(
         "compute_merkle_root_and_capitalization(us) avg: {}",
-        elapsed.into_iter().sum::<u64>() as f64 / len as f64
+        elapsed.into_iter().sum::<u64>() as f64 / iterations as f64
     );
 }
