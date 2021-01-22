@@ -183,6 +183,8 @@ impl SnapshotRequestHandler {
                 log(&snapshot_root_bank, line!());
 
                 warn!("extra time before");
+                snapshot_root_bank.update_accounts_hash_with_store_option(true, true, true);
+
                 //snapshot_root_bank.update_accounts_hash_with_store_option(true, false, true);
                 warn!("extra time before done");
 
