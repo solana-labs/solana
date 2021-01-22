@@ -184,8 +184,18 @@ pub fn parse_args<'a>(
         path: default_signer_path.clone(),
     };
 
-    let CliCommandInfo { command, signers } =
-        parse_command(&matches, &default_signer, &mut wallet_manager)?;
+    let CliCommandInfo {
+        command,
+        mut signers,
+    } = parse_command(&matches, &default_signer, &mut wallet_manager)?;
+
+    if signers.is_empty() {
+        if let Ok(signer_info) =
+            default_signer.generate_unique_signers(vec![None], matches, &mut wallet_manager)
+        {
+            signers.extend(signer_info.signers);
+        }
+    }
 
     let verbose = matches.is_present("verbose");
     let output_format = matches
