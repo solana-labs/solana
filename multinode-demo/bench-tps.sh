@@ -14,7 +14,7 @@ usage() {
   echo
   echo " Run bench-tps "
   echo
-  echo "   extra args: additional arguments are pass along to solana-bench-tps"
+  echo "   extra args: additional arguments are passed along to solana-bench-tps"
   echo
   exit 1
 }
