@@ -19,10 +19,22 @@ use solana_sdk::{
 };
 use std::{collections::HashMap, fmt, sync::Arc};
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum ForceActivation {
+    No,
+    Almost,
+    Yes,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum FeatureCliCommand {
-    Status { features: Vec<Pubkey> },
-    Activate { feature: Pubkey },
+    Status {
+        features: Vec<Pubkey>,
+    },
+    Activate {
+        feature: Pubkey,
+        force: ForceActivation,
+    },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -126,6 +138,13 @@ impl FeatureSubCommands for App<'_, '_> {
                                 .index(1)
                                 .required(true)
                                 .help("The signer for the feature to activate"),
+                        )
+                        .arg(
+                            Arg::with_name("force")
+                                .long("yolo")
+                                .hidden(true)
+                                .multiple(true)
+                                .help("Override activation sanity checks. Don't use this flag"),
                         ),
                 ),
         )
@@ -152,13 +171,20 @@ pub fn parse_feature_subcommand(
         ("activate", Some(matches)) => {
             let (feature_signer, feature) = signer_of(matches, "feature", wallet_manager)?;
             let mut signers = vec![default_signer.signer_from_path(matches, wallet_manager)?];
+
+            let force = match matches.occurrences_of("force") {
+                2 => ForceActivation::Yes,
+                1 => ForceActivation::Almost,
+                _ => ForceActivation::No,
+            };
+
             signers.push(feature_signer.unwrap());
             let feature = feature.unwrap();
 
             known_feature(&feature)?;
 
             CliCommandInfo {
-                command: CliCommand::Feature(FeatureCliCommand::Activate { feature }),
+                command: CliCommand::Feature(FeatureCliCommand::Activate { feature, force }),
                 signers,
             }
         }
@@ -189,7 +215,9 @@ pub fn process_feature_subcommand(
 ) -> ProcessResult {
     match feature_subcommand {
         FeatureCliCommand::Status { features } => process_status(rpc_client, config, features),
-        FeatureCliCommand::Activate { feature } => process_activate(rpc_client, config, *feature),
+        FeatureCliCommand::Activate { feature, force } => {
+            process_activate(rpc_client, config, *feature, *force)
+        }
     }
 }
 
@@ -329,12 +357,14 @@ fn process_activate(
     rpc_client: &RpcClient,
     config: &CliConfig,
     feature_id: Pubkey,
+    force: ForceActivation,
 ) -> ProcessResult {
     let account = rpc_client
         .get_multiple_accounts(&[feature_id])?
         .into_iter()
         .next()
         .unwrap();
+
     if let Some(account) = account {
         if feature::from_account(&account).is_some() {
             return Err(format!("{} has already been activated", feature_id).into());
@@ -342,7 +372,13 @@ fn process_activate(
     }
 
     if !feature_activation_allowed(rpc_client, false)? {
-        return Err("Feature activation is not allowed at this time".into());
+        match force {
+        ForceActivation::Almost =>
+            return Err("Add force argument once more to override the sanity check to force feature activation ".into()),
+        ForceActivation::Yes => println!("FEATURE ACTIVATION FORCED"),
+        ForceActivation::No =>
+            return Err("Feature activation is not allowed at this time".into()),
+        }
     }
 
     let rent = rpc_client.get_minimum_balance_for_rent_exemption(Feature::size_of())?;
