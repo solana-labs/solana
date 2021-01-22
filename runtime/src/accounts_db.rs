@@ -3262,6 +3262,14 @@ impl AccountsDB {
             scanned_slots.insert(storage_slot);
         }
 
+        assert!(self.accounts_index.is_root(slot));
+
+        for storage_slot in ancestors.keys() {
+            if *storage_slot > slot || !self.accounts_index.is_root(*storage_slot) {
+                warn!("Bad ancestor slot!: {}, {}, {}", storage_slot, slot, self.accounts_index.is_root(*storage_slot));
+            }
+        }
+
         scanned_slots.extend(ancestors.keys());
 
         let len = AtomicUsize::new(0);
