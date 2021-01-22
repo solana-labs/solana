@@ -90,7 +90,7 @@ impl SnapshotRequestHandler {
                 } = snapshot_request;
 
                 warn!("extra time before");
-                //snapshot_root_bank.update_accounts_hash_with_store_option(true, false,false);
+                snapshot_root_bank.update_accounts_hash_with_store_option(true, true,false);
                 warn!("extra time before done");
 
                 let mut shrink_time = Measure::start("shrink_time");
@@ -120,7 +120,7 @@ impl SnapshotRequestHandler {
                     }
                     else {
                         let mut hash_time = Measure::start("hash_time");
-                        snapshot_root_bank.update_accounts_hash_with_store_option(true, false, false);
+                        snapshot_root_bank.update_accounts_hash_with_store_option(true, true, true);
                         hash_time.stop();
                         hash_time
                     }

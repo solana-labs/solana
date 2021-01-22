@@ -3832,6 +3832,17 @@ impl AccountsDB {
             assert_eq!(hash, hash_other);
             assert_eq!(total_lamports, total_lamports_other);
             warn!("Verified: {}, {}", hash, total_lamports_other);
+
+            let storages = self.get_snapshot_storages(slot);
+            let (hash_other, total_lamports_other) = Self::calculate_accounts_hash_using_stores_only(storages,
+
+                simple_capitalization_enabled,
+                slot,
+            );
+            assert_eq!(hash, hash_other);
+            assert_eq!(total_lamports, total_lamports_other);
+            warn!("Verified using store: {}, {}", hash, total_lamports_other);
+
         }
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
