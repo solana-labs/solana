@@ -4322,25 +4322,25 @@ pub mod tests {
 
         let expected_results = vec![
             (0, 0, "GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn", 0),
-            (0, 1, "ApFBEedWoeGBA1aub11TQq5Bj7saWP2utvDHpjGatRLG", 0),
-            (0, 2, "Dk13jZD32F85ibQ55tCaEV1hwTCEWDQXaeE85iYFn1hU", 1),
-            (0, 3, "EkBFh3AjAiJLPPBZjBM7XbdRMy5qXJYP7fftTKdqhCLf", 3),
-            (0, 4, "4wQgGeg9GfKGTx9mr6qdjMDkUiYtmGxJxsEFVVchaouY", 6),
-            (0, 5, "FeafYBMNVPHaFiGNiCQ8LWH4Q1H5Dgjbbi9fTaeAqH6R", 10),
-            (0, 6, "2zSeu4j1juUVtnQxtau5JKCrPUTGoBzaiBB2SAeiUkgF", 15),
-            (0, 7, "63UCSKC62wFt5DH6gZqbYAhhhuPkivnUXXozFChKXe37", 21),
-            (0, 8, "AiQ7kc4uT5qghPUjdPoRSZhu6C7xuPhZt4AYrHkD3CdW", 28),
-            (0, 9, "5uJ912fLFza1tTw48VaePHTSgnN9eKyASfwWoGHcHNnm", 36),
+            (0, 1, "8unXKJYTxrR423HgQxbDmx29mFri1QNrzVKKDxEfc6bj", 0),
+            (0, 2, "6QfkevXLLqbfAaR1kVjvMLFtEXvNUVrpmkwXqgsYtCFW", 1),
+            (0, 3, "G3FrJd9JrXcMiqChTSfvEdBL2sCPny3ebiUy9Xxbn7a2", 3),
+            (0, 4, "G3sZXHhwoCFuNyWy7Efffr47RBW33ibEp7b2hqNDmXdu", 6),
+            (0, 5, "78atJJYpokAPKMJwHxUW8SBDvPkkSpTBV7GiB27HwosJ", 10),
+            (0, 6, "7c9SM2BmCRVVXdrEdKcMK91MviPqXqQMd8QAb77tgLEy", 15),
+            (0, 7, "3hsmnZPhf22UvBLiZ4dVa21Qsdh65CCrtYXsb8MxoVAa", 21),
+            (0, 8, "5bwXUiC6RCRhb8fqvjvUXT6waU25str3UXA3a6Aq1jux", 28),
+            (0, 9, "3NNtQKH6PaYpCnFBtyi2icK9eYX3YM5pqA3SKaXtUNzu", 36),
             (1, 0, "GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn", 0),
-            (1, 1, "4Q9L7G5ZHzb77py6rKUAs64ojhCAJ6PSDppp3tZZbSNQ", 0),
-            (1, 2, "J37bRRe1Lgkk1Z1v65S6psqco88Bvdxf8FxQQW7KP1ef", 1),
-            (1, 3, "5QQVnMT1nsFaUHLFFcJoJ2Q4g1Hip7SJzADREe3ijj5R", 3),
-            (1, 4, "BHqFPCmfZrUKbmJHGdGhWVsCU48DVDaRjrtY6nP8n9CL", 6),
-            (1, 5, "BkcJdbSenpo2Zv7jqSem5L8AuSRmcFkopUhsKZS1kN6e", 10),
-            (1, 6, "Ffggpco4ToRe4mfTyK7HJ7hZHLfQpfakM9oMkMY9K4Lr", 15),
-            (1, 7, "2WnVv8fvrcYG7KiDniDzxs1CDzkEHUW8fcbxJpc9DomF", 21),
-            (1, 8, "4zNkEWYAns5f7Ju1LUAYPWymUpjHq2pjzGpez3ZFKmEt", 28),
-            (1, 9, "AWrzriZM1ETtzxsPhdkdxpWdnbgHeG5H8uyNYE6anMqs", 36),
+            (1, 1, "4GWVCsnEu1iRyxjAB3F7J7C4MMvcoxFWtP9ihvwvDgxY", 0),
+            (1, 2, "8ML8Te6Uw2mipFr2v9sMZDcziXzhVqJo2qeMJohg1CJx", 1),
+            (1, 3, "AMEuC3AgqAeRBGBhSfTmuMdfbAiXJnGmKv99kHmcAE1H", 3),
+            (1, 4, "HEnDuJLHpsQfrApimGrovTqPEF6Vkrx2dKFr3BDtYzWx", 6),
+            (1, 5, "6rH69iP2yM1o565noZN1EqjySW4PhYUskz3c5tXePUfV", 10),
+            (1, 6, "7qEQMEXdfSPjbZ3q4cuuZwebDMvTvuaQ3dBiHoDUKo9a", 15),
+            (1, 7, "GDJz7LSKYjqqz6ujCaaQRJRmQ7TLNCwYJhdT84qT4qwk", 21),
+            (1, 8, "HT9krPLVTo3rr5WZQBQFrbqWs8SbYScXfnt8EVuobboM", 28),
+            (1, 9, "8y2pMgqMdRsvqw6BQXm6wtz3qxGPss72i6H6gVpPyeda", 36),
         ];
 
         let mut expected_index = 0;
@@ -4357,7 +4357,11 @@ pub mod tests {
             };
             for count in start..iterations {
                 let mut input: Vec<_> = (0..count)
-                    .map(|i| (Pubkey::new_unique(), Hash::new_unique(), i as u64))
+                    .map(|i| {
+                        let key = Pubkey::new(&vec![(pass * iterations + count) as u8; 32]);
+                        let hash = Hash::new(&vec![(pass * iterations + count + i + 1) as u8; 32]);
+                        (key, hash, i as u64)
+                    })
                     .collect();
                 let result;
                 if pass == 0 {
