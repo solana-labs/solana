@@ -227,13 +227,19 @@ where
             },
         ) in hashmap.iter()
         {
+            #[allow(deprecated)]
             let slot = match commitment.commitment {
-                CommitmentLevel::Max => commitment_slots.highest_confirmed_root,
-                CommitmentLevel::Recent => commitment_slots.slot,
-                CommitmentLevel::Root => commitment_slots.root,
-                CommitmentLevel::Single | CommitmentLevel::SingleGossip => {
-                    commitment_slots.highest_confirmed_slot
+                 // Max variant is deprecated
+                CommitmentLevel::Max | CommitmentLevel::Finalized => {
+                    commitment_slots.highest_confirmed_root
                 }
+                 // Recent variant is deprecated
+                CommitmentLevel::Recent | CommitmentLevel::Processed => commitment_slots.slot,
+                 // Root variant is deprecated
+                CommitmentLevel::Root => commitment_slots.root,
+                CommitmentLevel::Single  // Single variant is deprecated
+                | CommitmentLevel::SingleGossip  // SingleGossip variant is deprecated
+                | CommitmentLevel::Confirmed => commitment_slots.highest_confirmed_slot,
             };
             if let Some(bank) = bank_forks.read().unwrap().get(slot).cloned() {
                 let results = bank_method(&bank, hashmap_key);
@@ -626,6 +632,7 @@ impl RpcSubscriptions {
         self.subscriptions.total()
     }
 
+    #[allow(deprecated)]
     pub fn add_account_subscription(
         &self,
         pubkey: Pubkey,
@@ -639,19 +646,25 @@ impl RpcSubscriptions {
             .unwrap_or_else(CommitmentConfig::single_gossip);
 
         let slot = match commitment.commitment {
-            CommitmentLevel::Max => self
+            // Max variant is deprecated
+            CommitmentLevel::Max | CommitmentLevel::Finalized => self
                 .block_commitment_cache
                 .read()
                 .unwrap()
                 .highest_confirmed_root(),
-            CommitmentLevel::Recent => self.block_commitment_cache.read().unwrap().slot(),
+            CommitmentLevel::Recent | CommitmentLevel::Processed => {
+                self.block_commitment_cache.read().unwrap().slot()
+            }
+            // Root variant is deprecated
             CommitmentLevel::Root => self.block_commitment_cache.read().unwrap().root(),
+            // Single variant is deprecated
             CommitmentLevel::Single => self
                 .block_commitment_cache
                 .read()
                 .unwrap()
                 .highest_confirmed_slot(),
-            CommitmentLevel::SingleGossip => self
+            // SingleGossip variant is deprecated
+            CommitmentLevel::SingleGossip | CommitmentLevel::Confirmed => self
                 .optimistically_confirmed_bank
                 .read()
                 .unwrap()
@@ -670,7 +683,9 @@ impl RpcSubscriptions {
             0
         };
 
-        let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip {
+        let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip // SingleGossip variant is deprecated
+            || commitment.commitment == CommitmentLevel::Confirmed
+        {
             self.subscriptions
                 .gossip_account_subscriptions
                 .write()
@@ -704,6 +719,7 @@ impl RpcSubscriptions {
         }
     }
 
+    #[allow(deprecated)]
     pub fn add_program_subscription(
         &self,
         program_id: Pubkey,
@@ -717,7 +733,9 @@ impl RpcSubscriptions {
             .commitment
             .unwrap_or_else(CommitmentConfig::single_gossip);
 
-        let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip {
+        let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip // SingleGossip variant is deprecated
+            || commitment.commitment == CommitmentLevel::Confirmed
+        {
             self.subscriptions
                 .gossip_program_subscriptions
                 .write()
@@ -754,6 +772,7 @@ impl RpcSubscriptions {
         }
     }
 
+    #[allow(deprecated)]
     pub fn add_logs_subscription(
         &self,
         address: Option<Pubkey>,
@@ -765,7 +784,9 @@ impl RpcSubscriptions {
         let commitment = commitment.unwrap_or_else(CommitmentConfig::single_gossip);
 
         {
-            let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip {
+            let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip // SingleGossip variant is deprecated
+                || commitment.commitment == CommitmentLevel::Confirmed
+            {
                 self.subscriptions
                     .gossip_logs_subscriptions
                     .write()
@@ -862,6 +883,7 @@ impl RpcSubscriptions {
             .unwrap() = config;
     }
 
+    #[allow(deprecated)]
     pub fn add_signature_subscription(
         &self,
         signature: Signature,
@@ -875,7 +897,9 @@ impl RpcSubscriptions {
 
         let commitment = commitment.unwrap_or_else(CommitmentConfig::single_gossip);
 
-        let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip {
+        let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip // SingleGossip variant is deprecated
+            || commitment.commitment == CommitmentLevel::Confirmed
+        {
             self.subscriptions
                 .gossip_signature_subscriptions
                 .write()
@@ -915,7 +939,7 @@ impl RpcSubscriptions {
         self.enqueue_notification(NotificationEntry::Bank(commitment_slots));
     }
 
-    /// Notify SingleGossip commitment-level subscribers of changes to any accounts or new
+    /// Notify Confirmed commitment-level subscribers of changes to any accounts or new
     /// signatures.
     pub fn notify_gossip_subscribers(&self, slot: Slot) {
         self.enqueue_notification(NotificationEntry::Gossip(slot));
@@ -1374,7 +1398,7 @@ pub(crate) mod tests {
         subscriptions.add_account_subscription(
             alice.pubkey(),
             Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::recent()),
+                commitment: Some(CommitmentConfig::processed()),
                 encoding: None,
                 data_slice: None,
             }),
@@ -1433,7 +1457,7 @@ pub(crate) mod tests {
         subscriptions.add_account_subscription(
             alice.pubkey(),
             Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::recent()),
+                commitment: Some(CommitmentConfig::processed()),
                 encoding: None,
                 data_slice: None,
             }),
@@ -1529,7 +1553,7 @@ pub(crate) mod tests {
             solana_stake_program::id(),
             Some(RpcProgramAccountsConfig {
                 account_config: RpcAccountInfoConfig {
-                    commitment: Some(CommitmentConfig::recent()),
+                    commitment: Some(CommitmentConfig::processed()),
                     ..RpcAccountInfoConfig::default()
                 },
                 ..RpcProgramAccountsConfig::default()
@@ -1658,7 +1682,7 @@ pub(crate) mod tests {
         subscriptions.add_signature_subscription(
             past_bank_tx.signatures[0],
             Some(RpcSignatureSubscribeConfig {
-                commitment: Some(CommitmentConfig::recent()),
+                commitment: Some(CommitmentConfig::processed()),
                 enable_received_notification: Some(false),
             }),
             SubscriptionId::Number(1),
@@ -1667,7 +1691,7 @@ pub(crate) mod tests {
         subscriptions.add_signature_subscription(
             past_bank_tx.signatures[0],
             Some(RpcSignatureSubscribeConfig {
-                commitment: Some(CommitmentConfig::root()),
+                commitment: Some(CommitmentConfig::finalized()),
                 enable_received_notification: Some(false),
             }),
             SubscriptionId::Number(2),
@@ -1676,7 +1700,7 @@ pub(crate) mod tests {
         subscriptions.add_signature_subscription(
             processed_tx.signatures[0],
             Some(RpcSignatureSubscribeConfig {
-                commitment: Some(CommitmentConfig::recent()),
+                commitment: Some(CommitmentConfig::processed()),
                 enable_received_notification: Some(false),
             }),
             SubscriptionId::Number(3),
@@ -1685,7 +1709,7 @@ pub(crate) mod tests {
         subscriptions.add_signature_subscription(
             unprocessed_tx.signatures[0],
             Some(RpcSignatureSubscribeConfig {
-                commitment: Some(CommitmentConfig::recent()),
+                commitment: Some(CommitmentConfig::processed()),
                 enable_received_notification: Some(false),
             }),
             SubscriptionId::Number(4),
@@ -1695,7 +1719,7 @@ pub(crate) mod tests {
         subscriptions.add_signature_subscription(
             unprocessed_tx.signatures[0],
             Some(RpcSignatureSubscribeConfig {
-                commitment: Some(CommitmentConfig::recent()),
+                commitment: Some(CommitmentConfig::processed()),
                 enable_received_notification: Some(true),
             }),
             SubscriptionId::Number(5),
@@ -1892,7 +1916,7 @@ pub(crate) mod tests {
     fn test_add_and_remove_subscription() {
         let mut subscriptions: HashMap<u64, HashMap<SubscriptionId, SubscriptionData<(), ()>>> =
             HashMap::new();
-        let commitment = CommitmentConfig::single_gossip();
+        let commitment = CommitmentConfig::confirmed();
 
         let num_keys = 5;
         for key in 0..num_keys {
@@ -1982,7 +2006,7 @@ pub(crate) mod tests {
         subscriptions.add_account_subscription(
             alice.pubkey(),
             Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::single_gossip()),
+                commitment: Some(CommitmentConfig::confirmed()),
                 encoding: None,
                 data_slice: None,
             }),
@@ -2063,7 +2087,7 @@ pub(crate) mod tests {
         subscriptions.add_account_subscription(
             alice.pubkey(),
             Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::single_gossip()),
+                commitment: Some(CommitmentConfig::confirmed()),
                 encoding: None,
                 data_slice: None,
             }),

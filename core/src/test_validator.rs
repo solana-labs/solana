@@ -416,7 +416,7 @@ impl TestValidator {
         //  due to a bug in the Bank)
         {
             let rpc_client =
-                RpcClient::new_with_commitment(rpc_url.clone(), CommitmentConfig::recent());
+                RpcClient::new_with_commitment(rpc_url.clone(), CommitmentConfig::processed());
             let fee_rate_governor = rpc_client
                 .get_fee_rate_governor()
                 .expect("get_fee_rate_governor")
@@ -475,7 +475,7 @@ impl TestValidator {
     /// associated fee calculator
     pub fn rpc_client(&self) -> (RpcClient, Hash, FeeCalculator) {
         let rpc_client =
-            RpcClient::new_with_commitment(self.rpc_url.clone(), CommitmentConfig::recent());
+            RpcClient::new_with_commitment(self.rpc_url.clone(), CommitmentConfig::processed());
         let (recent_blockhash, fee_calculator) = rpc_client
             .get_recent_blockhash()
             .expect("get_recent_blockhash");
