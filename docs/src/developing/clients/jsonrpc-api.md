@@ -2795,6 +2795,19 @@ Result:
 
 Submits a signed transaction to the cluster for processing.
 
+Note that this doesn't guarantee the transaction is confirmed by the cluster.
+While this method reasonably retries to submit it background, the transaction
+could be rejected if transaction's `recent_blockhash` expires.
+
+In other words, this method immediately succeeds, without waiting for any
+confirmations.
+
+Use [`getSignatureStatuses`](jsonrpc-api.md#getsignaturestatuses) to make sure
+the transaction is confirmed or not.
+
+Also, this method doesn't alter the transaction in any way. This method just
+relays the transaction created by clients to the cluster as-is.
+
 Before submitting, the following preflight checks are performed:
 
 1. The transaction signatures are verified
@@ -2802,6 +2815,11 @@ Before submitting, the following preflight checks are performed:
    commitment. On failure an error will be returned. Preflight checks may be
    disabled if desired. It is recommended to specify the same commitment and
    preflight commitment to avoid confusing behavior.
+
+Also, the returned signature isn't something this method specifically creates or
+registers at the cluster. It is just the first signature in the transaction, which
+can be used to identify the transaction by other methods.
+In fact, the signature can easily extracted from the transaction data.
 
 #### Parameters:
 
@@ -2813,7 +2831,7 @@ Before submitting, the following preflight checks are performed:
 
 #### Results:
 
-- `<string>` - Transaction Signature, as base-58 encoded string
+- `<string>` - First Transaction Signature embedded in the transaction, as base-58 encoded string (to be used for identification of transaction)
 
 #### Example:
 
