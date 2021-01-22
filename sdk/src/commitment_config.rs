@@ -60,6 +60,24 @@ impl CommitmentConfig {
         }
     }
 
+    pub fn finalized() -> Self {
+        Self {
+            commitment: CommitmentLevel::Finalized,
+        }
+    }
+
+    pub fn confirmed() -> Self {
+        Self {
+            commitment: CommitmentLevel::Confirmed,
+        }
+    }
+
+    pub fn processed() -> Self {
+        Self {
+            commitment: CommitmentLevel::Processed,
+        }
+    }
+
     pub fn ok(self) -> Option<Self> {
         if self == Self::default() {
             None
