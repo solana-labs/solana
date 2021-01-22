@@ -229,6 +229,12 @@ fn process_instruction(
                 }
             }
         }
+        WRITE_ACCOUNT => {
+            msg!("write account");
+            for i in 0..instruction_data[1] {
+                accounts[0].data.borrow_mut()[i as usize] = instruction_data[1];
+            }
+        }
         _ => panic!(),
     }
 

@@ -16,6 +16,7 @@ pub const RETURN_OK: u8 = 7;
 pub const VERIFY_PRIVILEGE_DEESCALATION: u8 = 8;
 pub const VERIFY_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER: u8 = 9;
 pub const VERIFY_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE: u8 = 10;
+pub const WRITE_ACCOUNT: u8 = 11;
 
 pub fn create_instruction(
     program_id: Pubkey,
