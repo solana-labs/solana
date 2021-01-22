@@ -123,6 +123,10 @@ pub enum CliCommand {
         blockhash: Option<Hash>,
         print_timestamp: bool,
     },
+    Rent {
+        data_length: usize,
+        use_lamports_unit: bool,
+    },
     ShowBlockProduction {
         epoch: Option<Epoch>,
         slot_limit: Option<u64>,
@@ -864,6 +868,17 @@ pub fn parse_command(
                 signers: signer_info.signers,
             })
         }
+        ("rent", Some(matches)) => {
+            let data_length = value_of(matches, "data_length").unwrap();
+            let use_lamports_unit = matches.is_present("lamports");
+            Ok(CliCommandInfo {
+                command: CliCommand::Rent {
+                    data_length,
+                    use_lamports_unit,
+                },
+                signers: vec![],
+            })
+        }
         //
         ("", None) => {
             eprintln!("{}", matches.usage());
@@ -1172,7 +1187,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Cluster Query Commands
         // Get address of this client
         CliCommand::Address => Ok(format!("{}", config.pubkey()?)),
-
         // Return software version of solana-cli and cluster entrypoint node
         CliCommand::Catchup {
             node_pubkey,
@@ -1237,6 +1251,10 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             blockhash,
             *print_timestamp,
         ),
+        CliCommand::Rent {
+            data_length,
+            use_lamports_unit,
+        } => process_calculate_rent(&rpc_client, config, *data_length, *use_lamports_unit),
         CliCommand::ShowBlockProduction { epoch, slot_limit } => {
             process_show_block_production(&rpc_client, config, *epoch, *slot_limit)
         }

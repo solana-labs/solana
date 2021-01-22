@@ -35,7 +35,7 @@ pub fn println_name_value(name: &str, value: &str) {
     println!("{} {}", style(name).bold(), styled_value);
 }
 
-pub fn writeln_name_value(f: &mut fmt::Formatter, name: &str, value: &str) -> fmt::Result {
+pub fn writeln_name_value(f: &mut dyn fmt::Write, name: &str, value: &str) -> fmt::Result {
     let styled_value = if value.is_empty() {
         style("(not set)").italic()
     } else {
