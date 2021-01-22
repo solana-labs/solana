@@ -94,7 +94,14 @@ impl AccountsHashVerifier {
         .into_iter()
         .map(|x| x.clone())
         .collect();
-        warn!("scan_account_storage_no_bank_2 from process_accounts_package, storages: {}", storage_maps.len());
+        let mut sum = 0;
+        let mut size = 0;
+        for s in storage_maps.clone() {
+            sum += s.accounts.accounts(0).len();
+            size += s.accounts.file_size;
+        }
+        warn!("scan_account_storage_no_bank_2 from process_accounts_package, storages: {}, # accounts: {}, size: {}", storage_maps.len(), sum, size);
+
 
         let simple_capitalization_enabled = true; // ??? TODO
         let hash = AccountsDB::calculate_accounts_hash_using_stores_only(accounts_package.storages.clone(), simple_capitalization_enabled, accounts_package.slot);

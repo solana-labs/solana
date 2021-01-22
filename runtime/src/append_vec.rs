@@ -122,7 +122,7 @@ pub struct AppendVec {
     #[allow(clippy::mutex_atomic)]
     append_offset: Mutex<usize>,
     current_len: AtomicUsize,
-    file_size: u64,
+    pub file_size: u64,
     remove_on_drop: bool,
 }
 

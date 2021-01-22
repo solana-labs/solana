@@ -345,12 +345,12 @@ pub enum BankHashVerificationError {
 /// Persistent storage structure holding the accounts
 #[derive(Debug)]
 pub struct AccountStorageEntry {
-    pub(crate) id: AtomicUsize,
+    pub id: AtomicUsize,
 
-    pub(crate) slot: AtomicU64,
+    pub slot: AtomicU64,
 
     /// storage holding the accounts
-    pub(crate) accounts: AppendVec,
+    pub accounts: AppendVec,
 
     /// Keeps track of the number of accounts stored in a specific AppendVec.
     ///  This is periodically checked to reuse the stores that do not have
@@ -3473,7 +3473,13 @@ impl AccountsDB {
             .map(|x| x.clone())
             .collect();
         if storage_maps.len() > 10000{
-            warn!("scan_account_storage_no_bank_2, storages: {}", storage_maps.len());
+            let mut sum = 0;
+            let mut size = 0;
+            for s in storage_maps.clone() {
+                sum += s.accounts.accounts(0).len();
+                size += s.accounts.file_size;
+            }
+            warn!("scan_account_storage_no_bank_2, storages: {}, # accounts: {}, size: {}", storage_maps.len(), sum, size);
         }
 
         //            .map(|res| res.clone.unwrap().values().cloned().collect())
