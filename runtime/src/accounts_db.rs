@@ -3580,6 +3580,8 @@ impl AccountsDB {
 
     pub fn rest_of_hash_calculation(
         accounts: (DashMap<Pubkey, CalculateHashIntermediate>, Measure, Measure),
+        slot:Slot,
+        simple_capitalization_enabled: bool,
     ) -> (Hash, u64) {
         let (account_maps, time_scan, time_accumulate) = accounts;
 
@@ -3602,7 +3604,7 @@ impl AccountsDB {
             ("scan", time_scan.as_us(), i64),
             ("scan_accumulate", time_accumulate.as_us(), i64),
         );
-        warn!("hashes including zeros: {}, after removal: {}, lamports: {}, hash: {}", len,hash_total, ret.1, ret.0 );
+        warn!("hashes including zeros: {}, after removal: {}, lamports: {}, hash: {}, slot: {}, simple cap: {}", len,hash_total, ret.1, ret.0, slot, simple_capitalization_enabled);
 
         ret
     }
@@ -3612,10 +3614,11 @@ impl AccountsDB {
     pub fn calculate_accounts_hash_using_stores_only(
         storages: SnapshotStorages,
         simple_capitalization_enabled: bool,
+        slot:Slot,
     ) -> (Hash, u64) {
         let result = Self::scan_slot_using_snapshot(storages, simple_capitalization_enabled);
 
-        Self::rest_of_hash_calculation(result)
+        Self::rest_of_hash_calculation(result, slot, simple_capitalization_enabled)
     }
 
     // modeled after get_accounts_delta_hash
@@ -3633,7 +3636,7 @@ impl AccountsDB {
             Self::scan_slot_using_snapshot(combined_maps, simple_capitalization_enabled)
         };
 
-        Self::rest_of_hash_calculation(result)
+        Self::rest_of_hash_calculation(result, slot, simple_capitalization_enabled)
     }
 
     fn calculate_accounts_hash(
