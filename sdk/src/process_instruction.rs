@@ -41,6 +41,7 @@ pub trait InvokeContext {
         message: &Message,
         instruction: &CompiledInstruction,
         accounts: &[Rc<RefCell<Account>>],
+        caller_pivileges: Option<&[bool]>,
     ) -> Result<(), InstructionError>;
     /// Get the program ID of the currently executing program
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
@@ -340,6 +341,7 @@ impl InvokeContext for MockInvokeContext {
         _message: &Message,
         _instruction: &CompiledInstruction,
         _accounts: &[Rc<RefCell<Account>>],
+        _caller_pivileges: Option<&[bool]>,
     ) -> Result<(), InstructionError> {
         Ok(())
     }

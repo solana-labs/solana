@@ -17,6 +17,7 @@ static const uint8_t TEST_INSTRUCTION_META_TOO_LARGE = 10;
 static const uint8_t TEST_RETURN_ERROR = 11;
 static const uint8_t TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER = 12;
 static const uint8_t TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE = 13;
+static const uint8_t TEST_WRITE_DEESCALATION = 14;
 
 static const int MINT_INDEX = 0;
 static const int ARGUMENT_INDEX = 1;
@@ -251,6 +252,26 @@ extern uint64_t entrypoint(const uint8_t *input) {
     for (int i = 0; i < accounts[INVOKED_ARGUMENT_INDEX].data_len; i++) {
       sol_assert(accounts[INVOKED_ARGUMENT_INDEX].data[i] == i);
     }
+
+    sol_log("Verify data write before ro cpi call");
+    {
+      for (int i = 0; i < accounts[ARGUMENT_INDEX].data_len; i++) {
+        accounts[ARGUMENT_INDEX].data[i] = 0;
+      }
+
+      SolAccountMeta arguments[] = {
+          {accounts[ARGUMENT_INDEX].key, false, false}};
+      uint8_t data[] = {VERIFY_PRIVILEGE_DEESCALATION};
+      const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                          arguments, SOL_ARRAY_SIZE(arguments),
+                                          data, SOL_ARRAY_SIZE(data)};
+      sol_assert(SUCCESS ==
+                 sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+
+      for (int i = 0; i < accounts[ARGUMENT_INDEX].data_len; i++) {
+        sol_assert(accounts[ARGUMENT_INDEX].data[i] == 0);
+      }
+    }
     break;
   }
   case TEST_PRIVILEGE_ESCALATION_SIGNER: {
@@ -443,7 +464,8 @@ extern uint64_t entrypoint(const uint8_t *input) {
     break;
   }
   case TEST_RETURN_ERROR: {
-    SolAccountMeta arguments[] = {{accounts[ARGUMENT_INDEX].key, true, true}};
+    sol_log("Test return error");
+    SolAccountMeta arguments[] = {{accounts[ARGUMENT_INDEX].key, false, true}};
     uint8_t data[] = {RETURN_ERROR};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                         arguments, SOL_ARRAY_SIZE(arguments),
@@ -484,6 +506,18 @@ extern uint64_t entrypoint(const uint8_t *input) {
     break;
   }
 
+  case TEST_WRITE_DEESCALATION: {
+    sol_log("Test writable deescalation");
+
+    SolAccountMeta arguments[] = {
+        {accounts[INVOKED_ARGUMENT_INDEX].key, false, false}};
+    uint8_t data[] = {WRITE_ACCOUNT, 10};
+    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                        arguments, SOL_ARRAY_SIZE(arguments),
+                                        data, SOL_ARRAY_SIZE(data)};
+    sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
+    break;
+  }
   default:
     sol_panic();
   }

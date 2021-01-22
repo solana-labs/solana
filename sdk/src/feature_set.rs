@@ -166,6 +166,10 @@ pub mod prevent_upgrade_and_invoke {
     solana_sdk::declare_id!("BiNjYd8jCYDgAwMqP91uwZs6skWpuHtKrZbckuKESs8N");
 }
 
+pub mod track_writable_deescalation {
+    solana_sdk::declare_id!("HVPSxqskEtRLRT2ZeEMmkmt9FWqoFX4vrN6f5VaadLED");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -197,15 +201,16 @@ lazy_static! {
         (try_find_program_address_syscall_enabled::id(), "add try_find_program_address syscall"),
         (warp_timestamp::id(), "warp timestamp to current, adjust bounding to 50% #14210 & #14531"),
         (stake_program_v3::id(), "solana_stake_program v3"),
-        (max_cpi_instruction_size_ipv6_mtu::id(), "Max cross-program invocation size 1280"),
-        (limit_cpi_loader_invoke::id(), "Loader not authorized via CPI"),
-        (use_loaded_program_accounts::id(), "Use loaded program accounts"),
-        (abort_on_all_cpi_failures::id(), "Abort on all CPI failures"),
-        (use_loaded_executables::id(), "Use loaded executable accounts"),
+        (max_cpi_instruction_size_ipv6_mtu::id(), "max cross-program invocation size 1280"),
+        (limit_cpi_loader_invoke::id(), "loader not authorized via CPI"),
+        (use_loaded_program_accounts::id(), "use loaded program accounts"),
+        (abort_on_all_cpi_failures::id(), "abort on all CPI failures"),
+        (use_loaded_executables::id(), "use loaded executable accounts"),
         (turbine_retransmit_peers_patch::id(), "turbine retransmit peers patch #14631"),
-        (prevent_upgrade_and_invoke::id(), "Prevent upgrade and invoke in same tx batch"),
-        (full_inflation::candidate_example::vote::id(), "Community vote allowing candidate_example to enable full inflation"),
-        (full_inflation::candidate_example::enable::id(), "Full inflation enabled by candidate_example"),
+        (prevent_upgrade_and_invoke::id(), "prevent upgrade and invoke in same tx batch"),
+        (full_inflation::candidate_example::vote::id(), "community vote allowing candidate_example to enable full inflation"),
+        (full_inflation::candidate_example::enable::id(), "full inflation enabled by candidate_example"),
+        (track_writable_deescalation::id(), "Track account writable deescalation"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
