@@ -28,6 +28,7 @@ members = [
     "local-cluster",
     "logger",
     "log-analyzer",
+    "merkle-root-bench",
     "merkle-tree",
     "stake-o-matic",
     "storage-bigtable",
