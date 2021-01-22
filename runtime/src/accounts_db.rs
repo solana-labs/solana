@@ -3512,7 +3512,9 @@ impl AccountsDB {
             .get_slot_stores(slot)
             .map(|res| res.read().unwrap().values().cloned().collect())
             .unwrap_or_default();
-        warn!("get_storage_maps, found slots: {}", storage_maps.len());
+        if storage_maps.len() > 10000 {
+            warn!("get_storage_maps, found slots: {}", storage_maps.len());
+        }
         storage_maps
     }
 
