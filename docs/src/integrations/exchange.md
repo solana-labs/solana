@@ -177,9 +177,9 @@ transfer to the appropriate deposit address.
 
 ### Poll for Blocks
 
-The easiest way to track all the deposit accounts for your exchange is to poll
-for each confirmed block and inspect for addresses of interest, using the
-JSON-RPC service of your Solana api node.
+To track all the deposit accounts for your exchange, poll for each confirmed
+block and inspect for addresses of interest, using the JSON-RPC service of your
+Solana api node.
 
 - To identify which blocks are available, send a [`getConfirmedBlocks` request](developing/clients/jsonrpc-api.md#getconfirmedblocks),
   passing the last block you have already processed as the start-slot parameter:
@@ -273,7 +273,10 @@ can request the block from RPC in binary format, and parse it using either our
 
 ### Address History
 
-You can also query the transaction history of a specific address.
+You can also query the transaction history of a specific address. This is
+generally *not* a viable method for tracking all your deposit addresses over all
+slots, but may be useful for examining a few accounts for a specific period of
+time.
 
 - Send a [`getConfirmedSignaturesForAddress`](developing/clients/jsonrpc-api.md#getconfirmedsignaturesforaddress)
   request to the api node, specifying a range of recent slots:
