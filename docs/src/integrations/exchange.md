@@ -179,7 +179,7 @@ transfer to the appropriate deposit address.
 
 To track all the deposit accounts for your exchange, poll for each confirmed
 block and inspect for addresses of interest, using the JSON-RPC service of your
-Solana api node.
+Solana API node.
 
 - To identify which blocks are available, send a [`getConfirmedBlocks` request](developing/clients/jsonrpc-api.md#getconfirmedblocks),
   passing the last block you have already processed as the start-slot parameter:
