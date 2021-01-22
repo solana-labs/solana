@@ -4498,7 +4498,7 @@ impl AccountsDB {
 
         warn!("get_snapshot_storages: raw: {}, after: {}, is root: {}, slot: {}", result_raw.len(), result.len(), self.accounts_index.is_root(snapshot_slot), snapshot_slot);
 
-        result
+        result_raw
     }
 
     fn merge_array<X>(dest: &mut HashMap<Pubkey, X>, source: (Pubkey, X))
