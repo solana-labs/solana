@@ -1165,7 +1165,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         println_name_value("RPC URL:", &config.json_rpc_url);
         println_name_value("Default Signer Path:", &config.keypair_path);
         if config.keypair_path.starts_with("usb://") {
-            println_name_value("Pubkey:", &format!("{:?}", config.pubkey()?));
+            let pubkey = config
+                .pubkey()
+                .map(|pubkey| format!("{:?}", pubkey))
+                .unwrap_or_else(|_| "Unavailable".to_string());
+            println_name_value("Pubkey:", &pubkey);
         }
         println_name_value("Commitment:", &config.commitment.commitment.to_string());
     }
