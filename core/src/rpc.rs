@@ -680,7 +680,7 @@ impl JsonRpcRequestProcessor {
         if result.is_err() {
             let err = result.as_ref().unwrap_err();
             if let solana_storage_bigtable::Error::BlockNotFound(slot) = err {
-                return Err(RpcCustomError::BigTableSlotSkipped { slot: *slot }.into());
+                return Err(RpcCustomError::LongTermStorageSlotSkipped { slot: *slot }.into());
             }
         }
         Ok(())

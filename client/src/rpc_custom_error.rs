@@ -12,7 +12,7 @@ pub const JSON_RPC_SERVER_ERROR_NODE_UNHEALTHLY: i64 = -32005;
 pub const JSON_RPC_SERVER_ERROR_TRANSACTION_PRECOMPILE_VERIFICATION_FAILURE: i64 = -32006;
 pub const JSON_RPC_SERVER_ERROR_SLOT_SKIPPED: i64 = -32007;
 pub const JSON_RPC_SERVER_ERROR_NO_SNAPSHOT: i64 = -32008;
-pub const JSON_RPC_SERVER_ERROR_BIGTABLE_SLOT_SKIPPED: i64 = -32009;
+pub const JSON_RPC_SERVER_ERROR_LONG_TERM_STORAGE_SLOT_SKIPPED: i64 = -32009;
 
 pub enum RpcCustomError {
     BlockCleanedUp {
@@ -35,7 +35,7 @@ pub enum RpcCustomError {
         slot: Slot,
     },
     NoSnapshot,
-    BigTableSlotSkipped {
+    LongTermStorageSlotSkipped {
         slot: Slot,
     },
 }
@@ -110,9 +110,9 @@ impl From<RpcCustomError> for Error {
                 message: "No snapshot".to_string(),
                 data: None,
             },
-            RpcCustomError::BigTableSlotSkipped { slot } => Self {
-                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_BIGTABLE_SLOT_SKIPPED),
-                message: format!("Slot {} was skipped, or missing in BigTable", slot),
+            RpcCustomError::LongTermStorageSlotSkipped { slot } => Self {
+                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_LONG_TERM_STORAGE_SLOT_SKIPPED),
+                message: format!("Slot {} was skipped, or missing in long-term storage", slot),
                 data: None,
             },
         }
