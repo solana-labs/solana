@@ -670,6 +670,22 @@ impl JsonRpcRequestProcessor {
         Ok(())
     }
 
+    fn check_bigtable_result<T>(
+        &self,
+        result: &std::result::Result<T, solana_storage_bigtable::Error>,
+    ) -> Result<()>
+    where
+        T: std::fmt::Debug,
+    {
+        if result.is_err() {
+            let err = result.as_ref().unwrap_err();
+            if let solana_storage_bigtable::Error::BlockNotFound(slot) = err {
+                return Err(RpcCustomError::LongTermStorageSlotSkipped { slot: *slot }.into());
+            }
+        }
+        Ok(())
+    }
+
     pub fn get_confirmed_block(
         &self,
         slot: Slot,
@@ -688,9 +704,11 @@ impl JsonRpcRequestProcessor {
             self.check_blockstore_root(&result, slot)?;
             if result.is_err() {
                 if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
-                    return Ok(self
+                    let bigtable_result = self
                         .runtime_handle
-                        .block_on(bigtable_ledger_storage.get_confirmed_block(slot))
+                        .block_on(bigtable_ledger_storage.get_confirmed_block(slot));
+                    self.check_bigtable_result(&bigtable_result)?;
+                    return Ok(bigtable_result
                         .ok()
                         .map(|confirmed_block| confirmed_block.encode(encoding)));
                 }
@@ -803,9 +821,11 @@ impl JsonRpcRequestProcessor {
             self.check_blockstore_root(&result, slot)?;
             if result.is_err() || matches!(result, Ok(None)) {
                 if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
-                    return Ok(self
+                    let bigtable_result = self
                         .runtime_handle
-                        .block_on(bigtable_ledger_storage.get_confirmed_block(slot))
+                        .block_on(bigtable_ledger_storage.get_confirmed_block(slot));
+                    self.check_bigtable_result(&bigtable_result)?;
+                    return Ok(bigtable_result
                         .ok()
                         .and_then(|confirmed_block| confirmed_block.block_time));
                 }
