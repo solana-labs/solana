@@ -814,8 +814,9 @@ impl CleanAccountsStats {
 }
 
 #[derive(Debug, Default)]
-struct ShrinkStatsV1 {
+struct ShrinkStats {
     last_report: AtomicU64,
+    num_slots_shrunk: AtomicUsize,
     storage_read_elapsed: AtomicU64,
     index_read_elapsed: AtomicU64,
     find_alive_elapsed: AtomicU64,
@@ -826,23 +827,93 @@ struct ShrinkStatsV1 {
     write_storage_elapsed: AtomicU64,
     rewrite_elapsed: AtomicU64,
     drop_storage_entries_elapsed: AtomicU64,
-    recycle_stores_write_time: AtomicU64,
+    recycle_stores_write_elapsed: AtomicU64,
+    accounts_removed: AtomicUsize,
 }
 
-#[derive(Debug, Default)]
-struct ShrinkStats {
-    last_report: AtomicU64,
-    index_read_elapsed: AtomicU64,
-    find_alive_elapsed: AtomicU64,
-    create_and_insert_store_elapsed: AtomicU64,
-    store_accounts_elapsed: AtomicU64,
-    update_index_elapsed: AtomicU64,
-    handle_reclaims_elapsed: AtomicU64,
-    write_storage_elapsed: AtomicU64,
-    rewrite_elapsed: AtomicU64,
-    drop_storage_entries_elapsed: AtomicU64,
-    recycle_stores_write_time: AtomicU64,
-    accounts_removed: AtomicU64,
+impl ShrinkStats {
+    fn report(&self) {
+        let last = self.last_report.load(Ordering::Relaxed);
+        let now = solana_sdk::timing::timestamp();
+
+        let should_report = now.saturating_sub(last) > 1000
+            && self
+                .last_report
+                .compare_and_swap(last, now, Ordering::Relaxed)
+                == last;
+
+        if should_report {
+            datapoint_info!(
+                "shrink_stats",
+                (
+                    "num_slots_shrunk",
+                    self.num_slots_shrunk.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "storage_read_elapsed",
+                    self.storage_read_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "index_read_elapsed",
+                    self.index_read_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "find_alive_elapsed",
+                    self.find_alive_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "create_and_insert_store_elapsed",
+                    self.create_and_insert_store_elapsed
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "store_accounts_elapsed",
+                    self.store_accounts_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "update_index_elapsed",
+                    self.update_index_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "handle_reclaims_elapsed",
+                    self.handle_reclaims_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "write_storage_elapsed",
+                    self.write_storage_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "rewrite_elapsed",
+                    self.rewrite_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "drop_storage_entries_elapsed",
+                    self.drop_storage_entries_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "recycle_stores_write_time",
+                    self.recycle_stores_write_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "drop_storage_entries_elapsed",
+                    self.accounts_removed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+            );
+        }
+    }
 }
 
 fn make_min_priority_thread_pool() -> ThreadPool {
@@ -1672,49 +1743,47 @@ impl AccountsDB {
         }
         drop_storage_entries_elapsed.stop();
 
-        datapoint_info!(
-            "do_shrink_slot_stores_time",
-            ("index_read_elapsed", index_read_elapsed.as_us(), i64),
-            ("find_alive_elapsed", find_alive_elapsed, i64),
-            (
-                "create_and_insert_store_elapsed",
-                create_and_insert_store_elapsed,
-                i64
-            ),
-            (
-                "store_accounts_elapsed",
-                store_accounts_timing.store_accounts_elapsed,
-                i64
-            ),
-            (
-                "update_index_elapsed",
-                store_accounts_timing.update_index_elapsed,
-                i64
-            ),
-            (
-                "handle_reclaims_elapsed",
-                store_accounts_timing.handle_reclaims_elapsed,
-                i64
-            ),
-            ("write_storage_elapsed", write_storage_elapsed, i64),
-            ("rewrite_elapsed", rewrite_elapsed.as_us(), i64),
-            (
-                "drop_storage_entries_elapsed",
-                drop_storage_entries_elapsed.as_us(),
-                i64
-            ),
-            (
-                "recycle_stores_write_elapsed",
-                recycle_stores_write_elapsed.as_us(),
-                i64
-            ),
-            ("total_starting_accounts", total_starting_accounts, i64),
-            (
-                "total_accounts_after_shrink",
-                total_accounts_after_shrink,
-                i64
-            )
+        self.shrink_stats
+            .num_slots_shrunk
+            .fetch_add(1, Ordering::Relaxed);
+        self.shrink_stats
+            .index_read_elapsed
+            .fetch_add(index_read_elapsed.as_us(), Ordering::Relaxed);
+        self.shrink_stats
+            .find_alive_elapsed
+            .fetch_add(find_alive_elapsed, Ordering::Relaxed);
+        self.shrink_stats
+            .create_and_insert_store_elapsed
+            .fetch_add(create_and_insert_store_elapsed, Ordering::Relaxed);
+        self.shrink_stats.store_accounts_elapsed.fetch_add(
+            store_accounts_timing.store_accounts_elapsed,
+            Ordering::Relaxed,
         );
+        self.shrink_stats.update_index_elapsed.fetch_add(
+            store_accounts_timing.update_index_elapsed,
+            Ordering::Relaxed,
+        );
+        self.shrink_stats.handle_reclaims_elapsed.fetch_add(
+            store_accounts_timing.handle_reclaims_elapsed,
+            Ordering::Relaxed,
+        );
+        self.shrink_stats
+            .write_storage_elapsed
+            .fetch_add(write_storage_elapsed, Ordering::Relaxed);
+        self.shrink_stats
+            .rewrite_elapsed
+            .fetch_add(rewrite_elapsed.as_us(), Ordering::Relaxed);
+        self.shrink_stats
+            .drop_storage_entries_elapsed
+            .fetch_add(drop_storage_entries_elapsed.as_us(), Ordering::Relaxed);
+        self.shrink_stats
+            .recycle_stores_write_elapsed
+            .fetch_add(recycle_stores_write_elapsed.as_us(), Ordering::Relaxed);
+        self.shrink_stats.accounts_removed.fetch_add(
+            total_starting_accounts - total_accounts_after_shrink,
+            Ordering::Relaxed,
+        );
+        self.shrink_stats.report();
     }
 
     // Reads all accounts in given slot's AppendVecs and filter only to alive,
@@ -1939,44 +2008,47 @@ impl AccountsDB {
         }
         drop_storage_entries_elapsed.stop();
 
-        datapoint_info!(
-            "do_shrink_slot_time",
-            ("storage_read_elapsed", storage_read_elapsed.as_us(), i64),
-            ("index_read_elapsed", index_read_elapsed.as_us(), i64),
-            ("find_alive_elapsed", find_alive_elapsed, i64),
-            (
-                "create_and_insert_store_elapsed",
-                create_and_insert_store_elapsed,
-                i64
-            ),
-            (
-                "store_accounts_elapsed",
-                store_accounts_timing.store_accounts_elapsed,
-                i64
-            ),
-            (
-                "update_index_elapsed",
-                store_accounts_timing.update_index_elapsed,
-                i64
-            ),
-            (
-                "handle_reclaims_elapsed",
-                store_accounts_timing.handle_reclaims_elapsed,
-                i64
-            ),
-            ("write_storage_elapsed", write_storage_elapsed, i64),
-            ("rewrite_elapsed", rewrite_elapsed.as_us(), i64),
-            (
-                "drop_storage_entries_elapsed",
-                drop_storage_entries_elapsed.as_us(),
-                i64
-            ),
-            (
-                "recycle_stores_write_elapsed",
-                recycle_stores_write_elapsed.as_us(),
-                i64
-            ),
+        self.shrink_stats
+            .num_slots_shrunk
+            .fetch_add(1, Ordering::Relaxed);
+        self.shrink_stats
+            .storage_read_elapsed
+            .fetch_add(storage_read_elapsed.as_us(), Ordering::Relaxed);
+        self.shrink_stats
+            .index_read_elapsed
+            .fetch_add(index_read_elapsed.as_us(), Ordering::Relaxed);
+        self.shrink_stats
+            .find_alive_elapsed
+            .fetch_add(find_alive_elapsed, Ordering::Relaxed);
+        self.shrink_stats
+            .create_and_insert_store_elapsed
+            .fetch_add(create_and_insert_store_elapsed, Ordering::Relaxed);
+        self.shrink_stats.store_accounts_elapsed.fetch_add(
+            store_accounts_timing.store_accounts_elapsed,
+            Ordering::Relaxed,
         );
+        self.shrink_stats.update_index_elapsed.fetch_add(
+            store_accounts_timing.update_index_elapsed,
+            Ordering::Relaxed,
+        );
+        self.shrink_stats.handle_reclaims_elapsed.fetch_add(
+            store_accounts_timing.handle_reclaims_elapsed,
+            Ordering::Relaxed,
+        );
+        self.shrink_stats
+            .write_storage_elapsed
+            .fetch_add(write_storage_elapsed, Ordering::Relaxed);
+        self.shrink_stats
+            .rewrite_elapsed
+            .fetch_add(rewrite_elapsed.as_us(), Ordering::Relaxed);
+        self.shrink_stats
+            .drop_storage_entries_elapsed
+            .fetch_add(drop_storage_entries_elapsed.as_us(), Ordering::Relaxed);
+        self.shrink_stats
+            .recycle_stores_write_elapsed
+            .fetch_add(recycle_stores_write_elapsed.as_us(), Ordering::Relaxed);
+        self.shrink_stats.report();
+
         alive_accounts.len()
     }
 
