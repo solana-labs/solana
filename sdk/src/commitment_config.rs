@@ -85,6 +85,36 @@ impl CommitmentConfig {
             Some(self)
         }
     }
+
+    pub fn is_finalized(&self) -> bool {
+        matches!(
+            &self.commitment,
+            CommitmentLevel::Finalized | CommitmentLevel::Max | CommitmentLevel::Root
+        )
+    }
+
+    pub fn is_confirmed(&self) -> bool {
+        matches!(
+            &self.commitment,
+            CommitmentLevel::Confirmed | CommitmentLevel::SingleGossip | CommitmentLevel::Single
+        )
+    }
+
+    pub fn is_processed(&self) -> bool {
+        matches!(
+            &self.commitment,
+            CommitmentLevel::Processed | CommitmentLevel::Recent
+        )
+    }
+
+    pub fn use_deprecated_commitment(commitment: CommitmentConfig) -> Self {
+        match commitment.commitment {
+            CommitmentLevel::Finalized => CommitmentConfig::max(),
+            CommitmentLevel::Confirmed => CommitmentConfig::single_gossip(),
+            CommitmentLevel::Processed => CommitmentConfig::recent(),
+            _ => commitment,
+        }
+    }
 }
 
 impl FromStr for CommitmentConfig {
