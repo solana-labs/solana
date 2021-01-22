@@ -31,7 +31,7 @@ use solana_runtime::{
 use solana_sdk::{
     account::Account,
     clock::{Slot, UnixTimestamp},
-    commitment_config::{CommitmentConfig, CommitmentLevel},
+    commitment_config::CommitmentConfig,
     pubkey::Pubkey,
     signature::Signature,
     transaction,
@@ -227,20 +227,14 @@ where
             },
         ) in hashmap.iter()
         {
-            #[allow(deprecated)]
-            let slot = match commitment.commitment {
-                 // Max variant is deprecated
-                CommitmentLevel::Max | CommitmentLevel::Finalized => {
-                    commitment_slots.highest_confirmed_root
-                }
-                 // Recent variant is deprecated
-                CommitmentLevel::Recent | CommitmentLevel::Processed => commitment_slots.slot,
-                 // Root variant is deprecated
-                CommitmentLevel::Root => commitment_slots.root,
-                CommitmentLevel::Single  // Single variant is deprecated
-                | CommitmentLevel::SingleGossip  // SingleGossip variant is deprecated
-                | CommitmentLevel::Confirmed => commitment_slots.highest_confirmed_slot,
+            let slot = if commitment.is_finalized() {
+                commitment_slots.highest_confirmed_root
+            } else if commitment.is_confirmed() {
+                commitment_slots.highest_confirmed_slot
+            } else {
+                commitment_slots.slot
             };
+
             if let Some(bank) = bank_forks.read().unwrap().get(slot).cloned() {
                 let results = bank_method(&bank, hashmap_key);
                 let mut w_last_notified_slot = last_notified_slot.write().unwrap();
@@ -632,7 +626,6 @@ impl RpcSubscriptions {
         self.subscriptions.total()
     }
 
-    #[allow(deprecated)]
     pub fn add_account_subscription(
         &self,
         pubkey: Pubkey,
@@ -643,34 +636,23 @@ impl RpcSubscriptions {
         let config = config.unwrap_or_default();
         let commitment = config
             .commitment
-            .unwrap_or_else(CommitmentConfig::single_gossip);
+            .unwrap_or_else(CommitmentConfig::confirmed);
 
-        let slot = match commitment.commitment {
-            // Max variant is deprecated
-            CommitmentLevel::Max | CommitmentLevel::Finalized => self
-                .block_commitment_cache
+        let slot = if commitment.is_finalized() {
+            self.block_commitment_cache
                 .read()
                 .unwrap()
-                .highest_confirmed_root(),
-            CommitmentLevel::Recent | CommitmentLevel::Processed => {
-                self.block_commitment_cache.read().unwrap().slot()
-            }
-            // Root variant is deprecated
-            CommitmentLevel::Root => self.block_commitment_cache.read().unwrap().root(),
-            // Single variant is deprecated
-            CommitmentLevel::Single => self
-                .block_commitment_cache
-                .read()
-                .unwrap()
-                .highest_confirmed_slot(),
-            // SingleGossip variant is deprecated
-            CommitmentLevel::SingleGossip | CommitmentLevel::Confirmed => self
-                .optimistically_confirmed_bank
+                .highest_confirmed_root()
+        } else if commitment.is_confirmed() {
+            self.optimistically_confirmed_bank
                 .read()
                 .unwrap()
                 .bank
-                .slot(),
+                .slot()
+        } else {
+            self.block_commitment_cache.read().unwrap().slot()
         };
+
         let last_notified_slot = if let Some((_account, slot)) = self
             .bank_forks
             .read()
@@ -683,9 +665,7 @@ impl RpcSubscriptions {
             0
         };
 
-        let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip // SingleGossip variant is deprecated
-            || commitment.commitment == CommitmentLevel::Confirmed
-        {
+        let mut subscriptions = if commitment.is_confirmed() {
             self.subscriptions
                 .gossip_account_subscriptions
                 .write()
@@ -719,7 +699,6 @@ impl RpcSubscriptions {
         }
     }
 
-    #[allow(deprecated)]
     pub fn add_program_subscription(
         &self,
         program_id: Pubkey,
@@ -731,11 +710,9 @@ impl RpcSubscriptions {
         let commitment = config
             .account_config
             .commitment
-            .unwrap_or_else(CommitmentConfig::single_gossip);
+            .unwrap_or_else(CommitmentConfig::confirmed);
 
-        let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip // SingleGossip variant is deprecated
-            || commitment.commitment == CommitmentLevel::Confirmed
-        {
+        let mut subscriptions = if commitment.is_confirmed() {
             self.subscriptions
                 .gossip_program_subscriptions
                 .write()
@@ -772,7 +749,6 @@ impl RpcSubscriptions {
         }
     }
 
-    #[allow(deprecated)]
     pub fn add_logs_subscription(
         &self,
         address: Option<Pubkey>,
@@ -781,12 +757,10 @@ impl RpcSubscriptions {
         sub_id: SubscriptionId,
         subscriber: Subscriber<Response<RpcLogsResponse>>,
     ) {
-        let commitment = commitment.unwrap_or_else(CommitmentConfig::single_gossip);
+        let commitment = commitment.unwrap_or_else(CommitmentConfig::confirmed);
 
         {
-            let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip // SingleGossip variant is deprecated
-                || commitment.commitment == CommitmentLevel::Confirmed
-            {
+            let mut subscriptions = if commitment.is_confirmed() {
                 self.subscriptions
                     .gossip_logs_subscriptions
                     .write()
@@ -883,7 +857,6 @@ impl RpcSubscriptions {
             .unwrap() = config;
     }
 
-    #[allow(deprecated)]
     pub fn add_signature_subscription(
         &self,
         signature: Signature,
@@ -895,11 +868,9 @@ impl RpcSubscriptions {
             .map(|config| (config.commitment, config.enable_received_notification))
             .unwrap_or_default();
 
-        let commitment = commitment.unwrap_or_else(CommitmentConfig::single_gossip);
+        let commitment = commitment.unwrap_or_else(CommitmentConfig::confirmed);
 
-        let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip // SingleGossip variant is deprecated
-            || commitment.commitment == CommitmentLevel::Confirmed
-        {
+        let mut subscriptions = if commitment.is_confirmed() {
             self.subscriptions
                 .gossip_signature_subscriptions
                 .write()

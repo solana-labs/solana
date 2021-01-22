@@ -144,14 +144,9 @@ impl JsonRpcRequestProcessor {
         debug!("RPC commitment_config: {:?}", commitment);
         let r_bank_forks = self.bank_forks.read().unwrap();
 
-        let commitment_level = match commitment {
-            None => CommitmentLevel::Finalized,
-            Some(config) => config.commitment,
-        };
+        let commitment = commitment.unwrap_or_default();
 
-        if commitment_level == CommitmentLevel::SingleGossip || // SingleGossip variant is deprecated
-            commitment_level == CommitmentLevel::Confirmed
-        {
+        if commitment.is_confirmed() {
             let bank = self
                 .optimistically_confirmed_bank
                 .read()
@@ -166,9 +161,9 @@ impl JsonRpcRequestProcessor {
             .block_commitment_cache
             .read()
             .unwrap()
-            .slot_with_commitment(commitment_level);
+            .slot_with_commitment(commitment.commitment);
 
-        match commitment_level {
+        match commitment.commitment {
             // Recent variant is deprecated
             CommitmentLevel::Recent | CommitmentLevel::Processed => {
                 debug!("RPC using the heaviest slot: {:?}", slot);
@@ -202,7 +197,7 @@ impl JsonRpcRequestProcessor {
             // For more information, see https://github.com/solana-labs/solana/issues/11078
             warn!(
                 "Bank with {:?} not found at slot: {:?}",
-                commitment_level, slot
+                commitment.commitment, slot
             );
             r_bank_forks.root_bank()
         })
