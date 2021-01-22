@@ -915,6 +915,42 @@ pub fn snapshot_bank(
     Ok(())
 }
 
+/// Convenience function to create a snapshot archive out of any Bank, regardless of state.  The
+/// Bank will be frozen during the process.
+pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
+    snapshot_path: P,
+    bank: &Bank,
+    snapshot_version: Option<SnapshotVersion>,
+    snapshot_package_output_path: Q,
+) -> Result<PathBuf> {
+    let snapshot_version = snapshot_version.unwrap_or_default();
+
+    assert!(bank.is_complete());
+    bank.squash(); // Bank may not be a root
+    bank.force_flush_accounts_cache();
+    bank.clean_accounts(true);
+    bank.update_accounts_hash();
+    bank.rehash(); // Bank accounts may have been manually modified by the caller
+
+    let temp_dir = tempfile::tempdir_in(snapshot_path)?;
+
+    let storages: Vec<_> = bank.get_snapshot_storages();
+    let slot_snapshot_paths = add_snapshot(&temp_dir, &bank, &storages, snapshot_version)?;
+    let package = package_snapshot(
+        &bank,
+        &slot_snapshot_paths,
+        &temp_dir,
+        bank.src.slot_deltas(&bank.src.roots()),
+        snapshot_package_output_path,
+        storages,
+        ArchiveFormat::TarZstd,
+        snapshot_version,
+    )?;
+
+    archive_snapshot_package(&package)?;
+    Ok(package.tar_output_file)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
