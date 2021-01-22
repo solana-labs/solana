@@ -11,6 +11,7 @@ pub const JSON_RPC_SERVER_ERROR_BLOCK_NOT_AVAILABLE: i64 = -32004;
 pub const JSON_RPC_SERVER_ERROR_NODE_UNHEALTHLY: i64 = -32005;
 pub const JSON_RPC_SERVER_ERROR_TRANSACTION_PRECOMPILE_VERIFICATION_FAILURE: i64 = -32006;
 pub const JSON_RPC_SERVER_ERROR_SLOT_SKIPPED: i64 = -32007;
+pub const JSON_RPC_SERVER_ERROR_LONG_TERM_STORAGE_SLOT_SKIPPED: i64 = -32009;
 
 pub enum RpcCustomError {
     BlockCleanedUp {
@@ -28,6 +29,9 @@ pub enum RpcCustomError {
     RpcNodeUnhealthy,
     TransactionPrecompileVerificationFailure(solana_sdk::transaction::TransactionError),
     SlotSkipped {
+        slot: Slot,
+    },
+    LongTermStorageSlotSkipped {
         slot: Slot,
     },
 }
@@ -83,6 +87,11 @@ impl From<RpcCustomError> for Error {
                     "Slot {} was skipped, or missing due to ledger jump to recent snapshot",
                     slot
                 ),
+                data: None,
+            },
+            RpcCustomError::LongTermStorageSlotSkipped { slot } => Self {
+                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_LONG_TERM_STORAGE_SLOT_SKIPPED),
+                message: format!("Slot {} was skipped, or missing in long-term storage", slot),
                 data: None,
             },
         }
