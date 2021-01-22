@@ -3,14 +3,16 @@ use solana_account_decoder::parse_token::UiTokenAmount;
 use solana_sdk::{
     hash::Hash,
     instruction::CompiledInstruction,
+    instruction::InstructionError,
     message::{Message, MessageHeader},
     pubkey::Pubkey,
     signature::Signature,
     transaction::Transaction,
+    transaction::TransactionError,
 };
 use solana_transaction_status::{
-    ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionStatusMeta,
-    TransactionTokenBalance, TransactionWithStatusMeta,
+    ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionByAddrInfo,
+    TransactionStatusMeta, TransactionTokenBalance, TransactionWithStatusMeta,
 };
 use std::convert::{TryFrom, TryInto};
 
@@ -18,6 +20,13 @@ pub mod generated {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         concat!("/proto/solana.storage.confirmed_block.rs")
+    ));
+}
+
+pub mod tx_by_addr {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        concat!("/proto/solana.storage.transaction_by_addr.rs")
     ));
 }
 
@@ -417,6 +426,356 @@ impl From<generated::CompiledInstruction> for CompiledInstruction {
     }
 }
 
+impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
+    type Error = &'static str;
+
+    fn try_from(transaction_error: tx_by_addr::TransactionError) -> Result<Self, Self::Error> {
+        if transaction_error.transaction_error == 8 {
+            if let Some(instruction_error) = transaction_error.instruction_error {
+                if let Some(custom) = instruction_error.custom {
+                    return Ok(TransactionError::InstructionError(
+                        instruction_error.index as u8,
+                        InstructionError::Custom(custom.custom),
+                    ));
+                }
+
+                let ie = match instruction_error.error {
+                    0 => InstructionError::GenericError,
+                    1 => InstructionError::InvalidArgument,
+                    2 => InstructionError::InvalidInstructionData,
+                    3 => InstructionError::InvalidAccountData,
+                    4 => InstructionError::AccountDataTooSmall,
+                    5 => InstructionError::InsufficientFunds,
+                    6 => InstructionError::IncorrectProgramId,
+                    7 => InstructionError::MissingRequiredSignature,
+                    8 => InstructionError::AccountAlreadyInitialized,
+                    9 => InstructionError::UninitializedAccount,
+                    10 => InstructionError::UnbalancedInstruction,
+                    11 => InstructionError::ModifiedProgramId,
+                    12 => InstructionError::ExternalAccountLamportSpend,
+                    13 => InstructionError::ExternalAccountDataModified,
+                    14 => InstructionError::ReadonlyLamportChange,
+                    15 => InstructionError::ReadonlyDataModified,
+                    16 => InstructionError::DuplicateAccountIndex,
+                    17 => InstructionError::ExecutableModified,
+                    18 => InstructionError::RentEpochModified,
+                    19 => InstructionError::NotEnoughAccountKeys,
+                    20 => InstructionError::AccountDataSizeChanged,
+                    21 => InstructionError::AccountNotExecutable,
+                    22 => InstructionError::AccountBorrowFailed,
+                    23 => InstructionError::AccountBorrowOutstanding,
+                    24 => InstructionError::DuplicateAccountOutOfSync,
+                    26 => InstructionError::InvalidError,
+                    27 => InstructionError::ExecutableDataModified,
+                    28 => InstructionError::ExecutableLamportChange,
+                    29 => InstructionError::ExecutableAccountNotRentExempt,
+                    30 => InstructionError::UnsupportedProgramId,
+                    31 => InstructionError::CallDepth,
+                    32 => InstructionError::MissingAccount,
+                    33 => InstructionError::ReentrancyNotAllowed,
+                    34 => InstructionError::MaxSeedLengthExceeded,
+                    35 => InstructionError::InvalidSeeds,
+                    36 => InstructionError::InvalidRealloc,
+                    37 => InstructionError::ComputationalBudgetExceeded,
+                    38 => InstructionError::PrivilegeEscalation,
+                    39 => InstructionError::ProgramEnvironmentSetupFailure,
+                    40 => InstructionError::ProgramFailedToComplete,
+                    41 => InstructionError::ProgramFailedToCompile,
+                    42 => InstructionError::Immutable,
+                    43 => InstructionError::IncorrectAuthority,
+                    _ => return Err("Invalid InstructionError"),
+                };
+
+                return Ok(TransactionError::InstructionError(
+                    instruction_error.index as u8,
+                    ie,
+                ));
+            }
+        }
+
+        Ok(match transaction_error.transaction_error {
+            0 => TransactionError::AccountInUse,
+            1 => TransactionError::AccountLoadedTwice,
+            2 => TransactionError::AccountNotFound,
+            3 => TransactionError::ProgramAccountNotFound,
+            4 => TransactionError::InsufficientFundsForFee,
+            5 => TransactionError::InvalidAccountForFee,
+            6 => TransactionError::DuplicateSignature,
+            7 => TransactionError::BlockhashNotFound,
+            9 => TransactionError::CallChainTooDeep,
+            10 => TransactionError::MissingSignatureForFee,
+            11 => TransactionError::InvalidAccountIndex,
+            12 => TransactionError::SignatureFailure,
+            13 => TransactionError::InvalidProgramForExecution,
+            14 => TransactionError::SanitizeFailure,
+            15 => TransactionError::ClusterMaintenance,
+            _ => return Err("Invalid TransactionError"),
+        })
+    }
+}
+
+impl From<TransactionError> for tx_by_addr::TransactionError {
+    fn from(transaction_error: TransactionError) -> Self {
+        Self {
+            transaction_error: match transaction_error {
+                TransactionError::AccountInUse => tx_by_addr::TransactionErrorType::AccountInUse,
+                TransactionError::AccountLoadedTwice => {
+                    tx_by_addr::TransactionErrorType::AccountLoadedTwice
+                }
+                TransactionError::AccountNotFound => {
+                    tx_by_addr::TransactionErrorType::AccountNotFound
+                }
+                TransactionError::ProgramAccountNotFound => {
+                    tx_by_addr::TransactionErrorType::ProgramAccountNotFound
+                }
+                TransactionError::InsufficientFundsForFee => {
+                    tx_by_addr::TransactionErrorType::InsufficientFundsForFee
+                }
+                TransactionError::InvalidAccountForFee => {
+                    tx_by_addr::TransactionErrorType::InvalidAccountForFee
+                }
+                TransactionError::DuplicateSignature => {
+                    tx_by_addr::TransactionErrorType::DuplicateSignature
+                }
+                TransactionError::BlockhashNotFound => {
+                    tx_by_addr::TransactionErrorType::BlockhashNotFound
+                }
+                TransactionError::CallChainTooDeep => {
+                    tx_by_addr::TransactionErrorType::CallChainTooDeep
+                }
+                TransactionError::MissingSignatureForFee => {
+                    tx_by_addr::TransactionErrorType::MissingSignatureForFee
+                }
+                TransactionError::InvalidAccountIndex => {
+                    tx_by_addr::TransactionErrorType::InvalidAccountIndex
+                }
+                TransactionError::SignatureFailure => {
+                    tx_by_addr::TransactionErrorType::SignatureFailure
+                }
+                TransactionError::InvalidProgramForExecution => {
+                    tx_by_addr::TransactionErrorType::InvalidProgramForExecution
+                }
+                TransactionError::SanitizeFailure => {
+                    tx_by_addr::TransactionErrorType::SanitizeFailure
+                }
+                TransactionError::ClusterMaintenance => {
+                    tx_by_addr::TransactionErrorType::ClusterMaintenance
+                }
+                TransactionError::InstructionError(_, _) => {
+                    tx_by_addr::TransactionErrorType::InstructionError
+                }
+            } as i32,
+            instruction_error: match transaction_error {
+                TransactionError::InstructionError(index, ref instruction_error) => {
+                    Some(tx_by_addr::InstructionError {
+                        index: index as u32,
+                        error: match instruction_error {
+                            InstructionError::GenericError => {
+                                tx_by_addr::InstructionErrorType::GenericError
+                            }
+                            InstructionError::InvalidArgument => {
+                                tx_by_addr::InstructionErrorType::InvalidArgument
+                            }
+                            InstructionError::InvalidInstructionData => {
+                                tx_by_addr::InstructionErrorType::InvalidInstructionData
+                            }
+                            InstructionError::InvalidAccountData => {
+                                tx_by_addr::InstructionErrorType::InvalidAccountData
+                            }
+                            InstructionError::AccountDataTooSmall => {
+                                tx_by_addr::InstructionErrorType::AccountDataTooSmall
+                            }
+                            InstructionError::InsufficientFunds => {
+                                tx_by_addr::InstructionErrorType::InsufficientFunds
+                            }
+                            InstructionError::IncorrectProgramId => {
+                                tx_by_addr::InstructionErrorType::IncorrectProgramId
+                            }
+                            InstructionError::MissingRequiredSignature => {
+                                tx_by_addr::InstructionErrorType::MissingRequiredSignature
+                            }
+                            InstructionError::AccountAlreadyInitialized => {
+                                tx_by_addr::InstructionErrorType::AccountAlreadyInitialized
+                            }
+                            InstructionError::UninitializedAccount => {
+                                tx_by_addr::InstructionErrorType::UninitializedAccount
+                            }
+                            InstructionError::UnbalancedInstruction => {
+                                tx_by_addr::InstructionErrorType::UnbalancedInstruction
+                            }
+                            InstructionError::ModifiedProgramId => {
+                                tx_by_addr::InstructionErrorType::ModifiedProgramId
+                            }
+                            InstructionError::ExternalAccountLamportSpend => {
+                                tx_by_addr::InstructionErrorType::ExternalAccountLamportSpend
+                            }
+                            InstructionError::ExternalAccountDataModified => {
+                                tx_by_addr::InstructionErrorType::ExternalAccountDataModified
+                            }
+                            InstructionError::ReadonlyLamportChange => {
+                                tx_by_addr::InstructionErrorType::ReadonlyLamportChange
+                            }
+                            InstructionError::ReadonlyDataModified => {
+                                tx_by_addr::InstructionErrorType::ReadonlyDataModified
+                            }
+                            InstructionError::DuplicateAccountIndex => {
+                                tx_by_addr::InstructionErrorType::DuplicateAccountIndex
+                            }
+                            InstructionError::ExecutableModified => {
+                                tx_by_addr::InstructionErrorType::ExecutableModified
+                            }
+                            InstructionError::RentEpochModified => {
+                                tx_by_addr::InstructionErrorType::RentEpochModified
+                            }
+                            InstructionError::NotEnoughAccountKeys => {
+                                tx_by_addr::InstructionErrorType::NotEnoughAccountKeys
+                            }
+                            InstructionError::AccountDataSizeChanged => {
+                                tx_by_addr::InstructionErrorType::AccountDataSizeChanged
+                            }
+                            InstructionError::AccountNotExecutable => {
+                                tx_by_addr::InstructionErrorType::AccountNotExecutable
+                            }
+                            InstructionError::AccountBorrowFailed => {
+                                tx_by_addr::InstructionErrorType::AccountBorrowFailed
+                            }
+                            InstructionError::AccountBorrowOutstanding => {
+                                tx_by_addr::InstructionErrorType::AccountBorrowOutstanding
+                            }
+                            InstructionError::DuplicateAccountOutOfSync => {
+                                tx_by_addr::InstructionErrorType::DuplicateAccountOutOfSync
+                            }
+                            InstructionError::Custom(_) => tx_by_addr::InstructionErrorType::Custom,
+                            InstructionError::InvalidError => {
+                                tx_by_addr::InstructionErrorType::InvalidError
+                            }
+                            InstructionError::ExecutableDataModified => {
+                                tx_by_addr::InstructionErrorType::ExecutableDataModified
+                            }
+                            InstructionError::ExecutableLamportChange => {
+                                tx_by_addr::InstructionErrorType::ExecutableLamportChange
+                            }
+                            InstructionError::ExecutableAccountNotRentExempt => {
+                                tx_by_addr::InstructionErrorType::ExecutableAccountNotRentExempt
+                            }
+                            InstructionError::UnsupportedProgramId => {
+                                tx_by_addr::InstructionErrorType::UnsupportedProgramId
+                            }
+                            InstructionError::CallDepth => {
+                                tx_by_addr::InstructionErrorType::CallDepth
+                            }
+                            InstructionError::MissingAccount => {
+                                tx_by_addr::InstructionErrorType::MissingAccount
+                            }
+                            InstructionError::ReentrancyNotAllowed => {
+                                tx_by_addr::InstructionErrorType::ReentrancyNotAllowed
+                            }
+                            InstructionError::MaxSeedLengthExceeded => {
+                                tx_by_addr::InstructionErrorType::MaxSeedLengthExceeded
+                            }
+                            InstructionError::InvalidSeeds => {
+                                tx_by_addr::InstructionErrorType::InvalidSeeds
+                            }
+                            InstructionError::InvalidRealloc => {
+                                tx_by_addr::InstructionErrorType::InvalidRealloc
+                            }
+                            InstructionError::ComputationalBudgetExceeded => {
+                                tx_by_addr::InstructionErrorType::ComputationalBudgetExceeded
+                            }
+                            InstructionError::PrivilegeEscalation => {
+                                tx_by_addr::InstructionErrorType::PrivilegeEscalation
+                            }
+                            InstructionError::ProgramEnvironmentSetupFailure => {
+                                tx_by_addr::InstructionErrorType::ProgramEnvironmentSetupFailure
+                            }
+                            InstructionError::ProgramFailedToComplete => {
+                                tx_by_addr::InstructionErrorType::ProgramFailedToComplete
+                            }
+                            InstructionError::ProgramFailedToCompile => {
+                                tx_by_addr::InstructionErrorType::ProgramFailedToCompile
+                            }
+                            InstructionError::Immutable => {
+                                tx_by_addr::InstructionErrorType::Immutable
+                            }
+                            InstructionError::IncorrectAuthority => {
+                                tx_by_addr::InstructionErrorType::IncorrectAuthority
+                            }
+                        } as i32,
+                        custom: match instruction_error {
+                            InstructionError::Custom(custom) => {
+                                Some(tx_by_addr::CustomError { custom: *custom })
+                            }
+                            _ => None,
+                        },
+                    })
+                }
+                _ => None,
+            },
+        }
+    }
+}
+
+impl From<TransactionByAddrInfo> for tx_by_addr::TransactionByAddrInfo {
+    fn from(by_addr: TransactionByAddrInfo) -> Self {
+        let TransactionByAddrInfo {
+            signature,
+            err,
+            index,
+            memo,
+            block_time,
+        } = by_addr;
+
+        Self {
+            signature: <Signature as AsRef<[u8]>>::as_ref(&signature).into(),
+            err: match err {
+                None => None,
+                Some(e) => Some(e.into()),
+            },
+            index,
+            memo: memo.map(|memo| tx_by_addr::Memo { memo }),
+            block_time: block_time.map(|timestamp| tx_by_addr::UnixTimestamp { timestamp }),
+        }
+    }
+}
+
+impl TryFrom<tx_by_addr::TransactionByAddrInfo> for TransactionByAddrInfo {
+    type Error = &'static str;
+
+    fn try_from(
+        transaction_by_addr: tx_by_addr::TransactionByAddrInfo,
+    ) -> Result<Self, Self::Error> {
+        let err = if let Some(err) = transaction_by_addr.err {
+            Some(err.try_into()?)
+        } else {
+            None
+        };
+
+        Ok(Self {
+            signature: Signature::new(&transaction_by_addr.signature),
+            err,
+            index: transaction_by_addr.index,
+            memo: transaction_by_addr
+                .memo
+                .map(|tx_by_addr::Memo { memo }| memo),
+            block_time: transaction_by_addr
+                .block_time
+                .map(|tx_by_addr::UnixTimestamp { timestamp }| timestamp),
+        })
+    }
+}
+
+impl TryFrom<tx_by_addr::TransactionByAddr> for Vec<TransactionByAddrInfo> {
+    type Error = &'static str;
+
+    fn try_from(collection: tx_by_addr::TransactionByAddr) -> Result<Self, Self::Error> {
+        Ok(collection
+            .tx_by_addrs
+            .into_iter()
+            .map(|tx_by_addr| tx_by_addr.try_into())
+            .collect::<Result<Vec<TransactionByAddrInfo>, Self::Error>>()?)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -447,5 +806,540 @@ mod test {
         reward.reward_type = Some(RewardType::Staking);
         let gen_reward: generated::Reward = reward.clone().into();
         assert_eq!(reward, gen_reward.into());
+    }
+
+    #[test]
+    fn test_transaction_by_addr_encode() {
+        let info = TransactionByAddrInfo {
+            signature: Signature::new(&bs58::decode("Nfo6rgemG1KLbk1xuNwfrQTsdxaGfLuWURHNRy9LYnDrubG7LFQZaA5obPNas9LQ6DdorJqxh2LxA3PsnWdkSrL").into_vec().unwrap()),
+            err: None,
+            index: 5,
+            memo: Some("string".to_string()),
+            block_time: Some(1610674861)
+        };
+
+        let tx_by_addr_transaction_info: tx_by_addr::TransactionByAddrInfo = info.clone().into();
+        assert_eq!(info, tx_by_addr_transaction_info.try_into().unwrap());
+    }
+
+    #[test]
+    fn test_transaction_error_encode() {
+        let transaction_error = TransactionError::AccountInUse;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::AccountLoadedTwice;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::AccountNotFound;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::BlockhashNotFound;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::CallChainTooDeep;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::ClusterMaintenance;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::DuplicateSignature;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::InsufficientFundsForFee;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::InvalidAccountForFee;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::InvalidAccountIndex;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::InvalidProgramForExecution;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::MissingSignatureForFee;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::ProgramAccountNotFound;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::SanitizeFailure;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::SignatureFailure;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::AccountAlreadyInitialized);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::AccountBorrowFailed);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::AccountBorrowOutstanding);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::AccountDataSizeChanged);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::AccountDataTooSmall);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::AccountNotExecutable);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::InstructionError(10, InstructionError::CallDepth);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::ComputationalBudgetExceeded);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::DuplicateAccountIndex);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::DuplicateAccountOutOfSync);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::InstructionError(
+            10,
+            InstructionError::ExecutableAccountNotRentExempt,
+        );
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::ExecutableDataModified);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::ExecutableLamportChange);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::ExecutableModified);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::ExternalAccountDataModified);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::ExternalAccountLamportSpend);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::GenericError);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::InstructionError(10, InstructionError::Immutable);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::IncorrectAuthority);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::IncorrectProgramId);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::InsufficientFunds);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::InvalidAccountData);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::InvalidArgument);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::InvalidError);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::InvalidInstructionData);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::InvalidRealloc);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::InvalidSeeds);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::MaxSeedLengthExceeded);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::MissingAccount);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::MissingRequiredSignature);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::ModifiedProgramId);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::NotEnoughAccountKeys);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::PrivilegeEscalation);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::InstructionError(
+            10,
+            InstructionError::ProgramEnvironmentSetupFailure,
+        );
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::ProgramFailedToCompile);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::ProgramFailedToComplete);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::ReadonlyDataModified);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::ReadonlyLamportChange);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::ReentrancyNotAllowed);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::RentEpochModified);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::UnbalancedInstruction);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::UninitializedAccount);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::UnsupportedProgramId);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error =
+            TransactionError::InstructionError(10, InstructionError::Custom(10));
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
     }
 }

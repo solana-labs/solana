@@ -1,7 +1,7 @@
 use crate::client_error;
 use solana_account_decoder::{parse_token::UiTokenAmount, UiAccount};
 use solana_sdk::{
-    clock::{Epoch, Slot},
+    clock::{Epoch, Slot, UnixTimestamp},
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     inflation::Inflation,
     transaction::{Result, TransactionError},
@@ -286,6 +286,7 @@ pub struct RpcConfirmedTransactionStatusWithSignature {
     pub slot: Slot,
     pub err: Option<TransactionError>,
     pub memo: Option<String>,
+    pub block_time: Option<UnixTimestamp>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -304,12 +305,14 @@ impl From<ConfirmedTransactionStatusWithSignature> for RpcConfirmedTransactionSt
             slot,
             err,
             memo,
+            block_time,
         } = value;
         Self {
             signature: signature.to_string(),
             slot,
             err,
             memo,
+            block_time,
         }
     }
 }

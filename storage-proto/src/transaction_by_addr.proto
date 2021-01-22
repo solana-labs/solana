@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package solana.storage.TransactionByAddr;
+
+message TransactionByAddr {
+    repeated TransactionByAddrInfo tx_by_addrs = 1;
+}
+
+message TransactionByAddrInfo {
+    bytes signature = 1;
+    TransactionError err = 2;
+    uint32 index = 3;
+    Memo memo = 4;
+    UnixTimestamp block_time = 5;
+}
+
+message Memo {
+    string memo = 1;
+}
+
+message TransactionError {
+    TransactionErrorType transaction_error = 1;
+    InstructionError instruction_error = 2;
+}
+
+enum TransactionErrorType {
+    ACCOUNT_IN_USE = 0;
+    ACCOUNT_LOADED_TWICE = 1;
+    ACCOUNT_NOT_FOUND = 2;
+    PROGRAM_ACCOUNT_NOT_FOUND = 3;
+    INSUFFICIENT_FUNDS_FOR_FEE = 4;
+    INVALID_ACCOUNT_FOR_FEE = 5;
+    DUPLICATE_SIGNATURE = 6;
+    BLOCKHASH_NOT_FOUND = 7;
+    INSTRUCTION_ERROR = 8;
+    CALL_CHAIN_TOO_DEEP = 9;
+    MISSING_SIGNATURE_FOR_FEE = 10;
+    INVALID_ACCOUNT_INDEX = 11;
+    SIGNATURE_FAILURE = 12;
+    INVALID_PROGRAM_FOR_EXECUTION = 13;
+    SANITIZE_FAILURE = 14;
+    CLUSTER_MAINTENANCE = 15;
+}
+
+message InstructionError {
+    uint32 index = 1;
+    InstructionErrorType error = 2;
+    CustomError custom = 3;
+}
+
+enum InstructionErrorType {
+    GENERIC_ERROR = 0;
+    INVALID_ARGUMENT = 1;
+    INVALID_INSTRUCTION_DATA = 2;
+    INVALID_ACCOUNT_DATA = 3;
+    ACCOUNT_DATA_TOO_SMALL = 4;
+    INSUFFICIENT_FUNDS = 5;
+    INCORRECT_PROGRAM_ID = 6;
+    MISSING_REQUIRED_SIGNATURE = 7;
+    ACCOUNT_ALREADY_INITIALIZED = 8;
+    UNINITIALIZED_ACCOUNT = 9;
+    UNBALANCED_INSTRUCTION = 10;
+    MODIFIED_PROGRAM_ID = 11;
+    EXTERNAL_ACCOUNT_LAMPORT_SPEND = 12;
+    EXTERNAL_ACCOUNT_DATA_MODIFIED = 13;
+    READONLY_LAMPORT_CHANGE = 14;
+    READONLY_DATA_MODIFIED = 15;
+    DUPLICATE_ACCOUNT_INDEX = 16;
+    EXECUTABLE_MODIFIED = 17;
+    RENT_EPOCH_MODIFIED = 18;
+    NOT_ENOUGH_ACCOUNT_KEYS = 19;
+    ACCOUNT_DATA_SIZE_CHANGED = 20;
+    ACCOUNT_NOT_EXECUTABLE = 21;
+    ACCOUNT_BORROW_FAILED = 22;
+    ACCOUNT_BORROW_OUTSTANDING = 23;
+    DUPLICATE_ACCOUNT_OUT_OF_SYNC = 24;
+    CUSTOM = 25;
+    INVALID_ERROR = 26;
+    EXECUTABLE_DATA_MODIFIED = 27;
+    EXECUTABLE_LAMPORT_CHANGE = 28;
+    EXECUTABLE_ACCOUNT_NOT_RENT_EXEMPT = 29;
+    UNSUPPORTED_PROGRAM_ID = 30;
+    CALL_DEPTH = 31;
+    MISSING_ACCOUNT = 32;
+    REENTRANCY_NOT_ALLOWED = 33;
+    MAX_SEED_LENGTH_EXCEEDED = 34;
+    INVALID_SEEDS = 35;
+    INVALID_REALLOC = 36;
+    COMPUTATIONAL_BUDGET_EXCEEDED = 37;
+    PRIVILEGE_ESCALATION = 38;
+    PROGRAM_ENVIRONMENT_SETUP_FAILURE = 39;
+    PROGRAM_FAILED_TO_COMPLETE = 40;
+    PROGRAM_FAILED_TO_COMPILE = 41;
+    IMMUTABLE = 42;
+    INCORRECT_AUTHORITY = 43;
+}
+
+message UnixTimestamp {
+    int64 timestamp = 1;
+}
+
+message CustomError {
+    uint32 custom = 1;
+}

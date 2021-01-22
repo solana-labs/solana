@@ -353,6 +353,7 @@ fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransa
                     transaction: tx.clone(),
                     meta: Some(tx_status_meta),
                 },
+                block_time: None,
             }
         },
     )
