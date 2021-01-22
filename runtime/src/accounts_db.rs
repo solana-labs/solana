@@ -1031,6 +1031,7 @@ impl AccountsDB {
             })
         };
         accounts_scan.stop();
+        warn!("purges: {:?}, purges in root: {:?}", purges, purges_in_root);
 
         let mut clean_old_rooted = Measure::start("clean_old_roots");
         let (purged_account_slots, removed_accounts) =
