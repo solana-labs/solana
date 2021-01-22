@@ -90,7 +90,7 @@ impl SnapshotRequestHandler {
                 } = snapshot_request;
 
                 warn!("extra time before");
-                snapshot_root_bank.update_accounts_hash_with_store_option(true, false,false);
+                //snapshot_root_bank.update_accounts_hash_with_store_option(true, false,false);
                 warn!("extra time before done");
 
                 let mut shrink_time = Measure::start("shrink_time");
@@ -120,7 +120,7 @@ impl SnapshotRequestHandler {
                     }
                     else {
                         let mut hash_time = Measure::start("hash_time");
-                        //snapshot_root_bank.update_accounts_hash_with_store_option(true, false, true);
+                        snapshot_root_bank.update_accounts_hash_with_store_option(true, false, false);
                         hash_time.stop();
                         hash_time
                     }
@@ -159,7 +159,7 @@ impl SnapshotRequestHandler {
                 snapshot_time.stop();
 
                 warn!("extra time before");
-                snapshot_root_bank.update_accounts_hash_with_store_option(true, false, true);
+                //snapshot_root_bank.update_accounts_hash_with_store_option(true, false, true);
                 warn!("extra time before done");
 
                 // Cleanup outdated snapshots
@@ -169,7 +169,7 @@ impl SnapshotRequestHandler {
                 total_time.stop();
 
                 warn!("extra time before");
-                snapshot_root_bank.update_accounts_hash_with_store_option(true, false, true);
+                //snapshot_root_bank.update_accounts_hash_with_store_option(true, false, true);
                 warn!("extra time before done");
 
                 datapoint_info!(
