@@ -3249,36 +3249,6 @@ impl AccountsDB {
         );
     }
 
-    // TODO: remove pub. bench uses it for now.
-    pub fn compute_merkle_root_legacy(hashes: Vec<(Pubkey, Hash, u64)>, fanout: usize) -> Hash {
-        let hashes: Vec<_> = hashes
-            .into_iter()
-            .map(|(_pubkey, hash, _lamports)| hash)
-            .collect();
-        let mut hashes: Vec<_> = hashes.chunks(fanout).map(|x| x.to_vec()).collect();
-        while hashes.len() > 1 {
-            let mut time = Measure::start("time");
-            let new_hashes: Vec<Hash> = hashes
-                .par_iter()
-                .map(|h| {
-                    let mut hasher = Hasher::default();
-                    for v in h.iter() {
-                        hasher.hash(v.as_ref());
-                    }
-                    hasher.result()
-                })
-                .collect();
-            time.stop();
-            debug!("hashing {} {}", hashes.len(), time);
-            hashes = new_hashes.chunks(fanout).map(|x| x.to_vec()).collect();
-        }
-        let mut hasher = Hasher::default();
-        hashes.into_iter().flatten().for_each(|hash| {
-            hasher.hash(hash.as_ref());
-        });
-        hasher.result()
-    }
-
     pub fn compute_merkle_root_and_capitalization(
         hashes: Vec<(Pubkey, Hash, u64)>,
         fanout: usize,
@@ -3355,7 +3325,7 @@ impl AccountsDB {
         slot: Slot,
         debug: bool,
     ) -> Hash {
-        let (hash, ..) = Self::accumulate_account_hashes_and_capitalization(hashes, slot, debug);
+        let (hash, ..) = Self::accumulate_account_hashes_and_capitalization(hashes, slot, debug).0;
         hash
     }
 
@@ -3367,7 +3337,7 @@ impl AccountsDB {
         mut hashes: Vec<(Pubkey, Hash, u64)>,
         slot: Slot,
         debug: bool,
-    ) -> (Hash, u64) {
+    ) -> ((Hash, u64), (Measure, Measure)) {
         let mut sort_time = Measure::start("sort");
         Self::sort_hashes_by_pubkey(&mut hashes);
         sort_time.stop();
@@ -3383,12 +3353,7 @@ impl AccountsDB {
         let res = Self::compute_merkle_root_and_capitalization(hashes, fanout);
         hash_time.stop();
 
-        debug!(
-            "accumulate_account_hashes_and_capitalization: {},{}",
-            sort_time, hash_time
-        );
-
-        res
+        (res, (sort_time, hash_time))
     }
 
     pub fn checked_cast_for_capitalization(balance: u128) -> u64 {
@@ -3505,13 +3470,15 @@ impl AccountsDB {
         let hash_total = hashes.len();
 
         let mut accumulate = Measure::start("accumulate");
-        let (accumulated_hash, total_lamports) =
+        let ((accumulated_hash, total_lamports), (sort_time, hash_time)) =
             Self::accumulate_account_hashes_and_capitalization(hashes, slot, false);
         accumulate.stop();
         datapoint_info!(
             "update_accounts_hash",
             ("accounts_scan", scan.as_us(), i64),
             ("hash_accumulate", accumulate.as_us(), i64),
+            ("hash", hash_time.as_us(), i64),
+            ("sort", sort_time.as_us(), i64),
             ("hash_total", hash_total, i64),
         );
         Ok((accumulated_hash, total_lamports))
@@ -4353,6 +4320,30 @@ pub mod tests {
     fn test_accountsdb_compute_merkle_root_and_capitalization() {
         solana_logger::setup();
 
+        let expected_results = vec![
+            (0, 0, "GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn", 0),
+            (0, 1, "ApFBEedWoeGBA1aub11TQq5Bj7saWP2utvDHpjGatRLG", 0),
+            (0, 2, "Dk13jZD32F85ibQ55tCaEV1hwTCEWDQXaeE85iYFn1hU", 1),
+            (0, 3, "EkBFh3AjAiJLPPBZjBM7XbdRMy5qXJYP7fftTKdqhCLf", 3),
+            (0, 4, "4wQgGeg9GfKGTx9mr6qdjMDkUiYtmGxJxsEFVVchaouY", 6),
+            (0, 5, "FeafYBMNVPHaFiGNiCQ8LWH4Q1H5Dgjbbi9fTaeAqH6R", 10),
+            (0, 6, "2zSeu4j1juUVtnQxtau5JKCrPUTGoBzaiBB2SAeiUkgF", 15),
+            (0, 7, "63UCSKC62wFt5DH6gZqbYAhhhuPkivnUXXozFChKXe37", 21),
+            (0, 8, "AiQ7kc4uT5qghPUjdPoRSZhu6C7xuPhZt4AYrHkD3CdW", 28),
+            (0, 9, "5uJ912fLFza1tTw48VaePHTSgnN9eKyASfwWoGHcHNnm", 36),
+            (1, 0, "GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn", 0),
+            (1, 1, "4Q9L7G5ZHzb77py6rKUAs64ojhCAJ6PSDppp3tZZbSNQ", 0),
+            (1, 2, "J37bRRe1Lgkk1Z1v65S6psqco88Bvdxf8FxQQW7KP1ef", 1),
+            (1, 3, "5QQVnMT1nsFaUHLFFcJoJ2Q4g1Hip7SJzADREe3ijj5R", 3),
+            (1, 4, "BHqFPCmfZrUKbmJHGdGhWVsCU48DVDaRjrtY6nP8n9CL", 6),
+            (1, 5, "BkcJdbSenpo2Zv7jqSem5L8AuSRmcFkopUhsKZS1kN6e", 10),
+            (1, 6, "Ffggpco4ToRe4mfTyK7HJ7hZHLfQpfakM9oMkMY9K4Lr", 15),
+            (1, 7, "2WnVv8fvrcYG7KiDniDzxs1CDzkEHUW8fcbxJpc9DomF", 21),
+            (1, 8, "4zNkEWYAns5f7Ju1LUAYPWymUpjHq2pjzGpez3ZFKmEt", 28),
+            (1, 9, "AWrzriZM1ETtzxsPhdkdxpWdnbgHeG5H8uyNYE6anMqs", 36),
+        ];
+
+        let mut expected_index = 0;
         let start = 0;
         let default_fanout = 2;
         let fanout_in_accumulate = 16;
@@ -4377,7 +4368,8 @@ pub mod tests {
                         input.clone(),
                         0,
                         false,
-                    );
+                    )
+                    .0;
                     AccountsDB::sort_hashes_by_pubkey(&mut input);
                 }
                 let mut expected = 0;
@@ -4386,6 +4378,8 @@ pub mod tests {
                     let last_number = count - 1;
                     expected = count * last_number / 2;
                 }
+
+                // compare against calculated result for lamports
                 assert_eq!(
                     result.1,
                     expected,
@@ -4393,8 +4387,13 @@ pub mod tests {
                     count,
                     input.into_iter().map(|x| x.2).collect::<Vec<u64>>()
                 );
-                let hash_result_legacy = AccountsDB::compute_merkle_root_legacy(input, fanout);
-                assert_eq!(result.0, hash_result_legacy, "failed at size: {}", count);
+
+                // compare against captured, expected results for hash (and lamports)
+                assert_eq!(
+                    (pass, count, &*(result.0.to_string()), result.1),
+                    expected_results[expected_index]
+                );
+                expected_index += 1;
             }
         }
     }
