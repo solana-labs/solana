@@ -182,7 +182,7 @@ pub fn download_snapshot(
         let desired_snapshot_package = snapshot_utils::get_snapshot_archive_path(
             ledger_path,
             &desired_snapshot_hash,
-            compression,
+            *compression,
         );
 
         if desired_snapshot_package.is_file() {

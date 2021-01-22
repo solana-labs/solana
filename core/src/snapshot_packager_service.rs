@@ -158,7 +158,7 @@ mod tests {
         let output_tar_path = snapshot_utils::get_snapshot_archive_path(
             &snapshot_package_output_path,
             &(42, Hash::default()),
-            &ArchiveFormat::TarBzip2,
+            ArchiveFormat::TarBzip2,
         );
         let snapshot_package = AccountsPackage::new(
             5,

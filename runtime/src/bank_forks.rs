@@ -17,7 +17,7 @@ use std::{
 
 pub use crate::snapshot_utils::SnapshotVersion;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum ArchiveFormat {
     TarBzip2,
     TarGzip,

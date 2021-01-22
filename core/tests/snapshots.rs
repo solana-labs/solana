@@ -155,7 +155,7 @@ mod tests {
             snapshot_utils::get_snapshot_archive_path(
                 snapshot_package_output_path,
                 &(old_last_bank.slot(), old_last_bank.get_accounts_hash()),
-                &ArchiveFormat::TarBzip2,
+                ArchiveFormat::TarBzip2,
             ),
             ArchiveFormat::TarBzip2,
             old_genesis_config,
@@ -385,7 +385,7 @@ mod tests {
                 saved_archive_path = Some(snapshot_utils::get_snapshot_archive_path(
                     snapshot_package_output_path,
                     &(slot, accounts_hash),
-                    &ArchiveFormat::TarBzip2,
+                    ArchiveFormat::TarBzip2,
                 ));
             }
         }
