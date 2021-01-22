@@ -88,6 +88,14 @@ impl AccountsHashVerifier {
         warn!("process_accounts_package - calculate hash");
         let mut start = Measure::start("test");
 
+        let storage_maps: Vec<Arc<AccountStorageEntry>> = accounts_package.storages.clone()
+        .into_iter()
+        .flatten()
+        .into_iter()
+        .map(|x| x.clone())
+        .collect();
+        warn!("scan_account_storage_no_bank_2 from process_accounts_package, storages: {}", storage_maps.len());
+
         let simple_capitalization_enabled = true; // ??? TODO
         let hash = AccountsDB::calculate_accounts_hash_using_stores_only(accounts_package.storages.clone(), simple_capitalization_enabled, accounts_package.slot);
         start.stop();

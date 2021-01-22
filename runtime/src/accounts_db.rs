@@ -4511,6 +4511,14 @@ impl AccountsDB {
             .filter(|snapshot_storage: &SnapshotStorage| !snapshot_storage.is_empty())
             .collect();
 
+            let storage_maps: Vec<Arc<AccountStorageEntry>> = result.clone()
+            .into_iter()
+            .flatten()
+            .into_iter()
+            .map(|x| x.clone())
+            .collect();
+            warn!("scan_account_storage_no_bank_2 from get snapshot, storages: {}", storage_maps.len());
+
         warn!("get_snapshot_storages: raw: {}, after: {}, is root: {}, slot: {}", result_raw.len(), result.len(), self.accounts_index.is_root(snapshot_slot), snapshot_slot);
 
         result
