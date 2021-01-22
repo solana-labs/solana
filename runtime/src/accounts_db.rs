@@ -3500,6 +3500,7 @@ impl AccountsDB {
             .get_slot_stores(slot)
             .map(|res| res.read().unwrap().values().cloned().collect())
             .unwrap_or_default();
+        warn!("get_storage_maps, found slots: {}", storage_maps.len());
         storage_maps
     }
 
@@ -4446,7 +4447,27 @@ impl AccountsDB {
     }
 
     pub fn get_snapshot_storages(&self, snapshot_slot: Slot) -> SnapshotStorages {
-        self.storage
+        let result_raw: SnapshotStorages =self.storage
+            .0
+            .iter()
+            .filter(|iter_item| {
+                let slot = *iter_item.key();
+                slot <= snapshot_slot && self.accounts_index.is_root(slot)
+            })
+            .map(|iter_item| {
+                iter_item
+                    .value()
+                    .read()
+                    .unwrap()
+                    .values()
+                    .filter(|x| true)
+                    .cloned()
+                    .collect()
+            })
+            .filter(|snapshot_storage: &SnapshotStorage| true)
+            .collect();
+
+        let result:SnapshotStorages  =self.storage
             .0
             .iter()
             .filter(|iter_item| {
@@ -4464,7 +4485,11 @@ impl AccountsDB {
                     .collect()
             })
             .filter(|snapshot_storage: &SnapshotStorage| !snapshot_storage.is_empty())
-            .collect()
+            .collect();
+
+        warn!("get_snapshot_storages: raw: {}, after: {}, is root: {}", result_raw.len(), result.len(), self.accounts_index.is_root(snapshot_slot));
+
+        result
     }
 
     fn merge_array<X>(dest: &mut HashMap<Pubkey, X>, source: (Pubkey, X))

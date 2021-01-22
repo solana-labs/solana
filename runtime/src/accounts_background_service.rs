@@ -116,7 +116,7 @@ impl SnapshotRequestHandler {
                     }
                     else {
                         let mut hash_time = Measure::start("hash_time");
-                        snapshot_root_bank.update_accounts_hash_with_store_option(true, false);
+                        snapshot_root_bank.update_accounts_hash_with_store_option(true, true);
                         hash_time.stop();
                         hash_time
                     }
