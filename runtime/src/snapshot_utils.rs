@@ -911,7 +911,7 @@ pub fn snapshot_bank(
     )?;
 
     warn!("extra time before");
-    snapshot_root_bank.update_accounts_hash_with_store_option(true, true);
+    root_bank.update_accounts_hash_with_store_option(true, true);
     warn!("extra time before done");
 
     accounts_package_sender.send(package)?;
