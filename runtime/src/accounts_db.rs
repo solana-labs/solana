@@ -4358,8 +4358,8 @@ pub mod tests {
             for count in start..iterations {
                 let mut input: Vec<_> = (0..count)
                     .map(|i| {
-                        let key = Pubkey::new(&vec![(pass * iterations + count) as u8; 32]);
-                        let hash = Hash::new(&vec![(pass * iterations + count + i + 1) as u8; 32]);
+                        let key = Pubkey::new(&[(pass * iterations + count) as u8; 32]);
+                        let hash = Hash::new(&[(pass * iterations + count + i + 1) as u8; 32]);
                         (key, hash, i as u64)
                     })
                     .collect();
