@@ -1,9 +1,14 @@
 use {
-    clap::{value_t_or_exit, App, Arg},
+    clap::{value_t, value_t_or_exit, App, Arg},
     console::style,
     fd_lock::FdLock,
     indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle},
-    solana_clap_utils::{input_parsers::pubkey_of, input_validators::is_pubkey},
+    solana_clap_utils::{
+        input_parsers::{pubkey_of, pubkeys_of},
+        input_validators::{
+            is_pubkey, is_pubkey_or_keypair, is_url_or_moniker, normalize_to_url_if_moniker,
+        },
+    },
     solana_client::{client_error, rpc_client::RpcClient, rpc_request},
     solana_core::rpc::JsonRpcConfig,
     solana_faucet::faucet::{run_local_faucet_with_port, FAUCET_PORT},
@@ -19,6 +24,7 @@ use {
     },
     solana_validator::{start_logger, test_validator::*},
     std::{
+        collections::HashSet,
         fs, io,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         path::{Path, PathBuf},
@@ -71,6 +77,18 @@ fn main() {
             }
         })
         .arg(
+            Arg::with_name("json_rpc_url")
+                .short("u")
+                .long("url")
+                .value_name("URL_OR_MONIKER")
+                .takes_value(true)
+                .validator(is_url_or_moniker)
+                .help(
+                    "URL for Solana's JSON RPC or moniker (or their first letter): \
+                   [mainnet-beta, testnet, devnet, localhost]",
+                ),
+        )
+        .arg(
             Arg::with_name("mint_address")
                 .long("mint")
                 .value_name("PUBKEY")
@@ -78,7 +96,8 @@ fn main() {
                 .takes_value(true)
                 .help(
                     "Address of the mint account that will receive tokens \
-                       created at genesis [default: client keypair]",
+                       created at genesis.  If the ledger already exists then \
+                       this parameter is silently ignored [default: client keypair]",
                 ),
         )
         .arg(
@@ -132,7 +151,25 @@ fn main() {
                 .takes_value(true)
                 .number_of_values(2)
                 .multiple(true)
-                .help("Add a BPF program to the genesis configuration"),
+                .help(
+                    "Add a BPF program to the genesis configuration. \
+                       If the ledger already exists then this parameter is silently ignored",
+                ),
+        )
+        .arg(
+            Arg::with_name("clone_account")
+                .long("clone")
+                .short("c")
+                .value_name("ADDRESS")
+                .takes_value(true)
+                .validator(is_pubkey_or_keypair)
+                .multiple(true)
+                .requires("json_rpc_url")
+                .help(
+                    "Copy an account from the cluster referenced by the --url argument the \
+                     genesis configuration. \
+                     If the ledger already exists then this parameter is silently ignored",
+                ),
         )
         .get_matches();
 
@@ -141,6 +178,8 @@ fn main() {
     } else {
         solana_cli_config::Config::default()
     };
+
+    let json_rpc_url = value_t!(matches, "json_rpc_url", String).map(normalize_to_url_if_moniker);
 
     let mint_address = pubkey_of(&matches, "mint_address").unwrap_or_else(|| {
         read_keypair_file(&cli_config.keypair_path)
@@ -193,6 +232,10 @@ fn main() {
             }
         }
     }
+
+    let clone_accounts: HashSet<_> = pubkeys_of(&matches, "clone_account")
+        .map(|v| v.into_iter().collect())
+        .unwrap_or_default();
 
     if !ledger_path.exists() {
         fs::create_dir(&ledger_path).unwrap_or_else(|err| {
@@ -285,7 +328,8 @@ fn main() {
             None
         };
 
-        TestValidatorGenesis::default()
+        let mut genesis = TestValidatorGenesis::default();
+        genesis
             .ledger_path(&ledger_path)
             .add_account(
                 faucet_keypair.pubkey(),
@@ -298,8 +342,13 @@ fn main() {
                 ..JsonRpcConfig::default()
             })
             .rpc_port(rpc_port)
-            .add_programs_with_path(&programs)
-            .start_with_mint_address(mint_address)
+            .add_programs_with_path(&programs);
+
+        if !clone_accounts.is_empty() {
+            let rpc_client = RpcClient::new(json_rpc_url.unwrap());
+            genesis.clone_accounts(clone_accounts, &rpc_client);
+        }
+        genesis.start_with_mint_address(mint_address)
     }
     .unwrap_or_else(|err| {
         eprintln!("Error: failed to start validator: {}", err);
