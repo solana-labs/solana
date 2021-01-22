@@ -23,7 +23,7 @@ use solana_account_decoder::{
 use solana_sdk::{
     account::Account,
     clock::{Slot, UnixTimestamp, DEFAULT_MS_PER_SLOT, MAX_HASH_AGE_IN_SECONDS},
-    commitment_config::{CommitmentConfig, CommitmentLevel},
+    commitment_config::CommitmentConfig,
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
     fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -616,7 +616,7 @@ impl RpcClient {
     ) -> ClientResult<Signature> {
         let signature = self.send_transaction(transaction)?;
         let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
-            self.get_recent_blockhash_with_commitment(CommitmentConfig::recent())?
+            self.get_recent_blockhash_with_commitment(CommitmentConfig::processed())?
                 .value
                 .0
         } else {
@@ -628,7 +628,7 @@ impl RpcClient {
                 if self
                     .get_fee_calculator_for_blockhash_with_commitment(
                         &recent_blockhash,
-                        CommitmentConfig::recent(),
+                        CommitmentConfig::processed(),
                     )?
                     .value
                     .is_none()
@@ -1327,9 +1327,10 @@ impl RpcClient {
         commitment: CommitmentConfig,
         config: RpcSendTransactionConfig,
     ) -> ClientResult<Signature> {
-        let desired_confirmations = match commitment.commitment {
-            CommitmentLevel::Max | CommitmentLevel::Root => MAX_LOCKOUT_HISTORY + 1,
-            _ => 1,
+        let desired_confirmations = if commitment.is_finalized() {
+            MAX_LOCKOUT_HISTORY + 1
+        } else {
+            1
         };
         let mut confirmations = 0;
 
@@ -1340,7 +1341,7 @@ impl RpcClient {
             confirmations, desired_confirmations, transaction.signatures[0],
         ));
         let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
-            self.get_recent_blockhash_with_commitment(CommitmentConfig::recent())?
+            self.get_recent_blockhash_with_commitment(CommitmentConfig::processed())?
                 .value
                 .0
         } else {
@@ -1349,13 +1350,13 @@ impl RpcClient {
         let signature = self.send_transaction_with_config(transaction, config)?;
         let (signature, status) = loop {
             // Get recent commitment in order to count confirmations for successful transactions
-            let status =
-                self.get_signature_status_with_commitment(&signature, CommitmentConfig::recent())?;
+            let status = self
+                .get_signature_status_with_commitment(&signature, CommitmentConfig::processed())?;
             if status.is_none() {
                 if self
                     .get_fee_calculator_for_blockhash_with_commitment(
                         &recent_blockhash,
-                        CommitmentConfig::recent(),
+                        CommitmentConfig::processed(),
                     )?
                     .value
                     .is_none()
