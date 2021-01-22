@@ -33,7 +33,7 @@ fn test_stake_delegation_force() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
     let default_signer = Keypair::new();
 
     let mut config = CliConfig::recent_for_tests();
@@ -122,7 +122,7 @@ fn test_seed_stake_delegation_and_deactivation() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
     let validator_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let mut config_validator = CliConfig::recent_for_tests();
@@ -202,7 +202,7 @@ fn test_stake_delegation_and_deactivation() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
     let validator_keypair = Keypair::new();
 
     let mut config_validator = CliConfig::recent_for_tests();
@@ -278,7 +278,7 @@ fn test_offline_stake_delegation_and_deactivation() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
     let mut config_validator = CliConfig::recent_for_tests();
     config_validator.json_rpc_url = test_validator.rpc_url();
@@ -411,7 +411,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
     let config_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let mut config = CliConfig::recent_for_tests();
@@ -465,7 +465,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     let nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
-        CommitmentConfig::recent(),
+        CommitmentConfig::processed(),
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
@@ -493,7 +493,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     let nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
-        CommitmentConfig::recent(),
+        CommitmentConfig::processed(),
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
@@ -526,7 +526,7 @@ fn test_stake_authorize() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
     let default_signer = Keypair::new();
 
     let mut config = CliConfig::recent_for_tests();
@@ -706,7 +706,7 @@ fn test_stake_authorize() {
     let nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
-        CommitmentConfig::recent(),
+        CommitmentConfig::processed(),
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
@@ -756,7 +756,7 @@ fn test_stake_authorize() {
     let new_nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
-        CommitmentConfig::recent(),
+        CommitmentConfig::processed(),
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
@@ -776,7 +776,7 @@ fn test_stake_authorize_with_fee_payer() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
     let default_signer = Keypair::new();
     let default_pubkey = default_signer.pubkey();
 
@@ -898,7 +898,7 @@ fn test_stake_split() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
     let default_signer = Keypair::new();
     let offline_signer = Keypair::new();
 
@@ -975,7 +975,7 @@ fn test_stake_split() {
     let nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
-        CommitmentConfig::recent(),
+        CommitmentConfig::processed(),
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
@@ -1042,7 +1042,7 @@ fn test_stake_set_lockup() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
     let default_signer = Keypair::new();
     let offline_signer = Keypair::new();
 
@@ -1227,7 +1227,7 @@ fn test_stake_set_lockup() {
     let nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
-        CommitmentConfig::recent(),
+        CommitmentConfig::processed(),
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
@@ -1294,7 +1294,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
     let mut config = CliConfig::recent_for_tests();
     let default_signer = keypair_from_seed(&[1u8; 32]).unwrap();
     config.signers = vec![&default_signer];
@@ -1342,7 +1342,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     let nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
-        CommitmentConfig::recent(),
+        CommitmentConfig::processed(),
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
@@ -1397,7 +1397,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     let nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
-        CommitmentConfig::recent(),
+        CommitmentConfig::processed(),
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
@@ -1445,7 +1445,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     let nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
-        CommitmentConfig::recent(),
+        CommitmentConfig::processed(),
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()

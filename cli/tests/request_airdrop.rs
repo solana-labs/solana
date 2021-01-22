@@ -32,7 +32,7 @@ fn test_cli_request_airdrop() {
     sig_response.unwrap();
 
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
     let balance = rpc_client
         .get_balance(&bob_config.signers[0].pubkey())

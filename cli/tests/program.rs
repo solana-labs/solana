@@ -34,7 +34,7 @@ fn test_cli_program_deploy_non_upgradeable() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
     let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();
@@ -155,7 +155,7 @@ fn test_cli_program_deploy_no_authority() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
     let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();
@@ -243,7 +243,7 @@ fn test_cli_program_deploy_with_authority() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
     let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();
@@ -574,7 +574,7 @@ fn test_cli_program_write_buffer() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
     let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();
@@ -829,7 +829,7 @@ fn test_cli_program_set_buffer_authority() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
     let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();

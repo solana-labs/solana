@@ -300,7 +300,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         Arg::with_name("commitment")
             .long("commitment")
             .takes_value(true)
-            .possible_values(&["recent", "single", "singleGossip", "root", "max"])
+            .possible_values(&[
+                "processed",
+                "confirmed",
+                "finalized",
+                "recent",
+                "single",
+                "singleGossip",
+                "root",
+                "max",
+            ])
             .value_name("COMMITMENT_LEVEL")
             .global(true)
             .help("Return information at the selected commitment level"),
