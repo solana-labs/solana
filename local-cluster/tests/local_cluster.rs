@@ -1054,7 +1054,7 @@ fn test_snapshot_download() {
     let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
         &validator_snapshot_test_config.snapshot_output_path,
         &archive_snapshot_hash,
-        &ArchiveFormat::TarBzip2,
+        ArchiveFormat::TarBzip2,
     );
 
     // Download the snapshot, then boot a validator from it.
@@ -1124,7 +1124,7 @@ fn test_snapshot_restart_tower() {
     let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
         &validator_snapshot_test_config.snapshot_output_path,
         &archive_snapshot_hash,
-        &ArchiveFormat::TarBzip2,
+        ArchiveFormat::TarBzip2,
     );
     fs::hard_link(archive_filename, &validator_archive_path).unwrap();
 
@@ -1189,7 +1189,7 @@ fn test_snapshots_blockstore_floor() {
     let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
         &validator_snapshot_test_config.snapshot_output_path,
         &(archive_slot, archive_hash),
-        &ArchiveFormat::TarBzip2,
+        ArchiveFormat::TarBzip2,
     );
     fs::hard_link(archive_filename, &validator_archive_path).unwrap();
     let slot_floor = archive_slot;

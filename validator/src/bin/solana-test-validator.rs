@@ -6,7 +6,8 @@ use {
     solana_clap_utils::{
         input_parsers::{pubkey_of, pubkeys_of},
         input_validators::{
-            is_pubkey, is_pubkey_or_keypair, is_url_or_moniker, normalize_to_url_if_moniker,
+            is_pubkey, is_pubkey_or_keypair, is_slot, is_url_or_moniker,
+            normalize_to_url_if_moniker,
         },
     },
     solana_client::{client_error, rpc_client::RpcClient, rpc_request},
@@ -171,6 +172,22 @@ fn main() {
                      If the ledger already exists then this parameter is silently ignored",
                 ),
         )
+        .arg(
+            Arg::with_name("warp_slot")
+                .required(false)
+                .long("warp-slot")
+                .short("w")
+                .takes_value(true)
+                .value_name("WARP_SLOT")
+                .validator(is_slot)
+                .min_values(0)
+                .max_values(1)
+                .help(
+                    "Warp the ledger to WARP_SLOT after starting the validator. \
+                        If no slot is provided then the current slot of the cluster \
+                        referenced by the --url argument will be used",
+                ),
+        )
         .get_matches();
 
     let cli_config = if let Some(config_file) = matches.value_of("config_file") {
@@ -179,7 +196,9 @@ fn main() {
         solana_cli_config::Config::default()
     };
 
-    let json_rpc_url = value_t!(matches, "json_rpc_url", String).map(normalize_to_url_if_moniker);
+    let cluster_rpc_client = value_t!(matches, "json_rpc_url", String)
+        .map(normalize_to_url_if_moniker)
+        .map(RpcClient::new);
 
     let mint_address = pubkey_of(&matches, "mint_address").unwrap_or_else(|| {
         read_keypair_file(&cli_config.keypair_path)
@@ -236,6 +255,25 @@ fn main() {
     let clone_accounts: HashSet<_> = pubkeys_of(&matches, "clone_account")
         .map(|v| v.into_iter().collect())
         .unwrap_or_default();
+
+    let warp_slot = if matches.is_present("warp_slot") {
+        Some(match matches.value_of("warp_slot") {
+            Some(_) => value_t_or_exit!(matches, "warp_slot", Slot),
+            None => {
+                cluster_rpc_client.as_ref().unwrap_or_else(|_| {
+                        eprintln!("The --url argument must be provided if --warp-slot/-w is used without an explicit slot");
+                        exit(1);
+
+                }).get_slot()
+                    .unwrap_or_else(|err| {
+                        eprintln!("Unable to get current cluster slot: {}", err);
+                        exit(1);
+                    })
+            }
+        })
+    } else {
+        None
+    };
 
     if !ledger_path.exists() {
         fs::create_dir(&ledger_path).unwrap_or_else(|err| {
@@ -345,8 +383,16 @@ fn main() {
             .add_programs_with_path(&programs);
 
         if !clone_accounts.is_empty() {
-            let rpc_client = RpcClient::new(json_rpc_url.unwrap());
-            genesis.clone_accounts(clone_accounts, &rpc_client);
+            genesis.clone_accounts(
+                clone_accounts,
+                cluster_rpc_client
+                    .as_ref()
+                    .expect("bug: --url argument missing?"),
+            );
+        }
+
+        if let Some(warp_slot) = warp_slot {
+            genesis.warp_slot(warp_slot);
         }
         genesis.start_with_mint_address(mint_address)
     }

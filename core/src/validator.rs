@@ -120,6 +120,7 @@ pub struct ValidatorConfig {
     pub poh_pinned_cpu_core: usize,
     pub account_indexes: HashSet<AccountIndex>,
     pub accounts_db_caching_enabled: bool,
+    pub warp_slot: Option<Slot>,
 }
 
 impl Default for ValidatorConfig {
@@ -166,6 +167,7 @@ impl Default for ValidatorConfig {
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
             account_indexes: HashSet::new(),
             accounts_db_caching_enabled: false,
+            warp_slot: None,
         }
     }
 }
@@ -223,9 +225,14 @@ pub struct Validator {
 }
 
 // in the distant future, get rid of ::new()/exit() and use Result properly...
-fn abort() -> ! {
+pub(crate) fn abort() -> ! {
     #[cfg(not(test))]
-    std::process::exit(1);
+    {
+        // standard error is usually redirected to a log file, cry for help on standard output as
+        // well
+        println!("Validator process aborted. The validator log may contain further details");
+        std::process::exit(1);
+    }
 
     #[cfg(test)]
     panic!("process::exit(1) is intercepted for friendly test failure...");
@@ -848,6 +855,13 @@ fn post_process_restored_tower(
                 }
             }
 
+            if let Some(warp_slot) = config.warp_slot {
+                // unconditionally relax tower requirement so that we can always restore tower
+                // from root bank after the warp
+                should_require_tower = false;
+                return Err(crate::consensus::TowerError::HardFork(warp_slot));
+            }
+
             tower
         })
         .unwrap_or_else(|err| {
@@ -990,6 +1004,50 @@ fn new_banks_from_ledger(
         error!("Failed to load ledger: {:?}", err);
         abort()
     });
+
+    if let Some(warp_slot) = config.warp_slot {
+        let snapshot_config = config.snapshot_config.as_ref().unwrap_or_else(|| {
+            error!("warp slot requires a snapshot config");
+            abort();
+        });
+
+        let working_bank = bank_forks.working_bank();
+
+        if warp_slot <= working_bank.slot() {
+            error!(
+                "warp slot ({}) cannot be less than the working bank slot ({})",
+                warp_slot,
+                working_bank.slot()
+            );
+            abort();
+        }
+        info!("warping to slot {}", warp_slot);
+
+        bank_forks.insert(Bank::warp_from_parent(
+            &bank_forks.root_bank(),
+            &Pubkey::default(),
+            warp_slot,
+        ));
+        bank_forks.set_root(
+            warp_slot,
+            &solana_runtime::accounts_background_service::ABSRequestSender::default(),
+            Some(warp_slot),
+        );
+        leader_schedule_cache.set_root(&bank_forks.root_bank());
+
+        let archive_file = solana_runtime::snapshot_utils::bank_to_snapshot_archive(
+            ledger_path,
+            &bank_forks.root_bank(),
+            None,
+            &snapshot_config.snapshot_package_output_path,
+            snapshot_config.archive_format,
+        )
+        .unwrap_or_else(|err| {
+            error!("Unable to create snapshot: {}", err);
+            abort();
+        });
+        info!("created snapshot: {}", archive_file.display());
+    }
 
     let tower = post_process_restored_tower(
         restored_tower,
