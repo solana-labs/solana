@@ -3270,7 +3270,21 @@ impl AccountsDB {
             }
         }
 
+        if ancestors.len() > 0{
+            warn!("ancestors: {:?}", ancestors);
+        }
+
         scanned_slots.extend(ancestors.keys());
+
+        let mut min = u64::MAX;
+        for k in scanned_slots.clone() {
+            let k = k as u64;
+            if k < min {
+                min = k;
+            }
+        };
+        warn!("min slot: {}", min);
+
 
         let len = AtomicUsize::new(0);
         // scan all slots

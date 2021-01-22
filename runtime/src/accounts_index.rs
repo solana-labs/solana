@@ -23,6 +23,7 @@ use std::{
         Arc, RwLock, RwLockReadGuard, RwLockWriteGuard,
     },
 };
+use log::*;
 
 pub const ITER_BATCH_SIZE: usize = 1000;
 
@@ -850,6 +851,7 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
         list.retain(|(slot, value)| {
             let should_purge = Self::can_purge(max_root, *slot) && !value.is_cached();
             if should_purge {
+                warn!("purging slot: {}, max_root: {}", *slot, max_root);
                 reclaims.push((*slot, value.clone()));
                 purged_slots.insert(*slot);
             }
