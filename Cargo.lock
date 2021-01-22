@@ -4517,6 +4517,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-merkle-root-bench"
+version = "1.6.0"
+dependencies = [
+ "clap",
+ "log 0.4.11",
+ "solana-logger 1.6.0",
+ "solana-measure",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-version",
+]
+
+[[package]]
 name = "solana-merkle-tree"
 version = "1.6.0"
 dependencies = [
