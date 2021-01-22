@@ -1,11 +1,12 @@
 import { TransactionInstruction } from "@solana/web3.js";
 
 export const PROGRAM_IDS: string[] = [
-  "9qvG1zUp8xF1Bi4m6UdRNby1BAAuaDrUxSpv4CmRRMjL", // mainnet
-  "2n2dsFSgmPcZ8jkmBZLGUM2nzuFqcBGQ3JEEj6RJJcEg", // testnet
+  "SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8", // mainnet / testnet / devnet
+  "9qvG1zUp8xF1Bi4m6UdRNby1BAAuaDrUxSpv4CmRRMjL", // mainnet - legacy
+  "2n2dsFSgmPcZ8jkmBZLGUM2nzuFqcBGQ3JEEj6RJJcEg", // testnet - legacy
   "9tdctNJuFsYZ6VrKfKEuwwbPp4SFdFw3jYBZU8QUtzeX", // testnet - legacy
   "CrRvVBS4Hmj47TPU3cMukurpmCUYUrdHYxTQBxncBGqw", // testnet - legacy
-  "BSfTAcBdqmvX5iE2PW88WFNNp2DHhLUaBKk5WrnxVkcJ", // devnet
+  "BSfTAcBdqmvX5iE2PW88WFNNp2DHhLUaBKk5WrnxVkcJ", // devnet - legacy
   "H1E1G7eD5Rrcy43xvDxXCsjkRggz7MWNMLGJ8YNzJ8PM", // devnet - legacy
   "CMoteLxSPVPoc7Drcggf3QPg3ue8WPpxYyZTg77UGqHo", // devnet - legacy
   "EEuPz4iZA5reBUeZj6x1VzoiHfYeHMppSCnHZasRFhYo", // devnet - legacy
@@ -14,9 +15,11 @@ export const PROGRAM_IDS: string[] = [
 
 const INSTRUCTION_LOOKUP: { [key: number]: string } = {
   0: "Initialize Swap",
-  1: "Exchange",
-  2: "Deposit",
-  3: "Withdraw",
+  1: "Swap",
+  2: "Deposit All Token Types",
+  3: "Withdraw All Token Types",
+  4: "Deposit Single Token Type Exact Amount In",
+  5: "Withdraw Single Token Type Exact Amount Out",
 };
 
 export function isTokenSwapInstruction(
