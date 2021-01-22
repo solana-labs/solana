@@ -1918,6 +1918,7 @@ fn main() {
                         &bank,
                         Some(snapshot_version),
                         output_directory,
+                        ArchiveFormat::TarZstd,
                     )
                     .unwrap_or_else(|err| {
                         eprintln!("Unable to create snapshot: {}", err);
