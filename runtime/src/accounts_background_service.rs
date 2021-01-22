@@ -120,7 +120,7 @@ impl SnapshotRequestHandler {
                     }
                     else {
                         let mut hash_time = Measure::start("hash_time");
-                        snapshot_root_bank.update_accounts_hash_with_store_option(true, true, false);
+                        snapshot_root_bank.update_accounts_hash_with_store_option(true, true, true);
                         hash_time.stop();
                         hash_time
                     }
@@ -135,7 +135,7 @@ impl SnapshotRequestHandler {
                 }
 
                 warn!("extra time before");
-                snapshot_root_bank.update_accounts_hash_with_store_option(true, true, false);
+                snapshot_root_bank.update_accounts_hash_with_store_option(true, true, true);
                 warn!("extra time before done");
 
                 // Generate an accounts package
@@ -159,7 +159,7 @@ impl SnapshotRequestHandler {
                 snapshot_time.stop();
 
                 warn!("extra time before");
-                snapshot_root_bank.update_accounts_hash_with_store_option(true, true, false);
+                snapshot_root_bank.update_accounts_hash_with_store_option(true, true, true);
                 warn!("extra time before done");
 
                 // Cleanup outdated snapshots
