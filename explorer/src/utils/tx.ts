@@ -35,6 +35,7 @@ export const PROGRAM_IDS = {
   ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL:
     "SPL Associated Token Account Program",
   Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo: "Memo Program",
+  SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8: "Token Swap Program",
 } as const;
 
 export type LoaderName = typeof LOADER_IDS[keyof typeof LOADER_IDS];
