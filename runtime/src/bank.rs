@@ -7,7 +7,7 @@ use crate::{
         AccountAddressFilter, Accounts, TransactionAccountDeps, TransactionAccounts,
         TransactionLoadResult, TransactionLoaders,
     },
-    accounts_db::{ErrorCounters, SnapshotStorages},
+    accounts_db::{AppendVecId, ErrorCounters, SnapshotStorages},
     accounts_index::{AccountIndex, Ancestors, IndexKey},
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType},
@@ -4309,7 +4309,7 @@ impl Bank {
 
     pub fn get_sorted_accounts(
         &self,
-    ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot)> {
+    ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> {
         self
             .rc
             .accounts

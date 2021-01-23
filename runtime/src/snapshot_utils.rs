@@ -892,7 +892,7 @@ pub fn snapshot_bank(
     snapshot_package_output_path: &Path,
     snapshot_version: SnapshotVersion,
     archive_format: &ArchiveFormat,
-) -> Result<(Vec<(Pubkey, Hash, u64, u64, u64, Slot)>)> {
+) -> Result<(Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>)> {
     let storages: Vec<_> = root_bank.get_snapshot_storages();
     let a1 = AccountsDB::get_sorted_accounts_from_stores(storages.clone(), root_bank.simple_capitalization_enabled());
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");

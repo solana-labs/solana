@@ -1,6 +1,6 @@
 use crate::bank_forks::ArchiveFormat;
 use crate::snapshot_utils::SnapshotVersion;
-use crate::{accounts_db::SnapshotStorages, bank::BankSlotDelta};
+use crate::{accounts_db::AppendVecId, accounts_db::SnapshotStorages, bank::BankSlotDelta};
 use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
 
@@ -26,7 +26,7 @@ pub struct AccountsPackage {
     pub hash: Hash,
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
-    pub data: Vec<Vec<(Pubkey, Hash, u64, u64, u64, Slot)>>,
+    pub data: Vec<Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>>,
 }
 
 impl AccountsPackage {
@@ -40,7 +40,7 @@ impl AccountsPackage {
         hash: Hash,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
-        data: Vec<Vec<(Pubkey, Hash, u64, u64, u64, Slot)>>,
+        data: Vec<Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>>,
     ) -> Self {
         Self {
             slot,

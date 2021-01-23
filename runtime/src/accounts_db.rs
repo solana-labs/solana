@@ -158,7 +158,7 @@ type ReclaimResult = (AccountSlots, AppendVecOffsets);
 type StorageFinder<'a> = Box<dyn Fn(Slot, usize) -> Arc<AccountStorageEntry> + 'a>;
 type ShrinkCandidates = HashMap<Slot, HashMap<AppendVecId, Arc<AccountStorageEntry>>>;
 
-type CalculateHashIntermediate = (u64, Hash, u64, u64, Slot);
+type CalculateHashIntermediate = (u64, Hash, u64, u64, Slot, AppendVecId);
 
 trait Versioned {
     fn version(&self) -> u64;
@@ -3246,8 +3246,8 @@ impl AccountsDB {
         }
     }
 
-    pub fn compare2(left:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
-right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
+    pub fn compare2(left:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
+right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
 ) -> bool {
     let mut failed =false;
         let mut l = 0;
@@ -3283,8 +3283,8 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
             }
             if lv.0 == rv.0 {
                 // cut out pb key
-                let lv = (lv.1, lv.2, lv.3, lv.4, lv.5);
-                let rv = (rv.1, rv.2, rv.3, rv.4, rv.5);
+                let lv = (lv.1, lv.2, lv.3, lv.4, lv.5, lv.6);
+                let rv = (rv.1, rv.2, rv.3, rv.4, rv.5, rv.6);
                 failed=true;
                 warn!("jwash:different: {:?} {:?}, {:?}", left[l].0, lv, rv);
                 l += 1;
@@ -3292,8 +3292,8 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
             }
             else{
                 // at least cut out hashes
-                let lv = (lv.0, lv.2, lv.3, lv.4, lv.5);
-                let rv = (rv.0, rv.2, rv.3, rv.4, rv.5);
+                let lv = (lv.0, lv.2, lv.3, lv.4, lv.5, lv.6);
+                let rv = (rv.0, rv.2, rv.3, rv.4, rv.5, rv.6);
 
                 if lv.0 < rv.0 {
                     failed=true;
@@ -3476,7 +3476,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
                     );
 
                     let key = public_key;
-                    let source_item = (version, *loaded_account.loaded_hash(), balance, lamports, 1111);
+                    let source_item = (version, *loaded_account.loaded_hash(), balance, lamports, 1111, _store_id);
                     match map.entry(*key) {
                         Occupied(mut dest_item) => {
                             if dest_item.get_mut().version() <= source_item.version() {
@@ -3534,7 +3534,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
 
                     accum.push((
                         *public_key,
-                        (version, *loaded_account.loaded_hash(), balance, lamports, slot),
+                        (version, *loaded_account.loaded_hash(), balance, lamports, slot, _store_id),
                     ));
                 },
             );
@@ -3663,7 +3663,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
                         //|(pubkey, (_, hash, lamports, original_lamports))| {
                         |inp| {
                             let (pubkey, sv) = inp;
-                            let (_, hash, lamports, original_lamports, _) = sv.get();
+                            let (_, hash, lamports, original_lamports, _, _) = sv.get();
                             if *original_lamports != 0 {
                                 Some((*pubkey, *hash, *lamports))
                             } else {
@@ -3688,7 +3688,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
 
     fn remove_zero_balance_accounts2(
         account_maps: DashMap<Pubkey, CalculateHashIntermediate>,
-    ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot)> {
+    ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> {
         let shards: Vec<_> = account_maps
             .shards()
             .into_iter()
@@ -3708,9 +3708,9 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
                         //|(pubkey, (_, hash, lamports, original_lamports))| {
                         |inp| {
                             let (pubkey, sv) = inp;
-                            let (version, hash, lamports, original_lamports, last) = sv.get();
+                            let (version, hash, lamports, original_lamports, last, last2) = sv.get();
                             if *original_lamports != 0 {
-                                Some((*pubkey, *hash, *lamports, *version, *original_lamports, *last))
+                                Some((*pubkey, *hash, *lamports, *version, *original_lamports, *last, *last2))
                             } else {
                                 None
                             }
@@ -3779,7 +3779,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
         slot: Slot,
         ancestors: &Ancestors,
         simple_capitalization_enabled: bool,
-    ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot)> {
+    ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> {
 
         let (x, ..) = self.get_accounts_using_stores(slot, ancestors, simple_capitalization_enabled);
 
@@ -3795,7 +3795,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
     pub fn get_sorted_accounts_from_stores(
         storages: SnapshotStorages,
         simple_capitalization_enabled: bool,
-    ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot)> {
+    ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> {
 
         let (x, ..) = Self::scan_slot_using_snapshot(storages, simple_capitalization_enabled);
 
