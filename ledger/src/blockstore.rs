@@ -89,7 +89,8 @@ pub const MAX_TURBINE_DELAY_IN_TICKS: u64 = MAX_TURBINE_PROPAGATION_IN_MS / MS_P
 // (32K shreds per slot * 4 TX per shred * 2.5 slots per sec)
 pub const MAX_DATA_SHREDS_PER_SLOT: usize = 32_768;
 
-pub type CompletedSlotsReceiver = Receiver<Vec<u64>>;
+pub type CompletedSlotsChannelContents = Vec<u64>;
+pub type CompletedSlotsReceiver = Receiver<CompletedSlotsChannelContents>;
 type CompletedRanges = Vec<(u32, u32)>;
 
 #[derive(Clone, Copy)]
@@ -145,7 +146,7 @@ pub struct Blockstore {
     last_root: Arc<RwLock<Slot>>,
     insert_shreds_lock: Arc<Mutex<()>>,
     pub new_shreds_signals: Vec<SyncSender<bool>>,
-    pub completed_slots_senders: Vec<SyncSender<Vec<Slot>>>,
+    pub completed_slots_senders: Vec<SyncSender<CompletedSlotsChannelContents>>,
     pub lowest_cleanup_slot: Arc<RwLock<u64>>,
     no_compaction: bool,
 }
@@ -2998,7 +2999,7 @@ fn is_valid_write_to_slot_0(slot_to_write: u64, parent_slot: Slot, last_root: u6
 
 fn send_signals(
     new_shreds_signals: &[SyncSender<bool>],
-    completed_slots_senders: &[SyncSender<Vec<u64>>],
+    completed_slots_senders: &[SyncSender<CompletedSlotsChannelContents>],
     should_signal: bool,
     newly_completed_slots: Vec<u64>,
 ) {
@@ -3033,7 +3034,7 @@ fn send_signals(
 
 fn commit_slot_meta_working_set(
     slot_meta_working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
-    completed_slots_senders: &[SyncSender<Vec<u64>>],
+    completed_slots_senders: &[SyncSender<CompletedSlotsChannelContents>],
     write_batch: &mut WriteBatch,
 ) -> Result<(bool, Vec<u64>)> {
     let mut should_signal = false;
