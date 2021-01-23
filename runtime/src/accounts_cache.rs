@@ -1,7 +1,7 @@
 use dashmap::DashMap;
 use solana_sdk::{account::Account, clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::{
-    collections::HashSet,
+    collections::BTreeSet,
     ops::Deref,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -90,7 +90,7 @@ pub struct AccountsCache {
     cache: DashMap<Slot, SlotCache>,
     // Queue of potentially unflushed roots. Random eviction + cache too large
     // could have triggered a flush of this slot already
-    maybe_unflushed_roots: RwLock<HashSet<Slot>>,
+    maybe_unflushed_roots: RwLock<BTreeSet<Slot>>,
     max_flushed_root: AtomicU64,
 }
 
@@ -147,14 +147,25 @@ impl AccountsCache {
     }
 
     pub fn add_root(&self, root: Slot) {
-        self.maybe_unflushed_roots.write().unwrap().insert(root);
+        let max_flushed_root = self.fetch_max_flush_root();
+        if root > max_flushed_root || (root == max_flushed_root && root == 0) {
+            self.maybe_unflushed_roots.write().unwrap().insert(root);
+        }
     }
 
-    pub fn clear_roots(&self) -> HashSet<Slot> {
-        std::mem::replace(
-            &mut self.maybe_unflushed_roots.write().unwrap(),
-            HashSet::new(),
-        )
+    pub fn clear_roots(&self, max_root: Option<Slot>) -> BTreeSet<Slot> {
+        let mut w_maybe_unflushed_roots = self.maybe_unflushed_roots.write().unwrap();
+        if let Some(max_root) = max_root {
+            // `greater_than_max_root` contains all slots >= `max_root + 1`, or alternatively,
+            // all slots > `max_root`. Meanwhile, `w_maybe_unflushed_roots` is left with all slots
+            // <= `max_root`.
+            let greater_than_max_root = w_maybe_unflushed_roots.split_off(&(max_root + 1));
+            // After the replace, `w_maybe_unflushed_roots` contains slots > `max_root`, and
+            // we return all slots <= `max_root`
+            std::mem::replace(&mut w_maybe_unflushed_roots, greater_than_max_root)
+        } else {
+            std::mem::replace(&mut *w_maybe_unflushed_roots, BTreeSet::new())
+        }
     }
 
     // Removes slots less than or equal to `max_root`. Only safe to pass in a rooted slot,
