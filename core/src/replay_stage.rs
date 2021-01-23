@@ -590,7 +590,7 @@ impl ReplayStage {
                             }
                             let mut count = 0;
                             let mut message = false;
-                            let mut slots:Vec<Slot> = vec![];
+                            let mut all_slots:Vec<Slot> = vec![];
                             'outer: loop {
                                 let result = completed_slots_receiver.try_recv();
                                 match result {
@@ -606,14 +606,14 @@ impl ReplayStage {
                                                 break 'outer;
                                             }
                                             else {
-                                                slots.push(slot);
+                                                all_slots.push(slot);
                                             }
                                         }
                                     },
                                 };
                             }
                             if !message {
-                                warn!("jwash:Cannot find blockstore ready time, so cannot calculate delay to poh reset, found count: {}, {:?}, looking for: {}", count, slots, reset_bank.slot());
+                                warn!("jwash:Cannot find blockstore ready time, so cannot calculate delay to poh reset, found count: {}, {:?}, looking for: {}", count, all_slots, reset_bank.slot());
                             }
                         }
                         Self::report_memory(&allocated, "reset_bank", start);
