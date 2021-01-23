@@ -74,54 +74,6 @@ impl AccountsHashVerifier {
         }
     }
 
-    fn compare2(left:Vec<(Pubkey, Hash, u64)>,
-right:Vec<(Pubkey, Hash, u64)>,
-){
-        let mut l = 0;
-        let mut r = 0;
-        loop {
-            let ldone = l >= left.len();
-            let rdone = r >= right.len();
-            if ldone && rdone {
-                break;
-            }
-            if ldone {
-                warn!("jwash:Only in right: {:?}", right[r]);
-                r += 1;
-                continue;
-            }
-            if rdone {
-                warn!("jwash:Only in left: {:?}", left[l]);
-                l += 1;
-                continue;
-            }
-            let lv = left[l];
-            let rv = right[r];
-            if lv == rv {
-                l += 1;
-                r += 1;
-                continue;
-            }
-            if lv.0 == rv.0 {
-                warn!("jwash:different: {:?}, {:?}", lv, rv);
-                l += 1;
-                r += 1;
-            }
-            else{
-                if lv.0 < rv.0 {
-                    warn!("jwash:Only in left: {:?}", left[l]);
-                    l += 1;
-                    continue;
-                }
-                else {
-                    warn!("jwash:Only in right: {:?}", right[r]);
-                    r += 1;
-                    continue;
-                }
-            }
-        }
-    }
-
     fn process_accounts_package(
         accounts_package: AccountsPackage,
         cluster_info: &ClusterInfo,
@@ -161,9 +113,9 @@ right:Vec<(Pubkey, Hash, u64)>,
         let a3 = AccountsDB::get_sorted_accounts_from_stores(accounts_package.storages.clone(), true);
         let others = accounts_package.data.clone();
         warn!("jwash:comparing 1");
-        Self::compare2(others[0].clone(), others[1].clone());
+        AccountsDB::compare2(others[0].clone(), others[1].clone());
         warn!("jwash:comparing 2");
-        Self::compare2(others[0].clone(), a3);
+        AccountsDB::compare2(others[0].clone(), a3);
         
         assert_eq!(hash.0, accounts_package.hash);
 

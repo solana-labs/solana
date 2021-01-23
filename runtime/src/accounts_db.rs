@@ -3245,6 +3245,70 @@ impl AccountsDB {
         }
     }
 
+    pub fn compare2(left:Vec<(Pubkey, Hash, u64)>,
+right:Vec<(Pubkey, Hash, u64)>,
+) -> bool {
+    let mut failed =false;
+        let mut l = 0;
+        let mut r = 0;
+        loop {
+            let ldone = l >= left.len();
+            let rdone = r >= right.len();
+            if ldone && rdone {
+                break;
+            }
+            if ldone {
+                warn!("jwash:Only in right: {:?}", right[r]);
+                failed=true;
+                r += 1;
+                continue;
+            }
+            if rdone {
+                failed=true;
+                warn!("jwash:Only in left: {:?}", left[l]);
+                l += 1;
+                continue;
+            }
+            let lv = left[l];
+            let rv = right[r];
+            if lv == rv {
+                l += 1;
+                r += 1;
+                continue;
+            }
+            if lv.0 == rv.0 {
+                // cut out pb key
+                let lv = (lv.1, lv.2);
+                let rv = (rv.1, rv.2);
+                failed=true;
+                warn!("jwash:different: {:?} {:?}, {:?}", left[l].0, lv, rv);
+                l += 1;
+                r += 1;
+            }
+            else{
+                // at least cut out hashes
+                let lv = (lv.0, lv.2);
+                let rv = (rv.0, rv.2);
+
+                if lv.0 < rv.0 {
+                    failed=true;
+                    warn!("jwash:Only in left: {:?}", left[l]);
+                    l += 1;
+                    continue;
+                }
+                else {
+                    failed=true;
+                    warn!("jwash:Only in right: {:?}", right[r]);
+                    r += 1;
+                    continue;
+                }
+            }
+        }
+        failed
+    }
+
+
+
     fn get_accounts_using_stores(
         &self,
         slot: Slot,
