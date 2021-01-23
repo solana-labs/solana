@@ -381,13 +381,18 @@ impl AccountStorageEntry {
         }
     }
 
-    pub(crate) fn new_empty_map(id: AppendVecId, accounts_current_len: usize) -> Self {
+    pub(crate) fn new_existing(
+        slot: Slot,
+        id: AppendVecId,
+        accounts: AppendVec,
+        num_accounts: usize,
+    ) -> Self {
         Self {
             id: AtomicUsize::new(id),
-            slot: AtomicU64::new(0),
-            accounts: AppendVec::new_empty_map(accounts_current_len),
+            slot: AtomicU64::new(slot),
+            accounts,
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
-            approx_store_count: AtomicUsize::new(0),
+            approx_store_count: AtomicUsize::new(num_accounts),
             alive_bytes: AtomicUsize::new(0),
         }
     }
@@ -519,13 +524,6 @@ impl AccountStorageEntry {
         count -= 1;
         *count_and_status = (count, status);
         count
-    }
-
-    pub fn set_file<P: AsRef<Path>>(&mut self, path: P) -> IOResult<()> {
-        let num_accounts = self.accounts.set_file(path)?;
-        self.approx_store_count
-            .store(num_accounts, Ordering::Relaxed);
-        Ok(())
     }
 
     pub fn get_relative_path(&self) -> Option<PathBuf> {
