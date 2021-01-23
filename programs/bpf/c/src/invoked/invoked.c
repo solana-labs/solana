@@ -158,6 +158,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_assert(accounts[ARGUMENT_INDEX].is_writable);
     break;
   }
+
   case VERIFY_PRIVILEGE_ESCALATION: {
     sol_log("Should never get here!");
     break;
@@ -188,6 +189,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
                sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
     break;
   }
+
   case VERIFY_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE: {
     sol_log("verify privilege deescalation escalation writable");
     static const int INVOKED_PROGRAM_INDEX = 0;
@@ -245,6 +247,18 @@ extern uint64_t entrypoint(const uint8_t *input) {
     }
     break;
   }
+
+  case WRITE_ACCOUNT: {
+    sol_log("write account");
+    static const int INVOKED_ARGUMENT_INDEX = 0;
+    sol_assert(sol_deserialize(input, &params, 1));
+
+    for (int i = 0; i < params.data[1]; i++) {
+      accounts[INVOKED_ARGUMENT_INDEX].data[i] = params.data[1];
+    }
+    break;
+  }
+
   default:
     return ERROR_INVALID_INSTRUCTION_DATA;
   }

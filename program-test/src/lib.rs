@@ -210,6 +210,13 @@ impl program_stubs::SyscallStubs for SyscallStubs {
         let program_id_index = message.instructions[0].program_id_index as usize;
         let program_id = message.account_keys[program_id_index];
         let program_account_info = &account_infos[program_id_index];
+        // TODO don't have the caller's keyed_accounts so can't validate writer or signer escalation or deescalation yet
+        let caller_privileges = message
+            .account_keys
+            .iter()
+            .enumerate()
+            .map(|(i, _)| message.is_writable(i))
+            .collect::<Vec<bool>>();
 
         stable_log::program_invoke(&logger, &program_id, invoke_context.invoke_depth());
 
@@ -268,6 +275,7 @@ impl program_stubs::SyscallStubs for SyscallStubs {
             &message,
             &executables,
             &accounts,
+            &caller_privileges,
             invoke_context,
         )
         .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
