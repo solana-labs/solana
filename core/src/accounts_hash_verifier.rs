@@ -113,9 +113,9 @@ impl AccountsHashVerifier {
         let a3 = AccountsDB::get_sorted_accounts_from_stores(accounts_package.storages.clone(), true);
         let others = accounts_package.data.clone();
         warn!("jwash:comparing 1");
-        AccountsDB::compare2(others[0].clone(), others[1].clone());
+        assert!(!AccountsDB::compare2(others[0].clone(), others[1].clone()));
         warn!("jwash:comparing 2");
-        AccountsDB::compare2(others[0].clone(), a3);
+        assert!(!AccountsDB::compare2(others[0].clone(), a3));
         
         assert_eq!(hash.0, accounts_package.hash);
 
