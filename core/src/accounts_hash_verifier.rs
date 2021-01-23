@@ -111,7 +111,7 @@ impl AccountsHashVerifier {
         warn!("process_accounts_package - calculate hash: {:?}, took(ms): {}", hash, start.as_ms());
 
         let a3 = AccountsDB::get_sorted_accounts_from_stores(accounts_package.storages.clone(), true);
-        let others = accounts_package.data;
+        let others = accounts_package.data.clone();
         
         assert_eq!(hash.0, accounts_package.hash);
 
