@@ -598,7 +598,7 @@ impl ReplayStage {
                                         for slot in slots {
                                             if slot == reset_bank.slot() {
                                                 let delay = time_now - notification_time;
-                                                debug!("Delay between blockstore deciding slot was ready and poh reset(ms): {}", delay.as_millis());
+                                                warn!("jwash:Delay between blockstore deciding slot was ready and poh reset(ms): {}", delay.as_millis());
                                                 delay_since_ready = Some(delay.as_micros() as u64);
                                                 message = true;
                                                 break 'outer;
@@ -608,7 +608,7 @@ impl ReplayStage {
                                 };
                             }
                             if !message {
-                                warn!("Cannot find blockstore ready time, so cannot calculate delay to poh reset");
+                                warn!("jwash:Cannot find blockstore ready time, so cannot calculate delay to poh reset");
                             }
                         }
                         Self::report_memory(&allocated, "reset_bank", start);
