@@ -89,6 +89,7 @@ impl AccessToken {
                 return;
             }
 
+            #[allow(deprecated)]
             if self
                 .refresh_active
                 .compare_and_swap(false, true, Ordering::Relaxed)

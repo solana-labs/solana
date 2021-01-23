@@ -645,7 +645,7 @@ fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
 
 fn load_bank_forks(
     arg_matches: &ArgMatches,
-    ledger_path: &PathBuf,
+    ledger_path: &Path,
     genesis_config: &GenesisConfig,
     process_options: ProcessOptions,
     access_type: AccessType,
@@ -653,7 +653,7 @@ fn load_bank_forks(
     snapshot_archive_path: Option<PathBuf>,
 ) -> bank_forks_utils::LoadResult {
     let blockstore = open_blockstore(&ledger_path, access_type, wal_recovery_mode);
-    let snapshot_path = ledger_path.clone().join(if blockstore.is_primary_access() {
+    let snapshot_path = ledger_path.join(if blockstore.is_primary_access() {
         "snapshot"
     } else {
         "snapshot.ledger-tool"
@@ -662,7 +662,7 @@ fn load_bank_forks(
         None
     } else {
         let snapshot_package_output_path =
-            snapshot_archive_path.unwrap_or_else(|| ledger_path.clone());
+            snapshot_archive_path.unwrap_or_else(|| ledger_path.to_path_buf());
         Some(SnapshotConfig {
             snapshot_interval_slots: 0, // Value doesn't matter
             snapshot_package_output_path,
@@ -1443,7 +1443,7 @@ fn main() {
                 last_in_slot: bool,
                 data_complete: bool,
                 shred: &'a Shred,
-            };
+            }
             let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
             let ending_slot = value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);
             let ledger = open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary, None);
@@ -2442,13 +2442,13 @@ fn main() {
                                         cluster_points: String,
                                         old_capitalization: u64,
                                         new_capitalization: u64,
-                                    };
+                                    }
                                     fn format_or_na<T: std::fmt::Display>(
                                         data: Option<T>,
                                     ) -> String {
                                         data.map(|data| format!("{}", data))
                                             .unwrap_or_else(|| "N/A".to_owned())
-                                    };
+                                    }
                                     let mut point_details = detail
                                         .map(|d| d.points.iter().map(Some).collect::<Vec<_>>())
                                         .unwrap_or_default();

@@ -3908,6 +3908,8 @@ impl AccountsDB {
     fn report_store_timings(&self) {
         let last = self.stats.last_store_report.load(Ordering::Relaxed);
         let now = solana_sdk::timing::timestamp();
+
+        #[allow(deprecated)]
         if now.saturating_sub(last) > 1000
             && self
                 .stats

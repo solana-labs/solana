@@ -35,16 +35,16 @@ impl From<TransportError> for ClientErrorKind {
     }
 }
 
-impl Into<TransportError> for ClientErrorKind {
-    fn into(self) -> TransportError {
-        match self {
-            Self::Io(err) => TransportError::IoError(err),
-            Self::TransactionError(err) => TransportError::TransactionError(err),
-            Self::Reqwest(err) => TransportError::Custom(format!("{:?}", err)),
-            Self::RpcError(err) => TransportError::Custom(format!("{:?}", err)),
-            Self::SerdeJson(err) => TransportError::Custom(format!("{:?}", err)),
-            Self::SigningError(err) => TransportError::Custom(format!("{:?}", err)),
-            Self::Custom(err) => TransportError::Custom(format!("{:?}", err)),
+impl From<ClientErrorKind> for TransportError {
+    fn from(client_error_kind: ClientErrorKind) -> Self {
+        match client_error_kind {
+            ClientErrorKind::Io(err) => Self::IoError(err),
+            ClientErrorKind::TransactionError(err) => Self::TransactionError(err),
+            ClientErrorKind::Reqwest(err) => Self::Custom(format!("{:?}", err)),
+            ClientErrorKind::RpcError(err) => Self::Custom(format!("{:?}", err)),
+            ClientErrorKind::SerdeJson(err) => Self::Custom(format!("{:?}", err)),
+            ClientErrorKind::SigningError(err) => Self::Custom(format!("{:?}", err)),
+            ClientErrorKind::Custom(err) => Self::Custom(format!("{:?}", err)),
         }
     }
 }
@@ -100,9 +100,9 @@ impl From<TransportError> for ClientError {
     }
 }
 
-impl Into<TransportError> for ClientError {
-    fn into(self) -> TransportError {
-        self.kind.into()
+impl From<ClientError> for TransportError {
+    fn from(client_error: ClientError) -> Self {
+        client_error.kind.into()
     }
 }
 

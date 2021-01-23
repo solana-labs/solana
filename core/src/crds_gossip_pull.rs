@@ -145,10 +145,10 @@ impl CrdsFilterSet {
     }
 }
 
-impl Into<Vec<CrdsFilter>> for CrdsFilterSet {
-    fn into(self) -> Vec<CrdsFilter> {
-        let mask_bits = self.mask_bits;
-        self.filters
+impl From<CrdsFilterSet> for Vec<CrdsFilter> {
+    fn from(cfs: CrdsFilterSet) -> Self {
+        let mask_bits = cfs.mask_bits;
+        cfs.filters
             .into_iter()
             .enumerate()
             .map(|(seed, filter)| CrdsFilter {

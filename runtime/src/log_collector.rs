@@ -30,9 +30,9 @@ impl LogCollector {
     }
 }
 
-impl Into<Vec<String>> for LogCollector {
-    fn into(self) -> Vec<String> {
-        self.inner.into_inner().messages
+impl From<LogCollector> for Vec<String> {
+    fn from(log_collector: LogCollector) -> Self {
+        log_collector.inner.into_inner().messages
     }
 }
 
