@@ -122,7 +122,7 @@ impl ClusterSlotsService {
         cluster_info: &ClusterInfo,
     ) {
         let mut slots: Vec<Slot> = vec![];
-        while let Ok(mut more) = completed_slots_receiver.try_recv() {
+        while let Ok((mut more, _)) = completed_slots_receiver.try_recv() {
             slots.append(&mut more);
         }
         #[allow(clippy::stable_sort_primitive)]
@@ -161,7 +161,7 @@ impl ClusterSlotsService {
             })
             .collect();
 
-        while let Ok(mut more) = completed_slots_receiver.try_recv() {
+        while let Ok((mut more, _)) = completed_slots_receiver.try_recv() {
             slots.append(&mut more);
         }
         slots.sort_unstable();
