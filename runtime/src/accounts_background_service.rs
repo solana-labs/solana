@@ -90,7 +90,7 @@ impl SnapshotRequestHandler {
                     status_cache_slot_deltas,
                 } = snapshot_request;
 
-                let a1 = snapshot_root_bank.get_sorted_accounts();
+                //let a1 = snapshot_root_bank.get_sorted_accounts();
 
                 warn!("extra time before");
                 //snapshot_root_bank.update_accounts_hash_with_store_option(true, true,false);
@@ -181,10 +181,12 @@ impl SnapshotRequestHandler {
                 purge_old_snapshots_time.stop();
                 total_time.stop();
 
+                /*
                 {
                     let a2 = AccountsDB::get_sorted_accounts_from_stores(snapshot_root_bank.get_snapshot_storages(), snapshot_root_bank.simple_capitalization_enabled());
                     assert!(!AccountsDB::compare2(a1, a2));
                 }
+                */
 
                 log(&snapshot_root_bank, line!());
 
