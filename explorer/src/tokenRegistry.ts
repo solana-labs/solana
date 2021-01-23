@@ -272,4 +272,11 @@ const MAINNET_TOKENS: { [key: string]: TokenDetails } = {
     icon: "/tokens/kin.svg",
     website: "https://kin.org",
   },
+  FtgGSFADXBtroxq8VCausXRr2of47QBf5AS1NtZCu4GD: {
+    symbol: "BRZ",
+    name: "BRZ",
+    logo: "/tokens/brz.png",
+    icon: "/tokens/brz.png",
+    website: "https://brztoken.io",
+  },
 };
