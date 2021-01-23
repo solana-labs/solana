@@ -172,7 +172,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
 
     let a1 = bank.get_sorted_accounts();
     let a2 = AccountsDB::get_sorted_accounts_from_stores(snapshot_storages.clone(), bank.simple_capitalization_enabled());
-    assert!(!AccountsDB::compare2(a1, a2));
+    assert!(!AccountsDB::compare2(a1.clone(), a2.clone()));
 
     let snapshot_package_output_file = get_snapshot_archive_path(
         &snapshot_package_output_path,
