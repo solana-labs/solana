@@ -857,7 +857,9 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
             }
             !should_purge
         });
-        warn!("purging slots: {}", purged_slots.len());
+        if (purged_slots.len() > 1) {
+            warn!("purging slots: {}", purged_slots.len());
+        }
 
         self.purge_secondary_indexes_by_inner_key(pubkey, Some(&purged_slots), account_indexes);
     }
