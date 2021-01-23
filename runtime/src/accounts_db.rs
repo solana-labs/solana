@@ -3245,8 +3245,8 @@ impl AccountsDB {
         }
     }
 
-    pub fn compare2(left:Vec<(Pubkey, Hash, u64)>,
-right:Vec<(Pubkey, Hash, u64)>,
+    pub fn compare2(left:Vec<(Pubkey, Hash, u64, u64, u64)>,
+right:Vec<(Pubkey, Hash, u64, u64, u64)>,
 ) -> bool {
     let mut failed =false;
         let mut l = 0;
@@ -3278,8 +3278,8 @@ right:Vec<(Pubkey, Hash, u64)>,
             }
             if lv.0 == rv.0 {
                 // cut out pb key
-                let lv = (lv.1, lv.2);
-                let rv = (rv.1, rv.2);
+                let lv = (lv.1, lv.2, lv.3, lv.4);
+                let rv = (rv.1, rv.2, rv.3, rv.4);
                 failed=true;
                 warn!("jwash:different: {:?} {:?}, {:?}", left[l].0, lv, rv);
                 l += 1;
@@ -3287,8 +3287,8 @@ right:Vec<(Pubkey, Hash, u64)>,
             }
             else{
                 // at least cut out hashes
-                let lv = (lv.0, lv.2);
-                let rv = (rv.0, rv.2);
+                let lv = (lv.0, lv.2, lv.3, lv.4);
+                let rv = (rv.0, rv.2, rv.3, rv.4);
 
                 if lv.0 < rv.0 {
                     failed=true;
@@ -3680,6 +3680,51 @@ right:Vec<(Pubkey, Hash, u64)>,
         hashes
     }
 
+    fn remove_zero_balance_accounts2(
+        account_maps: DashMap<Pubkey, CalculateHashIntermediate>,
+    ) -> Vec<(Pubkey, Hash, u64, u64, u64)> {
+        let shards: Vec<_> = account_maps
+            .shards()
+            .into_iter()
+            .map(|x| x.clone())
+            .collect();
+
+        warn!("# shards: {}", shards.len());
+        let hashes: Vec<_> = shards
+            .par_iter()
+            .map(|x| {
+                //let abc: u32 = x.read().deref();
+                let a: dashmap::lock::RwLockReadGuard<HashMap<_, _>> = x.read();
+                //let b= a.borrow();
+                let res: Vec<_> = a
+                    .iter()
+                    .filter_map(
+                        //|(pubkey, (_, hash, lamports, original_lamports))| {
+                        |inp| {
+                            let (pubkey, sv) = inp;
+                            let (version, hash, lamports, original_lamports) = sv.get();
+                            if *original_lamports != 0 {
+                                Some((*pubkey, *hash, *lamports, *version, *original_lamports))
+                            } else {
+                                None
+                            }
+                        },
+                    )
+                    .collect();
+                res
+            })
+            //.into_iter()
+            /*
+            .map(|x| {
+                let a:HashMap<_,_> = x;
+                a.into_iter().collect::<Vec<_>>()
+                //x
+            })*/
+            .flatten()
+            .collect();
+        hashes
+    }
+
     pub fn rest_of_hash_calculation(
         accounts: (DashMap<Pubkey, CalculateHashIntermediate>, Measure, Measure),
         slot:Slot,
@@ -3728,12 +3773,12 @@ right:Vec<(Pubkey, Hash, u64)>,
         slot: Slot,
         ancestors: &Ancestors,
         simple_capitalization_enabled: bool,
-    ) -> Vec<(Pubkey, Hash, u64)> {
+    ) -> Vec<(Pubkey, Hash, u64, u64, u64)> {
 
         let (x, ..) = self.get_accounts_using_stores(slot, ancestors, simple_capitalization_enabled);
 
         let mut zeros = Measure::start("eliminate zeros");
-        let mut hashes = Self::remove_zero_balance_accounts(x);
+        let mut hashes = Self::remove_zero_balance_accounts2(x);
         zeros.stop();
 
         hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
@@ -3744,12 +3789,12 @@ right:Vec<(Pubkey, Hash, u64)>,
     pub fn get_sorted_accounts_from_stores(
         storages: SnapshotStorages,
         simple_capitalization_enabled: bool,
-    ) -> Vec<(Pubkey, Hash, u64)> {
+    ) -> Vec<(Pubkey, Hash, u64, u64, u64)> {
 
         let (x, ..) = Self::scan_slot_using_snapshot(storages, simple_capitalization_enabled);
 
         let mut zeros = Measure::start("eliminate zeros");
-        let mut hashes = Self::remove_zero_balance_accounts(x);
+        let mut hashes = Self::remove_zero_balance_accounts2(x);
         zeros.stop();
 
         hashes.par_sort_by(|a, b| a.0.cmp(&b.0));

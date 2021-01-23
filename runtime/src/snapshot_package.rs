@@ -26,7 +26,7 @@ pub struct AccountsPackage {
     pub hash: Hash,
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
-    pub data: Vec<Vec<(Pubkey, Hash, u64)>>,
+    pub data: Vec<Vec<(Pubkey, Hash, u64, u64, u64)>>,
 }
 
 impl AccountsPackage {
@@ -40,7 +40,7 @@ impl AccountsPackage {
         hash: Hash,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
-        data: Vec<Vec<(Pubkey, Hash, u64)>>,
+        data: Vec<Vec<(Pubkey, Hash, u64, u64, u64)>>,
     ) -> Self {
         Self {
             slot,
