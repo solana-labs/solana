@@ -892,8 +892,9 @@ pub fn snapshot_bank(
     snapshot_package_output_path: &Path,
     snapshot_version: SnapshotVersion,
     archive_format: &ArchiveFormat,
-) -> Result<()> {
+) -> Result<(Vec<(Pubkey, Hash, u64, u64, u64, Slot)>)> {
     let storages: Vec<_> = root_bank.get_snapshot_storages();
+    let a1 = AccountsDB::get_sorted_accounts_from_stores(storages.clone(), root_bank.simple_capitalization_enabled());
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
     add_snapshot(snapshot_path, &root_bank, &storages, snapshot_version)?;
     add_snapshot_time.stop();
@@ -916,13 +917,13 @@ pub fn snapshot_bank(
         snapshot_version,
     )?;
 
-    warn!("extra time before");
-    root_bank.update_accounts_hash_with_store_option(true, false, true);
-    warn!("extra time before done");
+    let a2 = AccountsDB::get_sorted_accounts_from_stores(root_bank.get_snapshot_storages(), root_bank.simple_capitalization_enabled());
+    warn!("jwash:Comparing in snapshot_bank");
+    assert!(!AccountsDB::compare2(a1.clone, a2));
 
     accounts_package_sender.send(package)?;
 
-    Ok(())
+    Ok((a1))
 }
 
 #[cfg(test)]
