@@ -175,7 +175,7 @@ impl SnapshotRequestHandler {
                     );
                 }
 
-                let r = r.unwrap.clone();
+                let r = r.unwrap().clone();
 
                 snapshot_time.stop();
 
