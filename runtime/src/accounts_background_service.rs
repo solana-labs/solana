@@ -200,7 +200,7 @@ impl SnapshotRequestHandler {
                     warn!("jwash:Comparing in accounts_bg_service4");
                     assert!(!AccountsDB::compare2(a1.clone(), a2));
                     warn!("jwash:Comparing in accounts_bg_service5");
-                    assert!(!AccountsDB::compare2(r.unwrap(), a1.clone()));
+                    assert!(!AccountsDB::compare2(r.unwrap().clone(), a1.clone()));
                 }
 
                 log(&snapshot_root_bank, line!());
