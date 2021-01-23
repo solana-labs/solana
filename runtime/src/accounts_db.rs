@@ -3269,7 +3269,10 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
             }
             let lv = left[l];
             let rv = right[r];
-            if lv == rv {
+            let lv2 = (lv.1, lv.2, lv.3, lv.4, lv.0);
+            let rv2 = (rv.1, rv.2, rv.3, rv.4, rv.0);
+
+            if lv == rv || lv2 == rv2 {
                 l += 1;
                 r += 1;
                 continue;
