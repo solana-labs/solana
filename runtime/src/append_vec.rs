@@ -271,7 +271,7 @@ impl AppendVec {
     }
 
     #[allow(clippy::mutex_atomic)]
-    pub fn set_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
+    pub fn set_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<usize> {
         // this AppendVec must not hold actual file;
         assert_eq!(self.file_size, 0);
 
@@ -293,17 +293,18 @@ impl AppendVec {
         self.path = path.as_ref().to_path_buf();
         self.map = map;
 
-        if !self.sanitize_layout_and_length() {
+        let (sanitized, num_accounts) = self.sanitize_layout_and_length();
+        if !sanitized {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "incorrect layout/length/data",
             ));
         }
 
-        Ok(())
+        Ok(num_accounts)
     }
 
-    fn sanitize_layout_and_length(&self) -> bool {
+    fn sanitize_layout_and_length(&self) -> (bool, usize) {
         let mut offset = 0;
 
         // This discards allocated accounts immediately after check at each loop iteration.
@@ -311,15 +312,17 @@ impl AppendVec {
         // This code should not reuse AppendVec.accounts() method as the current form or
         // extend it to be reused here because it would allow attackers to accumulate
         // some measurable amount of memory needlessly.
+        let mut num_accounts = 0;
         while let Some((account, next_offset)) = self.get_account(offset) {
             if !account.sanitize() {
-                return false;
+                return (false, num_accounts);
             }
             offset = next_offset;
+            num_accounts += 1;
         }
         let aligned_current_len = u64_align!(self.current_len.load(Ordering::Relaxed));
 
-        offset == aligned_current_len
+        (offset == aligned_current_len, num_accounts)
     }
 
     fn get_slice(&self, offset: usize, size: usize) -> Option<(&[u8], usize)> {
