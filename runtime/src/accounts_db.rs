@@ -1034,6 +1034,7 @@ impl AccountsDB {
         let mut clean_old_rooted = Measure::start("clean_old_roots");
         let (purged_account_slots, removed_accounts) =
             self.clean_old_rooted_accounts(purges_in_root, max_clean_root);
+        warn!("done with clean_old_rooted_accounts");
 
         if self.caching_enabled {
             self.do_reset_uncleaned_roots(max_clean_root);
@@ -1126,7 +1127,9 @@ impl AccountsDB {
 
         let reclaims = self.purge_keys_exact(&pubkey_to_slot_set);
 
+        warn!("handle_reclaims call in clean_accounts");
         self.handle_reclaims(&reclaims, None, false, None);
+        warn!("handle_reclaims call in clean_accounts done");
 
         reclaims_time.stop();
         datapoint_info!(
@@ -4585,7 +4588,9 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
         //
         // From 1) and 2) we guarantee passing Some(slot), true is safe
         // hit thiswarn!("jwash:store_accounts_custom");
+        warn!("jwash:handle_reclaims in store_accounts_custom");
         let mut handle_reclaims_time = Measure::start("handle_reclaims");
+        warn!("jwash:handle_reclaims in store_accounts_custom done");
         self.handle_reclaims(&reclaims, Some(slot), true, None);
         handle_reclaims_time.stop();
         self.stats
