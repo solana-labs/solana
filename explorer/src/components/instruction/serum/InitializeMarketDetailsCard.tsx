@@ -109,7 +109,7 @@ export function InitializeMarketDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>Quote Dust THreshold</td>
+        <td>Quote Dust Threshold</td>
         <td className="text-lg-right">
           {info.quoteDustThreshold.toString(10)}
         </td>
