@@ -919,7 +919,7 @@ pub fn snapshot_bank(
 
     let a2 = AccountsDB::get_sorted_accounts_from_stores(root_bank.get_snapshot_storages(), root_bank.simple_capitalization_enabled());
     warn!("jwash:Comparing in snapshot_bank");
-    assert!(!AccountsDB::compare2(a1.clone, a2));
+    assert!(!AccountsDB::compare2(a1.clone(), a2));
 
     accounts_package_sender.send(package)?;
 
