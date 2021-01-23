@@ -506,6 +506,21 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
             .map(WriteAccountMapEntry::from_account_map_entry)
     }
 
+    fn insert_new_entry_if_missing(&self, pubkey: &Pubkey) -> (WriteAccountMapEntry<T>, bool) {
+        let new_entry = Arc::new(AccountMapEntryInner {
+            ref_count: AtomicU64::new(0),
+            slot_list: RwLock::new(SlotList::with_capacity(1)),
+        });
+        let mut w_account_maps = self.account_maps.write().unwrap();
+        let mut is_newly_inserted = false;
+        let account_entry = w_account_maps.entry(*pubkey).or_insert_with(|| {
+            is_newly_inserted = true;
+            new_entry
+        });
+        let w_account_entry = WriteAccountMapEntry::from_account_map_entry(account_entry.clone());
+        (w_account_entry, is_newly_inserted)
+    }
+
     fn get_account_write_entry_else_create(
         &self,
         pubkey: &Pubkey,
@@ -513,18 +528,9 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
         let mut w_account_entry = self.get_account_write_entry(pubkey);
         let mut is_newly_inserted = false;
         if w_account_entry.is_none() {
-            let new_entry = Arc::new(AccountMapEntryInner {
-                ref_count: AtomicU64::new(0),
-                slot_list: RwLock::new(SlotList::with_capacity(1)),
-            });
-            let mut w_account_maps = self.account_maps.write().unwrap();
-            let account_entry = w_account_maps.entry(*pubkey).or_insert_with(|| {
-                is_newly_inserted = true;
-                new_entry
-            });
-            w_account_entry = Some(WriteAccountMapEntry::from_account_map_entry(
-                account_entry.clone(),
-            ));
+            let entry_is_new = self.insert_new_entry_if_missing(pubkey);
+            w_account_entry = Some(entry_is_new.0);
+            is_newly_inserted = entry_is_new.1;
         }
 
         (w_account_entry.unwrap(), is_newly_inserted)
@@ -726,6 +732,10 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
         account_data: &[u8],
         account_indexes: &HashSet<AccountIndex>,
     ) {
+        if account_indexes.is_empty() {
+            return;
+        }
+
         if account_indexes.contains(&AccountIndex::ProgramId) {
             self.program_id_index.insert(account_owner, pubkey, slot);
         }
@@ -761,6 +771,29 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
                 self.spl_token_mint_index.insert(&mint_key, pubkey, slot);
             }
         }
+    }
+
+    // Same functionally to upsert, but doesn't take the read lock
+    // initially on the accounts_map
+    // Can save time when inserting lots of new keys
+    pub fn insert_new_if_missing(
+        &self,
+        slot: Slot,
+        pubkey: &Pubkey,
+        account_owner: &Pubkey,
+        account_data: &[u8],
+        account_indexes: &HashSet<AccountIndex>,
+        account_info: T,
+        reclaims: &mut SlotList<T>,
+    ) {
+        {
+            let (mut w_account_entry, _is_new) = self.insert_new_entry_if_missing(pubkey);
+            if account_info.is_zero_lamport() {
+                self.zero_lamport_pubkeys.insert(*pubkey);
+            }
+            w_account_entry.update(slot, account_info, reclaims);
+        }
+        self.update_secondary_indexes(pubkey, slot, account_owner, account_data, account_indexes);
     }
 
     // Updates the given pubkey at the given slot with the new account information.

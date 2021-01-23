@@ -505,7 +505,10 @@ impl AccountStorageEntry {
     }
 
     pub fn set_file<P: AsRef<Path>>(&mut self, path: P) -> IOResult<()> {
-        self.accounts.set_file(path)
+        let num_accounts = self.accounts.set_file(path)?;
+        self.approx_store_count
+            .store(num_accounts, Ordering::Relaxed);
+        Ok(())
     }
 
     pub fn get_relative_path(&self) -> Option<PathBuf> {
@@ -4120,8 +4123,7 @@ impl AccountsDB {
     }
 
     pub fn generate_index(&self) {
-        type AccountsMap<'a> =
-            DashMap<Pubkey, Mutex<BTreeMap<u64, (AppendVecId, StoredAccountMeta<'a>)>>>;
+        type AccountsMap<'a> = HashMap<Pubkey, BTreeMap<u64, (AppendVecId, StoredAccountMeta<'a>)>>;
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
@@ -4129,42 +4131,37 @@ impl AccountsDB {
         let mut last_log_update = Instant::now();
         for (index, slot) in slots.iter().enumerate() {
             let now = Instant::now();
-            if now.duration_since(last_log_update).as_secs() >= 10 {
+            if now.duration_since(last_log_update).as_secs() >= 2 {
                 info!("generating index: {}/{} slots...", index, slots.len());
                 last_log_update = now;
             }
-            let accounts_map: AccountsMap = AccountsMap::new();
             let storage_maps: Vec<Arc<AccountStorageEntry>> = self
                 .storage
                 .get_slot_stores(*slot)
                 .map(|res| res.read().unwrap().values().cloned().collect())
                 .unwrap_or_default();
-            self.thread_pool.install(|| {
-                storage_maps.par_iter().for_each(|storage| {
-                    let accounts = storage.accounts.accounts(0);
-                    accounts.into_iter().for_each(|stored_account| {
-                        let entry = accounts_map
-                            .get(&stored_account.meta.pubkey)
-                            .unwrap_or_else(|| {
-                                accounts_map
-                                    .entry(stored_account.meta.pubkey)
-                                    .or_insert(Mutex::new(BTreeMap::new()))
-                                    .downgrade()
-                            });
-                        assert!(
-                            // There should only be one update per write version for a specific slot
-                            // and account
-                            entry
-                                .lock()
-                                .unwrap()
-                                .insert(
-                                    stored_account.meta.write_version,
-                                    (storage.append_vec_id(), stored_account)
-                                )
-                                .is_none()
-                        );
-                    })
-                });
+            let num_accounts = storage_maps
+                .iter()
+                .map(|storage| storage.approx_stored_count())
+                .sum();
+            let mut accounts_map: AccountsMap = AccountsMap::with_capacity(num_accounts);
+            storage_maps.iter().for_each(|storage| {
+                let accounts = storage.accounts.accounts(0);
+                accounts.into_iter().for_each(|stored_account| {
+                    let entry = accounts_map
+                        .entry(stored_account.meta.pubkey)
+                        .or_insert_with(BTreeMap::new);
+                    assert!(
+                        // There should only be one update per write version for a specific slot
+                        // and account
+                        entry
+                            .insert(
+                                stored_account.meta.write_version,
+                                (storage.append_vec_id(), stored_account)
+                            )
+                            .is_none()
+                    );
+                })
             });
             // Need to restore indexes even with older write versions which may
             // be shielding other accounts. When they are then purged, the
@@ -4173,16 +4170,14 @@ impl AccountsDB {
             if !accounts_map.is_empty() {
                 let mut _reclaims: Vec<(u64, AccountInfo)> = vec![];
                 for (pubkey, account_infos) in accounts_map.into_iter() {
-                    for (_, (store_id, stored_account)) in
-                        account_infos.into_inner().unwrap().into_iter()
-                    {
+                    for (_, (store_id, stored_account)) in account_infos.into_iter() {
                         let account_info = AccountInfo {
                             store_id,
                             offset: stored_account.offset,
                             stored_size: stored_account.stored_size,
                             lamports: stored_account.account_meta.lamports,
                         };
-                        self.accounts_index.upsert(
+                        self.accounts_index.insert_new_if_missing(
                             *slot,
                             &pubkey,
                             &stored_account.account_meta.owner,
@@ -4228,9 +4223,6 @@ impl AccountsDB {
                     trace!("id: {} clearing count", id);
                     store.count_and_status.write().unwrap().0 = 0;
                 }
-                store
-                    .approx_store_count
-                    .store(store.accounts.accounts(0).len(), Ordering::Relaxed);
             }
         }
     }
