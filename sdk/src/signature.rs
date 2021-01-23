@@ -400,7 +400,7 @@ pub fn keypair_from_seed_phrase_and_passphrase(
     seed_phrase: &str,
     passphrase: &str,
 ) -> Result<Keypair, Box<dyn error::Error>> {
-    const PBKDF2_ROUNDS: usize = 2048;
+    const PBKDF2_ROUNDS: u32 = 2048;
     const PBKDF2_BYTES: usize = 64;
 
     let salt = format!("mnemonic{}", passphrase);
