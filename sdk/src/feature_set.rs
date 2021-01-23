@@ -210,7 +210,7 @@ lazy_static! {
         (prevent_upgrade_and_invoke::id(), "prevent upgrade and invoke in same tx batch"),
         (full_inflation::candidate_example::vote::id(), "community vote allowing candidate_example to enable full inflation"),
         (full_inflation::candidate_example::enable::id(), "full inflation enabled by candidate_example"),
-        (track_writable_deescalation::id(), "Track account writable deescalation"),
+        (track_writable_deescalation::id(), "track account writable deescalation"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
