@@ -214,7 +214,7 @@ A fraction of a [block](terminology.md#block); the smallest unit sent between [v
 ## signature
 
 A 64-byte ed25519 signature of R (32-bytes) and S (32-bytes). With the requirement that R is a packed Edwards point not of small order and S is a scalar in the range of 0 <= S < L.
-This requirement ensures no signature malleability and each transaction must have at least one signature at the least for [fee account](terminology#fee-account).
+This requirement ensures no signature malleability. Each transaction must have at least one signature for [fee account](terminology#fee-account).
 Thus, the first signature in transaction can be treated as [transacton id](terminology.md#transaction-id)
 
 ## slot
@@ -263,11 +263,11 @@ A scarce, fungible member of a set of tokens.
 
 ## transaction
 
-One or more [instructions](terminology.md#instruction) signed by the [client](terminology.md#client) using one or more [keypairs](terminology.md#keypair) and executed atomically with only two possible outcomes of success or failure.
+One or more [instructions](terminology.md#instruction) signed by the [client](terminology.md#client) using one or more [keypairs](terminology.md#keypair) and executed atomically with only two possible outcomes: success or failure.
 
 ## transaction id
 
-The first [signature](terminology.md#signature) in [transaction](terminology.md#transaction) which can be used to uniquely identify transaction across the complete [ledger](terminology.md#transaction), ranging from the newest [block](terminology.md#block) to the [genesis block](terminology.md#genesis-block).
+The first [signature](terminology.md#signature) in a [transaction](terminology.md#transaction), which can be used to uniquely identify the transaction across the complete [ledger](terminology.md#ledger).
 
 ## transaction confirmations
 
