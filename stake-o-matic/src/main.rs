@@ -372,7 +372,7 @@ fn classify_block_producers(
             }
         );
 
-        confirmed_blocks.push(retry_rpc_operation(10, || {
+        confirmed_blocks.push(retry_rpc_operation(42, || {
             rpc_client.get_confirmed_blocks(next_slot, Some(last_slot))
         })?);
         next_slot = last_slot + 1;
