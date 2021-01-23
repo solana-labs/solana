@@ -590,7 +590,7 @@ impl ReplayStage {
                             }
                             let mut count = 0;
                             let mut message = false;
-                            let mut slots = vec![];
+                            let mut slots:Vec<Slot> = vec![];
                             'outer: loop {
                                 let result = completed_slots_receiver.try_recv();
                                 match result {
