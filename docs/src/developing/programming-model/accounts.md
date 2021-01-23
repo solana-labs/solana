@@ -84,6 +84,33 @@ _assign_ account ownership, meaning changing owner to different program id. If
 an account is not owned by a program, the program is only permitted to read its
 data and credit the account.
 
+## Owner of unmodified reference-only accounts
+
+It's recommended from a security perspective for programs to check the owner
+of unmodified reference-only accounts at the entrypoint.
+
+That avoids the account-spoofing attack. As the context of this attack,
+malicious users can create *arbitrary account `data`* and pass it to your
+program, pretending to be a legitimate account. But they can only do so with a
+bogus `owner`, they cannot fake your program's intended `owner`. This is
+guaranteed by the runtime restriction (= program's exclusive write-access if
+and only if `program_id` matches with account's owner).
+
+So checking the owner protects against any kind of spoofing attacks.
+
+An example case is to read a sysvar. Unless its owner (or its hard-coded
+address) is checked, it's impossible to be sure whether it's a real and valid
+sysvar merely by successful deserialization. Accordingly, the Solana SDK
+implements
+[such a check](https://github.com/solana-labs/solana/blob/a95675a7ce1651f7b59443eb146b356bc4b3f374/sdk/program/src/sysvar/mod.rs#L65)
+for sysvars.
+
+If your program always modifies the supplied account, this owner check isn't
+strictly needed, because modifying unowned (could be a faked owner)
+accounts will be inhibited by the very same runtime restrictions
+aforementioned. The end result of this would be a full rollback of the entire
+state changes due to being a *failed* transaction.
+
 ## Rent
 
 Keeping accounts alive on Solana incurs a storage cost called _rent_ because the

@@ -171,6 +171,33 @@ that this method only supports fixed sized types. Token utilizes the
 trait to encode/decode instruction data for both token instructions as well as
 token account states.
 
+### Multiple instructions in a single transaction
+
+A transaction can contain any number of arbitrary instructions up to the
+serialized transaction's max size (currently `PACKET_DATA_SIZE = 1232`) or
+computational budget limit via CPI. This means a malicious user can craft
+various irregular transactions, like a transaction containing your program's
+de-initialize instructions _many times_ inside a single transaction.
+
+This means your program should be hardened properly for any instruction
+sequences.
+
+Note that this hardening should address this subtle one: resetting account
+data to uninitialized state explicitly, not blindly relying on runtime's
+usual deletion behavior for accounts with no lamports at the end of the
+transaction.
+
+That's because even after one of your instructions resets account's lamports
+to 0 for account deletion, the runtime doesn't immediately reset the account's
+data for subsequent instructions when executing the transaction (On the other
+hand, the runtime does reset such account's data for subsequent transactions).
+Thus, it's possible for your program to be tricked to do certain actions more
+than allowed even after intended termination of the account, if not
+hardened properly.
+
+This behavior difference between intra-transaction and inter-transaction
+is intentional for the shared memory program's workings.
+
 ## Signatures
 
 Each transaction explicitly lists all account public keys referenced by the
