@@ -19,11 +19,11 @@ use std::{
 
 type CounterMap = HashMap<(&'static str, u64), CounterPoint>;
 
-impl Into<DataPoint> for CounterPoint {
-    fn into(self) -> DataPoint {
-        let mut point = DataPoint::new(self.name);
-        point.timestamp = self.timestamp;
-        point.add_field_i64("count", self.count);
+impl From<CounterPoint> for DataPoint {
+    fn from(counter_point: CounterPoint) -> Self {
+        let mut point = Self::new(counter_point.name);
+        point.timestamp = counter_point.timestamp;
+        point.add_field_i64("count", counter_point.count);
         point
     }
 }

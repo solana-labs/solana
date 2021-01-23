@@ -121,6 +121,7 @@ fn update_retransmit_stats(
 
     let now = timestamp();
     let last = stats.last_ts.load(Ordering::Relaxed);
+    #[allow(deprecated)]
     if now.saturating_sub(last) > 2000
         && stats.last_ts.compare_and_swap(last, now, Ordering::Relaxed) == last
     {
@@ -310,6 +311,7 @@ fn retransmit(
 
     let now = timestamp();
     let last = last_peer_update.load(Ordering::Relaxed);
+    #[allow(deprecated)]
     if now.saturating_sub(last) > 1000
         && last_peer_update.compare_and_swap(last, now, Ordering::Relaxed) == last
     {

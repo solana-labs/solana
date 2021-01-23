@@ -329,6 +329,7 @@ impl StandardBroadcastRun {
         let mut get_peers_time = Measure::start("broadcast::get_peers");
         let now = timestamp();
         let last = self.last_peer_update.load(Ordering::Relaxed);
+        #[allow(deprecated)]
         if now - last > BROADCAST_PEER_UPDATE_INTERVAL_MS
             && self
                 .last_peer_update

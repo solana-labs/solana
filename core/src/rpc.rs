@@ -749,7 +749,7 @@ impl JsonRpcRequestProcessor {
             // If the starting slot is lower than what's available in blockstore assume the entire
             // [start_slot..end_slot] can be fetched from BigTable.
             if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
-                return Ok(self
+                return self
                     .runtime_handle
                     .block_on(
                         bigtable_ledger_storage
@@ -764,7 +764,7 @@ impl JsonRpcRequestProcessor {
                             "BigTable query failed (maybe timeout due to too large range?)"
                                 .to_string(),
                         )
-                    })?);
+                    });
             }
         }
 

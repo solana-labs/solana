@@ -263,15 +263,9 @@ mod tests {
     #[test]
     fn test_get_highest_confirmed_root() {
         assert_eq!(get_highest_confirmed_root(vec![], 10), 0);
-        let mut rooted_stake = vec![];
-        rooted_stake.push((0, 5));
-        rooted_stake.push((1, 5));
+        let rooted_stake = vec![(0, 5), (1, 5)];
         assert_eq!(get_highest_confirmed_root(rooted_stake, 10), 0);
-        let mut rooted_stake = vec![];
-        rooted_stake.push((1, 5));
-        rooted_stake.push((0, 10));
-        rooted_stake.push((2, 5));
-        rooted_stake.push((1, 4));
+        let rooted_stake = vec![(1, 5), (0, 10), (2, 5), (1, 4)];
         assert_eq!(get_highest_confirmed_root(rooted_stake, 10), 1);
     }
 
