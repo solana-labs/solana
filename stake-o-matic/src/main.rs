@@ -463,16 +463,11 @@ fn simulate_transactions(
     rpc_client: &RpcClient,
     candidate_transactions: Vec<(Transaction, String)>,
 ) -> client_error::Result<Vec<(Transaction, String)>> {
-    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
-
-    info!(
-        "Simulating {} transactions with blockhash {}",
-        candidate_transactions.len(),
-        blockhash
-    );
+    info!("Simulating {} transactions", candidate_transactions.len(),);
     let mut simulated_transactions = vec![];
     for (mut transaction, memo) in candidate_transactions {
-        transaction.message.recent_blockhash = blockhash;
+        transaction.message.recent_blockhash =
+            retry_rpc_operation(10, || rpc_client.get_recent_blockhash())?.0;
 
         let sim_result = rpc_client.simulate_transaction_with_config(
             &transaction,
@@ -511,7 +506,7 @@ fn transact(
     );
 
     let (blockhash, fee_calculator, last_valid_slot) = rpc_client
-        .get_recent_blockhash_with_commitment(CommitmentConfig::max())?
+        .get_recent_blockhash_with_commitment(rpc_client.commitment())?
         .value;
     info!("{} transactions to send", transactions.len());
 
