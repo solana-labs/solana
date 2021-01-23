@@ -121,7 +121,7 @@ Requests can be sent in batches by sending an array of JSON-RPC request objects 
 - Hash: A SHA-256 hash of a chunk of data.
 - Pubkey: The public key of a Ed25519 key-pair.
 - Transaction: A list of Solana instructions signed by a client key-pair to authorize those actions.
-- Signature: An Ed25519 signature of transaction's payload data (= instructions). This can be used to identify transactions.
+- Signature: An Ed25519 signature of transaction's payload data including instructions. This can be used to identify transactions.
 
 ## Configuring State Commitment
 
