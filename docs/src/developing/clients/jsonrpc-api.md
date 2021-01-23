@@ -2795,18 +2795,15 @@ Result:
 
 Submits a signed transaction to the cluster for processing.
 
-Note that this doesn't guarantee the transaction is confirmed by the cluster.
-While this method reasonably retries to submit it background, the transaction
-could be rejected if transaction's `recent_blockhash` expires.
+This method does not alter the transaction in any way; it relays the transaction created by clients to the node as-is.
 
-In other words, this method immediately succeeds, without waiting for any
-confirmations.
+If the node's rpc service receives the transaction, this method immediately succeeds, without waiting for any confirmations. A successful response from this method does not guarantee the transaction is processed or confirmed by the cluster.
 
-Use [`getSignatureStatuses`](jsonrpc-api.md#getsignaturestatuses) to make sure
-the transaction is confirmed or not.
+While the rpc service will reasonably retry to submit it, the transaction
+could be rejected if transaction's `recent_blockhash` expires before it lands.
 
-Also, this method doesn't alter the transaction in any way. This method just
-relays the transaction created by clients to the cluster as-is.
+Use [`getSignatureStatuses`](jsonrpc-api.md#getsignaturestatuses) to ensure
+a transaction is processed and confirmed.
 
 Before submitting, the following preflight checks are performed:
 
@@ -2816,10 +2813,8 @@ Before submitting, the following preflight checks are performed:
    disabled if desired. It is recommended to specify the same commitment and
    preflight commitment to avoid confusing behavior.
 
-Also, the returned signature isn't something this method specifically creates or
-registers at the cluster. It is just the first signature in the transaction, which
-can be used to identify the transaction by other methods.
-In fact, the signature can easily extracted from the transaction data.
+The returned signature is the first signature in the transaction, which
+is used to identify the transaction. This identifier can be easily extracted from the transaction data before submission.
 
 #### Parameters:
 
