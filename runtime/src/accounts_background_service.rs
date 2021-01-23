@@ -199,6 +199,8 @@ impl SnapshotRequestHandler {
                     let a2 = AccountsDB::get_sorted_accounts_from_stores(snapshot_root_bank.get_snapshot_storages(), snapshot_root_bank.simple_capitalization_enabled());
                     warn!("jwash:Comparing in accounts_bg_service4");
                     assert!(!AccountsDB::compare2(a1.clone(), a2));
+                    warn!("jwash:Comparing in accounts_bg_service5");
+                    assert!(!AccountsDB::compare2(r.unwrap(), a1.clone()));
                 }
 
                 log(&snapshot_root_bank, line!());

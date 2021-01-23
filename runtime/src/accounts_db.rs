@@ -1167,6 +1167,7 @@ impl AccountsDB {
         no_dead_slot: bool,
         reclaim_result: Option<&mut ReclaimResult>,
     ) {
+        warn!("jwash:handle reclaims start");
         if reclaims.is_empty() {
             return;
         }
@@ -1187,6 +1188,7 @@ impl AccountsDB {
             }
         }
         self.process_dead_slots(&dead_slots, purged_account_slots);
+        warn!("jwash:handle reclaims end");
     }
 
     // Must be kept private!, does sensitive cleanup that should only be called from
@@ -1213,7 +1215,7 @@ impl AccountsDB {
             self.shrink_candidate_slots.lock().unwrap().remove(slot);
         }
 
-        debug!(
+        warn!(
             "process_dead_slots({}): {} {} {:?}",
             dead_slots.len(),
             clean_dead_slots,
@@ -2402,7 +2404,7 @@ impl AccountsDB {
         drop_storage_entries_elapsed.stop();
 
         datapoint_info!(
-            "purge_slots_time",
+            "purge_slots_time_from_store",
             ("safety_checks_elapsed", safety_checks_elapsed.as_us(), i64),
             (
                 "remove_storages_elapsed",
@@ -2502,7 +2504,7 @@ impl AccountsDB {
         drop_storage_entries_elapsed.stop();
 
         datapoint_info!(
-            "purge_slots_time",
+            "purge_slots_time_plain",
             (
                 "remove_storages_elapsed",
                 remove_storages_elapsed.as_us(),
@@ -2585,6 +2587,7 @@ impl AccountsDB {
             }
         }
 
+        warn!("jwash:remove_unrooted_slot");
         // 1) Remove old bank hash from self.bank_hashes
         // 2) Purge this slot's storage entries from self.storage
         self.handle_reclaims(&reclaims, Some(remove_slot), false, None);
@@ -4579,6 +4582,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
         //    b)From 1) we know no other slots are included in the "reclaims"
         //
         // From 1) and 2) we guarantee passing Some(slot), true is safe
+        warn!("jwash:store_accounts_custom");
         let mut handle_reclaims_time = Measure::start("handle_reclaims");
         self.handle_reclaims(&reclaims, Some(slot), true, None);
         handle_reclaims_time.stop();

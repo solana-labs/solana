@@ -555,6 +555,7 @@ impl RepairService {
         duplicate_slots_reset_sender: &DuplicateSlotsResetSender,
         repair_validators: &Option<HashSet<Pubkey>>,
     ) {
+        warn!("jwash:process_new_duplicate_slots");
         for slot in new_duplicate_slots {
             warn!(
                 "Cluster completed slot: {}, dumping our current version and repairing",
