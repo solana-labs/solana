@@ -435,7 +435,7 @@ impl LocalCluster {
     ) -> u64 {
         trace!("getting leader blockhash");
         let (blockhash, _fee_calculator, _last_valid_slot) = client
-            .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+            .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
             .unwrap();
         let mut tx =
             system_transaction::transfer(&source_keypair, dest_pubkey, lamports, blockhash);
@@ -452,7 +452,7 @@ impl LocalCluster {
             .wait_for_balance_with_commitment(
                 dest_pubkey,
                 Some(lamports),
-                CommitmentConfig::recent(),
+                CommitmentConfig::processed(),
             )
             .expect("get balance")
     }
@@ -474,7 +474,7 @@ impl LocalCluster {
 
         // Create the vote account if necessary
         if client
-            .poll_get_balance_with_commitment(&vote_account_pubkey, CommitmentConfig::recent())
+            .poll_get_balance_with_commitment(&vote_account_pubkey, CommitmentConfig::processed())
             .unwrap_or(0)
             == 0
         {
@@ -496,7 +496,7 @@ impl LocalCluster {
                 &[from_account.as_ref(), vote_account],
                 message,
                 client
-                    .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+                    .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
                     .unwrap()
                     .0,
             );
@@ -507,7 +507,7 @@ impl LocalCluster {
                 .wait_for_balance_with_commitment(
                     &vote_account_pubkey,
                     Some(amount),
-                    CommitmentConfig::recent(),
+                    CommitmentConfig::processed(),
                 )
                 .expect("get balance");
 
@@ -524,7 +524,7 @@ impl LocalCluster {
                 &[from_account.as_ref(), &stake_account_keypair],
                 message,
                 client
-                    .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+                    .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
                     .unwrap()
                     .0,
             );
@@ -541,7 +541,7 @@ impl LocalCluster {
                 .wait_for_balance_with_commitment(
                     &stake_account_pubkey,
                     Some(amount),
-                    CommitmentConfig::recent(),
+                    CommitmentConfig::processed(),
                 )
                 .expect("get balance");
         } else {
@@ -552,8 +552,9 @@ impl LocalCluster {
         }
         info!("Checking for vote account registration of {}", node_pubkey);
         match (
-            client.get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::recent()),
-            client.get_account_with_commitment(&vote_account_pubkey, CommitmentConfig::recent()),
+            client
+                .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::processed()),
+            client.get_account_with_commitment(&vote_account_pubkey, CommitmentConfig::processed()),
         ) {
             (Ok(Some(stake_account)), Ok(Some(vote_account))) => {
                 match (
