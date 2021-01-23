@@ -1167,7 +1167,7 @@ impl AccountsDB {
         no_dead_slot: bool,
         reclaim_result: Option<&mut ReclaimResult>,
     ) {
-        warn!("jwash:handle reclaims start");
+        // hit this warn!("jwash:handle reclaims start");
         if reclaims.is_empty() {
             return;
         }
@@ -1188,7 +1188,7 @@ impl AccountsDB {
             }
         }
         self.process_dead_slots(&dead_slots, purged_account_slots);
-        warn!("jwash:handle reclaims end");
+        // hit this warn!("jwash:handle reclaims end");
     }
 
     // Must be kept private!, does sensitive cleanup that should only be called from
@@ -3253,6 +3253,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
         let mut l = 0;
         let mut r = 0;
         loop {
+            assert!(!failed);
             let ldone = l >= left.len();
             let rdone = r >= right.len();
             if ldone && rdone {
@@ -4183,6 +4184,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
                     "AccountDB::accounts_index corrupted. Storage pointed to: {}, expected: {}, should only point to one slot",
                     store.slot(), *slot
                 );
+                warn!("remove_account, {}, {}, {}", slot, account_info.lamports, account_info.store_id);
                 let count = store.remove_account(account_info.stored_size);
                 if count == 0 {
                     dead_slots.insert(*slot);
@@ -4582,7 +4584,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
         //    b)From 1) we know no other slots are included in the "reclaims"
         //
         // From 1) and 2) we guarantee passing Some(slot), true is safe
-        warn!("jwash:store_accounts_custom");
+        // hit thiswarn!("jwash:store_accounts_custom");
         let mut handle_reclaims_time = Measure::start("handle_reclaims");
         self.handle_reclaims(&reclaims, Some(slot), true, None);
         handle_reclaims_time.stop();
