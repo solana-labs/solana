@@ -119,11 +119,12 @@ impl Tpu {
     }
 
     pub fn join(self) -> thread::Result<()> {
-        let mut results = vec![];
-        results.push(self.fetch_stage.join());
-        results.push(self.sigverify_stage.join());
-        results.push(self.cluster_info_vote_listener.join());
-        results.push(self.banking_stage.join());
+        let results = vec![
+            self.fetch_stage.join(),
+            self.sigverify_stage.join(),
+            self.cluster_info_vote_listener.join(),
+            self.banking_stage.join(),
+        ];
         let broadcast_result = self.broadcast_stage.join();
         for result in results {
             result?;

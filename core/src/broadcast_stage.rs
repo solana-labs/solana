@@ -347,6 +347,7 @@ fn update_peer_stats(
 ) {
     let now = timestamp();
     let last = last_datapoint_submit.load(Ordering::Relaxed);
+    #[allow(deprecated)]
     if now.saturating_sub(last) > 1000
         && last_datapoint_submit.compare_and_swap(last, now, Ordering::Relaxed) == last
     {

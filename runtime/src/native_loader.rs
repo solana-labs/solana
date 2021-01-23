@@ -14,7 +14,13 @@ use solana_sdk::{
     process_instruction::{InvokeContext, LoaderEntrypoint},
     pubkey::Pubkey,
 };
-use std::{collections::HashMap, env, path::PathBuf, str, sync::RwLock};
+use std::{
+    collections::HashMap,
+    env,
+    path::{Path, PathBuf},
+    str,
+    sync::RwLock,
+};
 use thiserror::Error;
 
 #[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
@@ -85,12 +91,12 @@ impl NativeLoader {
     }
 
     #[cfg(windows)]
-    fn library_open(path: &PathBuf) -> Result<Library, libloading::Error> {
+    fn library_open(path: &Path) -> Result<Library, libloading::Error> {
         Library::new(path)
     }
 
     #[cfg(not(windows))]
-    fn library_open(path: &PathBuf) -> Result<Library, libloading::Error> {
+    fn library_open(path: &Path) -> Result<Library, libloading::Error> {
         // Linux tls bug can cause crash on dlclose(), workaround by never unloading
         Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW)
     }

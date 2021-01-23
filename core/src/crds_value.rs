@@ -273,6 +273,42 @@ impl Vote {
             wallclock: new_rand_timestamp(rng),
         }
     }
+<<<<<<< HEAD
+=======
+
+    pub(crate) fn transaction(&self) -> &Transaction {
+        &self.transaction
+    }
+
+    pub(crate) fn slot(&self) -> Option<Slot> {
+        self.slot
+    }
+}
+
+impl<'de> Deserialize<'de> for Vote {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Vote {
+            from: Pubkey,
+            transaction: Transaction,
+            wallclock: u64,
+        }
+        let vote = Vote::deserialize(deserializer)?;
+        let vote = match vote.transaction.sanitize() {
+            Ok(_) => Self::new(vote.from, vote.transaction, vote.wallclock),
+            Err(_) => Self {
+                from: vote.from,
+                transaction: vote.transaction,
+                wallclock: vote.wallclock,
+                slot: None,
+            },
+        };
+        Ok(vote)
+    }
+>>>>>>> cbffab785... Upgrade to Rust v1.49.0
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]

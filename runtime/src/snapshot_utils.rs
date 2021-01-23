@@ -585,7 +585,7 @@ pub fn remove_snapshot<P: AsRef<Path>>(slot: Slot, snapshot_path: P) -> Result<(
 pub fn bank_from_archive<P: AsRef<Path>>(
     account_paths: &[PathBuf],
     frozen_account_pubkeys: &[Pubkey],
-    snapshot_path: &PathBuf,
+    snapshot_path: &Path,
     snapshot_tar: P,
     archive_format: ArchiveFormat,
     genesis_config: &GenesisConfig,
@@ -760,7 +760,7 @@ fn rebuild_bank_from_snapshots<P>(
     snapshot_version: &str,
     account_paths: &[PathBuf],
     frozen_account_pubkeys: &[Pubkey],
-    unpacked_snapshots_dir: &PathBuf,
+    unpacked_snapshots_dir: &Path,
     append_vecs_path: P,
     genesis_config: &GenesisConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
