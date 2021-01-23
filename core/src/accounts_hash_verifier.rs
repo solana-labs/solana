@@ -103,10 +103,16 @@ impl AccountsHashVerifier {
         warn!("scan_account_storage_no_bank_2 from process_accounts_package, storages: {}, # accounts: {}, size: {}", storage_maps.len(), sum, size);
 
 
+
+
         let simple_capitalization_enabled = true; // ??? TODO
         let hash = AccountsDB::calculate_accounts_hash_using_stores_only(accounts_package.storages.clone(), simple_capitalization_enabled, accounts_package.slot);
         start.stop();
         warn!("process_accounts_package - calculate hash: {:?}, took(ms): {}", hash, start.as_ms());
+
+        let a3 = AccountsDB::get_sorted_accounts_from_stores(accounts_package.storages.clone(), true);
+        let others = accounts_package.data;
+        
         assert_eq!(hash.0, accounts_package.hash);
 
         if fault_injection_rate_slots != 0

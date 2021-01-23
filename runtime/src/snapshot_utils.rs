@@ -7,6 +7,7 @@ use crate::{
         bank_from_stream, bank_to_stream, SerdeStyle, SnapshotStorage, SnapshotStorages,
     },
     snapshot_package::{AccountsPackage, AccountsPackageSendError, AccountsPackageSender},
+    accounts_db::*,
 };
 use bincode::{config::Options, serialize_into};
 use bzip2::bufread::BzDecoder;
@@ -169,6 +170,9 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         )?;
     }
 
+    let a1 = bank.get_sorted_accounts();
+    let a2 = AccountsDB::get_sorted_accounts_from_stores(snapshot_storages.clone(), bank.simple_capitalization_enabled());
+
     let snapshot_package_output_file = get_snapshot_archive_path(
         &snapshot_package_output_path,
         &(bank.slot(), bank.get_accounts_hash()),
@@ -185,8 +189,8 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         bank.get_accounts_hash(),
         archive_format,
         snapshot_version,
+        vec![a1, a2],
     );
-
     Ok(package)
 }
 

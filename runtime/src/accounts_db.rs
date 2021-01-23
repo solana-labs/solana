@@ -3271,11 +3271,13 @@ impl AccountsDB {
             }
         }
 
-        if ancestors.len() > 0{
-            warn!("ancestors: {:?}", ancestors);
-        }
+        let len_before = scanned_slots.len();
 
         scanned_slots.extend(ancestors.keys());
+        let len_after = scanned_slots.len();
+        if ancestors.len() > 0{
+            warn!("ancestors: more: {}, {:?}", len_after-len_before, ancestors);
+        }
 
         let mut min = u64::MAX;
         for k in scanned_slots.clone() {
@@ -3655,6 +3657,40 @@ impl AccountsDB {
         let result = Self::scan_slot_using_snapshot(storages, simple_capitalization_enabled);
 
         Self::rest_of_hash_calculation(result, slot, simple_capitalization_enabled)
+    }
+
+    pub fn get_sorted_accounts(
+        &self,
+        slot: Slot,
+        ancestors: &Ancestors,
+        simple_capitalization_enabled: bool,
+    ) -> Vec<(Pubkey, Hash, u64)> {
+
+        let (x, ..) = self.get_accounts_using_stores(slot, ancestors, simple_capitalization_enabled);
+
+        let mut zeros = Measure::start("eliminate zeros");
+        let mut hashes = Self::remove_zero_balance_accounts(x);
+        zeros.stop();
+
+        hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
+
+        hashes
+    }
+
+    pub fn get_sorted_accounts_from_stores(
+        storages: SnapshotStorages,
+        simple_capitalization_enabled: bool,
+    ) -> Vec<(Pubkey, Hash, u64)> {
+
+        let (x, ..) = Self::scan_slot_using_snapshot(storages, simple_capitalization_enabled);
+
+        let mut zeros = Measure::start("eliminate zeros");
+        let mut hashes = Self::remove_zero_balance_accounts(x);
+        zeros.stop();
+
+        hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
+
+        hashes
     }
 
     // modeled after get_accounts_delta_hash

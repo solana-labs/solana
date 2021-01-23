@@ -4307,6 +4307,16 @@ impl Bank {
         self.rc.accounts.accounts_db.get_accounts_hash(self.slot)
     }
 
+    pub fn get_sorted_accounts(
+        &self,
+    ) -> Vec<(Pubkey, Hash, u64)> {
+        self
+            .rc
+            .accounts
+            .accounts_db
+            .get_sorted_accounts(self.slot(), &self.ancestors, self.simple_capitalization_enabled())
+    }
+
     pub fn update_accounts_hash_with_store_option(
         &self,
         use_store: bool,

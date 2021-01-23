@@ -2,6 +2,8 @@ use crate::bank_forks::ArchiveFormat;
 use crate::snapshot_utils::SnapshotVersion;
 use crate::{accounts_db::SnapshotStorages, bank::BankSlotDelta};
 use solana_sdk::clock::Slot;
+use solana_sdk::pubkey::Pubkey;
+
 use solana_sdk::hash::Hash;
 use std::{
     path::PathBuf,
@@ -24,6 +26,7 @@ pub struct AccountsPackage {
     pub hash: Hash,
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
+    pub data: Vec<Vec<(Pubkey, Hash, u64)>>,
 }
 
 impl AccountsPackage {
@@ -37,6 +40,7 @@ impl AccountsPackage {
         hash: Hash,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
+        data: Vec<Vec<(Pubkey, Hash, u64)>>,
     ) -> Self {
         Self {
             slot,
@@ -48,6 +52,7 @@ impl AccountsPackage {
             hash,
             archive_format,
             snapshot_version,
+            data,
         }
     }
 }
