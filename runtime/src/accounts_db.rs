@@ -92,7 +92,6 @@ const CACHE_VIRTUAL_OFFSET: usize = 0;
 const CACHE_VIRTUAL_STORED_SIZE: usize = 0;
 
 type DashMapVersionHash = DashMap<Pubkey, (u64, Hash)>;
-type DashMapVersionHash2 = DashMap<Pubkey, (u64, Hash, u64, u64)>;
 
 lazy_static! {
     // FROZEN_ACCOUNT_PANIC is used to signal local_cluster that an AccountsDB panic has occurred,
@@ -159,8 +158,7 @@ type ReclaimResult = (AccountSlots, AppendVecOffsets);
 type StorageFinder<'a> = Box<dyn Fn(Slot, usize) -> Arc<AccountStorageEntry> + 'a>;
 type ShrinkCandidates = HashMap<Slot, HashMap<AppendVecId, Arc<AccountStorageEntry>>>;
 
-type CalculateHashIntermediate = (u64, Hash, u64, u64);
-type CalculateHashIntermediateForCache = (Pubkey, u64, Hash, u64, u64);
+type CalculateHashIntermediate = (u64, Hash, u64, u64, Slot);
 
 trait Versioned {
     fn version(&self) -> u64;
@@ -3245,8 +3243,8 @@ impl AccountsDB {
         }
     }
 
-    pub fn compare2(left:Vec<(Pubkey, Hash, u64, u64, u64)>,
-right:Vec<(Pubkey, Hash, u64, u64, u64)>,
+    pub fn compare2(left:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
+right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
 ) -> bool {
     let mut failed =false;
         let mut l = 0;
@@ -3470,7 +3468,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64)>,
                     );
 
                     let key = public_key;
-                    let source_item = (version, *loaded_account.loaded_hash(), balance, lamports);
+                    let source_item = (version, *loaded_account.loaded_hash(), balance, lamports, 1111);
                     match map.entry(*key) {
                         Occupied(mut dest_item) => {
                             if dest_item.get_mut().version() <= source_item.version() {
@@ -3528,7 +3526,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64)>,
 
                     accum.push((
                         *public_key,
-                        (version, *loaded_account.loaded_hash(), balance, lamports),
+                        (version, *loaded_account.loaded_hash(), balance, lamports, slot),
                     ));
                 },
             );
@@ -3657,7 +3655,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64)>,
                         //|(pubkey, (_, hash, lamports, original_lamports))| {
                         |inp| {
                             let (pubkey, sv) = inp;
-                            let (_, hash, lamports, original_lamports) = sv.get();
+                            let (_, hash, lamports, original_lamports, _) = sv.get();
                             if *original_lamports != 0 {
                                 Some((*pubkey, *hash, *lamports))
                             } else {
@@ -3682,7 +3680,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64)>,
 
     fn remove_zero_balance_accounts2(
         account_maps: DashMap<Pubkey, CalculateHashIntermediate>,
-    ) -> Vec<(Pubkey, Hash, u64, u64, u64)> {
+    ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot)> {
         let shards: Vec<_> = account_maps
             .shards()
             .into_iter()
@@ -3702,9 +3700,9 @@ right:Vec<(Pubkey, Hash, u64, u64, u64)>,
                         //|(pubkey, (_, hash, lamports, original_lamports))| {
                         |inp| {
                             let (pubkey, sv) = inp;
-                            let (version, hash, lamports, original_lamports) = sv.get();
+                            let (version, hash, lamports, original_lamports, last) = sv.get();
                             if *original_lamports != 0 {
-                                Some((*pubkey, *hash, *lamports, *version, *original_lamports))
+                                Some((*pubkey, *hash, *lamports, *version, *original_lamports, *last))
                             } else {
                                 None
                             }
@@ -3773,7 +3771,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64)>,
         slot: Slot,
         ancestors: &Ancestors,
         simple_capitalization_enabled: bool,
-    ) -> Vec<(Pubkey, Hash, u64, u64, u64)> {
+    ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot)> {
 
         let (x, ..) = self.get_accounts_using_stores(slot, ancestors, simple_capitalization_enabled);
 
@@ -3789,7 +3787,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64)>,
     pub fn get_sorted_accounts_from_stores(
         storages: SnapshotStorages,
         simple_capitalization_enabled: bool,
-    ) -> Vec<(Pubkey, Hash, u64, u64, u64)> {
+    ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot)> {
 
         let (x, ..) = Self::scan_slot_using_snapshot(storages, simple_capitalization_enabled);
 
@@ -4087,61 +4085,12 @@ right:Vec<(Pubkey, Hash, u64, u64, u64)>,
         }
     }
 
-    fn scan_accounts_hash_function_lamports(
-        accum: &DashMap<Pubkey, CalculateHashIntermediate>,
-        loaded_account: LoadedAccount,
-        simple_capitalization_enabled: bool,
-    ) {
-        let loaded_write_version = loaded_account.write_version();
-        let loaded_hash = *loaded_account.loaded_hash();
-        let lamports = loaded_account.lamports();
-        let balance = Self::account_balance_for_capitalization(
-            lamports,
-            &loaded_account.owner(),
-            loaded_account.executable(),
-            simple_capitalization_enabled,
-        );
-
-        let should_insert = if let Some(existing_entry) = accum.get(loaded_account.pubkey()) {
-            loaded_write_version > existing_entry.value().version()
-        } else {
-            true
-        };
-        if should_insert {
-            let value = (loaded_write_version, loaded_hash, balance, lamports);
-            // Detected insertion is necessary, grabs the write lock to commit the write,
-            match accum.entry(*loaded_account.pubkey()) {
-                // Double check in case another thread interleaved a write between the read + write.
-                Occupied(mut occupied_entry) => {
-                    if loaded_write_version > occupied_entry.get().version() {
-                        occupied_entry.insert(value);
-                    }
-                }
-
-                Vacant(vacant_entry) => {
-                    vacant_entry.insert(value);
-                }
-            }
-        }
-    }
-
     fn scan_cache(loaded_account: LoadedAccount) -> (Pubkey, Hash, u64) {
         // Cache only has one version per key, don't need to worry about versioning
         (
             *loaded_account.pubkey(),
             *loaded_account.loaded_hash(),
             CACHE_VIRTUAL_WRITE_VERSION,
-        )
-    }
-
-    fn scan_cache_2(loaded_account: LoadedAccount) -> CalculateHashIntermediateForCache {
-        // Cache only has one version per key, don't need to worry about versioning
-        (
-            *loaded_account.pubkey(),
-            CACHE_VIRTUAL_WRITE_VERSION, // ??? todo what to put here?
-            *loaded_account.loaded_hash(),
-            0,                         // balance
-            loaded_account.lamports(), // raw lamports
         )
     }
 

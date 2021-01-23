@@ -4309,7 +4309,7 @@ impl Bank {
 
     pub fn get_sorted_accounts(
         &self,
-    ) -> Vec<(Pubkey, Hash, u64, u64, u64)> {
+    ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot)> {
         self
             .rc
             .accounts
