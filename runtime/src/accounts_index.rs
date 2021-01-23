@@ -788,9 +788,6 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
     ) {
         {
             let (mut w_account_entry, _is_new) = self.insert_new_entry_if_missing(pubkey);
-            if account_info.is_zero_lamport() {
-                self.zero_lamport_pubkeys.insert(*pubkey);
-            }
             w_account_entry.update(slot, account_info, reclaims);
         }
         self.update_secondary_indexes(pubkey, slot, account_owner, account_data, account_indexes);
