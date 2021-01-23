@@ -588,13 +588,14 @@ impl ReplayStage {
                                     inc_new_counter_info!("replay_stage-partition_resolved", 1);
                                 }
                             }
-
+                            let mut count = 0;
                             let mut message = false;
                             'outer: loop {
                                 let result = completed_slots_receiver.try_recv();
                                 match result {
                                     Err(_) => break,
                                     Ok((slots, notification_time)) => {
+                                        count += slots.len();
                                         for slot in slots {
                                             if slot == reset_bank.slot() {
                                                 let delay = time_now - notification_time;
@@ -608,7 +609,7 @@ impl ReplayStage {
                                 };
                             }
                             if !message {
-                                warn!("jwash:Cannot find blockstore ready time, so cannot calculate delay to poh reset");
+                                warn!("jwash:Cannot find blockstore ready time, so cannot calculate delay to poh reset, found count: {}", count);
                             }
                         }
                         Self::report_memory(&allocated, "reset_bank", start);
