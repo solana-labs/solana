@@ -907,7 +907,7 @@ impl ShrinkStats {
                     i64
                 ),
                 (
-                    "drop_storage_entries_elapsed",
+                    "accounts_removed",
                     self.accounts_removed.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
@@ -2862,7 +2862,7 @@ impl AccountsDB {
         self.do_purge_slots_from_cache_and_store(
             true,
             non_roots.into_iter(),
-            &self.clean_accounts_stats.purge_stats,
+            &self.external_purge_slots_stats,
         );
         self.external_purge_slots_stats
             .report("external_purge_slots_stats", Some(1000));
