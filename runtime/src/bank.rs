@@ -3909,14 +3909,17 @@ impl Bank {
     }
 
     pub fn force_flush_accounts_cache(&self) {
-        self.rc.accounts.accounts_db.force_flush_accounts_cache()
+        self.rc
+            .accounts
+            .accounts_db
+            .flush_accounts_cache(true, Some(self.slot()))
     }
 
     pub fn flush_accounts_cache_if_needed(&self) {
         self.rc
             .accounts
             .accounts_db
-            .flush_accounts_cache_if_needed()
+            .flush_accounts_cache(false, Some(self.slot()))
     }
 
     fn store_account_and_update_capitalization(&self, pubkey: &Pubkey, new_account: &Account) {
@@ -10241,7 +10244,8 @@ pub(crate) mod tests {
     fn get_shrink_account_size() -> usize {
         let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000_000);
 
-        // Set root for bank 0, with caching enabled
+        // Set root for bank 0, with caching disabled so we can get the size
+        // of the storage for this slot
         let mut bank0 = Arc::new(Bank::new_with_config(
             &genesis_config,
             HashSet::new(),
@@ -10279,12 +10283,16 @@ pub(crate) mod tests {
         bank0.restore_old_behavior_for_fragile_tests();
 
         let pubkey0_size = get_shrink_account_size();
+
         let account0 = Account::new(1000, pubkey0_size as usize, &Pubkey::new_unique());
         bank0.store_account(&pubkey0, &account0);
 
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank0).unwrap());
         bank0.freeze();
         bank0.squash();
+        // Flush now so that accounts cache cleaning doesn't clean up bank 0 when later
+        // slots add updates to the cache
+        bank0.force_flush_accounts_cache();
 
         // Store some lamports in bank 1
         let some_lamports = 123;
@@ -10292,6 +10300,11 @@ pub(crate) mod tests {
         bank1.deposit(&pubkey1, some_lamports);
         bank1.deposit(&pubkey2, some_lamports);
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank1).unwrap());
+        bank1.freeze();
+        bank1.squash();
+        // Flush now so that accounts cache cleaning doesn't clean up bank 0 when later
+        // slots add updates to the cache
+        bank1.force_flush_accounts_cache();
 
         // Store some lamports for pubkey1 in bank 2, root bank 2
         let mut bank2 = Arc::new(new_from_parent(&bank1));
@@ -11809,43 +11822,45 @@ pub(crate) mod tests {
 
     #[test]
     fn test_store_scan_consistency_root() {
-        test_store_scan_consistency(
-            false,
-            |bank0, bank_to_scan_sender, pubkeys_to_modify, program_id, starting_lamports| {
-                let mut current_bank = bank0.clone();
-                let mut prev_bank = bank0;
-                loop {
-                    let lamports_this_round = current_bank.slot() + starting_lamports + 1;
-                    let account = Account::new(lamports_this_round, 0, &program_id);
-                    for key in pubkeys_to_modify.iter() {
-                        current_bank.store_account(key, &account);
+        for accounts_db_caching_enabled in &[false, true] {
+            test_store_scan_consistency(
+                *accounts_db_caching_enabled,
+                |bank0, bank_to_scan_sender, pubkeys_to_modify, program_id, starting_lamports| {
+                    let mut current_bank = bank0.clone();
+                    let mut prev_bank = bank0;
+                    loop {
+                        let lamports_this_round = current_bank.slot() + starting_lamports + 1;
+                        let account = Account::new(lamports_this_round, 0, &program_id);
+                        for key in pubkeys_to_modify.iter() {
+                            current_bank.store_account(key, &account);
+                        }
+                        current_bank.freeze();
+                        // Send the previous bank to the scan thread to perform the scan.
+                        // Meanwhile this thread will squash and update roots immediately after
+                        // so the roots will update while scanning.
+                        //
+                        // The capacity of the channel is 1 so that this thread will wait for the scan to finish before starting
+                        // the next iteration, allowing the scan to stay in sync with these updates
+                        // such that every scan will see this interruption.
+                        if bank_to_scan_sender.send(prev_bank).is_err() {
+                            // Channel was disconnected, exit
+                            return;
+                        }
+                        current_bank.squash();
+                        if current_bank.slot() % 2 == 0 {
+                            current_bank.force_flush_accounts_cache();
+                            current_bank.clean_accounts(true);
+                        }
+                        prev_bank = current_bank.clone();
+                        current_bank = Arc::new(Bank::new_from_parent(
+                            &current_bank,
+                            &solana_sdk::pubkey::new_rand(),
+                            current_bank.slot() + 1,
+                        ));
                     }
-                    current_bank.freeze();
-                    // Send the previous bank to the scan thread to perform the scan.
-                    // Meanwhile this thread will squash and update roots immediately after
-                    // so the roots will update while scanning.
-                    //
-                    // The capacity of the channel is 1 so that this thread will wait for the scan to finish before starting
-                    // the next iteration, allowing the scan to stay in sync with these updates
-                    // such that every scan will see this interruption.
-                    if bank_to_scan_sender.send(prev_bank).is_err() {
-                        // Channel was disconnected, exit
-                        return;
-                    }
-
-                    current_bank.freeze();
-                    current_bank.squash();
-                    current_bank.force_flush_accounts_cache();
-                    current_bank.clean_accounts(true);
-                    prev_bank = current_bank.clone();
-                    current_bank = Arc::new(Bank::new_from_parent(
-                        &current_bank,
-                        &solana_sdk::pubkey::new_rand(),
-                        current_bank.slot() + 1,
-                    ));
-                }
-            },
-        );
+                },
+            );
+        }
     }
 
     #[test]
