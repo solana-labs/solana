@@ -3276,8 +3276,8 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
             }
             if lv.0 == rv.0 {
                 // cut out pb key
-                let lv = (lv.1, lv.2, lv.3, lv.4);
-                let rv = (rv.1, rv.2, rv.3, rv.4);
+                let lv = (lv.1, lv.2, lv.3, lv.4, lv.5);
+                let rv = (rv.1, rv.2, rv.3, rv.4, rv.5);
                 failed=true;
                 warn!("jwash:different: {:?} {:?}, {:?}", left[l].0, lv, rv);
                 l += 1;
@@ -3285,8 +3285,8 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
             }
             else{
                 // at least cut out hashes
-                let lv = (lv.0, lv.2, lv.3, lv.4);
-                let rv = (rv.0, rv.2, rv.3, rv.4);
+                let lv = (lv.0, lv.2, lv.3, lv.4, lv.5);
+                let rv = (rv.0, rv.2, rv.3, rv.4, rv.5);
 
                 if lv.0 < rv.0 {
                     failed=true;
