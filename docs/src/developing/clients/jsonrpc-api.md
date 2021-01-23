@@ -120,8 +120,8 @@ Requests can be sent in batches by sending an array of JSON-RPC request objects 
 
 - Hash: A SHA-256 hash of a chunk of data.
 - Pubkey: The public key of a Ed25519 key-pair.
-- Signature: An Ed25519 signature of a chunk of data.
-- Transaction: A Solana instruction signed by a client key-pair.
+- Transaction: A list of Solana instructions signed by a client key-pair to authorize those actions.
+- Signature: An Ed25519 signature of transaction's payload data (= instructions). This can be used to identify transactions.
 
 ## Configuring State Commitment
 
@@ -642,7 +642,7 @@ Transactions are quite different from those on other blockchains. Be sure to rev
 
 The JSON structure of a transaction is defined as follows:
 
-- `signatures: <array[string]>` - A list of base-58 encoded signatures applied to the transaction. The list is always of length `message.header.numRequiredSignatures`, and the signature at index `i` corresponds to the public key at index `i` in `message.account_keys`.
+- `signatures: <array[string]>` - A list of base-58 encoded signatures applied to the transaction. The list is always of length `message.header.numRequiredSignatures` and not empty. The signature at index `i` corresponds to the public key at index `i` in `message.account_keys`. The first one is used as [transaction id](../../terminology.md#transaction-id).
 - `message: <object>` - Defines the content of the transaction.
   - `accountKeys: <array[string]>` - List of base-58 encoded public keys used by the transaction, including by the instructions and for signatures. The first `message.header.numRequiredSignatures` public keys must sign the transaction.
   - `header: <object>` - Details the account types and signatures required by the transaction.
@@ -2795,9 +2795,13 @@ Result:
 
 Submits a signed transaction to the cluster for processing.
 
-This method does not alter the transaction in any way; it relays the transaction created by clients to the node as-is.
+This method does not alter the transaction in any way; it relays the
+transaction created by clients to the node as-is.
 
-If the node's rpc service receives the transaction, this method immediately succeeds, without waiting for any confirmations. A successful response from this method does not guarantee the transaction is processed or confirmed by the cluster.
+If the node's rpc service receives the transaction, this method immediately
+succeeds, without waiting for any confirmations. A successful response from
+this method does not guarantee the transaction is processed or confirmed by the
+cluster.
 
 While the rpc service will reasonably retry to submit it, the transaction
 could be rejected if transaction's `recent_blockhash` expires before it lands.
@@ -2814,7 +2818,9 @@ Before submitting, the following preflight checks are performed:
    preflight commitment to avoid confusing behavior.
 
 The returned signature is the first signature in the transaction, which
-is used to identify the transaction. This identifier can be easily extracted from the transaction data before submission.
+is used to identify the transaction ([transaction id](../../terminology.md#transanction-id)).
+This identifier can be easily extracted from the transaction data before
+submission.
 
 #### Parameters:
 
@@ -2826,7 +2832,7 @@ is used to identify the transaction. This identifier can be easily extracted fro
 
 #### Results:
 
-- `<string>` - First Transaction Signature embedded in the transaction, as base-58 encoded string (to be used for identification of transaction)
+- `<string>` - First Transaction Signature embedded in the transaction, as base-58 encoded string ([transaction id](../../terminology.md#transanction-id))
 
 #### Example:
 
