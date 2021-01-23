@@ -60,6 +60,7 @@ use std::{
         Arc, Mutex, RwLock,
     },
     time::Duration,
+    time::Instant,
 };
 use thiserror::Error;
 use trees::{Tree, TreeWalk};
@@ -89,7 +90,7 @@ pub const MAX_TURBINE_DELAY_IN_TICKS: u64 = MAX_TURBINE_PROPAGATION_IN_MS / MS_P
 // (32K shreds per slot * 4 TX per shred * 2.5 slots per sec)
 pub const MAX_DATA_SHREDS_PER_SLOT: usize = 32_768;
 
-pub type CompletedSlotsChannelContents = Vec<u64>;
+pub type CompletedSlotsChannelContents = (Vec<u64>, Instant);
 pub type CompletedSlotsReceiver = Receiver<CompletedSlotsChannelContents>;
 type CompletedRanges = Vec<(u32, u32)>;
 
@@ -123,6 +124,7 @@ pub struct BlockstoreSignals {
     pub blockstore: Blockstore,
     pub ledger_signal_receiver: Receiver<bool>,
     pub completed_slots_receiver: CompletedSlotsReceiver,
+    pub completed_slots_receiver_2: CompletedSlotsReceiver,
 }
 
 // ledger window
@@ -382,13 +384,16 @@ impl Blockstore {
         let (ledger_signal_sender, ledger_signal_receiver) = sync_channel(1);
         let (completed_slots_sender, completed_slots_receiver) =
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
+        let (completed_slots_sender_2, completed_slots_receiver_2) =
+            sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
         blockstore.new_shreds_signals = vec![ledger_signal_sender];
-        blockstore.completed_slots_senders = vec![completed_slots_sender];
+        blockstore.completed_slots_senders = vec![completed_slots_sender, completed_slots_sender_2];
 
         Ok(BlockstoreSignals {
             blockstore,
             ledger_signal_receiver,
             completed_slots_receiver,
+            completed_slots_receiver_2,
         })
     }
 
@@ -3016,8 +3021,9 @@ fn send_signals(
 
         slots.push(newly_completed_slots);
 
+        let now = Instant::now();
         for (signal, slots) in completed_slots_senders.iter().zip(slots.into_iter()) {
-            let res = signal.try_send(slots);
+            let res = signal.try_send((slots, now));
             if let Err(TrySendError::Full(_)) = res {
                 datapoint_error!(
                     "blockstore_error",
@@ -4382,7 +4388,7 @@ pub mod tests {
 
         // Insert first shred, slot should now be considered complete
         ledger.insert_shreds(vec![shred0], None, false).unwrap();
-        assert_eq!(recvr.try_recv().unwrap(), vec![0]);
+        assert_eq!(recvr.try_recv().unwrap().0, vec![0]);
     }
 
     #[test]
@@ -4415,7 +4421,7 @@ pub mod tests {
         ledger
             .insert_shreds(vec![orphan_child0], None, false)
             .unwrap();
-        assert_eq!(recvr.try_recv().unwrap(), vec![slots[2]]);
+        assert_eq!(recvr.try_recv().unwrap().0, vec![slots[2]]);
 
         // Insert the shreds for the orphan_slot
         let orphan_shred0 = orphan_shreds.remove(0);
@@ -4426,7 +4432,7 @@ pub mod tests {
         ledger
             .insert_shreds(vec![orphan_shred0], None, false)
             .unwrap();
-        assert_eq!(recvr.try_recv().unwrap(), vec![slots[1]]);
+        assert_eq!(recvr.try_recv().unwrap().0, vec![slots[1]]);
     }
 
     #[test]
@@ -4457,7 +4463,7 @@ pub mod tests {
 
         all_shreds.shuffle(&mut thread_rng());
         ledger.insert_shreds(all_shreds, None, false).unwrap();
-        let mut result = recvr.try_recv().unwrap();
+        let mut result = recvr.try_recv().unwrap().0;
         result.sort_unstable();
         slots.push(disconnected_slot);
         slots.sort_unstable();

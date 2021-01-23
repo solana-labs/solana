@@ -103,6 +103,7 @@ impl Tvu {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         exit: &Arc<AtomicBool>,
         completed_slots_receiver: CompletedSlotsReceiver,
+        completed_slots_receiver_2: CompletedSlotsReceiver,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         cfg: Option<Arc<AtomicBool>>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -258,6 +259,7 @@ impl Tvu {
             retransmit_slots_sender,
             duplicate_slots_reset_receiver,
             replay_vote_sender,
+            completed_slots_receiver_2,
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -342,6 +344,7 @@ pub mod tests {
             blockstore,
             ledger_signal_receiver,
             completed_slots_receiver,
+            completed_slots_receiver_2,
             ..
         } = Blockstore::open_with_signal(&blockstore_path, None, true)
             .expect("Expected to successfully open ledger");
@@ -384,6 +387,7 @@ pub mod tests {
             &leader_schedule_cache,
             &exit,
             completed_slots_receiver,
+            completed_slots_receiver_2,
             block_commitment_cache,
             None,
             None,
