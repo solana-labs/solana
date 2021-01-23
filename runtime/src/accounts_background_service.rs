@@ -139,6 +139,7 @@ impl SnapshotRequestHandler {
 
                 {
                     let a2 = AccountsDB::get_sorted_accounts_from_stores(snapshot_root_bank.get_snapshot_storages(), snapshot_root_bank.simple_capitalization_enabled());
+                    warn!("jwash:Comparing in accounts_bg_service");
                     assert!(!AccountsDB::compare2(a1.clone(), a2));
                 }
 
@@ -181,6 +182,12 @@ impl SnapshotRequestHandler {
 
                 log(&snapshot_root_bank, line!());
 
+                {
+                    let a2 = AccountsDB::get_sorted_accounts_from_stores(snapshot_root_bank.get_snapshot_storages(), snapshot_root_bank.simple_capitalization_enabled());
+                    warn!("jwash:Comparing in accounts_bg_service3");
+                    assert!(!AccountsDB::compare2(a1.clone(), a2));
+                }
+
                 // Cleanup outdated snapshots
                 let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
                 snapshot_utils::purge_old_snapshots(&self.snapshot_config.snapshot_path);
@@ -189,6 +196,7 @@ impl SnapshotRequestHandler {
 
                 {
                     let a2 = AccountsDB::get_sorted_accounts_from_stores(snapshot_root_bank.get_snapshot_storages(), snapshot_root_bank.simple_capitalization_enabled());
+                    warn!("jwash:Comparing in accounts_bg_service4");
                     assert!(!AccountsDB::compare2(a1.clone(), a2));
                 }
 

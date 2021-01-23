@@ -3305,6 +3305,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot)>,
                 }
             }
         }
+        warn!("jwash: compare done");
         failed
     }
 
