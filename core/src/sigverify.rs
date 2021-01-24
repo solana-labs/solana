@@ -53,7 +53,7 @@ mod tests {
 
     #[test]
     fn test_mark_disabled() {
-        let mut batch = Packets::default();
+        let mut batch = Packets::for_test_or_bench();
         batch.packets.push(Packet::default());
         let mut batches: Vec<Packets> = vec![batch];
         mark_disabled(&mut batches, &[vec![0]]);

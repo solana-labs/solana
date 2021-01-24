@@ -92,7 +92,7 @@ pub mod tests {
             0,
             0xc0de,
         );
-        let mut batch = [Packets::default(), Packets::default()];
+        let mut batch = [Packets::for_test_or_bench(), Packets::for_test_or_bench()];
 
         let keypair = Keypair::new();
         Shredder::sign_shred(&keypair, &mut shred);
@@ -130,7 +130,7 @@ pub mod tests {
         let bf = Arc::new(RwLock::new(BankForks::new(bank)));
         let verifier = ShredSigVerifier::new(bf, cache);
 
-        let mut batch = vec![Packets::default()];
+        let mut batch = vec![Packets::for_test_or_bench()];
         batch[0].packets.resize(2, Packet::default());
 
         let mut shred = Shred::new_from_data(

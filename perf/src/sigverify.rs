@@ -653,7 +653,7 @@ mod tests {
         // generate packet vector
         let batches: Vec<_> = (0..num_batches)
             .map(|_| {
-                let mut packets = Packets::default();
+                let mut packets = Packets::for_test_or_bench();
                 packets.packets.resize(0, Packet::default());
                 for _ in 0..num_packets_per_batch {
                     packets.packets.push(packet.clone());

@@ -16,19 +16,16 @@ pub struct Packets {
     pub packets: PinnedVec<Packet>,
 }
 
-//auto derive doesn't support large arrays
-impl Default for Packets {
-    fn default() -> Packets {
-        Self::with_capacity(NUM_RCVMMSGS)
-    }
-}
-
 pub type PacketsRecycler = Recycler<PinnedVec<Packet>>;
 
 impl Packets {
     pub fn new(packets: Vec<Packet>) -> Self {
         let packets = PinnedVec::from_vec(packets);
         Self { packets }
+    }
+
+    pub fn for_test_or_bench() -> Packets {
+        Self::with_capacity(NUM_RCVMMSGS)
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
@@ -75,6 +72,7 @@ pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<Packets>
     out
 }
 
+#[cfg(test)]
 pub fn to_packets<T: Serialize>(xs: &[T]) -> Vec<Packets> {
     to_packets_chunked(xs, NUM_PACKETS)
 }
