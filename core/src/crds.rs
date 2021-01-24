@@ -42,9 +42,7 @@ use std::ops::{Index, IndexMut};
 const CRDS_SHARDS_BITS: u32 = 8;
 // Limit number of crds values associated with each unique pubkey. This
 // excludes crds values which by label design are limited per each pubkey.
-// TODO: Find the right value for this once duplicate shreds and corresponding
-// votes are broadcasted over gossip.
-const MAX_CRDS_VALUES_PER_PUBKEY: usize = 512;
+const MAX_CRDS_VALUES_PER_PUBKEY: usize = 32;
 
 #[derive(Clone)]
 pub struct Crds {
@@ -230,6 +228,15 @@ impl Crds {
     /// Returns all entries which are Vote.
     pub(crate) fn get_votes(&self) -> impl Iterator<Item = &VersionedCrdsValue> {
         self.votes.iter().map(move |i| self.table.index(*i))
+    }
+
+    /// Returns all records associated with a pubkey.
+    pub(crate) fn get_records(&self, pubkey: &Pubkey) -> impl Iterator<Item = &VersionedCrdsValue> {
+        self.records
+            .get(pubkey)
+            .into_iter()
+            .flat_map(|records| records.into_iter())
+            .map(move |i| self.table.index(*i))
     }
 
     pub fn len(&self) -> usize {
