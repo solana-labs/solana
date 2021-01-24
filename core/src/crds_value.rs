@@ -303,7 +303,7 @@ impl<'de> Deserialize<'de> for Vote {
             from: Pubkey,
             transaction: Transaction,
             wallclock: u64,
-        };
+        }
         let vote = Vote::deserialize(deserializer)?;
         let vote = match vote.transaction.sanitize() {
             Ok(_) => Self::new(vote.from, vote.transaction, vote.wallclock),
