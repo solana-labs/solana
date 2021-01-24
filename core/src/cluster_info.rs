@@ -1374,9 +1374,9 @@ impl ClusterInfo {
             || !ContactInfo::is_valid_address(&contact_info.tvu)
     }
 
-    fn sorted_stakes_with_index<S: std::hash::BuildHasher>(
+    fn sorted_stakes_with_index(
         peers: &[ContactInfo],
-        stakes: Option<Arc<HashMap<Pubkey, u64, S>>>,
+        stakes: Option<&HashMap<Pubkey, u64>>,
     ) -> Vec<(u64, usize)> {
         let stakes_and_index: Vec<_> = peers
             .iter()
@@ -1417,7 +1417,7 @@ impl ClusterInfo {
     // Return sorted_retransmit_peers(including self) and their stakes
     pub fn sorted_retransmit_peers_and_stakes(
         &self,
-        stakes: Option<Arc<HashMap<Pubkey, u64>>>,
+        stakes: Option<&HashMap<Pubkey, u64>>,
     ) -> (Vec<ContactInfo>, Vec<(u64, usize)>) {
         let mut peers = self.retransmit_peers();
         // insert "self" into this list for the layer and neighborhood computation
@@ -3183,9 +3183,9 @@ impl Node {
     }
 }
 
-pub fn stake_weight_peers<S: std::hash::BuildHasher>(
+pub fn stake_weight_peers(
     peers: &mut Vec<ContactInfo>,
-    stakes: Option<Arc<HashMap<Pubkey, u64, S>>>,
+    stakes: Option<&HashMap<Pubkey, u64>>,
 ) -> Vec<(u64, usize)> {
     peers.dedup();
     ClusterInfo::sorted_stakes_with_index(peers, stakes)
@@ -4066,9 +4066,8 @@ mod tests {
         cluster_info.insert_info(contact_info);
         stakes.insert(id4, 10);
 
-        let stakes = Arc::new(stakes);
         let mut peers = cluster_info.tvu_peers();
-        let peers_and_stakes = stake_weight_peers(&mut peers, Some(stakes));
+        let peers_and_stakes = stake_weight_peers(&mut peers, Some(&stakes));
         assert_eq!(peers.len(), 2);
         assert_eq!(peers[0].id, id);
         assert_eq!(peers[1].id, id2);
