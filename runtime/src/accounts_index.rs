@@ -3,6 +3,7 @@ use crate::{
     inline_spl_token_v2_0::{self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
     secondary_index::*,
 };
+use dashmap::DashSet;
 use ouroboros::self_referencing;
 use solana_sdk::{
     clock::Slot,
@@ -227,6 +228,10 @@ impl<'a, T: 'static + Clone> Iterator for AccountsIndexIterator<'a, T> {
     }
 }
 
+pub trait ZeroLamport {
+    fn is_zero_lamport(&self) -> bool;
+}
+
 #[derive(Debug, Default)]
 pub struct AccountsIndex<T> {
     pub account_maps: RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
@@ -235,9 +240,10 @@ pub struct AccountsIndex<T> {
     spl_token_owner_index: SecondaryIndex<RwLockSecondaryIndexEntry>,
     roots_tracker: RwLock<RootsTracker>,
     ongoing_scan_roots: RwLock<BTreeMap<Slot, u64>>,
+    zero_lamport_pubkeys: DashSet<Pubkey>,
 }
 
-impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
+impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     fn iter<R>(&self, range: Option<R>) -> AccountsIndexIterator<T>
     where
         R: RangeBounds<Pubkey>,
@@ -788,6 +794,9 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
     ) {
         {
             let (mut w_account_entry, _is_new) = self.insert_new_entry_if_missing(pubkey);
+            if account_info.is_zero_lamport() {
+                self.zero_lamport_pubkeys.insert(*pubkey);
+            }
             w_account_entry.update(slot, account_info, reclaims);
         }
         self.update_secondary_indexes(pubkey, slot, account_owner, account_data, account_indexes);
@@ -820,11 +829,22 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
             //  - The secondary index is never consulted as primary source of truth for gets/stores.
             //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
             //  account operations.
+            if account_info.is_zero_lamport() {
+                self.zero_lamport_pubkeys.insert(*pubkey);
+            }
             w_account_entry.update(slot, account_info, reclaims);
             is_newly_inserted
         };
         self.update_secondary_indexes(pubkey, slot, account_owner, account_data, account_indexes);
         is_newly_inserted
+    }
+
+    pub fn remove_zero_lamport_key(&self, pubkey: &Pubkey) {
+        self.zero_lamport_pubkeys.remove(pubkey);
+    }
+
+    pub fn zero_lamport_pubkeys(&self) -> &DashSet<Pubkey> {
+        &self.zero_lamport_pubkeys
     }
 
     pub fn unref_from_storage(&self, pubkey: &Pubkey) {
@@ -938,7 +958,7 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
         w_roots_tracker.uncleaned_roots.extend(roots);
     }
 
-    fn max_root(&self) -> Slot {
+    pub fn max_root(&self) -> Slot {
         self.roots_tracker.read().unwrap().max_root
     }
 
@@ -2128,5 +2148,17 @@ pub mod tests {
             key_end,
             &account_index,
         );
+    }
+
+    impl ZeroLamport for bool {
+        fn is_zero_lamport(&self) -> bool {
+            false
+        }
+    }
+
+    impl ZeroLamport for u64 {
+        fn is_zero_lamport(&self) -> bool {
+            false
+        }
     }
 }
