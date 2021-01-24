@@ -185,9 +185,10 @@ impl From<&str> for BlockstoreRecoveryMode {
         }
     }
 }
-impl Into<DBRecoveryMode> for BlockstoreRecoveryMode {
-    fn into(self) -> DBRecoveryMode {
-        match self {
+
+impl From<BlockstoreRecoveryMode> for DBRecoveryMode {
+    fn from(brm: BlockstoreRecoveryMode) -> Self {
+        match brm {
             BlockstoreRecoveryMode::TolerateCorruptedTailRecords => {
                 DBRecoveryMode::TolerateCorruptedTailRecords
             }
@@ -404,6 +405,7 @@ pub trait Column {
     fn key(index: Self::Index) -> Vec<u8>;
     fn index(key: &[u8]) -> Self::Index;
     fn primary_index(index: Self::Index) -> Slot;
+    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> Self::Index;
 }
 

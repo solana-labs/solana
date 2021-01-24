@@ -196,14 +196,18 @@ impl<T: BloomHashIndex> AtomicBloom<T> {
     }
 }
 
-impl<T: BloomHashIndex> Into<Bloom<T>> for AtomicBloom<T> {
-    fn into(self) -> Bloom<T> {
-        let bits: Vec<_> = self.bits.into_iter().map(AtomicU64::into_inner).collect();
+impl<T: BloomHashIndex> From<AtomicBloom<T>> for Bloom<T> {
+    fn from(atomic_bloom: AtomicBloom<T>) -> Self {
+        let bits: Vec<_> = atomic_bloom
+            .bits
+            .into_iter()
+            .map(AtomicU64::into_inner)
+            .collect();
         let num_bits_set = bits.iter().map(|x| x.count_ones() as u64).sum();
         let mut bits: BitVec<u64> = bits.into();
-        bits.truncate(self.num_bits);
+        bits.truncate(atomic_bloom.num_bits);
         Bloom {
-            keys: self.keys,
+            keys: atomic_bloom.keys,
             bits,
             num_bits_set,
             _phantom: PhantomData::default(),

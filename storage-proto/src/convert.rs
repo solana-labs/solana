@@ -768,11 +768,11 @@ impl TryFrom<tx_by_addr::TransactionByAddr> for Vec<TransactionByAddrInfo> {
     type Error = &'static str;
 
     fn try_from(collection: tx_by_addr::TransactionByAddr) -> Result<Self, Self::Error> {
-        Ok(collection
+        collection
             .tx_by_addrs
             .into_iter()
             .map(|tx_by_addr| tx_by_addr.try_into())
-            .collect::<Result<Vec<TransactionByAddrInfo>, Self::Error>>()?)
+            .collect::<Result<Vec<TransactionByAddrInfo>, Self::Error>>()
     }
 }
 

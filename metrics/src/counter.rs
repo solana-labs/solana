@@ -164,6 +164,7 @@ impl Counter {
         }
     }
     pub fn init(&mut self) {
+        #![allow(deprecated)]
         self.lograte
             .compare_and_swap(0, Self::default_log_rate(), Ordering::Relaxed);
         self.metricsrate
@@ -188,6 +189,7 @@ impl Counter {
         }
 
         let lastlog = self.lastlog.load(Ordering::Relaxed);
+        #[allow(deprecated)]
         let prev = self
             .lastlog
             .compare_and_swap(lastlog, counts, Ordering::Relaxed);

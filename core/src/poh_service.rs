@@ -125,7 +125,7 @@ impl PohService {
                 // sleep is not accurate enough to get a predictable time.
                 // Kernel can not schedule the thread for a while.
                 while (now.elapsed().as_nanos() as u64) < target_tick_ns {
-                    std::sync::atomic::spin_loop_hint();
+                    std::hint::spin_loop();
                 }
                 total_sleep_us += (now.elapsed().as_nanos() as u64 - elapsed_ns) / 1000;
                 now = Instant::now();
