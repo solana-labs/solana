@@ -359,9 +359,9 @@ fn update_peer_stats(
     }
 }
 
-pub fn get_broadcast_peers<S: std::hash::BuildHasher>(
+pub fn get_broadcast_peers(
     cluster_info: &ClusterInfo,
-    stakes: Option<Arc<HashMap<Pubkey, u64, S>>>,
+    stakes: Option<&HashMap<Pubkey, u64>>,
 ) -> (Vec<ContactInfo>, Vec<(u64, usize)>) {
     use crate::cluster_info;
     let mut peers = cluster_info.tvu_peers();
