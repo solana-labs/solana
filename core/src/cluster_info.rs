@@ -3161,11 +3161,8 @@ mod tests {
     };
     use itertools::izip;
     use rand::seq::SliceRandom;
-<<<<<<< HEAD
-    use solana_perf::test_tx::test_tx;
-=======
     use solana_ledger::shred::Shredder;
->>>>>>> 491b05975... broadcasts duplicate shreds through gossip (#14699)
+    use solana_perf::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, Signer};
     use solana_vote_program::{vote_instruction, vote_state::Vote};
     use std::iter::repeat_with;
