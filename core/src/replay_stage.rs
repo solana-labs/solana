@@ -21,7 +21,7 @@ use crate::{
 };
 use solana_ledger::{
     block_error::BlockError,
-    blockstore::{Blockstore, CompletedSlotsReceiver},
+    blockstore::{Blockstore, CompletedSlotsChannelContents, CompletedSlotsReceiver},
     blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
     entry::VerifyRecyclers,
     leader_schedule_cache::LeaderScheduleCache,
@@ -322,6 +322,7 @@ impl ReplayStage {
                 let mut partition_exists = false;
                 let mut skipped_slots_info = SkippedSlotsInfo::default();
                 let mut replay_timing = ReplayTiming::default();
+                let mut slot_time_queue: std::collections::VecDeque<(Slot, Instant)> = std::collections::VecDeque::new();
                 loop {
                     let mut delay_since_ready:Option<u64> = None;
                     let allocated = thread_mem_usage::Allocatedp::default();
@@ -591,28 +592,43 @@ impl ReplayStage {
                             let mut count = 0;
                             let mut message = false;
                             let mut all_slots:Vec<Slot> = vec![];
+                            let mut found: Option<(Slot, Instant)> = None;
                             'outer: loop {
-                                let result = completed_slots_receiver.try_recv();
-                                match result {
-                                    Err(_) => break,
-                                    Ok((slots, notification_time)) => {
-                                        count += slots.len();
-                                        for slot in slots {
-                                            if slot == reset_bank.slot() - 1 {
-                                                let delay = time_now - notification_time;
-                                                warn!("jwash:Delay between blockstore deciding slot was ready and poh reset(ms): {}", delay.as_millis());
-                                                delay_since_ready = Some(delay.as_micros() as u64);
+                                loop {
+                                    match slot_time_queue.pop_front() {
+                                        Some(item) => {
+                                            let target = reset_bank.slot() - 1;
+                                            if item.0 == target {
+                                                found = Some(item);
                                                 message = true;
                                                 break 'outer;
                                             }
-                                            else {
-                                                all_slots.push(slot);
+                                            else if item.0 > target {
+                                                break 'outer;
                                             }
+                                        },
+                                        None => {break;}
+                                    }
+                                };
+
+                                let result = completed_slots_receiver.try_recv();
+                                match result {
+                                    Err(_) => break,
+                                    Ok(item) => {
+                                        for slot in &item.0 {
+                                            slot_time_queue.push_back((slot.clone(), item.1));
                                         }
                                     },
                                 };
                             }
-                            if !message {
+                            if message {
+                                let found = found.unwrap();
+                                let notification_time = found.1;
+                                let delay = time_now - notification_time;
+                                warn!("jwash:Delay between blockstore deciding slot was ready and poh reset(ms): {}", delay.as_millis());
+                                delay_since_ready = Some(delay.as_micros() as u64);
+                            }
+                            else {
                                 warn!("jwash:Cannot find blockstore ready time, so cannot calculate delay to poh reset, found count: {}, {:?}, looking for: {}", count, all_slots, reset_bank.slot());
                             }
                         }
