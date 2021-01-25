@@ -382,7 +382,7 @@ impl ClusterInfoVoteListener {
                 return Ok(());
             }
 
-            if let Err(e) = verified_vote_packets.get_and_process_vote_packets(
+            if let Err(e) = verified_vote_packets.receive_and_process_vote_packets(
                 &verified_vote_label_packets_receiver,
                 &mut update_version,
             ) {
