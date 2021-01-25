@@ -1,4 +1,5 @@
 #![allow(deprecated)]
+#![cfg(feature = "full")]
 
 use std::str::FromStr;
 use thiserror::Error;
