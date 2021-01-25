@@ -2487,25 +2487,6 @@ impl Bank {
         self.rc.accounts.accounts_db.set_shrink_paths(paths);
     }
 
-    fn load_accounts(
-        &self,
-        txs: &[Transaction],
-        iteration_order: Option<&[usize]>,
-        results: Vec<TransactionCheckResult>,
-        error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionLoadResult> {
-        self.rc.accounts.load_accounts(
-            &self.ancestors,
-            txs,
-            iteration_order,
-            results,
-            &self.blockhash_queue.read().unwrap(),
-            error_counters,
-            &self.rent_collector,
-            &self.feature_set,
-        )
-    }
-
     fn check_age(
         &self,
         txs: &[Transaction],
@@ -2904,11 +2885,15 @@ impl Bank {
             max_age,
             &mut error_counters,
         );
-        let mut loaded_accounts = self.load_accounts(
+        let mut loaded_accounts = self.rc.accounts.load_accounts(
+            &self.ancestors,
             txs,
             batch.iteration_order(),
             sig_results,
+            &self.blockhash_queue.read().unwrap(),
             &mut error_counters,
+            &self.rent_collector,
+            &self.feature_set,
         );
         load_time.stop();
 
@@ -2926,13 +2911,17 @@ impl Bank {
             .zip(OrderedIterator::new(txs, batch.iteration_order()))
             .map(|(accs, (_, tx))| match accs {
                 (Err(e), _nonce_rollback) => (Err(e.clone()), None),
-                (Ok((accounts, account_deps, loaders, _rents)), nonce_rollback) => {
+                (Ok(loaded_transaction), nonce_rollback) => {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
 
-                    let executors = self.get_executors(&tx.message, &loaders);
+                    let executors = self.get_executors(&tx.message, &loaded_transaction.loaders);
 
                     let (account_refcells, account_dep_refcells, loader_refcells) =
-                        Self::accounts_to_refcells(accounts, account_deps, loaders);
+                        Self::accounts_to_refcells(
+                            &mut loaded_transaction.accounts,
+                            &mut loaded_transaction.account_deps,
+                            &mut loaded_transaction.loaders,
+                        );
 
                     let instruction_recorders = if enable_cpi_recording {
                         let ix_count = tx.message.instructions.len();
@@ -2978,8 +2967,8 @@ impl Bank {
                     );
 
                     Self::refcells_to_accounts(
-                        accounts,
-                        loaders,
+                        &mut loaded_transaction.accounts,
+                        &mut loaded_transaction.loaders,
                         account_refcells,
                         loader_refcells,
                     );
@@ -3372,9 +3361,9 @@ impl Bank {
                 continue;
             }
 
-            let acc = raccs.as_ref().unwrap();
+            let loaded_transaction = raccs.as_ref().unwrap();
 
-            collected_rent += acc.3;
+            collected_rent += loaded_transaction.rent;
         }
 
         self.collected_rent.fetch_add(collected_rent, Relaxed);
@@ -4402,12 +4391,12 @@ impl Bank {
             }
 
             let message = &tx.message();
-            let acc = raccs.as_ref().unwrap();
+            let loaded_transaction = raccs.as_ref().unwrap();
 
             for (pubkey, account) in message
                 .account_keys
                 .iter()
-                .zip(acc.0.iter())
+                .zip(loaded_transaction.accounts.iter())
                 .filter(|(_key, account)| (Stakes::is_stake(account)))
             {
                 if Stakes::is_stake(account) {

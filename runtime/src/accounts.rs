@@ -66,16 +66,15 @@ pub type TransactionAccounts = Vec<Account>;
 pub type TransactionAccountDeps = Vec<(Pubkey, Account)>;
 pub type TransactionRent = u64;
 pub type TransactionLoaders = Vec<Vec<(Pubkey, Account)>>;
+#[derive(PartialEq, Debug, Clone)]
+pub struct LoadedTransaction {
+    pub accounts: TransactionAccounts,
+    pub account_deps: TransactionAccountDeps,
+    pub loaders: TransactionLoaders,
+    pub rent: TransactionRent,
+}
 
-pub type TransactionLoadResult = (
-    Result<(
-        TransactionAccounts,
-        TransactionAccountDeps,
-        TransactionLoaders,
-        TransactionRent,
-    )>,
-    Option<NonceRollbackFull>,
-);
+pub type TransactionLoadResult = (Result<LoadedTransaction>, Option<NonceRollbackFull>);
 
 pub enum AccountAddressFilter {
     Exclude, // exclude all addresses matching the filter
@@ -151,7 +150,7 @@ impl Accounts {
         account
     }
 
-    fn load_tx_accounts(
+    fn load_transaction(
         &self,
         ancestors: &Ancestors,
         tx: &Transaction,
@@ -159,7 +158,7 @@ impl Accounts {
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
-    ) -> Result<(TransactionAccounts, TransactionAccountDeps, TransactionRent)> {
+    ) -> Result<LoadedTransaction> {
         // Copy all the accounts
         let message = tx.message();
         if tx.signatures.is_empty() && fee != 0 {
@@ -263,7 +262,30 @@ impl Accounts {
                         Err(TransactionError::InsufficientFundsForFee)
                     } else {
                         accounts[payer_index].lamports -= fee;
-                        Ok((accounts, account_deps, tx_rent))
+
+                        let message = tx.message();
+                        let loaders = message
+                            .instructions
+                            .iter()
+                            .map(|ix| {
+                                if message.account_keys.len() <= ix.program_id_index as usize {
+                                    error_counters.account_not_found += 1;
+                                    return Err(TransactionError::AccountNotFound);
+                                }
+                                let program_id = message.account_keys[ix.program_id_index as usize];
+                                self.load_executable_accounts(
+                                    ancestors,
+                                    &program_id,
+                                    error_counters,
+                                )
+                            })
+                            .collect::<Result<TransactionLoaders>>()?;
+                        Ok(LoadedTransaction {
+                            accounts,
+                            account_deps,
+                            loaders,
+                            rent: tx_rent,
+                        })
                     }
                 }
             } else {
@@ -341,28 +363,6 @@ impl Accounts {
         Ok(accounts)
     }
 
-    /// For each program_id in the transaction, load its loaders.
-    fn load_loaders(
-        &self,
-        ancestors: &Ancestors,
-        tx: &Transaction,
-        error_counters: &mut ErrorCounters,
-    ) -> Result<TransactionLoaders> {
-        let message = tx.message();
-        message
-            .instructions
-            .iter()
-            .map(|ix| {
-                if message.account_keys.len() <= ix.program_id_index as usize {
-                    error_counters.account_not_found += 1;
-                    return Err(TransactionError::AccountNotFound);
-                }
-                let program_id = message.account_keys[ix.program_id_index as usize];
-                self.load_executable_accounts(ancestors, &program_id, error_counters)
-            })
-            .collect()
-    }
-
     pub fn load_accounts(
         &self,
         ancestors: &Ancestors,
@@ -396,22 +396,15 @@ impl Accounts {
                         return (Err(TransactionError::BlockhashNotFound), None);
                     };
 
-                    let load_res = self.load_tx_accounts(
+                    let loaded_transaction = match self.load_transaction(
                         ancestors,
                         tx,
                         fee,
                         error_counters,
                         rent_collector,
                         feature_set,
-                    );
-                    let (accounts, account_deps, rents) = match load_res {
-                        Ok((a, d, r)) => (a, d, r),
-                        Err(e) => return (Err(e), None),
-                    };
-
-                    let load_res = self.load_loaders(ancestors, tx, error_counters);
-                    let loaders = match load_res {
-                        Ok(loaders) => loaders,
+                    ) {
+                        Ok(loaded_transaction) => loaded_transaction,
                         Err(e) => return (Err(e), None),
                     };
 
@@ -420,7 +413,7 @@ impl Accounts {
                         match NonceRollbackFull::from_partial(
                             nonce_rollback,
                             tx.message(),
-                            &accounts,
+                            &loaded_transaction.accounts,
                         ) {
                             Ok(nonce_rollback) => Some(nonce_rollback),
                             Err(e) => return (Err(e), None),
@@ -429,7 +422,7 @@ impl Accounts {
                         None
                     };
 
-                    (Ok((accounts, account_deps, loaders, rents)), nonce_rollback)
+                    (Ok(loaded_transaction), nonce_rollback)
                 }
                 (_, (Err(e), _nonce_rollback)) => (Err(e), None),
             })
@@ -947,13 +940,13 @@ impl Accounts {
             };
 
             let message = &tx.message();
-            let acc = raccs.as_mut().unwrap();
+            let loaded_transaction = raccs.as_mut().unwrap();
             let mut fee_payer_index = None;
             for ((i, key), account) in message
                 .account_keys
                 .iter()
                 .enumerate()
-                .zip(acc.0.iter_mut())
+                .zip(loaded_transaction.accounts.iter_mut())
                 .filter(|((i, key), _account)| message.is_non_loader_key(key, *i))
             {
                 let is_nonce_account = prepare_if_nonce_account(
@@ -986,7 +979,7 @@ impl Accounts {
                         }
                     }
                     if account.rent_epoch == 0 {
-                        acc.3 += rent_collector.collect_from_created_account(
+                        loaded_transaction.rent += rent_collector.collect_from_created_account(
                             &key,
                             account,
                             rent_fix_enabled,
@@ -1330,8 +1323,8 @@ mod tests {
         );
         assert_eq!(loaded_accounts.len(), 1);
         let (load_res, _nonce_rollback) = &loaded_accounts[0];
-        let (tx_accounts, _account_deps, _loaders, _rents) = load_res.as_ref().unwrap();
-        assert_eq!(tx_accounts[0].lamports, min_balance);
+        let loaded_transaction = load_res.as_ref().unwrap();
+        assert_eq!(loaded_transaction.accounts[0].lamports, min_balance);
 
         // Fee leaves zero balance fails
         accounts[0].1.lamports = min_balance;
@@ -1391,19 +1384,11 @@ mod tests {
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
-            (
-                Ok((
-                    transaction_accounts,
-                    _transaction_account_deps,
-                    transaction_loaders,
-                    _transaction_rents,
-                )),
-                _nonce_rollback,
-            ) => {
-                assert_eq!(transaction_accounts.len(), 3);
-                assert_eq!(transaction_accounts[0], accounts[0].1);
-                assert_eq!(transaction_loaders.len(), 1);
-                assert_eq!(transaction_loaders[0].len(), 0);
+            (Ok(loaded_transaction), _nonce_rollback) => {
+                assert_eq!(loaded_transaction.accounts.len(), 3);
+                assert_eq!(loaded_transaction.accounts[0], accounts[0].1);
+                assert_eq!(loaded_transaction.loaders.len(), 1);
+                assert_eq!(loaded_transaction.loaders[0].len(), 0);
             }
             (Err(e), _nonce_rollback) => Err(e).unwrap(),
         }
@@ -1622,21 +1607,13 @@ mod tests {
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
-            (
-                Ok((
-                    transaction_accounts,
-                    _transaction_account_deps,
-                    transaction_loaders,
-                    _transaction_rents,
-                )),
-                _nonce_rollback,
-            ) => {
-                assert_eq!(transaction_accounts.len(), 3);
-                assert_eq!(transaction_accounts[0], accounts[0].1);
-                assert_eq!(transaction_loaders.len(), 2);
-                assert_eq!(transaction_loaders[0].len(), 1);
-                assert_eq!(transaction_loaders[1].len(), 2);
-                for loaders in transaction_loaders.iter() {
+            (Ok(loaded_transaction), _nonce_rollback) => {
+                assert_eq!(loaded_transaction.accounts.len(), 3);
+                assert_eq!(loaded_transaction.accounts[0], accounts[0].1);
+                assert_eq!(loaded_transaction.loaders.len(), 2);
+                assert_eq!(loaded_transaction.loaders[0].len(), 1);
+                assert_eq!(loaded_transaction.loaders[1].len(), 2);
+                for loaders in loaded_transaction.loaders.iter() {
                     for (i, accounts_subset) in loaders.iter().enumerate() {
                         // +1 to skip first not loader account
                         assert_eq!(*accounts_subset, accounts[i + 1]);
@@ -1928,12 +1905,12 @@ mod tests {
         let transaction_loaders0 = vec![];
         let transaction_rent0 = 0;
         let loaded0 = (
-            Ok((
-                transaction_accounts0,
-                vec![],
-                transaction_loaders0,
-                transaction_rent0,
-            )),
+            Ok(LoadedTransaction {
+                accounts: transaction_accounts0,
+                account_deps: vec![],
+                loaders: transaction_loaders0,
+                rent: transaction_rent0,
+            }),
             None,
         );
 
@@ -1941,12 +1918,12 @@ mod tests {
         let transaction_loaders1 = vec![];
         let transaction_rent1 = 0;
         let loaded1 = (
-            Ok((
-                transaction_accounts1,
-                vec![],
-                transaction_loaders1,
-                transaction_rent1,
-            )),
+            Ok(LoadedTransaction {
+                accounts: transaction_accounts1,
+                account_deps: vec![],
+                loaders: transaction_loaders1,
+                rent: transaction_rent1,
+            }),
             None,
         );
 
@@ -1968,7 +1945,7 @@ mod tests {
             &txs,
             None,
             &loaders,
-            &mut loaded,
+            loaded.as_mut_slice(),
             &rent_collector,
             &(Hash::default(), FeeCalculator::default()),
             true,
@@ -2317,12 +2294,12 @@ mod tests {
         let transaction_loaders = vec![];
         let transaction_rent = 0;
         let loaded = (
-            Ok((
-                transaction_accounts,
-                vec![],
-                transaction_loaders,
-                transaction_rent,
-            )),
+            Ok(LoadedTransaction {
+                accounts: transaction_accounts,
+                account_deps: vec![],
+                loaders: transaction_loaders,
+                rent: transaction_rent,
+            }),
             nonce_rollback,
         );
 
@@ -2335,7 +2312,7 @@ mod tests {
             &txs,
             None,
             &loaders,
-            &mut loaded,
+            loaded.as_mut_slice(),
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
             true,
@@ -2428,12 +2405,12 @@ mod tests {
         let transaction_loaders = vec![];
         let transaction_rent = 0;
         let loaded = (
-            Ok((
-                transaction_accounts,
-                vec![],
-                transaction_loaders,
-                transaction_rent,
-            )),
+            Ok(LoadedTransaction {
+                accounts: transaction_accounts,
+                account_deps: vec![],
+                loaders: transaction_loaders,
+                rent: transaction_rent,
+            }),
             nonce_rollback,
         );
 
@@ -2446,7 +2423,7 @@ mod tests {
             &txs,
             None,
             &loaders,
-            &mut loaded,
+            loaded.as_mut_slice(),
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
             true,
