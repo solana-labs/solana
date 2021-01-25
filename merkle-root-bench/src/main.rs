@@ -28,38 +28,25 @@ fn main() {
 
     let num_accounts = value_t!(matches, "num_accounts", usize).unwrap_or(10_000);
     let iterations = value_t!(matches, "iterations", usize).unwrap_or(20);
-    let mut elapsed: Vec<u64> = vec![0; iterations];
-    let mut elapsed_legacy: Vec<u64> = vec![0; iterations];
     let hashes: Vec<_> = (0..num_accounts)
         .map(|_| (Pubkey::new_unique(), Hash::new_unique(), 1))
         .collect();
-    for x in 0..iterations {
-        let hashes = (hashes.clone(), hashes.clone()); // done outside timing
-        let mut time = Measure::start("compute_merkle_root_and_capitalization");
-        let fanout = 16;
-        let results = AccountsDB::compute_merkle_root_and_capitalization(hashes.0, fanout);
-        time.stop();
-        let mut time_legacy = Measure::start("hash");
-        let results_hash = AccountsDB::compute_merkle_root_legacy(hashes.1, fanout);
-        time_legacy.stop();
-        assert_eq!(results_hash, results.0);
-        elapsed[x] = time.as_us();
-        elapsed_legacy[x] = time_legacy.as_us();
-    }
+    let elapsed: Vec<_> = (0..iterations)
+        .map(|_| {
+            let hashes = hashes.clone(); // done outside timing
+            let mut time = Measure::start("compute_merkle_root_and_capitalization");
+            let fanout = 16;
+            AccountsDB::compute_merkle_root_and_capitalization(hashes, fanout);
+            time.stop();
+            time.as_us()
+        })
+        .collect();
 
-    let len = elapsed.len();
-    for x in 0..iterations {
-        println!(
-            "compute_merkle_root_and_capitalization(us),{},legacy(us),{}",
-            elapsed[x], elapsed_legacy[x]
-        );
+    for result in &elapsed {
+        println!("compute_merkle_root_and_capitalization(us),{}", result);
     }
     println!(
         "compute_merkle_root_and_capitalization(us) avg: {}",
-        elapsed.into_iter().sum::<u64>() as f64 / len as f64
-    );
-    println!(
-        "compute_merkle_root_legacy(us) avg: {}",
-        elapsed_legacy.into_iter().sum::<u64>() as f64 / len as f64
+        elapsed.into_iter().sum::<u64>() as f64 / iterations as f64
     );
 }
