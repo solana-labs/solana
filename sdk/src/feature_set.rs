@@ -150,8 +150,13 @@ pub mod abort_on_all_cpi_failures {
     solana_sdk::declare_id!("ED5D5a2hQaECHaMmKpnU48GdsfafdCjkb3pgAw5RKbb2");
 }
 
+<<<<<<< HEAD
 pub mod warp_timestamp {
     solana_sdk::declare_id!("Bfqm7fGk5MBptqa2WHXWFLH7uJvq8hkJcAQPipy2bAMk");
+=======
+pub mod use_loaded_executables {
+    solana_sdk::declare_id!("3Jq7mE2chDpf6oeEDsuGK7orTYEgyQjCPvaRppTNdVGK");
+>>>>>>> 74c83e685... Rotate feature key: use loaded executable accounts (#14838)
 }
 
 pub mod turbine_retransmit_peers_patch {
