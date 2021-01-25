@@ -792,7 +792,7 @@ fn check_poh_speed(genesis_config: &GenesisConfig, maybe_hash_samples: Option<u6
 
         let my_ns_per_slot = (hash_time_ns * hashes_per_slot) / hash_samples;
         debug!("computed: ns_per_slot: {}", my_ns_per_slot);
-        warn!("hashes/sec: {:e}", hash_samples as f64 / hash_time_ns as f64);
+        warn!("hashes/sec: {:e}", hash_samples as f64 / hash_time_ns as f64 * 1_000_000_000 as f64);
         let target_ns_per_slot = genesis_config.ns_per_slot() as u64;
         debug!(
             "cluster ns_per_hash: {}ns ns_per_slot: {}",
