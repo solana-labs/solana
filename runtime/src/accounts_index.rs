@@ -489,6 +489,15 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
         }
     }
 
+    pub fn get_all_account_keys(&self) -> Vec<Pubkey>{
+
+        let x:Vec<Pubkey> = self.account_maps
+        .read()
+        .unwrap()
+        .keys().cloned().collect();
+        x
+    }
+
     pub fn get_account_read_entry(&self, pubkey: &Pubkey) -> Option<ReadAccountMapEntry<T>> {
         self.account_maps
             .read()

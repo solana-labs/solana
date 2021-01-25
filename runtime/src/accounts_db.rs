@@ -3414,6 +3414,11 @@ impl AccountsDB {
     ) -> (DashMap<Pubkey, CalculateHashIntermediate>, Measure, Measure) {
         let mut scanned_slots = HashSet::<Slot>::new();
 
+        let mut time = Measure::start("scan all accounts");
+        self.accounts_index.get_all_account_keys();
+        time.stop();
+        warn!("jwash:scan_all_account_keys: {}ms", time.as_ms());
+
         scanned_slots.insert(slot);
 
         for storage_slot in self.storage.all_slots() {
