@@ -171,6 +171,26 @@ that this method only supports fixed sized types. Token utilizes the
 trait to encode/decode instruction data for both token instructions as well as
 token account states.
 
+### Multiple instructions in a single transaction
+
+A transaction can contain instructions in any order.   This means a malicious
+user could craft transactions that may pose instructions in an order that the
+program has not been protected against.  Programs should be hardened to properly
+and safely handle any possible instruction sequence.
+
+One not so obvious example is account deinitialization.  Some programs may
+attempt to deinitialize an account by setting its lamports to zero, with the
+assumption that the runtime will delete the account.  This assumption may be
+valid between transactions, but it is not between instructions or cross-program
+invocations.  To harden against this, the program should also explicitly zero out the
+account's data.
+
+An example of where this could be a problem is if a token program, upon
+transferring the token out of an account, sets the account's lamports to zero,
+assuming it will be deleted by the runtime.  If the program does zero out the
+account's data, a malicious user could trail this instruction with another that
+transfers the tokens a second time.
+
 ## Signatures
 
 Each transaction explicitly lists all account public keys referenced by the

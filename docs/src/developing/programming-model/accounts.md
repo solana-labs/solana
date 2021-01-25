@@ -84,6 +84,39 @@ _assign_ account ownership, meaning changing owner to different program id. If
 an account is not owned by a program, the program is only permitted to read its
 data and credit the account.
 
+## Verifying validity of unmodified, reference-only accounts
+
+For security purposes, it is recommended that programs check the validity of any
+account it reads but does not modify.
+
+The security model enforces that an account's data can only be modified by the
+account's `Owner` program.  Doing so allows the program to trust that the data
+passed to them via accounts they own will be in a known and valid state.  The
+runtime enforces this by rejecting any transaction containing a program that
+attempts to write to an account it does not own.  But, there are also cases
+where a program may merely read an account they think they own and assume the
+data has only been written by themselves and thus is valid.  But anyone can
+issues instructions to a program, and the runtime does not know that those
+accounts are expected to be owned by the program.  Therefore a malicious user
+could create accounts with arbitrary data and then pass these accounts to the
+program in the place of a valid account.  The arbitrary data could be crafted in
+a way that leads to unexpected or harmful program behavior.
+
+To check an account's validity, the program should either check the account's
+address against a known value or check that the account is indeed owned
+correctly (usually owned by the program itself).
+
+One example is when programs read a sysvar.  Unless the program checks the
+address or owner, it's impossible to be sure whether it's a real and valid
+sysvar merely by successful deserialization. Accordingly, the Solana SDK [checks
+the sysvar's validity during
+deserialization](https://github.com/solana-labs/solana/blob/a95675a7ce1651f7b59443eb146b356bc4b3f374/sdk/program/src/sysvar/mod.rs#L65).
+
+If the program always modifies the account in question, the address/owner check
+isn't required because modifying an unowned (could be the malicious account with
+the wrong owner) will be rejected by the runtime, and the containing transaction
+will be thrown out.
+
 ## Rent
 
 Keeping accounts alive on Solana incurs a storage cost called _rent_ because the
