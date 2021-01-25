@@ -2,8 +2,6 @@
 use solana_sdk::genesis_config::GenesisConfig;
 
 pub mod config;
-pub mod legacy_stake_processor;
-pub mod legacy_stake_state;
 pub mod stake_instruction;
 pub mod stake_state;
 

@@ -60,14 +60,10 @@ fn genesis_builtins() -> Vec<Builtin> {
             solana_vote_program::id(),
             with_program_logging!(solana_vote_program::vote_instruction::process_instruction),
         ),
-        // Remove legacy_stake_processor and move stake_instruction::process_instruction back to
-        // genesis_builtins around the v1.6 timeframe
         Builtin::new(
             "stake_program",
             solana_stake_program::id(),
-            with_program_logging!(
-                solana_stake_program::legacy_stake_processor::process_instruction
-            ),
+            with_program_logging!(solana_stake_program::stake_instruction::process_instruction),
         ),
         Builtin::new(
             "config_program",
@@ -92,26 +88,15 @@ pub enum ActivationType {
 /// normal child Bank creation.
 /// https://github.com/solana-labs/solana/blob/84b139cc94b5be7c9e0c18c2ad91743231b85a0d/runtime/src/bank.rs#L1723
 fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
-    vec![
-        (
-            Builtin::new(
-                "secp256k1_program",
-                solana_sdk::secp256k1_program::id(),
-                solana_secp256k1_program::process_instruction,
-            ),
-            feature_set::secp256k1_program_enabled::id(),
-            ActivationType::NewProgram,
+    vec![(
+        Builtin::new(
+            "secp256k1_program",
+            solana_sdk::secp256k1_program::id(),
+            solana_secp256k1_program::process_instruction,
         ),
-        (
-            Builtin::new(
-                "stake_program_v3",
-                solana_stake_program::id(),
-                solana_stake_program::stake_instruction::process_instruction,
-            ),
-            feature_set::stake_program_v3::id(),
-            ActivationType::NewVersion,
-        ),
-    ]
+        feature_set::secp256k1_program_enabled::id(),
+        ActivationType::NewProgram,
+    )]
 }
 
 pub(crate) fn get() -> Builtins {
