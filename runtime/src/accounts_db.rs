@@ -3256,7 +3256,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
         let mut l = 0;
         let mut r = 0;
         loop {
-            assert!(!failed);
+            //assert!(!failed);
             let ldone = l >= left.len();
             let rdone = r >= right.len();
             if ldone && rdone {
