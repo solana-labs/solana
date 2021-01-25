@@ -3723,11 +3723,6 @@ impl AccountsDB {
         let res = Self::compute_merkle_root_and_capitalization(hashes, fanout);
         hash_time.stop();
 
-        debug!(
-            "accumulate_account_hashes_and_capitalization: {},{}",
-            sort_time, hash_time
-        );
-
         (res, (sort_time, hash_time))
     }
 
