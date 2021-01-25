@@ -3263,12 +3263,16 @@ impl AccountsDB {
                 break;
             }
             if ldone {
-                warn!("difft:should not happen Only in right1: {:?}", right[r]);
+                if right[r].0 == key {
+                    warn!("difft:should not happen Only in right1: {:?}", right[r]);
+                }
                 r += 1;
                 continue;
             }
             if rdone {
-                warn!("difft:should not happen Only in left2: {:?}", left[l]);
+                if left[l].0 == key {
+                    warn!("difft:should not happen Only in left2: {:?}", left[l]);
+                }
                 l += 1;
                 continue;
             }
