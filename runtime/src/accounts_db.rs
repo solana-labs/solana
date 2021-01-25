@@ -3249,12 +3249,99 @@ impl AccountsDB {
         }
     }
 
+    fn print(left:&Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
+    right:&Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
+    key: Pubkey){
+        let mut found =false;
+        let mut l = 0;
+        let mut r = 0;
+        warn!("jwash:checking:{}", key);
+        loop {
+            let ldone = l >= left.len();
+            let rdone = r >= right.len();
+            if ldone && rdone {
+                break;
+            }
+            if ldone {
+                warn!("jwash:Only in right1: {:?}", right[r]);
+                found=true;
+                r += 1;
+                continue;
+            }
+            if rdone {
+                found=true;
+                warn!("jwash:Only in left2: {:?}", left[l]);
+                l += 1;
+                continue;
+            }
+            let lv = left[l];
+            let rv = right[r];
+            let lv2 = (lv.1, lv.2, lv.3, lv.4, lv.6);
+            let rv2 = (rv.1, rv.2, rv.3, rv.4, rv.6);
+
+            if lv.0 != key {
+                l += 1;
+                if found {
+                    l = usize::MAX;
+                }
+                continue;
+            }
+
+            if rv.0 != key {
+                r += 1;
+                if found {
+                    r = usize::MAX;
+                }
+                continue;
+            }
+            found = true;
+
+            let lvnot5 = (lv.1, lv.2, lv.3, lv.4, lv.6);
+            let rvnot5 = (rv.1, rv.2, rv.3, rv.4, rv.6);
+            let same = lv == rv || lv2 == rv2 || (lvnot5 == rvnot5 && (lv.5 == 1111 || rv.5 == 1111));
+            let ls = (lv.0, lv.3);
+            let rs = (rv.0, rv.3);
+            let lv = (lv.1, lv.2, lv.3, lv.4, lv.5, lv.6);
+            let rv = (rv.1, rv.2, rv.3, rv.4, rv.5, rv.6);
+            if same {
+                warn!("jwash:same,{:?},{:?}", lv,rv);
+                l += 1;
+                r += 1;
+            }
+            else if ls == rs {
+                // cut out pb key
+                found=true;
+                warn!("jwash:different:,{:?},{:?}", lv, rv);
+                l += 1;
+                r += 1;
+
+            }
+            else{
+                // at least cut out hashes
+                //let lv = (lv.0, lv.2, lv.3, lv.4, lv.5, lv.6);
+                //let rv = (rv.0, rv.2, rv.3, rv.4, rv.5, rv.6);
+
+                if ls < rs {
+                    warn!("jwash:Only in left:,{:?}", lvnot5);
+                    l += 1;
+                    continue;
+                }
+                else {
+                    warn!("jwash:Only in right:,{:?}", rvnot5);
+                    r += 1;
+                    continue;
+                }
+            }
+        }
+    }
+
     pub fn compare2(left:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
 right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
 ) -> bool {
     let mut failed =false;
         let mut l = 0;
         let mut r = 0;
+        let mut last_key:Pubkey = Pubkey::default();
         loop {
             //assert!(!failed);
             let ldone = l >= left.len();
@@ -3294,6 +3381,10 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
                 warn!("jwash:different: {:?} {:?}, {:?}", left[l].0, lv, rv);
                 l += 1;
                 r += 1;
+                if last_key != left[l].0{
+                    last_key = left[l].0;
+                    Self::print(&left, &right, last_key);
+                }
             }
             else{
                 // at least cut out hashes
@@ -3302,14 +3393,22 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
 
                 if ls < rs {
                     failed=true;
-                    warn!("jwash:Only in left: {:?}", left[l]);
+                    warn!("jwash:Only in left2: {:?}", left[l]);
                     l += 1;
+                    if last_key != left[l].0{
+                        last_key = left[l].0;
+                        Self::print(&left, &right, last_key);
+                    }
                     continue;
                 }
                 else {
                     failed=true;
-                    warn!("jwash:Only in right: {:?}", right[r]);
+                    warn!("jwash:Only in right2: {:?}", right[r]);
                     r += 1;
+                    if last_key != left[l].0{
+                        last_key = left[l].0;
+                        Self::print(&left, &right, last_key);
+                    }
                     continue;
                 }
             }
