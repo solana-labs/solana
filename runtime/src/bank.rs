@@ -3443,6 +3443,7 @@ impl Bank {
             .load_to_collect_rent_eagerly(&self.ancestors, subrange);
         let account_count = accounts.len();
 
+        let acct = Vec::new();
         // parallelize?
         let mut rent = 0;
         for (pubkey, mut account) in accounts {
@@ -3454,10 +3455,11 @@ impl Bank {
             // Store all of them unconditionally to purge old AppendVec,
             // even if collected rent is 0 (= not updated).
             self.store_account(&pubkey, &account);
+            acct.push(pubkey.clone());
         }
         self.collected_rent.fetch_add(rent, Relaxed);
-
-        datapoint_info!("collect_rent_eagerly", ("accounts", account_count, i64));
+        warn!("jwash:collect_rent_eagerly, {:?}", acct);
+        //datapoint_info!("collect_rent_eagerly", ("accounts", account_count, i64));
     }
 
     // Mostly, the pair (start_index & end_index) is equivalent to this range:

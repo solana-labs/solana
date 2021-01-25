@@ -3380,8 +3380,15 @@ impl AccountsDB {
             if let Some(datar) = hr.get(&key) {
                 let lc = (datal.0, datal.1, datal.2, datal.3, datal.5);
                 let rc = (datar.0, datar.1, datar.2, datar.3, datar.5);
+                let lcnovers = (datal.0, datal.1, datal.2, datal.5);
+                let rcnovers = (datar.0, datar.1, datar.2, datar.5);
                 if lc != rc {
-                    warn!("jwash:different2: {:?} {:?}, {:?}", key, datal, datar);
+                    if lcnovers == rcnovers {
+                        warn!("jwash:only_version_changed: {:?} {:?} {:?}, {:?}, versions: {}", key, datal, datar.3, datar.3 - datal.3);
+                    }
+                    else{
+                        warn!("jwash:different2: {:?} {:?}, {:?}, versions: {}", key, datal, datar, datar.3 - datal.3);
+                    }
                     //failed=true;
                     //Self::print(&left, &right, key);
                 }
