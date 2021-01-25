@@ -3376,10 +3376,18 @@ impl AccountsDB {
                 let lc = (datal.0, datal.1, datal.2, datal.3, datal.5);
                 let rc = (datar.0, datar.1, datar.2, datar.3, datar.5);
                 if lc != rc {
-                    warn!("jwash:different: {:?} {:?}, {:?}", key, datal, datar);
+                    warn!("jwash:different2: {:?} {:?}, {:?}", key, datal, datar);
+                    //failed=true;
+                    //Self::print(&left, &right, key);
+                }
+                let lc = (datal.1, datal.2, datal.3);
+                let rc = (datar.1, datar.2, datar.3);
+                if lc != rc {
+                    warn!("jwash:different2: {:?} {:?}, {:?}", key, datal, datar);
                     failed=true;
                     Self::print(&left, &right, key);
                 }
+                
             }
             else{
                 warn!("jwash:Only in left: {:?}", (key, datal));
