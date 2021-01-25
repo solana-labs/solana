@@ -3022,7 +3022,7 @@ fn send_signals(
         slots.push(newly_completed_slots);
 
         let now = Instant::now();
-        warn!("jwash: send slot and now: {:?},{:?}", slots, now);
+        //warn!("jwash: send slot and now: {:?},{:?}", slots, now);
         for (signal, slots) in completed_slots_senders.iter().zip(slots.into_iter()) {
             let res = signal.try_send((slots, now));
             if let Err(TrySendError::Full(_)) = res {
