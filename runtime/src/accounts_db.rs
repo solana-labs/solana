@@ -60,7 +60,7 @@ use std::{
 };
 use tempfile::TempDir;
 
-const MAX_ACCOUNTS: usize = 1;//100_000;
+const MAX_ACCOUNTS: usize = 1_000_000;
 const PAGE_SIZE: u64 = 4 * 1024;
 const MAX_RECYCLE_STORES: usize = 0;
 const STORE_META_OVERHEAD: usize = 256;
@@ -3583,6 +3583,7 @@ impl AccountsDB {
                     accumulator.into_iter().for_each(|accumulator| {
                         for (key, source_item) in accumulator.iter() {
                             let key2 = (*key, source_item.version());
+                            let ln = map.len();
                             match map.entry(key2) {
                                 Occupied(mut dest_item) => {
                                     warn!("jwash:error2: {:?}", source_item);
@@ -3592,7 +3593,7 @@ impl AccountsDB {
                                     }
                                 }
                                 Vacant(v) => {
-                                    if map.len() < MAX_ACCOUNTS {
+                                    if ln < MAX_ACCOUNTS {
                                         v.insert(source_item.clone());
                                     }
                                 }
@@ -3742,6 +3743,7 @@ impl AccountsDB {
 
                     let key = (*public_key, version);
                     let source_item = (version, *loaded_account.loaded_hash(), balance, lamports, 1111, _store_id);
+                    let ln = map.len();
                     match map.entry(key) {
                         Occupied(mut dest_item) => {
                             warn!("jwash:occupied!: {:?}", source_item);
@@ -3751,7 +3753,7 @@ impl AccountsDB {
                             }
                         }
                         Vacant(v) => {
-                            if map.len() < MAX_ACCOUNTS {
+                            if ln < MAX_ACCOUNTS {
                                 v.insert(source_item.clone());
                             }
                         }
@@ -4049,13 +4051,14 @@ impl AccountsDB {
         simple_capitalization_enabled: bool,
     ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> {
 
-        warn!("jwash: get_sorted_accounts, {}", slot);
+        warn!("jwash: get_sorted_accounts, {}, {}", slot, MAX_ACCOUNTS);
         if MAX_ACCOUNTS == 0 {
             let n:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> = Vec::new();
             return n;
         }
         let (x, ..) = self.get_accounts_using_stores2(slot, ancestors, simple_capitalization_enabled);
 
+        warn!("jwash: get_sorted_accounts2, {}, {}", slot, MAX_ACCOUNTS);
         let mut zeros = Measure::start("eliminate zeros");
         let mut hashes = Self::remove_zero_balance_accounts2(x);
         zeros.stop();
