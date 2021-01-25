@@ -3371,36 +3371,6 @@ impl AccountsDB {
         );
     }
 
-    // TODO: remove pub. bench uses it for now.
-    pub fn compute_merkle_root_legacy(hashes: Vec<(Pubkey, Hash, u64)>, fanout: usize) -> Hash {
-        let hashes: Vec<_> = hashes
-            .into_iter()
-            .map(|(_pubkey, hash, _lamports)| hash)
-            .collect();
-        let mut hashes: Vec<_> = hashes.chunks(fanout).map(|x| x.to_vec()).collect();
-        while hashes.len() > 1 {
-            let mut time = Measure::start("time");
-            let new_hashes: Vec<Hash> = hashes
-                .par_iter()
-                .map(|h| {
-                    let mut hasher = Hasher::default();
-                    for v in h.iter() {
-                        hasher.hash(v.as_ref());
-                    }
-                    hasher.result()
-                })
-                .collect();
-            time.stop();
-            debug!("hashing {} {}", hashes.len(), time);
-            hashes = new_hashes.chunks(fanout).map(|x| x.to_vec()).collect();
-        }
-        let mut hasher = Hasher::default();
-        hashes.into_iter().flatten().for_each(|hash| {
-            hasher.hash(hash.as_ref());
-        });
-        hasher.result()
-    }
-
     pub fn compute_merkle_root_and_capitalization(
         hashes: Vec<(Pubkey, Hash, u64)>,
         fanout: usize,
@@ -3477,7 +3447,7 @@ impl AccountsDB {
         slot: Slot,
         debug: bool,
     ) -> Hash {
-        let (hash, ..) = Self::accumulate_account_hashes_and_capitalization(hashes, slot, debug);
+        let (hash, ..) = Self::accumulate_account_hashes_and_capitalization(hashes, slot, debug).0;
         hash
     }
 
@@ -3489,7 +3459,7 @@ impl AccountsDB {
         mut hashes: Vec<(Pubkey, Hash, u64)>,
         slot: Slot,
         debug: bool,
-    ) -> (Hash, u64) {
+    ) -> ((Hash, u64), (Measure, Measure)) {
         let mut sort_time = Measure::start("sort");
         Self::sort_hashes_by_pubkey(&mut hashes);
         sort_time.stop();
@@ -3505,12 +3475,7 @@ impl AccountsDB {
         let res = Self::compute_merkle_root_and_capitalization(hashes, fanout);
         hash_time.stop();
 
-        debug!(
-            "accumulate_account_hashes_and_capitalization: {},{}",
-            sort_time, hash_time
-        );
-
-        res
+        (res, (sort_time, hash_time))
     }
 
     pub fn checked_cast_for_capitalization(balance: u128) -> u64 {
@@ -3627,13 +3592,15 @@ impl AccountsDB {
         let hash_total = hashes.len();
 
         let mut accumulate = Measure::start("accumulate");
-        let (accumulated_hash, total_lamports) =
+        let ((accumulated_hash, total_lamports), (sort_time, hash_time)) =
             Self::accumulate_account_hashes_and_capitalization(hashes, slot, false);
         accumulate.stop();
         datapoint_info!(
             "update_accounts_hash",
             ("accounts_scan", scan.as_us(), i64),
             ("hash_accumulate", accumulate.as_us(), i64),
+            ("hash", hash_time.as_us(), i64),
+            ("sort", sort_time.as_us(), i64),
             ("hash_total", hash_total, i64),
         );
         Ok((accumulated_hash, total_lamports))
@@ -4466,6 +4433,30 @@ pub mod tests {
     fn test_accountsdb_compute_merkle_root_and_capitalization() {
         solana_logger::setup();
 
+        let expected_results = vec![
+            (0, 0, "GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn", 0),
+            (0, 1, "8unXKJYTxrR423HgQxbDmx29mFri1QNrzVKKDxEfc6bj", 0),
+            (0, 2, "6QfkevXLLqbfAaR1kVjvMLFtEXvNUVrpmkwXqgsYtCFW", 1),
+            (0, 3, "G3FrJd9JrXcMiqChTSfvEdBL2sCPny3ebiUy9Xxbn7a2", 3),
+            (0, 4, "G3sZXHhwoCFuNyWy7Efffr47RBW33ibEp7b2hqNDmXdu", 6),
+            (0, 5, "78atJJYpokAPKMJwHxUW8SBDvPkkSpTBV7GiB27HwosJ", 10),
+            (0, 6, "7c9SM2BmCRVVXdrEdKcMK91MviPqXqQMd8QAb77tgLEy", 15),
+            (0, 7, "3hsmnZPhf22UvBLiZ4dVa21Qsdh65CCrtYXsb8MxoVAa", 21),
+            (0, 8, "5bwXUiC6RCRhb8fqvjvUXT6waU25str3UXA3a6Aq1jux", 28),
+            (0, 9, "3NNtQKH6PaYpCnFBtyi2icK9eYX3YM5pqA3SKaXtUNzu", 36),
+            (1, 0, "GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn", 0),
+            (1, 1, "4GWVCsnEu1iRyxjAB3F7J7C4MMvcoxFWtP9ihvwvDgxY", 0),
+            (1, 2, "8ML8Te6Uw2mipFr2v9sMZDcziXzhVqJo2qeMJohg1CJx", 1),
+            (1, 3, "AMEuC3AgqAeRBGBhSfTmuMdfbAiXJnGmKv99kHmcAE1H", 3),
+            (1, 4, "HEnDuJLHpsQfrApimGrovTqPEF6Vkrx2dKFr3BDtYzWx", 6),
+            (1, 5, "6rH69iP2yM1o565noZN1EqjySW4PhYUskz3c5tXePUfV", 10),
+            (1, 6, "7qEQMEXdfSPjbZ3q4cuuZwebDMvTvuaQ3dBiHoDUKo9a", 15),
+            (1, 7, "GDJz7LSKYjqqz6ujCaaQRJRmQ7TLNCwYJhdT84qT4qwk", 21),
+            (1, 8, "HT9krPLVTo3rr5WZQBQFrbqWs8SbYScXfnt8EVuobboM", 28),
+            (1, 9, "8y2pMgqMdRsvqw6BQXm6wtz3qxGPss72i6H6gVpPyeda", 36),
+        ];
+
+        let mut expected_index = 0;
         let start = 0;
         let default_fanout = 2;
         let fanout_in_accumulate = 16;
@@ -4479,7 +4470,11 @@ pub mod tests {
             };
             for count in start..iterations {
                 let mut input: Vec<_> = (0..count)
-                    .map(|i| (Pubkey::new_unique(), Hash::new_unique(), i as u64))
+                    .map(|i| {
+                        let key = Pubkey::new(&[(pass * iterations + count) as u8; 32]);
+                        let hash = Hash::new(&[(pass * iterations + count + i + 1) as u8; 32]);
+                        (key, hash, i as u64)
+                    })
                     .collect();
                 let result;
                 if pass == 0 {
@@ -4490,7 +4485,8 @@ pub mod tests {
                         input.clone(),
                         0,
                         false,
-                    );
+                    )
+                    .0;
                     AccountsDB::sort_hashes_by_pubkey(&mut input);
                 }
                 let mut expected = 0;
@@ -4499,6 +4495,8 @@ pub mod tests {
                     let last_number = count - 1;
                     expected = count * last_number / 2;
                 }
+
+                // compare against calculated result for lamports
                 assert_eq!(
                     result.1,
                     expected,
@@ -4506,8 +4504,13 @@ pub mod tests {
                     count,
                     input.into_iter().map(|x| x.2).collect::<Vec<u64>>()
                 );
-                let hash_result_legacy = AccountsDB::compute_merkle_root_legacy(input, fanout);
-                assert_eq!(result.0, hash_result_legacy, "failed at size: {}", count);
+
+                // compare against captured, expected results for hash (and lamports)
+                assert_eq!(
+                    (pass, count, &*(result.0.to_string()), result.1),
+                    expected_results[expected_index]
+                );
+                expected_index += 1;
             }
         }
     }
