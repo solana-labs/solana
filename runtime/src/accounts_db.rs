@@ -60,7 +60,7 @@ use std::{
 };
 use tempfile::TempDir;
 
-const MAX_ACCOUNTS: usize = 1_000_000;
+const MAX_ACCOUNTS: usize = 100_000;
 const PAGE_SIZE: u64 = 4 * 1024;
 const MAX_RECYCLE_STORES: usize = 0;
 const STORE_META_OVERHEAD: usize = 256;
@@ -4051,6 +4051,7 @@ impl AccountsDB {
         simple_capitalization_enabled: bool,
     ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> {
 
+        let mut zeros = Measure::start("eliminate zeros");
         warn!("jwash: get_sorted_accounts, {}, {}", slot, MAX_ACCOUNTS);
         if MAX_ACCOUNTS == 0 {
             let n:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> = Vec::new();
@@ -4059,12 +4060,11 @@ impl AccountsDB {
         let (x, ..) = self.get_accounts_using_stores2(slot, ancestors, simple_capitalization_enabled);
 
         warn!("jwash: get_sorted_accounts2, {}, {}", slot, MAX_ACCOUNTS);
-        let mut zeros = Measure::start("eliminate zeros");
         let mut hashes = Self::remove_zero_balance_accounts2(x);
         zeros.stop();
 
         hashes.par_sort_by(|a, b| (a.0, a.3).cmp(&(b.0, b.3)));
-        warn!("jwash: DONE get_sorted_accounts, {}", slot);
+        warn!("jwash: DONE get_sorted_accounts, {}, {}ms", slot, zeros.as_ms());
 
         hashes
     }
@@ -4087,7 +4087,7 @@ impl AccountsDB {
         zeros.stop();
 
         hashes.par_sort_by(|a, b| (a.0, a.3).cmp(&(b.0, b.3)));
-        warn!("jwash: DONE get_sorted_accounts_from_stores");
+        warn!("jwash: DONE get_sorted_accounts_from_stores {}ms", zeros.as_ms());
 
         hashes
     }
