@@ -25,11 +25,7 @@ use solana_metrics::inc_new_counter_error;
 use solana_perf::packet::{Packet, Packets};
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{
-    clock::{Epoch, Slot},
-    epoch_schedule::EpochSchedule,
-    feature_set,
-    pubkey::Pubkey,
-    timing::timestamp,
+    clock::Slot, epoch_schedule::EpochSchedule, feature_set, pubkey::Pubkey, timing::timestamp,
 };
 use solana_streamer::streamer::PacketReceiver;
 use std::{
@@ -202,8 +198,6 @@ fn update_retransmit_stats(
 
 #[derive(Default)]
 struct EpochStakesCache {
-    epoch: Epoch,
-    stakes: Option<Arc<HashMap<Pubkey, u64>>>,
     peers: Vec<ContactInfo>,
     stakes_and_index: Vec<(u64, usize)>,
 }
@@ -295,40 +289,27 @@ fn retransmit(
     epoch_fetch.stop();
 
     let mut epoch_cache_update = Measure::start("retransmit_epoch_cach_update");
-    let mut r_epoch_stakes_cache = epoch_stakes_cache.read().unwrap();
-    if r_epoch_stakes_cache.epoch != bank_epoch {
-        drop(r_epoch_stakes_cache);
-        let mut w_epoch_stakes_cache = epoch_stakes_cache.write().unwrap();
-        if w_epoch_stakes_cache.epoch != bank_epoch {
-            let stakes = r_bank.epoch_staked_nodes(bank_epoch);
-            let stakes = stakes.map(Arc::new);
-            w_epoch_stakes_cache.stakes = stakes;
-            w_epoch_stakes_cache.epoch = bank_epoch;
-        }
-        drop(w_epoch_stakes_cache);
-        r_epoch_stakes_cache = epoch_stakes_cache.read().unwrap();
-    }
-
     let now = timestamp();
     let last = last_peer_update.load(Ordering::Relaxed);
     #[allow(deprecated)]
     if now.saturating_sub(last) > 1000
         && last_peer_update.compare_and_swap(last, now, Ordering::Relaxed) == last
     {
-        drop(r_epoch_stakes_cache);
-        let mut w_epoch_stakes_cache = epoch_stakes_cache.write().unwrap();
+        let epoch_staked_nodes = r_bank.epoch_staked_nodes(bank_epoch);
         let (peers, stakes_and_index) =
-            cluster_info.sorted_retransmit_peers_and_stakes(w_epoch_stakes_cache.stakes.clone());
-        w_epoch_stakes_cache.peers = peers;
-        w_epoch_stakes_cache.stakes_and_index = stakes_and_index;
-        drop(w_epoch_stakes_cache);
-        r_epoch_stakes_cache = epoch_stakes_cache.read().unwrap();
+            cluster_info.sorted_retransmit_peers_and_stakes(epoch_staked_nodes.as_ref());
+        {
+            let mut epoch_stakes_cache = epoch_stakes_cache.write().unwrap();
+            epoch_stakes_cache.peers = peers;
+            epoch_stakes_cache.stakes_and_index = stakes_and_index;
+        }
         {
             let mut sr = shreds_received.lock().unwrap();
             sr.0.clear();
             sr.1.reset();
         }
     }
+    let r_epoch_stakes_cache = epoch_stakes_cache.read().unwrap();
     let mut peers_len = 0;
     epoch_cache_update.stop();
 
