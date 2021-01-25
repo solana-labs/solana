@@ -3255,7 +3255,7 @@ impl AccountsDB {
         let mut found =false;
         let mut l = 0;
         let mut r = 0;
-        warn!("jwash:checking:{}", key);
+        warn!("difft:checking:{}", key);
         loop {
             let ldone = l >= left.len();
             let rdone = r >= right.len();
@@ -3263,14 +3263,14 @@ impl AccountsDB {
                 break;
             }
             if ldone {
-                warn!("jwash:Only in right1: {:?}", right[r]);
+                warn!("difft:Only in right1: {:?}", right[r]);
                 found=true;
                 r += 1;
                 continue;
             }
             if rdone {
                 found=true;
-                warn!("jwash:Only in left2: {:?}", left[l]);
+                warn!("difft:Only in left2: {:?}", left[l]);
                 l += 1;
                 continue;
             }
@@ -3304,14 +3304,14 @@ impl AccountsDB {
             let lv = (lv.1, lv.2, lv.3, lv.4, lv.5, lv.6);
             let rv = (rv.1, rv.2, rv.3, rv.4, rv.5, rv.6);
             if same {
-                warn!("jwash:same,{:?},{:?}", lv,rv);
+                warn!("difft:same,{:?},{:?}", lv,rv);
                 l += 1;
                 r += 1;
             }
             else if ls == rs {
                 // cut out pb key
                 found=true;
-                warn!("jwash:different:,{:?},{:?}", lv, rv);
+                warn!("difft:different:,{:?},{:?}", lv, rv);
                 l += 1;
                 r += 1;
 
@@ -3322,12 +3322,12 @@ impl AccountsDB {
                 //let rv = (rv.0, rv.2, rv.3, rv.4, rv.5, rv.6);
 
                 if ls < rs {
-                    warn!("jwash:Only in left:,{:?}", lvnot5);
+                    warn!("difft:Only in left:,{:?}", lvnot5);
                     l += 1;
                     continue;
                 }
                 else {
-                    warn!("jwash:Only in right:,{:?}", rvnot5);
+                    warn!("difft:Only in right:,{:?}", rvnot5);
                     r += 1;
                     continue;
                 }
