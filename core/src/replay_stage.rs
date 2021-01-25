@@ -625,7 +625,7 @@ impl ReplayStage {
                                 let found = found.unwrap();
                                 let notification_time = found.1;
                                 let delay = time_now - notification_time;
-                                warn!("jwash:Delay between blockstore deciding slot was ready and poh reset(ms): {}, slot: {}", delay.as_millis(), reset_bank.slot());
+                                warn!("jwash:Delay between blockstore deciding slot was ready and poh reset(ms): {}, slot: {}, time_now: {:?}, notificaiton time: {:?}", delay.as_millis(), reset_bank.slot(), time_now, notification_time);
                                 delay_since_ready = Some(delay.as_micros() as u64);
                             }
                             else {
