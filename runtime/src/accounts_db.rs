@@ -60,6 +60,7 @@ use std::{
 };
 use tempfile::TempDir;
 
+const MAX_ACCOUNTS: usize = 1_000_000;
 const PAGE_SIZE: u64 = 4 * 1024;
 const MAX_RECYCLE_STORES: usize = 0;
 const STORE_META_OVERHEAD: usize = 256;
@@ -3586,7 +3587,9 @@ impl AccountsDB {
                                     }
                                 }
                                 Vacant(v) => {
-                                    v.insert(source_item.clone());
+                                    if map.len() < MAX_ACCOUNTS {
+                                        v.insert(source_item.clone());
+                                    }
                                 }
                             };
                         }
@@ -3743,7 +3746,9 @@ impl AccountsDB {
                             }
                         }
                         Vacant(v) => {
-                            v.insert(source_item.clone());
+                            if map.len() < MAX_ACCOUNTS {
+                                v.insert(source_item.clone());
+                            }
                         }
                     };
                 },
@@ -4039,8 +4044,10 @@ impl AccountsDB {
         simple_capitalization_enabled: bool,
     ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> {
 
-        let n:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> = Vec::new();
-        return n;
+        if false {
+            let n:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> = Vec::new();
+            return n;
+        }
 
         let (x, ..) = self.get_accounts_using_stores2(slot, ancestors, simple_capitalization_enabled);
 
@@ -4058,8 +4065,10 @@ impl AccountsDB {
         simple_capitalization_enabled: bool,
     ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> {
 
-        let n:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> = Vec::new();
-        return n;
+        if false {
+            let n:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> = Vec::new();
+            return n;
+        }
 
         let (x, ..) = Self::scan_slot_using_snapshot2(storages, simple_capitalization_enabled);
 
