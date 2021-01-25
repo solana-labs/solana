@@ -45,8 +45,24 @@ module.exports = {
     "Staking": [
       "staking",
       "staking/stake-accounts",
-      "staking/stake-programming",
     ],
+      "Economics": [
+	  "economics_overview",
+	  {
+                type: "category",
+                label: "Validator Economics",
+                items: [
+                  "validator_economics/overview",
+                  "validator_economics/state_validation_protocol_based_rewards",
+                  "validator_economics/state_validation_transaction_fees",
+                  "validator_economics/validation_stake_delegation",
+                ],
+          },
+	  "storage_rent_economics",
+          "economic_sustainability",
+          "economic_mvp",
+          "references",
+	  ],
     "Command Line": [
       "cli",
       "cli/install-solana-cli-tools",
@@ -182,27 +198,6 @@ module.exports = {
         label: "Implemented",
         items: [
           "implemented-proposals/implemented-proposals",
-          {
-            type: "category",
-            label: "Economic Design",
-            items: [
-              "implemented-proposals/ed_overview/ed_overview",
-              {
-                type: "category",
-                label: "Validation Client Economics",
-                items: [
-                  "implemented-proposals/ed_overview/ed_validation_client_economics/ed_vce_overview",
-                  "implemented-proposals/ed_overview/ed_validation_client_economics/ed_vce_state_validation_protocol_based_rewards",
-                  "implemented-proposals/ed_overview/ed_validation_client_economics/ed_vce_state_validation_transaction_fees",
-                  "implemented-proposals/ed_overview/ed_validation_client_economics/ed_vce_validation_stake_delegation",
-                ],
-              },
-              "implemented-proposals/ed_overview/ed_storage_rent_economics",
-              "implemented-proposals/ed_overview/ed_economic_sustainability",
-              "implemented-proposals/ed_overview/ed_mvp",
-              "implemented-proposals/ed_overview/ed_references",
-            ],
-          },
           "implemented-proposals/abi-management",
           "implemented-proposals/bank-timestamp-correction",
           "implemented-proposals/commitment",
