@@ -66,7 +66,7 @@ pub enum StakeInstruction {
     ///
     /// # Account references
     ///   0. [WRITE] Stake account to be updated
-    ///   1. [] (reserved for future use) Clock sysvar
+    ///   1. [] Clock sysvar
     ///   2. [SIGNER] The stake or withdraw authority
     Authorize(Pubkey, StakeAuthorize),
 
@@ -138,6 +138,7 @@ pub enum StakeInstruction {
     /// # Account references
     ///   0. [WRITE] Stake account to be updated
     ///   1. [SIGNER] Base key of stake or withdraw authority
+    ///   2. [] Clock sysvar
     AuthorizeWithSeed(AuthorizeWithSeedArgs),
 }
 
@@ -368,6 +369,7 @@ pub fn authorize_with_seed(
     let account_metas = vec![
         AccountMeta::new(*stake_pubkey, false),
         AccountMeta::new_readonly(*authority_base, true),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
     ];
 
     let args = AuthorizeWithSeedArgs {
