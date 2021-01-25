@@ -4071,7 +4071,7 @@ impl AccountsDB {
         simple_capitalization_enabled: bool,
     ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> {
 
-        warn!("jwash: get_sorted_accounts_from_stores, {}", slot);
+        warn!("jwash: get_sorted_accounts_from_stores");
         if MAX_ACCOUNTS == 0 {
             let n:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> = Vec::new();
             return n;
@@ -4084,7 +4084,7 @@ impl AccountsDB {
         zeros.stop();
 
         hashes.par_sort_by(|a, b| (a.0, a.3).cmp(&(b.0, b.3)));
-        warn!("jwash: DONE get_sorted_accounts_from_stores, {}", slot);
+        warn!("jwash: DONE get_sorted_accounts_from_stores");
 
         hashes
     }
