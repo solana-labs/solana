@@ -84,32 +84,22 @@ _assign_ account ownership, meaning changing owner to different program id. If
 an account is not owned by a program, the program is only permitted to read its
 data and credit the account.
 
-## Owner of unmodified reference-only accounts
+## Verifying validity of unmodified, reference-only accounts
 
-It's recommended from a security perspective for programs to check the owner
-of unmodified reference-only accounts at the entrypoint.
+For security purposes it is recommended that programs check the validity of any account it refers to but does not modify.
 
-That avoids the account-spoofing attack. As the context of this attack,
-malicious users can create *arbitrary account `data`* and pass it to your
-program, pretending to be a legitimate account. But they can only do so with a
-bogus `owner`, they cannot fake your program's intended `owner`. This is
-guaranteed by the runtime restriction (= program's exclusive write-access if
-and only if `program_id` matches with account's owner).
+The security model enforces that only an account's `Owner` can update their data.  This allows the program to trust the data that passed to them via accounts they own to be in a known and valid state.  This is enforced by the runtime that will reject any transaction containing a program that attempts to write to an account it does not own.  But, there are also cases where a program may merely read an account they own assuming the data has only been written by themselves and thus is valid.  But anyone can issues instructions to a program and the runtime does not know that those accounts are expected to be owned by the program.  Therfore a malcious user could create accounts with arbitrary data and then pass these accounts to the
+program in the place of a valid account.  The arbitrary data could be crafted in a way that that does harm.
 
-So checking the owner protects against any kind of spoofing attacks.
+To check an account's validity the program should either check the account's address against a known value or check that the account is indeed owned correctly (usually that it is owned by program itself).
 
-An example case is to read a sysvar. Unless its owner (or its hard-coded
-address) is checked, it's impossible to be sure whether it's a real and valid
+One example is when programs reads a sysvars.  Unless its address or owner is checked, it's impossible to be sure whether it's a real and valid
 sysvar merely by successful deserialization. Accordingly, the Solana SDK
-implements
-[such a check](https://github.com/solana-labs/solana/blob/a95675a7ce1651f7b59443eb146b356bc4b3f374/sdk/program/src/sysvar/mod.rs#L65)
-for sysvars.
+[checks the sysvar's validity during deserialization](https://github.com/solana-labs/solana/blob/a95675a7ce1651f7b59443eb146b356bc4b3f374/sdk/program/src/sysvar/mod.rs#L65).
+ account's owner).
 
-If your program always modifies the supplied account, this owner check isn't
-strictly needed, because modifying unowned (could be a faked owner)
-accounts will be inhibited by the very same runtime restrictions
-aforementioned. The end result of this would be a full rollback of the entire
-state changes due to being a *failed* transaction.
+If the program always modifies the account in question the address/owner check isn't
+required because modifying an unowned (could be the malicous account with the wrong owner) will be rejected by the runtime and the containing transaction will be thrown out.
 
 ## Rent
 
