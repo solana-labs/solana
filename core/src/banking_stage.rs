@@ -1292,7 +1292,7 @@ mod tests {
             let tx_anf = system_transaction::transfer(&keypair, &to3, 1, start_hash);
 
             // send 'em over
-            let packets = to_packets_chunked(&[tx_no_ver, tx_anf, tx], 2);
+            let packets = to_packets_chunked(&[tx_no_ver, tx_anf, tx], 3);
 
             // glad they all fit
             assert_eq!(packets.len(), 1);
