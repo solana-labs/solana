@@ -60,7 +60,7 @@ use std::{
 };
 use tempfile::TempDir;
 
-const MAX_ACCOUNTS: usize = 100;//100_000;
+const MAX_ACCOUNTS: usize = 1;//100_000;
 const PAGE_SIZE: u64 = 4 * 1024;
 const MAX_RECYCLE_STORES: usize = 0;
 const STORE_META_OVERHEAD: usize = 256;
@@ -4049,11 +4049,11 @@ impl AccountsDB {
         simple_capitalization_enabled: bool,
     ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> {
 
+        warn!("jwash: get_sorted_accounts, {}", slot);
         if MAX_ACCOUNTS == 0 {
             let n:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> = Vec::new();
             return n;
         }
-
         let (x, ..) = self.get_accounts_using_stores2(slot, ancestors, simple_capitalization_enabled);
 
         let mut zeros = Measure::start("eliminate zeros");
@@ -4061,6 +4061,7 @@ impl AccountsDB {
         zeros.stop();
 
         hashes.par_sort_by(|a, b| (a.0, a.3).cmp(&(b.0, b.3)));
+        warn!("jwash: DONE get_sorted_accounts, {}", slot);
 
         hashes
     }
@@ -4070,6 +4071,7 @@ impl AccountsDB {
         simple_capitalization_enabled: bool,
     ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> {
 
+        warn!("jwash: get_sorted_accounts_from_stores, {}", slot);
         if MAX_ACCOUNTS == 0 {
             let n:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> = Vec::new();
             return n;
@@ -4082,6 +4084,7 @@ impl AccountsDB {
         zeros.stop();
 
         hashes.par_sort_by(|a, b| (a.0, a.3).cmp(&(b.0, b.3)));
+        warn!("jwash: DONE get_sorted_accounts_from_stores, {}", slot);
 
         hashes
     }
