@@ -4430,7 +4430,7 @@ impl AccountsDB {
                     store.slot(), *slot
                 );
                 let count = store.remove_account(account_info.stored_size);
-                warn!("remove_account, {}, {}, {}, {:?}, count: {}", slot, account_info.lamports, account_info.store_id, std::thread::current().name(), count);
+                warn!("rm_acct, {}, {}, {}, {:?}, {}", slot, account_info.lamports, account_info.store_id, std::thread::current().name().unwrap_or_default(), count);
                 if count == 0 {
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
@@ -4830,9 +4830,9 @@ impl AccountsDB {
         //
         // From 1) and 2) we guarantee passing Some(slot), true is safe
         // hit thiswarn!("jwash:store_accounts_custom");
-        warn!("jwash:handle_reclaims in store_accounts_custom");
+        warn!("jwash:hdl_rclm_st");
         let mut handle_reclaims_time = Measure::start("handle_reclaims");
-        warn!("jwash:handle_reclaims in store_accounts_custom done");
+        warn!("jwash:hdl_rclm_st done");
         self.handle_reclaims(&reclaims, Some(slot), true, None);
         handle_reclaims_time.stop();
         self.stats
