@@ -155,7 +155,7 @@ pub mod abort_on_all_cpi_failures {
 }
 
 pub mod use_loaded_executables {
-    solana_sdk::declare_id!("2SLL2KLakB83YAnF1TwFb1hpycrWeHAfHYyLhwk2JRGn");
+    solana_sdk::declare_id!("3Jq7mE2chDpf6oeEDsuGK7orTYEgyQjCPvaRppTNdVGK");
 }
 
 pub mod turbine_retransmit_peers_patch {
