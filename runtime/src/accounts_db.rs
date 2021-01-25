@@ -60,7 +60,7 @@ use std::{
 };
 use tempfile::TempDir;
 
-const MAX_ACCOUNTS: usize = 100_000;
+const MAX_ACCOUNTS: usize = 0;//100_000;
 const PAGE_SIZE: u64 = 4 * 1024;
 const MAX_RECYCLE_STORES: usize = 0;
 const STORE_META_OVERHEAD: usize = 256;
@@ -4049,7 +4049,7 @@ impl AccountsDB {
         simple_capitalization_enabled: bool,
     ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> {
 
-        if false {
+        if MAX_ACCOUNTS == 0 {
             let n:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> = Vec::new();
             return n;
         }
@@ -4070,7 +4070,7 @@ impl AccountsDB {
         simple_capitalization_enabled: bool,
     ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> {
 
-        if false {
+        if MAX_ACCOUNTS == 0 {
             let n:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> = Vec::new();
             return n;
         }
