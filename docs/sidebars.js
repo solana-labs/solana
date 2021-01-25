@@ -54,7 +54,7 @@ module.exports = {
                 items: [
                     "inflation/terminology",
 		    "inflation/inflation_schedule",
-                  "inflation/adjusted_staking_yield",
+                    "inflation/adjusted_staking_yield",
                 ],
           },
 	  {
