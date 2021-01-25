@@ -4408,6 +4408,7 @@ impl AccountsDB {
     ) -> HashSet<Slot> {
         let mut dead_slots = HashSet::new();
         let mut new_shrink_candidates: ShrinkCandidates = HashMap::new();
+        let mut last:(Slot, u64, usize) = (0, 0, 0);
         for (slot, account_info) in reclaims {
             // No cached accounts should make it here
             assert_ne!(account_info.store_id, CACHE_VIRTUAL_STORAGE_ID);
@@ -4430,7 +4431,11 @@ impl AccountsDB {
                     store.slot(), *slot
                 );
                 let count = store.remove_account(account_info.stored_size);
-                warn!("rm_acct, {}, {}, {}, {:?}, {}", slot, account_info.lamports, account_info.store_id, std::thread::current().name().unwrap_or_default(), count);
+                let now = (*slot, account_info.lamports, account_info.store_id);
+                if now != last {
+                    warn!("rm_acct, {}, {}, {}, {:?}, {}", slot, account_info.lamports, account_info.store_id, std::thread::current().name().unwrap_or_default(), count);
+                    last = now;
+                }
                 if count == 0 {
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
