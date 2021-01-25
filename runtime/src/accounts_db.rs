@@ -3263,14 +3263,12 @@ impl AccountsDB {
                 break;
             }
             if ldone {
-                warn!("difft:Only in right1: {:?}", right[r]);
-                found=true;
+                warn!("difft:should not happen Only in right1: {:?}", right[r]);
                 r += 1;
                 continue;
             }
             if rdone {
-                found=true;
-                warn!("difft:Only in left2: {:?}", left[l]);
+                warn!("difft:should not happen Only in left2: {:?}", left[l]);
                 l += 1;
                 continue;
             }
@@ -3279,23 +3277,34 @@ impl AccountsDB {
             let lv2 = (lv.1, lv.2, lv.3, lv.4, lv.6);
             let rv2 = (rv.1, rv.2, rv.3, rv.4, rv.6);
 
-            if lv.0 != key && rv.0 != key {
+            if found && lv.0 != key && rv.0 != key {
                 return;
+            }
 
+            let lvnot5 = (lv.1, lv.2, lv.3, lv.4, lv.6);
+            let rvnot5 = (rv.1, rv.2, rv.3, rv.4, rv.6);
             if lv.0 != key {
-                warn!("difft:Only in right2:,{:?}", rvnot5);
-                r += 1;
+                if found {
+                    warn!("difft:Only in right2:,{:?}", rvnot5);
+                    r += 1;
+                }
+                else {
+                    l += 1;
+                }
                 continue;
             }
             else if rv.0 != key {
-                warn!("difft:Only in left2:,{:?}", lvnot5);
-                l += 1;
+                if found {
+                    warn!("difft:Only in left2:,{:?}", lvnot5);
+                    l += 1;
+                }
+                else {
+                    r += 1;
+                }
                 continue;
             }
             found = true;
 
-            let lvnot5 = (lv.1, lv.2, lv.3, lv.4, lv.6);
-            let rvnot5 = (rv.1, rv.2, rv.3, rv.4, rv.6);
             let same = lv == rv || lv2 == rv2 || (lvnot5 == rvnot5 && (lv.5 == 1111 || rv.5 == 1111));
             let ls = (lv.0, lv.3);
             let rs = (rv.0, rv.3);
