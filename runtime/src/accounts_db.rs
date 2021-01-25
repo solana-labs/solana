@@ -3342,82 +3342,48 @@ impl AccountsDB {
         }
     }
 
-    pub fn compare2(left:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
-right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
-) -> bool {
-    let mut failed =false;
-        let mut l = 0;
-        let mut r = 0;
-        let mut last_key:Pubkey = Pubkey::default();
-        loop {
-            //assert!(!failed);
-            let ldone = l >= left.len();
-            let rdone = r >= right.len();
-            if ldone && rdone {
-                break;
-            }
-            if ldone {
-                warn!("jwash:Only in right: {:?}", right[r]);
-                failed=true;
-                r += 1;
-                continue;
-            }
-            if rdone {
-                failed=true;
-                warn!("jwash:Only in left: {:?}", left[l]);
-                l += 1;
-                continue;
-            }
-            let lv = left[l];
-            let rv = right[r];
-            let lv2 = (lv.1, lv.2, lv.3, lv.4, lv.0);
-            let rv2 = (rv.1, rv.2, rv.3, rv.4, rv.0);
+    fn build(left:&Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>) -> HashMap<Pubkey, CalculateHashIntermediate> {
+        let mut h:HashMap<Pubkey, CalculateHashIntermediate> = HashMap::new();
+        for l in left {
+            let key = l.0;
+            let new_one = (l.3, l.1, l.2, l.4, l.5, l.6);
+            match h.entry(key) {
+                std::collections::hash_map::Entry::Occupied(mut dest_item) => {
+                    if dest_item.get_mut().0 <= new_one.0 {
+                        // replace the item
+                        dest_item.insert(new_one.clone());
+                    }
+                }
+                std::collections::hash_map::Entry::Vacant(v) => {
+                    v.insert(new_one.clone());
+                }
+            };
+        }
 
-            if lv == rv || lv2 == rv2 {
-                l += 1;
-                r += 1;
-                continue;
-            }
-            let ls = (lv.0, lv.3);
-            let rs = (rv.0, rv.3);
-            if ls == rs {
-                // cut out pb key
-                let lv = (lv.1, lv.2, lv.3, lv.4, lv.5, lv.6);
-                let rv = (rv.1, rv.2, rv.3, rv.4, rv.5, rv.6);
-                failed=true;
-                warn!("jwash:different: {:?} {:?}, {:?}", left[l].0, lv, rv);
-                l += 1;
-                r += 1;
-                if last_key != left[l].0{
-                    last_key = left[l].0;
-                    Self::print(&left, &right, last_key);
+        h
+    }
+
+    pub fn compare2(left:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
+    right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
+    ) -> bool {
+
+        let hl = Self::build(&left);
+        let hr = Self::build(&right);
+        let mut failed = false;
+
+        for (key, datal) in hl {
+            if let Some(datar) = hr.get(&key) {
+                let lc = (datal.0, datal.1, datal.2, datal.3, datal.5);
+                let rc = (datar.0, datar.1, datar.2, datar.3, datar.5);
+                if lc != rc {
+                    warn!("jwash:different: {:?} {:?}, {:?}", key, datal, datar);
+                    failed=true;
+                    Self::print(&left, &right, key);
                 }
             }
             else{
-                // at least cut out hashes
-                let lv = (lv.0, lv.2, lv.3, lv.4, lv.5, lv.6);
-                let rv = (rv.0, rv.2, rv.3, rv.4, rv.5, rv.6);
-
-                if ls < rs {
-                    failed=true;
-                    warn!("jwash:Only in left2: {:?}", left[l]);
-                    l += 1;
-                    if last_key != left[l].0{
-                        last_key = left[l].0;
-                        Self::print(&left, &right, last_key);
-                    }
-                    continue;
-                }
-                else {
-                    failed=true;
-                    warn!("jwash:Only in right2: {:?}", right[r]);
-                    r += 1;
-                    if last_key != left[l].0{
-                        last_key = left[l].0;
-                        Self::print(&left, &right, last_key);
-                    }
-                    continue;
-                }
+                warn!("jwash:Only in left: {:?}", (key, datal));
+                failed=true;
             }
         }
         warn!("jwash: compare done");
