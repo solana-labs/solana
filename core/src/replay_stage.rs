@@ -604,6 +604,7 @@ impl ReplayStage {
                                                 break 'outer;
                                             }
                                             else if item.0 > target {
+                                                slot_time_queue.push_front(item);
                                                 break 'outer;
                                             }
                                         },
@@ -618,6 +619,7 @@ impl ReplayStage {
                                         for slot in &item.0 {
                                             slot_time_queue.push_back((slot.clone(), item.1));
                                         }
+                                        slot_time_queue.sort();
                                     },
                                 };
                             }
