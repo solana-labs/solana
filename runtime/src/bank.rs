@@ -3443,7 +3443,7 @@ impl Bank {
             .load_to_collect_rent_eagerly(&self.ancestors, subrange);
         let account_count = accounts.len();
 
-        let acct = Vec::new();
+        let mut acct = Vec::new();
         // parallelize?
         let mut rent = 0;
         for (pubkey, mut account) in accounts {
