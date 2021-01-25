@@ -646,6 +646,7 @@ export class StakeProgram {
       keys: [
         {pubkey: stakePubkey, isSigner: false, isWritable: true},
         {pubkey: authorityBase, isSigner: true, isWritable: false},
+        {pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false},
       ],
       programId: this.programId,
       data,
