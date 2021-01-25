@@ -8,6 +8,30 @@ module.exports = {
     organizationName: "solana-labs", // Usually your GitHub org/user name.
 	projectName: "solana", // Usually your repo name.
 	onBrokenLinks: 'throw',
+	i18n: {
+		defaultLocale: 'en',
+		locales: ['en', 'de', 'es', 'ru', 'ar', 'ko'],
+		localeConfigs: {
+			en: {
+			  label: 'English',
+			},
+			ru: {
+			  label: 'Русский',
+			},
+			es: {
+				label: 'Español',
+			},
+			de: {
+				label: 'Deutsch',
+			},
+			ar: {
+				label: 'العربية',
+			},
+			ko: {
+				label: '한국어',
+			}
+		},
+	},
     themeConfig: {
 	navbar: {
 	    logo: {
@@ -50,6 +74,10 @@ module.exports = {
 		    href: "https://github.com/solana-labs/solana",
 		    label: "GitHub",
 		    position: "right",
+		},
+		{
+			type: 'localeDropdown',
+			position: 'left',
 		},
 	    ],
 	},
