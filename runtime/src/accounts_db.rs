@@ -3279,19 +3279,17 @@ impl AccountsDB {
             let lv2 = (lv.1, lv.2, lv.3, lv.4, lv.6);
             let rv2 = (rv.1, rv.2, rv.3, rv.4, rv.6);
 
+            if lv.0 != key && rv.0 != key {
+                return;
+
             if lv.0 != key {
-                l += 1;
-                if found {
-                    l = usize::MAX;
-                }
+                warn!("difft:Only in right2:,{:?}", rvnot5);
+                r += 1;
                 continue;
             }
-
-            if rv.0 != key {
-                r += 1;
-                if found {
-                    r = usize::MAX;
-                }
+            else if rv.0 != key {
+                warn!("difft:Only in left2:,{:?}", lvnot5);
+                l += 1;
                 continue;
             }
             found = true;
