@@ -870,8 +870,11 @@ mod test {
             match value.wallclock().cmp(&current_value.wallclock()) {
                 Ordering::Less => (),
                 Ordering::Equal => {
-                    assert_eq!(value, *current_value);
-                    count += 1;
+                    // There is a chance that two randomly generated
+                    // crds-values have the same label and wallclock.
+                    if value == *current_value {
+                        count += 1;
+                    }
                 }
                 Ordering::Greater => panic!("this should not happen!"),
             }
