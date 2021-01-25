@@ -3578,12 +3578,18 @@ impl AccountsDB {
         let accumulators: Vec<_> = scanned_slots
             .into_par_iter()
             .map(|slots| {
+                let mut keep_adding = true;
                 for slot in slots {
                     let accumulator = self.scan_slot(slot, simple_capitalization_enabled);
+                    let mut keep_adding = true;
+                    if keep_adding {
+                        let ln = map.len();
+                        keep_adding = ln < MAX_ACCOUNTS;
+                    }
+                    
                     accumulator.into_iter().for_each(|accumulator| {
                         for (key, source_item) in accumulator.iter() {
                             let key2 = (*key, source_item.version());
-                            let ln = map.len();
                             match map.entry(key2) {
                                 Occupied(mut dest_item) => {
                                     warn!("jwash:error2: {:?}", source_item);
@@ -3593,7 +3599,7 @@ impl AccountsDB {
                                     }
                                 }
                                 Vacant(v) => {
-                                    if ln < MAX_ACCOUNTS {
+                                    if keep_adding {
                                         v.insert(source_item.clone());
                                     }
                                 }
@@ -3725,6 +3731,11 @@ impl AccountsDB {
     ) -> (DashMap<(Pubkey, u64), CalculateHashIntermediate>, Measure, Measure) {
         let mut map: DashMap<(Pubkey, u64), CalculateHashIntermediate> = DashMap::new();
         let mut time = Measure::start("scan all accounts");
+        let mut keep_adding = true;
+        if keep_adding {
+            let ln = map.len();
+            keep_adding = ln < MAX_ACCOUNTS;
+        }
         let accumulator: Vec<Vec<(Pubkey, CalculateHashIntermediate)>> =
             Self::scan_account_storage_no_bank_2(
                 storage,
@@ -3743,7 +3754,6 @@ impl AccountsDB {
 
                     let key = (*public_key, version);
                     let source_item = (version, *loaded_account.loaded_hash(), balance, lamports, 1111, _store_id);
-                    let ln = map.len();
                     match map.entry(key) {
                         Occupied(mut dest_item) => {
                             warn!("jwash:occupied!: {:?}", source_item);
@@ -3753,7 +3763,7 @@ impl AccountsDB {
                             }
                         }
                         Vacant(v) => {
-                            if ln < MAX_ACCOUNTS {
+                            if keep_adding {
                                 v.insert(source_item.clone());
                             }
                         }
