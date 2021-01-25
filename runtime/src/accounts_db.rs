@@ -3383,15 +3383,16 @@ impl AccountsDB {
                 let lc = (datal.1, datal.2, datal.3);
                 let rc = (datar.1, datar.2, datar.3);
                 if lc != rc {
-                    warn!("jwash:different2: {:?} {:?}, {:?}", key, datal, datar);
+                    warn!("jwash:different45: {:?} {:?}, {:?}", key, datal, datar);
                     failed=true;
                     Self::print(&left, &right, key);
                 }
                 
             }
             else{
-                warn!("jwash:Only in left: {:?}", (key, datal));
+                warn!("jwash:Only in left34: {:?}", (key, datal));
                 failed=true;
+                Self::print(&left, &right, key);
             }
         }
         warn!("jwash: compare done");
