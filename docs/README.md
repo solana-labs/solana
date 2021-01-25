@@ -13,6 +13,7 @@ $ npm install
 
 This command starts a local development server and open up a browser window.
 Most changes are reflected live without having to restart the server.
+(You might have to run build.sh first if you run into failures)
 
 ```
 $ npm run start
