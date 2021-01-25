@@ -206,13 +206,35 @@ impl Pubkey {
     ///
     /// Panics in the very unlikely event that the additional seed could not be
     /// found.
+    ///
+    /// The processes of finding a valid program address is by trial and error,
+    /// and even though it is deterministic given a set of inputs it can take a
+    /// variable amount of time to succeed across different inputs.  This means
+    /// that when called from an on-chain program it may incur a variable amount
+    /// of the program's compute budget.  Programs that are meant to be very
+    /// performant may not want to use this function because it could take a
+    /// considerable amount of time.  Also, programs that area already at risk
+    /// of exceeding their compute budget should also call this with care since
+    /// there is a chance that the program's budget may be occasionally
+    /// exceeded.
     pub fn find_program_address(seeds: &[&[u8]], program_id: &Pubkey) -> (Pubkey, u8) {
         Self::try_find_program_address(seeds, program_id)
             .unwrap_or_else(|| panic!("Unable to find a viable program address bump seed"))
     }
 
     /// Find a valid program address and its corresponding bump seed which must
-    /// be passed as an additional seed when calling `invoke_signed`
+    /// be passed as an additional seed when calling `invoke_signed`.
+    ///
+    /// The processes of finding a valid program address is by trial and error,
+    /// and even though it is deterministic given a set of inputs it can take a
+    /// variable amount of time to succeed across different inputs.  This means
+    /// that when called from an on-chain program it may incur a variable amount
+    /// of the program's compute budget.  Programs that are meant to be very
+    /// performant may not want to use this function because it could take a
+    /// considerable amount of time.  Also, programs that area already at risk
+    /// of exceeding their compute budget should also call this with care since
+    /// there is a chance that the program's budget may be occasionally
+    /// exceeded.
     #[allow(clippy::same_item_push)]
     pub fn try_find_program_address(seeds: &[&[u8]], program_id: &Pubkey) -> Option<(Pubkey, u8)> {
         // Perform the calculation inline, calling this from within a program is
