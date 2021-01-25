@@ -4463,8 +4463,8 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
                     "AccountDB::accounts_index corrupted. Storage pointed to: {}, expected: {}, should only point to one slot",
                     store.slot(), *slot
                 );
-                warn!("remove_account, {}, {}, {}, {:?}", slot, account_info.lamports, account_info.store_id, std::thread::current().name());
                 let count = store.remove_account(account_info.stored_size);
+                warn!("remove_account, {}, {}, {}, {:?}, count: {}", slot, account_info.lamports, account_info.store_id, std::thread::current().name(), count);
                 if count == 0 {
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
