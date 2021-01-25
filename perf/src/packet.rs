@@ -65,7 +65,7 @@ impl Packets {
 pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<Packets> {
     let mut out = vec![];
     for x in xs.chunks(chunks) {
-        let mut p = Packets::with_capacity(chunks);
+        let mut p = Packets::with_capacity(x.len());
         p.packets.resize(x.len(), Packet::default());
         for (i, o) in x.iter().zip(p.packets.iter_mut()) {
             Packet::populate_packet(o, None, i).expect("serialize request");
