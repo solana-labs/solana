@@ -619,7 +619,10 @@ impl ReplayStage {
                                         for slot in &item.0 {
                                             slot_time_queue.push_back((slot.clone(), item.1));
                                         }
-                                        slot_time_queue.sort();
+                                        let mut foo:Vec<_> = slot_time_queue.into_iter().collect();
+                                        foo.sort();
+                                        slot_time_queue = std::collections::VecDeque::new();
+                                        slot_time_queue.extend(foo);//.sort();
                                     },
                                 };
                             }
