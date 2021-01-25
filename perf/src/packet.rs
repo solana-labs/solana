@@ -19,8 +19,7 @@ pub struct Packets {
 //auto derive doesn't support large arrays
 impl Default for Packets {
     fn default() -> Packets {
-        let packets = PinnedVec::with_capacity(NUM_RCVMMSGS);
-        Packets { packets }
+        Self::with_capacity(NUM_RCVMMSGS)
     }
 }
 
@@ -30,6 +29,11 @@ impl Packets {
     pub fn new(packets: Vec<Packet>) -> Self {
         let packets = PinnedVec::from_vec(packets);
         Self { packets }
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        let packets = PinnedVec::with_capacity(capacity);
+        Packets { packets }
     }
 
     pub fn new_with_recycler(recycler: PacketsRecycler, size: usize, name: &'static str) -> Self {
@@ -61,7 +65,7 @@ impl Packets {
 pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<Packets> {
     let mut out = vec![];
     for x in xs.chunks(chunks) {
-        let mut p = Packets::default();
+        let mut p = Packets::with_capacity(x.len());
         p.packets.resize(x.len(), Packet::default());
         for (i, o) in x.iter().zip(p.packets.iter_mut()) {
             Packet::populate_packet(o, None, i).expect("serialize request");
