@@ -3421,6 +3421,112 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
                 });
         */
         (map, time, time_accumulate)
+    }    
+    fn get_accounts_using_stores2(
+        &self,
+        slot: Slot,
+        ancestors: &Ancestors,
+        simple_capitalization_enabled: bool,
+    ) -> (DashMap<(Pubkey, u64), CalculateHashIntermediate>, Measure, Measure) {
+        let mut scanned_slots = HashSet::<Slot>::new();
+
+        scanned_slots.insert(slot);
+
+        for storage_slot in self.storage.all_slots() {
+            if storage_slot > slot || !self.accounts_index.is_root(storage_slot) {
+                continue;
+            }
+
+            scanned_slots.insert(storage_slot);
+        }
+
+        assert!(self.accounts_index.is_root(slot));
+
+        for storage_slot in ancestors.keys() {
+            if *storage_slot > slot || !self.accounts_index.is_root(*storage_slot) {
+                warn!("Bad ancestor slot!: {}, {}, {}", storage_slot, slot, self.accounts_index.is_root(*storage_slot));
+            }
+        }
+
+        let len_before = scanned_slots.len();
+
+        scanned_slots.extend(ancestors.keys());
+        let len_after = scanned_slots.len();
+        if ancestors.len() > 0{
+            warn!("ancestors: more: {}, {:?}", len_after-len_before, ancestors);
+        }
+
+        let mut min = u64::MAX;
+        for k in scanned_slots.clone() {
+            let k = k as u64;
+            if k < min {
+                min = k;
+            }
+        };
+        warn!("min slot: {}", min);
+
+
+        let len = AtomicUsize::new(0);
+        // scan all slots
+        // this chunking is necessary so we don't overflow the stack in the par_iter below.
+        let num_threads = std::cmp::max(2, num_cpus::get() / 4); // stolen from make_min_priority_thread_pool, which is the thread pool I assume we're running in
+        let num_chunks_per_thread = 100;
+        let num_units_of_work = num_threads * num_chunks_per_thread;
+        let chunk_size = std::cmp::max(1, scanned_slots.len() / num_units_of_work);
+        let scanned_slots: Vec<Slot> = scanned_slots.into_iter().collect();
+        let scanned_slots: Vec<Vec<Slot>> = scanned_slots
+            .chunks(chunk_size)
+            .map(|x| x.to_vec())
+            .collect();
+        let mut time = Measure::start("scan all accounts");
+
+        let mut map: DashMap<(Pubkey, u64), CalculateHashIntermediate> = DashMap::new();
+
+        let accumulators: Vec<_> = scanned_slots
+            .into_par_iter()
+            .map(|slots| {
+                for slot in slots {
+                    let accumulator = self.scan_slot(slot, simple_capitalization_enabled);
+                    accumulator.into_iter().for_each(|accumulator| {
+                        for (key, source_item) in accumulator.iter() {
+                            let key2 = (*key, source_item.version());
+                            match map.entry(key2) {
+                                Occupied(mut dest_item) => {
+                                    warn!("jwash:error2: {:?}", source_item);
+                                    if dest_item.get_mut().version() <= source_item.version() {
+                                        // replace the item
+                                        dest_item.insert(source_item.clone());
+                                    }
+                                }
+                                Vacant(v) => {
+                                    v.insert(source_item.clone());
+                                }
+                            };
+                        }
+                    })
+                }
+                ()
+            })
+            .collect();
+        time.stop();
+        let mut time_accumulate = Measure::start("accumulate");
+        /*
+        let mut account_maps = DashMap::with_capacity(len.load(Ordering::Relaxed));
+        for accumulator in accumulators {
+            for item in accumulator {
+                AccountsDB::merge_array_old(&mut account_maps, &item);
+            }
+        }
+        */
+        time_accumulate.stop();
+
+        /*
+                let account_maps: Vec<_> = map.into_iter().map(|x| {
+                    let (pubkey, (version, hash, balance, raw_lamports)) = x;
+                    (pubkey, hash, balance, raw_lamports)
+                });
+        */
+        (map, time, time_accumulate)
     }
 
     fn merge_array_old<X>(dest: &mut HashMap<Pubkey, X>, source: &[(Pubkey, X)])
@@ -3482,6 +3588,65 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
                     let source_item = (version, *loaded_account.loaded_hash(), balance, lamports, 1111, _store_id);
                     match map.entry(*key) {
                         Occupied(mut dest_item) => {
+                            if dest_item.get_mut().version() <= source_item.version() {
+                                // replace the item
+                                dest_item.insert(source_item.clone());
+                            }
+                        }
+                        Vacant(v) => {
+                            v.insert(source_item.clone());
+                        }
+                    };
+                },
+            );
+
+        let mut time_accumulate = Measure::start("accumulate");
+        /*
+        let mut account_maps = DashMap::with_capacity(len.load(Ordering::Relaxed));
+        for accumulator in accumulators {
+            for item in accumulator {
+                AccountsDB::merge_array_old(&mut account_maps, &item);
+            }
+        }
+        */
+        time_accumulate.stop();
+
+        /*
+            let account_maps: Vec<_> = map.into_iter().map(|x| {
+                let (pubkey, (version, hash, balance, raw_lamports)) = x;
+                (pubkey, hash, balance, raw_lamports)
+            });
+        */
+        (map, time, time_accumulate)
+    }
+
+    fn scan_slot_using_snapshot2(
+        storage: SnapshotStorages,
+        simple_capitalization_enabled: bool,
+    ) -> (DashMap<(Pubkey, u64), CalculateHashIntermediate>, Measure, Measure) {
+        let mut map: DashMap<(Pubkey, u64), CalculateHashIntermediate> = DashMap::new();
+        let mut time = Measure::start("scan all accounts");
+        let accumulator: Vec<Vec<(Pubkey, CalculateHashIntermediate)>> =
+            Self::scan_account_storage_no_bank_2(
+                storage,
+                |loaded_account: LoadedAccount,
+                 _store_id: AppendVecId,
+                 accum: &mut Vec<(Pubkey, CalculateHashIntermediate)>| {
+                    let public_key = loaded_account.pubkey();
+                    let version = loaded_account.write_version();
+                    let lamports = loaded_account.lamports();
+                    let balance = Self::account_balance_for_capitalization(
+                        lamports,
+                        loaded_account.owner(),
+                        loaded_account.executable(),
+                        simple_capitalization_enabled,
+                    );
+
+                    let key = (*public_key, version);
+                    let source_item = (version, *loaded_account.loaded_hash(), balance, lamports, 1111, _store_id);
+                    match map.entry(key) {
+                        Occupied(mut dest_item) => {
+                            warn!("jwash:occupied!: {:?}", source_item);
                             if dest_item.get_mut().version() <= source_item.version() {
                                 // replace the item
                                 dest_item.insert(source_item.clone());
@@ -3690,7 +3855,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
     }
 
     fn remove_zero_balance_accounts2(
-        account_maps: DashMap<Pubkey, CalculateHashIntermediate>,
+        account_maps: DashMap<(Pubkey, u64), CalculateHashIntermediate>,
     ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> {
         let shards: Vec<_> = account_maps
             .shards()
@@ -3710,7 +3875,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
                     .filter_map(
                         //|(pubkey, (_, hash, lamports, original_lamports))| {
                         |inp| {
-                            let (pubkey, sv) = inp;
+                            let ((pubkey, _), sv) = inp;
                             let (version, hash, lamports, original_lamports, last, last2) = sv.get();
                             if *original_lamports != 0 {
                                 Some((*pubkey, *hash, *lamports, *version, *original_lamports, *last, *last2))
@@ -3784,7 +3949,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
         simple_capitalization_enabled: bool,
     ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> {
 
-        let (x, ..) = self.get_accounts_using_stores(slot, ancestors, simple_capitalization_enabled);
+        let (x, ..) = self.get_accounts_using_stores2(slot, ancestors, simple_capitalization_enabled);
 
         let mut zeros = Measure::start("eliminate zeros");
         let mut hashes = Self::remove_zero_balance_accounts2(x);
@@ -3800,7 +3965,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
         simple_capitalization_enabled: bool,
     ) -> Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)> {
 
-        let (x, ..) = Self::scan_slot_using_snapshot(storages, simple_capitalization_enabled);
+        let (x, ..) = Self::scan_slot_using_snapshot2(storages, simple_capitalization_enabled);
 
         let mut zeros = Measure::start("eliminate zeros");
         let mut hashes = Self::remove_zero_balance_accounts2(x);
