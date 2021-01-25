@@ -354,7 +354,7 @@ mod test {
         );
         let message = Message::new(&[instruction], None);
         assert_eq!(
-            parse_stake(&message.instructions[0], &keys[0..2]).unwrap(),
+            parse_stake(&message.instructions[0], &keys[0..3]).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "authorizeWithSeed".to_string(),
                 info: json!({
