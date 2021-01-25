@@ -173,30 +173,23 @@ token account states.
 
 ### Multiple instructions in a single transaction
 
-A transaction can contain any number of arbitrary instructions up to the
-serialized transaction's max size (currently `PACKET_DATA_SIZE = 1232`) or
-computational budget limit via CPI. This means a malicious user can craft
-various irregular transactions, like a transaction containing your program's
-de-initialize instructions _many times_ inside a single transaction.
+A transaction can contain instructions in any order.   This means a malicious
+user could craft transactions that may pose instructions in an order that the
+program has not been protected against.  Programs should be hardened to properly
+and safely handle any possible instruction sequence.
 
-This means your program should be hardened properly for any instruction
-sequences.
+One not so obvious example is account deinitialization.  Some programs may
+attempt to deinitialize an account by setting its lamports to zero, with the
+assumption that the runtime will delete the account.  This assumption may be
+valid between transactions, but it is not between instructions or cross-program
+invocations.  To harden against this, the program should also explicitly zero out the
+account's data.
 
-Note that this hardening should address this subtle one: resetting account
-data to uninitialized state explicitly, not blindly relying on runtime's
-usual deletion behavior for accounts with no lamports at the end of the
-transaction.
-
-That's because even after one of your instructions resets account's lamports
-to 0 for account deletion, the runtime doesn't immediately reset the account's
-data for subsequent instructions when executing the transaction (On the other
-hand, the runtime does reset such account's data for subsequent transactions).
-Thus, it's possible for your program to be tricked to do certain actions more
-than allowed even after intended termination of the account, if not
-hardened properly.
-
-This behavior difference between intra-transaction and inter-transaction
-is intentional for the shared memory program's workings.
+An example of where this could be a problem is if a token program, upon
+transferring the token out of an account, sets the account's lamports to zero,
+assuming it will be deleted by the runtime.  If the program does zero out the
+account's data, a malicious user could trail this instruction with another that
+transfers the tokens a second time.
 
 ## Signatures
 
