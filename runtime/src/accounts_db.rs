@@ -3689,6 +3689,9 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
                     let source_item = (version, *loaded_account.loaded_hash(), balance, lamports, 1111, _store_id);
                     match map.entry(*key) {
                         Occupied(mut dest_item) => {
+                            if dest_item.get_mut().version() == source_item.version() {
+                                warn!("jwash:error3: {:?}", source_item);
+                            }
                             if dest_item.get_mut().version() <= source_item.version() {
                                 // replace the item
                                 dest_item.insert(source_item.clone());
@@ -4929,26 +4932,6 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
         warn!("get_snapshot_storages: raw: {}, after: {}, is root: {}, slot: {}", result_raw.len(), result.len(), self.accounts_index.is_root(snapshot_slot), snapshot_slot);
 
         result
-    }
-
-    fn merge_array<X>(dest: &mut HashMap<Pubkey, X>, source: (Pubkey, X))
-    where
-        X: Versioned + Clone + std::fmt::Debug,
-    {
-        let (key, source_item) = source;
-        match dest.entry(key) {
-            std::collections::hash_map::Entry::Occupied(mut dest_item) => {
-                let dest_version = dest_item.get_mut().version();
-                let source_version = source_item.version();
-                if dest_version <= source_version {
-                    // replace the item
-                    dest_item.insert(source_item);
-                }
-            }
-            std::collections::hash_map::Entry::Vacant(v) => {
-                v.insert(source_item);
-            }
-        };
     }
 
     pub fn generate_index(&self) {
