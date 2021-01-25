@@ -50,6 +50,15 @@ module.exports = {
 	  "economics_overview",
 	  {
                 type: "category",
+                label: "Inflation Design",
+                items: [
+                    "inflation/terminology",
+		    "inflation/inflation_schedule",
+                  "inflation/adjusted_staking_yield",
+                ],
+          },
+	  {
+                type: "category",
                 label: "Validator Economics",
                 items: [
                   "validator_economics/overview",

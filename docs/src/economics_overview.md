@@ -16,9 +16,9 @@ delegated stake and validator set (per validator commission). As discussed furth
 Transaction fees are participant-to-participant transfers, attached to network interactions as a motivation and compensation for the inclusion and execution of a proposed transaction. A mechanism for long-term economic stability and forking protection through partial burning of each transaction fee is also discussed below.
 
 First an overview of the inflation design is presented. This section
-starts with defining and clarifying [Terminology](inflation/terminology.md) commonly used
-subsequently in the discussion of inflation and the related
-components. Following that, we outline Solana's proposed [Inflation
+starts with defining and clarifying
+[Terminology](inflation/terminology.md) commonly used subsequently in
+the discussion of inflation and the related components. Following that, we outline Solana's proposed [Inflation
 Schedule](inflation/inflation_schedule.md), i.e. the specific
 parameters that uniquely parameterize the protocol-driven inflationary
 issuances over time. Next is a brief section on [Adjusted Staking
