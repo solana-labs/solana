@@ -1144,12 +1144,12 @@ fn do_process_program_write_and_deploy(
 
     if let Some(program_signer) = program_signer {
         Ok(json!({
-            "ProgramId": format!("{}", program_signer.pubkey()),
+            "programId": format!("{}", program_signer.pubkey()),
         })
         .to_string())
     } else {
         Ok(json!({
-            "Buffer": format!("{}", buffer_pubkey),
+            "buffer": format!("{}", buffer_pubkey),
         })
         .to_string())
     }
