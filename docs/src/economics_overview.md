@@ -1,0 +1,32 @@
+---
+title: Solana Economics Overview
+---
+
+**Subject to change.**
+
+Solana’s crypto-economic system is designed to promote a healthy, long term self-sustaining economy with participant incentives aligned to the security and decentralization of the network. The main participants in this economy are validation-clients. Their contributions to the network, state validation, and their requisite incentive mechanisms are discussed below.
+
+The main channels of participant remittances are referred to as
+protocol-based rewards and transaction fees. Protocol-based rewards
+are generated from inflationary issuances from a protocol-defined inflation schedule. These rewards will constitute the total protocol-based reward delivered to validation clients, the remaining sourced from transaction fees. In the early days of the network, it is likely that protocol-based rewards, deployed based on predefined issuance schedule, will drive the majority of participant incentives to participate in the network.
+
+These protocol-based rewards are calculated per epoch and distributed across the active
+delegated stake and validator set (per validator commission). As discussed further below, the per annum inflation rate is based on a pre-determined disinflationary schedule. This provides the network with monetary supply predictability which supports long term economic stability and security.
+
+Transaction fees are participant-to-participant transfers, attached to network interactions as a motivation and compensation for the inclusion and execution of a proposed transaction. A mechanism for long-term economic stability and forking protection through partial burning of each transaction fee is also discussed below.
+
+The specifics of validation-client economics are described in
+sections: [Validation-client
+Economics](validator_economics/overview.md), [State-validation
+Protocol-based
+Rewards](validator_economics/state_validation_protocol_based_rewards.md),
+[State-validation Transaction
+Fees](validator_economics/state_validation_transaction_fees.md). Also,
+the section titled [Validation Stake
+Delegation](validator_economics/validation_stake_delegation.md) closes
+with a discussion of validator delegation opportunities and
+marketplace. Additionally, in [Storage Rent
+Economics](storage_rent_economics.md), we describe an implementation
+of storage rent to account for the externality costs of maintaining
+the active state of the ledger.
+
