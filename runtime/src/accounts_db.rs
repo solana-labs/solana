@@ -61,7 +61,7 @@ use std::{
 use tempfile::TempDir;
 
 const PAGE_SIZE: u64 = 4 * 1024;
-const MAX_RECYCLE_STORES: usize = 1000;
+const MAX_RECYCLE_STORES: usize = 0;
 const STORE_META_OVERHEAD: usize = 256;
 const MAX_CACHE_SLOTS: usize = 200;
 const FLUSH_CACHE_RANDOM_THRESHOLD: usize = MAX_LOCKOUT_HISTORY;
