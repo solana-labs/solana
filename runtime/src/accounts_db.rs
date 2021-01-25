@@ -3955,7 +3955,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
         let mut hashes = Self::remove_zero_balance_accounts2(x);
         zeros.stop();
 
-        hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
+        hashes.par_sort_by(|a, b| (a.0, a.3).cmp(&(b.0, b.3)));
 
         hashes
     }
@@ -3971,7 +3971,7 @@ right:Vec<(Pubkey, Hash, u64, u64, u64, Slot, AppendVecId)>,
         let mut hashes = Self::remove_zero_balance_accounts2(x);
         zeros.stop();
 
-        hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
+        hashes.par_sort_by(|a, b| (a.0, a.3).cmp(&(b.0, b.3)));
 
         hashes
     }
