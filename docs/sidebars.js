@@ -57,20 +57,9 @@ module.exports = {
                     "inflation/adjusted_staking_yield",
                 ],
           },
-	  {
-                type: "category",
-                label: "Validator Economics",
-                items: [
-                  "validator_economics/overview",
-                  "validator_economics/state_validation_protocol_based_rewards",
-                  "validator_economics/state_validation_transaction_fees",
-                  "validator_economics/validation_stake_delegation",
-                ],
-          },
-	  "storage_rent_economics",
-          "economic_sustainability",
-          "economic_mvp",
-          "references",
+	  "transaction_fees",
+          "validation_services",
+	  "storage_rent_economics"
 	  ],
     "Command Line": [
       "cli",
