@@ -15,28 +15,7 @@ delegated stake and validator set (per validator commission). As discussed furth
 
 Transaction fees are participant-to-participant transfers, attached to network interactions as a motivation and compensation for the inclusion and execution of a proposed transaction. A mechanism for long-term economic stability and forking protection through partial burning of each transaction fee is also discussed below.
 
-First an overview of the inflation design is presented. This section
-starts with defining and clarifying
-[Terminology](inflation/terminology.md) commonly used subsequently in
-the discussion of inflation and the related components. Following that, we outline Solana's proposed [Inflation
-Schedule](inflation/inflation_schedule.md), i.e. the specific
-parameters that uniquely parameterize the protocol-driven inflationary
-issuances over time. Next is a brief section on [Adjusted Staking
-Yield](inflation/adjusted_staking_yield.md), and how token dilution
-might influence staking behavior.
+First an overview of the inflation design is presented. This section starts with defining and clarifying [Terminology](inflation/terminology.md) commonly used subsequently in the discussion of inflation and the related components. Following that, we outline Solana's proposed [Inflation Schedule](inflation/inflation_schedule.md), i.e. the specific parameters that uniquely parameterize the protocol-driven inflationary issuance over time. Next is a brief section on [Adjusted Staking Yield](inflation/adjusted_staking_yield.md), and how token dilution might influence staking behavior.
 
-The specifics of validation-client economics are described in
-sections: [Validation-client
-Economics](validator_economics/overview.md), [State-validation
-Protocol-based
-Rewards](validator_economics/state_validation_protocol_based_rewards.md),
-[State-validation Transaction
-Fees](validator_economics/state_validation_transaction_fees.md). Also,
-the section titled [Validation Stake
-Delegation](validator_economics/validation_stake_delegation.md) closes
-with a discussion of validator delegation opportunities and
-marketplace. Additionally, in [Storage Rent
-Economics](storage_rent_economics.md), we describe an implementation
-of storage rent to account for the externality costs of maintaining
-the active state of the ledger.
+A overview of [Transaction Fees](transaction_fees.md) on Solana is followed by a discussion of validator delegation opportunities and marketplaces in the section titled [Validation Services](validation_services.md). Finally, in [Storage Rent Economics](storage_rent_economics.md), we describe an implementation of storage rent to account for the externality costs of maintaining the active state of the ledger.
 
