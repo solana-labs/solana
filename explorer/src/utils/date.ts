@@ -1,4 +1,7 @@
-export function displayTimestamp(unixTimestamp: number): string {
+export function displayTimestamp(
+  unixTimestamp: number,
+  shortTimeZoneName = false
+): string {
   const expireDate = new Date(unixTimestamp);
   const dateString = new Intl.DateTimeFormat("en-US", {
     year: "numeric",
@@ -10,12 +13,15 @@ export function displayTimestamp(unixTimestamp: number): string {
     minute: "numeric",
     second: "numeric",
     hour12: false,
-    timeZoneName: "long",
+    timeZoneName: shortTimeZoneName ? "short" : "long",
   }).format(expireDate);
   return `${dateString} at ${timeString}`;
 }
 
-export function displayTimestampUtc(unixTimestamp: number): string {
+export function displayTimestampUtc(
+  unixTimestamp: number,
+  shortTimeZoneName = false
+): string {
   const expireDate = new Date(unixTimestamp);
   const dateString = new Intl.DateTimeFormat("en-US", {
     year: "numeric",
@@ -29,6 +35,7 @@ export function displayTimestampUtc(unixTimestamp: number): string {
     second: "numeric",
     hour12: false,
     timeZone: "UTC",
+    timeZoneName: shortTimeZoneName ? "short" : "long",
   }).format(expireDate);
   return `${dateString} at ${timeString}`;
 }
