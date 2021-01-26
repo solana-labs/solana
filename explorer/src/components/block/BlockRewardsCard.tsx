@@ -36,7 +36,7 @@ export function BlockRewardsCard({ block }: { block: ConfirmedBlock }) {
                 ).toFixed(9);
               }
               return (
-                <tr>
+                <tr key={reward.pubkey + reward.rewardType}>
                   <td>
                     <Address pubkey={new PublicKey(reward.pubkey)} link />
                   </td>
