@@ -60,10 +60,10 @@ $ cargo test
 ```
 
 ### 運行本地測試網
-在本地運行您自己的測試網。([說明文檔](https://docs.solana.com/cluster/bench-tps))
+在本地運行您自己的測試網。更多說明請參閱[說明文檔](https://docs.solana.com/cluster/bench-tps)。
 
 ### 訪問遠程開發集群
-* `devnet` - 24小時在線的穩定公用集群，可通過 devnet.solana.com 訪問。更多說明請參閱 [說明文檔](https://docs.solana.com/clusters)
+* `devnet` - 24小時在線的穩定公用集群，可通過 devnet.solana.com 訪問。更多說明請參閱[說明文檔](https://docs.solana.com/clusters)。
 
 # 基準測試 (Benchmarking)
 
