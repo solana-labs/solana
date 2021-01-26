@@ -45,15 +45,23 @@ pub fn parse_stake(
         }
         StakeInstruction::Authorize(new_authorized, authority_type) => {
             check_num_stake_accounts(&instruction.accounts, 3)?;
+            let mut value = json!({
+                "stakeAccount": account_keys[instruction.accounts[0] as usize].to_string(),
+                "clockSysvar": account_keys[instruction.accounts[1] as usize].to_string(),
+                "authority": account_keys[instruction.accounts[2] as usize].to_string(),
+                "newAuthority": new_authorized.to_string(),
+                "authorityType": authority_type,
+            });
+            let map = value.as_object_mut().unwrap();
+            if instruction.accounts.len() >= 4 {
+                map.insert(
+                    "custodian".to_string(),
+                    json!(account_keys[instruction.accounts[3] as usize].to_string()),
+                );
+            }
             Ok(ParsedInstructionEnum {
                 instruction_type: "authorize".to_string(),
-                info: json!({
-                    "stakeAccount": account_keys[instruction.accounts[0] as usize].to_string(),
-                    "clockSysvar": account_keys[instruction.accounts[1] as usize].to_string(),
-                    "authority": account_keys[instruction.accounts[2] as usize].to_string(),
-                    "newAuthority": new_authorized.to_string(),
-                    "authorityType": authority_type,
-                }),
+                info: value,
             })
         }
         StakeInstruction::DelegateStake => {
@@ -93,7 +101,7 @@ pub fn parse_stake(
                 "lamports": lamports,
             });
             let map = value.as_object_mut().unwrap();
-            if instruction.accounts.len() == 6 {
+            if instruction.accounts.len() >= 6 {
                 map.insert(
                     "custodian".to_string(),
                     json!(account_keys[instruction.accounts[5] as usize].to_string()),
@@ -151,16 +159,30 @@ pub fn parse_stake(
         }
         StakeInstruction::AuthorizeWithSeed(args) => {
             check_num_stake_accounts(&instruction.accounts, 2)?;
-            Ok(ParsedInstructionEnum {
-                instruction_type: "authorizeWithSeed".to_string(),
-                info: json!({
+            let mut value = json!({
                     "stakeAccount": account_keys[instruction.accounts[0] as usize].to_string(),
                     "authorityBase": account_keys[instruction.accounts[1] as usize].to_string(),
                     "newAuthorized": args.new_authorized_pubkey.to_string(),
                     "authorityType": args.stake_authorize,
                     "authoritySeed": args.authority_seed,
                     "authorityOwner": args.authority_owner.to_string(),
-                }),
+            });
+            let map = value.as_object_mut().unwrap();
+            if instruction.accounts.len() >= 3 {
+                map.insert(
+                    "clockSysvar".to_string(),
+                    json!(account_keys[instruction.accounts[2] as usize].to_string()),
+                );
+            }
+            if instruction.accounts.len() >= 4 {
+                map.insert(
+                    "custodian".to_string(),
+                    json!(account_keys[instruction.accounts[3] as usize].to_string()),
+                );
+            }
+            Ok(ParsedInstructionEnum {
+                instruction_type: "authorizeWithSeed".to_string(),
+                info: value,
             })
         }
     }
@@ -184,17 +206,17 @@ mod test {
     fn test_parse_stake_instruction() {
         let mut keys: Vec<Pubkey> = vec![];
         for _ in 0..6 {
-            keys.push(solana_sdk::pubkey::new_rand());
+            keys.push(Pubkey::new_unique());
         }
 
         let authorized = Authorized {
-            staker: solana_sdk::pubkey::new_rand(),
-            withdrawer: solana_sdk::pubkey::new_rand(),
+            staker: Pubkey::new_unique(),
+            withdrawer: Pubkey::new_unique(),
         };
         let lockup = Lockup {
             unix_timestamp: 1_234_567_890,
             epoch: 11,
-            custodian: solana_sdk::pubkey::new_rand(),
+            custodian: Pubkey::new_unique(),
         };
         let lamports = 55;
 
@@ -222,9 +244,13 @@ mod test {
         );
         assert!(parse_stake(&message.instructions[1], &keys[0..2]).is_err());
 
-        let authority_type = StakeAuthorize::Staker;
-        let instruction =
-            stake_instruction::authorize(&keys[1], &keys[0], &keys[3], authority_type);
+        let instruction = stake_instruction::authorize(
+            &keys[1],
+            &keys[0],
+            &keys[3],
+            StakeAuthorize::Staker,
+            None,
+        );
         let message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(&message.instructions[0], &keys[0..3]).unwrap(),
@@ -235,7 +261,31 @@ mod test {
                     "clockSysvar": keys[2].to_string(),
                     "authority": keys[0].to_string(),
                     "newAuthority": keys[3].to_string(),
-                    "authorityType": authority_type,
+                    "authorityType": StakeAuthorize::Staker,
+                }),
+            }
+        );
+        assert!(parse_stake(&message.instructions[0], &keys[0..2]).is_err());
+
+        let instruction = stake_instruction::authorize(
+            &keys[1],
+            &keys[0],
+            &keys[3],
+            StakeAuthorize::Withdrawer,
+            Some(&keys[1]),
+        );
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_stake(&message.instructions[0], &keys[0..3]).unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "authorize".to_string(),
+                info: json!({
+                    "stakeAccount": keys[1].to_string(),
+                    "clockSysvar": keys[2].to_string(),
+                    "authority": keys[0].to_string(),
+                    "newAuthority": keys[3].to_string(),
+                    "authorityType": StakeAuthorize::Withdrawer,
+                    "custodian": keys[1].to_string(),
                 }),
             }
         );
@@ -350,7 +400,8 @@ mod test {
             seed.to_string(),
             &keys[2],
             &keys[3],
-            authority_type,
+            StakeAuthorize::Staker,
+            None,
         );
         let message = Message::new(&[instruction], None);
         assert_eq!(
@@ -363,7 +414,36 @@ mod test {
                     "newAuthorized": keys[3].to_string(),
                     "authorityBase": keys[0].to_string(),
                     "authoritySeed": seed,
-                    "authorityType": authority_type,
+                    "authorityType": StakeAuthorize::Staker,
+                    "clockSysvar": keys[2].to_string(),
+                }),
+            }
+        );
+        assert!(parse_stake(&message.instructions[0], &keys[0..1]).is_err());
+
+        let instruction = stake_instruction::authorize_with_seed(
+            &keys[1],
+            &keys[0],
+            seed.to_string(),
+            &keys[2],
+            &keys[3],
+            StakeAuthorize::Withdrawer,
+            Some(&keys[4]),
+        );
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_stake(&message.instructions[0], &keys[0..5]).unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "authorizeWithSeed".to_string(),
+                info: json!({
+                    "stakeAccount": keys[2].to_string(),
+                    "authorityOwner": keys[2].to_string(),
+                    "newAuthorized": keys[3].to_string(),
+                    "authorityBase": keys[0].to_string(),
+                    "authoritySeed": seed,
+                    "authorityType": StakeAuthorize::Withdrawer,
+                    "clockSysvar": keys[3].to_string(),
+                    "custodian": keys[1].to_string(),
                 }),
             }
         );
@@ -375,11 +455,11 @@ mod test {
     fn test_parse_set_lockup() {
         let mut keys: Vec<Pubkey> = vec![];
         for _ in 0..2 {
-            keys.push(solana_sdk::pubkey::new_rand());
+            keys.push(Pubkey::new_unique());
         }
         let unix_timestamp = 1_234_567_890;
         let epoch = 11;
-        let custodian = solana_sdk::pubkey::new_rand();
+        let custodian = Pubkey::new_unique();
 
         let lockup = LockupArgs {
             unix_timestamp: Some(unix_timestamp),
