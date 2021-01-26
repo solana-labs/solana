@@ -8,6 +8,7 @@ use serde_derive::{Deserialize, Serialize};
 use solana_sdk::{
     clock::{Epoch, UnixTimestamp},
     decode_error::DecodeError,
+    feature_set,
     instruction::{AccountMeta, Instruction, InstructionError},
     keyed_account::{from_keyed_account, get_signers, next_keyed_account, KeyedAccount},
     process_instruction::InvokeContext,
@@ -484,17 +485,59 @@ pub fn process_instruction(
             &from_keyed_account::<Rent>(next_keyed_account(keyed_accounts)?)?,
         ),
         StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
-            me.authorize(&signers, &authorized_pubkey, stake_authorize)
+            let require_custodian_for_locked_stake_authorize = invoke_context.is_feature_active(
+                &feature_set::require_custodian_for_locked_stake_authorize::id(),
+            );
+
+            if require_custodian_for_locked_stake_authorize {
+                me.authorize(
+                    &signers,
+                    &authorized_pubkey,
+                    stake_authorize,
+                    require_custodian_for_locked_stake_authorize,
+                    &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
+                    keyed_accounts.next().map(|ka| ka.unsigned_key()),
+                )
+            } else {
+                me.authorize(
+                    &signers,
+                    &authorized_pubkey,
+                    stake_authorize,
+                    require_custodian_for_locked_stake_authorize,
+                    &Clock::default(),
+                    None,
+                )
+            }
         }
         StakeInstruction::AuthorizeWithSeed(args) => {
             let authority_base = next_keyed_account(keyed_accounts)?;
-            me.authorize_with_seed(
-                &authority_base,
-                &args.authority_seed,
-                &args.authority_owner,
-                &args.new_authorized_pubkey,
-                args.stake_authorize,
-            )
+            let require_custodian_for_locked_stake_authorize = invoke_context.is_feature_active(
+                &feature_set::require_custodian_for_locked_stake_authorize::id(),
+            );
+
+            if require_custodian_for_locked_stake_authorize {
+                me.authorize_with_seed(
+                    &authority_base,
+                    &args.authority_seed,
+                    &args.authority_owner,
+                    &args.new_authorized_pubkey,
+                    args.stake_authorize,
+                    require_custodian_for_locked_stake_authorize,
+                    &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
+                    keyed_accounts.next().map(|ka| ka.unsigned_key()),
+                )
+            } else {
+                me.authorize_with_seed(
+                    &authority_base,
+                    &args.authority_seed,
+                    &args.authority_owner,
+                    &args.new_authorized_pubkey,
+                    args.stake_authorize,
+                    require_custodian_for_locked_stake_authorize,
+                    &Clock::default(),
+                    None,
+                )
+            }
         }
         StakeInstruction::DelegateStake => {
             let vote = next_keyed_account(keyed_accounts)?;
