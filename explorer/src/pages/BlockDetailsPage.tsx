@@ -1,7 +1,7 @@
 import React from "react";
 
-import { BlockHistoryCard } from "components/account/BlockHistoryCard";
 import { ErrorCard } from "components/common/ErrorCard";
+import { BlockOverviewCard } from "components/block/BlockOverviewCard";
 
 type Props = { slot: string };
 
@@ -9,7 +9,7 @@ export function BlockDetailsPage({ slot }: Props) {
   let output = <ErrorCard text={`Block ${slot} is not valid`} />;
 
   if (!isNaN(Number(slot))) {
-    output = <BlockHistoryCard slot={Number(slot)} />;
+    output = <BlockOverviewCard slot={Number(slot)} />;
   }
 
   return (
