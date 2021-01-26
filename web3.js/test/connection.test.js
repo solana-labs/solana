@@ -411,7 +411,8 @@ test('get epoch info', async () => {
     'epoch',
     'slotIndex',
     'slotsInEpoch',
-    'absoluteSlot' /*, 'blockHeight'*/, // Uncomment blockHeight after 1.1.20 ships
+    'absoluteSlot',
+    'blockHeight',
   ]) {
     expect(epochInfo).toHaveProperty(key);
     expect(epochInfo[key]).toBeGreaterThanOrEqual(0);
