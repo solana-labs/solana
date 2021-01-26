@@ -323,7 +323,7 @@ fn check_vote_account(
     authorized_voter_pubkeys: &[Pubkey],
 ) -> Result<(), String> {
     let vote_account = rpc_client
-        .get_account_with_commitment(vote_account_address, CommitmentConfig::single_gossip())
+        .get_account_with_commitment(vote_account_address, CommitmentConfig::confirmed())
         .map_err(|err| format!("failed to fetch vote account: {}", err.to_string()))?
         .value
         .ok_or_else(|| format!("vote account does not exist: {}", vote_account_address))?;
@@ -336,7 +336,7 @@ fn check_vote_account(
     }
 
     let identity_account = rpc_client
-        .get_account_with_commitment(identity_pubkey, CommitmentConfig::single_gossip())
+        .get_account_with_commitment(identity_pubkey, CommitmentConfig::confirmed())
         .map_err(|err| format!("failed to fetch identity account: {}", err.to_string()))?
         .value
         .ok_or_else(|| format!("identity account does not exist: {}", identity_pubkey))?;
@@ -690,7 +690,7 @@ fn rpc_bootstrap(
                     Ok(())
                 } else {
                     rpc_client
-                        .get_slot_with_commitment(CommitmentConfig::root())
+                        .get_slot_with_commitment(CommitmentConfig::finalized())
                         .map_err(|err| format!("Failed to get RPC node slot: {}", err))
                         .and_then(|slot| {
                             info!("RPC node root slot: {}", slot);

@@ -418,7 +418,7 @@ mod test {
             .unwrap();
 
         rpc_client
-            .poll_for_signature_with_commitment(&stake1_signature, CommitmentConfig::recent())
+            .poll_for_signature_with_commitment(&stake1_signature, CommitmentConfig::processed())
             .unwrap();
 
         // A balance increase by system transfer is ignored
@@ -473,7 +473,7 @@ mod test {
         rpc_client
             .poll_for_signature_with_commitment(
                 &stake3_initialize_signature,
-                CommitmentConfig::recent(),
+                CommitmentConfig::processed(),
             )
             .unwrap();
 
@@ -504,7 +504,7 @@ mod test {
         rpc_client
             .poll_for_signature_with_commitment(
                 &stake3_withdraw_signature,
-                CommitmentConfig::recent(),
+                CommitmentConfig::processed(),
             )
             .unwrap();
 
@@ -529,7 +529,7 @@ mod test {
         rpc_client
             .poll_for_signature_with_commitment(
                 &stake4_initialize_signature,
-                CommitmentConfig::recent(),
+                CommitmentConfig::processed(),
             )
             .unwrap();
 
@@ -560,7 +560,7 @@ mod test {
         rpc_client
             .poll_for_signature_with_commitment(
                 &stake45_split_signature,
-                CommitmentConfig::recent(),
+                CommitmentConfig::processed(),
             )
             .unwrap();
 
@@ -577,12 +577,15 @@ mod test {
             ))
             .unwrap();
         rpc_client
-            .poll_for_signature_with_commitment(&fund_system1_signature, CommitmentConfig::recent())
+            .poll_for_signature_with_commitment(
+                &fund_system1_signature,
+                CommitmentConfig::processed(),
+            )
             .unwrap();
         accounts_info.enroll_system_account(
             &system1_keypair.pubkey(),
             rpc_client
-                .get_slot_with_commitment(CommitmentConfig::recent())
+                .get_slot_with_commitment(CommitmentConfig::processed())
                 .unwrap(),
             2 * one_sol,
         );
@@ -616,12 +619,15 @@ mod test {
             ))
             .unwrap();
         rpc_client
-            .poll_for_signature_with_commitment(&fund_system2_signature, CommitmentConfig::recent())
+            .poll_for_signature_with_commitment(
+                &fund_system2_signature,
+                CommitmentConfig::processed(),
+            )
             .unwrap();
         accounts_info.enroll_system_account(
             &system2_keypair.pubkey(),
             rpc_client
-                .get_slot_with_commitment(CommitmentConfig::recent())
+                .get_slot_with_commitment(CommitmentConfig::processed())
                 .unwrap(),
             2 * one_sol,
         );
@@ -644,7 +650,7 @@ mod test {
 
         // Process all the transactions
         let current_slot = rpc_client
-            .get_slot_with_commitment(CommitmentConfig::recent())
+            .get_slot_with_commitment(CommitmentConfig::processed())
             .unwrap();
         process_slots(&rpc_client, &mut accounts_info, current_slot + 1);
 

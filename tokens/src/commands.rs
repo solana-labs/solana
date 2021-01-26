@@ -1046,7 +1046,7 @@ mod tests {
         let test_validator = TestValidator::with_no_fees(alice.pubkey());
         let url = test_validator.rpc_url();
 
-        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
         test_process_distribute_tokens_with_client(&client, alice, None);
     }
 
@@ -1056,7 +1056,7 @@ mod tests {
         let test_validator = TestValidator::with_no_fees(alice.pubkey());
         let url = test_validator.rpc_url();
 
-        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
         test_process_distribute_tokens_with_client(&client, alice, Some(sol_to_lamports(1.5)));
     }
 
@@ -1066,7 +1066,7 @@ mod tests {
         let test_validator = TestValidator::with_no_fees(alice.pubkey());
         let url = test_validator.rpc_url();
 
-        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
         test_process_distribute_stake_with_client(&client, alice);
     }
 
@@ -1381,7 +1381,7 @@ mod tests {
         let test_validator = TestValidator::with_custom_fees(alice.pubkey(), fees);
         let url = test_validator.rpc_url();
 
-        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
 
@@ -1464,7 +1464,7 @@ mod tests {
         let test_validator = TestValidator::with_custom_fees(alice.pubkey(), fees);
         let url = test_validator.rpc_url();
 
-        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
 
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
@@ -1573,7 +1573,7 @@ mod tests {
         let alice = Keypair::new();
         let test_validator = TestValidator::with_custom_fees(alice.pubkey(), fees);
         let url = test_validator.rpc_url();
-        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
 
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
@@ -1680,7 +1680,7 @@ mod tests {
         let test_validator = TestValidator::with_custom_fees(alice.pubkey(), fees);
         let url = test_validator.rpc_url();
 
-        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
 
         let sender_keypair_file = tmp_file_path("keypair_file", &alice.pubkey());
         write_keypair_file(&alice, &sender_keypair_file).unwrap();
@@ -1994,7 +1994,7 @@ mod tests {
         let sender_keypair = Keypair::new();
         let test_validator = TestValidator::with_no_fees(sender_keypair.pubkey());
         let url = test_validator.rpc_url();
-        let client = RpcClient::new_with_commitment(url, CommitmentConfig::recent());
+        let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
 
         let fee_payer = Keypair::new();
         let transaction = transfer(

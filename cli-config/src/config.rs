@@ -42,7 +42,7 @@ impl Default for Config {
             "System Program".to_string(),
         );
 
-        let commitment = "singleGossip".to_string();
+        let commitment = "confirmed".to_string();
 
         Self {
             json_rpc_url,
