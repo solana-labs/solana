@@ -128,12 +128,10 @@ fn load_upgradeable_bpf_program(
     );
 }
 
-fn upgrade_bpf_program(
+fn load_upgradeable_buffer(
     bank_client: &BankClient,
     payer_keypair: &Keypair,
     buffer_keypair: &Keypair,
-    executable_pubkey: &Pubkey,
-    authority_keypair: &Keypair,
     name: &str,
 ) {
     let path = create_bpf_path(name);
@@ -143,6 +141,17 @@ fn upgrade_bpf_program(
     let mut elf = Vec::new();
     file.read_to_end(&mut elf).unwrap();
     load_buffer_account(bank_client, payer_keypair, &buffer_keypair, &elf);
+}
+
+fn upgrade_bpf_program(
+    bank_client: &BankClient,
+    payer_keypair: &Keypair,
+    buffer_keypair: &Keypair,
+    executable_pubkey: &Pubkey,
+    authority_keypair: &Keypair,
+    name: &str,
+) {
+    load_upgradeable_buffer(bank_client, payer_keypair, buffer_keypair, name);
     upgrade_program(
         bank_client,
         payer_keypair,
@@ -1607,6 +1616,81 @@ fn test_program_bpf_upgrade() {
 
 #[cfg(feature = "bpf_rust")]
 #[test]
+fn test_program_bpf_upgrade_and_invoke_in_same_tx() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
+    bank.add_builtin(&name, id, entrypoint);
+    let bank = Arc::new(bank);
+    let bank_client = BankClient::new_shared(&bank);
+
+    // Deploy upgrade program
+    let buffer_keypair = Keypair::new();
+    let program_keypair = Keypair::new();
+    let program_id = program_keypair.pubkey();
+    let authority_keypair = Keypair::new();
+    load_upgradeable_bpf_program(
+        &bank_client,
+        &mint_keypair,
+        &buffer_keypair,
+        &program_keypair,
+        &authority_keypair,
+        "noop",
+    );
+
+    let invoke_instruction = Instruction::new(
+        program_id,
+        &[0],
+        vec![
+            AccountMeta::new(program_id.clone(), false),
+            AccountMeta::new(clock::id(), false),
+            AccountMeta::new(fees::id(), false),
+        ],
+    );
+
+    // Call upgradeable program
+    let result =
+        bank_client.send_and_confirm_instruction(&mint_keypair, invoke_instruction.clone());
+    assert!(result.is_ok());
+
+    // Prepare for upgrade
+    let buffer_keypair = Keypair::new();
+    load_upgradeable_buffer(&bank_client, &mint_keypair, &buffer_keypair, "panic");
+
+    // Invoke, then upgrade the program, and then invoke again in same tx
+    let message = Message::new(
+        &[
+            invoke_instruction.clone(),
+            bpf_loader_upgradeable::upgrade(
+                &program_id,
+                &buffer_keypair.pubkey(),
+                &authority_keypair.pubkey(),
+                &mint_keypair.pubkey(),
+            ),
+            invoke_instruction,
+        ],
+        Some(&mint_keypair.pubkey()),
+    );
+    let tx = Transaction::new(
+        &[&mint_keypair, &authority_keypair],
+        message.clone(),
+        bank.last_blockhash(),
+    );
+    let (result, _) = process_transaction_and_record_inner(&bank, tx);
+    assert_eq!(
+        result.unwrap_err(),
+        TransactionError::InstructionError(2, InstructionError::ProgramFailedToComplete)
+    );
+}
+
+#[cfg(feature = "bpf_rust")]
+#[test]
 fn test_program_bpf_invoke_upgradeable_via_cpi() {
     solana_logger::setup();
 
@@ -1840,6 +1924,86 @@ fn test_program_bpf_upgrade_via_cpi() {
     assert_eq!(
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::Custom(43))
+    );
+}
+
+#[cfg(feature = "bpf_rust")]
+#[test]
+fn test_program_bpf_upgrade_self_via_cpi() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, id, entrypoint);
+    let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
+    bank.add_builtin(&name, id, entrypoint);
+    let bank = Arc::new(bank);
+    let bank_client = BankClient::new_shared(&bank);
+    let noop_program_id = load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, "noop");
+
+    // Deploy upgradeable program
+    let buffer_keypair = Keypair::new();
+    let program_keypair = Keypair::new();
+    let program_id = program_keypair.pubkey();
+    let authority_keypair = Keypair::new();
+    load_upgradeable_bpf_program(
+        &bank_client,
+        &mint_keypair,
+        &buffer_keypair,
+        &program_keypair,
+        &authority_keypair,
+        "solana_bpf_rust_invoke_and_return",
+    );
+
+    let mut invoke_instruction = Instruction::new(
+        program_id,
+        &[0],
+        vec![
+            AccountMeta::new(noop_program_id, false),
+            AccountMeta::new(noop_program_id, false),
+            AccountMeta::new(clock::id(), false),
+            AccountMeta::new(fees::id(), false),
+        ],
+    );
+
+    // Call the upgraded program
+    invoke_instruction.data[0] += 1;
+    let result =
+        bank_client.send_and_confirm_instruction(&mint_keypair, invoke_instruction.clone());
+    assert!(result.is_ok());
+
+    // Prepare for upgrade
+    let buffer_keypair = Keypair::new();
+    load_upgradeable_buffer(&bank_client, &mint_keypair, &buffer_keypair, "panic");
+
+    // Invoke, then upgrade the program, and then invoke again in same tx
+    let message = Message::new(
+        &[
+            invoke_instruction.clone(),
+            bpf_loader_upgradeable::upgrade(
+                &program_id,
+                &buffer_keypair.pubkey(),
+                &authority_keypair.pubkey(),
+                &mint_keypair.pubkey(),
+            ),
+            invoke_instruction,
+        ],
+        Some(&mint_keypair.pubkey()),
+    );
+    let tx = Transaction::new(
+        &[&mint_keypair, &authority_keypair],
+        message.clone(),
+        bank.last_blockhash(),
+    );
+    let (result, _) = process_transaction_and_record_inner(&bank, tx);
+    assert_eq!(
+        result.unwrap_err(),
+        TransactionError::InstructionError(2, InstructionError::ProgramFailedToComplete)
     );
 }
 
