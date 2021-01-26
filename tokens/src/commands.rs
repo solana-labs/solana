@@ -211,6 +211,7 @@ fn distribution_instructions(
         &stake_authority,
         &recipient,
         StakeAuthorize::Staker,
+        None,
     ));
 
     // Make the recipient the new withdraw authority
@@ -219,6 +220,7 @@ fn distribution_instructions(
         &withdraw_authority,
         &recipient,
         StakeAuthorize::Withdrawer,
+        None,
     ));
 
     // Add lockup

@@ -592,6 +592,7 @@ fn test_stake_authorize() {
         nonce_account: None,
         nonce_authority: 0,
         fee_payer: 0,
+        custodian: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -619,6 +620,7 @@ fn test_stake_authorize() {
         nonce_account: None,
         nonce_authority: 0,
         fee_payer: 0,
+        custodian: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -641,6 +643,7 @@ fn test_stake_authorize() {
         nonce_account: None,
         nonce_authority: 0,
         fee_payer: 0,
+        custodian: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -663,6 +666,7 @@ fn test_stake_authorize() {
         nonce_account: None,
         nonce_authority: 0,
         fee_payer: 0,
+        custodian: None,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sign_reply = process_command(&config_offline).unwrap();
@@ -678,6 +682,7 @@ fn test_stake_authorize() {
         nonce_account: None,
         nonce_authority: 0,
         fee_payer: 0,
+        custodian: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -724,6 +729,7 @@ fn test_stake_authorize() {
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: 0,
         fee_payer: 0,
+        custodian: None,
     };
     let sign_reply = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sign_reply);
@@ -743,6 +749,7 @@ fn test_stake_authorize() {
         nonce_account: Some(nonce_account.pubkey()),
         nonce_authority: 0,
         fee_payer: 0,
+        custodian: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -845,6 +852,7 @@ fn test_stake_authorize_with_fee_payer() {
         nonce_account: None,
         nonce_authority: 0,
         fee_payer: 1,
+        custodian: None,
     };
     process_command(&config).unwrap();
     // `config` balance has not changed, despite submitting the TX
@@ -863,6 +871,7 @@ fn test_stake_authorize_with_fee_payer() {
         nonce_account: None,
         nonce_authority: 0,
         fee_payer: 0,
+        custodian: None,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sign_reply = process_command(&config_offline).unwrap();
@@ -878,6 +887,7 @@ fn test_stake_authorize_with_fee_payer() {
         nonce_account: None,
         nonce_authority: 0,
         fee_payer: 0,
+        custodian: None,
     };
     process_command(&config).unwrap();
     // `config`'s balance again has not changed
