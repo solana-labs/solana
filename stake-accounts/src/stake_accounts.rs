@@ -66,12 +66,14 @@ fn authorize_stake_accounts_instructions(
         stake_authority_pubkey,
         new_stake_authority_pubkey,
         StakeAuthorize::Staker,
+        None,
     );
     let instruction1 = stake_instruction::authorize(
         &stake_account_address,
         withdraw_authority_pubkey,
         new_withdraw_authority_pubkey,
         StakeAuthorize::Withdrawer,
+        None,
     );
     vec![instruction0, instruction1]
 }

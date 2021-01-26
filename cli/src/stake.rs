@@ -64,6 +64,12 @@ pub const WITHDRAW_AUTHORITY_ARG: ArgConstant<'static> = ArgConstant {
     help: "Authorized withdrawer [default: cli config keypair]",
 };
 
+pub const CUSTODIAN_ARG: ArgConstant<'static> = ArgConstant {
+    name: "custodian",
+    long: "custodian",
+    help: "Authority to override account lockup",
+};
+
 fn stake_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(STAKE_AUTHORITY_ARG.name)
         .long(STAKE_AUTHORITY_ARG.long)
@@ -80,6 +86,15 @@ fn withdraw_authority_arg<'a, 'b>() -> Arg<'a, 'b> {
         .value_name("KEYPAIR")
         .validator(is_valid_signer)
         .help(WITHDRAW_AUTHORITY_ARG.help)
+}
+
+fn custodian_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name(CUSTODIAN_ARG.name)
+        .long(CUSTODIAN_ARG.long)
+        .takes_value(true)
+        .value_name("KEYPAIR")
+        .validator(is_valid_signer)
+        .help(CUSTODIAN_ARG.help)
 }
 
 pub trait StakeSubCommands {
@@ -223,6 +238,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .offline_args()
                 .nonce_args(false)
                 .arg(fee_payer_arg())
+                .arg(custodian_arg())
         )
         .subcommand(
             SubCommand::with_name("deactivate-stake")
@@ -331,14 +347,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .offline_args()
                 .nonce_args(false)
                 .arg(fee_payer_arg())
-                .arg(
-                    Arg::with_name("custodian")
-                        .long("custodian")
-                        .takes_value(true)
-                        .value_name("KEYPAIR")
-                        .validator(is_valid_signer)
-                        .help("Authority to override account lockup")
-                )
+                .arg(custodian_arg())
         )
         .subcommand(
             SubCommand::with_name("stake-set-lockup")
@@ -561,10 +570,14 @@ pub fn parse_stake_authorize(
     let (nonce_authority, nonce_authority_pubkey) =
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
+    let (custodian, custodian_pubkey) = signer_of(matches, "custodian", wallet_manager)?;
 
     bulk_signers.push(fee_payer);
     if nonce_account.is_some() {
         bulk_signers.push(nonce_authority);
+    }
+    if custodian.is_some() {
+        bulk_signers.push(custodian);
     }
     let signer_info =
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
@@ -591,6 +604,7 @@ pub fn parse_stake_authorize(
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
+            custodian: custodian_pubkey.and_then(|_| signer_info.index_of(custodian_pubkey)),
         },
         signers: signer_info.signers,
     })
@@ -970,6 +984,7 @@ pub fn process_stake_authorize(
     config: &CliConfig,
     stake_account_pubkey: &Pubkey,
     new_authorizations: &[(StakeAuthorize, Pubkey, SignerIndex)],
+    custodian: Option<SignerIndex>,
     sign_only: bool,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
@@ -977,6 +992,7 @@ pub fn process_stake_authorize(
     fee_payer: SignerIndex,
 ) -> ProcessResult {
     let mut ixs = Vec::new();
+    let custodian = custodian.map(|index| config.signers[index]);
     for (stake_authorize, authorized_pubkey, authority) in new_authorizations.iter() {
         check_unique_pubkeys(
             (stake_account_pubkey, "stake_account_pubkey".to_string()),
@@ -988,6 +1004,7 @@ pub fn process_stake_authorize(
             &authority.pubkey(),  // currently authorized
             authorized_pubkey,    // new stake signer
             *stake_authorize,     // stake or withdraw
+            custodian.map(|signer| signer.pubkey()).as_ref(),
         ));
     }
 
@@ -1939,6 +1956,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
+                    custodian: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
             },
@@ -1973,6 +1991,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
+                    custodian: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2011,6 +2030,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
+                    custodian: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2038,6 +2058,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
+                    custodian: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
             },
@@ -2062,6 +2083,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
+                    custodian: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2092,6 +2114,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
+                    custodian: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2123,6 +2146,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
+                    custodian: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
             },
@@ -2151,6 +2175,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
+                    custodian: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2185,6 +2210,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
+                    custodian: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -2221,6 +2247,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 1,
+                    custodian: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2267,6 +2294,7 @@ mod tests {
                     nonce_account: Some(nonce_account),
                     nonce_authority: 2,
                     fee_payer: 1,
+                    custodian: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2299,6 +2327,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 0,
+                    custodian: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -2336,6 +2365,7 @@ mod tests {
                     nonce_account: Some(nonce_account_pubkey),
                     nonce_authority: 1,
                     fee_payer: 0,
+                    custodian: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2369,6 +2399,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 1,
+                    custodian: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2406,6 +2437,7 @@ mod tests {
                     nonce_account: None,
                     nonce_authority: 0,
                     fee_payer: 1,
+                    custodian: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
