@@ -47,8 +47,7 @@ use std::{
 pub struct RpcClient {
     sender: Box<dyn RpcSender + Send + Sync + 'static>,
     commitment_config: CommitmentConfig,
-    default_cluster_transaction_encoding: RwLock<Option<UiTransactionEncoding>>,
-    use_deprecated_commitment: RwLock<Option<bool>>,
+    node_version: RwLock<Option<semver::Version>>,
 }
 
 fn serialize_encode_transaction(
@@ -78,8 +77,7 @@ impl RpcClient {
     ) -> Self {
         Self {
             sender: Box::new(sender),
-            default_cluster_transaction_encoding: RwLock::new(None),
-            use_deprecated_commitment: RwLock::new(None),
+            node_version: RwLock::new(None),
             commitment_config,
         }
     }
@@ -130,27 +128,30 @@ impl RpcClient {
         Self::new_with_timeout(url, timeout)
     }
 
+    fn get_node_version(&self) -> Result<semver::Version, RpcError> {
+        let r_node_version = self.node_version.read().unwrap();
+        if let Some(version) = &*r_node_version {
+            Ok(version.clone())
+        } else {
+            drop(r_node_version);
+            let mut w_node_version = self.node_version.write().unwrap();
+            let node_version = self.get_version().map_err(|e| {
+                RpcError::RpcRequestError(format!("cluster version query failed: {}", e))
+            })?;
+            let node_version = semver::Version::parse(&node_version.solana_core).map_err(|e| {
+                RpcError::RpcRequestError(format!("failed to parse cluster version: {}", e))
+            })?;
+            *w_node_version = Some(node_version.clone());
+            Ok(node_version)
+        }
+    }
+
     pub fn commitment(&self) -> CommitmentConfig {
         self.commitment_config
     }
 
     fn use_deprecated_commitment(&self) -> Result<bool, RpcError> {
-        let use_deprecated_commitment = self.use_deprecated_commitment.read().unwrap();
-        if let Some(use_deprecated_commitment) = *use_deprecated_commitment {
-            Ok(use_deprecated_commitment)
-        } else {
-            drop(use_deprecated_commitment);
-            let cluster_version = self.get_version().map_err(|e| {
-                RpcError::RpcRequestError(format!("cluster version query failed: {}", e))
-            })?;
-            let cluster_version =
-                semver::Version::parse(&cluster_version.solana_core).map_err(|e| {
-                    RpcError::RpcRequestError(format!("failed to parse cluster version: {}", e))
-                })?;
-            let use_deprecated_commitment = cluster_version < semver::Version::new(1, 5, 5);
-            *self.use_deprecated_commitment.write().unwrap() = Some(use_deprecated_commitment);
-            Ok(use_deprecated_commitment)
-        }
+        Ok(self.get_node_version()? < semver::Version::new(1, 5, 5))
     }
 
     fn maybe_map_commitment(
@@ -206,27 +207,10 @@ impl RpcClient {
     }
 
     fn default_cluster_transaction_encoding(&self) -> Result<UiTransactionEncoding, RpcError> {
-        let default_cluster_transaction_encoding =
-            self.default_cluster_transaction_encoding.read().unwrap();
-        if let Some(encoding) = *default_cluster_transaction_encoding {
-            Ok(encoding)
+        if self.get_node_version()? < semver::Version::new(1, 3, 16) {
+            Ok(UiTransactionEncoding::Base58)
         } else {
-            drop(default_cluster_transaction_encoding);
-            let cluster_version = self.get_version().map_err(|e| {
-                RpcError::RpcRequestError(format!("cluster version query failed: {}", e))
-            })?;
-            let cluster_version =
-                semver::Version::parse(&cluster_version.solana_core).map_err(|e| {
-                    RpcError::RpcRequestError(format!("failed to parse cluster version: {}", e))
-                })?;
-            // Prefer base64 since 1.3.16
-            let encoding = if cluster_version < semver::Version::new(1, 3, 16) {
-                UiTransactionEncoding::Base58
-            } else {
-                UiTransactionEncoding::Base64
-            };
-            *self.default_cluster_transaction_encoding.write().unwrap() = Some(encoding);
-            Ok(encoding)
+            Ok(UiTransactionEncoding::Base64)
         }
     }
 
