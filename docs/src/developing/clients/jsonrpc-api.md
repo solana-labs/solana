@@ -134,22 +134,20 @@ to report progress and higher levels to ensure the state will not be rolled back
 In descending order of commitment (most finalized to least finalized), clients
 may specify:
 
-- `"max"` - the node will query the most recent block confirmed by supermajority
+- `"finalized"` - the node will query the most recent block confirmed by supermajority
 of the cluster as having reached maximum lockout, meaning the cluster has
 recognized this block as finalized
-- `"root"` - the node will query the most recent block having reached maximum
-lockout on this node, meaning the node has recognized this block as finalized
-- `"singleGossip"` - the node will query the most recent block that has been voted on by supermajority of the cluster.
+- `"confirmed"` - the node will query the most recent block that has been voted on by supermajority of the cluster.
   - It incorporates votes from gossip and replay.
   - It does not count votes on descendants of a block, only direct votes on that block.
   - This confirmation level also upholds "optimistic confirmation" guarantees in
     release 1.3 and onwards.
-- `"recent"` - the node will query its most recent block.  Note that the block
+- `"processed"` - the node will query its most recent block.  Note that the block
 may not be complete.
 
 For processing many dependent transactions in series, it's recommended to use
-`"singleGossip"` commitment, which balances speed with rollback safety.
-For total safety, it's recommended to use`"max"` commitment.
+`"confirmed"` commitment, which balances speed with rollback safety.
+For total safety, it's recommended to use`"finalized"` commitment.
 
 #### Example
 
@@ -2966,7 +2964,7 @@ After connecting to the RPC PubSub websocket at `ws://<ADDRESS>/`:
 
 - Submit subscription requests to the websocket using the methods below
 - Multiple subscriptions may be active at once
-- Many subscriptions take the optional [`commitment` parameter](jsonrpc-api.md#configuring-state-commitment), defining how finalized a change should be to trigger a notification. For subscriptions, if commitment is unspecified, the default value is `"singleGossip"`.
+- Many subscriptions take the optional [`commitment` parameter](jsonrpc-api.md#configuring-state-commitment), defining how finalized a change should be to trigger a notification. For subscriptions, if commitment is unspecified, the default value is `"confirmed"`.
 
 ### accountSubscribe
 

@@ -248,7 +248,7 @@ mod tests {
     #[test]
     fn test_build_request_json_config_options() {
         let commitment_config = CommitmentConfig {
-            commitment: CommitmentLevel::Max,
+            commitment: CommitmentLevel::Finalized,
         };
         let addr = json!("deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx");
 

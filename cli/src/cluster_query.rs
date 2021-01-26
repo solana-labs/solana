@@ -902,7 +902,7 @@ pub fn process_get_block(
     let slot = if let Some(slot) = slot {
         slot
     } else {
-        rpc_client.get_slot_with_commitment(CommitmentConfig::max())?
+        rpc_client.get_slot_with_commitment(CommitmentConfig::finalized())?
     };
 
     let mut block =
@@ -980,7 +980,7 @@ pub fn process_get_block_time(
     let slot = if let Some(slot) = slot {
         slot
     } else {
-        rpc_client.get_slot_with_commitment(CommitmentConfig::max())?
+        rpc_client.get_slot_with_commitment(CommitmentConfig::finalized())?
     };
     let timestamp = rpc_client.get_block_time(slot)?;
     let block_time = CliBlockTime { slot, timestamp };
@@ -1029,7 +1029,7 @@ pub fn process_show_block_production(
     slot_limit: Option<u64>,
 ) -> ProcessResult {
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
-    let epoch_info = rpc_client.get_epoch_info_with_commitment(CommitmentConfig::max())?;
+    let epoch_info = rpc_client.get_epoch_info_with_commitment(CommitmentConfig::finalized())?;
 
     let epoch = epoch.unwrap_or(epoch_info.epoch);
     if epoch > epoch_info.epoch {
@@ -1088,7 +1088,7 @@ pub fn process_show_block_production(
 
     progress_bar.set_message(&format!("Fetching leader schedule for epoch {}...", epoch));
     let leader_schedule = rpc_client
-        .get_leader_schedule_with_commitment(Some(start_slot), CommitmentConfig::root())?;
+        .get_leader_schedule_with_commitment(Some(start_slot), CommitmentConfig::finalized())?;
     if leader_schedule.is_none() {
         return Err(format!("Unable to fetch leader schedule for slot {}", start_slot).into());
     }

@@ -390,7 +390,7 @@ fn swapper<T>(
             while client
                 .get_balance_with_commitment(
                     &trade_infos[trade_index].trade_account,
-                    CommitmentConfig::recent(),
+                    CommitmentConfig::processed(),
                 )
                 .unwrap_or(0)
                 == 0
@@ -445,7 +445,7 @@ fn swapper<T>(
             account_group = (account_group + 1) % account_groups as usize;
 
             let (blockhash, _fee_calculator, _last_valid_slot) = client
-                .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+                .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
                 .expect("Failed to get blockhash");
             let to_swap_txs: Vec<_> = to_swap
                 .par_iter()
@@ -571,7 +571,7 @@ fn trader<T>(
         account_group = (account_group + 1) % account_groups as usize;
 
         let (blockhash, _fee_calculator, _last_valid_slot) = client
-            .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+            .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
             .expect("Failed to get blockhash");
 
         trades.chunks(chunk_size).for_each(|chunk| {
@@ -658,7 +658,7 @@ where
 {
     for s in &tx.signatures {
         if let Ok(Some(r)) =
-            sync_client.get_signature_status_with_commitment(s, CommitmentConfig::recent())
+            sync_client.get_signature_status_with_commitment(s, CommitmentConfig::processed())
         {
             match r {
                 Ok(_) => {
@@ -681,7 +681,7 @@ fn verify_funding_transfer<T: SyncClient + ?Sized>(
     if verify_transaction(client, tx) {
         for a in &tx.message().account_keys[1..] {
             if client
-                .get_balance_with_commitment(a, CommitmentConfig::recent())
+                .get_balance_with_commitment(a, CommitmentConfig::processed())
                 .unwrap_or(0)
                 >= amount
             {
@@ -764,7 +764,7 @@ pub fn fund_keys<T: Client>(client: &T, source: &Keypair, dests: &[Arc<Keypair>]
                 );
 
                 let (blockhash, _fee_calculator, _last_valid_slot) = client
-                    .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+                    .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
                     .expect("blockhash");
                 to_fund_txs.par_iter_mut().for_each(|(k, tx)| {
                     tx.sign(&[*k], blockhash);
@@ -803,7 +803,7 @@ pub fn fund_keys<T: Client>(client: &T, source: &Keypair, dests: &[Arc<Keypair>]
         funded.append(&mut new_funded);
         funded.retain(|(k, b)| {
             client
-                .get_balance_with_commitment(&k.pubkey(), CommitmentConfig::recent())
+                .get_balance_with_commitment(&k.pubkey(), CommitmentConfig::processed())
                 .unwrap_or(0)
                 > lamports
                 && *b > lamports
@@ -857,7 +857,7 @@ pub fn create_token_accounts<T: Client>(
             let mut retries = 0;
             while !to_create_txs.is_empty() {
                 let (blockhash, _fee_calculator, _last_valid_slot) = client
-                    .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+                    .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
                     .expect("Failed to get blockhash");
                 to_create_txs
                     .par_iter_mut()
@@ -903,7 +903,7 @@ pub fn create_token_accounts<T: Client>(
         let mut new_notfunded: Vec<(&Arc<Keypair>, &Keypair)> = vec![];
         for f in &notfunded {
             if client
-                .get_balance_with_commitment(&f.1.pubkey(), CommitmentConfig::recent())
+                .get_balance_with_commitment(&f.1.pubkey(), CommitmentConfig::processed())
                 .unwrap_or(0)
                 == 0
             {
@@ -968,7 +968,7 @@ pub fn airdrop_lamports<T: Client>(
     id: &Keypair,
     amount: u64,
 ) {
-    let balance = client.get_balance_with_commitment(&id.pubkey(), CommitmentConfig::recent());
+    let balance = client.get_balance_with_commitment(&id.pubkey(), CommitmentConfig::processed());
     let balance = balance.unwrap_or(0);
     if balance >= amount {
         return;
@@ -986,7 +986,7 @@ pub fn airdrop_lamports<T: Client>(
     let mut tries = 0;
     loop {
         let (blockhash, _fee_calculator, _last_valid_slot) = client
-            .get_recent_blockhash_with_commitment(CommitmentConfig::recent())
+            .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
             .expect("Failed to get blockhash");
         match request_airdrop_transaction(&faucet_addr, &id.pubkey(), amount_to_drop, blockhash) {
             Ok(transaction) => {
@@ -995,14 +995,14 @@ pub fn airdrop_lamports<T: Client>(
                 for _ in 0..30 {
                     if let Ok(Some(_)) = client.get_signature_status_with_commitment(
                         &signature,
-                        CommitmentConfig::recent(),
+                        CommitmentConfig::processed(),
                     ) {
                         break;
                     }
                     sleep(Duration::from_millis(100));
                 }
                 if client
-                    .get_balance_with_commitment(&id.pubkey(), CommitmentConfig::recent())
+                    .get_balance_with_commitment(&id.pubkey(), CommitmentConfig::processed())
                     .unwrap_or(0)
                     >= amount
                 {

@@ -437,7 +437,7 @@ impl CliConfig<'_> {
     }
 
     fn default_commitment() -> CommitmentConfig {
-        CommitmentConfig::single_gossip()
+        CommitmentConfig::confirmed()
     }
 
     fn first_nonempty_setting(
@@ -532,10 +532,10 @@ impl CliConfig<'_> {
 
     pub fn recent_for_tests() -> Self {
         Self {
-            commitment: CommitmentConfig::recent(),
+            commitment: CommitmentConfig::processed(),
             send_transaction_config: RpcSendTransactionConfig {
                 skip_preflight: true,
-                preflight_commitment: Some(CommitmentConfig::recent().commitment),
+                preflight_commitment: Some(CommitmentConfig::processed().commitment),
                 ..RpcSendTransactionConfig::default()
             },
             ..Self::default()
@@ -558,7 +558,7 @@ impl Default for CliConfig<'_> {
             rpc_timeout: Duration::from_secs(u64::from_str(DEFAULT_RPC_TIMEOUT_SECONDS).unwrap()),
             verbose: false,
             output_format: OutputFormat::Display,
-            commitment: CommitmentConfig::single_gossip(),
+            commitment: CommitmentConfig::confirmed(),
             send_transaction_config: RpcSendTransactionConfig::default(),
             address_labels: HashMap::new(),
         }

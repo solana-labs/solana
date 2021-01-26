@@ -20,7 +20,7 @@ use solana_account_decoder::parse_token::UiTokenAmount;
 pub use solana_runtime::bank::RewardType;
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
-    commitment_config::{CommitmentConfig, CommitmentLevel},
+    commitment_config::CommitmentConfig,
     deserialize_utils::default_on_eof,
     instruction::CompiledInstruction,
     message::{Message, MessageHeader},
@@ -280,22 +280,18 @@ pub struct TransactionStatus {
 
 impl TransactionStatus {
     pub fn satisfies_commitment(&self, commitment_config: CommitmentConfig) -> bool {
-        match commitment_config.commitment {
-            CommitmentLevel::Max | CommitmentLevel::Root => self.confirmations.is_none(),
-            CommitmentLevel::SingleGossip => {
-                if let Some(status) = &self.confirmation_status {
-                    *status != TransactionConfirmationStatus::Processed
-                } else {
-                    // These fallback cases handle TransactionStatus RPC responses from older software
-                    self.confirmations.is_some() && self.confirmations.unwrap() > 1
-                        || self.confirmations.is_none()
-                }
+        if commitment_config.is_finalized() {
+            self.confirmations.is_none()
+        } else if commitment_config.is_confirmed() {
+            if let Some(status) = &self.confirmation_status {
+                *status != TransactionConfirmationStatus::Processed
+            } else {
+                // These fallback cases handle TransactionStatus RPC responses from older software
+                self.confirmations.is_some() && self.confirmations.unwrap() > 1
+                    || self.confirmations.is_none()
             }
-            CommitmentLevel::Single => match self.confirmations {
-                Some(confirmations) => confirmations >= 1,
-                None => true,
-            },
-            CommitmentLevel::Recent => true,
+        } else {
+            true
         }
     }
 
@@ -604,11 +600,9 @@ mod test {
             confirmation_status: Some(TransactionConfirmationStatus::Finalized),
         };
 
-        assert!(status.satisfies_commitment(CommitmentConfig::default()));
-        assert!(status.satisfies_commitment(CommitmentConfig::root()));
-        assert!(status.satisfies_commitment(CommitmentConfig::single()));
-        assert!(status.satisfies_commitment(CommitmentConfig::single_gossip()));
-        assert!(status.satisfies_commitment(CommitmentConfig::recent()));
+        assert!(status.satisfies_commitment(CommitmentConfig::finalized()));
+        assert!(status.satisfies_commitment(CommitmentConfig::confirmed()));
+        assert!(status.satisfies_commitment(CommitmentConfig::processed()));
 
         let status = TransactionStatus {
             slot: 0,
@@ -618,11 +612,9 @@ mod test {
             confirmation_status: Some(TransactionConfirmationStatus::Confirmed),
         };
 
-        assert!(!status.satisfies_commitment(CommitmentConfig::default()));
-        assert!(!status.satisfies_commitment(CommitmentConfig::root()));
-        assert!(status.satisfies_commitment(CommitmentConfig::single()));
-        assert!(status.satisfies_commitment(CommitmentConfig::single_gossip()));
-        assert!(status.satisfies_commitment(CommitmentConfig::recent()));
+        assert!(!status.satisfies_commitment(CommitmentConfig::finalized()));
+        assert!(status.satisfies_commitment(CommitmentConfig::confirmed()));
+        assert!(status.satisfies_commitment(CommitmentConfig::processed()));
 
         let status = TransactionStatus {
             slot: 0,
@@ -632,11 +624,9 @@ mod test {
             confirmation_status: Some(TransactionConfirmationStatus::Processed),
         };
 
-        assert!(!status.satisfies_commitment(CommitmentConfig::default()));
-        assert!(!status.satisfies_commitment(CommitmentConfig::root()));
-        assert!(status.satisfies_commitment(CommitmentConfig::single()));
-        assert!(!status.satisfies_commitment(CommitmentConfig::single_gossip()));
-        assert!(status.satisfies_commitment(CommitmentConfig::recent()));
+        assert!(!status.satisfies_commitment(CommitmentConfig::finalized()));
+        assert!(!status.satisfies_commitment(CommitmentConfig::confirmed()));
+        assert!(status.satisfies_commitment(CommitmentConfig::processed()));
 
         let status = TransactionStatus {
             slot: 0,
@@ -646,11 +636,9 @@ mod test {
             confirmation_status: None,
         };
 
-        assert!(!status.satisfies_commitment(CommitmentConfig::default()));
-        assert!(!status.satisfies_commitment(CommitmentConfig::root()));
-        assert!(!status.satisfies_commitment(CommitmentConfig::single()));
-        assert!(!status.satisfies_commitment(CommitmentConfig::single_gossip()));
-        assert!(status.satisfies_commitment(CommitmentConfig::recent()));
+        assert!(!status.satisfies_commitment(CommitmentConfig::finalized()));
+        assert!(!status.satisfies_commitment(CommitmentConfig::confirmed()));
+        assert!(status.satisfies_commitment(CommitmentConfig::processed()));
 
         // Test single_gossip fallback cases
         let status = TransactionStatus {
@@ -660,7 +648,7 @@ mod test {
             err: None,
             confirmation_status: None,
         };
-        assert!(!status.satisfies_commitment(CommitmentConfig::single_gossip()));
+        assert!(!status.satisfies_commitment(CommitmentConfig::confirmed()));
 
         let status = TransactionStatus {
             slot: 0,
@@ -669,7 +657,7 @@ mod test {
             err: None,
             confirmation_status: None,
         };
-        assert!(status.satisfies_commitment(CommitmentConfig::single_gossip()));
+        assert!(status.satisfies_commitment(CommitmentConfig::confirmed()));
 
         let status = TransactionStatus {
             slot: 0,
@@ -678,6 +666,6 @@ mod test {
             err: None,
             confirmation_status: None,
         };
-        assert!(status.satisfies_commitment(CommitmentConfig::single_gossip()));
+        assert!(status.satisfies_commitment(CommitmentConfig::confirmed()));
     }
 }

@@ -64,7 +64,7 @@ fn full_battery_tests(
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
     let json_rpc_url = test_validator.rpc_url();
 
     let mut config_payer = CliConfig::recent_for_tests();
@@ -230,7 +230,7 @@ fn test_create_account_with_seed() {
 
     // Setup accounts
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
     request_and_confirm_airdrop(
         &rpc_client,
         &faucet_addr,
@@ -280,7 +280,7 @@ fn test_create_account_with_seed() {
     let nonce_hash = nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_address,
-        CommitmentConfig::recent(),
+        CommitmentConfig::processed(),
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
