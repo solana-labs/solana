@@ -430,7 +430,7 @@ fn transact(
     );
 
     let (blockhash, fee_calculator, last_valid_slot) = rpc_client
-        .get_recent_blockhash_with_commitment(CommitmentConfig::max())?
+        .get_recent_blockhash_with_commitment(CommitmentConfig::finalized())?
         .value;
     info!("{} transactions to send", transactions.len());
 
