@@ -304,11 +304,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 "processed",
                 "confirmed",
                 "finalized",
-                "recent",
-                "single",
-                "singleGossip",
-                "root",
-                "max",
+                "recent", // Deprecated as of v1.5.5
+                "single", // Deprecated as of v1.5.5
+                "singleGossip", // Deprecated as of v1.5.5
+                "root", // Deprecated as of v1.5.5
+                "max", // Deprecated as of v1.5.5
             ])
             .value_name("COMMITMENT_LEVEL")
             .hide_possible_values(true)
