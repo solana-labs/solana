@@ -779,17 +779,15 @@ impl Executor for BPFExecutor {
                     }
                 }
                 Err(error) => {
-                    ic_logger_msg!(logger, "Program {} BPF VM error: {}", program_id, error);
                     let error = match error {
                         EbpfError::UserError(BPFError::SyscallError(
                             SyscallError::InstructionError(error),
                         )) => error,
                         err => {
-                            ic_logger_msg!(logger, "Program failed to complete: {:?}", err);
+                            ic_logger_msg!(logger, "Program failed to complete: {}", err);
                             InstructionError::ProgramFailedToComplete
                         }
                     };
-
                     stable_log::program_failure(&logger, program_id, &error);
                     return Err(error);
                 }
