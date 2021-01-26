@@ -584,6 +584,16 @@ pub fn info(
             "SOLANA_INSTALL_ACTIVE_RELEASE={}",
             &config.active_release_dir().to_str().unwrap_or("")
         );
+        config
+            .explicit_release
+            .map(|er| match er {
+                ExplicitRelease::Semver(semver) => semver,
+                ExplicitRelease::Channel(channel) => channel,
+            })
+            .and_then(|channel| {
+                println!("SOLANA_INSTALL_ACTIVE_CHANNEL={}", channel,);
+                Option::<String>::None
+            });
         return Ok(None);
     }
 
