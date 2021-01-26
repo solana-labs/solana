@@ -311,8 +311,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 "max",
             ])
             .value_name("COMMITMENT_LEVEL")
+            .hide_possible_values(true)
             .global(true)
-            .help("Return information at the selected commitment level"),
+            .help("Return information at the selected commitment level [possible values: processed, confirmed, finalized]"),
     )
     .arg(
         Arg::with_name("verbose")
