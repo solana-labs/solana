@@ -3329,9 +3329,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77cd2bce0b970bcc90210d005d838cd37745899f41f4d096edc58b49d8bb6094"
+checksum = "cef52e1b7993b49ea5c2f65b1363bdc6f38046e467585d08094f54bf55db5ccc"
 dependencies = [
  "byteorder 1.3.4",
  "combine",
