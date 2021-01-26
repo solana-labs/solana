@@ -46,21 +46,6 @@ module.exports = {
       "staking",
       "staking/stake-accounts",
     ],
-      "Economics": [
-	  "economics_overview",
-	  {
-                type: "category",
-                label: "Inflation Design",
-                items: [
-                    "inflation/terminology",
-		    "inflation/inflation_schedule",
-                    "inflation/adjusted_staking_yield",
-                ],
-          },
-	  "transaction_fees",
-          "validation_services",
-	  "storage_rent_economics"
-	  ],
     "Command Line": [
       "cli",
       "cli/install-solana-cli-tools",
@@ -190,6 +175,21 @@ module.exports = {
         ],
       },
     ],
+      "Economics": [
+	  "economics_overview",
+	  {
+                type: "category",
+                label: "Inflation Design",
+                items: [
+                    "inflation/terminology",
+		    "inflation/inflation_schedule",
+                    "inflation/adjusted_staking_yield",
+                ],
+          },
+	  "transaction_fees",
+          "validation_services",
+	  "storage_rent_economics"
+	  ],
     "Design Proposals": [
       {
         type: "category",

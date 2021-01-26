@@ -14,4 +14,4 @@ Method 2: Pay per byte
 
 If an account has less than two-years worth of deposited rent the network charges rent on a per-epoch basis, in credit for the next epoch. This rent is deducted at a rate specified in genesis, in lamports per kilobyte-year.
 
-For information on the technical implementation details of this design, see the [Rent](../rent.md) section.
+For information on the technical implementation details of this design, see the [Rent](implemented-proposals/rent.md) section.
