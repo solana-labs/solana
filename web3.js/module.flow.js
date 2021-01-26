@@ -780,6 +780,7 @@ declare module '@solana/web3.js' {
     authorizedPubkey: PublicKey,
     newAuthorizedPubkey: PublicKey,
     stakeAuthorizationType: StakeAuthorizationType,
+    custodianPubkey?: PublicKey,
   |};
 
   declare export type AuthorizeWithSeedStakeParams = {|
@@ -789,6 +790,7 @@ declare module '@solana/web3.js' {
     authorityOwner: PublicKey,
     newAuthorizedPubkey: PublicKey,
     stakeAuthorizationType: StakeAuthorizationType,
+    custodianPubkey?: PublicKey,
   |};
 
   declare export type SplitStakeParams = {|
@@ -803,6 +805,7 @@ declare module '@solana/web3.js' {
     authorizedPubkey: PublicKey,
     toPubkey: PublicKey,
     lamports: number,
+    custodianPubkey?: PublicKey,
   |};
 
   declare export type DeactivateStakeParams = {|

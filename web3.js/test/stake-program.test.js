@@ -129,6 +129,25 @@ test('authorize', () => {
   expect(params).toEqual(StakeInstruction.decodeAuthorize(stakeInstruction));
 });
 
+test('authorize with custodian', () => {
+  const stakePubkey = new Account().publicKey;
+  const authorizedPubkey = new Account().publicKey;
+  const newAuthorizedPubkey = new Account().publicKey;
+  const stakeAuthorizationType = StakeAuthorizationLayout.Withdrawer;
+  const custodianPubkey = new Account().publicKey;
+  const params = {
+    stakePubkey,
+    authorizedPubkey,
+    newAuthorizedPubkey,
+    stakeAuthorizationType,
+    custodianPubkey,
+  };
+  const transaction = StakeProgram.authorize(params);
+  expect(transaction.instructions).toHaveLength(1);
+  const [stakeInstruction] = transaction.instructions;
+  expect(params).toEqual(StakeInstruction.decodeAuthorize(stakeInstruction));
+});
+
 test('authorizeWithSeed', () => {
   const stakePubkey = new Account().publicKey;
   const authorityBase = new Account().publicKey;
@@ -143,6 +162,31 @@ test('authorizeWithSeed', () => {
     authorityOwner,
     newAuthorizedPubkey,
     stakeAuthorizationType,
+  };
+  const transaction = StakeProgram.authorizeWithSeed(params);
+  expect(transaction.instructions).toHaveLength(1);
+  const [stakeInstruction] = transaction.instructions;
+  expect(params).toEqual(
+    StakeInstruction.decodeAuthorizeWithSeed(stakeInstruction),
+  );
+});
+
+test('authorizeWithSeed with custodian', () => {
+  const stakePubkey = new Account().publicKey;
+  const authorityBase = new Account().publicKey;
+  const authoritySeed = 'test string';
+  const authorityOwner = new Account().publicKey;
+  const newAuthorizedPubkey = new Account().publicKey;
+  const stakeAuthorizationType = StakeAuthorizationLayout.Staker;
+  const custodianPubkey = new Account().publicKey;
+  const params = {
+    stakePubkey,
+    authorityBase,
+    authoritySeed,
+    authorityOwner,
+    newAuthorizedPubkey,
+    stakeAuthorizationType,
+    custodianPubkey,
   };
   const transaction = StakeProgram.authorizeWithSeed(params);
   expect(transaction.instructions).toHaveLength(1);
@@ -187,6 +231,24 @@ test('withdraw', () => {
     authorizedPubkey,
     toPubkey,
     lamports: 123,
+  };
+  const transaction = StakeProgram.withdraw(params);
+  expect(transaction.instructions).toHaveLength(1);
+  const [stakeInstruction] = transaction.instructions;
+  expect(params).toEqual(StakeInstruction.decodeWithdraw(stakeInstruction));
+});
+
+test('withdraw with custodian', () => {
+  const stakePubkey = new Account().publicKey;
+  const authorizedPubkey = new Account().publicKey;
+  const toPubkey = new Account().publicKey;
+  const custodianPubkey = new Account().publicKey;
+  const params = {
+    stakePubkey,
+    authorizedPubkey,
+    toPubkey,
+    lamports: 123,
+    custodianPubkey,
   };
   const transaction = StakeProgram.withdraw(params);
   expect(transaction.instructions).toHaveLength(1);
