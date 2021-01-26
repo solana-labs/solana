@@ -68,6 +68,8 @@ pub enum StakeInstruction {
     ///   0. [WRITE] Stake account to be updated
     ///   1. [] Clock sysvar
     ///   2. [SIGNER] The stake or withdraw authority
+    ///   3. Optional: [SIGNER] Lockup authority, if updating StakeAuthorize::Withdrawer before
+    ///      lockup expiration
     Authorize(Pubkey, StakeAuthorize),
 
     /// Delegate a stake to a particular vote account
@@ -139,6 +141,8 @@ pub enum StakeInstruction {
     ///   0. [WRITE] Stake account to be updated
     ///   1. [SIGNER] Base key of stake or withdraw authority
     ///   2. [] Clock sysvar
+    ///   3. Optional: [SIGNER] Lockup authority, if updating StakeAuthorize::Withdrawer before
+    ///      lockup expiration
     AuthorizeWithSeed(AuthorizeWithSeedArgs),
 }
 
@@ -344,12 +348,17 @@ pub fn authorize(
     authorized_pubkey: &Pubkey,
     new_authorized_pubkey: &Pubkey,
     stake_authorize: StakeAuthorize,
+    custodian_pubkey: Option<&Pubkey>,
 ) -> Instruction {
-    let account_metas = vec![
+    let mut account_metas = vec![
         AccountMeta::new(*stake_pubkey, false),
         AccountMeta::new_readonly(sysvar::clock::id(), false),
         AccountMeta::new_readonly(*authorized_pubkey, true),
     ];
+
+    if let Some(custodian_pubkey) = custodian_pubkey {
+        account_metas.push(AccountMeta::new_readonly(*custodian_pubkey, true));
+    }
 
     Instruction::new(
         id(),
@@ -365,12 +374,17 @@ pub fn authorize_with_seed(
     authority_owner: &Pubkey,
     new_authorized_pubkey: &Pubkey,
     stake_authorize: StakeAuthorize,
+    custodian_pubkey: Option<&Pubkey>,
 ) -> Instruction {
-    let account_metas = vec![
+    let mut account_metas = vec![
         AccountMeta::new(*stake_pubkey, false),
         AccountMeta::new_readonly(*authority_base, true),
         AccountMeta::new_readonly(sysvar::clock::id(), false),
     ];
+
+    if let Some(custodian_pubkey) = custodian_pubkey {
+        account_metas.push(AccountMeta::new_readonly(*custodian_pubkey, true));
+    }
 
     let args = AuthorizeWithSeedArgs {
         new_authorized_pubkey: *new_authorized_pubkey,
@@ -637,7 +651,8 @@ mod tests {
                 &Pubkey::default(),
                 &Pubkey::default(),
                 &Pubkey::default(),
-                StakeAuthorize::Staker
+                StakeAuthorize::Staker,
+                None,
             )),
             Err(InstructionError::InvalidAccountData),
         );
@@ -722,7 +737,8 @@ mod tests {
                 &spoofed_stake_state_pubkey(),
                 &Pubkey::default(),
                 &Pubkey::default(),
-                StakeAuthorize::Staker
+                StakeAuthorize::Staker,
+                None,
             )),
             Err(InstructionError::IncorrectProgramId),
         );
