@@ -1,4 +1,4 @@
-export function displayTimestamp(unixTimestamp: number): string {
+export function displayTimestamp(unixTimestamp: number, shortTimezone = false): string {
   const expireDate = new Date(unixTimestamp);
   const dateString = new Intl.DateTimeFormat("en-US", {
     year: "numeric",
@@ -10,7 +10,7 @@ export function displayTimestamp(unixTimestamp: number): string {
     minute: "numeric",
     second: "numeric",
     hour12: false,
-    timeZoneName: "long",
+    timeZoneName: shortTimezone ? "short" : "long",
   }).format(expireDate);
   return `${dateString} at ${timeString}`;
 }

@@ -7,7 +7,7 @@ import { Signature } from "components/common/Signature";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { Slot } from "components/common/Slot";
-import { displayTimestampUtc } from "utils/date";
+import { displayTimestamp } from "utils/date";
 
 export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
   const address = pubkey.toBase58();
@@ -79,7 +79,7 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
 
           {hasTimestamps && (
             <td className="text-muted">
-              {blockTime ? displayTimestampUtc(blockTime * 1000) : "---"}
+              {blockTime ? displayTimestamp(blockTime * 1000, true) : "---"}
             </td>
           )}
 
