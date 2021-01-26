@@ -534,7 +534,7 @@ fn transact(
             break;
         }
 
-        let slot = rpc_client.get_slot_with_commitment(CommitmentConfig::max())?;
+        let slot = rpc_client.get_slot_with_commitment(CommitmentConfig::finalized())?;
         info!(
             "Current slot={}, last_valid_slot={} (slots remaining: {}) ",
             slot,

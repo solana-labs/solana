@@ -26,7 +26,7 @@ fn test_vote_authorize_and_withdraw() {
     let faucet_addr = receiver.recv().unwrap();
 
     let rpc_client =
-        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::recent());
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
     let default_signer = Keypair::new();
 
     let mut config = CliConfig::recent_for_tests();

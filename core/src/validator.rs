@@ -498,7 +498,7 @@ impl Validator {
         };
 
         if config.dev_halt_at_slot.is_some() {
-            // Simulate a confirmed root to avoid RPC errors with CommitmentConfig::max() and
+            // Simulate a confirmed root to avoid RPC errors with CommitmentConfig::finalized() and
             // to ensure RPC endpoints like getConfirmedBlock, which require a confirmed root, work
             block_commitment_cache
                 .write()

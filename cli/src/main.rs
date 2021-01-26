@@ -300,10 +300,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         Arg::with_name("commitment")
             .long("commitment")
             .takes_value(true)
-            .possible_values(&["recent", "single", "singleGossip", "root", "max"])
+            .possible_values(&[
+                "processed",
+                "confirmed",
+                "finalized",
+                "recent", // Deprecated as of v1.5.5
+                "single", // Deprecated as of v1.5.5
+                "singleGossip", // Deprecated as of v1.5.5
+                "root", // Deprecated as of v1.5.5
+                "max", // Deprecated as of v1.5.5
+            ])
             .value_name("COMMITMENT_LEVEL")
+            .hide_possible_values(true)
             .global(true)
-            .help("Return information at the selected commitment level"),
+            .help("Return information at the selected commitment level [possible values: processed, confirmed, finalized]"),
     )
     .arg(
         Arg::with_name("verbose")

@@ -247,7 +247,7 @@ fn test_rpc_subscriptions() {
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());
     let mut mint_balance = rpc_client
-        .get_balance_with_commitment(&alice.pubkey(), CommitmentConfig::recent())
+        .get_balance_with_commitment(&alice.pubkey(), CommitmentConfig::processed())
         .unwrap()
         .value;
     assert!(mint_balance >= transactions.len() as u64);
@@ -264,7 +264,7 @@ fn test_rpc_subscriptions() {
     let expected_mint_balance = mint_balance - transactions.len() as u64;
     while mint_balance != expected_mint_balance && now.elapsed() < Duration::from_secs(5) {
         mint_balance = rpc_client
-            .get_balance_with_commitment(&alice.pubkey(), CommitmentConfig::recent())
+            .get_balance_with_commitment(&alice.pubkey(), CommitmentConfig::processed())
             .unwrap()
             .value;
         sleep(Duration::from_millis(100));

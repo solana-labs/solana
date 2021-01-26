@@ -435,14 +435,16 @@ fn main() {
             rpc_client: &RpcClient,
             identity: &Pubkey,
         ) -> client_error::Result<(Slot, Slot, Slot, u64, Sol, String)> {
-            let processed_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::recent())?;
+            let processed_slot =
+                rpc_client.get_slot_with_commitment(CommitmentConfig::processed())?;
             let confirmed_slot =
-                rpc_client.get_slot_with_commitment(CommitmentConfig::single_gossip())?;
-            let finalized_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::max())?;
+                rpc_client.get_slot_with_commitment(CommitmentConfig::confirmed())?;
+            let finalized_slot =
+                rpc_client.get_slot_with_commitment(CommitmentConfig::finalized())?;
             let transaction_count =
-                rpc_client.get_transaction_count_with_commitment(CommitmentConfig::recent())?;
+                rpc_client.get_transaction_count_with_commitment(CommitmentConfig::processed())?;
             let identity_balance = rpc_client
-                .get_balance_with_commitment(identity, CommitmentConfig::single_gossip())?
+                .get_balance_with_commitment(identity, CommitmentConfig::confirmed())?
                 .value;
 
             let health = match rpc_client.get_health() {
