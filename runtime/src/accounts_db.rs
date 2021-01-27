@@ -486,11 +486,11 @@ impl AccountStorageEntry {
         }
     }
 
-    fn remove_account(&self, num_bytes: usize) -> usize {
+    fn remove_account(&self, num_bytes: usize, reset_accounts: bool) -> usize {
         let mut count_and_status = self.count_and_status.write().unwrap();
         let (mut count, mut status) = *count_and_status;
 
-        if count == 1 && status == AccountStorageStatus::Full {
+        if count == 1 && status == AccountStorageStatus::Full && reset_accounts {
             // this case arises when we remove the last account from the
             //  storage, but we've learned from previous write attempts that
             //  the storage is full
@@ -1291,8 +1291,12 @@ impl AccountsDB {
             } else {
                 (None, None)
             };
-        let dead_slots =
-            self.remove_dead_accounts(reclaims, expected_single_dead_slot, reclaimed_offsets);
+        let dead_slots = self.remove_dead_accounts(
+            reclaims,
+            expected_single_dead_slot,
+            reclaimed_offsets,
+            no_dead_slot,
+        );
         if no_dead_slot {
             assert!(dead_slots.is_empty());
         } else if let Some(expected_single_dead_slot) = expected_single_dead_slot {
@@ -3736,6 +3740,7 @@ impl AccountsDB {
         reclaims: SlotSlice<AccountInfo>,
         expected_slot: Option<Slot>,
         mut reclaimed_offsets: Option<&mut AppendVecOffsets>,
+        no_dead_slot: bool,
     ) -> HashSet<Slot> {
         let mut dead_slots = HashSet::new();
         let mut new_shrink_candidates: ShrinkCandidates = HashMap::new();
@@ -3760,7 +3765,7 @@ impl AccountsDB {
                     "AccountDB::accounts_index corrupted. Storage pointed to: {}, expected: {}, should only point to one slot",
                     store.slot(), *slot
                 );
-                let count = store.remove_account(account_info.stored_size);
+                let count = store.remove_account(account_info.stored_size, no_dead_slot);
                 if count == 0 {
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
@@ -6353,7 +6358,7 @@ pub mod tests {
             .values()
             .next()
             .unwrap()
-            .remove_account(0);
+            .remove_account(0, true);
         assert!(db.get_snapshot_storages(after_slot).is_empty());
     }
 
@@ -6374,8 +6379,8 @@ pub mod tests {
             .next()
             .unwrap()
             .clone();
-        storage_entry.remove_account(0);
-        storage_entry.remove_account(0);
+        storage_entry.remove_account(0, true);
+        storage_entry.remove_account(0, true);
     }
 
     #[test]
@@ -7579,7 +7584,7 @@ pub mod tests {
             assert_eq!(removed_data_size, account.stored_size);
             assert_eq!(account_info.0, slot);
             let reclaims = vec![account_info];
-            accounts_db.remove_dead_accounts(&reclaims, None, None);
+            accounts_db.remove_dead_accounts(&reclaims, None, None, true);
             let after_size = storage0.alive_bytes.load(Ordering::Relaxed);
             assert_eq!(before_size, after_size + account.stored_size);
         }
