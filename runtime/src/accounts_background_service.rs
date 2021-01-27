@@ -100,8 +100,23 @@ impl SnapshotRequestHandler {
 
                 let mut flush_accounts_cache_time = Measure::start("flush_accounts_cache_time");
                 if accounts_db_caching_enabled {
-                    // Force flush all the roots from the cache so that the snapshot can be taken.
+                    // Forced cache flushing MUST flush all roots <= snapshot_root_bank.slot().
+                    // That's because `snapshot_root_bank.slot()` must be root at this point,
+                    // and contains relevant updates because each bank has at least 1 account update due
+                    // to sysvar maintenance. Otherwise, this would cause missing storages in the snapshot
                     snapshot_root_bank.force_flush_accounts_cache();
+                    // Ensure all roots <= `self.slot()` have been flushed.
+                    // Note `max_flush_root` could be larger than self.slot() if there are
+                    // `> MAX_CACHE_SLOT` cached and rooted slots which triggered earlier flushes.
+                    assert!(
+                        snapshot_root_bank.slot()
+                            <= snapshot_root_bank
+                                .rc
+                                .accounts
+                                .accounts_db
+                                .accounts_cache
+                                .fetch_max_flush_root()
+                    );
                 }
                 flush_accounts_cache_time.stop();
 
