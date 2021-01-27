@@ -129,7 +129,7 @@ __webpack_require__.r(__webpack_exports__);
  *    5. \tripledash vertical alignment is slightly adjusted.
  *
  *    This code, as other KaTeX code, is released under the MIT license.
- * 
+ *
  * /*************************************************************
  *
  *  MathJax/extensions/TeX/mhchem.js
@@ -167,7 +167,7 @@ katex__WEBPACK_IMPORTED_MODULE_0___default.a.__defineMacro("\\ce", function (con
 katex__WEBPACK_IMPORTED_MODULE_0___default.a.__defineMacro("\\pu", function (context) {
   return chemParse(context.consumeArgs(1)[0], "pu");
 }); //  Needed for \bond for the ~ forms
-//  Raise by 2.56mu, not 2mu. We're raising a hyphen-minus, U+002D, not 
+//  Raise by 2.56mu, not 2mu. We're raising a hyphen-minus, U+002D, not
 //  a mathematical minus, U+2212. So we need that extra 0.56.
 
 
