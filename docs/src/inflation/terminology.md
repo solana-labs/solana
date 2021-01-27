@@ -17,7 +17,7 @@ The Solana protocol will automatically create new tokens on a predetermined [inf
 A deterministic description of token issuance over time. The Solana Foundation is proposing a dis-inflationary *Inflation Schedule*. I.e. Inflation starts at its highest value, the rate reduces over time until stabilizing at a predetermined long-term inflation rate (see discussion below). This schedule is completely and uniquely parameterized by three numbers:
 
 - **Initial Inflation Rate [%]**: The starting *Inflation Rate* for when inflation is first enabled. Token issuance rate can only decrease from this point. 
-- **Dis-inflation Rate [%]**: The rate at which the *Inflation Rate* is reduced.
+- **Dis-inflation Rate [%]**: The year-over-year rate at which the *Inflation Rate* is reduced.
 - **Long-term Inflation Rate [%]**: The stable, long-term *Inflation Rate* to be expected.
 
 
