@@ -1,9 +1,10 @@
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use clap::{
-    crate_description, crate_name, value_t, values_t_or_exit, App, AppSettings, Arg, ArgMatches,
-    SubCommand,
+    crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, AppSettings,
+    Arg, ArgMatches, SubCommand,
 };
 use solana_clap_utils::{
+    input_validators::is_parsable,
     keypair::{
         keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
         SKIP_SEED_PHRASE_VALIDATION_ARG,
@@ -207,6 +208,7 @@ fn grind_parse_args(
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
+    let default_num_threads = num_cpus::get().to_string();
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
@@ -342,7 +344,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("num-threads")
                         .value_name("NUMBER")
                         .takes_value(true)
-                        .help("Specify the number of grind threads, defaults to the number of CPUs on the machine"),
+                        .validator(is_parsable::<usize>)
+                        .default_value(&default_num_threads)
+                        .help("Specify the number of grind threads"),
                 ),
         )
         .subcommand(
@@ -540,8 +544,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 exit(1);
             }
 
-            let num_threads =
-                value_t!(matches.value_of("num_threads"), usize).unwrap_or(num_cpus::get());
+            let num_threads = value_t_or_exit!(matches.value_of("num_threads"), usize);
 
             let grind_matches = grind_parse_args(
                 ignore_case,
