@@ -486,6 +486,8 @@ The result field will be an object with the following fields:
       - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
       - `postBalances: <array>` - array of u64 account balances after the transaction was processed
       - `innerInstructions: <array|undefined>` - List of [inner instructions](#inner-instructions-structure) or omitted if inner instruction recording was not yet enabled during this transaction
+      - `preTokenBalances: <array|undefined>` - List of  [token balances](#token-balances-structure) from before the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
+      - `postTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from after the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
       - `logMessages: <array>` - array of string log messages or omitted if log message recording was not yet enabled during this transaction
       - DEPRECATED: `status: <object>` - Transaction status
         - `"Ok": <null>` - Transaction was successful
@@ -664,6 +666,17 @@ The JSON structure of inner instructions is defined as a list of objects in the 
   - `programIdIndex: <number>` - Index into the `message.accountKeys` array indicating the program account that executes this instruction.
   - `accounts: <array[number]>` - List of ordered indices into the `message.accountKeys` array indicating which accounts to pass to the program.
   - `data: <string>` - The program input data encoded in a base-58 string.
+
+#### Token Balances Structure
+
+The JSON structure of token balances is defined as a list of objects in the following structure:
+
+- `accountIndex: <number>` - Index of the account in which the token balance is provided for.
+- `mint: <string>` - Pubkey of the token's mint.
+- `uiTokenAmount: <object>` -
+  - `amount: <string>` - Raw amount of tokens as a string, ignoring decimals.
+  - `decimals: <number>` - Number of decimals configured for token's mint.
+  - `uiAmount: <number>` - Token amount as a float, accounting for decimals.
 
 ### getConfirmedBlocks
 
@@ -853,6 +866,8 @@ N encoding attempts to use program-specific instruction parsers to return more h
     - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
     - `postBalances: <array>` - array of u64 account balances after the transaction was processed
     - `innerInstructions: <array|undefined>` - List of [inner instructions](#inner-instructions-structure) or omitted if inner instruction recording was not yet enabled during this transaction
+    - `preTokenBalances: <array|undefined>` - List of  [token balances](#token-balances-structure) from before the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
+    - `postTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from after the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
     - `logMessages: <array>` - array of string log messages or omitted if log message recording was not yet enabled during this transaction
     - DEPRECATED: `status: <object>` - Transaction status
       - `"Ok": <null>` - Transaction was successful
