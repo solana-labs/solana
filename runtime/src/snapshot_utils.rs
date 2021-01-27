@@ -984,7 +984,6 @@ pub fn process_accounts_package_pre(accounts_package: AccountsPackagePre) -> Acc
     )
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
