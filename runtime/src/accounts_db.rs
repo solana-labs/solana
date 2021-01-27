@@ -3691,10 +3691,6 @@ impl AccountsDB {
             ("sort", sort_time.as_us(), i64),
             ("hash_total", hash_total, i64),
         );
-        warn!(
-            "hashes including zeros: {}, after removal: {}, lamports: {}, hash: {}",
-            len, hash_total, ret.1, ret.0
-        );
 
         ret
     }
@@ -3744,15 +3740,10 @@ impl AccountsDB {
 
             assert_eq!(hash, hash_other);
             assert_eq!(total_lamports, total_lamports_other);
-            warn!("Verified: {}, {}", hash, total_lamports_other);
         }
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
         bank_hash_info.snapshot_hash = hash;
-        warn!(
-            "maybe bank setting hash to: {}, slot: {}, lamports: {}, using_store: {}, debug: {}",
-            hash, slot, total_lamports, use_store, debug_verify_store
-        );
         (hash, total_lamports)
     }
 
