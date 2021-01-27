@@ -326,3 +326,8 @@ div.inner-cards {
   max-height: 20rem;
   overflow-y: auto;
 }
+
+.alert-danger.alert-scam {
+  background: red;
+  border: 1px solid red;
+}
