@@ -107,9 +107,13 @@ fn main() {
                 .update_accounts_hash(0, &ancestors, true);
             time.stop();
             let mut time_store = Measure::start("hash using store");
-            let results_store = accounts
-                .accounts_db
-                .update_accounts_hash_with_store_option(true, false, solana_sdk::clock::Slot::default(), &ancestors, true);
+            let results_store = accounts.accounts_db.update_accounts_hash_with_store_option(
+                true,
+                false,
+                solana_sdk::clock::Slot::default(),
+                &ancestors,
+                true,
+            );
             time_store.stop();
             if results != results_store {
                 error!("results different: \n{:?}\n{:?}", results, results_store);
