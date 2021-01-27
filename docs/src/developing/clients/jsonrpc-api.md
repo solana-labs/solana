@@ -486,7 +486,7 @@ The result field will be an object with the following fields:
       - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
       - `postBalances: <array>` - array of u64 account balances after the transaction was processed
       - `innerInstructions: <array|undefined>` - List of [inner instructions](#inner-instructions-structure) or omitted if inner instruction recording was not yet enabled during this transaction
-      - `preTokenBalances: <array|undefined>` - List of  [token balances](#token-balances-structure) from before the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
+      - `preTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from before the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
       - `postTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from after the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
       - `logMessages: <array>` - array of string log messages or omitted if log message recording was not yet enabled during this transaction
       - DEPRECATED: `status: <object>` - Transaction status
