@@ -170,7 +170,8 @@ function DetailsSections({
     <>
       {isSpam && (
         <div className="alert alert-danger" role="alert">
-          Warning! This account has been flagged as a spam account. Please be cautious sending SOL to this account.
+          Warning! This account has been flagged as a spam account. Please be
+          cautious sending SOL to this account.
         </div>
       )}
       {<InfoSection account={account} />}
