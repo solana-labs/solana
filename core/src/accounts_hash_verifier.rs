@@ -88,7 +88,7 @@ impl AccountsHashVerifier {
         let mut time = Measure::start("hash");
 
         let simple_capitalization_enabled = true; // ??? TODO
-        let hash = AccountsDB::calculate_accounts_hash_using_stores_only(
+        let _hash = AccountsDB::calculate_accounts_hash_using_stores_only(
             accounts_package.storages.clone(),
             simple_capitalization_enabled,
         );
