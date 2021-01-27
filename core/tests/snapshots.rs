@@ -426,7 +426,10 @@ mod tests {
                         snapshot_package = new_snapshot_package;
                     }
 
-                    let snapshot_package = solana_runtime::snapshot_utils::process_accounts_package_pre(snapshot_package);
+                    let snapshot_package =
+                        solana_runtime::snapshot_utils::process_accounts_package_pre(
+                            snapshot_package,
+                        );
                     *pending_snapshot_package.lock().unwrap() = Some(snapshot_package);
                 }
 
