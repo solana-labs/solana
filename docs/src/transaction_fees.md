@@ -10,7 +10,7 @@ Each transaction sent through the network, to be processed by the current leader
 - reduce network spam by introducing real cost to transactions,
 - and provide potential long-term economic stability of the network through a protocol-captured minimum fee amount per transaction, as described below.
 
-Network consensus votes are submitted as transactions, which means that validators pay transaction fees to participate in consensus.
+Network consensus votes are sent as normal system transfers, which means that validators pay transaction fees to participate in consensus.
 
 Many current blockchain economies \(e.g. Bitcoin, Ethereum\), rely on protocol-based rewards to support the economy in the short term, with the assumption that the revenue generated through transaction fees will support the economy in the long term, when the protocol derived rewards expire. In an attempt to create a sustainable economy through protocol-based rewards and transaction fees, a fixed portion (initially 50%) of each transaction fee is destroyed, with the remaining fee going to the current leader processing the transaction. A scheduled global inflation rate provides a source for rewards distributed to validation-clients, through the process described above.
 
