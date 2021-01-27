@@ -326,3 +326,12 @@ div.inner-cards {
   max-height: 20rem;
   overflow-y: auto;
 }
+
+.container.is-spam .card {
+  border: 2px solid red;
+}
+
+.container.is-spam .alert-danger {
+  background: red;
+  border: 1px solid red;
+}

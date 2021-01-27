@@ -28,6 +28,7 @@ import { SlotHashesCard } from "components/account/SlotHashesCard";
 import { StakeHistoryCard } from "components/account/StakeHistoryCard";
 import { BlockhashesCard } from "components/account/BlockhashesCard";
 import { ConfigAccountSection } from "components/account/ConfigAccountSection";
+import { isSpamAccount } from "spamRegistry";
 
 const TABS_LOOKUP: { [id: string]: Tab } = {
   "spl-token:mint": {
@@ -73,8 +74,10 @@ export function AccountDetailsPage({ address, tab }: Props) {
     pubkey = new PublicKey(address);
   } catch (err) {}
 
+  const isSpam = isSpamAccount(address);
+
   return (
-    <div className="container mt-n3">
+    <div className={`container mt-n3 ${isSpam ? "is-spam" : ""}`}>
       <div className="header">
         <div className="header-body">
           <AccountHeader address={address} />
@@ -83,7 +86,7 @@ export function AccountDetailsPage({ address, tab }: Props) {
       {!pubkey ? (
         <ErrorCard text={`Address "${address}" is not valid`} />
       ) : (
-        <DetailsSections pubkey={pubkey} tab={tab} />
+        <DetailsSections pubkey={pubkey} tab={tab} isSpam={isSpam} />
       )}
     </div>
   );
@@ -123,7 +126,15 @@ export function AccountHeader({ address }: { address: string }) {
   );
 }
 
-function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
+function DetailsSections({
+  pubkey,
+  tab,
+  isSpam,
+}: {
+  pubkey: PublicKey;
+  tab?: string;
+  isSpam: boolean;
+}) {
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
   const info = useAccountInfo(address);
@@ -157,6 +168,11 @@ function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
 
   return (
     <>
+      {isSpam && (
+        <div className="alert alert-danger" role="alert">
+          Warning! This account has been flagged as a spam account.
+        </div>
+      )}
       {<InfoSection account={account} />}
       {<MoreSection account={account} tab={moreTab} tabs={tabs} />}
     </>
