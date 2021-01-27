@@ -83,7 +83,7 @@ sudo sysctl -p /etc/sysctl.d/20-solana-udp-buffers.conf
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-mmaps.conf <<EOF
 # Increase memory mapped files limit
-vm.max_map_count = 500000
+vm.max_map_count = 700000
 EOF"
 ```
 ```bash
