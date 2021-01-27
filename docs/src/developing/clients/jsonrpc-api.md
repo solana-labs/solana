@@ -532,6 +532,7 @@ Result:
             1,
             1
           ],
+          "postTokenBalances": [],
           "preBalances": [
             499998937500,
             26858640,
@@ -539,6 +540,7 @@ Result:
             1,
             1
           ],
+          "preTokenBalances": [],
           "status": {
             "Ok": null
           }
@@ -614,6 +616,7 @@ Result:
             1,
             1
           ],
+          "postTokenBalances": [],
           "preBalances": [
             499998937500,
             26858640,
@@ -621,6 +624,7 @@ Result:
             1,
             1
           ],
+          "preTokenBalances": [],
           "status": {
             "Ok": null
           }
@@ -809,7 +813,7 @@ from newest to oldest transaction:
   * `slot: <u64>` - The slot that contains the block with the transaction
   * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
   * `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
-  * `blockTime: <number | null>` - The unix timestamp of when the transaction was processed.
+  * `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when transaction was processed. null if not available.
 
 #### Example:
 Request:
@@ -838,7 +842,8 @@ Result:
       "err": null,
       "memo": null,
       "signature": "5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv",
-      "slot": 114
+      "slot": 114,
+      "blockTime": null
     }
   ],
   "id": 1
@@ -861,7 +866,7 @@ N encoding attempts to use program-specific instruction parsers to return more h
 - `<object>` - if transaction is confirmed, an object with the following fields:
   - `slot: <u64>` - the slot this transaction was processed in
   - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) object, either in JSON format or encoded binary data, depending on encoding parameter
-  - `blockTime: <number | null>` - The unix timestamp of when the transaction was processed.
+  - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when the transaction was processed. null if not available
   - `meta: <object | null>` - transaction status metadata object:
     - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
     - `fee: <u64>` - fee this transaction was charged, as u64 integer
@@ -907,6 +912,7 @@ Result:
         1,
         1
       ],
+      "postTokenBalances": [],
       "preBalances": [
         499998937500,
         26858640,
@@ -914,6 +920,7 @@ Result:
         1,
         1
       ],
+      "preTokenBalances": [],
       "status": {
         "Ok": null
       }
@@ -952,6 +959,7 @@ Result:
       ]
     }
   },
+  "blockTime": null,
   "id": 1
 }
 ```
@@ -988,6 +996,7 @@ Result:
         1,
         1
       ],
+      "postTokenBalances": [],
       "preBalances": [
         499998937500,
         26858640,
@@ -995,6 +1004,7 @@ Result:
         1,
         1
       ],
+      "preTokenBalances": [],
       "status": {
         "Ok": null
       }
