@@ -153,7 +153,7 @@ mod tests {
                 .unwrap()
                 .snapshot_path,
             snapshot_utils::get_snapshot_archive_path(
-                snapshot_package_output_path,
+                snapshot_package_output_path.to_path_buf(),
                 &(old_last_bank.slot(), old_last_bank.get_accounts_hash()),
                 ArchiveFormat::TarBzip2,
             ),
@@ -240,6 +240,7 @@ mod tests {
             snapshot_version,
         )
         .unwrap();
+        let snapshot_package = snapshot_utils::process_accounts_package_pre(snapshot_package);
         snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
 
         // Restore bank from snapshot
@@ -383,7 +384,7 @@ mod tests {
                 fs_extra::dir::copy(&last_snapshot_path, &saved_snapshots_dir, &options).unwrap();
 
                 saved_archive_path = Some(snapshot_utils::get_snapshot_archive_path(
-                    snapshot_package_output_path,
+                    snapshot_package_output_path.to_path_buf(),
                     &(slot, accounts_hash),
                     ArchiveFormat::TarBzip2,
                 ));
@@ -425,6 +426,7 @@ mod tests {
                         snapshot_package = new_snapshot_package;
                     }
 
+                    let snapshot_package = solana_runtime::snapshot_utils::process_accounts_package_pre(snapshot_package);
                     *pending_snapshot_package.lock().unwrap() = Some(snapshot_package);
                 }
 
