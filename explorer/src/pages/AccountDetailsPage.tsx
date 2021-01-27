@@ -74,10 +74,8 @@ export function AccountDetailsPage({ address, tab }: Props) {
     pubkey = new PublicKey(address);
   } catch (err) {}
 
-  const isScam = isScamAccount(address);
-
   return (
-    <div className={`container mt-n3 ${isScam ? "is-scam" : ""}`}>
+    <div className="container mt-n3">
       <div className="header">
         <div className="header-body">
           <AccountHeader address={address} />
@@ -86,7 +84,7 @@ export function AccountDetailsPage({ address, tab }: Props) {
       {!pubkey ? (
         <ErrorCard text={`Address "${address}" is not valid`} />
       ) : (
-        <DetailsSections pubkey={pubkey} tab={tab} isScam={isScam} />
+        <DetailsSections pubkey={pubkey} tab={tab} />
       )}
     </div>
   );
@@ -126,20 +124,13 @@ export function AccountHeader({ address }: { address: string }) {
   );
 }
 
-function DetailsSections({
-  pubkey,
-  tab,
-  isScam,
-}: {
-  pubkey: PublicKey;
-  tab?: string;
-  isScam: boolean;
-}) {
+function DetailsSections({ pubkey, tab }: { pubkey: PublicKey; tab?: string }) {
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
   const info = useAccountInfo(address);
   const { status } = useCluster();
   const location = useLocation();
+  const isScam = isScamAccount(address);
 
   // Fetch account on load
   React.useEffect(() => {
@@ -169,7 +160,7 @@ function DetailsSections({
   return (
     <>
       {isScam && (
-        <div className="alert alert-danger" role="alert">
+        <div className="alert alert-danger alert-scam" role="alert">
           Warning! This account has been flagged as a scam account. Please be
           cautious sending SOL to this account.
         </div>
