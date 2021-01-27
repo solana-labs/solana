@@ -1,4 +1,4 @@
-use serial_test_derive::serial;
+use serial_test::serial;
 use solana_bench_tps::bench::{do_bench_tps, generate_and_fund_keypairs};
 use solana_bench_tps::cli::Config;
 use solana_client::thin_client::create_client;

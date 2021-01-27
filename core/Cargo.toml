@@ -90,7 +90,6 @@ matches = "0.1.6"
 num_cpus = "1.13.0"
 reqwest = { version = "0.10.8", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serial_test = "0.4.0"
-serial_test_derive = "0.4.0"
 systemstat = "0.1.5"
 
 [build-dependencies]

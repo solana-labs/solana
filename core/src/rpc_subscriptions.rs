@@ -1296,7 +1296,7 @@ pub(crate) mod tests {
     };
     use jsonrpc_core::futures::{self, stream::Stream};
     use jsonrpc_pubsub::typed::Subscriber;
-    use serial_test_derive::serial;
+    use serial_test::serial;
     use solana_runtime::{
         commitment::BlockCommitment,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},

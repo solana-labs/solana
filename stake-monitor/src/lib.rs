@@ -357,7 +357,7 @@ pub fn process_slots(rpc_client: &RpcClient, accounts_info: &mut AccountsInfo, b
 #[cfg(test)]
 mod test {
     use super::*;
-    use serial_test_derive::serial;
+    use serial_test::serial;
     use solana_client::rpc_config::RpcSendTransactionConfig;
     use solana_core::{rpc::JsonRpcConfig, validator::ValidatorConfig};
     use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};

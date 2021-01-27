@@ -2,7 +2,7 @@ use assert_matches::assert_matches;
 use crossbeam_channel::{unbounded, Receiver};
 use gag::BufferRedirect;
 use log::*;
-use serial_test_derive::serial;
+use serial_test::serial;
 use solana_client::{
     pubsub_client::PubsubClient,
     rpc_client::RpcClient,

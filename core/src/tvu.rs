@@ -309,7 +309,7 @@ pub mod tests {
         cluster_info::{ClusterInfo, Node},
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     };
-    use serial_test_derive::serial;
+    use serial_test::serial;
     use solana_ledger::{
         blockstore::BlockstoreSignals,
         create_new_tmp_ledger,
