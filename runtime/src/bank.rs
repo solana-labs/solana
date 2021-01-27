@@ -4299,14 +4299,32 @@ impl Bank {
         self.rc.accounts.accounts_db.get_accounts_hash(self.slot)
     }
 
-    pub fn update_accounts_hash(&self) -> Hash {
-        let (hash, total_lamports) = self.rc.accounts.accounts_db.update_accounts_hash(
-            self.slot(),
-            &self.ancestors,
-            self.simple_capitalization_enabled(),
-        );
+    pub fn update_accounts_hash_with_store_option(
+        &self,
+        use_store: bool,
+        debug_verify_store: bool,
+    ) -> Hash {
+        let (hash, total_lamports) = self
+            .rc
+            .accounts
+            .accounts_db
+            .update_accounts_hash_with_store_option(
+                use_store,
+                debug_verify_store,
+                self.slot(),
+                &self.ancestors,
+                self.simple_capitalization_enabled(),
+            );
         assert_eq!(total_lamports, self.capitalization());
         hash
+    }
+
+    pub fn update_accounts_hash(&self) -> Hash {
+        self.update_accounts_hash_with_store_option(false, false)
+    }
+
+    pub fn update_accounts_hash_with_store_test(&self) -> Hash {
+        self.update_accounts_hash_with_store_option(false, true)
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
@@ -7085,9 +7103,9 @@ pub(crate) mod tests {
         bank.freeze();
         bank.squash();
         bank.force_flush_accounts_cache();
-        let hash = bank.update_accounts_hash();
+        let hash = bank.update_accounts_hash_with_store_test();
         bank.clean_accounts(false);
-        assert_eq!(bank.update_accounts_hash(), hash);
+        assert_eq!(bank.update_accounts_hash_with_store_test(), hash);
 
         let bank0 = Arc::new(new_from_parent(&bank));
         let blockhash = bank.last_blockhash();
@@ -7105,9 +7123,9 @@ pub(crate) mod tests {
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
         info!("bank0 purge");
-        let hash = bank0.update_accounts_hash();
+        let hash = bank0.update_accounts_hash_with_store_test();
         bank0.clean_accounts(false);
-        assert_eq!(bank0.update_accounts_hash(), hash);
+        assert_eq!(bank0.update_accounts_hash_with_store_test(), hash);
 
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
@@ -7127,7 +7145,7 @@ pub(crate) mod tests {
 
         bank1.freeze();
         bank1.squash();
-        bank1.update_accounts_hash();
+        bank1.update_accounts_hash_with_store_test();
         assert!(bank1.verify_bank_hash());
 
         // keypair should have 0 tokens on both forks
@@ -7905,7 +7923,7 @@ pub(crate) mod tests {
         let pubkey2 = solana_sdk::pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
-        bank2.update_accounts_hash();
+        bank2.update_accounts_hash_with_store_test();
         assert!(bank2.verify_bank_hash());
     }
 
@@ -7929,18 +7947,18 @@ pub(crate) mod tests {
 
         // Checkpointing should never modify the checkpoint's state once frozen
         let bank0_state = bank0.hash_internal_state();
-        bank2.update_accounts_hash();
+        bank2.update_accounts_hash_with_store_test();
         assert!(bank2.verify_bank_hash());
         let bank3 = Bank::new_from_parent(&bank0, &solana_sdk::pubkey::new_rand(), 2);
         assert_eq!(bank0_state, bank0.hash_internal_state());
         assert!(bank2.verify_bank_hash());
-        bank3.update_accounts_hash();
+        bank3.update_accounts_hash_with_store_test();
         assert!(bank3.verify_bank_hash());
 
         let pubkey2 = solana_sdk::pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
-        bank2.update_accounts_hash();
+        bank2.update_accounts_hash_with_store_test();
         assert!(bank2.verify_bank_hash());
         assert!(bank3.verify_bank_hash());
     }
@@ -7955,12 +7973,13 @@ pub(crate) mod tests {
 
     #[test]
     fn test_verify_snapshot_bank() {
+        solana_logger::setup();
         let pubkey = solana_sdk::pubkey::new_rand();
         let (genesis_config, mint_keypair) = create_genesis_config(2_000);
         let bank = Bank::new(&genesis_config);
         bank.transfer(1_000, &mint_keypair, &pubkey).unwrap();
         bank.freeze();
-        bank.update_accounts_hash();
+        bank.update_accounts_hash_with_store_test();
         assert!(bank.verify_snapshot_bank());
 
         // tamper the bank after freeze!
@@ -9023,11 +9042,11 @@ pub(crate) mod tests {
         );
 
         // Re-adding builtin programs should be no-op
-        bank.update_accounts_hash();
+        bank.update_accounts_hash_with_store_test();
         let old_hash = bank.get_accounts_hash();
         bank.add_builtin("mock_program1", vote_id, mock_ix_processor);
         bank.add_builtin("mock_program2", stake_id, mock_ix_processor);
-        bank.update_accounts_hash();
+        bank.update_accounts_hash_with_store_test();
         let new_hash = bank.get_accounts_hash();
         assert_eq!(old_hash, new_hash);
         assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());

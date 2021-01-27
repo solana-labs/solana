@@ -8,6 +8,8 @@ use crate::{
     cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
     snapshot_packager_service::PendingSnapshotPackage,
 };
+use solana_measure::measure::Measure;
+use solana_runtime::accounts_db::AccountsDB;
 use solana_runtime::snapshot_package::{AccountsPackage, AccountsPackageReceiver};
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::collections::{HashMap, HashSet};
@@ -83,6 +85,21 @@ impl AccountsHashVerifier {
         fault_injection_rate_slots: u64,
         snapshot_interval_slots: u64,
     ) {
+        let mut time = Measure::start("hash");
+
+        let simple_capitalization_enabled = true; // ??? TODO
+        let hash = AccountsDB::calculate_accounts_hash_using_stores_only(
+            accounts_package.storages.clone(),
+            simple_capitalization_enabled,
+        );
+        time.stop();
+
+        datapoint_info!(
+            "accounts_hash_verifier",
+            ("calculate_hash", time.as_us(), i64),
+        );
+        assert_eq!(hash.0, accounts_package.hash); // TODO: don't calculate hash elsewhere
+
         if fault_injection_rate_slots != 0
             && accounts_package.slot % fault_injection_rate_slots == 0
         {
