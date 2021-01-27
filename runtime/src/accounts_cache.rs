@@ -70,6 +70,11 @@ impl SlotCacheInner {
     pub fn is_frozen(&self) -> bool {
         self.is_frozen.load(Ordering::SeqCst)
     }
+
+    pub fn total_bytes(&self) -> u64 {
+        self.unique_account_writes_size.load(Ordering::Relaxed)
+            + self.same_account_writes_size.load(Ordering::Relaxed)
+    }
 }
 
 impl Deref for SlotCacheInner {
