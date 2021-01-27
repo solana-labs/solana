@@ -98,7 +98,7 @@ impl AccountsHashVerifier {
             "accounts_hash_verifier",
             ("calculate_hash", time.as_us(), i64),
         );
-        assert_eq!(hash.0, accounts_package.hash); // TODO: don't calculate hash elsewhere
+        //assert_eq!(hash.0, accounts_package.hash); // TODO: don't calculate hash elsewhere
 
         if fault_injection_rate_slots != 0
             && accounts_package.slot % fault_injection_rate_slots == 0
