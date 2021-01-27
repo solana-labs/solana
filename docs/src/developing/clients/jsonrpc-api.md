@@ -809,6 +809,7 @@ from newest to oldest transaction:
   * `slot: <u64>` - The slot that contains the block with the transaction
   * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
   * `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
+  * `blockTime: <number | null>` - The unix timestamp of when the transaction was processed.
 
 #### Example:
 Request:
@@ -860,6 +861,7 @@ N encoding attempts to use program-specific instruction parsers to return more h
 - `<object>` - if transaction is confirmed, an object with the following fields:
   - `slot: <u64>` - the slot this transaction was processed in
   - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) object, either in JSON format or encoded binary data, depending on encoding parameter
+  - `blockTime: <number | null>` - The unix timestamp of when the transaction was processed.
   - `meta: <object | null>` - transaction status metadata object:
     - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
     - `fee: <u64>` - fee this transaction was charged, as u64 integer
