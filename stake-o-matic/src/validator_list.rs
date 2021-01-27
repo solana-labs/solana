@@ -610,6 +610,7 @@ solana_sdk::pubkeys!(
         "EVCxvddWCFgh9LF4EJKzQb7stsPpSBrvTFUYnE51pX6t",
         "EVd8FFVB54svYdZdG6hH4F4hTbqre5mpQ7XyF5rKUmes",
         "EvenXreut1ywzoMaY3iXtwbuV4xcY2yz763TSxngja6n",
+        "EvVrzsxoj118sxxSTrcnc9u3fRdQfCc7d4gRzzX6TSqj",
         "EW8YLbq9b6saEKn6K9R1K29CSST1XDTPpJLeXThpkXes",
         "EWg9NTC5s7Pa9FktUk6dX8xRYkvJ952peH1z1iznd4nV",
         "EXaDpiWsCGQY9d6AUa54XBAs7fvxF1z7V63xN9ikMMvP",
