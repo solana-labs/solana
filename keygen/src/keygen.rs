@@ -129,8 +129,8 @@ fn grind_validator_starts_and_ends_with(v: String) -> Result<(), String> {
     Ok(())
 }
 
-fn grind_print_info(grind_matches: &[GrindMatch]) {
-    println!("Searching with {} threads for:", num_cpus::get());
+fn grind_print_info(grind_matches: &[GrindMatch], num_threads: usize) {
+    println!("Searching with {} threads for:", num_threads);
     for gm in grind_matches {
         let mut msg = Vec::<String>::new();
         if gm.count.load(Ordering::Relaxed) > 1 {
@@ -159,6 +159,7 @@ fn grind_parse_args(
     starts_with_args: HashSet<String>,
     ends_with_args: HashSet<String>,
     starts_and_ends_with_args: HashSet<String>,
+    num_threads: usize,
 ) -> Vec<GrindMatch> {
     let mut grind_matches = Vec::<GrindMatch>::new();
     for sw in starts_with_args {
@@ -201,7 +202,7 @@ fn grind_parse_args(
             count: AtomicU64::new(args[2].parse::<u64>().unwrap()),
         });
     }
-    grind_print_info(&grind_matches);
+    grind_print_info(&grind_matches, num_threads);
     grind_matches
 }
 
@@ -335,6 +336,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .multiple(true)
                         .validator(grind_validator_starts_and_ends_with)
                         .help("Saves specified number of keypairs whos public key starts and ends with the indicated perfix and suffix\nExample: --starts-and-ends-with sol:ana:4\nPREFIX and SUFFIX type is Base58\nCOUNT type is u64"),
+                )
+                .arg(
+                    Arg::with_name("num_threads")
+                        .long("num-threads")
+                        .value_name("NUMBER")
+                        .takes_value(true)
+                        .help("Specify the number of grind threads, defaults to the number of CPUs on the machine"),
                 ),
         )
         .subcommand(
@@ -532,11 +540,15 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 exit(1);
             }
 
+            let num_threads =
+                value_t!(matches.value_of("num_threads"), usize).unwrap_or(num_cpus::get());
+
             let grind_matches = grind_parse_args(
                 ignore_case,
                 starts_with_args,
                 ends_with_args,
                 starts_and_ends_with_args,
+                num_threads,
             );
 
             let grind_matches_thread_safe = Arc::new(grind_matches);
@@ -545,7 +557,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             let start = Instant::now();
             let done = Arc::new(AtomicBool::new(false));
 
-            let thread_handles: Vec<_> = (0..num_cpus::get())
+            let thread_handles: Vec<_> = (0..num_threads)
                 .map(|_| {
                     let done = done.clone();
                     let attempts = attempts.clone();
