@@ -440,8 +440,10 @@ function generateTokenBalanceRows(
         let delta;
 
         if (accountIndex in preBalanceMap) {
-          delta =
-            normalizeTokenDelta(uiTokenAmount, preBalanceMap[accountIndex].uiTokenAmount);
+          delta = normalizeTokenDelta(
+            uiTokenAmount,
+            preBalanceMap[accountIndex].uiTokenAmount
+          );
         } else {
           delta = uiTokenAmount.uiAmount;
         }

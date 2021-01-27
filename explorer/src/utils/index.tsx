@@ -29,8 +29,12 @@ export function normalizeTokenAmount(
   return rawTokens / Math.pow(10, decimals);
 }
 
-export function normalizeTokenDelta(tokenAmountA: TokenAmount, tokenAmountB: TokenAmount) {
-  const rawDelta = parseInt(tokenAmountA.amount) - parseInt(tokenAmountB.amount);
+export function normalizeTokenDelta(
+  tokenAmountA: TokenAmount,
+  tokenAmountB: TokenAmount
+) {
+  const rawDelta =
+    parseInt(tokenAmountA.amount) - parseInt(tokenAmountB.amount);
   return rawDelta / Math.pow(10, tokenAmountA.decimals);
 }
 
