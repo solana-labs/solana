@@ -7,7 +7,9 @@ use crate::{
     serde_snapshot::{
         bank_from_stream, bank_to_stream, SerdeStyle, SnapshotStorage, SnapshotStorages,
     },
-    snapshot_package::{AccountsPackage, AccountsPackagePre, AccountsPackageSendError, AccountsPackageSender},
+    snapshot_package::{
+        AccountsPackage, AccountsPackagePre, AccountsPackageSendError, AccountsPackageSender,
+    },
 };
 use bincode::{config::Options, serialize_into};
 use bzip2::bufread::BzDecoder;
@@ -948,14 +950,14 @@ pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
     Ok(package.tar_output_file)
 }
 
-pub fn process_accounts_package_pre(accounts_package: AccountsPackagePre) -> AccountsPackage
-{
+pub fn process_accounts_package_pre(accounts_package: AccountsPackagePre) -> AccountsPackage {
     let mut time = Measure::start("hash");
 
     let hash = AccountsDB::calculate_accounts_hash_using_stores_only(
         accounts_package.storages.clone(),
         false,
-    ).0;
+    )
+    .0;
     time.stop();
 
     datapoint_info!(

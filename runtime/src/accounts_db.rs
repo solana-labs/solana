@@ -290,9 +290,7 @@ impl<'a> LoadedAccount<'a> {
 
     pub fn lamports(&self) -> u64 {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => {
-                stored_account_meta.account_meta.lamports
-            }
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.account_meta.lamports,
             LoadedAccount::Cached((_, cached_account)) => match cached_account {
                 Cow::Owned(cached_account) => cached_account.account.lamports,
                 Cow::Borrowed(cached_account) => cached_account.account.lamports,
