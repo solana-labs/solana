@@ -4,6 +4,7 @@ import {
   HumanizeDuration,
   HumanizeDurationLanguage,
 } from "humanize-duration-ts";
+import { TokenAmount } from "@solana/web3.js";
 
 // Switch to web3 constant when web3 updates superstruct
 export const LAMPORTS_PER_SOL = 1000000000;
@@ -26,6 +27,11 @@ export function normalizeTokenAmount(
   if (typeof raw === "string") rawTokens = parseInt(raw);
   else rawTokens = raw;
   return rawTokens / Math.pow(10, decimals);
+}
+
+export function normalizeTokenDelta(tokenAmountA: TokenAmount, tokenAmountB: TokenAmount) {
+  const rawDelta = parseInt(tokenAmountA.amount) - parseInt(tokenAmountB.amount);
+  return rawDelta / Math.pow(10, tokenAmountA.decimals);
 }
 
 export function lamportsToSol(lamports: number | BN): number {

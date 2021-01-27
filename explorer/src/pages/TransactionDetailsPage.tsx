@@ -17,9 +17,12 @@ import {
   ParsedTransaction,
   ParsedInnerInstruction,
   Transaction,
+  TokenBalance,
+  ParsedMessageAccount,
+  TokenAmount,
 } from "@solana/web3.js";
 import { PublicKey } from "@solana/web3.js";
-import { lamportsToSolString } from "utils";
+import { lamportsToSolString, normalizeTokenDelta } from "utils";
 import { UnknownDetailsCard } from "components/instruction/UnknownDetailsCard";
 import { SystemDetailsCard } from "components/instruction/system/SystemDetailsCard";
 import { StakeDetailsCard } from "components/instruction/stake/StakeDetailsCard";
@@ -40,6 +43,7 @@ import { isTokenSwapInstruction } from "components/instruction/token-swap/types"
 import { TokenSwapDetailsCard } from "components/instruction/TokenSwapDetailsCard";
 import { isSerumInstruction } from "components/instruction/serum/types";
 import { MemoDetailsCard } from "components/instruction/MemoDetailsCard";
+import { TokenRegistry } from "tokenRegistry";
 
 const AUTO_REFRESH_INTERVAL = 2000;
 const ZERO_CONFIRMATION_BAILOUT = 5;
@@ -117,6 +121,7 @@ export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
         <>
           <StatusCard signature={signature} autoRefresh={autoRefresh} />
           <AccountsCard signature={signature} autoRefresh={autoRefresh} />
+          <TokenBalancesCard signature={signature} />
           <SignatureContext.Provider value={signature}>
             <InstructionsSection signature={signature} />
           </SignatureContext.Provider>
@@ -401,6 +406,127 @@ function AccountsCard({
               <th className="text-muted">Change (SOL)</th>
               <th className="text-muted">Post Balance (SOL)</th>
               <th className="text-muted">Details</th>
+            </tr>
+          </thead>
+          <tbody className="list">{accountRows}</tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+type TokenBalanceRow = {
+  account: PublicKey;
+  mint: string;
+  balance: TokenAmount;
+  delta: number;
+  accountIndex: number;
+};
+
+function generateTokenBalanceRows(
+  preTokenBalances: TokenBalance[],
+  postTokenBalances: TokenBalance[],
+  accounts: ParsedMessageAccount[]
+): TokenBalanceRow[] {
+  let preBalanceMap: { [index: number]: TokenBalance } = {};
+
+  preTokenBalances.forEach(
+    (balance) => (preBalanceMap[balance.accountIndex] = balance)
+  );
+
+  return postTokenBalances
+    .map(
+      ({ uiTokenAmount, accountIndex, mint }): TokenBalanceRow => {
+        let delta;
+
+        if (accountIndex in preBalanceMap) {
+          delta =
+            normalizeTokenDelta(uiTokenAmount, preBalanceMap[accountIndex].uiTokenAmount);
+        } else {
+          delta = uiTokenAmount.uiAmount;
+        }
+
+        return {
+          account: accounts[accountIndex].pubkey,
+          mint,
+          balance: uiTokenAmount,
+          delta,
+          accountIndex,
+        };
+      }
+    )
+    .sort((a, b) => a.accountIndex - b.accountIndex);
+}
+
+function TokenBalancesCard({ signature }: SignatureProps) {
+  const details = useTransactionDetails(signature);
+  const { cluster } = useCluster();
+
+  if (!details) {
+    return null;
+  }
+
+  const preTokenBalances = details.data?.transaction?.meta?.preTokenBalances;
+  const postTokenBalances = details.data?.transaction?.meta?.postTokenBalances;
+  const accountKeys =
+    details.data?.transaction?.transaction.message.accountKeys;
+
+  if (!preTokenBalances || !postTokenBalances || !accountKeys) {
+    return null;
+  }
+
+  const rows = generateTokenBalanceRows(
+    preTokenBalances,
+    postTokenBalances,
+    accountKeys
+  );
+
+  if (rows.length < 1) {
+    return null;
+  }
+
+  const accountRows = rows.map(({ account, delta, balance, mint }) => {
+    const key = account.toBase58();
+    const renderChange = () => {
+      if (delta > 0) {
+        return <span className="badge badge-soft-success">+{delta}</span>;
+      } else if (delta < 0) {
+        return <span className="badge badge-soft-warning">{delta}</span>;
+      }
+      return <span className="badge badge-soft-secondary">{delta}</span>;
+    };
+
+    const units = TokenRegistry.get(mint, cluster)?.symbol || "tokens";
+
+    return (
+      <tr key={key}>
+        <td>
+          <Address pubkey={account} link />
+        </td>
+        <td>
+          <Address pubkey={new PublicKey(mint)} link />
+        </td>
+        <td>{renderChange()}</td>
+        <td>
+          {balance.uiAmount} {units}
+        </td>
+      </tr>
+    );
+  });
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <h3 className="card-header-title">Token Balances</h3>
+      </div>
+      <div className="table-responsive mb-0">
+        <table className="table table-sm table-nowrap card-table">
+          <thead>
+            <tr>
+              <th className="text-muted">Address</th>
+              <th className="text-muted">Token</th>
+              <th className="text-muted">Change</th>
+              <th className="text-muted">Post Balance</th>
             </tr>
           </thead>
           <tbody className="list">{accountRows}</tbody>
