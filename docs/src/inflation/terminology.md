@@ -10,7 +10,7 @@ The total amount of tokens (locked or unlocked) that have been generated (via ge
 
 
 ### Inflation Rate [%]
-The Solana protocol will automatically create new tokens on a predetermined inflation schedule (discussed below). The *Inflation Rate [%]* is the annualized growth rate of the *Total Current Supply* at any point in time.
+The Solana protocol will automatically create new tokens on a predetermined [inflation schedule](#inflation-schedule). The *Inflation Rate [%]* is the annualized growth rate of the *Total Current Supply* at any point in time.
 
 
 ### Inflation Schedule
