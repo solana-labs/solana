@@ -420,6 +420,8 @@ type CompiledInnerInstruction = {
  * @property {Array<number>} preBalances The balances of the transaction accounts before processing
  * @property {Array<number>} postBalances The balances of the transaction accounts after processing
  * @property {Array<string>} logMessages An array of program log messages emitted during a transaction
+ * @property {Array<TokenBalance>} preTokenBalances The token balances of the transaction accounts before processing
+ * @property {Array<TokenBalance>} postTokenBalances The token balances of the transaction accounts after processing
  * @property {object|null} err The error result of transaction processing
  */
 type ConfirmedTransactionMeta = {
@@ -428,6 +430,8 @@ type ConfirmedTransactionMeta = {
   preBalances: Array<number>,
   postBalances: Array<number>,
   logMessages?: Array<string>,
+  preTokenBalances?: Array<TokenBalance>,
+  postTokenBalances?: Array<TokenBalance>,
   err: TransactionError | null,
 };
 
