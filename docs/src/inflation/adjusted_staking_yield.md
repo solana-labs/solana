@@ -5,15 +5,15 @@ title: Adjusted Staking Yield
 
 ### Token Dilution
 
-Similarly we can look at the expected *Staked Dilution* (i.e. *Adjusted Staking Yield*) and *Un-staked Dilution* as previously defined. Again, *dilution* in this context is defined as the change in fractional representation (i.e. ownership) of a set of tokens within a larger set. In this sense, dilution can be a positive value: an increase in fractional ownership (staked dilution / *Adjusted Staking Yield*), or a negative value: a decrease in fractional ownership (un-staked dilution). 
+Similarly we can look at the expected *Staked Dilution* (i.e. *Adjusted Staking Yield*) and *Un-staked Dilution* as previously defined. Again, *dilution* in this context is defined as the change in fractional representation (i.e. ownership) of a set of tokens within a larger set. In this sense, dilution can be a positive value: an increase in fractional ownership (staked dilution / *Adjusted Staking Yield*), or a negative value: a decrease in fractional ownership (un-staked dilution).
 
 We are interested in the relative change in ownership of staked vs un-staked tokens as the overall token pool increases with inflation issuance. As discussed, this issuance is distributed only to staked token holders, increasing the staked token fractional representation of the *Total Current Supply*.
 
 Continuing with the same *Inflation Schedule* parameters as above, we see the fraction of staked supply grow as shown below.
 
-![](/img/p_ex_staked_supply_w_range_initial_stake.png) 
+![](/img/p_ex_staked_supply_w_range_initial_stake.png)
 
-Due to this relative change in representation, the proportion of stake of any token holder will also change as a function of the *Inflation Schedule* and the proportion of all tokens that are staked. 
+Due to this relative change in representation, the proportion of stake of any token holder will also change as a function of the *Inflation Schedule* and the proportion of all tokens that are staked.
 
 Of initial interest, however, is the *dilution of **un-staked** tokens*, or $D_{us}$. In the case of un-staked tokens, token dilution is only a function of the *Inflation Schedule* because the amount of un-staked tokens doesn't change over time.
 
@@ -23,7 +23,7 @@ $$
 \begin{aligned}
 	D_{us} &= \left( \frac{P_{us}(t_{1}) - P_{us}(t_{0})}{P_{us}(t_{0})} \right)\\
 		&= \left( \frac{ \left( \frac{SOL_{us}(t_{2})}{SOL_{total}(t_{2})} \right) - \left( \frac{SOL_{us}(t_{1})}{SOL_{total}(t_{1})} \right)}{ \left( \frac{SOL_{us}(t_{1})}{SOL_{total}(t_{1})} \right) } \right)\\
-	
+
 \end{aligned}
 $$
 
@@ -43,7 +43,7 @@ $$
 \begin{aligned}
 	D_{us} &= \left( \frac{ \left( \frac{SOL_{us}(t_{1})}{SOL_{total}(t_{1})\times (1 + I_{1})} \right) - \left( \frac{SOL_{us}(t_{1})}{SOL_{total}(t_{1})} \right)}{ \left( \frac{SOL_{us}(t_{1})}{SOL_{total}(t_{1})} \right) } \right)\\
 	D_{us} &= \frac{1}{(1 + I_{1})} - 1\\
-\end{aligned}	
+\end{aligned}
 $$
 
 Or generally, dilution for un-staked tokens over any time frame undergoing inflation $I$:
@@ -122,5 +122,3 @@ Where we can see a primary dependence of the relative dilution of un-staked toke
 As might be intuitive, as the total fraction of staked tokens increases the relative dilution of un-staked tokens grows dramatically. E.g. with $80\%$ of the network tokens staked, an un-staked token holder will experience ~$400\%$ more dilution than a staked holder.
 
 Again, this represents the change in fractional change in ownership of staked tokens and illustrates the built-in incentive for token holder to stake their tokens to earn *Staked Yield* and avoid *Un-staked Dilution*.
-
-

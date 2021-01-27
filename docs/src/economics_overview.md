@@ -11,7 +11,7 @@ protocol-based rewards and transaction fees. Protocol-based rewards
 are generated from inflationary issuances from a protocol-defined inflation schedule. These rewards will constitute the total protocol-based reward delivered to validation clients, the remaining sourced from transaction fees. In the early days of the network, it is likely that protocol-based rewards, deployed based on predefined issuance schedule, will drive the majority of participant incentives to participate in the network.
 
 These protocol-based rewards are calculated per epoch and distributed across the active
-delegated stake and validator set (per validator commission). As discussed further below, the per annum inflation rate is based on a pre-determined disinflationary schedule. This provides the network with monetary supply predictability which supports long term economic stability and security.
+delegated stake and validator set (per validator commission). As discussed further below, the per annum inflation rate is based on a pre-determined disinflationary schedule. This provides the network with supply predictability which supports long term economic stability and security.
 
 Transaction fees are participant-to-participant transfers, attached to network interactions as a motivation and compensation for the inclusion and execution of a proposed transaction. A mechanism for long-term economic stability and forking protection through partial burning of each transaction fee is also discussed below.
 
