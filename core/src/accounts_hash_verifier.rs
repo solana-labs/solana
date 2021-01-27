@@ -8,9 +8,7 @@ use crate::{
     cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
     snapshot_packager_service::PendingSnapshotPackage,
 };
-use solana_measure::measure::Measure;
-use solana_runtime::accounts_db::AccountsDB;
-use solana_runtime::snapshot_package::{AccountsPackage, AccountsPackageReceiver};
+use solana_runtime::snapshot_package::{AccountsPackagePre, AccountsPackageReceiver};
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::collections::{HashMap, HashSet};
 use std::{
@@ -75,7 +73,7 @@ impl AccountsHashVerifier {
     }
 
     fn process_accounts_package(
-        accounts_package: AccountsPackage,
+        accounts_package: AccountsPackagePre,
         cluster_info: &ClusterInfo,
         trusted_validators: &Option<HashSet<Pubkey>>,
         halt_on_trusted_validator_accounts_hash_mismatch: bool,
@@ -85,21 +83,8 @@ impl AccountsHashVerifier {
         fault_injection_rate_slots: u64,
         snapshot_interval_slots: u64,
     ) {
-        let mut time = Measure::start("hash");
-
-        let simple_capitalization_enabled = true; // ??? TODO
-        let _hash = AccountsDB::calculate_accounts_hash_using_stores_only(
-            accounts_package.storages.clone(),
-            simple_capitalization_enabled,
-        );
-        time.stop();
-
-        datapoint_info!(
-            "accounts_hash_verifier",
-            ("calculate_hash", time.as_us(), i64),
-        );
-        //assert_eq!(hash.0, accounts_package.hash); // TODO: don't calculate hash elsewhere
-
+        let accounts_package = solana_runtime::snapshot_utils::process_accounts_package_pre(accounts_package);
+        let hash = accounts_package.hash;
         if fault_injection_rate_slots != 0
             && accounts_package.slot % fault_injection_rate_slots == 0
         {
@@ -108,10 +93,10 @@ impl AccountsHashVerifier {
             use solana_sdk::hash::extend_and_hash;
             warn!("inserting fault at slot: {}", accounts_package.slot);
             let rand = thread_rng().gen_range(0, 10);
-            let hash = extend_and_hash(&accounts_package.hash, &[rand]);
+            let hash = extend_and_hash(&hash, &[rand]);
             hashes.push((accounts_package.slot, hash));
         } else {
-            hashes.push((accounts_package.slot, accounts_package.hash));
+            hashes.push((accounts_package.slot, hash));
         }
 
         while hashes.len() > MAX_SNAPSHOT_HASHES {

@@ -9,11 +9,46 @@ use std::{
 };
 use tempfile::TempDir;
 
-pub type AccountsPackageSender = Sender<AccountsPackage>;
-pub type AccountsPackageReceiver = Receiver<AccountsPackage>;
-pub type AccountsPackageSendError = SendError<AccountsPackage>;
+pub type AccountsPackageSender = Sender<AccountsPackagePre>;
+pub type AccountsPackageReceiver = Receiver<AccountsPackagePre>;
+pub type AccountsPackageSendError = SendError<AccountsPackagePre>;
 
 #[derive(Debug)]
+pub struct AccountsPackagePre {
+    pub slot: Slot,
+    pub block_height: Slot,
+    pub slot_deltas: Vec<BankSlotDelta>,
+    pub snapshot_links: TempDir,
+    pub storages: SnapshotStorages,
+    pub archive_format: ArchiveFormat,
+    pub snapshot_version: SnapshotVersion,
+    pub snapshot_output_dir: PathBuf,
+}
+
+impl AccountsPackagePre {
+    pub fn new(
+        slot: Slot,
+        block_height: u64,
+        slot_deltas: Vec<BankSlotDelta>,
+        snapshot_links: TempDir,
+        storages: SnapshotStorages,
+        archive_format: ArchiveFormat,
+        snapshot_version: SnapshotVersion,
+        snapshot_output_dir: PathBuf,
+    ) -> Self {
+        Self {
+            slot,
+            block_height,
+            slot_deltas,
+            snapshot_links,
+            storages,
+            archive_format,
+            snapshot_version,
+            snapshot_output_dir,
+        }
+    }
+}
+
 pub struct AccountsPackage {
     pub slot: Slot,
     pub block_height: Slot,

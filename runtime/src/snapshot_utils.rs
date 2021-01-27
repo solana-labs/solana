@@ -1,4 +1,5 @@
 use crate::{
+    accounts_db::AccountsDB,
     accounts_index::AccountIndex,
     bank::{Bank, BankSlotDelta, Builtins},
     bank_forks::ArchiveFormat,
@@ -6,7 +7,7 @@ use crate::{
     serde_snapshot::{
         bank_from_stream, bank_to_stream, SerdeStyle, SnapshotStorage, SnapshotStorages,
     },
-    snapshot_package::{AccountsPackage, AccountsPackageSendError, AccountsPackageSender},
+    snapshot_package::{AccountsPackage, AccountsPackagePre, AccountsPackageSendError, AccountsPackageSender},
 };
 use bincode::{config::Options, serialize_into};
 use bzip2::bufread::BzDecoder;
@@ -144,7 +145,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_storages: SnapshotStorages,
     archive_format: ArchiveFormat,
     snapshot_version: SnapshotVersion,
-) -> Result<AccountsPackage> {
+) -> Result<AccountsPackagePre> {
     // Hard link all the snapshots we need for this package
     let snapshot_tmpdir = tempfile::Builder::new()
         .prefix(&format!("{}{}-", TMP_SNAPSHOT_PREFIX, bank.slot()))
@@ -169,22 +170,15 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         )?;
     }
 
-    let snapshot_package_output_file = get_snapshot_archive_path(
-        &snapshot_package_output_path,
-        &(bank.slot(), bank.get_accounts_hash()),
-        archive_format,
-    );
-
-    let package = AccountsPackage::new(
+    let package = AccountsPackagePre::new(
         bank.slot(),
         bank.block_height(),
         status_cache_slot_deltas,
         snapshot_tmpdir,
         snapshot_storages,
-        snapshot_package_output_file,
-        bank.get_accounts_hash(),
         archive_format,
         snapshot_version,
+        snapshot_package_output_path.as_ref().to_path_buf(),
     );
 
     Ok(package)
@@ -630,12 +624,12 @@ pub fn bank_from_archive<P: AsRef<Path>>(
     Ok(bank)
 }
 
-pub fn get_snapshot_archive_path<P: AsRef<Path>>(
-    snapshot_output_dir: P,
+pub fn get_snapshot_archive_path(
+    snapshot_output_dir: PathBuf,
     snapshot_hash: &(Slot, Hash),
     archive_format: ArchiveFormat,
 ) -> PathBuf {
-    snapshot_output_dir.as_ref().join(format!(
+    snapshot_output_dir.join(format!(
         "snapshot-{}-{}{}",
         snapshot_hash.0,
         snapshot_hash.1,
@@ -948,9 +942,46 @@ pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
         snapshot_version,
     )?;
 
+    let package = process_accounts_package_pre(package);
+
     archive_snapshot_package(&package)?;
     Ok(package.tar_output_file)
 }
+
+pub fn process_accounts_package_pre(accounts_package: AccountsPackagePre) -> AccountsPackage
+{
+    let mut time = Measure::start("hash");
+
+    let hash = AccountsDB::calculate_accounts_hash_using_stores_only(
+        accounts_package.storages.clone(),
+        false,
+    ).0;
+    time.stop();
+
+    datapoint_info!(
+        "accounts_hash_verifier",
+        ("calculate_hash", time.as_us(), i64),
+    );
+
+    let tar_output_file = get_snapshot_archive_path(
+        accounts_package.snapshot_output_dir,
+        &(accounts_package.slot, hash),
+        accounts_package.archive_format,
+    );
+
+    AccountsPackage::new(
+        accounts_package.slot,
+        accounts_package.block_height,
+        accounts_package.slot_deltas,
+        accounts_package.snapshot_links,
+        accounts_package.storages,
+        tar_output_file,
+        hash,
+        accounts_package.archive_format,
+        accounts_package.snapshot_version,
+    )
+}
+
 
 #[cfg(test)]
 mod tests {
