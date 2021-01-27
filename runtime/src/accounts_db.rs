@@ -291,7 +291,7 @@ impl<'a> LoadedAccount<'a> {
     pub fn lamports(&self) -> u64 {
         match self {
             LoadedAccount::Stored(stored_account_meta) => {
-                stored_account_meta.clone_account().lamports
+                stored_account_meta.account_meta.lamports
             }
             LoadedAccount::Cached((_, cached_account)) => match cached_account {
                 Cow::Owned(cached_account) => cached_account.account.lamports,
@@ -3670,8 +3670,6 @@ impl AccountsDB {
         accounts: (DashMap<Pubkey, CalculateHashIntermediate>, Measure),
     ) -> (Hash, u64) {
         let (account_maps, time_scan) = accounts;
-
-        let len = account_maps.len();
 
         let mut zeros = Measure::start("eliminate zeros");
         let hashes = Self::remove_zero_balance_accounts(account_maps);
