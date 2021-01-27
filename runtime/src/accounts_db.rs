@@ -7662,14 +7662,16 @@ pub mod tests {
             HashSet::new(),
             caching_enabled,
         ));
-        let mut slots: Vec<_> = (0..num_slots as Slot).into_iter().collect();
+        let slots: Vec<_> = (0..num_slots as Slot).into_iter().collect();
+        let stall_slot = num_slots as Slot;
         let scan_stall_key = Pubkey::new_unique();
         let keys: Vec<Pubkey> = std::iter::repeat_with(Pubkey::new_unique)
             .take(num_slots)
             .collect();
         if scan_slot.is_some() {
             accounts_db.store_cached(
-                0,
+                // Store it in a slot that isn't returned in `slots`
+                stall_slot,
                 &[(&scan_stall_key, &Account::new(1, 0, &Pubkey::default()))],
             );
         }
@@ -7682,13 +7684,16 @@ pub mod tests {
             }
             accounts_db.add_root(*slot as Slot);
             if Some(*slot) == scan_slot {
-                scan_tracker = Some(setup_scan(
-                    accounts_db.clone(),
-                    Arc::new(Ancestors::default()),
-                    scan_stall_key,
-                ));
+                let ancestors = Arc::new(vec![(stall_slot, 1), (*slot, 1)].into_iter().collect());
+                scan_tracker = Some(setup_scan(accounts_db.clone(), ancestors, scan_stall_key));
+                assert_eq!(
+                    accounts_db.accounts_index.min_ongoing_scan_root().unwrap(),
+                    *slot
+                );
             }
         }
+
+        accounts_db.accounts_cache.remove_slot(stall_slot);
 
         // If there's <= MAX_CACHE_SLOTS, no slots should be flushed
         if accounts_db.accounts_cache.num_slots() <= MAX_CACHE_SLOTS {
@@ -7812,6 +7817,7 @@ pub mod tests {
         let (accounts_db, keys, slots, scan_tracker) =
             setup_accounts_db_cache_clean(num_slots, scan_root);
         let is_cache_at_limit = num_slots - requested_flush_root as usize - 1 > MAX_CACHE_SLOTS;
+
         // If:
         // 1) `requested_flush_root` is specified,
         // 2) not at the cache limit, i.e. `is_cache_at_limit == false`, then
@@ -7885,35 +7891,33 @@ pub mod tests {
                     slot_accounts.into_iter().collect::<HashSet<Pubkey>>()
                 }
             };
-            if *slot >= requested_flush_root || *slot >= scan_root.unwrap_or(Slot::MAX) {
-                // 1) If slot > `requested_flush_root`, then  either:
-                //   a) If `is_cache_at_limit == false`, still in the cache
-                //   b) if `is_cache_at_limit == true`, were not cleaned before being flushed to storage.
-                //
-                // In both cases all the *original* updates at index `slot` were uncleaned and thus
-                // should be discoverable by this scan.
-                //
-                // 2) If slot == `requested_flush_root`, the slot was not cleaned before being flushed to storage,
-                // so it also contains all the original updates.
-                //
-                // 3) If *slot >= scan_root, then we should not clean it either
-                assert_eq!(
-                    slot_accounts,
+
+            let expected_accounts =
+                if *slot >= requested_flush_root || *slot >= scan_root.unwrap_or(Slot::MAX) {
+                    // 1) If slot > `requested_flush_root`, then  either:
+                    //   a) If `is_cache_at_limit == false`, still in the cache
+                    //   b) if `is_cache_at_limit == true`, were not cleaned before being flushed to storage.
+                    //
+                    // In both cases all the *original* updates at index `slot` were uncleaned and thus
+                    // should be discoverable by this scan.
+                    //
+                    // 2) If slot == `requested_flush_root`, the slot was not cleaned before being flushed to storage,
+                    // so it also contains all the original updates.
+                    //
+                    // 3) If *slot >= scan_root, then we should not clean it either
                     keys[*slot as usize..]
                         .iter()
                         .cloned()
                         .collect::<HashSet<Pubkey>>()
-                );
-            } else {
-                // Slots less than `requested_flush_root` and `scan_root` were cleaned in the cache before being flushed
-                // to storage, should only contain one account
-                assert_eq!(
-                    slot_accounts,
+                } else {
+                    // Slots less than `requested_flush_root` and `scan_root` were cleaned in the cache before being flushed
+                    // to storage, should only contain one account
                     std::iter::once(keys[*slot as usize])
                         .into_iter()
                         .collect::<HashSet<Pubkey>>()
-                );
-            }
+                };
+
+            assert_eq!(slot_accounts, expected_accounts);
         }
 
         if let Some(scan_tracker) = scan_tracker {
