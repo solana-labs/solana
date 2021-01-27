@@ -28,7 +28,7 @@ import { SlotHashesCard } from "components/account/SlotHashesCard";
 import { StakeHistoryCard } from "components/account/StakeHistoryCard";
 import { BlockhashesCard } from "components/account/BlockhashesCard";
 import { ConfigAccountSection } from "components/account/ConfigAccountSection";
-import { isSpamAccount } from "spamRegistry";
+import { isScamAccount } from "scamRegistry";
 
 const TABS_LOOKUP: { [id: string]: Tab } = {
   "spl-token:mint": {
@@ -74,10 +74,10 @@ export function AccountDetailsPage({ address, tab }: Props) {
     pubkey = new PublicKey(address);
   } catch (err) {}
 
-  const isSpam = isSpamAccount(address);
+  const isScam = isScamAccount(address);
 
   return (
-    <div className={`container mt-n3 ${isSpam ? "is-spam" : ""}`}>
+    <div className={`container mt-n3 ${isScam ? "is-scam" : ""}`}>
       <div className="header">
         <div className="header-body">
           <AccountHeader address={address} />
@@ -86,7 +86,7 @@ export function AccountDetailsPage({ address, tab }: Props) {
       {!pubkey ? (
         <ErrorCard text={`Address "${address}" is not valid`} />
       ) : (
-        <DetailsSections pubkey={pubkey} tab={tab} isSpam={isSpam} />
+        <DetailsSections pubkey={pubkey} tab={tab} isScam={isScam} />
       )}
     </div>
   );
@@ -129,11 +129,11 @@ export function AccountHeader({ address }: { address: string }) {
 function DetailsSections({
   pubkey,
   tab,
-  isSpam,
+  isScam,
 }: {
   pubkey: PublicKey;
   tab?: string;
-  isSpam: boolean;
+  isScam: boolean;
 }) {
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
@@ -168,9 +168,9 @@ function DetailsSections({
 
   return (
     <>
-      {isSpam && (
+      {isScam && (
         <div className="alert alert-danger" role="alert">
-          Warning! This account has been flagged as a spam account. Please be
+          Warning! This account has been flagged as a scam account. Please be
           cautious sending SOL to this account.
         </div>
       )}

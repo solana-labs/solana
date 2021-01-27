@@ -1,7 +1,7 @@
-const spamAddresses = toHash(["GACpXND1SSfTSQMmqGuFvGwXB3jGEYBDRGNzmLfTYwSP"]);
+const scamAddresses = toHash(["GACpXND1SSfTSQMmqGuFvGwXB3jGEYBDRGNzmLfTYwSP"]);
 
-export function isSpamAccount(address: string) {
-  return address in spamAddresses;
+export function isScamAccount(address: string) {
+  return address in scamAddresses;
 }
 
 function toHash(addresses: string[]) {
