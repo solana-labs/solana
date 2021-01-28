@@ -5,7 +5,7 @@ use solana_core::validator::ValidatorConfig;
 use solana_exchange_program::exchange_processor::process_instruction;
 use solana_exchange_program::id;
 use solana_exchange_program::solana_exchange_program;
-use solana_faucet::faucet::run_local_faucet;
+use solana_faucet::faucet::run_local_faucet_with_port;
 use solana_local_cluster::local_cluster::{ClusterConfig, LocalCluster};
 use solana_runtime::bank::Bank;
 use solana_runtime::bank_client::BankClient;
@@ -57,8 +57,11 @@ fn test_exchange_local_cluster() {
     );
 
     let (addr_sender, addr_receiver) = channel();
-    run_local_faucet(faucet_keypair, addr_sender, Some(1_000_000_000_000));
-    let faucet_addr = addr_receiver.recv_timeout(Duration::from_secs(2)).unwrap();
+    run_local_faucet_with_port(faucet_keypair, addr_sender, Some(1_000_000_000_000), 0);
+    let faucet_addr = addr_receiver
+        .recv_timeout(Duration::from_secs(2))
+        .expect("run_local_faucet")
+        .expect("faucet_addr");
 
     info!("Connecting to the cluster");
     let nodes =

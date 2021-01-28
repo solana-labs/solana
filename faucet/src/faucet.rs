@@ -265,9 +265,9 @@ pub fn request_airdrop_transaction(
 
 pub fn run_local_faucet_with_port(
     faucet_keypair: Keypair,
-    sender: Sender<SocketAddr>,
+    sender: Sender<Result<SocketAddr, String>>,
     per_time_cap: Option<u64>,
-    port: u16,
+    port: u16, // 0 => auto assign
 ) {
     thread::spawn(move || {
         let faucet_addr = socketaddr!(0, port);
@@ -283,23 +283,41 @@ pub fn run_local_faucet_with_port(
 }
 
 // For integration tests. Listens on random open port and reports port to Sender.
-pub fn run_local_faucet(
-    faucet_keypair: Keypair,
-    sender: Sender<SocketAddr>,
-    per_time_cap: Option<u64>,
-) {
-    run_local_faucet_with_port(faucet_keypair, sender, per_time_cap, 0)
+pub fn run_local_faucet(faucet_keypair: Keypair, per_time_cap: Option<u64>) -> SocketAddr {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    run_local_faucet_with_port(faucet_keypair, sender, per_time_cap, 0);
+    receiver
+        .recv()
+        .expect("run_local_faucet")
+        .expect("faucet_addr")
 }
 
 pub async fn run_faucet(
     faucet: Arc<Mutex<Faucet>>,
     faucet_addr: SocketAddr,
-    send_addr: Option<Sender<SocketAddr>>,
+    sender: Option<Sender<Result<SocketAddr, String>>>,
 ) {
-    let listener = TcpListener::bind(&faucet_addr).await.unwrap();
-    if let Some(send_addr) = send_addr {
-        send_addr.send(listener.local_addr().unwrap()).unwrap();
+    let listener = TcpListener::bind(&faucet_addr).await;
+    if let Some(sender) = sender {
+        sender.send(
+            listener.as_ref().map(|listener| listener.local_addr().unwrap())
+                .map_err(|err| {
+                    format!(
+                        "Unable to bind faucet to {:?}, check the address is not already in use: {}",
+                        faucet_addr, err
+                    )
+                })
+            )
+            .unwrap();
     }
+
+    let listener = match listener {
+        Err(err) => {
+            error!("Faucet failed to start: {}", err);
+            return;
+        }
+        Ok(listener) => listener,
+    };
     info!("Faucet started. Listening on: {}", faucet_addr);
     info!(
         "Faucet account address: {}",
