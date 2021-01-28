@@ -10,8 +10,13 @@ use bincode::serialize;
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
+<<<<<<< HEAD
 use serde_json::{self, json};
 use solana_bpf_loader_program::bpf_verifier;
+=======
+use serde_json::{self, json, Value};
+use solana_bpf_loader_program::{bpf_verifier, BPFError, ThisInstructionMeter};
+>>>>>>> 7e2e0d4a8... Manually camelCase solana program json (#14907)
 use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
 use solana_cli_output::display::new_spinner_progress_bar;
 use solana_client::{
@@ -864,6 +869,7 @@ fn process_set_authority(
         )
         .map_err(|e| format!("Setting authority failed: {}", e))?;
 
+<<<<<<< HEAD
     match new_authority {
         Some(pubkey) => Ok(json!({
             "Authority": format!("{:?}", pubkey),
@@ -873,6 +879,62 @@ fn process_set_authority(
             "Authority": "None",
         })
         .to_string()),
+=======
+    Ok(option_pubkey_to_string("authority", new_authority).to_string())
+}
+
+fn process_get_authority(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    account_pubkey: Option<Pubkey>,
+) -> ProcessResult {
+    if let Some(account_pubkey) = account_pubkey {
+        if let Some(account) = rpc_client
+            .get_account_with_commitment(&account_pubkey, config.commitment)?
+            .value
+        {
+            if let Ok(UpgradeableLoaderState::Program {
+                programdata_address,
+            }) = account.state()
+            {
+                if let Some(account) = rpc_client
+                    .get_account_with_commitment(&programdata_address, config.commitment)?
+                    .value
+                {
+                    if let Ok(UpgradeableLoaderState::ProgramData {
+                        upgrade_authority_address,
+                        ..
+                    }) = account.state()
+                    {
+                        let mut value =
+                            option_pubkey_to_string("authority", upgrade_authority_address);
+                        let map = value.as_object_mut().unwrap();
+                        map.insert("accountType".to_string(), json!("program".to_string()));
+                        Ok(value.to_string())
+                    } else {
+                        Err("Invalid associated ProgramData account found for the program".into())
+                    }
+                } else {
+                    Err(
+                        "Failed to find associated ProgramData account for the provided program"
+                            .into(),
+                    )
+                }
+            } else if let Ok(UpgradeableLoaderState::Buffer { authority_address }) = account.state()
+            {
+                let mut value = option_pubkey_to_string("authority", authority_address);
+                let map = value.as_object_mut().unwrap();
+                map.insert("accountType".to_string(), json!("buffer".to_string()));
+                Ok(value.to_string())
+            } else {
+                Err("Not a buffer or program account".into())
+            }
+        } else {
+            Err("Unable to find the account".into())
+        }
+    } else {
+        Err("No account specified".into())
+>>>>>>> 7e2e0d4a8... Manually camelCase solana program json (#14907)
     }
 }
 
@@ -1076,12 +1138,12 @@ fn do_process_program_write_and_deploy(
 
     if let Some(program_signer) = program_signer {
         Ok(json!({
-            "ProgramId": format!("{}", program_signer.pubkey()),
+            "programId": format!("{}", program_signer.pubkey()),
         })
         .to_string())
     } else {
         Ok(json!({
-            "Buffer": format!("{}", buffer_pubkey),
+            "buffer": format!("{}", buffer_pubkey),
         })
         .to_string())
     }
@@ -1393,6 +1455,20 @@ fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
     );
 }
 
+<<<<<<< HEAD
+=======
+fn option_pubkey_to_string(tag: &str, option: Option<Pubkey>) -> Value {
+    match option {
+        Some(pubkey) => json!({
+            tag: format!("{:?}", pubkey),
+        }),
+        None => json!({
+            tag: "none",
+        }),
+    }
+}
+
+>>>>>>> 7e2e0d4a8... Manually camelCase solana program json (#14907)
 fn send_and_confirm_transactions_with_spinner<T: Signers>(
     rpc_client: &RpcClient,
     mut transactions: Vec<Transaction>,
@@ -2272,7 +2348,7 @@ mod tests {
         let program_id = json
             .as_object()
             .unwrap()
-            .get("ProgramId")
+            .get("programId")
             .unwrap()
             .as_str()
             .unwrap();
