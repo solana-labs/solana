@@ -77,7 +77,7 @@ fn test_cli_program_deploy_non_upgradeable() {
     let program_id_str = json
         .as_object()
         .unwrap()
-        .get("ProgramId")
+        .get("programId")
         .unwrap()
         .as_str()
         .unwrap();
@@ -221,7 +221,7 @@ fn test_cli_program_deploy_no_authority() {
     let program_id_str = json
         .as_object()
         .unwrap()
-        .get("ProgramId")
+        .get("programId")
         .unwrap()
         .as_str()
         .unwrap();
@@ -318,7 +318,7 @@ fn test_cli_program_deploy_with_authority() {
     let program_pubkey_str = json
         .as_object()
         .unwrap()
-        .get("ProgramId")
+        .get("programId")
         .unwrap()
         .as_str()
         .unwrap();
@@ -365,7 +365,7 @@ fn test_cli_program_deploy_with_authority() {
     let program_pubkey_str = json
         .as_object()
         .unwrap()
-        .get("ProgramId")
+        .get("programId")
         .unwrap()
         .as_str()
         .unwrap();
@@ -434,7 +434,7 @@ fn test_cli_program_deploy_with_authority() {
     let new_upgrade_authority_str = json
         .as_object()
         .unwrap()
-        .get("Authority")
+        .get("authority")
         .unwrap()
         .as_str()
         .unwrap();
@@ -488,11 +488,11 @@ fn test_cli_program_deploy_with_authority() {
     let new_upgrade_authority_str = json
         .as_object()
         .unwrap()
-        .get("Authority")
+        .get("authority")
         .unwrap()
         .as_str()
         .unwrap();
-    assert_eq!(new_upgrade_authority_str, "None");
+    assert_eq!(new_upgrade_authority_str, "none");
 
     // Upgrade with no authority
     config.signers = vec![&keypair, &new_upgrade_authority];
@@ -529,7 +529,7 @@ fn test_cli_program_deploy_with_authority() {
     let program_pubkey_str = json
         .as_object()
         .unwrap()
-        .get("ProgramId")
+        .get("programId")
         .unwrap()
         .as_str()
         .unwrap();
@@ -618,7 +618,7 @@ fn test_cli_program_write_buffer() {
     let buffer_pubkey_str = json
         .as_object()
         .unwrap()
-        .get("Buffer")
+        .get("buffer")
         .unwrap()
         .as_str()
         .unwrap();
@@ -652,7 +652,7 @@ fn test_cli_program_write_buffer() {
     let buffer_pubkey_str = json
         .as_object()
         .unwrap()
-        .get("Buffer")
+        .get("buffer")
         .unwrap()
         .as_str()
         .unwrap();
@@ -690,7 +690,7 @@ fn test_cli_program_write_buffer() {
     let buffer_pubkey_str = json
         .as_object()
         .unwrap()
-        .get("Buffer")
+        .get("buffer")
         .unwrap()
         .as_str()
         .unwrap();
@@ -728,7 +728,7 @@ fn test_cli_program_write_buffer() {
     let buffer_pubkey_str = json
         .as_object()
         .unwrap()
-        .get("Buffer")
+        .get("buffer")
         .unwrap()
         .as_str()
         .unwrap();
@@ -763,7 +763,7 @@ fn test_cli_program_write_buffer() {
     let buffer_pubkey_str = json
         .as_object()
         .unwrap()
-        .get("Buffer")
+        .get("buffer")
         .unwrap()
         .as_str()
         .unwrap();
@@ -858,7 +858,7 @@ fn test_cli_program_set_buffer_authority() {
     let new_buffer_authority_str = json
         .as_object()
         .unwrap()
-        .get("Authority")
+        .get("authority")
         .unwrap()
         .as_str()
         .unwrap();
@@ -885,7 +885,7 @@ fn test_cli_program_set_buffer_authority() {
     let buffer_authority_str = json
         .as_object()
         .unwrap()
-        .get("Authority")
+        .get("authority")
         .unwrap()
         .as_str()
         .unwrap();
@@ -912,11 +912,11 @@ fn test_cli_program_set_buffer_authority() {
     let buffer_authority_str = json
         .as_object()
         .unwrap()
-        .get("Authority")
+        .get("authority")
         .unwrap()
         .as_str()
         .unwrap();
-    assert_eq!(buffer_authority_str, "None");
+    assert_eq!(buffer_authority_str, "none");
     let buffer_account = rpc_client.get_account(&buffer_keypair.pubkey()).unwrap();
     if let UpgradeableLoaderState::Buffer { authority_address } = buffer_account.state().unwrap() {
         assert_eq!(authority_address, None);
