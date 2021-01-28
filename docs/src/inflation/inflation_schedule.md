@@ -13,9 +13,9 @@ As mentioned above, the network's *Inflation Schedule* is uniquely described by 
 
 Based on these considerations and the community discussions following the initial [design](https://forums.solana.com/t/solana-inflation-design-overview/920), the Solana Foundation proposes the following Inflation Schedule parameters:
 
-> Initial Inflation Rate: $8\%$
-> Dis-inflation Rate: $-15\%$
-> Long-term Inflation Rate: $1.5\%$
+- Initial Inflation Rate: $8\%$
+- Dis-inflation Rate: $-15\%$
+- Long-term Inflation Rate: $1.5\%$
 
 These parameters define the proposed *Inflation Schedule*. Below we show implications of these parameters. These plots only show the impact of inflation issuances given the Inflation Schedule as parameterized above. They *do not account* for other factors that may impact the Total Supply such as fee/rent burning, slashing or other unforeseen future token destruction events. Therefore, what is presented here is an **upper limit** on the amount of SOL issued via inflation.
 
