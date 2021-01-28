@@ -8,7 +8,12 @@ use solana_sdk::{
     account::Account,
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+<<<<<<< HEAD
     feature_set::{instructions_sysvar_enabled, FeatureSet},
+=======
+    feature_set::{instructions_sysvar_enabled, track_writable_deescalation, FeatureSet},
+    ic_msg,
+>>>>>>> 0b1015f7d... Richer runtime failure logging (#14875)
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_readonly_accounts, KeyedAccount},
     message::Message,
@@ -22,7 +27,12 @@ use solana_sdk::{
     system_program,
     transaction::TransactionError,
 };
-use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
+use std::{
+    cell::{Ref, RefCell},
+    collections::HashMap,
+    rc::Rc,
+    sync::Arc,
+};
 
 pub struct Executors {
     pub executors: HashMap<Pubkey, Arc<dyn Executor>>,
@@ -514,6 +524,7 @@ impl MessageProcessor {
         instruction: &Instruction,
         keyed_accounts: &[&KeyedAccount],
         signers: &[Pubkey],
+        invoke_context: &Ref<&mut dyn InvokeContext>,
     ) -> Result<(Message, Pubkey, usize), InstructionError> {
         // Check for privilege escalation
         for account in instruction.accounts.iter() {
@@ -526,9 +537,21 @@ impl MessageProcessor {
                         None
                     }
                 })
-                .ok_or(InstructionError::MissingAccount)?;
+                .ok_or_else(|| {
+                    ic_msg!(
+                        invoke_context,
+                        "Instruction references an unknown account {:?}",
+                        account.pubkey
+                    );
+                    InstructionError::MissingAccount
+                })?;
             // Readonly account cannot become writable
             if account.is_writable && !keyed_account.is_writable() {
+                ic_msg!(
+                    invoke_context,
+                    "{:?}'s writable priviledge escalated ",
+                    account.pubkey
+                );
                 return Err(InstructionError::PrivilegeEscalation);
             }
 
@@ -537,6 +560,11 @@ impl MessageProcessor {
                 keyed_account.signer_key().is_some() // Signed in the parent instruction
                 || signers.contains(&account.pubkey) // Signed by the program
             ) {
+                ic_msg!(
+                    invoke_context,
+                    "{:?}'s signer priviledge escalated ",
+                    account.pubkey
+                );
                 return Err(InstructionError::PrivilegeEscalation);
             }
         }
@@ -551,8 +579,17 @@ impl MessageProcessor {
                 } else {
                     None
                 }
+<<<<<<< HEAD
             })
             .ok_or(InstructionError::MissingAccount)?;
+=======
+            }
+            None => {
+                ic_msg!(invoke_context, "Unknown program {:?}", program_id);
+                return Err(InstructionError::MissingAccount);
+            }
+        }
+>>>>>>> 0b1015f7d... Richer runtime failure logging (#14875)
 
         let message = Message::new(&[instruction.clone()], None);
         let program_id_index = message.instructions[0].program_id_index as usize;
@@ -567,10 +604,12 @@ impl MessageProcessor {
         keyed_accounts: &[&KeyedAccount],
         signers_seeds: &[&[&[u8]]],
     ) -> Result<(), InstructionError> {
-        let caller_program_id = invoke_context.get_caller()?;
+        let invoke_context = RefCell::new(invoke_context);
 
-        // Translate and verify caller's data
+        let (message, executables, accounts, account_refs, caller_privileges) = {
+            let invoke_context = invoke_context.borrow();
 
+<<<<<<< HEAD
         let signers = signers_seeds
             .iter()
             .map(|seeds| Pubkey::create_program_address(&seeds, caller_program_id))
@@ -585,63 +624,129 @@ impl MessageProcessor {
                     accounts.push(Rc::new(keyed_account.account.clone()));
                     account_refs.push(keyed_account);
                     continue 'root;
+=======
+            let caller_program_id = invoke_context.get_caller()?;
+
+            // Translate and verify caller's data
+
+            let signers = signers_seeds
+                .iter()
+                .map(|seeds| Pubkey::create_program_address(&seeds, caller_program_id))
+                .collect::<Result<Vec<_>, solana_sdk::pubkey::PubkeyError>>()?;
+            let mut caller_privileges = keyed_accounts
+                .iter()
+                .map(|keyed_account| keyed_account.is_writable())
+                .collect::<Vec<bool>>();
+            caller_privileges.insert(0, false);
+            let (message, callee_program_id, _) =
+                Self::create_message(&instruction, &keyed_accounts, &signers, &invoke_context)?;
+            let mut accounts = vec![];
+            let mut account_refs = vec![];
+            'root: for account_key in message.account_keys.iter() {
+                for keyed_account in keyed_accounts {
+                    if account_key == keyed_account.unsigned_key() {
+                        accounts.push(Rc::new(keyed_account.account.clone()));
+                        account_refs.push(keyed_account);
+                        continue 'root;
+                    }
+>>>>>>> 0b1015f7d... Richer runtime failure logging (#14875)
                 }
+                ic_msg!(
+                    invoke_context,
+                    "Instruction references an unknown account {:?}",
+                    account_key
+                );
+                return Err(InstructionError::MissingAccount);
             }
-            return Err(InstructionError::MissingAccount);
-        }
 
-        // Process instruction
+            // Process instruction
 
-        invoke_context.record_instruction(&instruction);
+            invoke_context.record_instruction(&instruction);
 
-        let program_account = invoke_context
-            .get_account(&callee_program_id)
-            .ok_or(InstructionError::MissingAccount)?;
-        if !program_account.borrow().executable {
-            return Err(InstructionError::AccountNotExecutable);
-        }
-        let programdata_executable =
-            if program_account.borrow().owner == bpf_loader_upgradeable::id() {
-                if let UpgradeableLoaderState::Program {
-                    programdata_address,
-                } = program_account.borrow().state()?
-                {
-                    if let Some(account) = invoke_context.get_account(&programdata_address) {
-                        Some((programdata_address, account))
+            let program_account =
+                invoke_context
+                    .get_account(&callee_program_id)
+                    .ok_or_else(|| {
+                        ic_msg!(invoke_context, "Unknown program {:?}", callee_program_id);
+                        InstructionError::MissingAccount
+                    })?;
+            if !program_account.borrow().executable {
+                return Err(InstructionError::AccountNotExecutable);
+            }
+            let programdata_executable =
+                if program_account.borrow().owner == bpf_loader_upgradeable::id() {
+                    if let UpgradeableLoaderState::Program {
+                        programdata_address,
+                    } = program_account.borrow().state()?
+                    {
+                        if let Some(account) = invoke_context.get_account(&programdata_address) {
+                            Some((programdata_address, account))
+                        } else {
+                            ic_msg!(
+                                invoke_context,
+                                "Unknown upgradeable programdata account {:?}",
+                                programdata_address,
+                            );
+                            return Err(InstructionError::MissingAccount);
+                        }
                     } else {
+                        ic_msg!(
+                            invoke_context,
+                            "Upgradeable program account state not valid {:?}",
+                            callee_program_id,
+                        );
                         return Err(InstructionError::MissingAccount);
                     }
                 } else {
-                    return Err(InstructionError::MissingAccount);
-                }
-            } else {
-                None
-            };
-        let mut executable_accounts = vec![(callee_program_id, program_account)];
-        if let Some(programdata) = programdata_executable {
-            executable_accounts.push(programdata);
-        }
+                    None
+                };
+            let mut executables = vec![(callee_program_id, program_account)];
+            if let Some(programdata) = programdata_executable {
+                executables.push(programdata);
+            }
+            (
+                message,
+                executables,
+                accounts,
+                account_refs,
+                caller_privileges,
+            )
+        };
 
+        #[allow(clippy::deref_addrof)]
         MessageProcessor::process_cross_program_instruction(
             &message,
-            &executable_accounts,
+            &executables,
             &accounts,
+<<<<<<< HEAD
             invoke_context,
+=======
+            &caller_privileges,
+            *(&mut *(invoke_context.borrow_mut())),
+>>>>>>> 0b1015f7d... Richer runtime failure logging (#14875)
         )?;
 
         // Copy results back to caller
 
-        for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
-            let account = account.borrow();
-            if message.is_writable(i) && !account.executable {
-                account_ref.try_account_ref_mut()?.lamports = account.lamports;
-                account_ref.try_account_ref_mut()?.owner = account.owner;
-                if account_ref.data_len()? != account.data.len() && account_ref.data_len()? != 0 {
-                    // Only support for `CreateAccount` at this time.
-                    // Need a way to limit total realloc size across multiple CPI calls
-                    return Err(InstructionError::InvalidRealloc);
+        {
+            let invoke_context = invoke_context.borrow();
+            for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
+                let account = account.borrow();
+                if message.is_writable(i) && !account.executable {
+                    account_ref.try_account_ref_mut()?.lamports = account.lamports;
+                    account_ref.try_account_ref_mut()?.owner = account.owner;
+                    if account_ref.data_len()? != account.data.len() && account_ref.data_len()? != 0
+                    {
+                        // Only support for `CreateAccount` at this time.
+                        // Need a way to limit total realloc size across multiple CPI calls
+                        ic_msg!(
+                            invoke_context,
+                            "Inner instructions do not support realloc, only SystemProgram::CreateAccount",
+                        );
+                        return Err(InstructionError::InvalidRealloc);
+                    }
+                    account_ref.try_account_ref_mut()?.data = account.data.clone();
                 }
-                account_ref.try_account_ref_mut()?.data = account.data.clone();
             }
         }
 

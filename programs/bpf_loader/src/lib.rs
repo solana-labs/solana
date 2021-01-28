@@ -714,17 +714,23 @@ impl Executor for BPFExecutor {
                     }
                 }
                 Err(error) => {
+<<<<<<< HEAD
                     log!(logger, "Program {} BPF VM error: {}", program_id, error);
+=======
+>>>>>>> 0b1015f7d... Richer runtime failure logging (#14875)
                     let error = match error {
                         EbpfError::UserError(BPFError::SyscallError(
                             SyscallError::InstructionError(error),
                         )) => error,
                         err => {
+<<<<<<< HEAD
                             log!(logger, "Program failed to complete: {:?}", err);
+=======
+                            ic_logger_msg!(logger, "Program failed to complete: {}", err);
+>>>>>>> 0b1015f7d... Richer runtime failure logging (#14875)
                             InstructionError::ProgramFailedToComplete
                         }
                     };
-
                     stable_log::program_failure(&logger, program_id, &error);
                     return Err(error);
                 }

@@ -21,6 +21,7 @@ use solana_sdk::{
         try_find_program_address_syscall_enabled, use_loaded_program_accounts,
     },
     hash::{Hasher, HASH_BYTES},
+    ic_msg,
     instruction::{AccountMeta, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     native_loader,
@@ -57,14 +58,18 @@ pub enum SyscallError {
     MalformedSignerSeed(Utf8Error, Vec<u8>),
     #[error("Could not create program address with signer seeds: {0}")]
     BadSeeds(PubkeyError),
-    #[error("Program id is not supported by cross-program invocations")]
-    ProgramNotSupported,
+    #[error("Program {0} supported by inner instructions")]
+    ProgramNotSupported(Pubkey),
     #[error("{0}")]
     InstructionError(InstructionError),
     #[error("Unaligned pointer")]
     UnalignedPointer,
     #[error("Too many signers")]
     TooManySigners,
+    #[error("Instruction passed to inner instruction is too large")]
+    InstructionTooLarge,
+    #[error("Too many accounts passed to inner instruction")]
+    TooManyAccounts,
 }
 impl From<SyscallError> for EbpfError<BPFError> {
     fn from(error: SyscallError) -> Self {
@@ -784,8 +789,20 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
             AccountMeta,
             ix.accounts.as_ptr(),
             ix.accounts.len(),
+<<<<<<< HEAD
             ro_regions,
             self.loader_id
+=======
+            ix.data.len(),
+            &self.invoke_context.borrow(),
+        )?;
+
+        let accounts = translate_slice::<AccountMeta>(
+            memory_mapping,
+            ix.accounts.as_ptr() as u64,
+            ix.accounts.len() as u64,
+            self.loader_id,
+>>>>>>> 0b1015f7d... Richer runtime failure logging (#14875)
         )?
         .to_vec();
         let data = translate_slice!(
@@ -1065,11 +1082,25 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
         max_size: usize,
         ro_regions: &[MemoryRegion],
     ) -> Result<Instruction, EbpfError<BPFError>> {
+<<<<<<< HEAD
         let ix_c = translate_type!(SolInstruction, addr, ro_regions, self.loader_id)?;
         check_instruction_size(ix_c.accounts_len, ix_c.data_len, max_size)?;
         let program_id = translate_type!(Pubkey, ix_c.program_id_addr, ro_regions, self.loader_id)?;
         let meta_cs = translate_slice!(
             SolAccountMeta,
+=======
+        let ix_c = translate_type::<SolInstruction>(memory_mapping, addr, self.loader_id)?;
+
+        check_instruction_size(
+            ix_c.accounts_len,
+            ix_c.data_len,
+            &self.invoke_context.borrow(),
+        )?;
+        let program_id =
+            translate_type::<Pubkey>(memory_mapping, ix_c.program_id_addr, self.loader_id)?;
+        let meta_cs = translate_slice::<SolAccountMeta>(
+            memory_mapping,
+>>>>>>> 0b1015f7d... Richer runtime failure logging (#14875)
             ix_c.accounts_addr,
             ix_c.accounts_len,
             ro_regions,
@@ -1265,19 +1296,103 @@ impl<'a> SyscallObject<BPFError> for SyscallInvokeSignedC<'a> {
     }
 }
 
+<<<<<<< HEAD
+=======
+fn get_translated_accounts<'a, T, F>(
+    account_keys: &[Pubkey],
+    program_account_index: usize,
+    account_info_keys: &[&Pubkey],
+    account_infos: &[T],
+    invoke_context: &Ref<&mut dyn InvokeContext>,
+    do_translate: F,
+) -> Result<TranslatedAccounts<'a>, EbpfError<BPFError>>
+where
+    F: Fn(&T) -> Result<TranslatedAccount<'a>, EbpfError<BPFError>>,
+{
+    let mut accounts = Vec::with_capacity(account_keys.len());
+    let mut refs = Vec::with_capacity(account_keys.len());
+    for (i, ref account_key) in account_keys.iter().enumerate() {
+        let account = invoke_context.get_account(&account_key).ok_or_else(|| {
+            ic_msg!(
+                invoke_context,
+                "Instruction references an unknown account {:?}",
+                account_key
+            );
+            SyscallError::InstructionError(InstructionError::MissingAccount)
+        })?;
+
+        if (invoke_context.is_feature_active(&use_loaded_program_accounts::id())
+            && i == program_account_index)
+            || (invoke_context.is_feature_active(&use_loaded_executables::id())
+                && account.borrow().executable)
+        {
+            // Use the known executable
+            accounts.push(Rc::new(account));
+            refs.push(None);
+        } else if let Some(account_info) =
+            account_info_keys
+                .iter()
+                .zip(account_infos)
+                .find_map(|(key, account_info)| {
+                    if key == account_key {
+                        Some(account_info)
+                    } else {
+                        None
+                    }
+                })
+        {
+            let (account, account_ref) = do_translate(account_info)?;
+            accounts.push(account);
+            refs.push(account_ref);
+        } else {
+            ic_msg!(
+                invoke_context,
+                "Instruction references an unknown account {:?}",
+                account_key
+            );
+            return Err(SyscallError::InstructionError(InstructionError::MissingAccount).into());
+        }
+    }
+
+    Ok((accounts, refs))
+}
+
+>>>>>>> 0b1015f7d... Richer runtime failure logging (#14875)
 fn check_instruction_size(
     num_accounts: usize,
     data_len: usize,
-    max_size: usize,
+    invoke_context: &Ref<&mut dyn InvokeContext>,
 ) -> Result<(), EbpfError<BPFError>> {
-    if max_size < num_accounts * size_of::<AccountMeta>() + data_len {
-        return Err(
-            SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded).into(),
-        );
+    if invoke_context
+        .get_bpf_compute_budget()
+        .max_cpi_instruction_size
+        < num_accounts * size_of::<AccountMeta>() + data_len
+    {
+        return Err(SyscallError::InstructionTooLarge.into());
     }
     Ok(())
 }
 
+<<<<<<< HEAD
+=======
+fn check_account_infos(
+    len: usize,
+    invoke_context: &Ref<&mut dyn InvokeContext>,
+) -> Result<(), EbpfError<BPFError>> {
+    if len * size_of::<Pubkey>()
+        > invoke_context
+            .get_bpf_compute_budget()
+            .max_cpi_instruction_size
+        && invoke_context.is_feature_active(&use_loaded_program_accounts::id())
+    {
+        // Cap the number of account_infos a caller can pass to approximate
+        // maximum that accounts that could be passed in an instruction
+        return Err(SyscallError::TooManyAccounts.into());
+    };
+    Ok(())
+}
+
+>>>>>>> 0b1015f7d... Richer runtime failure logging (#14875)
 fn check_authorized_program(
     program_id: &Pubkey,
     instruction_data: &[u8],
@@ -1288,11 +1403,49 @@ fn check_authorized_program(
         || (bpf_loader_upgradeable::check_id(program_id)
             && !bpf_loader_upgradeable::is_upgrade_instruction(instruction_data))
     {
-        return Err(SyscallError::InstructionError(InstructionError::UnsupportedProgramId).into());
+        return Err(SyscallError::ProgramNotSupported(*program_id).into());
     }
     Ok(())
 }
 
+<<<<<<< HEAD
+=======
+fn get_upgradeable_executable(
+    callee_program_id: &Pubkey,
+    program_account: &RefCell<Account>,
+    invoke_context: &Ref<&mut dyn InvokeContext>,
+) -> Result<Option<(Pubkey, RefCell<Account>)>, EbpfError<BPFError>> {
+    if program_account.borrow().owner == bpf_loader_upgradeable::id() {
+        match program_account.borrow().state() {
+            Ok(UpgradeableLoaderState::Program {
+                programdata_address,
+            }) => {
+                if let Some(account) = invoke_context.get_account(&programdata_address) {
+                    Ok(Some((programdata_address, account)))
+                } else {
+                    ic_msg!(
+                        invoke_context,
+                        "Unknown upgradeable programdata account {:?}",
+                        programdata_address,
+                    );
+                    Err(SyscallError::InstructionError(InstructionError::MissingAccount).into())
+                }
+            }
+            _ => {
+                ic_msg!(
+                    invoke_context,
+                    "Invalid upgradeable program account {:?}",
+                    callee_program_id,
+                );
+                Err(SyscallError::InstructionError(InstructionError::InvalidAccountData).into())
+            }
+        }
+    } else {
+        Ok(None)
+    }
+}
+
+>>>>>>> 0b1015f7d... Richer runtime failure logging (#14875)
 /// Call process instruction, common to both Rust and C
 fn call<'a>(
     syscall: &mut dyn SyscallInvokeSigned<'a>,
@@ -1352,6 +1505,7 @@ fn call<'a>(
 
     // Process instruction
 
+<<<<<<< HEAD
     invoke_context.record_instruction(&instruction);
 
     let program_account = if use_loaded_program_accounts {
@@ -1389,6 +1543,64 @@ fn call<'a>(
             }
         } else {
             return Err(SyscallError::InstructionError(InstructionError::MissingAccount).into());
+=======
+        let instruction = syscall.translate_instruction(instruction_addr, &memory_mapping)?;
+        let signers = syscall.translate_signers(
+            caller_program_id,
+            signers_seeds_addr,
+            signers_seeds_len,
+            memory_mapping,
+        )?;
+        let keyed_account_refs = syscall
+            .get_callers_keyed_accounts()
+            .iter()
+            .collect::<Vec<&KeyedAccount>>();
+        let (message, callee_program_id, callee_program_id_index) =
+            MessageProcessor::create_message(
+                &instruction,
+                &keyed_account_refs,
+                &signers,
+                &invoke_context,
+            )
+            .map_err(SyscallError::InstructionError)?;
+        let caller_privileges = message
+            .account_keys
+            .iter()
+            .map(|key| {
+                if let Some(keyed_account) = keyed_account_refs
+                    .iter()
+                    .find(|keyed_account| key == keyed_account.unsigned_key())
+                {
+                    keyed_account.is_writable()
+                } else {
+                    false
+                }
+            })
+            .collect::<Vec<bool>>();
+        if invoke_context.is_feature_active(&limit_cpi_loader_invoke::id()) {
+            check_authorized_program(&callee_program_id, &instruction.data)?;
+        }
+        let (accounts, account_refs) = syscall.translate_accounts(
+            &message.account_keys,
+            callee_program_id_index,
+            account_infos_addr,
+            account_infos_len,
+            memory_mapping,
+        )?;
+
+        // Construct executables
+
+        let program_account = (**accounts.get(callee_program_id_index).ok_or_else(|| {
+            ic_msg!(invoke_context, "Unknown program {:?}", callee_program_id,);
+            SyscallError::InstructionError(InstructionError::MissingAccount)
+        })?)
+        .clone();
+        let programdata_executable =
+            get_upgradeable_executable(&callee_program_id, &program_account, &invoke_context)?;
+        let mut executables = vec![(callee_program_id, program_account)];
+        if let Some(executable) = programdata_executable {
+            executables.push(executable);
+>>>>>>> 0b1015f7d... Richer runtime failure logging (#14875)
         }
     } else {
         None
@@ -1419,27 +1631,49 @@ fn call<'a>(
     }
 
     // Copy results back to caller
-    for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
-        let account = account.borrow();
-        if let Some(account_ref) = account_ref {
-            if message.is_writable(i) && !account.executable {
-                *account_ref.lamports = account.lamports;
-                *account_ref.owner = account.owner;
-                if account_ref.data.len() != account.data.len() {
-                    if !account_ref.data.is_empty() {
-                        // Only support for `CreateAccount` at this time.
-                        // Need a way to limit total realloc size across multiple CPI calls
-                        return Err(SyscallError::InstructionError(
-                            InstructionError::InvalidRealloc,
-                        )
-                        .into());
+    {
+        let invoke_context = syscall.get_context()?;
+        for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
+            let account = account.borrow();
+            if let Some(account_ref) = account_ref {
+                if message.is_writable(i) && !account.executable {
+                    *account_ref.lamports = account.lamports;
+                    *account_ref.owner = account.owner;
+                    if account_ref.data.len() != account.data.len() {
+                        if !account_ref.data.is_empty() {
+                            // Only support for `CreateAccount` at this time.
+                            // Need a way to limit total realloc size across multiple CPI calls
+                            ic_msg!(
+                                invoke_context,
+                                "Inner instructions do not support realloc, only SystemProgram::CreateAccount",
+                            );
+                            return Err(SyscallError::InstructionError(
+                                InstructionError::InvalidRealloc,
+                            )
+                            .into());
+                        }
+                        if account.data.len() > account_ref.data.len() + MAX_PERMITTED_DATA_INCREASE
+                        {
+                            ic_msg!(
+                                invoke_context,
+                                "SystemProgram::CreateAccount data size limited to {:?} in inner instructions",
+                                MAX_PERMITTED_DATA_INCREASE
+                            );
+                            return Err(SyscallError::InstructionError(
+                                InstructionError::InvalidRealloc,
+                            )
+                            .into());
+                        }
+                        let _ = translate(
+                            memory_mapping,
+                            AccessType::Store,
+                            account_ref.vm_data_addr,
+                            account.data.len() as u64,
+                        )?;
+                        *account_ref.ref_to_len_in_vm = account.data.len() as u64;
+                        *account_ref.serialized_len_ptr = account.data.len() as u64;
                     }
-                    if account.data.len() > account_ref.data.len() + MAX_PERMITTED_DATA_INCREASE {
-                        return Err(SyscallError::InstructionError(
-                            InstructionError::InvalidRealloc,
-                        )
-                        .into());
-                    }
+<<<<<<< HEAD
                     let _ = translate!(
                         account_ref.vm_data_addr,
                         account.data.len() as u64,
@@ -1448,10 +1682,12 @@ fn call<'a>(
                     )?;
                     *account_ref.ref_to_len_in_vm = account.data.len() as u64;
                     *account_ref.serialized_len_ptr = account.data.len() as u64;
+=======
+                    account_ref
+                        .data
+                        .clone_from_slice(&account.data[0..account_ref.data.len()]);
+>>>>>>> 0b1015f7d... Richer runtime failure logging (#14875)
                 }
-                account_ref
-                    .data
-                    .clone_from_slice(&account.data[0..account_ref.data.len()]);
             }
         }
     }
