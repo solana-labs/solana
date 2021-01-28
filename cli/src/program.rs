@@ -10,10 +10,12 @@ use bincode::serialize;
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
-use serde_json::{self, json, Value};
 use solana_bpf_loader_program::{bpf_verifier, BPFError, ThisInstructionMeter};
 use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
-use solana_cli_output::display::new_spinner_progress_bar;
+use solana_cli_output::{
+    display::new_spinner_progress_bar, CliProgramAccountType, CliProgramAuthority,
+    CliProgramBuffer, CliProgramId,
+};
 use solana_client::{
     rpc_client::RpcClient, rpc_config::RpcSendTransactionConfig,
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, rpc_response::RpcLeaderSchedule,
@@ -863,7 +865,17 @@ fn process_set_authority(
         )
         .map_err(|e| format!("Setting authority failed: {}", e))?;
 
-    Ok(option_pubkey_to_string("authority", new_authority).to_string())
+    let authority = CliProgramAuthority {
+        authority: new_authority
+            .map(|pubkey| pubkey.to_string())
+            .unwrap_or_else(|| "none".to_string()),
+        account_type: if program_pubkey.is_some() {
+            CliProgramAccountType::Program
+        } else {
+            CliProgramAccountType::Buffer
+        },
+    };
+    Ok(config.output_format.formatted_string(&authority))
 }
 
 fn process_get_authority(
@@ -889,11 +901,13 @@ fn process_get_authority(
                         ..
                     }) = account.state()
                     {
-                        let mut value =
-                            option_pubkey_to_string("authority", upgrade_authority_address);
-                        let map = value.as_object_mut().unwrap();
-                        map.insert("accountType".to_string(), json!("program".to_string()));
-                        Ok(value.to_string())
+                        let authority = CliProgramAuthority {
+                            authority: upgrade_authority_address
+                                .map(|pubkey| pubkey.to_string())
+                                .unwrap_or_else(|| "none".to_string()),
+                            account_type: CliProgramAccountType::Program,
+                        };
+                        Ok(config.output_format.formatted_string(&authority))
                     } else {
                         Err("Invalid associated ProgramData account found for the program".into())
                     }
@@ -905,10 +919,13 @@ fn process_get_authority(
                 }
             } else if let Ok(UpgradeableLoaderState::Buffer { authority_address }) = account.state()
             {
-                let mut value = option_pubkey_to_string("authority", authority_address);
-                let map = value.as_object_mut().unwrap();
-                map.insert("accountType".to_string(), json!("buffer".to_string()));
-                Ok(value.to_string())
+                let authority = CliProgramAuthority {
+                    authority: authority_address
+                        .map(|pubkey| pubkey.to_string())
+                        .unwrap_or_else(|| "none".to_string()),
+                    account_type: CliProgramAccountType::Buffer,
+                };
+                Ok(config.output_format.formatted_string(&authority))
             } else {
                 Err("Not a buffer or program account".into())
             }
@@ -1117,15 +1134,15 @@ fn do_process_program_write_and_deploy(
     )?;
 
     if let Some(program_signers) = program_signers {
-        Ok(json!({
-            "programId": format!("{}", program_signers[0].pubkey()),
-        })
-        .to_string())
+        let program_id = CliProgramId {
+            program_id: program_signers[0].pubkey().to_string(),
+        };
+        Ok(config.output_format.formatted_string(&program_id))
     } else {
-        Ok(json!({
-            "buffer": format!("{}", buffer_pubkey),
-        })
-        .to_string())
+        let buffer = CliProgramBuffer {
+            buffer: buffer_pubkey.to_string(),
+        };
+        Ok(config.output_format.formatted_string(&buffer))
     }
 }
 
@@ -1238,10 +1255,10 @@ fn do_process_program_upgrade(
         Some(&[upgrade_authority]),
     )?;
 
-    Ok(json!({
-        "programId": format!("{}", program_id),
-    })
-    .to_string())
+    let program_id = CliProgramId {
+        program_id: program_id.to_string(),
+    };
+    Ok(config.output_format.formatted_string(&program_id))
 }
 
 fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
@@ -1442,17 +1459,6 @@ fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
     );
 }
 
-fn option_pubkey_to_string(tag: &str, option: Option<Pubkey>) -> Value {
-    match option {
-        Some(pubkey) => json!({
-            tag: format!("{:?}", pubkey),
-        }),
-        None => json!({
-            tag: "none",
-        }),
-    }
-}
-
 fn send_and_confirm_transactions_with_spinner<T: Signers>(
     rpc_client: &RpcClient,
     mut transactions: Vec<Transaction>,
@@ -1623,6 +1629,7 @@ mod tests {
     use super::*;
     use crate::cli::{app, parse_command, process_command};
     use serde_json::Value;
+    use solana_cli_output::OutputFormat;
     use solana_sdk::signature::write_keypair_file;
 
     fn make_tmp_path(name: &str) -> String {
@@ -2240,6 +2247,7 @@ mod tests {
                 allow_excessive_balance: false,
             }),
             signers: vec![&default_keypair],
+            output_format: OutputFormat::JsonCompact,
             ..CliConfig::default()
         };
 
