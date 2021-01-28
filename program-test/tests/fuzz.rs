@@ -68,9 +68,7 @@ async fn run_fuzz_instructions(
         .banks_client
         .process_transaction(transaction)
         .await
-        .unwrap_or_else(|e| {
-            print!("{:?}", e);
-        });
+        .unwrap();
     for keypair in signer_keypairs {
         let account = test_state
             .banks_client
