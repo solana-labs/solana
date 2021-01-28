@@ -12,6 +12,20 @@ pub(super) struct SerializableAccountStorageEntry {
     accounts_current_len: usize,
 }
 
+pub trait SerializableStorage {
+    fn id(&self) -> AppendVecId;
+    fn current_len(&self) -> usize;
+}
+
+impl SerializableStorage for SerializableAccountStorageEntry {
+    fn id(&self) -> AppendVecId {
+        self.id
+    }
+    fn current_len(&self) -> usize {
+        self.accounts_current_len
+    }
+}
+
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
 impl solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableAccountStorageEntry {}
 
@@ -21,12 +35,6 @@ impl From<&AccountStorageEntry> for SerializableAccountStorageEntry {
             id: rhs.append_vec_id(),
             accounts_current_len: rhs.accounts.len(),
         }
-    }
-}
-
-impl From<SerializableAccountStorageEntry> for AccountStorageEntry {
-    fn from(s: SerializableAccountStorageEntry) -> Self {
-        AccountStorageEntry::new_empty_map(s.id, s.accounts_current_len)
     }
 }
 
