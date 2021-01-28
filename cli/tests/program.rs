@@ -14,7 +14,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use std::{fs::File, io::Read, path::PathBuf, str::FromStr, sync::mpsc::channel};
+use std::{fs::File, io::Read, path::PathBuf, str::FromStr};
 
 #[test]
 fn test_cli_program_deploy_non_upgradeable() {
@@ -28,10 +28,7 @@ fn test_cli_program_deploy_non_upgradeable() {
 
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
-
-    let (sender, receiver) = channel();
-    run_local_faucet(mint_keypair, sender, None);
-    let faucet_addr = receiver.recv().unwrap();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -149,10 +146,7 @@ fn test_cli_program_deploy_no_authority() {
 
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
-
-    let (sender, receiver) = channel();
-    run_local_faucet(mint_keypair, sender, None);
-    let faucet_addr = receiver.recv().unwrap();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -237,10 +231,7 @@ fn test_cli_program_deploy_with_authority() {
 
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
-
-    let (sender, receiver) = channel();
-    run_local_faucet(mint_keypair, sender, None);
-    let faucet_addr = receiver.recv().unwrap();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -568,10 +559,7 @@ fn test_cli_program_write_buffer() {
 
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
-
-    let (sender, receiver) = channel();
-    run_local_faucet(mint_keypair, sender, None);
-    let faucet_addr = receiver.recv().unwrap();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -823,10 +811,7 @@ fn test_cli_program_set_buffer_authority() {
 
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
-
-    let (sender, receiver) = channel();
-    run_local_faucet(mint_keypair, sender, None);
-    let faucet_addr = receiver.recv().unwrap();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());

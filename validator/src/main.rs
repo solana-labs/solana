@@ -41,7 +41,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use solana_validator::start_logger;
+use solana_validator::redirect_stderr_to_file;
 use std::{
     collections::HashSet,
     env,
@@ -1809,7 +1809,7 @@ pub fn main() {
         }
     };
     let use_progress_bar = logfile.is_none();
-    let _logger_thread = start_logger(logfile);
+    let _logger_thread = redirect_stderr_to_file(logfile);
 
     info!("{} {}", crate_name!(), solana_version::version!());
     info!("Starting validator with: {:#?}", std::env::args_os());
