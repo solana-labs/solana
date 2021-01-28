@@ -199,9 +199,9 @@ pub fn cluster_info_retransmit() {
     assert!(done);
     let mut p = Packet::default();
     p.meta.size = 10;
-    let peers = c1.retransmit_peers();
+    let peers = c1.tvu_peers();
     let retransmit_peers: Vec<_> = peers.iter().collect();
-    ClusterInfo::retransmit_to(&retransmit_peers, &mut p, None, &tn1, false).unwrap();
+    ClusterInfo::retransmit_to(&retransmit_peers, &mut p, &tn1, false).unwrap();
     let res: Vec<_> = [tn1, tn2, tn3]
         .into_par_iter()
         .map(|s| {

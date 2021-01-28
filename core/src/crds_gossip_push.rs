@@ -129,7 +129,7 @@ impl CrdsGossipPush {
         let mut seed = [0; 32];
         rand::thread_rng().fill(&mut seed[..]);
         let shuffle = weighted_shuffle(
-            staked_peers.iter().map(|(_, stake)| *stake).collect_vec(),
+            &staked_peers.iter().map(|(_, stake)| *stake).collect_vec(),
             seed,
         );
 
@@ -326,7 +326,7 @@ impl CrdsGossipPush {
         let mut seed = [0; 32];
         rng.fill(&mut seed[..]);
         let mut shuffle = weighted_shuffle(
-            options.iter().map(|weighted| weighted.0).collect_vec(),
+            &options.iter().map(|weighted| weighted.0).collect_vec(),
             seed,
         )
         .into_iter();

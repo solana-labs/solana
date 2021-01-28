@@ -7,9 +7,9 @@ use self::{
 };
 use crate::contact_info::ContactInfo;
 use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
-use crate::weighted_shuffle::weighted_best;
+use crate::weighted_shuffle::weighted_shuffle;
 use crate::{
-    cluster_info::{ClusterInfo, ClusterInfoError},
+    cluster_info::{compute_retransmit_peers, ClusterInfo, ClusterInfoError, DATA_PLANE_FANOUT},
     poh_recorder::WorkingBankEntry,
     result::{Error, Result},
 };
@@ -23,7 +23,7 @@ use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
 use solana_runtime::bank::Bank;
 use solana_sdk::timing::timestamp;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
-use solana_streamer::sendmmsg::send_mmsg;
+use solana_streamer::sendmmsg::multicast;
 use std::sync::atomic::AtomicU64;
 use std::{
     collections::HashMap,
@@ -373,7 +373,7 @@ pub fn get_broadcast_peers(
 /// # Remarks
 pub fn broadcast_shreds(
     s: &UdpSocket,
-    shreds: &Arc<Vec<Shred>>,
+    shreds: &[Shred],
     peers_and_stakes: &[(u64, usize)],
     peers: &[ContactInfo],
     last_datapoint_submit: &Arc<AtomicU64>,
@@ -385,25 +385,41 @@ pub fn broadcast_shreds(
         return Ok(());
     }
     let mut shred_select = Measure::start("shred_select");
+    let stakes: Vec<_> = peers_and_stakes.iter().map(|(stake, _)| *stake).collect();
     let packets: Vec<_> = shreds
         .iter()
         .map(|shred| {
-            let broadcast_index = weighted_best(&peers_and_stakes, shred.seed());
-
-            (&shred.payload, &peers[broadcast_index].tvu)
+            let index: Vec<_> = weighted_shuffle(&stakes, shred.seed())
+                .into_iter()
+                .map(|i| peers_and_stakes[i].1)
+                .collect();
+            // Broadcast to the first node.
+            // Forward to the rest of the first layer.
+            let (neighbors, _) = compute_retransmit_peers(DATA_PLANE_FANOUT, 0, &index);
+            let anchor = &peers[neighbors[0]];
+            let forwards = neighbors
+                .into_iter()
+                .skip(1)
+                .map(|i| &peers[i].tvu_forwards)
+                .filter(|addr| ContactInfo::is_valid_address(addr));
+            let addrs: Vec<_> = std::iter::once(&anchor.tvu).chain(forwards).collect();
+            (&shred.payload, addrs)
         })
         .collect();
     shred_select.stop();
     transmit_stats.shred_select += shred_select.as_us();
 
-    let mut sent = 0;
     let mut send_mmsg_time = Measure::start("send_mmsg");
-    while sent < packets.len() {
-        match send_mmsg(s, &packets[sent..]) {
-            Ok(n) => sent += n,
-            Err(e) => {
-                return Err(Error::Io(e));
-            }
+    for (payload, addrs) in packets {
+        let mut sent = 0;
+        while sent < addrs.len() {
+            sent += match multicast(s, payload, &addrs[sent..]) {
+                Ok(count) => count,
+                Err(err) => {
+                    error!("failed to broadcast shred: {}", err);
+                    return Err(Error::from(err));
+                }
+            };
         }
     }
     send_mmsg_time.stop();
