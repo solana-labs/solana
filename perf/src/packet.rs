@@ -24,10 +24,6 @@ impl Packets {
         Self { packets }
     }
 
-    pub fn for_bench() -> Packets {
-        Self::with_capacity(NUM_RCVMMSGS)
-    }
-
     pub fn with_capacity(capacity: usize) -> Self {
         let packets = PinnedVec::with_capacity(capacity);
         Packets { packets }

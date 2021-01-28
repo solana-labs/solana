@@ -13,7 +13,7 @@ use std::time::SystemTime;
 
 fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
     let send = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let mut msgs = Packets::for_bench();
+    let mut msgs = Packets::default();
     msgs.packets.resize(10, Packet::default());
     for w in msgs.packets.iter_mut() {
         w.meta.size = PACKET_DATA_SIZE;
