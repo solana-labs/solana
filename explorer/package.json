@@ -6,6 +6,7 @@
     "@project-serum/serum": "^0.13.19",
     "@react-hook/debounce": "^3.0.0",
     "@sentry/react": "^6.0.1",
+    "@solana/solana-flagged-accounts": "git+https://github.com/solana-labs/solana-flagged-accounts.git",
     "@solana/web3.js": "^0.90.1",
     "@testing-library/jest-dom": "^5.11.9",
     "@testing-library/react": "^11.2.2",
@@ -42,9 +43,9 @@
     "typescript": "^4.1.3"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
+    "start": "npm explore @solana/solana-flagged-accounts -- npm run build && react-scripts start",
+    "build": "npm explore @solana/solana-flagged-accounts -- npm run build && react-scripts build",
+    "test": "npm explore @solana/solana-flagged-accounts -- npm run build && react-scripts test",
     "format": "prettier -c \"**/*.+(js|jsx|ts|tsx|json|css|md)\"",
     "format:fix": "prettier --write \"**/*.+(js|jsx|ts|tsx|json|css|md)\""
   },
