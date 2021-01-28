@@ -161,7 +161,7 @@ fn process_instruction(
             assert!(!accounts[ARGUMENT_INDEX].is_writable);
         }
         VERIFY_PRIVILEGE_ESCALATION => {
-            msg!("Should never get here!");
+            msg!("Verify privilege escalation");
         }
         VERIFY_PRIVILEGE_DEESCALATION => {
             msg!("verify privilege deescalation");
