@@ -27,6 +27,7 @@ use solana_sdk::{
     client::SyncClient,
     clock::{DEFAULT_SLOTS_PER_EPOCH, MAX_PROCESSING_AGE},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
+    feature_set::try_find_program_address_syscall_enabled,
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     message::Message,
@@ -2139,4 +2140,43 @@ fn test_program_upgradeable_locks() {
     } else {
         panic!("no meta");
     }
+}
+
+#[ignore]
+#[cfg(feature = "bpf_rust")]
+#[test]
+fn test_program_bpf_syscall_feature_activation() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new(&genesis_config);
+    bank.deactivate_feature(&try_find_program_address_syscall_enabled::id());
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, id, entrypoint);
+    let bank = Arc::new(bank);
+    let bank_client = BankClient::new_shared(&bank);
+
+    let program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_noop",
+    );
+    let instruction = Instruction::new(program_id, &0u8, vec![]);
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert!(result.is_ok());
+
+    let mut bank = Bank::new_from_parent(&bank, &Pubkey::default(), 1);
+    bank.activate_feature(&try_find_program_address_syscall_enabled::id());
+
+    let bank = Arc::new(bank);
+    let bank_client = BankClient::new_shared(&bank);
+    let instruction = Instruction::new(program_id, &1u8, vec![]);
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    println!("result: {:?}", result);
+    assert!(result.is_ok());
 }
