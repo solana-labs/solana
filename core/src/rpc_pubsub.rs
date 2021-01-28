@@ -781,6 +781,7 @@ mod tests {
             &stake_authority.pubkey(),
             &new_stake_authority,
             StakeAuthorize::Staker,
+            None,
         );
         let message = Message::new(&[ix], Some(&stake_authority.pubkey()));
         let tx = Transaction::new(&[&stake_authority], message, blockhash);

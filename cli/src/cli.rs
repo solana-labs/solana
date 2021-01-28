@@ -260,6 +260,7 @@ pub enum CliCommand {
         nonce_account: Option<Pubkey>,
         nonce_authority: SignerIndex,
         fee_payer: SignerIndex,
+        custodian: Option<SignerIndex>,
     },
     StakeSetLockup {
         stake_account_pubkey: Pubkey,
@@ -1520,11 +1521,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             nonce_account,
             nonce_authority,
             fee_payer,
+            custodian,
         } => process_stake_authorize(
             &rpc_client,
             config,
             &stake_account_pubkey,
             new_authorizations,
+            *custodian,
             *sign_only,
             blockhash_query,
             *nonce_account,
