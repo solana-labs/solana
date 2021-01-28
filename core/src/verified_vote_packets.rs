@@ -82,7 +82,7 @@ mod tests {
             .insert(label1, (2, none_empty_packets));
         verified_vote_packets
             .0
-            .insert(label2, (1, Packets::for_test_or_bench()));
+            .insert(label2, (1, Packets::default()));
 
         // Both updates have timestamps greater than 0, so both should be returned
         let (new_update_version, updates) = verified_vote_packets.get_latest_votes(0);
@@ -110,10 +110,8 @@ mod tests {
         let label1 = CrdsValueLabel::Vote(0, pubkey);
         let label2 = CrdsValueLabel::Vote(1, pubkey);
         let mut update_version = 0;
-        s.send(vec![(label1.clone(), Packets::for_test_or_bench())])
-            .unwrap();
-        s.send(vec![(label2.clone(), Packets::for_test_or_bench())])
-            .unwrap();
+        s.send(vec![(label1.clone(), Packets::default())]).unwrap();
+        s.send(vec![(label2.clone(), Packets::default())]).unwrap();
 
         let data = Packet {
             meta: Meta {
@@ -145,8 +143,7 @@ mod tests {
         );
 
         // Test timestamp for next batch overwrites the original
-        s.send(vec![(label2.clone(), Packets::for_test_or_bench())])
-            .unwrap();
+        s.send(vec![(label2.clone(), Packets::default())]).unwrap();
         verified_vote_packets
             .get_and_process_vote_packets(&r, &mut update_version)
             .unwrap();

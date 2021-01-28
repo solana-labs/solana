@@ -11,7 +11,7 @@ pub const PACKETS_PER_BATCH: usize = 256;
 pub const NUM_RCVMMSGS: usize = 128;
 pub const PACKETS_BATCH_SIZE: usize = PACKETS_PER_BATCH * PACKET_DATA_SIZE;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Packets {
     pub packets: PinnedVec<Packet>,
 }
@@ -24,7 +24,7 @@ impl Packets {
         Self { packets }
     }
 
-    pub fn for_test_or_bench() -> Packets {
+    pub fn for_bench() -> Packets {
         Self::with_capacity(NUM_RCVMMSGS)
     }
 

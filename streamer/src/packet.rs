@@ -86,7 +86,7 @@ mod tests {
         let addr = recv_socket.local_addr().unwrap();
         let send_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let saddr = send_socket.local_addr().unwrap();
-        let mut p = Packets::for_test_or_bench();
+        let mut p = Packets::default();
 
         p.packets.resize(10, Packet::default());
 
@@ -109,7 +109,7 @@ mod tests {
     #[test]
     pub fn debug_trait() {
         write!(io::sink(), "{:?}", Packet::default()).unwrap();
-        write!(io::sink(), "{:?}", Packets::for_test_or_bench()).unwrap();
+        write!(io::sink(), "{:?}", Packets::default()).unwrap();
     }
 
     #[test]
@@ -135,13 +135,13 @@ mod tests {
         let recv_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let addr = recv_socket.local_addr().unwrap();
         let send_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let mut p = Packets::for_test_or_bench();
+        let mut p = Packets::default();
         p.packets.resize(PACKETS_PER_BATCH, Packet::default());
 
         // Should only get PACKETS_PER_BATCH packets per iteration even
         // if a lot more were sent, and regardless of packet size
         for _ in 0..2 * PACKETS_PER_BATCH {
-            let mut p = Packets::for_test_or_bench();
+            let mut p = Packets::default();
             p.packets.resize(1, Packet::default());
             for m in p.packets.iter_mut() {
                 m.meta.set_addr(&addr);

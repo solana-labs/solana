@@ -187,7 +187,7 @@ mod test {
     #[test]
     fn streamer_debug() {
         write!(io::sink(), "{:?}", Packet::default()).unwrap();
-        write!(io::sink(), "{:?}", Packets::for_test_or_bench()).unwrap();
+        write!(io::sink(), "{:?}", Packets::default()).unwrap();
     }
     #[test]
     fn streamer_send_test() {
@@ -202,7 +202,7 @@ mod test {
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);
-            let mut msgs = Packets::for_test_or_bench();
+            let mut msgs = Packets::default();
             for i in 0..5 {
                 let mut b = Packet::default();
                 {
