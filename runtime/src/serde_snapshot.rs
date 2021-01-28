@@ -9,6 +9,7 @@ use {
         epoch_stakes::EpochStakes,
         message_processor::MessageProcessor,
         rent_collector::RentCollector,
+        serde_snapshot::future::SerializableStorage,
         stakes::Stakes,
     },
     bincode,
@@ -70,7 +71,7 @@ trait TypeContext<'a> {
     type SerializableAccountStorageEntry: Serialize
         + DeserializeOwned
         + From<&'a AccountStorageEntry>
-        + Into<AccountStorageEntry>;
+        + SerializableStorage;
 
     fn serialize_bank_and_storage<S: serde::ser::Serializer>(
         serializer: S,
@@ -240,7 +241,7 @@ fn reconstruct_bank_from_fields<E, P>(
     caching_enabled: bool,
 ) -> Result<Bank, Error>
 where
-    E: Into<AccountStorageEntry>,
+    E: SerializableStorage,
     P: AsRef<Path>,
 {
     let mut accounts_db = reconstruct_accountsdb_from_fields(
@@ -274,7 +275,7 @@ fn reconstruct_accountsdb_from_fields<E, P>(
     caching_enabled: bool,
 ) -> Result<AccountsDB, Error>
 where
-    E: Into<AccountStorageEntry>,
+    E: SerializableStorage,
     P: AsRef<Path>,
 {
     let mut accounts_db = AccountsDB::new_with_config(
@@ -284,20 +285,6 @@ where
         caching_enabled,
     );
     let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
-
-    // convert to two level map of slot -> id -> account storage entry
-    let storage = {
-        let mut map = HashMap::new();
-        for (slot, entries) in storage.into_iter() {
-            let sub_map = map.entry(slot).or_insert_with(HashMap::new);
-            for entry in entries.into_iter() {
-                let entry: AccountStorageEntry = entry.into();
-                entry.slot.store(slot, Ordering::Relaxed);
-                sub_map.insert(entry.append_vec_id(), Arc::new(entry));
-            }
-        }
-        map
-    };
 
     // Ensure all account paths exist
     for path in &accounts_db.paths {
@@ -320,14 +307,14 @@ where
             remaining_slots_to_process -= 1;
 
             let mut new_slot_storage = HashMap::new();
-            for (id, storage_entry) in slot_storage.drain() {
+            for storage_entry in slot_storage.drain(..) {
                 let path_index = thread_rng().gen_range(0, accounts_db.paths.len());
                 let local_dir = &accounts_db.paths[path_index];
 
                 // Move the corresponding AppendVec from the snapshot into the directory pointed
                 // at by `local_dir`
                 let append_vec_relative_path =
-                    AppendVec::new_relative_path(slot, storage_entry.append_vec_id());
+                    AppendVec::new_relative_path(slot, storage_entry.id());
                 let append_vec_abs_path = stream_append_vecs_path
                     .as_ref()
                     .join(&append_vec_relative_path);
@@ -342,9 +329,17 @@ where
 
                 // Notify the AppendVec of the new file location
                 let local_path = local_dir.join(append_vec_relative_path);
-                let mut u_storage_entry = Arc::try_unwrap(storage_entry).unwrap();
-                u_storage_entry.set_file(local_path)?;
-                new_slot_storage.insert(id, Arc::new(u_storage_entry));
+
+                let (accounts, num_accounts) =
+                    AppendVec::new_from_file(&local_path, storage_entry.current_len())?;
+                let u_storage_entry = AccountStorageEntry::new_existing(
+                    slot,
+                    storage_entry.id(),
+                    accounts,
+                    num_accounts,
+                );
+
+                new_slot_storage.insert(storage_entry.id(), Arc::new(u_storage_entry));
             }
             Ok((slot, new_slot_storage))
         })
