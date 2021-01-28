@@ -4655,6 +4655,20 @@ impl Bank {
         false
     }
 
+    pub fn deactivate_feature(&mut self, id: &Pubkey) {
+        let mut feature_set = Arc::make_mut(&mut self.feature_set).clone();
+        feature_set.active.remove(&id);
+        feature_set.inactive.insert(*id);
+        self.feature_set = Arc::new(feature_set);
+    }
+
+    pub fn activate_feature(&mut self, id: &Pubkey) {
+        let mut feature_set = Arc::make_mut(&mut self.feature_set).clone();
+        feature_set.inactive.remove(id);
+        feature_set.active.insert(*id, 0);
+        self.feature_set = Arc::new(feature_set);
+    }
+
     // This is called from snapshot restore AND for each epoch boundary
     // The entire code path herein must be idempotent
     fn apply_feature_activations(&mut self, init_finish_or_warp: bool) {
