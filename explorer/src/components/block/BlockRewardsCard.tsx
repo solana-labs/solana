@@ -3,7 +3,11 @@ import { lamportsToSolString } from "utils";
 import { ConfirmedBlock, PublicKey } from "@solana/web3.js";
 import { Address } from "components/common/Address";
 
+const PAGE_SIZE = 10;
+
 export function BlockRewardsCard({ block }: { block: ConfirmedBlock }) {
+  const [rewardsDisplayed, setRewardsDisplayed] = React.useState(PAGE_SIZE);
+
   if (block.rewards.length < 1) {
     return null;
   }
@@ -26,7 +30,11 @@ export function BlockRewardsCard({ block }: { block: ConfirmedBlock }) {
             </tr>
           </thead>
           <tbody>
-            {block.rewards.map((reward) => {
+            {block.rewards.map((reward, index) => {
+              if (index >= rewardsDisplayed - 1) {
+                return null;
+              }
+
               let percentChange;
               if (reward.postBalance !== null && reward.postBalance !== 0) {
                 percentChange = (
@@ -54,6 +62,19 @@ export function BlockRewardsCard({ block }: { block: ConfirmedBlock }) {
           </tbody>
         </table>
       </div>
+
+      {block.rewards.length > rewardsDisplayed && (
+        <div className="card-footer">
+          <button
+            className="btn btn-primary w-100"
+            onClick={() =>
+              setRewardsDisplayed((displayed) => displayed + PAGE_SIZE)
+            }
+          >
+            Load More
+          </button>
+        </div>
+      )}
     </div>
   );
 }
