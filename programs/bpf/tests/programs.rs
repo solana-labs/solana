@@ -916,13 +916,13 @@ fn test_program_bpf_invoke_sanity() {
 
         do_invoke_failure_test_local(
             TEST_INSTRUCTION_DATA_TOO_LARGE,
-            TransactionError::InstructionError(0, InstructionError::ComputationalBudgetExceeded),
+            TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete),
             &[],
         );
 
         do_invoke_failure_test_local(
             TEST_INSTRUCTION_META_TOO_LARGE,
-            TransactionError::InstructionError(0, InstructionError::ComputationalBudgetExceeded),
+            TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete),
             &[],
         );
 

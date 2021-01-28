@@ -23,6 +23,7 @@ use solana_sdk::{
         use_loaded_program_accounts,
     },
     hash::{Hasher, HASH_BYTES},
+    ic_msg,
     instruction::{AccountMeta, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     native_loader,
@@ -59,14 +60,18 @@ pub enum SyscallError {
     MalformedSignerSeed(Utf8Error, Vec<u8>),
     #[error("Could not create program address with signer seeds: {0}")]
     BadSeeds(PubkeyError),
-    #[error("Program id is not supported by cross-program invocations")]
-    ProgramNotSupported,
+    #[error("Program {0} supported by inner instructions")]
+    ProgramNotSupported(Pubkey),
     #[error("{0}")]
     InstructionError(InstructionError),
     #[error("Unaligned pointer")]
     UnalignedPointer,
     #[error("Too many signers")]
     TooManySigners,
+    #[error("Instruction passed to inner instruction is too large")]
+    InstructionTooLarge,
+    #[error("Too many accounts passed to inner instruction")]
+    TooManyAccounts,
 }
 impl From<SyscallError> for EbpfError<BPFError> {
     fn from(error: SyscallError) -> Self {
@@ -898,10 +903,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
         check_instruction_size(
             ix.accounts.len(),
             ix.data.len(),
-            self.invoke_context
-                .borrow()
-                .get_bpf_compute_budget()
-                .max_cpi_instruction_size,
+            &self.invoke_context.borrow(),
         )?;
 
         let accounts = translate_slice::<AccountMeta>(
@@ -1186,10 +1188,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
         check_instruction_size(
             ix_c.accounts_len,
             ix_c.data_len,
-            self.invoke_context
-                .borrow()
-                .get_bpf_compute_budget()
-                .max_cpi_instruction_size,
+            &self.invoke_context.borrow(),
         )?;
         let program_id =
             translate_type::<Pubkey>(memory_mapping, ix_c.program_id_addr, self.loader_id)?;
@@ -1408,12 +1407,14 @@ where
     let mut accounts = Vec::with_capacity(account_keys.len());
     let mut refs = Vec::with_capacity(account_keys.len());
     for (i, ref account_key) in account_keys.iter().enumerate() {
-        let account =
-            invoke_context
-                .get_account(&account_key)
-                .ok_or(SyscallError::InstructionError(
-                    InstructionError::MissingAccount,
-                ))?;
+        let account = invoke_context.get_account(&account_key).ok_or_else(|| {
+            ic_msg!(
+                invoke_context,
+                "Instruction references an unknown account {:?}",
+                account_key
+            );
+            SyscallError::InstructionError(InstructionError::MissingAccount)
+        })?;
 
         if (invoke_context.is_feature_active(&use_loaded_program_accounts::id())
             && i == program_account_index)
@@ -1439,6 +1440,11 @@ where
             accounts.push(account);
             refs.push(account_ref);
         } else {
+            ic_msg!(
+                invoke_context,
+                "Instruction references an unknown account {:?}",
+                account_key
+            );
             return Err(SyscallError::InstructionError(InstructionError::MissingAccount).into());
         }
     }
@@ -1449,12 +1455,14 @@ where
 fn check_instruction_size(
     num_accounts: usize,
     data_len: usize,
-    max_size: usize,
+    invoke_context: &Ref<&mut dyn InvokeContext>,
 ) -> Result<(), EbpfError<BPFError>> {
-    if max_size < num_accounts * size_of::<AccountMeta>() + data_len {
-        return Err(
-            SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded).into(),
-        );
+    if invoke_context
+        .get_bpf_compute_budget()
+        .max_cpi_instruction_size
+        < num_accounts * size_of::<AccountMeta>() + data_len
+    {
+        return Err(SyscallError::InstructionTooLarge.into());
     }
     Ok(())
 }
@@ -1471,9 +1479,7 @@ fn check_account_infos(
     {
         // Cap the number of account_infos a caller can pass to approximate
         // maximum that accounts that could be passed in an instruction
-        return Err(
-            SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded).into(),
-        );
+        return Err(SyscallError::TooManyAccounts.into());
     };
     Ok(())
 }
@@ -1488,30 +1494,40 @@ fn check_authorized_program(
         || (bpf_loader_upgradeable::check_id(program_id)
             && !bpf_loader_upgradeable::is_upgrade_instruction(instruction_data))
     {
-        return Err(SyscallError::InstructionError(InstructionError::UnsupportedProgramId).into());
+        return Err(SyscallError::ProgramNotSupported(*program_id).into());
     }
     Ok(())
 }
 
 fn get_upgradeable_executable(
+    callee_program_id: &Pubkey,
     program_account: &RefCell<Account>,
     invoke_context: &Ref<&mut dyn InvokeContext>,
 ) -> Result<Option<(Pubkey, RefCell<Account>)>, EbpfError<BPFError>> {
     if program_account.borrow().owner == bpf_loader_upgradeable::id() {
-        if let UpgradeableLoaderState::Program {
-            programdata_address,
-        } = program_account
-            .borrow()
-            .state()
-            .map_err(SyscallError::InstructionError)?
-        {
-            if let Some(account) = invoke_context.get_account(&programdata_address) {
-                Ok(Some((programdata_address, account)))
-            } else {
-                Err(SyscallError::InstructionError(InstructionError::MissingAccount).into())
+        match program_account.borrow().state() {
+            Ok(UpgradeableLoaderState::Program {
+                programdata_address,
+            }) => {
+                if let Some(account) = invoke_context.get_account(&programdata_address) {
+                    Ok(Some((programdata_address, account)))
+                } else {
+                    ic_msg!(
+                        invoke_context,
+                        "Unknown upgradeable programdata account {:?}",
+                        programdata_address,
+                    );
+                    Err(SyscallError::InstructionError(InstructionError::MissingAccount).into())
+                }
             }
-        } else {
-            Err(SyscallError::InstructionError(InstructionError::MissingAccount).into())
+            _ => {
+                ic_msg!(
+                    invoke_context,
+                    "Invalid upgradeable program account {:?}",
+                    callee_program_id,
+                );
+                Err(SyscallError::InstructionError(InstructionError::InvalidAccountData).into())
+            }
         }
     } else {
         Ok(None)
@@ -1560,8 +1576,13 @@ fn call<'a>(
             .iter()
             .collect::<Vec<&KeyedAccount>>();
         let (message, callee_program_id, callee_program_id_index) =
-            MessageProcessor::create_message(&instruction, &keyed_account_refs, &signers)
-                .map_err(SyscallError::InstructionError)?;
+            MessageProcessor::create_message(
+                &instruction,
+                &keyed_account_refs,
+                &signers,
+                &invoke_context,
+            )
+            .map_err(SyscallError::InstructionError)?;
         let caller_privileges = message
             .account_keys
             .iter()
@@ -1589,14 +1610,13 @@ fn call<'a>(
 
         // Construct executables
 
-        let program_account =
-            (**accounts
-                .get(callee_program_id_index)
-                .ok_or(SyscallError::InstructionError(
-                    InstructionError::MissingAccount,
-                ))?)
-            .clone();
-        let programdata_executable = get_upgradeable_executable(&program_account, &invoke_context)?;
+        let program_account = (**accounts.get(callee_program_id_index).ok_or_else(|| {
+            ic_msg!(invoke_context, "Unknown program {:?}", callee_program_id,);
+            SyscallError::InstructionError(InstructionError::MissingAccount)
+        })?)
+        .clone();
+        let programdata_executable =
+            get_upgradeable_executable(&callee_program_id, &program_account, &invoke_context)?;
         let mut executables = vec![(callee_program_id, program_account)];
         if let Some(executable) = programdata_executable {
             executables.push(executable);
@@ -1640,39 +1660,52 @@ fn call<'a>(
     }
 
     // Copy results back to caller
-    for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
-        let account = account.borrow();
-        if let Some(account_ref) = account_ref {
-            if message.is_writable(i) && !account.executable {
-                *account_ref.lamports = account.lamports;
-                *account_ref.owner = account.owner;
-                if account_ref.data.len() != account.data.len() {
-                    if !account_ref.data.is_empty() {
-                        // Only support for `CreateAccount` at this time.
-                        // Need a way to limit total realloc size across multiple CPI calls
-                        return Err(SyscallError::InstructionError(
-                            InstructionError::InvalidRealloc,
-                        )
-                        .into());
+    {
+        let invoke_context = syscall.get_context()?;
+        for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
+            let account = account.borrow();
+            if let Some(account_ref) = account_ref {
+                if message.is_writable(i) && !account.executable {
+                    *account_ref.lamports = account.lamports;
+                    *account_ref.owner = account.owner;
+                    if account_ref.data.len() != account.data.len() {
+                        if !account_ref.data.is_empty() {
+                            // Only support for `CreateAccount` at this time.
+                            // Need a way to limit total realloc size across multiple CPI calls
+                            ic_msg!(
+                                invoke_context,
+                                "Inner instructions do not support realloc, only SystemProgram::CreateAccount",
+                            );
+                            return Err(SyscallError::InstructionError(
+                                InstructionError::InvalidRealloc,
+                            )
+                            .into());
+                        }
+                        if account.data.len() > account_ref.data.len() + MAX_PERMITTED_DATA_INCREASE
+                        {
+                            ic_msg!(
+                                invoke_context,
+                                "SystemProgram::CreateAccount data size limited to {:?} in inner instructions",
+                                MAX_PERMITTED_DATA_INCREASE
+                            );
+                            return Err(SyscallError::InstructionError(
+                                InstructionError::InvalidRealloc,
+                            )
+                            .into());
+                        }
+                        let _ = translate(
+                            memory_mapping,
+                            AccessType::Store,
+                            account_ref.vm_data_addr,
+                            account.data.len() as u64,
+                        )?;
+                        *account_ref.ref_to_len_in_vm = account.data.len() as u64;
+                        *account_ref.serialized_len_ptr = account.data.len() as u64;
                     }
-                    if account.data.len() > account_ref.data.len() + MAX_PERMITTED_DATA_INCREASE {
-                        return Err(SyscallError::InstructionError(
-                            InstructionError::InvalidRealloc,
-                        )
-                        .into());
-                    }
-                    let _ = translate(
-                        memory_mapping,
-                        AccessType::Store,
-                        account_ref.vm_data_addr,
-                        account.data.len() as u64,
-                    )?;
-                    *account_ref.ref_to_len_in_vm = account.data.len() as u64;
-                    *account_ref.serialized_len_ptr = account.data.len() as u64;
+                    account_ref
+                        .data
+                        .clone_from_slice(&account.data[0..account_ref.data.len()]);
                 }
-                account_ref
-                    .data
-                    .clone_from_slice(&account.data[0..account_ref.data.len()]);
             }
         }
     }
