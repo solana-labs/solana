@@ -579,11 +579,7 @@ impl ProgramTest {
         }
     }
 
-    /// Start the test client
-    ///
-    /// Returns a `BanksClient` interface into the test environment as well as a payer `Keypair`
-    /// with SOL for sending transactions
-    pub async fn start(self) -> ProgramTestState {
+    fn setup_bank(&self) -> (Arc<RwLock<BankForks>>, Keypair, Hash, GenesisConfig) {
         {
             use std::sync::Once;
             static ONCE: Once = Once::new();
@@ -624,7 +620,7 @@ impl ProgramTest {
         }
 
         // User-supplied additional builtins
-        for builtin in self.builtins {
+        for builtin in self.builtins.iter() {
             bank.add_builtin(
                 &builtin.name,
                 builtin.id,
@@ -632,7 +628,7 @@ impl ProgramTest {
             );
         }
 
-        for (address, account) in self.accounts {
+        for (address, account) in self.accounts.iter() {
             if bank.get_account(&address).is_some() {
                 info!("Overriding account at {}", address);
             }
@@ -645,16 +641,49 @@ impl ProgramTest {
                 ..BpfComputeBudget::default()
             }));
         }
-
         let bank = setup_fee_calculator(bank);
         let last_blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+
+        (bank_forks, payer, last_blockhash, genesis_config)
+    }
+
+    pub async fn start(self) -> (BanksClient, Keypair, Hash) {
+        let (bank_forks, payer, last_blockhash, genesis_config) = self.setup_bank();
         let transport = start_local_server(&bank_forks).await;
         let banks_client = start_client(transport)
             .await
             .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
 
-        ProgramTestState::new(
+        // Run a simulated PohService to provide the client with new blockhashes.  New blockhashes
+        // are required when sending multiple otherwise identical transactions in series from a
+        // test
+        tokio::spawn(async move {
+            loop {
+                bank_forks
+                    .read()
+                    .unwrap()
+                    .working_bank()
+                    .register_tick(&Hash::new_unique());
+                tokio::time::sleep(genesis_config.poh_config.target_tick_duration).await;
+            }
+        });
+
+        (banks_client, payer, last_blockhash)
+    }
+
+    /// Start the test client
+    ///
+    /// Returns a `BanksClient` interface into the test environment as well as a payer `Keypair`
+    /// with SOL for sending transactions
+    pub async fn start_with_context(self) -> ProgramTestContext {
+        let (bank_forks, payer, last_blockhash, genesis_config) = self.setup_bank();
+        let transport = start_local_server(&bank_forks).await;
+        let banks_client = start_client(transport)
+            .await
+            .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
+
+        ProgramTestContext::new(
             bank_forks,
             banks_client,
             payer,
@@ -705,24 +734,21 @@ struct DroppableTask<T>(Sender<()>, JoinHandle<T>);
 
 impl<T> Drop for DroppableTask<T> {
     fn drop(&mut self) {
-        match self.0.try_send(()) {
-            Ok(_) => {}
-            Err(e) => {
-                debug!("Error cancelling task: {:?}", e);
-            }
+        if let Err(e) = self.0.try_send(()) {
+            debug!("Error cancelling task: {:?}", e);
         }
     }
 }
 
-pub struct ProgramTestState {
+pub struct ProgramTestContext {
     pub banks_client: BanksClient,
     pub payer: Keypair,
     pub last_blockhash: Hash,
     _bank_task: DroppableTask<()>,
 }
 
-impl ProgramTestState {
-    pub fn new(
+impl ProgramTestContext {
+    fn new(
         bank_forks: Arc<RwLock<BankForks>>,
         banks_client: BanksClient,
         payer: Keypair,
