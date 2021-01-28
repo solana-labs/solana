@@ -6,16 +6,13 @@ use solana_sdk::{
     commitment_config::CommitmentConfig,
     signature::{Keypair, Signer},
 };
-use std::sync::mpsc::channel;
 
 #[test]
 fn test_cli_request_airdrop() {
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
 
-    let (sender, receiver) = channel();
-    run_local_faucet(mint_keypair, sender, None);
-    let faucet_addr = receiver.recv().unwrap();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
 
     let mut bob_config = CliConfig::recent_for_tests();
     bob_config.json_rpc_url = test_validator.rpc_url();

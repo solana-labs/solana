@@ -17,17 +17,13 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, NullSigner, Signer},
 };
-use std::sync::mpsc::channel;
 
 #[test]
 fn test_transfer() {
     solana_logger::setup();
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_custom_fees(mint_keypair.pubkey(), 1);
-
-    let (sender, receiver) = channel();
-    run_local_faucet(mint_keypair, sender, None);
-    let faucet_addr = receiver.recv().unwrap();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -242,10 +238,7 @@ fn test_transfer_multisession_signing() {
     solana_logger::setup();
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_custom_fees(mint_keypair.pubkey(), 1);
-
-    let (sender, receiver) = channel();
-    run_local_faucet(mint_keypair, sender, None);
-    let faucet_addr = receiver.recv().unwrap();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
 
     let to_pubkey = Pubkey::new(&[1u8; 32]);
     let offline_from_signer = keypair_from_seed(&[2u8; 32]).unwrap();
@@ -359,10 +352,7 @@ fn test_transfer_all() {
     solana_logger::setup();
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_custom_fees(mint_keypair.pubkey(), 1);
-
-    let (sender, receiver) = channel();
-    run_local_faucet(mint_keypair, sender, None);
-    let faucet_addr = receiver.recv().unwrap();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());

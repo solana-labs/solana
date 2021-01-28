@@ -15,15 +15,12 @@ use solana_sdk::{
     signature::{Keypair, Signer},
 };
 use solana_vote_program::vote_state::{VoteAuthorize, VoteState, VoteStateVersions};
-use std::sync::mpsc::channel;
 
 #[test]
 fn test_vote_authorize_and_withdraw() {
     let mint_keypair = Keypair::new();
     let test_validator = TestValidator::with_no_fees(mint_keypair.pubkey());
-    let (sender, receiver) = channel();
-    run_local_faucet(mint_keypair, sender, None);
-    let faucet_addr = receiver.recv().unwrap();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
