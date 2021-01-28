@@ -476,28 +476,6 @@ fn test_cli_program_deploy_with_authority() {
         program_data[..]
     );
 
-<<<<<<< HEAD
-=======
-    // Get upgrade authority
-    config.signers = vec![&keypair];
-    config.command = CliCommand::Program(ProgramCliCommand::GetAuthority {
-        account_pubkey: Some(program_pubkey),
-    });
-    let response = process_command(&config);
-    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
-    let authority_pubkey_str = json
-        .as_object()
-        .unwrap()
-        .get("authority")
-        .unwrap()
-        .as_str()
-        .unwrap();
-    assert_eq!(
-        new_upgrade_authority.pubkey(),
-        Pubkey::from_str(&authority_pubkey_str).unwrap()
-    );
-
->>>>>>> 7e2e0d4a8... Manually camelCase solana program json (#14907)
     // Set no authority
     config.signers = vec![&keypair, &new_upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::SetUpgradeAuthority {
@@ -569,26 +547,8 @@ fn test_cli_program_deploy_with_authority() {
         panic!("not a buffer account");
     }
 
-<<<<<<< HEAD
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
-=======
-    // Get buffer authority
-    config.signers = vec![&keypair];
-    config.command = CliCommand::Program(ProgramCliCommand::GetAuthority {
-        account_pubkey: Some(program_pubkey),
-    });
-    let response = process_command(&config);
-    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
-    let authority_pubkey_str = json
-        .as_object()
-        .unwrap()
-        .get("authority")
-        .unwrap()
-        .as_str()
-        .unwrap();
-    assert_eq!("none", authority_pubkey_str);
->>>>>>> 7e2e0d4a8... Manually camelCase solana program json (#14907)
 }
 
 #[test]
@@ -713,28 +673,6 @@ fn test_cli_program_write_buffer() {
         program_data[..]
     );
 
-<<<<<<< HEAD
-=======
-    // Get buffer authority
-    config.signers = vec![&keypair];
-    config.command = CliCommand::Program(ProgramCliCommand::GetAuthority {
-        account_pubkey: Some(buffer_keypair.pubkey()),
-    });
-    let response = process_command(&config);
-    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
-    let authority_pubkey_str = json
-        .as_object()
-        .unwrap()
-        .get("authority")
-        .unwrap()
-        .as_str()
-        .unwrap();
-    assert_eq!(
-        keypair.pubkey(),
-        Pubkey::from_str(&authority_pubkey_str).unwrap()
-    );
-
->>>>>>> 7e2e0d4a8... Manually camelCase solana program json (#14907)
     // Specify buffer authority
     let buffer_keypair = Keypair::new();
     let authority_keypair = Keypair::new();
@@ -837,26 +775,8 @@ fn test_cli_program_write_buffer() {
         panic!("not a buffer account");
     }
 
-<<<<<<< HEAD
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
-=======
-    // Get buffer authority
-    config.signers = vec![&keypair];
-    config.command = CliCommand::Program(ProgramCliCommand::GetAuthority {
-        account_pubkey: Some(buffer_pubkey),
-    });
-    let response = process_command(&config);
-    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
-    let authority_pubkey_str = json
-        .as_object()
-        .unwrap()
-        .get("authority")
-        .unwrap()
-        .as_str()
-        .unwrap();
-    assert_eq!("none", authority_pubkey_str);
->>>>>>> 7e2e0d4a8... Manually camelCase solana program json (#14907)
 }
 
 #[test]
