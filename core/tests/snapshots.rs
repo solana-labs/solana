@@ -238,6 +238,7 @@ mod tests {
             last_bank.get_snapshot_storages(),
             ArchiveFormat::TarBzip2,
             snapshot_version,
+            None,
         )
         .unwrap();
         let snapshot_package = snapshot_utils::process_accounts_package_pre(snapshot_package);
@@ -359,6 +360,7 @@ mod tests {
                 &snapshot_package_output_path,
                 snapshot_config.snapshot_version,
                 &snapshot_config.archive_format,
+                None,
             )
             .unwrap();
 

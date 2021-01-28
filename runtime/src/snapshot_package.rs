@@ -23,6 +23,8 @@ pub struct AccountsPackagePre {
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
     pub snapshot_output_dir: PathBuf,
+    pub expected_capitalization: u64,
+    pub hash_for_testing: Option<Hash>,
 }
 
 impl AccountsPackagePre {
@@ -35,6 +37,8 @@ impl AccountsPackagePre {
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
         snapshot_output_dir: PathBuf,
+        expected_capitalization: u64,
+        hash_for_testing: Option<Hash>,
     ) -> Self {
         Self {
             slot,
@@ -45,6 +49,8 @@ impl AccountsPackagePre {
             archive_format,
             snapshot_version,
             snapshot_output_dir,
+            expected_capitalization,
+            hash_for_testing,
         }
     }
 }

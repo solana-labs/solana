@@ -147,6 +147,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_storages: SnapshotStorages,
     archive_format: ArchiveFormat,
     snapshot_version: SnapshotVersion,
+    hash_for_testing: Option<Hash>,
 ) -> Result<AccountsPackagePre> {
     // Hard link all the snapshots we need for this package
     let snapshot_tmpdir = tempfile::Builder::new()
@@ -181,6 +182,8 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         archive_format,
         snapshot_version,
         snapshot_package_output_path.as_ref().to_path_buf(),
+        bank.capitalization(),
+        hash_for_testing,
     );
 
     Ok(package)
@@ -882,6 +885,7 @@ pub fn snapshot_bank(
     snapshot_package_output_path: &Path,
     snapshot_version: SnapshotVersion,
     archive_format: &ArchiveFormat,
+    hash_for_testing: Option<Hash>,
 ) -> Result<()> {
     let storages: Vec<_> = root_bank.get_snapshot_storages();
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
@@ -904,6 +908,7 @@ pub fn snapshot_bank(
         storages,
         *archive_format,
         snapshot_version,
+        hash_for_testing,
     )?;
 
     accounts_package_sender.send(package)?;
@@ -942,6 +947,7 @@ pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
         storages,
         archive_format,
         snapshot_version,
+        None,
     )?;
 
     let package = process_accounts_package_pre(package);
@@ -953,12 +959,17 @@ pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
 pub fn process_accounts_package_pre(accounts_package: AccountsPackagePre) -> AccountsPackage {
     let mut time = Measure::start("hash");
 
-    let hash = AccountsDB::calculate_accounts_hash_using_stores_only(
+    let (hash, lamports) = AccountsDB::calculate_accounts_hash_using_stores_only(
         accounts_package.storages.clone(),
         false,
-    )
-    .0;
+    );
     time.stop();
+
+    assert_eq!(accounts_package.expected_capitalization, lamports);
+
+    if let Some(expected_hash) = accounts_package.hash_for_testing {
+        assert_eq!(expected_hash, hash);
+    };
 
     datapoint_info!(
         "accounts_hash_verifier",
