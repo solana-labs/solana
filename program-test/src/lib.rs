@@ -41,7 +41,7 @@ use {
     tokio::{
         sync::mpsc::{self, Sender},
         task::JoinHandle,
-    }
+    },
 };
 
 // Export types so test clients can limit their solana crate dependencies
@@ -654,7 +654,13 @@ impl ProgramTest {
             .await
             .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
 
-        ProgramTestState::new(bank_forks, banks_client, payer, last_blockhash, genesis_config)
+        ProgramTestState::new(
+            bank_forks,
+            banks_client,
+            payer,
+            last_blockhash,
+            genesis_config,
+        )
     }
 }
 
@@ -700,7 +706,7 @@ struct DroppableTask<T>(Sender<()>, JoinHandle<T>);
 impl<T> Drop for DroppableTask<T> {
     fn drop(&mut self) {
         match self.0.try_send(()) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
                 debug!("Error cancelling task: {:?}", e);
             }
@@ -716,7 +722,13 @@ pub struct ProgramTestState {
 }
 
 impl ProgramTestState {
-    pub fn new(bank_forks: Arc<RwLock<BankForks>>, banks_client: BanksClient, payer: Keypair, last_blockhash: Hash, genesis_config: GenesisConfig) -> Self {
+    pub fn new(
+        bank_forks: Arc<RwLock<BankForks>>,
+        banks_client: BanksClient,
+        payer: Keypair,
+        last_blockhash: Hash,
+        genesis_config: GenesisConfig,
+    ) -> Self {
         // Run a simulated PohService to provide the client with new blockhashes.  New blockhashes
         // are required when sending multiple otherwise identical transactions in series from a
         // test
@@ -726,12 +738,8 @@ impl ProgramTestState {
             tx,
             tokio::spawn(async move {
                 loop {
-                    match rx.try_recv() {
-                        Ok(_) => {
-                            break;
-                        }
-                        // The channel is currently empty
-                        _ => {}
+                    if rx.try_recv().is_ok() {
+                        break;
                     }
                     bank_forks
                         .read()
@@ -740,7 +748,7 @@ impl ProgramTestState {
                         .register_tick(&Hash::new_unique());
                     tokio::time::sleep(target_tick_duration).await;
                 }
-            })
+            }),
         );
 
         Self {
@@ -751,4 +759,3 @@ impl ProgramTestState {
         }
     }
 }
-
