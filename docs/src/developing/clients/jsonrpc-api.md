@@ -481,6 +481,8 @@ The result field will be an object with the following fields:
       - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
       - `postBalances: <array>` - array of u64 account balances after the transaction was processed
       - `innerInstructions: <array|undefined>` - List of [inner instructions](#inner-instructions-structure) or omitted if inner instruction recording was not yet enabled during this transaction
+      - `preTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from before the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
+      - `postTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from after the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
       - `logMessages: <array>` - array of string log messages or omitted if log message recording was not yet enabled during this transaction
       - DEPRECATED: `status: <object>` - Transaction status
         - `"Ok": <null>` - Transaction was successful
@@ -525,6 +527,7 @@ Result:
             1,
             1
           ],
+          "postTokenBalances": [],
           "preBalances": [
             499998937500,
             26858640,
@@ -532,6 +535,7 @@ Result:
             1,
             1
           ],
+          "preTokenBalances": [],
           "status": {
             "Ok": null
           }
@@ -607,6 +611,7 @@ Result:
             1,
             1
           ],
+          "postTokenBalances": [],
           "preBalances": [
             499998937500,
             26858640,
@@ -614,6 +619,7 @@ Result:
             1,
             1
           ],
+          "preTokenBalances": [],
           "status": {
             "Ok": null
           }
@@ -659,6 +665,17 @@ The JSON structure of inner instructions is defined as a list of objects in the 
   - `programIdIndex: <number>` - Index into the `message.accountKeys` array indicating the program account that executes this instruction.
   - `accounts: <array[number]>` - List of ordered indices into the `message.accountKeys` array indicating which accounts to pass to the program.
   - `data: <string>` - The program input data encoded in a base-58 string.
+
+#### Token Balances Structure
+
+The JSON structure of token balances is defined as a list of objects in the following structure:
+
+- `accountIndex: <number>` - Index of the account in which the token balance is provided for.
+- `mint: <string>` - Pubkey of the token's mint.
+- `uiTokenAmount: <object>` -
+  - `amount: <string>` - Raw amount of tokens as a string, ignoring decimals.
+  - `decimals: <number>` - Number of decimals configured for token's mint.
+  - `uiAmount: <number>` - Token amount as a float, accounting for decimals.
 
 ### getConfirmedBlocks
 
@@ -791,6 +808,7 @@ from newest to oldest transaction:
   * `slot: <u64>` - The slot that contains the block with the transaction
   * `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
   * `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
+  * `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when transaction was processed. null if not available.
 
 #### Example:
 Request:
@@ -819,7 +837,8 @@ Result:
       "err": null,
       "memo": null,
       "signature": "5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv",
-      "slot": 114
+      "slot": 114,
+      "blockTime": null
     }
   ],
   "id": 1
@@ -843,12 +862,15 @@ Returns transaction details for a confirmed transaction
 - `<object>` - if transaction is confirmed, an object with the following fields:
   - `slot: <u64>` - the slot this transaction was processed in
   - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) object, either in JSON format or encoded binary data, depending on encoding parameter
+  - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when the transaction was processed. null if not available
   - `meta: <object | null>` - transaction status metadata object:
     - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction.rs#L24)
     - `fee: <u64>` - fee this transaction was charged, as u64 integer
     - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
     - `postBalances: <array>` - array of u64 account balances after the transaction was processed
     - `innerInstructions: <array|undefined>` - List of [inner instructions](#inner-instructions-structure) or omitted if inner instruction recording was not yet enabled during this transaction
+    - `preTokenBalances: <array|undefined>` - List of  [token balances](#token-balances-structure) from before the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
+    - `postTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from after the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
     - `logMessages: <array>` - array of string log messages or omitted if log message recording was not yet enabled during this transaction
     - DEPRECATED: `status: <object>` - Transaction status
       - `"Ok": <null>` - Transaction was successful
@@ -886,6 +908,7 @@ Result:
         1,
         1
       ],
+      "postTokenBalances": [],
       "preBalances": [
         499998937500,
         26858640,
@@ -893,6 +916,7 @@ Result:
         1,
         1
       ],
+      "preTokenBalances": [],
       "status": {
         "Ok": null
       }
@@ -931,6 +955,7 @@ Result:
       ]
     }
   },
+  "blockTime": null,
   "id": 1
 }
 ```
@@ -967,6 +992,7 @@ Result:
         1,
         1
       ],
+      "postTokenBalances": [],
       "preBalances": [
         499998937500,
         26858640,
@@ -974,6 +1000,7 @@ Result:
         1,
         1
       ],
+      "preTokenBalances": [],
       "status": {
         "Ok": null
       }
