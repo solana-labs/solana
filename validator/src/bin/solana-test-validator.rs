@@ -23,7 +23,7 @@ use {
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
         system_program,
     },
-    solana_validator::{start_logger, test_validator::*},
+    solana_validator::{redirect_stderr_to_file, test_validator::*},
     std::{
         collections::HashSet,
         fs, io,
@@ -228,13 +228,13 @@ fn main() {
             match address_program {
                 [address, program] => {
                     let address = address.parse::<Pubkey>().unwrap_or_else(|err| {
-                        eprintln!("Error: invalid address {}: {}", address, err);
+                        println!("Error: invalid address {}: {}", address, err);
                         exit(1);
                     });
 
                     let program_path = PathBuf::from(program);
                     if !program_path.exists() {
-                        eprintln!(
+                        println!(
                             "Error: program file does not exist: {}",
                             program_path.display()
                         );
@@ -261,12 +261,12 @@ fn main() {
             Some(_) => value_t_or_exit!(matches, "warp_slot", Slot),
             None => {
                 cluster_rpc_client.as_ref().unwrap_or_else(|_| {
-                        eprintln!("The --url argument must be provided if --warp-slot/-w is used without an explicit slot");
+                        println!("The --url argument must be provided if --warp-slot/-w is used without an explicit slot");
                         exit(1);
 
                 }).get_slot()
                     .unwrap_or_else(|err| {
-                        eprintln!("Unable to get current cluster slot: {}", err);
+                        println!("Unable to get current cluster slot: {}", err);
                         exit(1);
                     })
             }
@@ -277,7 +277,7 @@ fn main() {
 
     if !ledger_path.exists() {
         fs::create_dir(&ledger_path).unwrap_or_else(|err| {
-            eprintln!(
+            println!(
                 "Error: Unable to create directory {}: {}",
                 ledger_path.display(),
                 err
@@ -288,7 +288,7 @@ fn main() {
 
     let mut ledger_fd_lock = FdLock::new(fs::File::open(&ledger_path).unwrap());
     let _ledger_lock = ledger_fd_lock.try_lock().unwrap_or_else(|_| {
-        eprintln!(
+        println!(
             "Error: Unable to lock {} directory. Check if another solana-test-validator is running",
             ledger_path.display()
         );
@@ -297,7 +297,7 @@ fn main() {
 
     if reset_ledger {
         remove_directory_contents(&ledger_path).unwrap_or_else(|err| {
-            eprintln!("Error: Unable to remove {}: {}", ledger_path.display(), err);
+            println!("Error: Unable to remove {}: {}", ledger_path.display(), err);
             exit(1);
         })
     }
@@ -326,14 +326,14 @@ fn main() {
     } else {
         None
     };
-    let _logger_thread = start_logger(logfile);
+    let _logger_thread = redirect_stderr_to_file(logfile);
 
     let faucet_lamports = sol_to_lamports(1_000_000.);
     let faucet_keypair_file = ledger_path.join("faucet-keypair.json");
     if !faucet_keypair_file.exists() {
         write_keypair_file(&Keypair::new(), faucet_keypair_file.to_str().unwrap()).unwrap_or_else(
             |err| {
-                eprintln!(
+                println!(
                     "Error: Failed to write {}: {}",
                     faucet_keypair_file.display(),
                     err
@@ -344,7 +344,7 @@ fn main() {
     }
     let faucet_keypair =
         read_keypair_file(faucet_keypair_file.to_str().unwrap()).unwrap_or_else(|err| {
-            eprintln!(
+            println!(
                 "Error: Failed to read {}: {}",
                 faucet_keypair_file.display(),
                 err
@@ -397,14 +397,17 @@ fn main() {
         genesis.start_with_mint_address(mint_address)
     }
     .unwrap_or_else(|err| {
-        eprintln!("Error: failed to start validator: {}", err);
+        println!("Error: failed to start validator: {}", err);
         exit(1);
     });
 
     if let Some(faucet_addr) = &faucet_addr {
         let (sender, receiver) = channel();
         run_local_faucet_with_port(faucet_keypair, sender, None, faucet_addr.port());
-        receiver.recv().expect("run faucet");
+        let _ = receiver.recv().expect("run faucet").unwrap_or_else(|err| {
+            println!("Error: failed to start faucet: {}", err);
+            exit(1);
+        });
     }
 
     if output == Output::Dashboard {
