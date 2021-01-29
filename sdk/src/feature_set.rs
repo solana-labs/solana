@@ -170,6 +170,10 @@ pub mod track_writable_deescalation {
     solana_sdk::declare_id!("HVPSxqskEtRLRT2ZeEMmkmt9FWqoFX4vrN6f5VaadLED");
 }
 
+pub mod spl_token_v2_self_transfer_fix {
+    solana_sdk::declare_id!("BL99GYhdjjcv6ys22C9wPgn2aTVERDbPHHo4NbS3hgp7");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -211,6 +215,7 @@ lazy_static! {
         (full_inflation::candidate_example::vote::id(), "community vote allowing candidate_example to enable full inflation"),
         (full_inflation::candidate_example::enable::id(), "full inflation enabled by candidate_example"),
         (track_writable_deescalation::id(), "track account writable deescalation"),
+        (spl_token_v2_self_transfer_fix::id(), "spl-token self-transfer fix"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
