@@ -1118,11 +1118,7 @@ fn do_process_program_write_and_deploy(
 
     if let Some(program_signers) = program_signers {
         Ok(json!({
-<<<<<<< HEAD
-            "programId": format!("{}", program_signer.pubkey()),
-=======
-            "ProgramId": format!("{}", program_signers[0].pubkey()),
->>>>>>> 07cef5a55... Buffer authority must match upgrade authority for deploys and upgrades (#14923)
+            "programId": format!("{}", program_signers[0].pubkey()),
         })
         .to_string())
     } else {

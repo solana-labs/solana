@@ -741,38 +741,6 @@ fn test_cli_program_write_buffer() {
         program_data[..]
     );
 
-<<<<<<< HEAD
-    // Specify final
-    let buffer_keypair = Keypair::new();
-    let authority_keypair = Keypair::new();
-    config.signers = vec![&keypair, &buffer_keypair, &authority_keypair];
-    config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
-        program_location: pathbuf.to_str().unwrap().to_string(),
-        buffer_signer_index: None,
-        buffer_pubkey: None,
-        buffer_authority_signer_index: Some(2),
-        is_final: true,
-        max_len: None,
-    });
-    let response = process_command(&config);
-    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
-    let buffer_pubkey_str = json
-        .as_object()
-        .unwrap()
-        .get("buffer")
-        .unwrap()
-        .as_str()
-        .unwrap();
-    let buffer_pubkey = Pubkey::from_str(&buffer_pubkey_str).unwrap();
-    let buffer_account = rpc_client.get_account(&buffer_pubkey).unwrap();
-    if let UpgradeableLoaderState::Buffer { authority_address } = buffer_account.state().unwrap() {
-        assert_eq!(authority_address, None);
-    } else {
-        panic!("not a buffer account");
-    }
-
-=======
->>>>>>> 07cef5a55... Buffer authority must match upgrade authority for deploys and upgrades (#14923)
     // Get buffer authority
     config.signers = vec![&keypair];
     config.command = CliCommand::Program(ProgramCliCommand::GetAuthority {
@@ -787,14 +755,10 @@ fn test_cli_program_write_buffer() {
         .unwrap()
         .as_str()
         .unwrap();
-<<<<<<< HEAD
-    assert_eq!("none", authority_pubkey_str);
-=======
     assert_eq!(
         authority_keypair.pubkey(),
         Pubkey::from_str(&authority_pubkey_str).unwrap()
     );
->>>>>>> 07cef5a55... Buffer authority must match upgrade authority for deploys and upgrades (#14923)
 }
 
 #[test]
@@ -910,25 +874,6 @@ fn test_cli_program_set_buffer_authority() {
     }
 }
 
-<<<<<<< HEAD
-    // Set authority to None
-    config.signers = vec![&keypair, &buffer_keypair];
-    config.command = CliCommand::Program(ProgramCliCommand::SetBufferAuthority {
-        buffer_pubkey: buffer_keypair.pubkey(),
-        buffer_authority_index: Some(1),
-        new_buffer_authority: None,
-    });
-    let response = process_command(&config);
-    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
-    let buffer_authority_str = json
-        .as_object()
-        .unwrap()
-        .get("authority")
-        .unwrap()
-        .as_str()
-        .unwrap();
-    assert_eq!(buffer_authority_str, "none");
-=======
 #[test]
 fn test_cli_program_mismatch_buffer_authority() {
     solana_logger::setup();
@@ -980,7 +925,6 @@ fn test_cli_program_mismatch_buffer_authority() {
         max_len: None,
     });
     process_command(&config).unwrap();
->>>>>>> 07cef5a55... Buffer authority must match upgrade authority for deploys and upgrades (#14923)
     let buffer_account = rpc_client.get_account(&buffer_keypair.pubkey()).unwrap();
     if let UpgradeableLoaderState::Buffer { authority_address } = buffer_account.state().unwrap() {
         assert_eq!(authority_address, Some(buffer_authority.pubkey()));
