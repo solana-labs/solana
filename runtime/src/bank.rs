@@ -4687,8 +4687,8 @@ impl Bank {
             self.rent_collector.rent.burn_percent = 50; // 50% rent burn
         }
 
-        if new_feature_activations.contains(&feature_set::spl_token_v2_multisig_fix::id()) {
-            self.apply_spl_token_v2_multisig_fix();
+        if new_feature_activations.contains(&feature_set::spl_token_v2_self_transfer_fix::id()) {
+            self.apply_spl_token_v2_self_transfer_fix();
         }
         // Remove me after a while around v1.6
         if !self.no_stake_rewrite.load(Relaxed)
@@ -4780,7 +4780,7 @@ impl Bank {
         }
     }
 
-    fn apply_spl_token_v2_multisig_fix(&mut self) {
+    fn apply_spl_token_v2_self_transfer_fix(&mut self) {
         if let Some(mut account) = self.get_account(&inline_spl_token_v2_0::id()) {
             self.capitalization.fetch_sub(account.lamports, Relaxed);
             account.lamports = 0;
@@ -11068,7 +11068,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_spl_token_v2_multisig_fix() {
+    fn test_spl_token_v2_self_transfer_fix() {
         let (genesis_config, _mint_keypair) = create_genesis_config(0);
         let mut bank = Bank::new(&genesis_config);
 
@@ -11083,7 +11083,7 @@ pub(crate) mod tests {
         assert_eq!(bank.get_balance(&inline_spl_token_v2_0::id()), 100);
         let original_capitalization = bank.capitalization();
 
-        bank.apply_spl_token_v2_multisig_fix();
+        bank.apply_spl_token_v2_self_transfer_fix();
 
         // Account is now empty, and the account lamports were burnt
         assert_eq!(bank.get_balance(&inline_spl_token_v2_0::id()), 0);
