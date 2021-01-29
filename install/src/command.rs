@@ -158,13 +158,19 @@ fn extract_release_archive(
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message(&format!("{}Extracting...", PACKAGE));
 
-    let _ = fs::remove_dir_all(extract_dir);
-    fs::create_dir_all(extract_dir)?;
+    let tmp_extract_dir = extract_dir.with_file_name("tmp-extract");
+    let _ = fs::remove_dir_all(&tmp_extract_dir);
+    fs::create_dir_all(&tmp_extract_dir)?;
 
     let tar_bz2 = File::open(archive)?;
     let tar = BzDecoder::new(BufReader::new(tar_bz2));
     let mut release = Archive::new(tar);
-    release.unpack(extract_dir)?;
+    release.unpack(&tmp_extract_dir)?;
+
+    // The next two lines are not atomic and if interrupted could brick the user's active install
+    // on an channel update.  Ideally this would not be the case.
+    let _ = fs::remove_dir_all(extract_dir)?;
+    fs::rename(&tmp_extract_dir, extract_dir)?;
 
     progress_bar.finish_and_clear();
     Ok(())
