@@ -1609,7 +1609,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                 cluster_nodes.as_ref(),
             );
 
-            for (_signature, transaction) in &pending_transactions {
+            for transaction in pending_transactions.values() {
                 if let Some(tpu_address) = tpu_address {
                     let wire_transaction =
                         serialize(transaction).expect("serialization should succeed");
