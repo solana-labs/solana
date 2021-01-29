@@ -1331,6 +1331,38 @@ fn test_fake_shreds_broadcast_leader() {
     test_faulty_node(BroadcastStageType::BroadcastFakeShreds);
 }
 
+#[test]
+#[serial]
+#[allow(unused_attributes)]
+#[ignore]
+fn test_duplicate_node() {
+    solana_logger::setup_with_default("warn,solana_local_cluster=info");
+    let num_nodes = 3;
+    let mut validator_configs = Vec::with_capacity(num_nodes);
+    validator_configs.resize_with(num_nodes, ValidatorConfig::default);
+    let mut validator_keys = Vec::with_capacity(num_nodes);
+    validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));
+    validator_keys[2].0 = validator_keys[1].0.clone();
+    validator_keys[2].1 = false;
+    let node_stakes = vec![100, 50, 50];
+    assert_eq!(node_stakes.len(), num_nodes);
+    assert_eq!(validator_keys.len(), num_nodes);
+    let mut cluster_config = ClusterConfig {
+        cluster_lamports: 10_000,
+        node_stakes,
+        validator_configs,
+        validator_keys: Some(validator_keys),
+        slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH * 2 as u64,
+        stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH * 2 as u64,
+        ..ClusterConfig::default()
+    };
+
+    let cluster = LocalCluster::new(&mut cluster_config);
+
+    // Check for new roots
+    cluster.check_for_new_roots(16, &"test_duplicate_node");
+}
+
 fn test_faulty_node(faulty_node_type: BroadcastStageType) {
     solana_logger::setup();
     let num_nodes = 2;

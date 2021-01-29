@@ -276,6 +276,7 @@ pub fn check_for_new_roots(num_new_roots: usize, contact_infos: &[ContactInfo], 
     let mut roots = vec![HashSet::new(); contact_infos.len()];
     let mut done = false;
     let mut last_print = Instant::now();
+    let mut num_roots_map = HashMap::new();
     while !done {
         for (i, ingress_node) in contact_infos.iter().enumerate() {
             let client = create_client(ingress_node.client_facing_addr(), VALIDATOR_PORT_RANGE);
