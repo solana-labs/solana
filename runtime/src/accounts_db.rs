@@ -3735,6 +3735,27 @@ impl AccountsDB {
         (hash, total_lamports)
     }
 
+    fn handle_one_loaded_account(
+        key: &Pubkey,
+        found_item: CalculateHashIntermediate,
+        map: &DashMap<Pubkey, CalculateHashIntermediate>,
+    ) {
+        match map.entry(*key) {
+            Occupied(mut dest_item) => {
+                let contents = dest_item.get();
+                if contents.4 < found_item.4
+                    || (contents.4 == found_item.4 && contents.version() <= found_item.version())
+                {
+                    // replace the item
+                    dest_item.insert(found_item);
+                }
+            }
+            Vacant(v) => {
+                v.insert(found_item);
+            }
+        };
+    }
+
     fn scan_slot_using_snapshot(
         storage: SnapshotStorages,
         simple_capitalization_enabled: bool,
@@ -3765,20 +3786,7 @@ impl AccountsDB {
                     raw_lamports,
                     slot,
                 );
-                match map.entry(*key) {
-                    Occupied(mut dest_item) => {
-                        let contents = dest_item.get();
-                        if contents.4 < slot
-                            || (contents.4 == slot && contents.version() <= source_item.version())
-                        {
-                            // replace the item
-                            dest_item.insert(source_item);
-                        }
-                    }
-                    Vacant(v) => {
-                        v.insert(source_item);
-                    }
-                };
+                Self::handle_one_loaded_account(key, source_item, &map);
             },
         );
         time.stop();
@@ -5003,17 +5011,111 @@ pub mod tests {
     }
 
     #[test]
-    fn test_accountsdb_scan_account_storage_no_bank() {
+    fn test_accountsdb_rest_of_hash_calculation() {
         solana_logger::setup();
 
+        let key = Pubkey::new_unique();
+        let mut account_maps: DashMap<Pubkey, CalculateHashIntermediate> = DashMap::new();
+        let hash = Hash::new(&[1u8; 32]);
+        let val = (0, hash, 88, 490, Slot::default());
+        account_maps.insert(key, val);
+
+        // 2nd key
+        let key = Pubkey::new_unique();
+        let hash = Hash::new(&[2u8; 32]);
+        let val = (0, hash, 1, 0, Slot::default());
+        account_maps.insert(key, val);
+
+        let result = AccountsDB::rest_of_hash_calculation((account_maps, Measure::start("")));
+        let expected_hash = Hash::from_str("8j9ARGFv4W2GfML7d3sVJK2MePwrikqYnu6yqer28cCa").unwrap();
+        assert_eq!(result, (expected_hash, 88));
+    }
+
+    #[test]
+    fn test_accountsdb_handle_one_loaded_account() {
+        solana_logger::setup();
+
+        let mut account_maps: DashMap<Pubkey, CalculateHashIntermediate> = DashMap::new();
+        let key = Pubkey::new_unique();
+        let hash = Hash::new_unique();
+        let val = (1, hash, 1, 2, 1);
+
+        AccountsDB::handle_one_loaded_account(&key, val, &account_maps);
+        assert_eq!(*account_maps.get(&key).unwrap(), val);
+
+        // slot same, version <
+        let hash2 = Hash::new_unique();
+        let val2 = (0, hash2, 4, 5, 1);
+        AccountsDB::handle_one_loaded_account(&key, val2, &account_maps);
+        assert_eq!(*account_maps.get(&key).unwrap(), val);
+
+        // slot same, vers =
+        let hash3 = Hash::new_unique();
+        let val3 = (1, hash3, 2, 3, 1);
+        AccountsDB::handle_one_loaded_account(&key, val3, &account_maps);
+        assert_eq!(*account_maps.get(&key).unwrap(), val3);
+
+        // slot same, vers >
+        let hash4 = Hash::new_unique();
+        let val4 = (2, hash3, 6, 7, 1);
+        AccountsDB::handle_one_loaded_account(&key, val4, &account_maps);
+        assert_eq!(*account_maps.get(&key).unwrap(), val4);
+
+        // slot >, version <
+        let hash5 = Hash::new_unique();
+        let val5 = (0, hash5, 8, 9, 2);
+        AccountsDB::handle_one_loaded_account(&key, val5, &account_maps);
+        assert_eq!(*account_maps.get(&key).unwrap(), val5);
+    }
+
+    #[test]
+    fn test_accountsdb_remove_zero_balance_accounts() {
+        solana_logger::setup();
+
+        let key = Pubkey::new_unique();
+        let hash = Hash::new_unique();
+        let mut account_maps: DashMap<Pubkey, CalculateHashIntermediate> = DashMap::new();
+        let val = (0, hash, 1, 2, Slot::default());
+        account_maps.insert(key, val);
+
+        let result = AccountsDB::remove_zero_balance_accounts(account_maps);
+        assert_eq!(result, vec![(key, val.1, val.2)]);
+
+        // zero original lamports
+        let mut account_maps: DashMap<Pubkey, CalculateHashIntermediate> = DashMap::new();
+        let val = (0, hash, 1, 0, Slot::default());
+        account_maps.insert(key, val);
+
+        let result = AccountsDB::remove_zero_balance_accounts(account_maps);
+        assert_eq!(result, vec![]);
+    }
+
+    #[test]
+    fn test_accountsdb_calculate_accounts_hash_using_stores_only_simple() {
+        solana_logger::setup();
+
+        let (storages, size, slot_expected) = sample_storage();
+        let result = AccountsDB::calculate_accounts_hash_using_stores_only(storages, true);
+        let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
+        assert_eq!(result, (expected_hash, 0));
+    }
+
+    fn sample_storage() -> (SnapshotStorages, usize, Slot) {
         let (temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
         let slot_expected: Slot = 0;
         let size: usize = 123;
         let data = AccountStorageEntry::new(&paths[0], slot_expected, 0, size as u64);
 
         let arc = Arc::new(data);
-        let mut storages = vec![vec![arc]];
+        let storages = vec![vec![arc]];
+        (storages, size, slot_expected)
+    }
 
+    #[test]
+    fn test_accountsdb_scan_account_storage_no_bank() {
+        solana_logger::setup();
+
+        let (storages, size, slot_expected) = sample_storage();
         let result = AccountsDB::scan_account_storage_no_bank(
             storages,
             |loaded_account: LoadedAccount,
