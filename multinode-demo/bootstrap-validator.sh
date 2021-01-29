@@ -48,6 +48,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --enable-rpc-transaction-history ]]; then
       args+=("$1")
       shift
+    elif [[ $1 = --enable-cpi-and-log-storage ]]; then
+      args+=("$1")
+      shift
     elif [[ $1 = --enable-rpc-bigtable-ledger-storage ]]; then
       args+=("$1")
       shift
