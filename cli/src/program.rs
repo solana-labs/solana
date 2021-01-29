@@ -10,7 +10,7 @@ use bincode::serialize;
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
-use serde_json::{self, json};
+use serde_json::{self, json, Value};
 use solana_bpf_loader_program::{bpf_verifier, BPFError, ThisInstructionMeter};
 use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
 use solana_cli_output::display::new_spinner_progress_bar;
@@ -863,7 +863,7 @@ fn process_set_authority(
         )
         .map_err(|e| format!("Setting authority failed: {}", e))?;
 
-    Ok(option_pubkey_to_string("Authority", new_authority))
+    Ok(option_pubkey_to_string("authority", new_authority).to_string())
 }
 
 fn process_get_authority(
@@ -889,10 +889,11 @@ fn process_get_authority(
                         ..
                     }) = account.state()
                     {
-                        Ok(option_pubkey_to_string(
-                            "Program upgrade authority",
-                            upgrade_authority_address,
-                        ))
+                        let mut value =
+                            option_pubkey_to_string("authority", upgrade_authority_address);
+                        let map = value.as_object_mut().unwrap();
+                        map.insert("accountType".to_string(), json!("program".to_string()));
+                        Ok(value.to_string())
                     } else {
                         Err("Invalid associated ProgramData account found for the program".into())
                     }
@@ -904,10 +905,10 @@ fn process_get_authority(
                 }
             } else if let Ok(UpgradeableLoaderState::Buffer { authority_address }) = account.state()
             {
-                Ok(option_pubkey_to_string(
-                    "Buffer authority",
-                    authority_address,
-                ))
+                let mut value = option_pubkey_to_string("authority", authority_address);
+                let map = value.as_object_mut().unwrap();
+                map.insert("accountType".to_string(), json!("buffer".to_string()));
+                Ok(value.to_string())
             } else {
                 Err("Not a buffer or program account".into())
             }
@@ -1117,12 +1118,12 @@ fn do_process_program_write_and_deploy(
 
     if let Some(program_signers) = program_signers {
         Ok(json!({
-            "ProgramId": format!("{}", program_signers[0].pubkey()),
+            "programId": format!("{}", program_signers[0].pubkey()),
         })
         .to_string())
     } else {
         Ok(json!({
-            "Buffer": format!("{}", buffer_pubkey),
+            "buffer": format!("{}", buffer_pubkey),
         })
         .to_string())
     }
@@ -1441,16 +1442,14 @@ fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
     );
 }
 
-fn option_pubkey_to_string(tag: &str, option: Option<Pubkey>) -> String {
+fn option_pubkey_to_string(tag: &str, option: Option<Pubkey>) -> Value {
     match option {
         Some(pubkey) => json!({
             tag: format!("{:?}", pubkey),
-        })
-        .to_string(),
+        }),
         None => json!({
-            tag: "None",
-        })
-        .to_string(),
+            tag: "none",
+        }),
     }
 }
 
@@ -2249,7 +2248,7 @@ mod tests {
         let program_id = json
             .as_object()
             .unwrap()
-            .get("ProgramId")
+            .get("programId")
             .unwrap()
             .as_str()
             .unwrap();
