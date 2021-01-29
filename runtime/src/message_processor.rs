@@ -23,12 +23,7 @@ use solana_sdk::{
     system_program,
     transaction::TransactionError,
 };
-use std::{
-    cell::{Ref, RefCell},
-    collections::HashMap,
-    rc::Rc,
-    sync::Arc,
-};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 
 pub struct Executors {
     pub executors: HashMap<Pubkey, Arc<dyn Executor>>,
@@ -531,7 +526,7 @@ impl MessageProcessor {
         instruction: &Instruction,
         keyed_accounts: &[&KeyedAccount],
         signers: &[Pubkey],
-        invoke_context: &Ref<&mut dyn InvokeContext>,
+        invoke_context: &mut dyn InvokeContext,
     ) -> Result<(Message, Pubkey, usize), InstructionError> {
         // Check for privilege escalation
         for account in instruction.accounts.iter() {
@@ -547,7 +542,7 @@ impl MessageProcessor {
                 .ok_or_else(|| {
                     ic_msg!(
                         invoke_context,
-                        "Instruction references an unknown account {:?}",
+                        "Instruction references an unknown account {}",
                         account.pubkey
                     );
                     InstructionError::MissingAccount
@@ -556,7 +551,7 @@ impl MessageProcessor {
             if account.is_writable && !keyed_account.is_writable() {
                 ic_msg!(
                     invoke_context,
-                    "{:?}'s writable priviledge escalated ",
+                    "{}'s writable privilege escalated",
                     account.pubkey
                 );
                 return Err(InstructionError::PrivilegeEscalation);
@@ -569,7 +564,7 @@ impl MessageProcessor {
             ) {
                 ic_msg!(
                     invoke_context,
-                    "{:?}'s signer priviledge escalated ",
+                    "{}'s signer priviledge escalated",
                     account.pubkey
                 );
                 return Err(InstructionError::PrivilegeEscalation);
@@ -584,11 +579,16 @@ impl MessageProcessor {
         {
             Some(keyed_account) => {
                 if !keyed_account.executable()? {
+                    ic_msg!(
+                        invoke_context,
+                        "Account {} is not executable",
+                        keyed_account.unsigned_key()
+                    );
                     return Err(InstructionError::AccountNotExecutable);
                 }
             }
             None => {
-                ic_msg!(invoke_context, "Unknown program {:?}", program_id);
+                ic_msg!(invoke_context, "Unknown program {}", program_id);
                 return Err(InstructionError::MissingAccount);
             }
         }
@@ -606,11 +606,7 @@ impl MessageProcessor {
         keyed_accounts: &[&KeyedAccount],
         signers_seeds: &[&[&[u8]]],
     ) -> Result<(), InstructionError> {
-        let invoke_context = RefCell::new(invoke_context);
-
         let (message, executables, accounts, account_refs, caller_privileges) = {
-            let invoke_context = invoke_context.borrow();
-
             let caller_program_id = invoke_context.get_caller()?;
 
             // Translate and verify caller's data
@@ -625,7 +621,7 @@ impl MessageProcessor {
                 .collect::<Vec<bool>>();
             caller_privileges.insert(0, false);
             let (message, callee_program_id, _) =
-                Self::create_message(&instruction, &keyed_accounts, &signers, &invoke_context)?;
+                Self::create_message(&instruction, &keyed_accounts, &signers, invoke_context)?;
             let mut accounts = vec![];
             let mut account_refs = vec![];
             'root: for account_key in message.account_keys.iter() {
@@ -638,7 +634,7 @@ impl MessageProcessor {
                 }
                 ic_msg!(
                     invoke_context,
-                    "Instruction references an unknown account {:?}",
+                    "Instruction references an unknown account {}",
                     account_key
                 );
                 return Err(InstructionError::MissingAccount);
@@ -652,10 +648,15 @@ impl MessageProcessor {
                 invoke_context
                     .get_account(&callee_program_id)
                     .ok_or_else(|| {
-                        ic_msg!(invoke_context, "Unknown program {:?}", callee_program_id);
+                        ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
                         InstructionError::MissingAccount
                     })?;
             if !program_account.borrow().executable {
+                ic_msg!(
+                    invoke_context,
+                    "Account {} is not executable",
+                    callee_program_id
+                );
                 return Err(InstructionError::AccountNotExecutable);
             }
             let programdata_executable =
@@ -669,7 +670,7 @@ impl MessageProcessor {
                         } else {
                             ic_msg!(
                                 invoke_context,
-                                "Unknown upgradeable programdata account {:?}",
+                                "Unknown upgradeable programdata account {}",
                                 programdata_address,
                             );
                             return Err(InstructionError::MissingAccount);
@@ -677,7 +678,7 @@ impl MessageProcessor {
                     } else {
                         ic_msg!(
                             invoke_context,
-                            "Upgradeable program account state not valid {:?}",
+                            "Upgradeable program account state not valid {}",
                             callee_program_id,
                         );
                         return Err(InstructionError::MissingAccount);
@@ -704,13 +705,12 @@ impl MessageProcessor {
             &executables,
             &accounts,
             &caller_privileges,
-            *(&mut *(invoke_context.borrow_mut())),
+            invoke_context,
         )?;
 
         // Copy results back to caller
 
         {
-            let invoke_context = invoke_context.borrow();
             for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
                 let account = account.borrow();
                 if message.is_writable(i) && !account.executable {
