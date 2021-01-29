@@ -3622,15 +3622,6 @@ impl AccountsDB {
             .collect()
     }
 
-    fn get_storage_maps(&self, slot: Slot) -> Vec<Arc<AccountStorageEntry>> {
-        let storage_maps: Vec<Arc<AccountStorageEntry>> = self
-            .storage
-            .get_slot_stores(slot)
-            .map(|res| res.read().unwrap().values().cloned().collect())
-            .unwrap_or_default();
-        storage_maps
-    }
-
     fn remove_zero_balance_accounts(
         account_maps: DashMap<Pubkey, CalculateHashIntermediate>,
     ) -> Vec<(Pubkey, Hash, u64)> {
@@ -3700,7 +3691,7 @@ impl AccountsDB {
         simple_capitalization_enabled: bool,
     ) -> (Hash, u64) {
         if use_store {
-            let combined_maps = vec![self.get_storage_maps(slot)];
+            let combined_maps = self.get_snapshot_storages(slot);
 
             Self::calculate_accounts_hash_using_stores_only(
                 combined_maps,
@@ -5012,6 +5003,30 @@ pub mod tests {
     }
 
     #[test]
+    fn test_accountsdb_scan_account_storage_no_bank() {
+        solana_logger::setup();
+
+        let (temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
+        let slot_expected: Slot = 0;
+        let size: usize = 123;
+        let data = AccountStorageEntry::new(&paths[0], slot_expected, 0, size as u64);
+
+        let arc = Arc::new(data);
+        let mut storages = vec![vec![arc]];
+
+        let result = AccountsDB::scan_account_storage_no_bank(
+            storages,
+            |loaded_account: LoadedAccount,
+             _store_id: AppendVecId,
+             accum: &mut Vec<(Pubkey, CalculateHashIntermediate)>,
+             slot: Slot| {
+                assert_eq!(loaded_account.stored_size(), size);
+                assert_eq!(slot_expected, slot);
+            },
+        );
+    }
+
+    #[test]
     fn test_accountsdb_compute_merkle_root_and_capitalization() {
         solana_logger::setup();
 
@@ -5062,13 +5077,22 @@ pub mod tests {
                     result =
                         AccountsDB::compute_merkle_root_and_capitalization(input.clone(), fanout);
                 } else {
+                    let unstable_sort = true;
                     result = AccountsDB::accumulate_account_hashes_and_capitalization(
                         input.clone(),
                         Slot::default(),
                         false,
-                        true,
+                        unstable_sort,
                     )
                     .0;
+                    let result2 = AccountsDB::accumulate_account_hashes_and_capitalization(
+                        input.clone(),
+                        Slot::default(),
+                        false,
+                        !unstable_sort,
+                    )
+                    .0;
+                    assert_eq!(result, result2);
                     assert_eq!(
                         AccountsDB::accumulate_account_hashes(
                             input.clone(),
