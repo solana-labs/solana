@@ -107,7 +107,7 @@ fn main() {
                 .update_accounts_hash(0, &ancestors, true);
             time.stop();
             let mut time_store = Measure::start("hash using store");
-            let results_store = accounts.accounts_db.update_accounts_hash_with_store_option(
+            let results_store = accounts.accounts_db.update_accounts_hash_with_index_option(
                 true,
                 false,
                 solana_sdk::clock::Slot::default(),
@@ -135,6 +135,6 @@ fn main() {
         info!("update_accounts_hash(us),{}", x);
     }
     for x in elapsed_store {
-        info!("calculate_accounts_hash_using_stores(us),{}", x);
+        info!("calculate_accounts_hash_without_index(us),{}", x);
     }
 }

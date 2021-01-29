@@ -960,7 +960,7 @@ pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
 pub fn process_accounts_package_pre(accounts_package: AccountsPackagePre) -> AccountsPackage {
     let mut time = Measure::start("hash");
 
-    let (hash, lamports) = AccountsDB::calculate_accounts_hash_using_stores_only(
+    let (hash, lamports) = AccountsDB::calculate_accounts_hash_without_index(
         accounts_package.storages.clone(),
         accounts_package.simple_capitalization_testing,
     );

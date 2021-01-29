@@ -4299,18 +4299,18 @@ impl Bank {
         self.rc.accounts.accounts_db.get_accounts_hash(self.slot)
     }
 
-    pub fn update_accounts_hash_with_store_option(
+    pub fn update_accounts_hash_with_index_option(
         &self,
-        use_store: bool,
-        debug_verify_store: bool,
+        do_not_use_index: bool,
+        debug_verify: bool,
     ) -> Hash {
         let (hash, total_lamports) = self
             .rc
             .accounts
             .accounts_db
-            .update_accounts_hash_with_store_option(
-                use_store,
-                debug_verify_store,
+            .update_accounts_hash_with_index_option(
+                do_not_use_index,
+                debug_verify,
                 self.slot(),
                 &self.ancestors,
                 self.simple_capitalization_enabled(),
@@ -4320,11 +4320,11 @@ impl Bank {
     }
 
     pub fn update_accounts_hash(&self) -> Hash {
-        self.update_accounts_hash_with_store_option(false, false)
+        self.update_accounts_hash_with_index_option(false, false)
     }
 
     pub fn update_accounts_hash_with_store_test(&self) -> Hash {
-        self.update_accounts_hash_with_store_option(false, true)
+        self.update_accounts_hash_with_index_option(false, true)
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
