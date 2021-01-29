@@ -2142,7 +2142,6 @@ fn test_program_upgradeable_locks() {
     }
 }
 
-#[ignore]
 #[cfg(feature = "bpf_rust")]
 #[test]
 fn test_program_bpf_syscall_feature_activation() {
