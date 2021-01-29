@@ -6124,8 +6124,8 @@ pub mod tests {
 
         let ancestors = linear_ancestors(latest_slot);
         assert_eq!(
-            daccounts.update_accounts_hash_test(latest_slot, &ancestors, true),
-            accounts.update_accounts_hash_test(latest_slot, &ancestors, true)
+            daccounts.update_accounts_hash(latest_slot, &ancestors, true),
+            accounts.update_accounts_hash(latest_slot, &ancestors, true)
         );
     }
 
@@ -6400,7 +6400,7 @@ pub mod tests {
         accounts.add_root(current_slot);
 
         accounts.print_accounts_stats("pre_f");
-        accounts.update_accounts_hash_test(4, &HashMap::default(), true);
+        accounts.update_accounts_hash(4, &HashMap::default(), true);
 
         let accounts = f(accounts, current_slot);
 
@@ -7466,7 +7466,7 @@ pub mod tests {
         );
 
         let no_ancestors = HashMap::default();
-        accounts.update_accounts_hash_test(current_slot, &no_ancestors, true);
+        accounts.update_accounts_hash(current_slot, &no_ancestors, true);
         accounts
             .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300, true)
             .unwrap();

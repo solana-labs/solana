@@ -7103,9 +7103,9 @@ pub(crate) mod tests {
         bank.freeze();
         bank.squash();
         bank.force_flush_accounts_cache();
-        let hash = bank.update_accounts_hash_with_store_test();
+        let hash = bank.update_accounts_hash();
         bank.clean_accounts(false);
-        assert_eq!(bank.update_accounts_hash_with_store_test(), hash);
+        assert_eq!(bank.update_accounts_hash(), hash);
 
         let bank0 = Arc::new(new_from_parent(&bank));
         let blockhash = bank.last_blockhash();
@@ -7123,9 +7123,9 @@ pub(crate) mod tests {
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
         info!("bank0 purge");
-        let hash = bank0.update_accounts_hash_with_store_test();
+        let hash = bank0.update_accounts_hash();
         bank0.clean_accounts(false);
-        assert_eq!(bank0.update_accounts_hash_with_store_test(), hash);
+        assert_eq!(bank0.update_accounts_hash(), hash);
 
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports, 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
@@ -7145,7 +7145,7 @@ pub(crate) mod tests {
 
         bank1.freeze();
         bank1.squash();
-        bank1.update_accounts_hash_with_store_test();
+        bank1.update_accounts_hash();
         assert!(bank1.verify_bank_hash());
 
         // keypair should have 0 tokens on both forks
@@ -7923,7 +7923,7 @@ pub(crate) mod tests {
         let pubkey2 = solana_sdk::pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
-        bank2.update_accounts_hash_with_store_test();
+        bank2.update_accounts_hash();
         assert!(bank2.verify_bank_hash());
     }
 
@@ -7947,18 +7947,18 @@ pub(crate) mod tests {
 
         // Checkpointing should never modify the checkpoint's state once frozen
         let bank0_state = bank0.hash_internal_state();
-        bank2.update_accounts_hash_with_store_test();
+        bank2.update_accounts_hash();
         assert!(bank2.verify_bank_hash());
         let bank3 = Bank::new_from_parent(&bank0, &solana_sdk::pubkey::new_rand(), 2);
         assert_eq!(bank0_state, bank0.hash_internal_state());
         assert!(bank2.verify_bank_hash());
-        bank3.update_accounts_hash_with_store_test();
+        bank3.update_accounts_hash();
         assert!(bank3.verify_bank_hash());
 
         let pubkey2 = solana_sdk::pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
-        bank2.update_accounts_hash_with_store_test();
+        bank2.update_accounts_hash();
         assert!(bank2.verify_bank_hash());
         assert!(bank3.verify_bank_hash());
     }
