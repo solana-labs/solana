@@ -1557,7 +1557,6 @@ impl AccountsDB {
             reclaims,
             expected_single_dead_slot,
             reclaimed_offsets,
-            no_dead_slot,
             reset_accounts,
         );
         if no_dead_slot {
@@ -4027,7 +4026,6 @@ impl AccountsDB {
         reclaims: SlotSlice<AccountInfo>,
         expected_slot: Option<Slot>,
         mut reclaimed_offsets: Option<&mut AppendVecOffsets>,
-        no_dead_slot: bool,
         reset_accounts: bool,
     ) -> HashSet<Slot> {
         let mut dead_slots = HashSet::new();
@@ -4054,7 +4052,7 @@ impl AccountsDB {
                     store.slot(), *slot
                 );
                 let count =
-                    store.remove_account(account_info.stored_size, no_dead_slot || reset_accounts);
+                    store.remove_account(account_info.stored_size, reset_accounts);
                 if count == 0 {
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
@@ -7906,7 +7904,7 @@ pub mod tests {
             assert_eq!(removed_data_size, account.stored_size);
             assert_eq!(account_info.0, slot);
             let reclaims = vec![account_info];
-            accounts_db.remove_dead_accounts(&reclaims, None, None, true, false);
+            accounts_db.remove_dead_accounts(&reclaims, None, None, true);
             let after_size = storage0.alive_bytes.load(Ordering::Relaxed);
             assert_eq!(before_size, after_size + account.stored_size);
         }
