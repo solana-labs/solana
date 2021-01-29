@@ -19,6 +19,7 @@ use {
     },
     solana_sdk::{
         account::Account,
+        genesis_config::GenesisConfig,
         keyed_account::KeyedAccount,
         process_instruction::{
             stable_log, BpfComputeBudget, InvokeContext, ProcessInstructionWithContext,
@@ -34,9 +35,13 @@ use {
         mem::transmute,
         path::{Path, PathBuf},
         rc::Rc,
-        sync::{Arc, RwLock},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
         time::{Duration, Instant},
     },
+    tokio::task::JoinHandle,
 };
 
 // Export types so test clients can limit their solana crate dependencies
@@ -351,6 +356,45 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
     file_data
 }
 
+fn setup_fee_calculator(bank: Bank) -> Bank {
+    // Realistic fee_calculator part 1: Fake a single signature by calling
+    // `bank.commit_transactions()` so that the fee calculator in the child bank will be
+    // initialized with a non-zero fee.
+    assert_eq!(bank.signature_count(), 0);
+    bank.commit_transactions(
+        &[],
+        None,
+        &mut [],
+        &[],
+        0,
+        1,
+        &mut ExecuteTimings::default(),
+    );
+    assert_eq!(bank.signature_count(), 1);
+
+    // Advance beyond slot 0 for a slightly more realistic test environment
+    let bank = Arc::new(bank);
+    let bank = Bank::new_from_parent(&bank, bank.collector_id(), bank.slot() + 1);
+    debug!("Bank slot: {}", bank.slot());
+
+    // Realistic fee_calculator part 2: Tick until a new blockhash is produced to pick up the
+    // non-zero fee calculator
+    let last_blockhash = bank.last_blockhash();
+    while last_blockhash == bank.last_blockhash() {
+        bank.register_tick(&Hash::new_unique());
+    }
+    let last_blockhash = bank.last_blockhash();
+    // Make sure the new last_blockhash now requires a fee
+    assert_ne!(
+        bank.get_fee_calculator(&last_blockhash)
+            .expect("fee_calculator")
+            .lamports_per_signature,
+        0
+    );
+
+    bank
+}
+
 pub struct ProgramTest {
     accounts: Vec<(Pubkey, Account)>,
     builtins: Vec<Builtin>,
@@ -535,11 +579,7 @@ impl ProgramTest {
         }
     }
 
-    /// Start the test client
-    ///
-    /// Returns a `BanksClient` interface into the test environment as well as a payer `Keypair`
-    /// with SOL for sending transactions
-    pub async fn start(self) -> (BanksClient, Keypair, Hash) {
+    fn setup_bank(&self) -> (Arc<RwLock<BankForks>>, Keypair, Hash, GenesisConfig) {
         {
             use std::sync::Once;
             static ONCE: Once = Once::new();
@@ -564,7 +604,6 @@ impl ProgramTest {
         let payer = gci.mint_keypair;
         debug!("Payer address: {}", payer.pubkey());
         debug!("Genesis config: {}", genesis_config);
-        let target_tick_duration = genesis_config.poh_config.target_tick_duration;
 
         let mut bank = Bank::new(&genesis_config);
 
@@ -581,7 +620,7 @@ impl ProgramTest {
         }
 
         // User-supplied additional builtins
-        for builtin in self.builtins {
+        for builtin in self.builtins.iter() {
             bank.add_builtin(
                 &builtin.name,
                 builtin.id,
@@ -589,7 +628,7 @@ impl ProgramTest {
             );
         }
 
-        for (address, account) in self.accounts {
+        for (address, account) in self.accounts.iter() {
             if bank.get_account(&address).is_some() {
                 info!("Overriding account at {}", address);
             }
@@ -602,43 +641,15 @@ impl ProgramTest {
                 ..BpfComputeBudget::default()
             }));
         }
-
-        // Realistic fee_calculator part 1: Fake a single signature by calling
-        // `bank.commit_transactions()` so that the fee calculator in the child bank will be
-        // initialized with a non-zero fee.
-        assert_eq!(bank.signature_count(), 0);
-        bank.commit_transactions(
-            &[],
-            None,
-            &mut [],
-            &[],
-            0,
-            1,
-            &mut ExecuteTimings::default(),
-        );
-        assert_eq!(bank.signature_count(), 1);
-
-        // Advance beyond slot 0 for a slightly more realistic test environment
-        let bank = Arc::new(bank);
-        let bank = Bank::new_from_parent(&bank, bank.collector_id(), bank.slot() + 1);
-        debug!("Bank slot: {}", bank.slot());
-
-        // Realistic fee_calculator part 2: Tick until a new blockhash is produced to pick up the
-        // non-zero fee calculator
+        let bank = setup_fee_calculator(bank);
         let last_blockhash = bank.last_blockhash();
-        while last_blockhash == bank.last_blockhash() {
-            bank.register_tick(&Hash::new_unique());
-        }
-        let last_blockhash = bank.last_blockhash();
-        // Make sure the new last_blockhash now requires a fee
-        assert_ne!(
-            bank.get_fee_calculator(&last_blockhash)
-                .expect("fee_calculator")
-                .lamports_per_signature,
-            0
-        );
-
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+
+        (bank_forks, payer, last_blockhash, genesis_config)
+    }
+
+    pub async fn start(self) -> (BanksClient, Keypair, Hash) {
+        let (bank_forks, payer, last_blockhash, genesis_config) = self.setup_bank();
         let transport = start_local_server(&bank_forks).await;
         let banks_client = start_client(transport)
             .await
@@ -654,11 +665,31 @@ impl ProgramTest {
                     .unwrap()
                     .working_bank()
                     .register_tick(&Hash::new_unique());
-                tokio::time::sleep(target_tick_duration).await;
+                tokio::time::sleep(genesis_config.poh_config.target_tick_duration).await;
             }
         });
 
         (banks_client, payer, last_blockhash)
+    }
+
+    /// Start the test client
+    ///
+    /// Returns a `BanksClient` interface into the test environment as well as a payer `Keypair`
+    /// with SOL for sending transactions
+    pub async fn start_with_context(self) -> ProgramTestContext {
+        let (bank_forks, payer, last_blockhash, genesis_config) = self.setup_bank();
+        let transport = start_local_server(&bank_forks).await;
+        let banks_client = start_client(transport)
+            .await
+            .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
+
+        ProgramTestContext::new(
+            bank_forks,
+            banks_client,
+            payer,
+            last_blockhash,
+            genesis_config,
+        )
     }
 }
 
@@ -696,5 +727,59 @@ impl ProgramTestBanksClientExt for BanksClient {
                 blockhash
             ),
         ))
+    }
+}
+
+struct DroppableTask<T>(Arc<AtomicBool>, JoinHandle<T>);
+
+impl<T> Drop for DroppableTask<T> {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
+}
+
+pub struct ProgramTestContext {
+    pub banks_client: BanksClient,
+    pub payer: Keypair,
+    pub last_blockhash: Hash,
+    _bank_task: DroppableTask<()>,
+}
+
+impl ProgramTestContext {
+    fn new(
+        bank_forks: Arc<RwLock<BankForks>>,
+        banks_client: BanksClient,
+        payer: Keypair,
+        last_blockhash: Hash,
+        genesis_config: GenesisConfig,
+    ) -> Self {
+        // Run a simulated PohService to provide the client with new blockhashes.  New blockhashes
+        // are required when sending multiple otherwise identical transactions in series from a
+        // test
+        let target_tick_duration = genesis_config.poh_config.target_tick_duration;
+        let exit = Arc::new(AtomicBool::new(false));
+        let bank_task = DroppableTask(
+            exit.clone(),
+            tokio::spawn(async move {
+                loop {
+                    if exit.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    bank_forks
+                        .read()
+                        .unwrap()
+                        .working_bank()
+                        .register_tick(&Hash::new_unique());
+                    tokio::time::sleep(target_tick_duration).await;
+                }
+            }),
+        );
+
+        Self {
+            banks_client,
+            payer,
+            last_blockhash,
+            _bank_task: bank_task,
+        }
     }
 }
