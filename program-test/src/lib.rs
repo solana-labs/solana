@@ -35,13 +35,13 @@ use {
         mem::transmute,
         path::{Path, PathBuf},
         rc::Rc,
-        sync::{Arc, RwLock},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
         time::{Duration, Instant},
     },
-    tokio::{
-        sync::mpsc::{self, Sender},
-        task::JoinHandle,
-    },
+    tokio::task::JoinHandle,
 };
 
 // Export types so test clients can limit their solana crate dependencies
@@ -730,13 +730,11 @@ impl ProgramTestBanksClientExt for BanksClient {
     }
 }
 
-struct DroppableTask<T>(Sender<()>, JoinHandle<T>);
+struct DroppableTask<T>(Arc<AtomicBool>, JoinHandle<T>);
 
 impl<T> Drop for DroppableTask<T> {
     fn drop(&mut self) {
-        if let Err(e) = self.0.try_send(()) {
-            debug!("Error cancelling task: {:?}", e);
-        }
+        self.0.store(true, Ordering::Relaxed);
     }
 }
 
@@ -759,12 +757,12 @@ impl ProgramTestContext {
         // are required when sending multiple otherwise identical transactions in series from a
         // test
         let target_tick_duration = genesis_config.poh_config.target_tick_duration;
-        let (tx, mut rx) = mpsc::channel(1);
+        let exit = Arc::new(AtomicBool::new(false));
         let bank_task = DroppableTask(
-            tx,
+            exit.clone(),
             tokio::spawn(async move {
                 loop {
-                    if rx.try_recv().is_ok() {
+                    if exit.load(Ordering::Relaxed) {
                         break;
                     }
                     bank_forks
