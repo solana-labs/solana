@@ -1,7 +1,7 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
 use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
 pub use solana_perf::packet::{
-    limited_deserialize, to_packets, to_packets_chunked, Packets, PacketsRecycler, NUM_PACKETS,
+    limited_deserialize, to_packets_chunked, Packets, PacketsRecycler, NUM_PACKETS,
     PACKETS_BATCH_SIZE, PACKETS_PER_BATCH,
 };
 

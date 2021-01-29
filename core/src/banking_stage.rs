@@ -1121,7 +1121,7 @@ mod tests {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     };
-    use solana_perf::packet::to_packets;
+    use solana_perf::packet::to_packets_chunked;
     use solana_sdk::{
         instruction::InstructionError,
         signature::{Keypair, Signer},
@@ -1292,7 +1292,7 @@ mod tests {
             let tx_anf = system_transaction::transfer(&keypair, &to3, 1, start_hash);
 
             // send 'em over
-            let packets = to_packets(&[tx_no_ver, tx_anf, tx]);
+            let packets = to_packets_chunked(&[tx_no_ver, tx_anf, tx], 3);
 
             // glad they all fit
             assert_eq!(packets.len(), 1);
@@ -1368,7 +1368,7 @@ mod tests {
         let tx =
             system_transaction::transfer(&mint_keypair, &alice.pubkey(), 2, genesis_config.hash());
 
-        let packets = to_packets(&[tx]);
+        let packets = to_packets_chunked(&[tx], 1);
         let packets = packets
             .into_iter()
             .map(|packets| (packets, vec![1u8]))
@@ -1379,7 +1379,7 @@ mod tests {
         // Process a second batch that uses the same from account, so conflicts with above TX
         let tx =
             system_transaction::transfer(&mint_keypair, &alice.pubkey(), 1, genesis_config.hash());
-        let packets = to_packets(&[tx]);
+        let packets = to_packets_chunked(&[tx], 1);
         let packets = packets
             .into_iter()
             .map(|packets| (packets, vec![1u8]))
