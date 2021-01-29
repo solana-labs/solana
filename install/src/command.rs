@@ -158,13 +158,22 @@ fn extract_release_archive(
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message(&format!("{}Extracting...", PACKAGE));
 
-    let _ = fs::remove_dir_all(extract_dir);
-    fs::create_dir_all(extract_dir)?;
+    if extract_dir.exists() {
+        let _ = fs::remove_dir_all(&extract_dir);
+    }
+
+    let tmp_extract_dir = extract_dir.with_file_name("tmp-extract");
+    if tmp_extract_dir.exists() {
+        let _ = fs::remove_dir_all(&tmp_extract_dir);
+    }
+    fs::create_dir_all(&tmp_extract_dir)?;
 
     let tar_bz2 = File::open(archive)?;
     let tar = BzDecoder::new(BufReader::new(tar_bz2));
     let mut release = Archive::new(tar);
-    release.unpack(extract_dir)?;
+    release.unpack(&tmp_extract_dir)?;
+
+    fs::rename(&tmp_extract_dir, extract_dir)?;
 
     progress_bar.finish_and_clear();
     Ok(())
@@ -786,10 +795,10 @@ pub fn update(config_file: &str) -> Result<bool, String> {
             ExplicitRelease::Semver(release_semver) => {
                 let download_url = github_release_download_url(release_semver);
                 let release_dir = config.release_dir(&release_semver);
-                let download_url = if release_dir.join(".ok").exists() {
+                let download_url = if release_dir.exists() {
                     // If this release_semver has already been successfully downloaded, no update
                     // needed
-                    println!("{} is present, no download required.", release_semver);
+                    println!("{} found in cache", release_semver);
                     None
                 } else {
                     Some(download_url)
@@ -797,33 +806,48 @@ pub fn update(config_file: &str) -> Result<bool, String> {
                 (download_url, release_dir)
             }
             ExplicitRelease::Channel(release_channel) => {
-                let release_dir = config.release_dir(&release_channel);
+                let version_url = release_channel_version_url(release_channel);
+
+                let (_temp_dir, temp_file, _temp_archive_sha256) =
+                    download_to_temp(&version_url, None)
+                        .map_err(|err| format!("Unable to download {}: {}", version_url, err))?;
+
+                let update_release_version = load_release_version(&temp_file)?;
+
+                let release_id = format!("{}-{}", release_channel, update_release_version.commit);
+                let release_dir = config.release_dir(&release_id);
                 let current_release_version_yml =
                     release_dir.join("solana-release").join("version.yml");
+
                 let download_url = Some(release_channel_download_url(release_channel));
 
                 if !current_release_version_yml.exists() {
+                    println_name_value(
+                        &format!("{}Release commit:", BULLET),
+                        &update_release_version.commit[0..7],
+                    );
                     (download_url, release_dir)
                 } else {
-                    let version_url = release_channel_version_url(release_channel);
-
-                    let (_temp_dir, temp_file, _temp_archive_sha256) =
-                        download_to_temp(&version_url, None).map_err(|err| {
-                            format!("Unable to download {}: {}", version_url, err)
-                        })?;
-
-                    let update_release_version = load_release_version(&temp_file)?;
                     let current_release_version =
                         load_release_version(&current_release_version_yml)?;
-
                     if update_release_version.commit == current_release_version.commit {
                         // Same commit, no update required
                         println!(
-                            "Latest {} build is already present, no download required.",
-                            release_channel
+                            "Latest {} build ({}) found in cache",
+                            release_channel,
+                            &current_release_version.commit[0..7],
                         );
                         (None, release_dir)
                     } else {
+                        println_name_value(
+                            &format!("{}Release commit:", BULLET),
+                            &format!(
+                                "{} => {}:",
+                                &current_release_version.commit[0..7],
+                                &update_release_version.commit[0..7],
+                            ),
+                        );
+
                         (download_url, release_dir)
                     }
                 }
@@ -840,7 +864,6 @@ pub fn update(config_file: &str) -> Result<bool, String> {
                     temp_archive, release_dir, err
                 )
             })?;
-            let _ = fs::create_dir_all(release_dir.join(".ok"));
         }
 
         release_dir
