@@ -150,6 +150,10 @@ pub mod track_writable_deescalation {
     solana_sdk::declare_id!("HVPSxqskEtRLRT2ZeEMmkmt9FWqoFX4vrN6f5VaadLED");
 }
 
+pub mod spl_token_v2_self_transfer_fix {
+    solana_sdk::declare_id!("BL99GYhdjjcv6ys22C9wPgn2aTVERDbPHHo4NbS3hgp7");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -189,6 +193,7 @@ lazy_static! {
         (turbine_retransmit_peers_patch::id(), "turbine retransmit peers patch #14631"),
         (prevent_upgrade_and_invoke::id(), "prevent upgrade and invoke in same tx batch"),
         (track_writable_deescalation::id(), "track account writable deescalation"),
+        (spl_token_v2_self_transfer_fix::id(), "spl-token self-transfer fix"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
