@@ -2,7 +2,7 @@ use bincode::serialized_size;
 use log::*;
 use rayon::prelude::*;
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use serial_test_derive::serial;
+use serial_test::serial;
 use solana_core::cluster_info;
 use solana_core::contact_info::ContactInfo;
 use solana_core::crds_gossip::*;
