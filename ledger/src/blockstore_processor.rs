@@ -1093,8 +1093,8 @@ pub struct TransactionStatusBatch {
     pub statuses: Vec<TransactionExecutionResult>,
     pub balances: TransactionBalancesSet,
     pub token_balances: TransactionTokenBalancesSet,
-    pub inner_instructions: Vec<Option<InnerInstructionsList>>,
-    pub transaction_logs: Vec<TransactionLogMessages>,
+    pub inner_instructions: Option<Vec<Option<InnerInstructionsList>>>,
+    pub transaction_logs: Option<Vec<TransactionLogMessages>>,
 }
 
 #[derive(Clone)]
@@ -1110,15 +1110,17 @@ pub fn send_transaction_status_batch(
     statuses: Vec<TransactionExecutionResult>,
     balances: TransactionBalancesSet,
     token_balances: TransactionTokenBalancesSet,
-    mut inner_instructions: Vec<Option<InnerInstructionsList>>,
-    mut transaction_logs: Vec<TransactionLogMessages>,
+    inner_instructions: Vec<Option<InnerInstructionsList>>,
+    transaction_logs: Vec<TransactionLogMessages>,
     transaction_status_sender: TransactionStatusSender,
 ) {
     let slot = bank.slot();
-    if !transaction_status_sender.enable_cpi_and_log_storage {
-        inner_instructions = inner_instructions.iter().map(|_| None).collect();
-        transaction_logs = transaction_logs.iter().map(|_| vec![]).collect();
-    }
+    let (inner_instructions, transaction_logs) =
+        if !transaction_status_sender.enable_cpi_and_log_storage {
+            (None, None)
+        } else {
+            (Some(inner_instructions), Some(transaction_logs))
+        };
     if let Err(e) = transaction_status_sender
         .sender
         .send(TransactionStatusBatch {
