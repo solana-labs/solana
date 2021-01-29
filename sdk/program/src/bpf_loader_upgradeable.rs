@@ -104,7 +104,7 @@ pub fn create_buffer(
             &UpgradeableLoaderInstruction::InitializeBuffer,
             vec![
                 AccountMeta::new(*buffer_address, false),
-                AccountMeta::new(*authority_address, false),
+                AccountMeta::new_readonly(*authority_address, false),
             ],
         ),
     ])
@@ -123,7 +123,7 @@ pub fn write(
         &UpgradeableLoaderInstruction::Write { offset, bytes },
         vec![
             AccountMeta::new(*buffer_address, false),
-            AccountMeta::new(*authority_address, true),
+            AccountMeta::new_readonly(*authority_address, true),
         ],
     )
 }

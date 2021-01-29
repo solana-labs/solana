@@ -142,7 +142,13 @@ fn load_upgradeable_buffer(
     });
     let mut elf = Vec::new();
     file.read_to_end(&mut elf).unwrap();
-    load_buffer_account(bank_client, payer_keypair, &buffer_keypair, buffer_authority_keypair, &elf);
+    load_buffer_account(
+        bank_client,
+        payer_keypair,
+        &buffer_keypair,
+        buffer_authority_keypair,
+        &elf,
+    );
 }
 
 fn upgrade_bpf_program(
@@ -153,7 +159,13 @@ fn upgrade_bpf_program(
     authority_keypair: &Keypair,
     name: &str,
 ) {
-    load_upgradeable_buffer(bank_client, payer_keypair, buffer_keypair, authority_keypair, name);
+    load_upgradeable_buffer(
+        bank_client,
+        payer_keypair,
+        buffer_keypair,
+        authority_keypair,
+        name,
+    );
     upgrade_program(
         bank_client,
         payer_keypair,
@@ -1663,7 +1675,13 @@ fn test_program_bpf_upgrade_and_invoke_in_same_tx() {
 
     // Prepare for upgrade
     let buffer_keypair = Keypair::new();
-    load_upgradeable_buffer(&bank_client, &mint_keypair, &buffer_keypair, &authority_keypair, "panic");
+    load_upgradeable_buffer(
+        &bank_client,
+        &mint_keypair,
+        &buffer_keypair,
+        &authority_keypair,
+        "panic",
+    );
 
     // Invoke, then upgrade the program, and then invoke again in same tx
     let message = Message::new(
@@ -1902,7 +1920,13 @@ fn test_program_bpf_upgrade_via_cpi() {
     let mut elf = Vec::new();
     file.read_to_end(&mut elf).unwrap();
     let buffer_keypair = Keypair::new();
-    load_buffer_account(&bank_client, &mint_keypair, &buffer_keypair, &authority_keypair, &elf);
+    load_buffer_account(
+        &bank_client,
+        &mint_keypair,
+        &buffer_keypair,
+        &authority_keypair,
+        &elf,
+    );
 
     // Upgrade program via CPI
     let mut upgrade_instruction = bpf_loader_upgradeable::upgrade(
@@ -1981,7 +2005,13 @@ fn test_program_bpf_upgrade_self_via_cpi() {
 
     // Prepare for upgrade
     let buffer_keypair = Keypair::new();
-    load_upgradeable_buffer(&bank_client, &mint_keypair, &buffer_keypair, &authority_keypair, "panic");
+    load_upgradeable_buffer(
+        &bank_client,
+        &mint_keypair,
+        &buffer_keypair,
+        &authority_keypair,
+        "panic",
+    );
 
     // Invoke, then upgrade the program, and then invoke again in same tx
     let message = Message::new(
@@ -2046,7 +2076,13 @@ fn test_program_upgradeable_locks() {
         });
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
-        load_buffer_account(&bank_client, &mint_keypair, buffer_keypair, &payer_keypair, &elf);
+        load_buffer_account(
+            &bank_client,
+            &mint_keypair,
+            buffer_keypair,
+            &payer_keypair,
+            &elf,
+        );
 
         bank_client
             .send_and_confirm_instruction(
