@@ -5069,7 +5069,14 @@ pub mod tests {
                         true,
                     )
                     .0;
-                    assert_eq!(AccountsDB::accumulate_account_hashes(input.clone(), Slot::default(), false), result.0);
+                    assert_eq!(
+                        AccountsDB::accumulate_account_hashes(
+                            input.clone(),
+                            Slot::default(),
+                            false
+                        ),
+                        result.0
+                    );
                     AccountsDB::sort_hashes_by_pubkey(&mut input);
                 }
                 let mut expected = 0;
