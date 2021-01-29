@@ -6703,6 +6703,68 @@ pub mod tests {
 
     #[test]
     #[should_panic(expected = "double remove of account in slot: 0/store: 0!!")]
+    fn test_storage_remove_account_double_remove_with_reset() {
+        let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let account = Account::new(1, 0, &Account::default().owner);
+        accounts.store_uncached(0, &[(&pubkey, &account)]);
+        let storage_entry = get_account_entry(&accounts);
+        storage_entry.remove_account(0, false);
+        storage_entry.remove_account(0, true);
+    }
+
+    fn get_account_entry(accounts: &AccountsDB) -> Arc<AccountStorageEntry> {
+        accounts
+            .storage
+            .get_slot_stores(0)
+            .unwrap()
+            .read()
+            .unwrap()
+            .values()
+            .next()
+            .unwrap()
+            .clone()
+    }
+
+    #[test]
+    fn test_storage_remove_account_with_reset_then_access() {
+        solana_logger::setup();
+        (0..3).into_iter().for_each(|pass| {
+            info!("pass: {}", pass);
+            let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
+            let pubkey = solana_sdk::pubkey::new_rand();
+            let account = Account::new(1, 0, &Account::default().owner);
+            let slot = 0;
+            accounts.store_uncached(slot, &[(&pubkey, &account)]);
+            let storage_entry = get_account_entry(&accounts);
+            storage_entry.set_status(AccountStorageStatus::Full);
+            let store_id = storage_entry.append_vec_id();
+            let result = accounts
+                .storage
+                .get_account_storage_entry(slot, store_id)
+                .unwrap();
+            assert_eq!(result.slot.load(Ordering::Relaxed), slot);
+            assert_eq!(result.id.load(Ordering::Relaxed), store_id);
+            if pass == 0 {
+                storage_entry.remove_account(0, false);
+            } else if pass == 1 {
+                storage_entry.remove_account(0, false);
+                accounts.shrink_all_slots();
+            } else if pass == 2 {
+                accounts.clean_accounts(None);
+            }
+            let result = accounts
+                .storage
+                .get_account_storage_entry(slot, store_id)
+                .unwrap();
+            assert_eq!(result.slot.load(Ordering::Relaxed), slot);
+            assert_eq!(result.id.load(Ordering::Relaxed), store_id);
+            assert_eq!(storage_entry.status(), AccountStorageStatus::Full);
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "double remove of account in slot: 0/store: 0!!")]
     fn test_storage_remove_account_double_remove() {
         let accounts = AccountsDB::new(Vec::new(), &ClusterType::Development);
         let pubkey = solana_sdk::pubkey::new_rand();
