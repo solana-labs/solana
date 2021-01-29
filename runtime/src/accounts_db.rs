@@ -1111,7 +1111,7 @@ impl AccountsDB {
 
         let mut measure = Measure::start("clean_old_root_reclaims");
         let mut reclaim_result = (HashMap::new(), HashMap::new());
-        self.handle_reclaims(&reclaims, None, false, Some(&mut reclaim_result));
+        self.handle_reclaims(&reclaims, None, false, Some(&mut reclaim_result), false);
         measure.stop();
         debug!("{} {}", clean_rooted, measure);
         inc_new_counter_info!("clean-old-root-reclaim-ms", measure.as_ms() as usize);
@@ -1487,7 +1487,7 @@ impl AccountsDB {
 
         let reclaims = self.purge_keys_exact(&pubkey_to_slot_set);
 
-        self.handle_reclaims(&reclaims, None, false, None);
+        self.handle_reclaims(&reclaims, None, false, None, true);
 
         reclaims_time.stop();
 
@@ -1542,6 +1542,7 @@ impl AccountsDB {
         expected_single_dead_slot: Option<Slot>,
         no_dead_slot: bool,
         reclaim_result: Option<&mut ReclaimResult>,
+        reset_accounts: bool,
     ) {
         if reclaims.is_empty() {
             return;
@@ -1557,6 +1558,7 @@ impl AccountsDB {
             expected_single_dead_slot,
             reclaimed_offsets,
             no_dead_slot,
+            reset_accounts,
         );
         if no_dead_slot {
             assert!(dead_slots.is_empty());
@@ -1602,7 +1604,7 @@ impl AccountsDB {
         );
     }
 
-    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I)
+    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I, reset_accounts: bool)
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
@@ -1726,6 +1728,7 @@ impl AccountsDB {
                 Some(Box::new(move |_, _| shrunken_store.clone())),
                 Some(Box::new(write_versions.into_iter())),
                 false,
+                reset_accounts,
             );
 
             // `store_accounts_custom()` above may have purged accounts from some
@@ -1837,7 +1840,7 @@ impl AccountsDB {
                 );
                 return 0;
             }
-            self.do_shrink_slot_stores(slot, stores.iter());
+            self.do_shrink_slot_stores(slot, stores.iter(), false);
             alive_count
         } else {
             0
@@ -2002,6 +2005,7 @@ impl AccountsDB {
                 &hashes,
                 Some(Box::new(move |_, _| shrunken_store.clone())),
                 Some(Box::new(write_versions.into_iter())),
+                false,
                 false,
             );
 
@@ -2194,7 +2198,7 @@ impl AccountsDB {
         let num_candidates = shrink_slots.len();
         for (slot, slot_shrink_candidates) in shrink_slots {
             let mut measure = Measure::start("shrink_candidate_slots-ms");
-            self.do_shrink_slot_stores(slot, slot_shrink_candidates.values());
+            self.do_shrink_slot_stores(slot, slot_shrink_candidates.values(), true);
             measure.stop();
             inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
         }
@@ -2965,7 +2969,7 @@ impl AccountsDB {
 
         // 1) Remove old bank hash from self.bank_hashes
         // 2) Purge this slot's storage entries from self.storage
-        self.handle_reclaims(&reclaims, Some(remove_slot), false, None);
+        self.handle_reclaims(&reclaims, Some(remove_slot), false, None, false);
         assert!(self.storage.get_slot_stores(remove_slot).is_none());
     }
 
@@ -3476,6 +3480,7 @@ impl AccountsDB {
                     &hashes,
                     Some(Box::new(move |_, _| flushed_store.clone())),
                     None,
+                    false,
                     false,
                 );
                 // If the above sizing function is correct, just one AppendVec is enough to hold
@@ -4023,6 +4028,7 @@ impl AccountsDB {
         expected_slot: Option<Slot>,
         mut reclaimed_offsets: Option<&mut AppendVecOffsets>,
         no_dead_slot: bool,
+        reset_accounts: bool,
     ) -> HashSet<Slot> {
         let mut dead_slots = HashSet::new();
         let mut new_shrink_candidates: ShrinkCandidates = HashMap::new();
@@ -4047,7 +4053,8 @@ impl AccountsDB {
                     "AccountDB::accounts_index corrupted. Storage pointed to: {}, expected: {}, should only point to one slot",
                     store.slot(), *slot
                 );
-                let count = store.remove_account(account_info.stored_size, no_dead_slot);
+                let count =
+                    store.remove_account(account_info.stored_size, no_dead_slot || reset_accounts);
                 if count == 0 {
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
@@ -4381,6 +4388,7 @@ impl AccountsDB {
             None::<StorageFinder>,
             None::<Box<dyn Iterator<Item = u64>>>,
             is_cached_store,
+            false,
         );
     }
 
@@ -4392,6 +4400,7 @@ impl AccountsDB {
         storage_finder: Option<StorageFinder<'a>>,
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
         is_cached_store: bool,
+        reset_accounts: bool,
     ) -> StoreAccountsTiming {
         let storage_finder: StorageFinder<'a> = storage_finder
             .unwrap_or_else(|| Box::new(move |slot, size| self.find_storage_candidate(slot, size)));
@@ -4457,7 +4466,7 @@ impl AccountsDB {
         //
         // From 1) and 2) we guarantee passing Some(slot), true is safe
         let mut handle_reclaims_time = Measure::start("handle_reclaims");
-        self.handle_reclaims(&reclaims, Some(slot), true, None);
+        self.handle_reclaims(&reclaims, Some(slot), true, None, reset_accounts);
         handle_reclaims_time.stop();
         self.stats
             .store_handle_reclaims
