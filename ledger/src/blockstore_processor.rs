@@ -136,7 +136,7 @@ fn execute_batch(
         ..
     } = tx_results;
 
-    if let Some(sender) = transaction_status_sender {
+    if let Some(transaction_status_sender) = transaction_status_sender {
         let post_token_balances = if record_token_balances {
             collect_token_balances(&bank, &batch, &mut mint_decimals)
         } else {
@@ -155,7 +155,7 @@ fn execute_batch(
             token_balances,
             inner_instructions,
             transaction_logs,
-            sender,
+            transaction_status_sender,
         );
     }
 
@@ -1097,7 +1097,11 @@ pub struct TransactionStatusBatch {
     pub transaction_logs: Vec<TransactionLogMessages>,
 }
 
-pub type TransactionStatusSender = Sender<TransactionStatusBatch>;
+#[derive(Clone)]
+pub struct TransactionStatusSender {
+    pub sender: Sender<TransactionStatusBatch>,
+    pub enable_cpi_and_log_storage: bool,
+}
 
 pub fn send_transaction_status_batch(
     bank: Arc<Bank>,
@@ -1106,21 +1110,28 @@ pub fn send_transaction_status_batch(
     statuses: Vec<TransactionExecutionResult>,
     balances: TransactionBalancesSet,
     token_balances: TransactionTokenBalancesSet,
-    inner_instructions: Vec<Option<InnerInstructionsList>>,
-    transaction_logs: Vec<TransactionLogMessages>,
+    mut inner_instructions: Vec<Option<InnerInstructionsList>>,
+    mut transaction_logs: Vec<TransactionLogMessages>,
     transaction_status_sender: TransactionStatusSender,
 ) {
     let slot = bank.slot();
-    if let Err(e) = transaction_status_sender.send(TransactionStatusBatch {
-        bank,
-        transactions: transactions.to_vec(),
-        iteration_order,
-        statuses,
-        balances,
-        token_balances,
-        inner_instructions,
-        transaction_logs,
-    }) {
+    if !transaction_status_sender.enable_cpi_and_log_storage {
+        inner_instructions = inner_instructions.iter().map(|_| None).collect();
+        transaction_logs = transaction_logs.iter().map(|_| vec![]).collect();
+    }
+    if let Err(e) = transaction_status_sender
+        .sender
+        .send(TransactionStatusBatch {
+            bank,
+            transactions: transactions.to_vec(),
+            iteration_order,
+            statuses,
+            balances,
+            token_balances,
+            inner_instructions,
+            transaction_logs,
+        })
+    {
         trace!(
             "Slot {} transaction_status send batch failed: {:?}",
             slot,

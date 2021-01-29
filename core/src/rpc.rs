@@ -109,6 +109,7 @@ pub struct JsonRpcConfig {
     pub enable_validator_exit: bool,
     pub enable_set_log_filter: bool,
     pub enable_rpc_transaction_history: bool,
+    pub enable_cpi_and_log_storage: bool,
     pub identity_pubkey: Pubkey,
     pub faucet_addr: Option<SocketAddr>,
     pub health_check_slot_distance: u64,
