@@ -4541,6 +4541,8 @@ impl AccountsDB {
             // is restored from the append-vec
             if !accounts_map.is_empty() {
                 let mut _reclaims: Vec<(u64, AccountInfo)> = vec![];
+                let dirty_keys = accounts_map.iter().map(|(pubkey, _info)| *pubkey).collect();
+                self.uncleaned_pubkeys.insert(*slot, dirty_keys);
                 for (pubkey, account_infos) in accounts_map.into_iter() {
                     for (_, (store_id, stored_account)) in account_infos.into_iter() {
                         let account_info = AccountInfo {
@@ -4565,7 +4567,6 @@ impl AccountsDB {
 
         // Need to add these last, otherwise older updates will be cleaned
         for slot in slots {
-            self.get_accounts_delta_hash(slot);
             self.accounts_index.add_root(slot, false);
         }
 
