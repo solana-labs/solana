@@ -162,6 +162,10 @@ pub mod prevent_upgrade_and_invoke {
     solana_sdk::declare_id!("BiNjYd8jCYDgAwMqP91uwZs6skWpuHtKrZbckuKESs8N");
 }
 
+pub mod spl_token_v2_self_transfer_fix {
+    solana_sdk::declare_id!("BL99GYhdjjcv6ys22C9wPgn2aTVERDbPHHo4NbS3hgp7");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -201,6 +205,7 @@ lazy_static! {
         (prevent_upgrade_and_invoke::id(), "Prevent upgrade and invoke in same tx batch"),
         (full_inflation::candidate_example::vote::id(), "Community vote allowing candidate_example to enable full inflation"),
         (full_inflation::candidate_example::enable::id(), "Full inflation enabled by candidate_example"),
+        (spl_token_v2_self_transfer_fix::id(), "spl-token self-transfer fix"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
