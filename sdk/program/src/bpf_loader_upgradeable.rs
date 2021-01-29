@@ -87,14 +87,10 @@ impl UpgradeableLoaderState {
 pub fn create_buffer(
     payer_address: &Pubkey,
     buffer_address: &Pubkey,
-    authority_address: Option<&Pubkey>,
+    authority_address: &Pubkey,
     lamports: u64,
     program_len: usize,
 ) -> Result<Vec<Instruction>, InstructionError> {
-    let mut metas = vec![AccountMeta::new(*buffer_address, false)];
-    if let Some(authority_address) = authority_address {
-        metas.push(AccountMeta::new(*authority_address, false));
-    }
     Ok(vec![
         system_instruction::create_account(
             payer_address,
@@ -103,7 +99,14 @@ pub fn create_buffer(
             UpgradeableLoaderState::buffer_len(program_len)? as u64,
             &id(),
         ),
-        Instruction::new(id(), &UpgradeableLoaderInstruction::InitializeBuffer, metas),
+        Instruction::new(
+            id(),
+            &UpgradeableLoaderInstruction::InitializeBuffer,
+            vec![
+                AccountMeta::new(*buffer_address, false),
+                AccountMeta::new_readonly(*authority_address, false),
+            ],
+        ),
     ])
 }
 
@@ -111,21 +114,17 @@ pub fn create_buffer(
 /// buffer account.
 pub fn write(
     buffer_address: &Pubkey,
-    authority_address: Option<&Pubkey>,
+    authority_address: &Pubkey,
     offset: u32,
     bytes: Vec<u8>,
 ) -> Instruction {
-    let mut metas = vec![
-        AccountMeta::new(*buffer_address, false),
-        AccountMeta::new(*buffer_address, true),
-    ];
-    if let Some(authority_address) = authority_address {
-        metas[1] = AccountMeta::new(*authority_address, true);
-    }
     Instruction::new(
         id(),
         &UpgradeableLoaderInstruction::Write { offset, bytes },
-        metas,
+        vec![
+            AccountMeta::new(*buffer_address, false),
+            AccountMeta::new_readonly(*authority_address, true),
+        ],
     )
 }
 
@@ -136,23 +135,11 @@ pub fn deploy_with_max_program_len(
     payer_address: &Pubkey,
     program_address: &Pubkey,
     buffer_address: &Pubkey,
-    upgrade_authority_address: Option<&Pubkey>,
+    upgrade_authority_address: &Pubkey,
     program_lamports: u64,
     max_data_len: usize,
 ) -> Result<Vec<Instruction>, InstructionError> {
     let (programdata_address, _) = Pubkey::find_program_address(&[program_address.as_ref()], &id());
-    let mut metas = vec![
-        AccountMeta::new(*payer_address, true),
-        AccountMeta::new(programdata_address, false),
-        AccountMeta::new(*program_address, false),
-        AccountMeta::new(*buffer_address, false),
-        AccountMeta::new_readonly(sysvar::rent::id(), false),
-        AccountMeta::new_readonly(sysvar::clock::id(), false),
-        AccountMeta::new_readonly(crate::system_program::id(), false),
-    ];
-    if let Some(address) = upgrade_authority_address {
-        metas.push(AccountMeta::new_readonly(*address, false));
-    }
     Ok(vec![
         system_instruction::create_account(
             payer_address,
@@ -164,7 +151,16 @@ pub fn deploy_with_max_program_len(
         Instruction::new(
             id(),
             &UpgradeableLoaderInstruction::DeployWithMaxDataLen { max_data_len },
-            metas,
+            vec![
+                AccountMeta::new(*payer_address, true),
+                AccountMeta::new(programdata_address, false),
+                AccountMeta::new(*program_address, false),
+                AccountMeta::new(*buffer_address, false),
+                AccountMeta::new_readonly(sysvar::rent::id(), false),
+                AccountMeta::new_readonly(sysvar::clock::id(), false),
+                AccountMeta::new_readonly(crate::system_program::id(), false),
+                AccountMeta::new_readonly(*upgrade_authority_address, true),
+            ],
         ),
     ])
 }
@@ -200,16 +196,17 @@ pub fn is_upgrade_instruction(instruction_data: &[u8]) -> bool {
 pub fn set_buffer_authority(
     buffer_address: &Pubkey,
     current_authority_address: &Pubkey,
-    new_authority_address: Option<&Pubkey>,
+    new_authority_address: &Pubkey,
 ) -> Instruction {
-    let mut metas = vec![
-        AccountMeta::new(*buffer_address, false),
-        AccountMeta::new_readonly(*current_authority_address, true),
-    ];
-    if let Some(address) = new_authority_address {
-        metas.push(AccountMeta::new_readonly(*address, false));
-    }
-    Instruction::new(id(), &UpgradeableLoaderInstruction::SetAuthority, metas)
+    Instruction::new(
+        id(),
+        &UpgradeableLoaderInstruction::SetAuthority,
+        vec![
+            AccountMeta::new(*buffer_address, false),
+            AccountMeta::new_readonly(*current_authority_address, true),
+            AccountMeta::new_readonly(*new_authority_address, false),
+        ],
+    )
 }
 
 /// Returns the instructions required to set a program's authority.

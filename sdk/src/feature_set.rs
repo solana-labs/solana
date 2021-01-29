@@ -174,6 +174,10 @@ pub mod spl_token_v2_self_transfer_fix {
     solana_sdk::declare_id!("BL99GYhdjjcv6ys22C9wPgn2aTVERDbPHHo4NbS3hgp7");
 }
 
+pub mod matching_buffer_upgrade_authorities {
+    solana_sdk::declare_id!("B5PSjDEJvKJEUQSL7q94N7XCEoWJCYum8XfUg7yuugUU");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -216,6 +220,7 @@ lazy_static! {
         (full_inflation::candidate_example::enable::id(), "full inflation enabled by candidate_example"),
         (track_writable_deescalation::id(), "track account writable deescalation"),
         (spl_token_v2_self_transfer_fix::id(), "spl-token self-transfer fix"),
+        (matching_buffer_upgrade_authorities::id(), "Upgradeable buffer and program authorities must match"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
