@@ -29,15 +29,6 @@ export function normalizeTokenAmount(
   return rawTokens / Math.pow(10, decimals);
 }
 
-export function normalizeTokenDelta(
-  tokenAmountA: TokenAmount,
-  tokenAmountB: TokenAmount
-) {
-  const rawDelta =
-    parseInt(tokenAmountA.amount) - parseInt(tokenAmountB.amount);
-  return rawDelta / Math.pow(10, tokenAmountA.decimals);
-}
-
 export function lamportsToSol(lamports: number | BN): number {
   if (typeof lamports === "number") {
     return Math.abs(lamports) / LAMPORTS_PER_SOL;

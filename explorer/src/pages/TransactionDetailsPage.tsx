@@ -22,7 +22,7 @@ import {
   TokenAmount,
 } from "@solana/web3.js";
 import { PublicKey } from "@solana/web3.js";
-import { lamportsToSolString, normalizeTokenDelta } from "utils";
+import { lamportsToSolString } from "utils";
 import { UnknownDetailsCard } from "components/instruction/UnknownDetailsCard";
 import { SystemDetailsCard } from "components/instruction/system/SystemDetailsCard";
 import { StakeDetailsCard } from "components/instruction/stake/StakeDetailsCard";
@@ -44,6 +44,7 @@ import { TokenSwapDetailsCard } from "components/instruction/TokenSwapDetailsCar
 import { isSerumInstruction } from "components/instruction/serum/types";
 import { MemoDetailsCard } from "components/instruction/MemoDetailsCard";
 import { TokenRegistry } from "tokenRegistry";
+import { BigNumber } from "bignumber.js";
 
 const AUTO_REFRESH_INTERVAL = 2000;
 const ZERO_CONFIRMATION_BAILOUT = 5;
@@ -363,9 +364,10 @@ function AccountsCard({
       const sols = lamportsToSolString(change);
       if (change > 0) {
         return <span className="badge badge-soft-success">+{sols}</span>;
-      } else {
+      } else if (change < 0) {
         return <span className="badge badge-soft-warning">-{sols}</span>;
       }
+      return <span className="badge badge-soft-secondary">0</span>;
     };
 
     return (
@@ -419,7 +421,7 @@ type TokenBalanceRow = {
   account: PublicKey;
   mint: string;
   balance: TokenAmount;
-  delta: number;
+  delta: BigNumber;
   accountIndex: number;
 };
 
@@ -440,12 +442,9 @@ function generateTokenBalanceRows(
         let delta;
 
         if (accountIndex in preBalanceMap) {
-          delta = normalizeTokenDelta(
-            uiTokenAmount,
-            preBalanceMap[accountIndex].uiTokenAmount
-          );
+          delta = new BigNumber(uiTokenAmount.uiAmount).minus(preBalanceMap[accountIndex].uiTokenAmount.uiAmount);
         } else {
-          delta = uiTokenAmount.uiAmount;
+          delta = new BigNumber(uiTokenAmount.uiAmount);
         }
 
         return {
@@ -490,12 +489,12 @@ function TokenBalancesCard({ signature }: SignatureProps) {
   const accountRows = rows.map(({ account, delta, balance, mint }) => {
     const key = account.toBase58();
     const renderChange = () => {
-      if (delta > 0) {
-        return <span className="badge badge-soft-success">+{delta}</span>;
-      } else if (delta < 0) {
-        return <span className="badge badge-soft-warning">{delta}</span>;
+      if (delta.gt(0)) {
+        return <span className="badge badge-soft-success">+{delta.toString()}</span>;
+      } else if (delta.lt(0)) {
+        return <span className="badge badge-soft-warning">{delta.toString()}</span>;
       }
-      return <span className="badge badge-soft-secondary">{delta}</span>;
+      return <span className="badge badge-soft-secondary">0</span>;
     };
 
     const units = TokenRegistry.get(mint, cluster)?.symbol || "tokens";
