@@ -209,6 +209,11 @@ pub fn main() -> Result<(), String> {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("gc")
+                .about("Delete older releases from the install cache to reclaim disk space")
+                .setting(AppSettings::DisableVersion),
+        )
+        .subcommand(
             SubCommand::with_name("update")
                 .about("Checks for an update, and if available downloads and applies it")
                 .setting(AppSettings::DisableVersion),
@@ -255,6 +260,7 @@ pub fn main() -> Result<(), String> {
                 update_manifest_keypair_file,
             )
         }
+        ("gc", Some(_matches)) => command::gc(config_file),
         ("update", Some(_matches)) => command::update(config_file).map(|_| ()),
         ("run", Some(matches)) => {
             let program_name = matches.value_of("program_name").unwrap();

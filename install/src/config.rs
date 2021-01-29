@@ -18,7 +18,7 @@ pub struct Config {
     pub current_update_manifest: Option<UpdateManifest>,
     pub update_poll_secs: u64,
     pub explicit_release: Option<ExplicitRelease>,
-    releases_dir: PathBuf,
+    pub releases_dir: PathBuf,
     active_release_dir: PathBuf,
 }
 

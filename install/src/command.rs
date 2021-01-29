@@ -39,6 +39,7 @@ static BULLET: Emoji = Emoji("• ", "* ");
 static SPARKLE: Emoji = Emoji("✨ ", "");
 static PACKAGE: Emoji = Emoji("📦 ", "");
 static INFORMATION: Emoji = Emoji("ℹ️  ", "");
+static RECYCLING: Emoji = Emoji("♻️  ", "");
 
 /// Creates a new process bar for processing that will take an unknown amount of time
 fn new_spinner_progress_bar() -> ProgressBar {
@@ -786,6 +787,61 @@ fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(src: P, dst: Q) -> std::io::Resul
     std::os::unix::fs::symlink(src, dst)
 }
 
+pub fn gc(config_file: &str) -> Result<(), String> {
+    let config = Config::load(config_file)?;
+
+    let entries = fs::read_dir(&config.releases_dir)
+        .map_err(|err| format!("Unable to read {}: {}", config.releases_dir.display(), err))?;
+
+    let mut releases = entries
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| {
+            entry
+                .metadata()
+                .ok()
+                .map(|metadata| (entry.path(), metadata))
+        })
+        .filter_map(|(release_path, metadata)| {
+            if metadata.is_dir() {
+                Some((release_path, metadata))
+            } else {
+                None
+            }
+        })
+        .filter_map(|(release_path, metadata)| {
+            metadata
+                .modified()
+                .ok()
+                .map(|modified_time| (release_path, modified_time))
+        })
+        .collect::<Vec<_>>();
+    releases.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap()); // order by newest releases
+
+    let old_releases = releases.split_off(5); // Delete all but the 5 newest releases
+
+    if !old_releases.is_empty() {
+        let progress_bar = new_spinner_progress_bar();
+        progress_bar.set_length(old_releases.len() as u64);
+        progress_bar.set_style(
+            ProgressStyle::default_bar()
+                .template(&format!(
+                    "{}{}{}",
+                    "{spinner:.green} ",
+                    RECYCLING,
+                    "Removing old releases [{bar:40.cyan/blue}] {pos}/{len} ({eta})"
+                ))
+                .progress_chars("=> "),
+        );
+        for (release, _modified_type) in old_releases {
+            progress_bar.inc(1);
+            let _ = fs::remove_dir_all(&release);
+        }
+        progress_bar.finish_and_clear();
+    }
+
+    Ok(())
+}
+
 pub fn update(config_file: &str) -> Result<bool, String> {
     let mut config = Config::load(config_file)?;
     let update_manifest = info(config_file, false, false)?;
@@ -917,6 +973,13 @@ pub fn update(config_file: &str) -> Result<bool, String> {
         return Err(format!("Incompatible update target: {}", release_target));
     }
 
+    // Trigger an update to the modification time for `release_dir`
+    {
+        let path = &release_dir.join(".touch");
+        let _ = fs::OpenOptions::new().create(true).write(true).open(path);
+        let _ = fs::remove_file(path);
+    }
+
     let _ = fs::remove_dir_all(config.active_release_dir());
     symlink_dir(
         release_dir.join("solana-release"),
@@ -932,6 +995,7 @@ pub fn update(config_file: &str) -> Result<bool, String> {
     })?;
 
     config.save(config_file)?;
+    gc(config_file)?;
 
     println!("  {}{}", SPARKLE, style("Update successful").bold());
     Ok(true)
