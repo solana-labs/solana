@@ -151,7 +151,7 @@ pub fn main() -> Result<(), String> {
         )
         .subcommand(
             SubCommand::with_name("info")
-                .about("displays information about the current installation")
+                .about("Displays information about the current installation")
                 .setting(AppSettings::DisableVersion)
                 .arg(
                     Arg::with_name("local_info_only")
@@ -169,7 +169,7 @@ pub fn main() -> Result<(), String> {
         )
         .subcommand(
             SubCommand::with_name("deploy")
-                .about("deploys a new update")
+                .about("Deploys a new update")
                 .setting(AppSettings::DisableVersion)
                 .arg({
                     let arg = Arg::with_name("from_keypair_file")
@@ -210,7 +210,7 @@ pub fn main() -> Result<(), String> {
         )
         .subcommand(
             SubCommand::with_name("update")
-                .about("checks for an update, and if available downloads and applies it")
+                .about("Checks for an update, and if available downloads and applies it")
                 .setting(AppSettings::DisableVersion),
         )
         .subcommand(
@@ -273,7 +273,7 @@ pub fn main_init() -> Result<(), String> {
     solana_logger::setup();
 
     let matches = App::new("solana-install-init")
-        .about("initializes a new installation")
+        .about("Initializes a new installation")
         .version(solana_version::version!())
         .arg({
             let arg = Arg::with_name("config_file")
