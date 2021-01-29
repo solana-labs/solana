@@ -22,3 +22,9 @@ vercel.json
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Documentation build artifacts
+/html/
+/src/tests.ok
+/src/cli/usage.md
+/src/.gitbook/assets/*.svg
