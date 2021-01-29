@@ -1487,7 +1487,7 @@ impl AccountsDB {
 
         let reclaims = self.purge_keys_exact(&pubkey_to_slot_set);
 
-        self.handle_reclaims(&reclaims, None, false, None, true);
+        self.handle_reclaims(&reclaims, None, false, None, false);
 
         reclaims_time.stop();
 
@@ -1604,7 +1604,7 @@ impl AccountsDB {
         );
     }
 
-    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I, reset_accounts: bool)
+    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I)
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
@@ -1728,7 +1728,7 @@ impl AccountsDB {
                 Some(Box::new(move |_, _| shrunken_store.clone())),
                 Some(Box::new(write_versions.into_iter())),
                 false,
-                reset_accounts,
+                false,
             );
 
             // `store_accounts_custom()` above may have purged accounts from some
@@ -1840,7 +1840,7 @@ impl AccountsDB {
                 );
                 return 0;
             }
-            self.do_shrink_slot_stores(slot, stores.iter(), false);
+            self.do_shrink_slot_stores(slot, stores.iter());
             alive_count
         } else {
             0
@@ -2198,7 +2198,7 @@ impl AccountsDB {
         let num_candidates = shrink_slots.len();
         for (slot, slot_shrink_candidates) in shrink_slots {
             let mut measure = Measure::start("shrink_candidate_slots-ms");
-            self.do_shrink_slot_stores(slot, slot_shrink_candidates.values(), true);
+            self.do_shrink_slot_stores(slot, slot_shrink_candidates.values());
             measure.stop();
             inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
         }
