@@ -857,7 +857,8 @@ Returns transaction details for a confirmed transaction
 #### Parameters:
 
 - `<string>` - transaction signature as base-58 encoded string
-N encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
+- `<string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (*slow*), "base64". If parameter not provided, the default encoding is "json".
+  "jsonParsed" encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
 - `<string>` - (optional) encoding for the returned Transaction, either "json", "jsonParsed", "base58" (*slow*), or "base64". If parameter not provided, the default encoding is JSON.
 
 #### Results:
