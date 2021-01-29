@@ -1,7 +1,9 @@
+#[cfg(not(feature = "no-jemalloc"))]
 #[cfg(unix)]
 use jemalloc_ctl::thread;
 
 pub fn datapoint(_name: &'static str) {
+    #[cfg(not(feature = "no-jemalloc"))]
     #[cfg(unix)]
     {
         let allocated = thread::allocatedp::mib().unwrap();
@@ -12,29 +14,32 @@ pub fn datapoint(_name: &'static str) {
 }
 
 pub struct Allocatedp {
+    #[cfg(not(feature = "no-jemalloc"))]
     #[cfg(unix)]
     allocated: thread::ThreadLocal<u64>,
 }
 
 impl Allocatedp {
     pub fn default() -> Self {
+        #[cfg(not(feature = "no-jemalloc"))]
         #[cfg(unix)]
         {
             let allocated = thread::allocatedp::mib().unwrap();
             let allocated = allocated.read().unwrap();
             Self { allocated }
         }
-        #[cfg(not(unix))]
+        #[cfg(any(feature = "no-jemalloc", not(unix)))]
         Self {}
     }
 
     /// Return current thread heap usage
     pub fn get(&self) -> u64 {
+        #[cfg(not(feature = "no-jemalloc"))]
         #[cfg(unix)]
         {
             self.allocated.get()
         }
-        #[cfg(not(unix))]
+        #[cfg(any(feature = "no-jemalloc", not(unix)))]
         0
     }
 
