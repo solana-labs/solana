@@ -1421,7 +1421,7 @@ pub fn main() {
         .arg(
             Arg::with_name("accounts_db_test_hash_calculation")
                 .long("accounts-db-test-hash-calculation")
-                .help("Enables testing of hash calculation"),
+                .help("Enables testing of hash calculation using stores in AccountsHashVerifier. This has a computational cost."),
         )
         .arg(
             // legacy nop argument
