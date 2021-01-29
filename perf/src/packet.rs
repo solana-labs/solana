@@ -11,16 +11,9 @@ pub const PACKETS_PER_BATCH: usize = 256;
 pub const NUM_RCVMMSGS: usize = 128;
 pub const PACKETS_BATCH_SIZE: usize = PACKETS_PER_BATCH * PACKET_DATA_SIZE;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Packets {
     pub packets: PinnedVec<Packet>,
-}
-
-//auto derive doesn't support large arrays
-impl Default for Packets {
-    fn default() -> Packets {
-        Self::with_capacity(NUM_RCVMMSGS)
-    }
 }
 
 pub type PacketsRecycler = Recycler<PinnedVec<Packet>>;
@@ -75,6 +68,7 @@ pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<Packets>
     out
 }
 
+#[cfg(test)]
 pub fn to_packets<T: Serialize>(xs: &[T]) -> Vec<Packets> {
     to_packets_chunked(xs, NUM_PACKETS)
 }
