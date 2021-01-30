@@ -49,22 +49,12 @@ pub mod full_inflation {
         }
     }
 
-    pub mod my_name {
+    pub mod stakeconomy {
         pub mod vote {
-            // TODO: Contact the Solana Foundation by emailing nominations@solana.foundation and
-            // replace "MyVoteAddress111111111111111111111111111111" with the pubkey provided to
-            // you.
-            //
-            // Once completed remove this TODO comment
-            solana_sdk::declare_id!("MyVoteAddress111111111111111111111111111111");
+             solana_sdk::declare_id!("JCergKv4GcywaBzn4JHi3sYJfG7mWenTG3QQDNUJiGS");
         }
         pub mod enable {
-            // TODO: Run `solana-keygen new -o inflation.json` and replace
-            // "MyEnab1eAddress1111111111111111111111111111" with the pubkey for the keypair you
-            // just generated, as output by solana-keygen.  Keep `inflation.json` in a safe place.
-            //
-            // Once completed remove this TODO comment
-            solana_sdk::declare_id!("MyEnab1eAddress1111111111111111111111111111");
+            solana_sdk::declare_id!("5NUfXNZUsP1ndyShQJ37H2dgHaEGaUNqgT9zn3BTiwct");
         }
     }
 
@@ -249,8 +239,8 @@ lazy_static! {
         (track_writable_deescalation::id(), "track account writable deescalation"),
         (spl_token_v2_self_transfer_fix::id(), "spl-token self-transfer fix"),
         (matching_buffer_upgrade_authorities::id(), "Upgradeable buffer and program authorities must match"),
-        (full_inflation::my_name::vote::id(), "Community vote allowing my_name to enable full inflation"),
-        (full_inflation::my_name::enable::id(), "Full inflation enabled by my_name"),
+        (full_inflation::stakeconomy::vote::id(), "Community vote allowing Stakeconomy.com to enable full inflation"),
+        (full_inflation::stakeconomy::enable::id(), "Full inflation enabled by Stakeconomy.com"),
         (full_inflation::nam::vote::id(), "community vote allowing Nam to enable full inflation"),
         (full_inflation::nam::enable::id(), "full inflation enabled by Nam"),
         /*************** ADD NEW FEATURES HERE ***************/
@@ -285,8 +275,8 @@ lazy_static! {
             enable_id: full_inflation::candidate_example::enable::id(),
         },
         FullInflationFeaturePair {
-            vote_id: full_inflation::my_name::vote::id(),
-            enable_id: full_inflation::my_name::enable::id(),
+            vote_id: full_inflation::stakeconomy::vote::id(),
+            enable_id: full_inflation::stakeconomy::enable::id(),
         },
         FullInflationFeaturePair {
             vote_id: full_inflation::nam::vote::id(),
