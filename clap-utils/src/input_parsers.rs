@@ -167,12 +167,12 @@ pub fn resolve_signer(
     name: &str,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<Option<String>, Box<dyn std::error::Error>> {
-    Ok(resolve_signer_from_path(
+    resolve_signer_from_path(
         matches,
         matches.value_of(name).unwrap(),
         name,
         wallet_manager,
-    )?)
+    )
 }
 
 pub fn lamports_of_sol(matches: &ArgMatches<'_>, name: &str) -> Option<u64> {

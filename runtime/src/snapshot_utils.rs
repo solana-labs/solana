@@ -172,7 +172,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     let snapshot_package_output_file = get_snapshot_archive_path(
         &snapshot_package_output_path,
         &(bank.slot(), bank.get_accounts_hash()),
-        &archive_format,
+        archive_format,
     );
 
     let package = AccountsPackage::new(
@@ -190,7 +190,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
     Ok(package)
 }
 
-fn get_archive_ext(archive_format: &ArchiveFormat) -> &'static str {
+fn get_archive_ext(archive_format: ArchiveFormat) -> &'static str {
     match archive_format {
         ArchiveFormat::TarBzip2 => ".tar.bz2",
         ArchiveFormat::TarGzip => ".tar.gz",
@@ -291,7 +291,7 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
         f.write_all(snapshot_package.snapshot_version.as_str().as_bytes())?;
     }
 
-    let file_ext = get_archive_ext(&snapshot_package.archive_format);
+    let file_ext = get_archive_ext(snapshot_package.archive_format);
 
     // Tar the staging directory into the archive at `archive_path`
     //
@@ -585,7 +585,7 @@ pub fn remove_snapshot<P: AsRef<Path>>(slot: Slot, snapshot_path: P) -> Result<(
 pub fn bank_from_archive<P: AsRef<Path>>(
     account_paths: &[PathBuf],
     frozen_account_pubkeys: &[Pubkey],
-    snapshot_path: &PathBuf,
+    snapshot_path: &Path,
     snapshot_tar: P,
     archive_format: ArchiveFormat,
     genesis_config: &GenesisConfig,
@@ -633,7 +633,7 @@ pub fn bank_from_archive<P: AsRef<Path>>(
 pub fn get_snapshot_archive_path<P: AsRef<Path>>(
     snapshot_output_dir: P,
     snapshot_hash: &(Slot, Hash),
-    archive_format: &ArchiveFormat,
+    archive_format: ArchiveFormat,
 ) -> PathBuf {
     snapshot_output_dir.as_ref().join(format!(
         "snapshot-{}-{}{}",
@@ -760,7 +760,7 @@ fn rebuild_bank_from_snapshots<P>(
     snapshot_version: &str,
     account_paths: &[PathBuf],
     frozen_account_pubkeys: &[Pubkey],
-    unpacked_snapshots_dir: &PathBuf,
+    unpacked_snapshots_dir: &Path,
     append_vecs_path: P,
     genesis_config: &GenesisConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
@@ -906,13 +906,50 @@ pub fn snapshot_bank(
         status_cache_slot_deltas,
         snapshot_package_output_path,
         storages,
-        archive_format.clone(),
+        *archive_format,
         snapshot_version,
     )?;
 
     accounts_package_sender.send(package)?;
 
     Ok(())
+}
+
+/// Convenience function to create a snapshot archive out of any Bank, regardless of state.  The
+/// Bank will be frozen during the process.
+pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
+    snapshot_path: P,
+    bank: &Bank,
+    snapshot_version: Option<SnapshotVersion>,
+    snapshot_package_output_path: Q,
+    archive_format: ArchiveFormat,
+) -> Result<PathBuf> {
+    let snapshot_version = snapshot_version.unwrap_or_default();
+
+    assert!(bank.is_complete());
+    bank.squash(); // Bank may not be a root
+    bank.force_flush_accounts_cache();
+    bank.clean_accounts(true);
+    bank.update_accounts_hash();
+    bank.rehash(); // Bank accounts may have been manually modified by the caller
+
+    let temp_dir = tempfile::tempdir_in(snapshot_path)?;
+
+    let storages: Vec<_> = bank.get_snapshot_storages();
+    let slot_snapshot_paths = add_snapshot(&temp_dir, &bank, &storages, snapshot_version)?;
+    let package = package_snapshot(
+        &bank,
+        &slot_snapshot_paths,
+        &temp_dir,
+        bank.src.slot_deltas(&bank.src.roots()),
+        snapshot_package_output_path,
+        storages,
+        archive_format,
+        snapshot_version,
+    )?;
+
+    archive_snapshot_package(&package)?;
+    Ok(package.tar_output_file)
 }
 
 #[cfg(test)]

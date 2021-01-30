@@ -67,11 +67,7 @@ where
     }
 }
 
-fn test_bpf_package(
-    config: &Config,
-    target_directory: &PathBuf,
-    package: &cargo_metadata::Package,
-) {
+fn test_bpf_package(config: &Config, target_directory: &Path, package: &cargo_metadata::Package) {
     let set_test_bpf_feature = package.features.contains_key("test-bpf");
 
     let bpf_out_dir = config

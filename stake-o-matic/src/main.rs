@@ -430,7 +430,7 @@ fn transact(
     );
 
     let (blockhash, fee_calculator, last_valid_slot) = rpc_client
-        .get_recent_blockhash_with_commitment(CommitmentConfig::max())?
+        .get_recent_blockhash_with_commitment(CommitmentConfig::finalized())?
         .value;
     info!("{} transactions to send", transactions.len());
 
@@ -458,7 +458,7 @@ fn transact(
             break;
         }
 
-        let slot = rpc_client.get_slot_with_commitment(CommitmentConfig::max())?;
+        let slot = rpc_client.get_slot_with_commitment(CommitmentConfig::finalized())?;
         info!(
             "Current slot={}, last_valid_slot={} (slots remaining: {}) ",
             slot,

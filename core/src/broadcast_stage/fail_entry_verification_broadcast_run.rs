@@ -135,7 +135,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
     ) -> Result<()> {
         let ((stakes, shreds), _) = receiver.lock().unwrap().recv()?;
         // Broadcast data
-        let (peers, peers_and_stakes) = get_broadcast_peers(cluster_info, stakes);
+        let (peers, peers_and_stakes) = get_broadcast_peers(cluster_info, stakes.as_deref());
 
         broadcast_shreds(
             sock,

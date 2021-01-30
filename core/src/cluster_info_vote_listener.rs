@@ -382,7 +382,7 @@ impl ClusterInfoVoteListener {
                 return Ok(());
             }
 
-            if let Err(e) = verified_vote_packets.get_and_process_vote_packets(
+            if let Err(e) = verified_vote_packets.receive_and_process_vote_packets(
                 &verified_vote_label_packets_receiver,
                 &mut update_version,
             ) {
@@ -403,6 +403,7 @@ impl ClusterInfoVoteListener {
                     let last_version = bank.last_vote_sync.load(Ordering::Relaxed);
                     let (new_version, msgs) = verified_vote_packets.get_latest_votes(last_version);
                     verified_packets_sender.send(msgs)?;
+                    #[allow(deprecated)]
                     bank.last_vote_sync.compare_and_swap(
                         last_version,
                         new_version,
@@ -824,7 +825,7 @@ mod tests {
         use bincode::serialized_size;
         info!("max vote size {}", serialized_size(&vote_tx).unwrap());
 
-        let msgs = packet::to_packets(&[vote_tx]); // panics if won't fit
+        let msgs = packet::to_packets_chunked(&[vote_tx], 1); // panics if won't fit
 
         assert_eq!(msgs.len(), 1);
     }

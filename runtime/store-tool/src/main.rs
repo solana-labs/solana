@@ -25,15 +25,13 @@ fn main() {
 
     let file = value_t_or_exit!(matches, "file", String);
     let len = value_t_or_exit!(matches, "len", usize);
-    let mut store = AppendVec::new_empty_map(len);
+    let (mut store, num_accounts) = AppendVec::new_from_file(file, len).expect("should succeed");
     store.set_no_remove_on_drop();
-    store.set_file(file).expect("set_file failed");
-    let accounts = store.accounts(0);
     info!(
         "store: len: {} capacity: {} accounts: {}",
         store.len(),
         store.capacity(),
-        accounts.len()
+        num_accounts,
     );
     for account in store.accounts(0) {
         info!(

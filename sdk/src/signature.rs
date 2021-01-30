@@ -125,9 +125,9 @@ impl fmt::Display for Signature {
     }
 }
 
-impl Into<[u8; 64]> for Signature {
-    fn into(self) -> [u8; 64] {
-        <GenericArray<u8, U64> as Into<[u8; 64]>>::into(self.0)
+impl From<Signature> for [u8; 64] {
+    fn from(signature: Signature) -> Self {
+        signature.0.into()
     }
 }
 
@@ -400,7 +400,7 @@ pub fn keypair_from_seed_phrase_and_passphrase(
     seed_phrase: &str,
     passphrase: &str,
 ) -> Result<Keypair, Box<dyn error::Error>> {
-    const PBKDF2_ROUNDS: usize = 2048;
+    const PBKDF2_ROUNDS: u32 = 2048;
     const PBKDF2_BYTES: usize = 64;
 
     let salt = format!("mnemonic{}", passphrase);

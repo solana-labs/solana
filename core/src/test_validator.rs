@@ -14,7 +14,7 @@ use {
     },
     solana_sdk::{
         account::Account,
-        clock::DEFAULT_MS_PER_SLOT,
+        clock::{Slot, DEFAULT_MS_PER_SLOT},
         commitment_config::CommitmentConfig,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
@@ -48,6 +48,7 @@ pub struct TestValidatorGenesis {
     rent: Rent,
     rpc_config: JsonRpcConfig,
     rpc_ports: Option<(u16, u16)>, // (JsonRpc, JsonRpcPubSub), None == random ports
+    warp_slot: Option<Slot>,
     accounts: HashMap<Pubkey, Account>,
     programs: Vec<ProgramInfo>,
 }
@@ -78,9 +79,39 @@ impl TestValidatorGenesis {
         self
     }
 
+    pub fn warp_slot(&mut self, warp_slot: Slot) -> &mut Self {
+        self.warp_slot = Some(warp_slot);
+        self
+    }
+
     /// Add an account to the test environment
     pub fn add_account(&mut self, address: Pubkey, account: Account) -> &mut Self {
         self.accounts.insert(address, account);
+        self
+    }
+
+    pub fn add_accounts<T>(&mut self, accounts: T) -> &mut Self
+    where
+        T: IntoIterator<Item = (Pubkey, Account)>,
+    {
+        for (address, account) in accounts {
+            self.add_account(address, account);
+        }
+        self
+    }
+
+    pub fn clone_accounts<T>(&mut self, addresses: T, rpc_client: &RpcClient) -> &mut Self
+    where
+        T: IntoIterator<Item = Pubkey>,
+    {
+        for address in addresses {
+            info!("Fetching {} over RPC...", address);
+            let account = rpc_client.get_account(&address).unwrap_or_else(|err| {
+                error!("Failed to fetch {}: {}", address, err);
+                crate::validator::abort();
+            });
+            self.add_account(address, account);
+        }
         self
     }
 
@@ -256,7 +287,7 @@ impl TestValidator {
             );
         }
 
-        let genesis_config = create_genesis_config_with_leader_ex(
+        let mut genesis_config = create_genesis_config_with_leader_ex(
             mint_lamports,
             &mint_address,
             &validator_identity.pubkey(),
@@ -269,6 +300,7 @@ impl TestValidator {
             solana_sdk::genesis_config::ClusterType::Development,
             accounts.into_iter().collect(),
         );
+        genesis_config.epoch_schedule = solana_sdk::epoch_schedule::EpochSchedule::without_warmup();
 
         let ledger_path = match &config.ledger_path {
             None => create_new_tmp_ledger!(&genesis_config).0,
@@ -361,6 +393,7 @@ impl TestValidator {
                 snapshot_version: SnapshotVersion::default(),
             }),
             enforce_ulimit_nofile: false,
+            warp_slot: config.warp_slot,
             ..ValidatorConfig::default()
         };
 
@@ -383,7 +416,7 @@ impl TestValidator {
         //  due to a bug in the Bank)
         {
             let rpc_client =
-                RpcClient::new_with_commitment(rpc_url.clone(), CommitmentConfig::recent());
+                RpcClient::new_with_commitment(rpc_url.clone(), CommitmentConfig::processed());
             let fee_rate_governor = rpc_client
                 .get_fee_rate_governor()
                 .expect("get_fee_rate_governor")
@@ -442,7 +475,7 @@ impl TestValidator {
     /// associated fee calculator
     pub fn rpc_client(&self) -> (RpcClient, Hash, FeeCalculator) {
         let rpc_client =
-            RpcClient::new_with_commitment(self.rpc_url.clone(), CommitmentConfig::recent());
+            RpcClient::new_with_commitment(self.rpc_url.clone(), CommitmentConfig::processed());
         let (recent_blockhash, fee_calculator) = rpc_client
             .get_recent_blockhash()
             .expect("get_recent_blockhash");

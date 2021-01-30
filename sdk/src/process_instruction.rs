@@ -41,6 +41,7 @@ pub trait InvokeContext {
         message: &Message,
         instruction: &CompiledInstruction,
         accounts: &[Rc<RefCell<Account>>],
+        caller_pivileges: Option<&[bool]>,
     ) -> Result<(), InstructionError>;
     /// Get the program ID of the currently executing program
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
@@ -63,6 +64,36 @@ pub trait InvokeContext {
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool;
     /// Get an account from a pre-account
     fn get_account(&self, pubkey: &Pubkey) -> Option<RefCell<Account>>;
+}
+
+/// Convenience macro to log a message with an `Rc<RefCell<dyn Logger>>`
+#[macro_export]
+macro_rules! ic_logger_msg {
+    ($logger:expr, $message:expr) => {
+        if let Ok(logger) = $logger.try_borrow_mut() {
+            if logger.log_enabled() {
+                logger.log($message);
+            }
+        }
+    };
+    ($logger:expr, $fmt:expr, $($arg:tt)*) => {
+        if let Ok(logger) = $logger.try_borrow_mut() {
+            if logger.log_enabled() {
+                logger.log(&format!($fmt, $($arg)*));
+            }
+        }
+    };
+}
+
+/// Convenience macro to log a message with an `InvokeContext`
+#[macro_export]
+macro_rules! ic_msg {
+    ($invoke_context:expr, $message:expr) => {
+        $crate::ic_logger_msg!($invoke_context.get_logger(), $message)
+    };
+    ($invoke_context:expr, $fmt:expr, $($arg:tt)*) => {
+        $crate::ic_logger_msg!($invoke_context.get_logger(), $fmt, $($arg)*)
+    };
 }
 
 #[derive(Clone, Copy, Debug, AbiExample)]
@@ -194,11 +225,7 @@ pub mod stable_log {
         program_id: &Pubkey,
         invoke_depth: usize,
     ) {
-        if let Ok(logger) = logger.try_borrow_mut() {
-            if logger.log_enabled() {
-                logger.log(&format!("Program {} invoke [{}]", program_id, invoke_depth));
-            }
-        }
+        ic_logger_msg!(logger, "Program {} invoke [{}]", program_id, invoke_depth);
     }
 
     /// Log a message from the program itself.
@@ -207,11 +234,7 @@ pub mod stable_log {
     ///     "Program log: <program-generated output>"
     /// That is, any program-generated output is guaranteed to be prefixed by "Program log: "
     pub fn program_log(logger: &Rc<RefCell<dyn Logger>>, message: &str) {
-        if let Ok(logger) = logger.try_borrow_mut() {
-            if logger.log_enabled() {
-                logger.log(&format!("Program log: {}", message))
-            }
-        }
+        ic_logger_msg!(logger, "Program log: {}", message);
     }
 
     /// Log successful program execution.
@@ -219,11 +242,7 @@ pub mod stable_log {
     /// The general form is:
     ///     "Program <address> success"
     pub fn program_success(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey) {
-        if let Ok(logger) = logger.try_borrow_mut() {
-            if logger.log_enabled() {
-                logger.log(&format!("Program {} success", program_id));
-            }
-        }
+        ic_logger_msg!(logger, "Program {} success", program_id);
     }
 
     /// Log program execution failure
@@ -235,11 +254,7 @@ pub mod stable_log {
         program_id: &Pubkey,
         err: &InstructionError,
     ) {
-        if let Ok(logger) = logger.try_borrow_mut() {
-            if logger.log_enabled() {
-                logger.log(&format!("Program {} failed: {}", program_id, err));
-            }
-        }
+        ic_logger_msg!(logger, "Program {} failed: {}", program_id, err);
     }
 }
 
@@ -326,6 +341,7 @@ impl InvokeContext for MockInvokeContext {
         _message: &Message,
         _instruction: &CompiledInstruction,
         _accounts: &[Rc<RefCell<Account>>],
+        _caller_pivileges: Option<&[bool]>,
     ) -> Result<(), InstructionError> {
         Ok(())
     }

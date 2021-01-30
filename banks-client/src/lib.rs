@@ -122,7 +122,7 @@ impl BanksClient {
     pub fn get_fees(
         &mut self,
     ) -> impl Future<Output = io::Result<(FeeCalculator, Hash, Slot)>> + '_ {
-        self.get_fees_with_commitment_and_context(context::current(), CommitmentLevel::Root)
+        self.get_fees_with_commitment_and_context(context::current(), CommitmentLevel::default())
     }
 
     /// Return the cluster rent
@@ -196,7 +196,7 @@ impl BanksClient {
     /// Return the most recent rooted slot height. All transactions at or below this height
     /// are said to be finalized. The cluster will not fork to a higher slot height.
     pub fn get_root_slot(&mut self) -> impl Future<Output = io::Result<Slot>> + '_ {
-        self.get_slot_with_context(context::current(), CommitmentLevel::Root)
+        self.get_slot_with_context(context::current(), CommitmentLevel::default())
     }
 
     /// Return the account at the given address at the slot corresponding to the given

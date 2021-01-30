@@ -31,7 +31,7 @@ use solana_runtime::{
 use solana_sdk::{
     account::Account,
     clock::{Slot, UnixTimestamp},
-    commitment_config::{CommitmentConfig, CommitmentLevel},
+    commitment_config::CommitmentConfig,
     pubkey::Pubkey,
     signature::Signature,
     transaction,
@@ -227,14 +227,14 @@ where
             },
         ) in hashmap.iter()
         {
-            let slot = match commitment.commitment {
-                CommitmentLevel::Max => commitment_slots.highest_confirmed_root,
-                CommitmentLevel::Recent => commitment_slots.slot,
-                CommitmentLevel::Root => commitment_slots.root,
-                CommitmentLevel::Single | CommitmentLevel::SingleGossip => {
-                    commitment_slots.highest_confirmed_slot
-                }
+            let slot = if commitment.is_finalized() {
+                commitment_slots.highest_confirmed_root
+            } else if commitment.is_confirmed() {
+                commitment_slots.highest_confirmed_slot
+            } else {
+                commitment_slots.slot
             };
+
             if let Some(bank) = bank_forks.read().unwrap().get(slot).cloned() {
                 let results = bank_method(&bank, hashmap_key);
                 let mut w_last_notified_slot = last_notified_slot.write().unwrap();
@@ -636,28 +636,23 @@ impl RpcSubscriptions {
         let config = config.unwrap_or_default();
         let commitment = config
             .commitment
-            .unwrap_or_else(CommitmentConfig::single_gossip);
+            .unwrap_or_else(CommitmentConfig::confirmed);
 
-        let slot = match commitment.commitment {
-            CommitmentLevel::Max => self
-                .block_commitment_cache
+        let slot = if commitment.is_finalized() {
+            self.block_commitment_cache
                 .read()
                 .unwrap()
-                .highest_confirmed_root(),
-            CommitmentLevel::Recent => self.block_commitment_cache.read().unwrap().slot(),
-            CommitmentLevel::Root => self.block_commitment_cache.read().unwrap().root(),
-            CommitmentLevel::Single => self
-                .block_commitment_cache
-                .read()
-                .unwrap()
-                .highest_confirmed_slot(),
-            CommitmentLevel::SingleGossip => self
-                .optimistically_confirmed_bank
+                .highest_confirmed_root()
+        } else if commitment.is_confirmed() {
+            self.optimistically_confirmed_bank
                 .read()
                 .unwrap()
                 .bank
-                .slot(),
+                .slot()
+        } else {
+            self.block_commitment_cache.read().unwrap().slot()
         };
+
         let last_notified_slot = if let Some((_account, slot)) = self
             .bank_forks
             .read()
@@ -670,7 +665,7 @@ impl RpcSubscriptions {
             0
         };
 
-        let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip {
+        let mut subscriptions = if commitment.is_confirmed() {
             self.subscriptions
                 .gossip_account_subscriptions
                 .write()
@@ -715,9 +710,9 @@ impl RpcSubscriptions {
         let commitment = config
             .account_config
             .commitment
-            .unwrap_or_else(CommitmentConfig::single_gossip);
+            .unwrap_or_else(CommitmentConfig::confirmed);
 
-        let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip {
+        let mut subscriptions = if commitment.is_confirmed() {
             self.subscriptions
                 .gossip_program_subscriptions
                 .write()
@@ -762,10 +757,10 @@ impl RpcSubscriptions {
         sub_id: SubscriptionId,
         subscriber: Subscriber<Response<RpcLogsResponse>>,
     ) {
-        let commitment = commitment.unwrap_or_else(CommitmentConfig::single_gossip);
+        let commitment = commitment.unwrap_or_else(CommitmentConfig::confirmed);
 
         {
-            let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip {
+            let mut subscriptions = if commitment.is_confirmed() {
                 self.subscriptions
                     .gossip_logs_subscriptions
                     .write()
@@ -873,9 +868,9 @@ impl RpcSubscriptions {
             .map(|config| (config.commitment, config.enable_received_notification))
             .unwrap_or_default();
 
-        let commitment = commitment.unwrap_or_else(CommitmentConfig::single_gossip);
+        let commitment = commitment.unwrap_or_else(CommitmentConfig::confirmed);
 
-        let mut subscriptions = if commitment.commitment == CommitmentLevel::SingleGossip {
+        let mut subscriptions = if commitment.is_confirmed() {
             self.subscriptions
                 .gossip_signature_subscriptions
                 .write()
@@ -915,7 +910,7 @@ impl RpcSubscriptions {
         self.enqueue_notification(NotificationEntry::Bank(commitment_slots));
     }
 
-    /// Notify SingleGossip commitment-level subscribers of changes to any accounts or new
+    /// Notify Confirmed commitment-level subscribers of changes to any accounts or new
     /// signatures.
     pub fn notify_gossip_subscribers(&self, slot: Slot) {
         self.enqueue_notification(NotificationEntry::Gossip(slot));
@@ -1374,7 +1369,7 @@ pub(crate) mod tests {
         subscriptions.add_account_subscription(
             alice.pubkey(),
             Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::recent()),
+                commitment: Some(CommitmentConfig::processed()),
                 encoding: None,
                 data_slice: None,
             }),
@@ -1433,7 +1428,7 @@ pub(crate) mod tests {
         subscriptions.add_account_subscription(
             alice.pubkey(),
             Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::recent()),
+                commitment: Some(CommitmentConfig::processed()),
                 encoding: None,
                 data_slice: None,
             }),
@@ -1529,7 +1524,7 @@ pub(crate) mod tests {
             solana_stake_program::id(),
             Some(RpcProgramAccountsConfig {
                 account_config: RpcAccountInfoConfig {
-                    commitment: Some(CommitmentConfig::recent()),
+                    commitment: Some(CommitmentConfig::processed()),
                     ..RpcAccountInfoConfig::default()
                 },
                 ..RpcProgramAccountsConfig::default()
@@ -1658,7 +1653,7 @@ pub(crate) mod tests {
         subscriptions.add_signature_subscription(
             past_bank_tx.signatures[0],
             Some(RpcSignatureSubscribeConfig {
-                commitment: Some(CommitmentConfig::recent()),
+                commitment: Some(CommitmentConfig::processed()),
                 enable_received_notification: Some(false),
             }),
             SubscriptionId::Number(1),
@@ -1667,7 +1662,7 @@ pub(crate) mod tests {
         subscriptions.add_signature_subscription(
             past_bank_tx.signatures[0],
             Some(RpcSignatureSubscribeConfig {
-                commitment: Some(CommitmentConfig::root()),
+                commitment: Some(CommitmentConfig::finalized()),
                 enable_received_notification: Some(false),
             }),
             SubscriptionId::Number(2),
@@ -1676,7 +1671,7 @@ pub(crate) mod tests {
         subscriptions.add_signature_subscription(
             processed_tx.signatures[0],
             Some(RpcSignatureSubscribeConfig {
-                commitment: Some(CommitmentConfig::recent()),
+                commitment: Some(CommitmentConfig::processed()),
                 enable_received_notification: Some(false),
             }),
             SubscriptionId::Number(3),
@@ -1685,7 +1680,7 @@ pub(crate) mod tests {
         subscriptions.add_signature_subscription(
             unprocessed_tx.signatures[0],
             Some(RpcSignatureSubscribeConfig {
-                commitment: Some(CommitmentConfig::recent()),
+                commitment: Some(CommitmentConfig::processed()),
                 enable_received_notification: Some(false),
             }),
             SubscriptionId::Number(4),
@@ -1695,7 +1690,7 @@ pub(crate) mod tests {
         subscriptions.add_signature_subscription(
             unprocessed_tx.signatures[0],
             Some(RpcSignatureSubscribeConfig {
-                commitment: Some(CommitmentConfig::recent()),
+                commitment: Some(CommitmentConfig::processed()),
                 enable_received_notification: Some(true),
             }),
             SubscriptionId::Number(5),
@@ -1892,7 +1887,7 @@ pub(crate) mod tests {
     fn test_add_and_remove_subscription() {
         let mut subscriptions: HashMap<u64, HashMap<SubscriptionId, SubscriptionData<(), ()>>> =
             HashMap::new();
-        let commitment = CommitmentConfig::single_gossip();
+        let commitment = CommitmentConfig::confirmed();
 
         let num_keys = 5;
         for key in 0..num_keys {
@@ -1982,7 +1977,7 @@ pub(crate) mod tests {
         subscriptions.add_account_subscription(
             alice.pubkey(),
             Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::single_gossip()),
+                commitment: Some(CommitmentConfig::confirmed()),
                 encoding: None,
                 data_slice: None,
             }),
@@ -2063,7 +2058,7 @@ pub(crate) mod tests {
         subscriptions.add_account_subscription(
             alice.pubkey(),
             Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::single_gossip()),
+                commitment: Some(CommitmentConfig::confirmed()),
                 encoding: None,
                 data_slice: None,
             }),

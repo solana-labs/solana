@@ -145,10 +145,10 @@ impl CrdsFilterSet {
     }
 }
 
-impl Into<Vec<CrdsFilter>> for CrdsFilterSet {
-    fn into(self) -> Vec<CrdsFilter> {
-        let mask_bits = self.mask_bits;
-        self.filters
+impl From<CrdsFilterSet> for Vec<CrdsFilter> {
+    fn from(cfs: CrdsFilterSet) -> Self {
+        let mask_bits = cfs.mask_bits;
+        cfs.filters
             .into_iter()
             .enumerate()
             .map(|(seed, filter)| CrdsFilter {
@@ -1428,7 +1428,7 @@ mod test {
 
         // construct something that's not a contact info
         let peer_vote =
-            CrdsValue::new_unsigned(CrdsData::Vote(0, Vote::new(&peer_pubkey, test_tx(), 0)));
+            CrdsValue::new_unsigned(CrdsData::Vote(0, Vote::new(peer_pubkey, test_tx(), 0)));
         // check that older CrdsValues (non-ContactInfos) infos pass even if are too old,
         // but a recent contact info (inserted above) exists
         assert_eq!(

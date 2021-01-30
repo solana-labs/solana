@@ -114,9 +114,12 @@ impl<T: Default + Reset> RecyclerX<T> {
         let max_gc = self.stats.max_gc.load(Ordering::Relaxed);
         if len > max_gc {
             // this is not completely accurate, but for most cases should be fine.
-            self.stats
-                .max_gc
-                .compare_and_swap(max_gc, len, Ordering::Relaxed);
+            let _ = self.stats.max_gc.compare_exchange(
+                max_gc,
+                len,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            );
         }
         let total = self.stats.total.load(Ordering::Relaxed);
         let reuse = self.stats.reuse.load(Ordering::Relaxed);

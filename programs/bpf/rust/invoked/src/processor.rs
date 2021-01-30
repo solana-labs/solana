@@ -161,7 +161,41 @@ fn process_instruction(
             assert!(!accounts[ARGUMENT_INDEX].is_writable);
         }
         VERIFY_PRIVILEGE_ESCALATION => {
-            msg!("Success");
+            msg!("Verify privilege escalation");
+        }
+        VERIFY_PRIVILEGE_DEESCALATION => {
+            msg!("verify privilege deescalation");
+            const INVOKED_ARGUMENT_INDEX: usize = 0;
+            assert!(!accounts[INVOKED_ARGUMENT_INDEX].is_signer);
+            assert!(!accounts[INVOKED_ARGUMENT_INDEX].is_writable);
+        }
+        VERIFY_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER => {
+            msg!("verify privilege deescalation escalation signer");
+            const INVOKED_PROGRAM_INDEX: usize = 0;
+            const INVOKED_ARGUMENT_INDEX: usize = 1;
+
+            assert!(!accounts[INVOKED_ARGUMENT_INDEX].is_signer);
+            assert!(!accounts[INVOKED_ARGUMENT_INDEX].is_writable);
+            let invoked_instruction = create_instruction(
+                *accounts[INVOKED_PROGRAM_INDEX].key,
+                &[(accounts[INVOKED_ARGUMENT_INDEX].key, true, false)],
+                vec![VERIFY_PRIVILEGE_ESCALATION],
+            );
+            invoke(&invoked_instruction, accounts)?;
+        }
+        VERIFY_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE => {
+            msg!("verify privilege deescalation escalation writable");
+            const INVOKED_PROGRAM_INDEX: usize = 0;
+            const INVOKED_ARGUMENT_INDEX: usize = 1;
+
+            assert!(!accounts[INVOKED_ARGUMENT_INDEX].is_signer);
+            assert!(!accounts[INVOKED_ARGUMENT_INDEX].is_writable);
+            let invoked_instruction = create_instruction(
+                *accounts[INVOKED_PROGRAM_INDEX].key,
+                &[(accounts[INVOKED_ARGUMENT_INDEX].key, false, true)],
+                vec![VERIFY_PRIVILEGE_ESCALATION],
+            );
+            invoke(&invoked_instruction, accounts)?;
         }
         NESTED_INVOKE => {
             msg!("nested invoke");
@@ -193,6 +227,12 @@ fn process_instruction(
                         data[i as usize] = i;
                     }
                 }
+            }
+        }
+        WRITE_ACCOUNT => {
+            msg!("write account");
+            for i in 0..instruction_data[1] {
+                accounts[0].data.borrow_mut()[i as usize] = instruction_data[1];
             }
         }
         _ => panic!(),

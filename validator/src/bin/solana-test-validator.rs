@@ -1,9 +1,15 @@
 use {
-    clap::{value_t_or_exit, App, Arg},
+    clap::{value_t, value_t_or_exit, App, Arg},
     console::style,
     fd_lock::FdLock,
     indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle},
-    solana_clap_utils::{input_parsers::pubkey_of, input_validators::is_pubkey},
+    solana_clap_utils::{
+        input_parsers::{pubkey_of, pubkeys_of},
+        input_validators::{
+            is_pubkey, is_pubkey_or_keypair, is_slot, is_url_or_moniker,
+            normalize_to_url_if_moniker,
+        },
+    },
     solana_client::{client_error, rpc_client::RpcClient, rpc_request},
     solana_core::rpc::JsonRpcConfig,
     solana_faucet::faucet::{run_local_faucet_with_port, FAUCET_PORT},
@@ -17,8 +23,9 @@ use {
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
         system_program,
     },
-    solana_validator::{start_logger, test_validator::*},
+    solana_validator::{redirect_stderr_to_file, test_validator::*},
     std::{
+        collections::HashSet,
         fs, io,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         path::{Path, PathBuf},
@@ -71,6 +78,18 @@ fn main() {
             }
         })
         .arg(
+            Arg::with_name("json_rpc_url")
+                .short("u")
+                .long("url")
+                .value_name("URL_OR_MONIKER")
+                .takes_value(true)
+                .validator(is_url_or_moniker)
+                .help(
+                    "URL for Solana's JSON RPC or moniker (or their first letter): \
+                   [mainnet-beta, testnet, devnet, localhost]",
+                ),
+        )
+        .arg(
             Arg::with_name("mint_address")
                 .long("mint")
                 .value_name("PUBKEY")
@@ -78,7 +97,8 @@ fn main() {
                 .takes_value(true)
                 .help(
                     "Address of the mint account that will receive tokens \
-                       created at genesis [default: client keypair]",
+                       created at genesis.  If the ledger already exists then \
+                       this parameter is silently ignored [default: client keypair]",
                 ),
         )
         .arg(
@@ -132,7 +152,41 @@ fn main() {
                 .takes_value(true)
                 .number_of_values(2)
                 .multiple(true)
-                .help("Add a BPF program to the genesis configuration"),
+                .help(
+                    "Add a BPF program to the genesis configuration. \
+                       If the ledger already exists then this parameter is silently ignored",
+                ),
+        )
+        .arg(
+            Arg::with_name("clone_account")
+                .long("clone")
+                .short("c")
+                .value_name("ADDRESS")
+                .takes_value(true)
+                .validator(is_pubkey_or_keypair)
+                .multiple(true)
+                .requires("json_rpc_url")
+                .help(
+                    "Copy an account from the cluster referenced by the --url argument the \
+                     genesis configuration. \
+                     If the ledger already exists then this parameter is silently ignored",
+                ),
+        )
+        .arg(
+            Arg::with_name("warp_slot")
+                .required(false)
+                .long("warp-slot")
+                .short("w")
+                .takes_value(true)
+                .value_name("WARP_SLOT")
+                .validator(is_slot)
+                .min_values(0)
+                .max_values(1)
+                .help(
+                    "Warp the ledger to WARP_SLOT after starting the validator. \
+                        If no slot is provided then the current slot of the cluster \
+                        referenced by the --url argument will be used",
+                ),
         )
         .get_matches();
 
@@ -141,6 +195,10 @@ fn main() {
     } else {
         solana_cli_config::Config::default()
     };
+
+    let cluster_rpc_client = value_t!(matches, "json_rpc_url", String)
+        .map(normalize_to_url_if_moniker)
+        .map(RpcClient::new);
 
     let mint_address = pubkey_of(&matches, "mint_address").unwrap_or_else(|| {
         read_keypair_file(&cli_config.keypair_path)
@@ -170,13 +228,13 @@ fn main() {
             match address_program {
                 [address, program] => {
                     let address = address.parse::<Pubkey>().unwrap_or_else(|err| {
-                        eprintln!("Error: invalid address {}: {}", address, err);
+                        println!("Error: invalid address {}: {}", address, err);
                         exit(1);
                     });
 
                     let program_path = PathBuf::from(program);
                     if !program_path.exists() {
-                        eprintln!(
+                        println!(
                             "Error: program file does not exist: {}",
                             program_path.display()
                         );
@@ -194,9 +252,32 @@ fn main() {
         }
     }
 
+    let clone_accounts: HashSet<_> = pubkeys_of(&matches, "clone_account")
+        .map(|v| v.into_iter().collect())
+        .unwrap_or_default();
+
+    let warp_slot = if matches.is_present("warp_slot") {
+        Some(match matches.value_of("warp_slot") {
+            Some(_) => value_t_or_exit!(matches, "warp_slot", Slot),
+            None => {
+                cluster_rpc_client.as_ref().unwrap_or_else(|_| {
+                        println!("The --url argument must be provided if --warp-slot/-w is used without an explicit slot");
+                        exit(1);
+
+                }).get_slot()
+                    .unwrap_or_else(|err| {
+                        println!("Unable to get current cluster slot: {}", err);
+                        exit(1);
+                    })
+            }
+        })
+    } else {
+        None
+    };
+
     if !ledger_path.exists() {
         fs::create_dir(&ledger_path).unwrap_or_else(|err| {
-            eprintln!(
+            println!(
                 "Error: Unable to create directory {}: {}",
                 ledger_path.display(),
                 err
@@ -207,7 +288,7 @@ fn main() {
 
     let mut ledger_fd_lock = FdLock::new(fs::File::open(&ledger_path).unwrap());
     let _ledger_lock = ledger_fd_lock.try_lock().unwrap_or_else(|_| {
-        eprintln!(
+        println!(
             "Error: Unable to lock {} directory. Check if another solana-test-validator is running",
             ledger_path.display()
         );
@@ -216,7 +297,7 @@ fn main() {
 
     if reset_ledger {
         remove_directory_contents(&ledger_path).unwrap_or_else(|err| {
-            eprintln!("Error: Unable to remove {}: {}", ledger_path.display(), err);
+            println!("Error: Unable to remove {}: {}", ledger_path.display(), err);
             exit(1);
         })
     }
@@ -245,14 +326,14 @@ fn main() {
     } else {
         None
     };
-    let _logger_thread = start_logger(logfile);
+    let _logger_thread = redirect_stderr_to_file(logfile);
 
     let faucet_lamports = sol_to_lamports(1_000_000.);
     let faucet_keypair_file = ledger_path.join("faucet-keypair.json");
     if !faucet_keypair_file.exists() {
         write_keypair_file(&Keypair::new(), faucet_keypair_file.to_str().unwrap()).unwrap_or_else(
             |err| {
-                eprintln!(
+                println!(
                     "Error: Failed to write {}: {}",
                     faucet_keypair_file.display(),
                     err
@@ -263,7 +344,7 @@ fn main() {
     }
     let faucet_keypair =
         read_keypair_file(faucet_keypair_file.to_str().unwrap()).unwrap_or_else(|err| {
-            eprintln!(
+            println!(
                 "Error: Failed to read {}: {}",
                 faucet_keypair_file.display(),
                 err
@@ -285,7 +366,8 @@ fn main() {
             None
         };
 
-        TestValidatorGenesis::default()
+        let mut genesis = TestValidatorGenesis::default();
+        genesis
             .ledger_path(&ledger_path)
             .add_account(
                 faucet_keypair.pubkey(),
@@ -298,18 +380,34 @@ fn main() {
                 ..JsonRpcConfig::default()
             })
             .rpc_port(rpc_port)
-            .add_programs_with_path(&programs)
-            .start_with_mint_address(mint_address)
+            .add_programs_with_path(&programs);
+
+        if !clone_accounts.is_empty() {
+            genesis.clone_accounts(
+                clone_accounts,
+                cluster_rpc_client
+                    .as_ref()
+                    .expect("bug: --url argument missing?"),
+            );
+        }
+
+        if let Some(warp_slot) = warp_slot {
+            genesis.warp_slot(warp_slot);
+        }
+        genesis.start_with_mint_address(mint_address)
     }
     .unwrap_or_else(|err| {
-        eprintln!("Error: failed to start validator: {}", err);
+        println!("Error: failed to start validator: {}", err);
         exit(1);
     });
 
     if let Some(faucet_addr) = &faucet_addr {
         let (sender, receiver) = channel();
         run_local_faucet_with_port(faucet_keypair, sender, None, faucet_addr.port());
-        receiver.recv().expect("run faucet");
+        let _ = receiver.recv().expect("run faucet").unwrap_or_else(|err| {
+            println!("Error: failed to start faucet: {}", err);
+            exit(1);
+        });
     }
 
     if output == Output::Dashboard {
@@ -340,14 +438,16 @@ fn main() {
             rpc_client: &RpcClient,
             identity: &Pubkey,
         ) -> client_error::Result<(Slot, Slot, Slot, u64, Sol, String)> {
-            let processed_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::recent())?;
+            let processed_slot =
+                rpc_client.get_slot_with_commitment(CommitmentConfig::processed())?;
             let confirmed_slot =
-                rpc_client.get_slot_with_commitment(CommitmentConfig::single_gossip())?;
-            let finalized_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::max())?;
+                rpc_client.get_slot_with_commitment(CommitmentConfig::confirmed())?;
+            let finalized_slot =
+                rpc_client.get_slot_with_commitment(CommitmentConfig::finalized())?;
             let transaction_count =
-                rpc_client.get_transaction_count_with_commitment(CommitmentConfig::recent())?;
+                rpc_client.get_transaction_count_with_commitment(CommitmentConfig::processed())?;
             let identity_balance = rpc_client
-                .get_balance_with_commitment(identity, CommitmentConfig::single_gossip())?
+                .get_balance_with_commitment(identity, CommitmentConfig::confirmed())?
                 .value;
 
             let health = match rpc_client.get_health() {

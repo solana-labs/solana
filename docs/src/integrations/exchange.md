@@ -107,9 +107,11 @@ possible to boot the node all the way from the genesis block.  Instead boot from
 a snapshot first and then add the `--no-snapshot-fetch` parameter for reboots.
 
 It is important to note that the amount of historical ledger available to your
-nodes is limited to what your trusted validators retain. You will need to ensure
-your nodes do not experience downtimes longer than this span, if ledger
-continuity is crucial for you.
+nodes from the rest of the network is limited at any point in time.  Once
+operational if your validators experience significant downtime they may not be
+able to catch up to the network and will need to download a new snapshot from a
+trusted validator.  In doing so your validators will now have a gap in its
+historical ledger data that cannot be filled.
 
 
 ### Minimizing Validator Port Exposure
@@ -175,9 +177,9 @@ transfer to the appropriate deposit address.
 
 ### Poll for Blocks
 
-The easiest way to track all the deposit accounts for your exchange is to poll
-for each confirmed block and inspect for addresses of interest, using the
-JSON-RPC service of your Solana api node.
+To track all the deposit accounts for your exchange, poll for each confirmed
+block and inspect for addresses of interest, using the JSON-RPC service of your
+Solana API node.
 
 - To identify which blocks are available, send a [`getConfirmedBlocks` request](developing/clients/jsonrpc-api.md#getconfirmedblocks),
   passing the last block you have already processed as the start-slot parameter:
@@ -271,20 +273,38 @@ can request the block from RPC in binary format, and parse it using either our
 
 ### Address History
 
-You can also query the transaction history of a specific address.
+You can also query the transaction history of a specific address. This is
+generally *not* a viable method for tracking all your deposit addresses over all
+slots, but may be useful for examining a few accounts for a specific period of
+time.
 
-- Send a [`getConfirmedSignaturesForAddress`](developing/clients/jsonrpc-api.md#getconfirmedsignaturesforaddress)
-  request to the api node, specifying a range of recent slots:
+- Send a [`getConfirmedSignaturesForAddress2`](developing/clients/jsonrpc-api.md#getconfirmedsignaturesforaddress2)
+  request to the api node:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedSignaturesForAddress","params":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", 0, 10]}' localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getConfirmedSignaturesForAddress2","params":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", {"limit": 3}]}' localhost:8899
 
 {
   "jsonrpc": "2.0",
   "result": [
-    "35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby",
-    "4bJdGN8Tt2kLWZ3Fa1dpwPSEkXWWTSszPSf1rRVsCwNjxbbUdwTeiWtmi8soA26YmwnKD4aAxNp8ci1Gjpdv4gsr",
-    "dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6"
+    {
+      "err": null,
+      "memo": null,
+      "signature": "35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby",
+      "slot": 114
+    },
+    {
+      "err": null,
+      "memo": null,
+      "signature": "4bJdGN8Tt2kLWZ3Fa1dpwPSEkXWWTSszPSf1rRVsCwNjxbbUdwTeiWtmi8soA26YmwnKD4aAxNp8ci1Gjpdv4gsr",
+      "slot": 112
+    },
+    {
+      "err": null,
+      "memo": null,
+      "signature": "dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6",
+      "slot": 108
+    }
   ],
   "id": 1
 }

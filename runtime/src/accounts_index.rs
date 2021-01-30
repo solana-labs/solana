@@ -3,6 +3,7 @@ use crate::{
     inline_spl_token_v2_0::{self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
     secondary_index::*,
 };
+use dashmap::DashSet;
 use ouroboros::self_referencing;
 use solana_sdk::{
     clock::Slot,
@@ -163,6 +164,13 @@ pub struct RootsTracker {
     previous_uncleaned_roots: HashSet<Slot>,
 }
 
+#[derive(Debug, Default)]
+pub struct AccountsIndexRootsStats {
+    pub roots_len: usize,
+    pub uncleaned_roots_len: usize,
+    pub previous_uncleaned_roots_len: usize,
+}
+
 pub struct AccountsIndexIterator<'a, T> {
     account_maps: &'a RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
     start_bound: Bound<Pubkey>,
@@ -227,6 +235,10 @@ impl<'a, T: 'static + Clone> Iterator for AccountsIndexIterator<'a, T> {
     }
 }
 
+pub trait ZeroLamport {
+    fn is_zero_lamport(&self) -> bool;
+}
+
 #[derive(Debug, Default)]
 pub struct AccountsIndex<T> {
     pub account_maps: RwLock<AccountMap<Pubkey, AccountMapEntry<T>>>,
@@ -235,9 +247,10 @@ pub struct AccountsIndex<T> {
     spl_token_owner_index: SecondaryIndex<RwLockSecondaryIndexEntry>,
     roots_tracker: RwLock<RootsTracker>,
     ongoing_scan_roots: RwLock<BTreeMap<Slot, u64>>,
+    zero_lamport_pubkeys: DashSet<Pubkey>,
 }
 
-impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
+impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
     fn iter<R>(&self, range: Option<R>) -> AccountsIndexIterator<T>
     where
         R: RangeBounds<Pubkey>,
@@ -506,6 +519,21 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
             .map(WriteAccountMapEntry::from_account_map_entry)
     }
 
+    fn insert_new_entry_if_missing(&self, pubkey: &Pubkey) -> (WriteAccountMapEntry<T>, bool) {
+        let new_entry = Arc::new(AccountMapEntryInner {
+            ref_count: AtomicU64::new(0),
+            slot_list: RwLock::new(SlotList::with_capacity(1)),
+        });
+        let mut w_account_maps = self.account_maps.write().unwrap();
+        let mut is_newly_inserted = false;
+        let account_entry = w_account_maps.entry(*pubkey).or_insert_with(|| {
+            is_newly_inserted = true;
+            new_entry
+        });
+        let w_account_entry = WriteAccountMapEntry::from_account_map_entry(account_entry.clone());
+        (w_account_entry, is_newly_inserted)
+    }
+
     fn get_account_write_entry_else_create(
         &self,
         pubkey: &Pubkey,
@@ -513,18 +541,9 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
         let mut w_account_entry = self.get_account_write_entry(pubkey);
         let mut is_newly_inserted = false;
         if w_account_entry.is_none() {
-            let new_entry = Arc::new(AccountMapEntryInner {
-                ref_count: AtomicU64::new(0),
-                slot_list: RwLock::new(SlotList::with_capacity(1)),
-            });
-            let mut w_account_maps = self.account_maps.write().unwrap();
-            let account_entry = w_account_maps.entry(*pubkey).or_insert_with(|| {
-                is_newly_inserted = true;
-                new_entry
-            });
-            w_account_entry = Some(WriteAccountMapEntry::from_account_map_entry(
-                account_entry.clone(),
-            ));
+            let entry_is_new = self.insert_new_entry_if_missing(pubkey);
+            w_account_entry = Some(entry_is_new.0);
+            is_newly_inserted = entry_is_new.1;
         }
 
         (w_account_entry.unwrap(), is_newly_inserted)
@@ -726,6 +745,10 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
         account_data: &[u8],
         account_indexes: &HashSet<AccountIndex>,
     ) {
+        if account_indexes.is_empty() {
+            return;
+        }
+
         if account_indexes.contains(&AccountIndex::ProgramId) {
             self.program_id_index.insert(account_owner, pubkey, slot);
         }
@@ -763,6 +786,29 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
         }
     }
 
+    // Same functionally to upsert, but doesn't take the read lock
+    // initially on the accounts_map
+    // Can save time when inserting lots of new keys
+    pub fn insert_new_if_missing(
+        &self,
+        slot: Slot,
+        pubkey: &Pubkey,
+        account_owner: &Pubkey,
+        account_data: &[u8],
+        account_indexes: &HashSet<AccountIndex>,
+        account_info: T,
+        reclaims: &mut SlotList<T>,
+    ) {
+        {
+            let (mut w_account_entry, _is_new) = self.insert_new_entry_if_missing(pubkey);
+            if account_info.is_zero_lamport() {
+                self.zero_lamport_pubkeys.insert(*pubkey);
+            }
+            w_account_entry.update(slot, account_info, reclaims);
+        }
+        self.update_secondary_indexes(pubkey, slot, account_owner, account_data, account_indexes);
+    }
+
     // Updates the given pubkey at the given slot with the new account information.
     // Returns true if the pubkey was newly inserted into the index, otherwise, if the
     // pubkey updates an existing entry in the index, returns false.
@@ -790,11 +836,22 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
             //  - The secondary index is never consulted as primary source of truth for gets/stores.
             //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
             //  account operations.
+            if account_info.is_zero_lamport() {
+                self.zero_lamport_pubkeys.insert(*pubkey);
+            }
             w_account_entry.update(slot, account_info, reclaims);
             is_newly_inserted
         };
         self.update_secondary_indexes(pubkey, slot, account_owner, account_data, account_indexes);
         is_newly_inserted
+    }
+
+    pub fn remove_zero_lamport_key(&self, pubkey: &Pubkey) {
+        self.zero_lamport_pubkeys.remove(pubkey);
+    }
+
+    pub fn zero_lamport_pubkeys(&self) -> &DashSet<Pubkey> {
+        &self.zero_lamport_pubkeys
     }
 
     pub fn unref_from_storage(&self, pubkey: &Pubkey) {
@@ -908,13 +965,13 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
         w_roots_tracker.uncleaned_roots.extend(roots);
     }
 
-    fn max_root(&self) -> Slot {
+    pub fn max_root(&self) -> Slot {
         self.roots_tracker.read().unwrap().max_root
     }
 
     /// Remove the slot when the storage for the slot is freed
     /// Accounts no longer reference this slot.
-    pub fn clean_dead_slot(&self, slot: Slot) {
+    pub fn clean_dead_slot(&self, slot: Slot) -> Option<AccountsIndexRootsStats> {
         if self.is_root(slot) {
             let (roots_len, uncleaned_roots_len, previous_uncleaned_roots_len) = {
                 let mut w_roots_tracker = self.roots_tracker.write().unwrap();
@@ -927,16 +984,13 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
                     w_roots_tracker.previous_uncleaned_roots.len(),
                 )
             };
-            datapoint_info!(
-                "accounts_index_roots_len",
-                ("roots_len", roots_len as i64, i64),
-                ("uncleaned_roots_len", uncleaned_roots_len as i64, i64),
-                (
-                    "previous_uncleaned_roots_len",
-                    previous_uncleaned_roots_len as i64,
-                    i64
-                ),
-            );
+            Some(AccountsIndexRootsStats {
+                roots_len,
+                uncleaned_roots_len,
+                previous_uncleaned_roots_len,
+            })
+        } else {
+            None
         }
     }
 
@@ -954,6 +1008,23 @@ impl<T: 'static + Clone + IsCached> AccountsIndex<T> {
             !is_cleaned
         });
         std::mem::replace(&mut w_roots_tracker.previous_uncleaned_roots, cleaned_roots)
+    }
+
+    #[cfg(test)]
+    pub fn clear_uncleaned_roots(&self, max_clean_root: Option<Slot>) -> HashSet<Slot> {
+        let mut cleaned_roots = HashSet::new();
+        let mut w_roots_tracker = self.roots_tracker.write().unwrap();
+        w_roots_tracker.uncleaned_roots.retain(|root| {
+            let is_cleaned = max_clean_root
+                .map(|max_clean_root| *root <= max_clean_root)
+                .unwrap_or(true);
+            if is_cleaned {
+                cleaned_roots.insert(*root);
+            }
+            // Only keep the slots that have yet to be cleaned
+            !is_cleaned
+        });
+        cleaned_roots
     }
 
     pub fn is_uncleaned_root(&self, slot: Slot) -> bool {
@@ -2081,5 +2152,17 @@ pub mod tests {
             key_end,
             &account_index,
         );
+    }
+
+    impl ZeroLamport for bool {
+        fn is_zero_lamport(&self) -> bool {
+            false
+        }
+    }
+
+    impl ZeroLamport for u64 {
+        fn is_zero_lamport(&self) -> bool {
+            false
+        }
     }
 }

@@ -184,8 +184,18 @@ pub fn parse_args<'a>(
         path: default_signer_path.clone(),
     };
 
-    let CliCommandInfo { command, signers } =
-        parse_command(&matches, &default_signer, &mut wallet_manager)?;
+    let CliCommandInfo {
+        command,
+        mut signers,
+    } = parse_command(&matches, &default_signer, &mut wallet_manager)?;
+
+    if signers.is_empty() {
+        if let Ok(signer_info) =
+            default_signer.generate_unique_signers(vec![None], matches, &mut wallet_manager)
+        {
+            signers.extend(signer_info.signers);
+        }
+    }
 
     let verbose = matches.is_present("verbose");
     let output_format = matches
@@ -235,7 +245,6 @@ pub fn parse_args<'a>(
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    solana_logger::setup();
     let matches = app(
         crate_name!(),
         crate_description!(),
@@ -290,10 +299,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         Arg::with_name("commitment")
             .long("commitment")
             .takes_value(true)
-            .possible_values(&["recent", "single", "singleGossip", "root", "max"])
+            .possible_values(&[
+                "processed",
+                "confirmed",
+                "finalized",
+                "recent", // Deprecated as of v1.5.5
+                "single", // Deprecated as of v1.5.5
+                "singleGossip", // Deprecated as of v1.5.5
+                "root", // Deprecated as of v1.5.5
+                "max", // Deprecated as of v1.5.5
+            ])
             .value_name("COMMITMENT_LEVEL")
+            .hide_possible_values(true)
             .global(true)
-            .help("Return information at the selected commitment level"),
+            .help("Return information at the selected commitment level [possible values: processed, confirmed, finalized]"),
     )
     .arg(
         Arg::with_name("verbose")

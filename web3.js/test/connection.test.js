@@ -398,7 +398,8 @@ test('get epoch info', async () => {
     'epoch',
     'slotIndex',
     'slotsInEpoch',
-    'absoluteSlot' /*, 'blockHeight'*/, // Uncomment blockHeight after 1.1.20 ships
+    'absoluteSlot',
+    'blockHeight',
   ]) {
     expect(epochInfo).toHaveProperty(key);
     expect(epochInfo[key]).toBeGreaterThanOrEqual(0);
@@ -1995,7 +1996,7 @@ test('transaction failure', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [account.publicKey.toBase58(), minimumAmount + 100010],
+      params: [account.publicKey.toBase58(), 3 * minimumAmount],
     },
     {
       error: null,
@@ -2005,7 +2006,7 @@ test('transaction failure', async () => {
   ]);
   const airdropSignature = await connection.requestAirdrop(
     account.publicKey,
-    minimumAmount + 100010,
+    3 * minimumAmount,
   );
 
   mockConfirmTransaction(airdropSignature);
@@ -2023,12 +2024,12 @@ test('transaction failure', async () => {
         context: {
           slot: 11,
         },
-        value: minimumAmount + 100010,
+        value: 3 * minimumAmount,
       },
     },
   ]);
   expect(await connection.getBalance(account.publicKey)).toBe(
-    minimumAmount + 100010,
+    3 * minimumAmount,
   );
 
   mockGetRecentBlockhash('max');
@@ -2049,7 +2050,7 @@ test('transaction failure', async () => {
     SystemProgram.createAccount({
       fromPubkey: account.publicKey,
       newAccountPubkey: newAccount.publicKey,
-      lamports: 1000,
+      lamports: minimumAmount,
       space: 0,
       programId: SystemProgram.programId,
     }),
@@ -2082,7 +2083,7 @@ test('transaction failure', async () => {
     SystemProgram.createAccount({
       fromPubkey: account.publicKey,
       newAccountPubkey: newAccount.publicKey,
-      lamports: 10,
+      lamports: minimumAmount + 1,
       space: 0,
       programId: SystemProgram.programId,
     }),

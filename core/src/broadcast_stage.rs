@@ -347,6 +347,7 @@ fn update_peer_stats(
 ) {
     let now = timestamp();
     let last = last_datapoint_submit.load(Ordering::Relaxed);
+    #[allow(deprecated)]
     if now.saturating_sub(last) > 1000
         && last_datapoint_submit.compare_and_swap(last, now, Ordering::Relaxed) == last
     {
@@ -358,9 +359,9 @@ fn update_peer_stats(
     }
 }
 
-pub fn get_broadcast_peers<S: std::hash::BuildHasher>(
+pub fn get_broadcast_peers(
     cluster_info: &ClusterInfo,
-    stakes: Option<Arc<HashMap<Pubkey, u64, S>>>,
+    stakes: Option<&HashMap<Pubkey, u64>>,
 ) -> (Vec<ContactInfo>, Vec<(u64, usize)>) {
     use crate::cluster_info;
     let mut peers = cluster_info.tvu_peers();

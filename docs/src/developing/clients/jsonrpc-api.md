@@ -120,8 +120,8 @@ Requests can be sent in batches by sending an array of JSON-RPC request objects 
 
 - Hash: A SHA-256 hash of a chunk of data.
 - Pubkey: The public key of a Ed25519 key-pair.
-- Signature: An Ed25519 signature of a chunk of data.
-- Transaction: A Solana instruction signed by a client key-pair.
+- Transaction: A list of Solana instructions signed by a client keypair to authorize those actions.
+- Signature: An Ed25519 signature of transaction's payload data including instructions. This can be used to identify transactions.
 
 ## Configuring State Commitment
 
@@ -134,22 +134,20 @@ to report progress and higher levels to ensure the state will not be rolled back
 In descending order of commitment (most finalized to least finalized), clients
 may specify:
 
-- `"max"` - the node will query the most recent block confirmed by supermajority
+- `"finalized"` - the node will query the most recent block confirmed by supermajority
 of the cluster as having reached maximum lockout, meaning the cluster has
 recognized this block as finalized
-- `"root"` - the node will query the most recent block having reached maximum
-lockout on this node, meaning the node has recognized this block as finalized
-- `"singleGossip"` - the node will query the most recent block that has been voted on by supermajority of the cluster.
+- `"confirmed"` - the node will query the most recent block that has been voted on by supermajority of the cluster.
   - It incorporates votes from gossip and replay.
   - It does not count votes on descendants of a block, only direct votes on that block.
   - This confirmation level also upholds "optimistic confirmation" guarantees in
     release 1.3 and onwards.
-- `"recent"` - the node will query its most recent block.  Note that the block
+- `"processed"` - the node will query its most recent block.  Note that the block
 may not be complete.
 
 For processing many dependent transactions in series, it's recommended to use
-`"singleGossip"` commitment, which balances speed with rollback safety.
-For total safety, it's recommended to use`"max"` commitment.
+`"confirmed"` commitment, which balances speed with rollback safety.
+For total safety, it's recommended to use`"finalized"` commitment.
 
 #### Example
 
@@ -642,7 +640,7 @@ Transactions are quite different from those on other blockchains. Be sure to rev
 
 The JSON structure of a transaction is defined as follows:
 
-- `signatures: <array[string]>` - A list of base-58 encoded signatures applied to the transaction. The list is always of length `message.header.numRequiredSignatures`, and the signature at index `i` corresponds to the public key at index `i` in `message.account_keys`.
+- `signatures: <array[string]>` - A list of base-58 encoded signatures applied to the transaction. The list is always of length `message.header.numRequiredSignatures` and not empty. The signature at index `i` corresponds to the public key at index `i` in `message.account_keys`. The first one is used as the [transaction id](../../terminology.md#transaction-id).
 - `message: <object>` - Defines the content of the transaction.
   - `accountKeys: <array[string]>` - List of base-58 encoded public keys used by the transaction, including by the instructions and for signatures. The first `message.header.numRequiredSignatures` public keys must sign the transaction.
   - `header: <object>` - Details the account types and signatures required by the transaction.
@@ -840,7 +838,8 @@ Returns transaction details for a confirmed transaction
 #### Parameters:
 
 - `<string>` - transaction signature as base-58 encoded string
-N encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
+- `<string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (*slow*), "base64". If parameter not provided, the default encoding is "json".
+  "jsonParsed" encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
 - `<string>` - (optional) encoding for the returned Transaction, either "json", "jsonParsed", "base58" (*slow*), or "base64". If parameter not provided, the default encoding is JSON.
 
 #### Results:
@@ -2670,7 +2669,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 Result:
 ```json
-{"jsonrpc":"2.0","result":{"solana-core": "1.5.5"},"id":1}
+{"jsonrpc":"2.0","result":{"solana-core": "1.5.6"},"id":1}
 ```
 
 ### getVoteAccounts
@@ -2795,6 +2794,20 @@ Result:
 
 Submits a signed transaction to the cluster for processing.
 
+This method does not alter the transaction in any way; it relays the
+transaction created by clients to the node as-is.
+
+If the node's rpc service receives the transaction, this method immediately
+succeeds, without waiting for any confirmations. A successful response from
+this method does not guarantee the transaction is processed or confirmed by the
+cluster.
+
+While the rpc service will reasonably retry to submit it, the transaction
+could be rejected if transaction's `recent_blockhash` expires before it lands.
+
+Use [`getSignatureStatuses`](jsonrpc-api.md#getsignaturestatuses) to ensure
+a transaction is processed and confirmed.
+
 Before submitting, the following preflight checks are performed:
 
 1. The transaction signatures are verified
@@ -2802,6 +2815,11 @@ Before submitting, the following preflight checks are performed:
    commitment. On failure an error will be returned. Preflight checks may be
    disabled if desired. It is recommended to specify the same commitment and
    preflight commitment to avoid confusing behavior.
+
+The returned signature is the first signature in the transaction, which
+is used to identify the transaction ([transaction id](../../terminology.md#transanction-id)).
+This identifier can be easily extracted from the transaction data before
+submission.
 
 #### Parameters:
 
@@ -2813,7 +2831,7 @@ Before submitting, the following preflight checks are performed:
 
 #### Results:
 
-- `<string>` - Transaction Signature, as base-58 encoded string
+- `<string>` - First Transaction Signature embedded in the transaction, as base-58 encoded string ([transaction id](../../terminology.md#transanction-id))
 
 #### Example:
 
@@ -2947,7 +2965,7 @@ After connecting to the RPC PubSub websocket at `ws://<ADDRESS>/`:
 
 - Submit subscription requests to the websocket using the methods below
 - Multiple subscriptions may be active at once
-- Many subscriptions take the optional [`commitment` parameter](jsonrpc-api.md#configuring-state-commitment), defining how finalized a change should be to trigger a notification. For subscriptions, if commitment is unspecified, the default value is `"singleGossip"`.
+- Many subscriptions take the optional [`commitment` parameter](jsonrpc-api.md#configuring-state-commitment), defining how finalized a change should be to trigger a notification. For subscriptions, if commitment is unspecified, the default value is `"confirmed"`.
 
 ### accountSubscribe
 

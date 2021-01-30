@@ -41,7 +41,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use solana_validator::start_logger;
+use solana_validator::redirect_stderr_to_file;
 use std::{
     collections::HashSet,
     env,
@@ -323,7 +323,7 @@ fn check_vote_account(
     authorized_voter_pubkeys: &[Pubkey],
 ) -> Result<(), String> {
     let vote_account = rpc_client
-        .get_account_with_commitment(vote_account_address, CommitmentConfig::single_gossip())
+        .get_account_with_commitment(vote_account_address, CommitmentConfig::confirmed())
         .map_err(|err| format!("failed to fetch vote account: {}", err.to_string()))?
         .value
         .ok_or_else(|| format!("vote account does not exist: {}", vote_account_address))?;
@@ -336,7 +336,7 @@ fn check_vote_account(
     }
 
     let identity_account = rpc_client
-        .get_account_with_commitment(identity_pubkey, CommitmentConfig::single_gossip())
+        .get_account_with_commitment(identity_pubkey, CommitmentConfig::confirmed())
         .map_err(|err| format!("failed to fetch identity account: {}", err.to_string()))?
         .value
         .ok_or_else(|| format!("identity account does not exist: {}", identity_pubkey))?;
@@ -690,7 +690,7 @@ fn rpc_bootstrap(
                     Ok(())
                 } else {
                     rpc_client
-                        .get_slot_with_commitment(CommitmentConfig::root())
+                        .get_slot_with_commitment(CommitmentConfig::finalized())
                         .map_err(|err| format!("Failed to get RPC node slot: {}", err))
                         .and_then(|slot| {
                             info!("RPC node root slot: {}", slot);
@@ -1443,9 +1443,16 @@ pub fn main() {
                 .help("Enable an accounts index, indexed by the selected account field"),
         )
         .arg(
+            Arg::with_name("no_accounts_db_caching")
+                .long("no-accounts-db-caching")
+                .help("Disables accounts caching"),
+        )
+        .arg(
+            // legacy nop argument
             Arg::with_name("accounts_db_caching_enabled")
                 .long("accounts-db-caching-enabled")
-                .help("Enable accounts caching"),
+                .conflicts_with("no_accounts_db_caching")
+                .hidden(true)
         )
         .get_matches();
 
@@ -1621,7 +1628,7 @@ pub fn main() {
         poh_pinned_cpu_core: value_of(&matches, "poh_pinned_cpu_core")
             .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),
         account_indexes,
-        accounts_db_caching_enabled: matches.is_present("accounts_db_caching_enabled"),
+        accounts_db_caching_enabled: !matches.is_present("no_accounts_db_caching"),
         ..ValidatorConfig::default()
     };
 
@@ -1802,7 +1809,7 @@ pub fn main() {
         }
     };
     let use_progress_bar = logfile.is_none();
-    let _logger_thread = start_logger(logfile);
+    let _logger_thread = redirect_stderr_to_file(logfile);
 
     info!("{} {}", crate_name!(), solana_version::version!());
     info!("Starting validator with: {:#?}", std::env::args_os());

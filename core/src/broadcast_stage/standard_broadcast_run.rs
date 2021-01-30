@@ -319,7 +319,7 @@ impl StandardBroadcastRun {
         &mut self,
         sock: &UdpSocket,
         cluster_info: &ClusterInfo,
-        stakes: Option<Arc<HashMap<Pubkey, u64>>>,
+        stakes: Option<&HashMap<Pubkey, u64>>,
         shreds: Arc<Vec<Shred>>,
         broadcast_shred_batch_info: Option<BroadcastShredBatchInfo>,
     ) -> Result<()> {
@@ -329,6 +329,7 @@ impl StandardBroadcastRun {
         let mut get_peers_time = Measure::start("broadcast::get_peers");
         let now = timestamp();
         let last = self.last_peer_update.load(Ordering::Relaxed);
+        #[allow(deprecated)]
         if now - last > BROADCAST_PEER_UPDATE_INTERVAL_MS
             && self
                 .last_peer_update
@@ -431,7 +432,7 @@ impl BroadcastRun for StandardBroadcastRun {
         sock: &UdpSocket,
     ) -> Result<()> {
         let ((stakes, shreds), slot_start_ts) = receiver.lock().unwrap().recv()?;
-        self.broadcast(sock, cluster_info, stakes, shreds, slot_start_ts)
+        self.broadcast(sock, cluster_info, stakes.as_deref(), shreds, slot_start_ts)
     }
     fn record(
         &mut self,

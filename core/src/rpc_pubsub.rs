@@ -579,7 +579,7 @@ mod tests {
             subscriber,
             tx.signatures[0].to_string(),
             Some(RpcSignatureSubscribeConfig {
-                commitment: Some(CommitmentConfig::single()),
+                commitment: Some(CommitmentConfig::finalized()),
                 ..RpcSignatureSubscribeConfig::default()
             }),
         );
@@ -612,7 +612,7 @@ mod tests {
             subscriber,
             tx.signatures[0].to_string(),
             Some(RpcSignatureSubscribeConfig {
-                commitment: Some(CommitmentConfig::single()),
+                commitment: Some(CommitmentConfig::finalized()),
                 enable_received_notification: Some(true),
             }),
         );
@@ -721,7 +721,7 @@ mod tests {
             subscriber,
             stake_account.pubkey().to_string(),
             Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::recent()),
+                commitment: Some(CommitmentConfig::processed()),
                 encoding: None,
                 data_slice: None,
             }),
@@ -781,6 +781,7 @@ mod tests {
             &stake_authority.pubkey(),
             &new_stake_authority,
             StakeAuthorize::Staker,
+            None,
         );
         let message = Message::new(&[ix], Some(&stake_authority.pubkey()));
         let tx = Transaction::new(&[&stake_authority], message, blockhash);
@@ -830,7 +831,7 @@ mod tests {
             subscriber,
             nonce_account.pubkey().to_string(),
             Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::recent()),
+                commitment: Some(CommitmentConfig::processed()),
                 encoding: Some(UiAccountEncoding::JsonParsed),
                 data_slice: None,
             }),
@@ -952,7 +953,7 @@ mod tests {
             subscriber,
             bob.pubkey().to_string(),
             Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::root()),
+                commitment: Some(CommitmentConfig::finalized()),
                 encoding: None,
                 data_slice: None,
             }),
@@ -1006,7 +1007,7 @@ mod tests {
             subscriber,
             bob.pubkey().to_string(),
             Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::root()),
+                commitment: Some(CommitmentConfig::finalized()),
                 encoding: None,
                 data_slice: None,
             }),

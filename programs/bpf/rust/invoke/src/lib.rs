@@ -27,6 +27,9 @@ const TEST_ALLOC_ACCESS_VIOLATION: u8 = 8;
 const TEST_INSTRUCTION_DATA_TOO_LARGE: u8 = 9;
 const TEST_INSTRUCTION_META_TOO_LARGE: u8 = 10;
 const TEST_RETURN_ERROR: u8 = 11;
+const TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER: u8 = 12;
+const TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE: u8 = 13;
+const TEST_WRITE_DEESCALATION: u8 = 14;
 
 // const MINT_INDEX: usize = 0;
 const ARGUMENT_INDEX: usize = 1;
@@ -306,6 +309,18 @@ fn process_instruction(
                 );
             }
 
+            msg!("Test privilege deescalation");
+            {
+                assert!(accounts[INVOKED_ARGUMENT_INDEX].is_signer);
+                assert!(accounts[INVOKED_ARGUMENT_INDEX].is_writable);
+                let invoked_instruction = create_instruction(
+                    *accounts[INVOKED_PROGRAM_INDEX].key,
+                    &[(accounts[INVOKED_ARGUMENT_INDEX].key, false, false)],
+                    vec![VERIFY_PRIVILEGE_DEESCALATION],
+                );
+                invoke(&invoked_instruction, accounts)?;
+            }
+
             msg!("Verify data values are retained and updated");
             {
                 let data = accounts[ARGUMENT_INDEX].try_borrow_data()?;
@@ -315,6 +330,28 @@ fn process_instruction(
                 let data = accounts[INVOKED_ARGUMENT_INDEX].try_borrow_data()?;
                 for i in 0..10 {
                     assert_eq!(data[i as usize], i);
+                }
+            }
+
+            msg!("Verify data write before cpi call with deescalated writable");
+            {
+                {
+                    let mut data = accounts[ARGUMENT_INDEX].try_borrow_mut_data()?;
+                    for i in 0..100 {
+                        data[i as usize] = 42;
+                    }
+                }
+
+                let invoked_instruction = create_instruction(
+                    *accounts[INVOKED_PROGRAM_INDEX].key,
+                    &[(accounts[ARGUMENT_INDEX].key, false, false)],
+                    vec![VERIFY_PRIVILEGE_DEESCALATION],
+                );
+                invoke(&invoked_instruction, accounts)?;
+
+                let data = accounts[ARGUMENT_INDEX].try_borrow_data()?;
+                for i in 0..100 {
+                    assert_eq!(data[i as usize], 42);
                 }
             }
         }
@@ -489,6 +526,43 @@ fn process_instruction(
                 *accounts[INVOKED_PROGRAM_INDEX].key,
                 &[(accounts[INVOKED_ARGUMENT_INDEX].key, false, true)],
                 vec![RETURN_ERROR],
+            );
+            let _ = invoke(&instruction, accounts);
+        }
+        TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER => {
+            msg!("Test privilege deescalation escalation signer");
+            assert!(accounts[INVOKED_ARGUMENT_INDEX].is_signer);
+            assert!(accounts[INVOKED_ARGUMENT_INDEX].is_writable);
+            let invoked_instruction = create_instruction(
+                *accounts[INVOKED_PROGRAM_INDEX].key,
+                &[
+                    (accounts[INVOKED_PROGRAM_INDEX].key, false, false),
+                    (accounts[INVOKED_ARGUMENT_INDEX].key, false, false),
+                ],
+                vec![VERIFY_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER],
+            );
+            invoke(&invoked_instruction, accounts)?;
+        }
+        TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE => {
+            msg!("Test privilege deescalation escalation writable");
+            assert!(accounts[INVOKED_ARGUMENT_INDEX].is_signer);
+            assert!(accounts[INVOKED_ARGUMENT_INDEX].is_writable);
+            let invoked_instruction = create_instruction(
+                *accounts[INVOKED_PROGRAM_INDEX].key,
+                &[
+                    (accounts[INVOKED_PROGRAM_INDEX].key, false, false),
+                    (accounts[INVOKED_ARGUMENT_INDEX].key, false, false),
+                ],
+                vec![VERIFY_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE],
+            );
+            invoke(&invoked_instruction, accounts)?;
+        }
+        TEST_WRITE_DEESCALATION => {
+            msg!("Test writable deescalation");
+            let instruction = create_instruction(
+                *accounts[INVOKED_PROGRAM_INDEX].key,
+                &[(accounts[INVOKED_ARGUMENT_INDEX].key, false, false)],
+                vec![WRITE_ACCOUNT, 10],
             );
             let _ = invoke(&instruction, accounts);
         }

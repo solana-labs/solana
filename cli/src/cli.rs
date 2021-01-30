@@ -123,6 +123,10 @@ pub enum CliCommand {
         blockhash: Option<Hash>,
         print_timestamp: bool,
     },
+    Rent {
+        data_length: usize,
+        use_lamports_unit: bool,
+    },
     ShowBlockProduction {
         epoch: Option<Epoch>,
         slot_limit: Option<u64>,
@@ -256,6 +260,7 @@ pub enum CliCommand {
         nonce_account: Option<Pubkey>,
         nonce_authority: SignerIndex,
         fee_payer: SignerIndex,
+        custodian: Option<SignerIndex>,
     },
     StakeSetLockup {
         stake_account_pubkey: Pubkey,
@@ -433,7 +438,7 @@ impl CliConfig<'_> {
     }
 
     fn default_commitment() -> CommitmentConfig {
-        CommitmentConfig::single_gossip()
+        CommitmentConfig::confirmed()
     }
 
     fn first_nonempty_setting(
@@ -528,10 +533,10 @@ impl CliConfig<'_> {
 
     pub fn recent_for_tests() -> Self {
         Self {
-            commitment: CommitmentConfig::recent(),
+            commitment: CommitmentConfig::processed(),
             send_transaction_config: RpcSendTransactionConfig {
                 skip_preflight: true,
-                preflight_commitment: Some(CommitmentConfig::recent().commitment),
+                preflight_commitment: Some(CommitmentConfig::processed().commitment),
                 ..RpcSendTransactionConfig::default()
             },
             ..Self::default()
@@ -554,7 +559,7 @@ impl Default for CliConfig<'_> {
             rpc_timeout: Duration::from_secs(u64::from_str(DEFAULT_RPC_TIMEOUT_SECONDS).unwrap()),
             verbose: false,
             output_format: OutputFormat::Display,
-            commitment: CommitmentConfig::single_gossip(),
+            commitment: CommitmentConfig::confirmed(),
             send_transaction_config: RpcSendTransactionConfig::default(),
             address_labels: HashMap::new(),
         }
@@ -864,6 +869,17 @@ pub fn parse_command(
                 signers: signer_info.signers,
             })
         }
+        ("rent", Some(matches)) => {
+            let data_length = value_of(matches, "data_length").unwrap();
+            let use_lamports_unit = matches.is_present("lamports");
+            Ok(CliCommandInfo {
+                command: CliCommand::Rent {
+                    data_length,
+                    use_lamports_unit,
+                },
+                signers: vec![],
+            })
+        }
         //
         ("", None) => {
             eprintln!("{}", matches.usage());
@@ -1150,7 +1166,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         println_name_value("RPC URL:", &config.json_rpc_url);
         println_name_value("Default Signer Path:", &config.keypair_path);
         if config.keypair_path.starts_with("usb://") {
-            println_name_value("Pubkey:", &format!("{:?}", config.pubkey()?));
+            let pubkey = config
+                .pubkey()
+                .map(|pubkey| format!("{:?}", pubkey))
+                .unwrap_or_else(|_| "Unavailable".to_string());
+            println_name_value("Pubkey:", &pubkey);
         }
         println_name_value("Commitment:", &config.commitment.commitment.to_string());
     }
@@ -1172,7 +1192,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Cluster Query Commands
         // Get address of this client
         CliCommand::Address => Ok(format!("{}", config.pubkey()?)),
-
         // Return software version of solana-cli and cluster entrypoint node
         CliCommand::Catchup {
             node_pubkey,
@@ -1237,6 +1256,10 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             blockhash,
             *print_timestamp,
         ),
+        CliCommand::Rent {
+            data_length,
+            use_lamports_unit,
+        } => process_calculate_rent(&rpc_client, config, *data_length, *use_lamports_unit),
         CliCommand::ShowBlockProduction { epoch, slot_limit } => {
             process_show_block_production(&rpc_client, config, *epoch, *slot_limit)
         }
@@ -1498,11 +1521,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             nonce_account,
             nonce_authority,
             fee_payer,
+            custodian,
         } => process_stake_authorize(
             &rpc_client,
             config,
             &stake_account_pubkey,
             new_authorizations,
+            *custodian,
             *sign_only,
             blockhash_query,
             *nonce_account,
@@ -2704,7 +2729,7 @@ mod tests {
         let program_id = json
             .as_object()
             .unwrap()
-            .get("ProgramId")
+            .get("programId")
             .unwrap()
             .as_str()
             .unwrap();

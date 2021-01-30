@@ -70,11 +70,7 @@ where
     }
 }
 
-fn build_bpf_package(
-    config: &Config,
-    target_directory: &PathBuf,
-    package: &cargo_metadata::Package,
-) {
+fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_metadata::Package) {
     let program_name = {
         let cdylib_targets = package
             .targets
