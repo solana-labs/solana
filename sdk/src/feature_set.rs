@@ -49,7 +49,7 @@ pub mod full_inflation {
         }
     }
 
-	pub mod nam {
+    pub mod nam {
         pub mod vote {
             solana_sdk::declare_id!("Hb6tvjY81EmgapxNS4dos1v8Q2RSjQABphu7cnzM4ELa");
         }
@@ -215,7 +215,7 @@ lazy_static! {
         (full_inflation::candidate_example::vote::id(), "Community vote allowing candidate_example to enable full inflation"),
         (full_inflation::candidate_example::enable::id(), "Full inflation enabled by candidate_example"),
         (matching_buffer_upgrade_authorities::id(), "Upgradeable buffer and program authorities must match"),
-		(full_inflation::nam::vote::id(), "community vote allowing Nam to enable full inflation"),
+        (full_inflation::nam::vote::id(), "community vote allowing Nam to enable full inflation"),
         (full_inflation::nam::enable::id(), "full inflation enabled by Nam"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
