@@ -215,6 +215,7 @@ lazy_static! {
         (abort_on_all_cpi_failures::id(), "abort on all CPI failures"),
         (use_loaded_executables::id(), "use loaded executable accounts"),
         (turbine_retransmit_peers_patch::id(), "turbine retransmit peers patch #14631"),
+        (prevent_upgrade_and_invoke::id(), "prevent upgrade and invoke in same tx batch"),
         (full_inflation::candidate_example::vote::id(), "Community vote allowing candidate_example to enable full inflation"),
         (full_inflation::candidate_example::enable::id(), "Full inflation enabled by candidate_example"),
         (track_writable_deescalation::id(), "track account writable deescalation"),
