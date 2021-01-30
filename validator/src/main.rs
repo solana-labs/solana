@@ -1,6 +1,6 @@
 use clap::{
-    crate_description, crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, App, Arg,
-    ArgMatches,
+    crate_description, crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, App,
+    AppSettings, Arg, ArgMatches, SubCommand,
 };
 use log::*;
 use rand::{seq::SliceRandom, thread_rng, Rng};
@@ -57,6 +57,12 @@ use std::{
     thread::sleep,
     time::{Duration, Instant},
 };
+
+#[derive(Debug, PartialEq)]
+enum Operation {
+    Initialize,
+    Run,
+}
 
 fn port_range_validator(port_range: String) -> Result<(), String> {
     if let Some((start, end)) = solana_net_utils::parse_port_range(&port_range) {
@@ -760,54 +766,6 @@ fn rpc_bootstrap(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn create_validator(
-    node: Node,
-    identity_keypair: &Arc<Keypair>,
-    ledger_path: &Path,
-    vote_account: &Pubkey,
-    authorized_voter_keypairs: Vec<Arc<Keypair>>,
-    cluster_entrypoints: Vec<ContactInfo>,
-    mut validator_config: ValidatorConfig,
-    rpc_bootstrap_config: RpcBootstrapConfig,
-    no_port_check: bool,
-    use_progress_bar: bool,
-    maximum_local_snapshot_age: Slot,
-) -> Validator {
-    if validator_config.cuda {
-        solana_perf::perf_libs::init_cuda();
-        enable_recycler_warming();
-    }
-    solana_ledger::entry::init_poh();
-    solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(ledger_path);
-
-    if !cluster_entrypoints.is_empty() {
-        rpc_bootstrap(
-            &node,
-            &identity_keypair,
-            &ledger_path,
-            &vote_account,
-            &authorized_voter_keypairs,
-            &cluster_entrypoints,
-            &mut validator_config,
-            rpc_bootstrap_config,
-            no_port_check,
-            use_progress_bar,
-            maximum_local_snapshot_age,
-        );
-    }
-
-    Validator::new(
-        node,
-        &identity_keypair,
-        &ledger_path,
-        &vote_account,
-        authorized_voter_keypairs,
-        cluster_entrypoints,
-        &validator_config,
-    )
-}
-
 pub fn main() {
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
@@ -830,6 +788,7 @@ pub fn main() {
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
+        .setting(AppSettings::VersionlessSubcommands)
         .arg(
             Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
                 .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
@@ -1454,7 +1413,22 @@ pub fn main() {
                 .conflicts_with("no_accounts_db_caching")
                 .hidden(true)
         )
+        .after_help("The default subcommand is run")
+        .subcommand(
+             SubCommand::with_name("init")
+             .about("Initialize the ledger directory then exit")
+         )
+        .subcommand(
+             SubCommand::with_name("run")
+             .about("Run the validator")
+         )
         .get_matches();
+
+    let operation = match matches.subcommand().0 {
+        "" | "run" => Operation::Run,
+        "init" => Operation::Initialize,
+        _ => unreachable!(),
+    };
 
     let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(Keypair::new));
 
@@ -1906,18 +1880,42 @@ pub fn main() {
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
     solana_metrics::set_panic_hook("validator");
 
-    let validator = create_validator(
+    if validator_config.cuda {
+        solana_perf::perf_libs::init_cuda();
+        enable_recycler_warming();
+    }
+    solana_ledger::entry::init_poh();
+    solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&ledger_path);
+
+    if !cluster_entrypoints.is_empty() {
+        rpc_bootstrap(
+            &node,
+            &identity_keypair,
+            &ledger_path,
+            &vote_account,
+            &authorized_voter_keypairs,
+            &cluster_entrypoints,
+            &mut validator_config,
+            rpc_bootstrap_config,
+            no_port_check,
+            use_progress_bar,
+            maximum_local_snapshot_age,
+        );
+    }
+
+    if operation == Operation::Initialize {
+        info!("Validator ledger initialization complete");
+        return;
+    }
+
+    let validator = Validator::new(
         node,
         &identity_keypair,
         &ledger_path,
         &vote_account,
         authorized_voter_keypairs,
         cluster_entrypoints,
-        validator_config,
-        rpc_bootstrap_config,
-        no_port_check,
-        use_progress_bar,
-        maximum_local_snapshot_age,
+        &validator_config,
     );
 
     if let Some(filename) = init_complete_file {
