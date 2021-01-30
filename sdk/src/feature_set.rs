@@ -49,7 +49,7 @@ pub mod full_inflation {
         }
     }
 
-	pub mod nam {
+    pub mod nam {
         pub mod vote {
             solana_sdk::declare_id!("Hb6tvjY81EmgapxNS4dos1v8Q2RSjQABphu7cnzM4ELa");
         }
@@ -230,7 +230,7 @@ lazy_static! {
         (track_writable_deescalation::id(), "track account writable deescalation"),
         (spl_token_v2_self_transfer_fix::id(), "spl-token self-transfer fix"),
         (matching_buffer_upgrade_authorities::id(), "Upgradeable buffer and program authorities must match"),
-		(full_inflation::nam::vote::id(), "community vote allowing Nam to enable full inflation"),
+        (full_inflation::nam::vote::id(), "community vote allowing Nam to enable full inflation"),
         (full_inflation::nam::enable::id(), "full inflation enabled by Nam"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
