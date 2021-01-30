@@ -2598,10 +2598,10 @@ impl Blockstore {
         })?;
 
         debug!("{:?} shreds in last FEC set", data_shreds.len(),);
-        bincode::deserialize::<Vec<Entry>>(&deshred_payload).map_err(|_| {
-            BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
-                "could not reconstruct entries".to_string(),
-            )))
+        bincode::deserialize::<Vec<Entry>>(&deshred_payload).map_err(|e| {
+            BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(format!(
+                "could not reconstruct entries: {:?}", e
+            ))))
         })
     }
 
