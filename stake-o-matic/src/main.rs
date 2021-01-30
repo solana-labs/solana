@@ -707,6 +707,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
         .unwrap();
 
+        debug!(
+            "\nidentity: {}\n - vote address: {}\n - baseline stake: {}\n - bonus stake: {}",
+            node_pubkey, vote_pubkey, baseline_stake_address, bonus_stake_address
+        );
+
         // Transactions to create the baseline and bonus stake accounts
         if let Ok((balance, stake_state)) = get_stake_account(&rpc_client, &baseline_stake_address)
         {
