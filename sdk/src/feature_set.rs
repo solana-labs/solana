@@ -51,7 +51,7 @@ pub mod full_inflation {
 
     pub mod stakeconomy {
         pub mod vote {
-             solana_sdk::declare_id!("JCergKv4GcywaBzn4JHi3sYJfG7mWenTG3QQDNUJiGS");
+            solana_sdk::declare_id!("JCergKv4GcywaBzn4JHi3sYJfG7mWenTG3QQDNUJiGS");
         }
         pub mod enable {
             solana_sdk::declare_id!("5NUfXNZUsP1ndyShQJ37H2dgHaEGaUNqgT9zn3BTiwct");
