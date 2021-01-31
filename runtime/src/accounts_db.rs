@@ -6758,6 +6758,7 @@ pub mod tests {
             .into_iter()
             .flatten()
             .map(|storage| {
+                storage.set_status(AccountStorageStatus::Full);
                 let accounts = storage.accounts.accounts(0);
                 accounts.into_iter().for_each(|stored_account| {
                     let acct = LoadedAccount::Stored(stored_account);
