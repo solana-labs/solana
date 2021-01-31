@@ -5067,7 +5067,7 @@ pub mod tests {
         // slot same, version <
         let hash2 = Hash::new_unique();
         let val2 = CalculateHashIntermediate::new(0, hash2, 4, 5, 1);
-        AccountsDB::handle_one_loaded_account(&key, val2.clone(), &account_maps);
+        AccountsDB::handle_one_loaded_account(&key, val2, &account_maps);
         assert_eq!(*account_maps.get(&key).unwrap(), val);
 
         // slot same, vers =
