@@ -3759,7 +3759,7 @@ impl AccountsDB {
         };
     }
 
-    fn scan_slot_using_snapshot(
+    fn scan_snapshot_stores(
         storage: SnapshotStorages,
         simple_capitalization_enabled: bool,
     ) -> (DashMap<Pubkey, CalculateHashIntermediate>, Measure) {
@@ -3771,7 +3771,6 @@ impl AccountsDB {
              _store_id: AppendVecId,
              _accum: &mut Vec<(Pubkey, CalculateHashIntermediate)>,
              slot: Slot| {
-                let public_key = loaded_account.pubkey();
                 let version = loaded_account.write_version();
                 let raw_lamports = loaded_account.lamports();
                 let balance = Self::account_balance_for_capitalization(
@@ -3781,7 +3780,6 @@ impl AccountsDB {
                     simple_capitalization_enabled,
                 );
 
-                let key = public_key;
                 let source_item = (
                     version,
                     *loaded_account.loaded_hash(),
@@ -3789,7 +3787,7 @@ impl AccountsDB {
                     raw_lamports,
                     slot,
                 );
-                Self::handle_one_loaded_account(key, source_item, &map);
+                Self::handle_one_loaded_account(loaded_account.pubkey(), source_item, &map);
             },
         );
         time.stop();
@@ -3803,7 +3801,7 @@ impl AccountsDB {
         storages: SnapshotStorages,
         simple_capitalization_enabled: bool,
     ) -> (Hash, u64) {
-        let result = Self::scan_slot_using_snapshot(storages, simple_capitalization_enabled);
+        let result = Self::scan_snapshot_stores(storages, simple_capitalization_enabled);
 
         Self::rest_of_hash_calculation(result)
     }
