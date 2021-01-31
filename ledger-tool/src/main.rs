@@ -1138,7 +1138,7 @@ fn main() {
                     .value_name("PUBKEY")
                     .validator(is_pubkey)
                     .multiple(true)
-                    .help("List if accounts to remove while creating the snapshot"),
+                    .help("List of accounts to remove while creating the snapshot"),
             )
             .arg(
                 Arg::with_name("remove_stake_accounts")
