@@ -3413,6 +3413,9 @@ impl AccountsDB {
         unstable_sort: bool,
     ) -> ((Hash, u64), (Measure, Measure)) {
         let mut sort_time = Measure::start("sort");
+        // Unstable and stable sorts produce the same results for the known callers.
+        // However, sort time performance can be very different for different callers.
+        // So, the option to specify which type of sort is provided.
         if unstable_sort {
             hashes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0));
         } else {
