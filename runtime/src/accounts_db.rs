@@ -4051,8 +4051,7 @@ impl AccountsDB {
                     "AccountDB::accounts_index corrupted. Storage pointed to: {}, expected: {}, should only point to one slot",
                     store.slot(), *slot
                 );
-                let count =
-                    store.remove_account(account_info.stored_size, reset_accounts);
+                let count = store.remove_account(account_info.stored_size, reset_accounts);
                 if count == 0 {
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
