@@ -167,6 +167,7 @@ type ReclaimResult = (AccountSlots, AppendVecOffsets);
 type StorageFinder<'a> = Box<dyn Fn(Slot, usize) -> Arc<AccountStorageEntry> + 'a>;
 type ShrinkCandidates = HashMap<Slot, HashMap<AppendVecId, Arc<AccountStorageEntry>>>;
 
+#[derive(Default, Debug, PartialEq, Clone)]
 struct CalculateHashIntermediate {
     pub version: u64,
     pub hash: Hash,
@@ -5037,13 +5038,13 @@ pub mod tests {
         let key = Pubkey::new_unique();
         let account_maps: DashMap<Pubkey, CalculateHashIntermediate> = DashMap::new();
         let hash = Hash::new(&[1u8; 32]);
-        let val = (0, hash, 88, 490, Slot::default());
+        let val = CalculateHashIntermediate::new(0, hash, 88, 490, Slot::default());
         account_maps.insert(key, val);
 
         // 2nd key
         let key = Pubkey::new_unique();
         let hash = Hash::new(&[2u8; 32]);
-        let val = (0, hash, 1, 0, Slot::default());
+        let val = CalculateHashIntermediate::new(0, hash, 1, 0, Slot::default());
         account_maps.insert(key, val);
 
         let result = AccountsDB::rest_of_hash_calculation((account_maps, Measure::start("")));
@@ -5058,33 +5059,33 @@ pub mod tests {
         let account_maps: DashMap<Pubkey, CalculateHashIntermediate> = DashMap::new();
         let key = Pubkey::new_unique();
         let hash = Hash::new_unique();
-        let val = (1, hash, 1, 2, 1);
+        let val = CalculateHashIntermediate::new(1, hash, 1, 2, 1);
 
-        AccountsDB::handle_one_loaded_account(&key, val, &account_maps);
+        AccountsDB::handle_one_loaded_account(&key, val.clone(), &account_maps);
         assert_eq!(*account_maps.get(&key).unwrap(), val);
 
         // slot same, version <
         let hash2 = Hash::new_unique();
-        let val2 = (0, hash2, 4, 5, 1);
-        AccountsDB::handle_one_loaded_account(&key, val2, &account_maps);
+        let val2 = CalculateHashIntermediate::new(0, hash2, 4, 5, 1);
+        AccountsDB::handle_one_loaded_account(&key, val2.clone(), &account_maps);
         assert_eq!(*account_maps.get(&key).unwrap(), val);
 
         // slot same, vers =
         let hash3 = Hash::new_unique();
-        let val3 = (1, hash3, 2, 3, 1);
-        AccountsDB::handle_one_loaded_account(&key, val3, &account_maps);
+        let val3 = CalculateHashIntermediate::new(1, hash3, 2, 3, 1);
+        AccountsDB::handle_one_loaded_account(&key, val3.clone(), &account_maps);
         assert_eq!(*account_maps.get(&key).unwrap(), val3);
 
         // slot same, vers >
         let hash4 = Hash::new_unique();
-        let val4 = (2, hash4, 6, 7, 1);
-        AccountsDB::handle_one_loaded_account(&key, val4, &account_maps);
+        let val4 = CalculateHashIntermediate::new(2, hash4, 6, 7, 1);
+        AccountsDB::handle_one_loaded_account(&key, val4.clone(), &account_maps);
         assert_eq!(*account_maps.get(&key).unwrap(), val4);
 
         // slot >, version <
         let hash5 = Hash::new_unique();
-        let val5 = (0, hash5, 8, 9, 2);
-        AccountsDB::handle_one_loaded_account(&key, val5, &account_maps);
+        let val5 = CalculateHashIntermediate::new(0, hash5, 8, 9, 2);
+        AccountsDB::handle_one_loaded_account(&key, val5.clone(), &account_maps);
         assert_eq!(*account_maps.get(&key).unwrap(), val5);
     }
 
@@ -5095,15 +5096,15 @@ pub mod tests {
         let key = Pubkey::new_unique();
         let hash = Hash::new_unique();
         let account_maps: DashMap<Pubkey, CalculateHashIntermediate> = DashMap::new();
-        let val = (0, hash, 1, 2, Slot::default());
-        account_maps.insert(key, val);
+        let val = CalculateHashIntermediate::new(0, hash, 1, 2, Slot::default());
+        account_maps.insert(key, val.clone());
 
         let result = AccountsDB::remove_zero_balance_accounts(account_maps);
-        assert_eq!(result, vec![(key, val.1, val.2)]);
+        assert_eq!(result, vec![(key, val.hash, val.lamports)]);
 
         // zero original lamports
         let account_maps: DashMap<Pubkey, CalculateHashIntermediate> = DashMap::new();
-        let val = (0, hash, 1, 0, Slot::default());
+        let val = CalculateHashIntermediate::new(0, hash, 1, 0, Slot::default());
         account_maps.insert(key, val);
 
         let result = AccountsDB::remove_zero_balance_accounts(account_maps);
