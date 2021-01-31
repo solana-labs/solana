@@ -5116,18 +5116,40 @@ pub mod tests {
         solana_logger::setup();
 
         let expected = 1;
-        let (storages, size, slot_expected) = sample_storage();
+        let slot_expected: Slot = 0;
+        let tf = crate::append_vec::test_utils::get_append_vec_path("test_accountsdb_scan_account_storage_no_bank");
+        let mut data = AccountStorageEntry::new_empty_map(0, 10000);
+        let av = AppendVec::new(&tf.path, true, 1024 * 1024);
+        data.accounts = av;
+
+        let arc = Arc::new(data);
+        let storages = vec![vec![arc]];
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let acc = Account::new(1, 48, &Account::default().owner);
+        let sm = StoredMeta {
+            data_len: 1,
+            pubkey: pubkey,
+            write_version: 1,
+        };
+        let some_hash = Hash::new(&[0xca; HASH_BYTES]);
+        storages[0][0]
+            .accounts
+            .append_accounts(&[(sm, &acc)], &[Hash::default()]);
+
+        let calls = AtomicU64::new(0);
         let result = AccountsDB::scan_account_storage_no_bank(
             storages,
             |loaded_account: LoadedAccount,
              _store_id: AppendVecId,
              accum: &mut Vec<u64>,
              slot: Slot| {
-                assert_eq!(loaded_account.stored_size(), size);
+                calls.fetch_add(1, Ordering::Relaxed);
+                assert_eq!(loaded_account.pubkey(), &pubkey);
                 assert_eq!(slot_expected, slot);
                 accum.push(expected);
             },
         );
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
         assert_eq!(result, vec![vec![expected]]);
     }
 

@@ -4323,10 +4323,6 @@ impl Bank {
         self.update_accounts_hash_with_index_option(false, false)
     }
 
-    pub fn update_accounts_hash_with_store_test(&self) -> Hash {
-        self.update_accounts_hash_with_index_option(false, true)
-    }
-
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(&self) -> bool {
@@ -4960,7 +4956,10 @@ fn is_simple_vote_transaction(transaction: &Transaction) -> bool {
         if program_pubkey == solana_vote_program::id() {
             if let Ok(vote_instruction) = limited_deserialize::<VoteInstruction>(&instruction.data)
             {
-                return matches!(vote_instruction, VoteInstruction::Vote(_) | VoteInstruction::VoteSwitch(_, _));
+                return matches!(
+                    vote_instruction,
+                    VoteInstruction::Vote(_) | VoteInstruction::VoteSwitch(_, _)
+                );
             }
         }
     }
@@ -7979,7 +7978,7 @@ pub(crate) mod tests {
         let bank = Bank::new(&genesis_config);
         bank.transfer(1_000, &mint_keypair, &pubkey).unwrap();
         bank.freeze();
-        bank.update_accounts_hash_with_store_test();
+        bank.update_accounts_hash();
         assert!(bank.verify_snapshot_bank());
 
         // tamper the bank after freeze!
@@ -9042,11 +9041,11 @@ pub(crate) mod tests {
         );
 
         // Re-adding builtin programs should be no-op
-        bank.update_accounts_hash_with_store_test();
+        bank.update_accounts_hash();
         let old_hash = bank.get_accounts_hash();
         bank.add_builtin("mock_program1", vote_id, mock_ix_processor);
         bank.add_builtin("mock_program2", stake_id, mock_ix_processor);
-        bank.update_accounts_hash_with_store_test();
+        bank.update_accounts_hash();
         let new_hash = bank.get_accounts_hash();
         assert_eq!(old_hash, new_hash);
         assert!(bank.stakes.read().unwrap().vote_accounts().is_empty());
