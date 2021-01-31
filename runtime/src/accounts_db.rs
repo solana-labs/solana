@@ -298,7 +298,7 @@ impl AccountStorage {
 
     fn slot_store_count(&self, slot: Slot, store_id: AppendVecId) -> Option<usize> {
         self.get_account_storage_entry(slot, store_id)
-            .map(|store| store.count_and_status.read().unwrap().0)
+            .map(|store| store.count())
     }
 
     fn all_slots(&self) -> Vec<Slot> {
@@ -2418,14 +2418,7 @@ impl AccountsDB {
     pub fn alive_account_count_in_slot(&self, slot: Slot) -> usize {
         self.storage
             .get_slot_stores(slot)
-            .map(|storages| {
-                storages
-                    .read()
-                    .unwrap()
-                    .values()
-                    .map(|s| s.count_and_status.read().unwrap().0)
-                    .sum()
-            })
+            .map(|storages| storages.read().unwrap().values().map(|s| s.count()).sum())
             .unwrap_or(0)
     }
 
@@ -2547,7 +2540,7 @@ impl AccountsDB {
                 if slot_stores.len() <= self.min_num_stores {
                     let mut total_accounts = 0;
                     for store in slot_stores.values() {
-                        total_accounts += store.count_and_status.read().unwrap().0;
+                        total_accounts += store.count();
                     }
 
                     // Create more stores so that when scanning the storage all CPUs have work
@@ -4585,12 +4578,7 @@ impl AccountsDB {
                 // Should be default at this point
                 assert_eq!(store.alive_bytes(), 0);
                 if let Some((stored_size, count)) = stored_sizes_and_counts.get(&id) {
-                    trace!(
-                        "id: {} setting count: {} cur: {}",
-                        id,
-                        count,
-                        store.count_and_status.read().unwrap().0
-                    );
+                    trace!("id: {} setting count: {} cur: {}", id, count, store.count(),);
                     store.count_and_status.write().unwrap().0 = *count;
                     store.alive_bytes.store(*stored_size, Ordering::SeqCst);
                 } else {
