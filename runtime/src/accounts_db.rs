@@ -5131,7 +5131,6 @@ pub mod tests {
             pubkey: pubkey,
             write_version: 1,
         };
-        let some_hash = Hash::new(&[0xca; HASH_BYTES]);
         storages[0][0]
             .accounts
             .append_accounts(&[(sm, &acc)], &[Hash::default()]);
