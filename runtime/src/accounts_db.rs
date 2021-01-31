@@ -5130,7 +5130,7 @@ pub mod tests {
         let acc = Account::new(1, 48, &Account::default().owner);
         let sm = StoredMeta {
             data_len: 1,
-            pubkey: pubkey,
+            pubkey,
             write_version: 1,
         };
         storages[0][0]
