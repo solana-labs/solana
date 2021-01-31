@@ -5117,7 +5117,9 @@ pub mod tests {
 
         let expected = 1;
         let slot_expected: Slot = 0;
-        let tf = crate::append_vec::test_utils::get_append_vec_path("test_accountsdb_scan_account_storage_no_bank");
+        let tf = crate::append_vec::test_utils::get_append_vec_path(
+            "test_accountsdb_scan_account_storage_no_bank",
+        );
         let mut data = AccountStorageEntry::new_empty_map(0, 10000);
         let av = AppendVec::new(&tf.path, true, 1024 * 1024);
         data.accounts = av;
