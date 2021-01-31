@@ -5816,8 +5816,8 @@ pub mod tests {
         expected_lamports: u64,
     ) {
         let ancestors = vec![(slot, 0)].into_iter().collect();
-        let (account, slot) = accounts.load_slow(&ancestors, &pubkey).unwrap();
-        assert_eq!((account.lamports, slot), (expected_lamports, slot));
+        let (account, slot_found) = accounts.load_slow(&ancestors, &pubkey).unwrap();
+        assert_eq!((account.lamports, slot_found), (expected_lamports, slot));
     }
 
     fn assert_not_load_account(accounts: &AccountsDB, slot: Slot, pubkey: Pubkey) {
