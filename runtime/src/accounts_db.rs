@@ -167,7 +167,25 @@ type ReclaimResult = (AccountSlots, AppendVecOffsets);
 type StorageFinder<'a> = Box<dyn Fn(Slot, usize) -> Arc<AccountStorageEntry> + 'a>;
 type ShrinkCandidates = HashMap<Slot, HashMap<AppendVecId, Arc<AccountStorageEntry>>>;
 
-type CalculateHashIntermediate = (u64, Hash, u64, u64, Slot);
+struct CalculateHashIntermediate {
+    pub version: u64,
+    pub hash: Hash,
+    pub lamports: u64,
+    pub raw_lamports: u64,
+    pub slot: Slot,
+}
+
+impl CalculateHashIntermediate {
+    pub fn new(version: u64, hash: Hash, lamports: u64, raw_lamports: u64, slot: Slot) -> Self {
+        Self {
+            version,
+            hash,
+            lamports,
+            raw_lamports,
+            slot,
+        }
+    }
+}
 
 trait Versioned {
     fn version(&self) -> u64;
@@ -181,7 +199,7 @@ impl Versioned for (u64, Hash) {
 
 impl Versioned for CalculateHashIntermediate {
     fn version(&self) -> u64 {
-        self.0
+        self.version
     }
 }
 
@@ -3644,9 +3662,9 @@ impl AccountsDB {
                     .iter()
                     .filter_map(|inp| {
                         let (pubkey, sv) = inp;
-                        let (_version, hash, lamports, raw_lamports, _slot) = sv.get();
-                        if *raw_lamports != 0 {
-                            Some((*pubkey, *hash, *lamports))
+                        let item = sv.get();
+                        if item.raw_lamports != 0 {
+                            Some((*pubkey, item.hash, item.lamports))
                         } else {
                             None
                         }
@@ -3659,7 +3677,7 @@ impl AccountsDB {
         hashes
     }
 
-    pub fn rest_of_hash_calculation(
+    fn rest_of_hash_calculation(
         accounts: (DashMap<Pubkey, CalculateHashIntermediate>, Measure),
     ) -> (Hash, u64) {
         let (account_maps, time_scan) = accounts;
@@ -3746,8 +3764,9 @@ impl AccountsDB {
         match map.entry(*key) {
             Occupied(mut dest_item) => {
                 let contents = dest_item.get();
-                if contents.4 < found_item.4
-                    || (contents.4 == found_item.4 && contents.version() <= found_item.version())
+                if contents.slot < found_item.slot
+                    || (contents.slot == found_item.slot
+                        && contents.version() <= found_item.version())
                 {
                     // replace the item
                     dest_item.insert(found_item);
@@ -3780,7 +3799,7 @@ impl AccountsDB {
                     simple_capitalization_enabled,
                 );
 
-                let source_item = (
+                let source_item = CalculateHashIntermediate::new(
                     version,
                     *loaded_account.loaded_hash(),
                     balance,
