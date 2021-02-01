@@ -31,7 +31,7 @@ The inflation rate actually observed on the Solana network after accounting for 
 ### Staking Yield [%]
 The rate of return (aka *interest*) earned on SOL staked on the network. It is often quoted as an annualized rate (e.g. "the network *staking yield* is currently $10\%$ per year").
 - *Staking yield* is of great interest to validators and token-holders holders who wish to delegate their tokens to avoid token dilution due to inflation (the extent of which is discussed below).
-- $100\%$ of inflationary issuances are to be distributed to staked token-holders in proportion to the SOL they have staked with validators.
+- $100\%$ of inflationary issuances are to be distributed to staked token-holders in proportion to their staked SOL and to validators who charge a commission on the rewards earned by their delegated SOL..
     - There may be future consideration for an additional split of inflation issuance with the introduction of *Archivers* into the economy. *Archivers* are network participants who provide a decentralized storage service and should also be incentivized with token distribution from inflation issuances for this service.
 	- Similarly, early designs specified a fixed percentage of inflationary issuance to be delivered to the Foundation treasury for operational expenses and future grants. However, inflation will be launching without any portion allocated to the Foundation.
 - *Staking yield* can be calculated from the *Inflation Schedule* along with the fraction of the *Total Current Supply* that is staked at any given time. The explicit relationship is given by:

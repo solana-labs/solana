@@ -6,7 +6,7 @@ As mentioned above, the network's *Inflation Schedule* is uniquely described by 
 
 - A large portion of the SOL issued via inflation will be distributed to stake-holders in proportion to the SOL they have staked. We want to ensure that the *Inflation Schedule* design results in reasonable *Staking Yields* for token holders who delegate SOL and for validation service providers (via commissions taken from *Staking Yields*).
 - The primary driver of *Staked Yield* is the amount of SOL staked divided by the total amount of SOL (% of total SOL staked). Therefore the distribution and delegation of tokens across validators are important factors to understand when determining initial inflation parameters.
-- [Yield throttling](https://forums.solana.com/t/validator-yield-throttling-proposal-discussion/855/5) is a mechanism currently under consideration that would impact *staking-yields*. **This is not taken into consideration in the discussion here or the modeling below.**
+- [Yield throttling](https://forums.solana.com/t/validator-yield-throttling-proposal-discussion/855/5) is a current area or research that would impact *staking-yields*. This is not taken into consideration in the discussion here or the modeling below.
 - Overall token issuance - i.e. what do we expect the Current Total Supply to be in 10 years, or 20 years?
 - Long-term, steady-state inflation is an important consideration not only for sustainable support for the validator ecosystem and the Solana Foundation grant programs, but also should be tuned in consideration with expected token losses and burning over time.
 - The rate at which we expect network usage to grow, as a consideration to the dis-inflationary rate. Over time, we plan for inflation to drop and expect that usage will grow.
@@ -27,7 +27,7 @@ In the above graph we see the annual inflation rate [$\%$] over time, given the 
 
 Similarly, here we see the *Total Current Supply* of SOL [MM] over time, assuming an initial *Total Current Supply* of `488,587,349 SOL` (i.e. for this example, taking the *Total Current Supply* as of `2020-01-25` and simulating inflation starting from that day).
 
-The expected Staking Yield and Adjusted Staking Yield metrics are then primarily a function of the % of total SOL staked on the network. Therefore we can we can estimate the *Staking Yield*, if we introduce an additional parameter *% of Staked SOL*:
+Setting aside validator uptime and commissions, the expected Staking Yield and Adjusted Staking Yield metrics are then primarily a function of the % of total SOL staked on the network. Therefore we can we can model *Staking Yield*, if we introduce an additional parameter *% of Staked SOL*:
 
 $$
 \%~\text{SOL Staked} = \frac{\text{Total SOL Staked}}{\text{Total Current Supply}}
