@@ -1011,6 +1011,7 @@ fn process_confirm(
                                     .expect("Successful decode"),
                                 &confirmed_transaction.transaction.meta,
                                 "  ",
+                                None,
                             );
                         }
                         Err(err) => {
@@ -1043,7 +1044,7 @@ fn process_confirm(
 
 #[allow(clippy::unnecessary_wraps)]
 fn process_decode_transaction(transaction: &Transaction) -> ProcessResult {
-    println_transaction(transaction, &None, "");
+    println_transaction(transaction, &None, "", None);
     Ok("".to_string())
 }
 

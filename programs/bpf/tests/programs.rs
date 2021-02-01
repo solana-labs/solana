@@ -387,7 +387,7 @@ fn print_confirmed_tx(name: &str, confirmed_tx: ConfirmedTransaction) {
     let tx = confirmed_tx.transaction.transaction.clone();
     let encoded = confirmed_tx.encode(UiTransactionEncoding::JsonParsed);
     println!("EXECUTE {} (slot {})", name, encoded.slot);
-    println_transaction(&tx, &encoded.transaction.meta, "  ");
+    println_transaction(&tx, &encoded.transaction.meta, "  ", None);
 }
 
 #[test]
