@@ -14,15 +14,18 @@ use thiserror::Error;
 
 lazy_static! {
     static ref BPF_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader::id();
-    static ref MEMO_PROGRAM_ID: Pubkey =
+    static ref MEMO_V1_PROGRAM_ID: Pubkey =
         Pubkey::from_str(&spl_memo_v1_0::id().to_string()).unwrap();
+    static ref MEMO_V3_PROGRAM_ID: Pubkey =
+        Pubkey::from_str(&spl_memo_v3_0::id().to_string()).unwrap();
     static ref STAKE_PROGRAM_ID: Pubkey = solana_stake_program::id();
     static ref SYSTEM_PROGRAM_ID: Pubkey = system_program::id();
     static ref TOKEN_PROGRAM_ID: Pubkey = spl_token_id_v2_0();
     static ref VOTE_PROGRAM_ID: Pubkey = solana_vote_program::id();
     static ref PARSABLE_PROGRAM_IDS: HashMap<Pubkey, ParsableProgram> = {
         let mut m = HashMap::new();
-        m.insert(*MEMO_PROGRAM_ID, ParsableProgram::SplMemo);
+        m.insert(*MEMO_V1_PROGRAM_ID, ParsableProgram::SplMemo);
+        m.insert(*MEMO_V3_PROGRAM_ID, ParsableProgram::SplMemo);
         m.insert(*TOKEN_PROGRAM_ID, ParsableProgram::SplToken);
         m.insert(*BPF_LOADER_PROGRAM_ID, ParsableProgram::BpfLoader);
         m.insert(*STAKE_PROGRAM_ID, ParsableProgram::Stake);
@@ -131,10 +134,18 @@ mod test {
             data: vec![240, 159, 166, 150],
         };
         assert_eq!(
-            parse(&MEMO_PROGRAM_ID, &memo_instruction, &[]).unwrap(),
+            parse(&MEMO_V1_PROGRAM_ID, &memo_instruction, &[]).unwrap(),
             ParsedInstruction {
                 program: "spl-memo".to_string(),
-                program_id: MEMO_PROGRAM_ID.to_string(),
+                program_id: MEMO_V1_PROGRAM_ID.to_string(),
+                parsed: json!("🦖"),
+            }
+        );
+        assert_eq!(
+            parse(&MEMO_V3_PROGRAM_ID, &memo_instruction, &[]).unwrap(),
+            ParsedInstruction {
+                program: "spl-memo".to_string(),
+                program_id: MEMO_V3_PROGRAM_ID.to_string(),
                 parsed: json!("🦖"),
             }
         );
