@@ -31,14 +31,15 @@ The inflation rate actually observed on the Solana network after accounting for 
 ### Staking Yield [%]
 The rate of return (aka *interest*) earned on SOL staked on the network. It is often quoted as an annualized rate (e.g. "the network *staking yield* is currently $10\%$ per year").
 - *Staking yield* is of great interest to validators and token-holders holders who wish to delegate their tokens to avoid token dilution due to inflation (the extent of which is discussed below).
-- $100\%$ of inflationary issuances are to be distributed to staked token-holders in proportion to the SOL they have staked with validators.
+- $100\%$ of inflationary issuances are to be distributed to staked token-holders in proportion to their staked SOL and to validators who charge a commission on the rewards earned by their delegated SOL..
     - There may be future consideration for an additional split of inflation issuance with the introduction of *Archivers* into the economy. *Archivers* are network participants who provide a decentralized storage service and should also be incentivized with token distribution from inflation issuances for this service.
 	- Similarly, early designs specified a fixed percentage of inflationary issuance to be delivered to the Foundation treasury for operational expenses and future grants. However, inflation will be launching without any portion allocated to the Foundation.
-- *Staking yield* can be calculated from the *Inflation Schedule* along with the fraction of the *Total Current Supply* that is staked at any given time. Since inflation interest is split between staked-token holders, the Foundation pool and, potentially, *Archivers* - only the portion delivered to validators should be considered in the calculation of *Staking Yield*. Currently, the only split discussed is the $5\%$ to the Foundation, which is likely to be directly staked upon receipt, so not impacting the yield calculation. Below, this is specified by setting the 'Fraction to Validators' to $100\%$. The explicit relationship is given by:
+- *Staking yield* can be calculated from the *Inflation Schedule* along with the fraction of the *Total Current Supply* that is staked at any given time. The explicit relationship is given by:
 
 $$
 \begin{aligned}
-\text{Staking Yield} &= \text{Inflation Rate}\times \text{Fraction to Validators}\times \left( \frac{1}{\%~\text{SOL Staked}} \right) \\
+\text{Staking Yield} =~&\text{Inflation Rate}\times\text{Validator Uptime}~\times \\
+&\left( 1 - \text{Validator Fee} \right) \times \left( \frac{1}{\%~\text{SOL Staked}} \right) \\
 \text{where:}\\
 \%~\text{SOL Staked} &= \frac{\text{Total SOL Staked}}{\text{Total Current Supply}}
 \end{aligned}
