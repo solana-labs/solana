@@ -6782,6 +6782,7 @@ pub mod tests {
 
             // this loads the newer account... assert_load_account(&db, slot_orig, pubkey, lamports);
             if pass == 0 {
+                db.clean_accounts(None);
                 db.shrink_all_slots();
             } else if pass == 1 {
                 db.clean_accounts(None);
