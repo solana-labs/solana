@@ -6754,20 +6754,22 @@ pub mod tests {
             assert!(snapshot[0].len() == 1);
             let _store_id = &snapshot[0][0].id;
             let mut count = 0;
-            snapshot.clone()
-            .into_iter()
-            .flatten()
-            .map(|storage| {
-                storage.set_status(AccountStorageStatus::Full);
-                let accounts = storage.accounts.accounts(0);
-                accounts.into_iter().for_each(|stored_account| {
-                    let acct = LoadedAccount::Stored(stored_account);
-                    //assert_eq!(accounts.slot(), slot_orig);
-                    assert_eq!(*acct.pubkey(), pubkey);
-                    assert_eq!(acct.account().lamports, lamports);
-                    count += 1;
-            })
-            }).count();
+            snapshot
+                .clone()
+                .into_iter()
+                .flatten()
+                .map(|storage| {
+                    storage.set_status(AccountStorageStatus::Full);
+                    let accounts = storage.accounts.accounts(0);
+                    accounts.into_iter().for_each(|stored_account| {
+                        let acct = LoadedAccount::Stored(stored_account);
+                        //assert_eq!(accounts.slot(), slot_orig);
+                        assert_eq!(*acct.pubkey(), pubkey);
+                        assert_eq!(acct.account().lamports, lamports);
+                        count += 1;
+                    })
+                })
+                .count();
             assert_eq!(count, 1);
 
             slot += 1;
@@ -6788,19 +6790,25 @@ pub mod tests {
             // assert_eq!(storage_entry.status(), AccountStorageStatus::Full);
 
             let mut count = 0;
-            snapshot.clone()
-            .into_iter()
-            .flatten()
-            .map(|storage| {
-                let accounts = storage.accounts.accounts(0);
-                accounts.into_iter().for_each(|stored_account| {
-                    let l = stored_account.account_meta.lamports;
-                    let acct = LoadedAccount::Stored(stored_account);
-                    warn!("lamports, slot: {}, {}", storage.slot.load(Ordering::Relaxed), l);
-                assert_eq!(*acct.pubkey(), pubkey);
-                count += 1;
-            })
-            }).count();
+            snapshot
+                .clone()
+                .into_iter()
+                .flatten()
+                .map(|storage| {
+                    let accounts = storage.accounts.accounts(0);
+                    accounts.into_iter().for_each(|stored_account| {
+                        let l = stored_account.account_meta.lamports;
+                        let acct = LoadedAccount::Stored(stored_account);
+                        warn!(
+                            "lamports, slot: {}, {}",
+                            storage.slot.load(Ordering::Relaxed),
+                            l
+                        );
+                        assert_eq!(*acct.pubkey(), pubkey);
+                        count += 1;
+                    })
+                })
+                .count();
             assert_eq!(count, 1);
         });
     }
