@@ -180,6 +180,10 @@ pub mod prevent_upgrade_and_invoke {
     solana_sdk::declare_id!("BiNjYd8jCYDgAwMqP91uwZs6skWpuHtKrZbckuKESs8N");
 }
 
+pub mod spl_token_v2_self_transfer_fix {
+    solana_sdk::declare_id!("BL99GYhdjjcv6ys22C9wPgn2aTVERDbPHHo4NbS3hgp7");
+}
+
 pub mod matching_buffer_upgrade_authorities {
     solana_sdk::declare_id!("B5PSjDEJvKJEUQSL7q94N7XCEoWJCYum8XfUg7yuugUU");
 }
@@ -223,6 +227,7 @@ lazy_static! {
         (prevent_upgrade_and_invoke::id(), "Prevent upgrade and invoke in same tx batch"),
         (full_inflation::candidate_example::vote::id(), "Community vote allowing candidate_example to enable full inflation"),
         (full_inflation::candidate_example::enable::id(), "Full inflation enabled by candidate_example"),
+        (spl_token_v2_self_transfer_fix::id(), "spl-token self-transfer fix"),
         (matching_buffer_upgrade_authorities::id(), "Upgradeable buffer and program authorities must match"),
         (full_inflation::stakeconomy::vote::id(), "Community vote allowing Stakeconomy.com to enable full inflation"),
         (full_inflation::stakeconomy::enable::id(), "Full inflation enabled by Stakeconomy.com"),
