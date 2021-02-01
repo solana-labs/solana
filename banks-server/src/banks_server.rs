@@ -247,11 +247,10 @@ impl Banks for BanksServer {
 }
 
 pub async fn start_local_server(
-    bank_forks: &Arc<RwLock<BankForks>>,
-    block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
 ) -> UnboundedChannel<Response<BanksResponse>, ClientMessage<BanksRequest>> {
-    let banks_server =
-        BanksServer::new_loopback(bank_forks.clone(), block_commitment_cache.clone());
+    let banks_server = BanksServer::new_loopback(bank_forks, block_commitment_cache);
     let (client_transport, server_transport) = transport::channel::unbounded();
     let server = server::new(server::Config::default())
         .incoming(stream::once(future::ready(server_transport)))

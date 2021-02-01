@@ -685,7 +685,8 @@ impl ProgramTest {
     pub async fn start(self) -> (BanksClient, Keypair, Hash) {
         let (bank_forks, block_commitment_cache, payer, last_blockhash, genesis_config) =
             self.setup_bank();
-        let transport = start_local_server(&bank_forks, &block_commitment_cache).await;
+        let transport =
+            start_local_server(bank_forks.clone(), block_commitment_cache.clone()).await;
         let banks_client = start_client(transport)
             .await
             .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
@@ -714,7 +715,8 @@ impl ProgramTest {
     pub async fn start_with_context(self) -> ProgramTestContext {
         let (bank_forks, block_commitment_cache, payer, last_blockhash, genesis_config) =
             self.setup_bank();
-        let transport = start_local_server(&bank_forks, &block_commitment_cache).await;
+        let transport =
+            start_local_server(bank_forks.clone(), block_commitment_cache.clone()).await;
         let banks_client = start_client(transport)
             .await
             .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
