@@ -436,27 +436,56 @@ function generateTokenBalanceRows(
     (balance) => (preBalanceMap[balance.accountIndex] = balance)
   );
 
-  return postTokenBalances
-    .map(
-      ({ uiTokenAmount, accountIndex, mint }): TokenBalanceRow => {
-        let delta;
+  let rows: TokenBalanceRow[] = [];
 
-        if (accountIndex in preBalanceMap) {
-          delta = new BigNumber(uiTokenAmount.uiAmount).minus(preBalanceMap[accountIndex].uiTokenAmount.uiAmount);
-        } else {
-          delta = new BigNumber(uiTokenAmount.uiAmount);
-        }
+  postTokenBalances.forEach(({ uiTokenAmount, accountIndex, mint }) => {
+    const preBalance = preBalanceMap[accountIndex];
+    const account = accounts[accountIndex].pubkey;
 
-        return {
-          account: accounts[accountIndex].pubkey,
-          mint,
-          balance: uiTokenAmount,
-          delta,
-          accountIndex,
-        };
-      }
-    )
-    .sort((a, b) => a.accountIndex - b.accountIndex);
+    // case where mint changes
+    if (preBalance && preBalance.mint !== mint) {
+      rows.push({
+        account: accounts[accountIndex].pubkey,
+        accountIndex,
+        balance: {
+          decimals: preBalance.uiTokenAmount.decimals,
+          amount: "0",
+          uiAmount: 0,
+        },
+        delta: new BigNumber(-preBalance.uiTokenAmount.uiAmount),
+        mint: preBalance.mint,
+      });
+
+      rows.push({
+        account: accounts[accountIndex].pubkey,
+        accountIndex,
+        balance: uiTokenAmount,
+        delta: new BigNumber(uiTokenAmount.uiAmount),
+        mint: mint,
+      });
+      return;
+    }
+
+    let delta;
+
+    if (preBalance) {
+      delta = new BigNumber(uiTokenAmount.uiAmount).minus(
+        preBalance.uiTokenAmount.uiAmount
+      );
+    } else {
+      delta = new BigNumber(uiTokenAmount.uiAmount);
+    }
+
+    rows.push({
+      account,
+      mint,
+      balance: uiTokenAmount,
+      delta,
+      accountIndex,
+    });
+  });
+
+  return rows.sort((a, b) => a.accountIndex - b.accountIndex);
 }
 
 function TokenBalancesCard({ signature }: SignatureProps) {
@@ -469,6 +498,7 @@ function TokenBalancesCard({ signature }: SignatureProps) {
 
   const preTokenBalances = details.data?.transaction?.meta?.preTokenBalances;
   const postTokenBalances = details.data?.transaction?.meta?.postTokenBalances;
+
   const accountKeys =
     details.data?.transaction?.transaction.message.accountKeys;
 
@@ -487,12 +517,16 @@ function TokenBalancesCard({ signature }: SignatureProps) {
   }
 
   const accountRows = rows.map(({ account, delta, balance, mint }) => {
-    const key = account.toBase58();
+    const key = account.toBase58() + mint;
     const renderChange = () => {
       if (delta.gt(0)) {
-        return <span className="badge badge-soft-success">+{delta.toString()}</span>;
+        return (
+          <span className="badge badge-soft-success">+{delta.toString()}</span>
+        );
       } else if (delta.lt(0)) {
-        return <span className="badge badge-soft-warning">{delta.toString()}</span>;
+        return (
+          <span className="badge badge-soft-warning">{delta.toString()}</span>
+        );
       }
       return <span className="badge badge-soft-secondary">0</span>;
     };
