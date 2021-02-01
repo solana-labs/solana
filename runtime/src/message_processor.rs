@@ -547,7 +547,7 @@ impl MessageProcessor {
                 .ok_or_else(|| {
                     ic_msg!(
                         invoke_context,
-                        "Instruction references an unknown account {:?}",
+                        "Instruction references an unknown account {}",
                         account.pubkey
                     );
                     InstructionError::MissingAccount
@@ -556,7 +556,7 @@ impl MessageProcessor {
             if account.is_writable && !keyed_account.is_writable() {
                 ic_msg!(
                     invoke_context,
-                    "{:?}'s writable priviledge escalated ",
+                    "{}'s writable privilege escalated",
                     account.pubkey
                 );
                 return Err(InstructionError::PrivilegeEscalation);
@@ -569,7 +569,7 @@ impl MessageProcessor {
             ) {
                 ic_msg!(
                     invoke_context,
-                    "{:?}'s signer priviledge escalated ",
+                    "{}'s signer priviledge escalated",
                     account.pubkey
                 );
                 return Err(InstructionError::PrivilegeEscalation);
@@ -584,11 +584,16 @@ impl MessageProcessor {
         {
             Some(keyed_account) => {
                 if !keyed_account.executable()? {
+                    ic_msg!(
+                        invoke_context,
+                        "Account {} is not executable",
+                        keyed_account.unsigned_key()
+                    );
                     return Err(InstructionError::AccountNotExecutable);
                 }
             }
             None => {
-                ic_msg!(invoke_context, "Unknown program {:?}", program_id);
+                ic_msg!(invoke_context, "Unknown program {}", program_id);
                 return Err(InstructionError::MissingAccount);
             }
         }
@@ -638,7 +643,7 @@ impl MessageProcessor {
                 }
                 ic_msg!(
                     invoke_context,
-                    "Instruction references an unknown account {:?}",
+                    "Instruction references an unknown account {}",
                     account_key
                 );
                 return Err(InstructionError::MissingAccount);
@@ -652,10 +657,15 @@ impl MessageProcessor {
                 invoke_context
                     .get_account(&callee_program_id)
                     .ok_or_else(|| {
-                        ic_msg!(invoke_context, "Unknown program {:?}", callee_program_id);
+                        ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
                         InstructionError::MissingAccount
                     })?;
             if !program_account.borrow().executable {
+                ic_msg!(
+                    invoke_context,
+                    "Account {} is not executable",
+                    callee_program_id
+                );
                 return Err(InstructionError::AccountNotExecutable);
             }
             let programdata_executable =
@@ -669,7 +679,7 @@ impl MessageProcessor {
                         } else {
                             ic_msg!(
                                 invoke_context,
-                                "Unknown upgradeable programdata account {:?}",
+                                "Unknown upgradeable programdata account {}",
                                 programdata_address,
                             );
                             return Err(InstructionError::MissingAccount);
@@ -677,7 +687,7 @@ impl MessageProcessor {
                     } else {
                         ic_msg!(
                             invoke_context,
-                            "Upgradeable program account state not valid {:?}",
+                            "Upgradeable program account state not valid {}",
                             callee_program_id,
                         );
                         return Err(InstructionError::MissingAccount);
