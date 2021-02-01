@@ -958,6 +958,14 @@ pub fn main() {
                 .help("Upload new confirmed blocks into a BigTable instance"),
         )
         .arg(
+            Arg::with_name("enable_cpi_and_log_storage")
+                .long("enable-cpi-and-log-storage")
+                .requires("enable_rpc_transaction_history")
+                .takes_value(false)
+                .help("Include CPI inner instructions and logs in the \
+                        historical transaction info stored"),
+        )
+        .arg(
             Arg::with_name("rpc_max_multiple_accounts")
                 .long("rpc-max-multiple-accounts")
                 .value_name("MAX ACCOUNTS")
@@ -1533,6 +1541,7 @@ pub fn main() {
             enable_validator_exit: matches.is_present("enable_rpc_exit"),
             enable_set_log_filter: matches.is_present("enable_rpc_set_log_filter"),
             enable_rpc_transaction_history: matches.is_present("enable_rpc_transaction_history"),
+            enable_cpi_and_log_storage: matches.is_present("enable_cpi_and_log_storage"),
             enable_bigtable_ledger_storage: matches
                 .is_present("enable_rpc_bigtable_ledger_storage"),
             enable_bigtable_ledger_upload: matches.is_present("enable_bigtable_ledger_upload"),

@@ -984,7 +984,11 @@ fn new_banks_from_ledger(
     let blockstore = Arc::new(blockstore);
     let transaction_history_services =
         if config.rpc_addrs.is_some() && config.rpc_config.enable_rpc_transaction_history {
-            initialize_rpc_transaction_history_services(blockstore.clone(), exit)
+            initialize_rpc_transaction_history_services(
+                blockstore.clone(),
+                exit,
+                config.rpc_config.enable_cpi_and_log_storage,
+            )
         } else {
             TransactionHistoryServices::default()
         };
@@ -1153,9 +1157,13 @@ fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_versi
 fn initialize_rpc_transaction_history_services(
     blockstore: Arc<Blockstore>,
     exit: &Arc<AtomicBool>,
+    enable_cpi_and_log_storage: bool,
 ) -> TransactionHistoryServices {
     let (transaction_status_sender, transaction_status_receiver) = unbounded();
-    let transaction_status_sender = Some(transaction_status_sender);
+    let transaction_status_sender = Some(TransactionStatusSender {
+        sender: transaction_status_sender,
+        enable_cpi_and_log_storage,
+    });
     let transaction_status_service = Some(TransactionStatusService::new(
         transaction_status_receiver,
         blockstore.clone(),
