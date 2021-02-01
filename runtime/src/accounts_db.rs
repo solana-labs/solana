@@ -6728,12 +6728,12 @@ pub mod tests {
     #[test]
     fn test_storage_remove_account_with_reset_then_access() {
         solana_logger::setup();
-        (1..2).into_iter().for_each(|pass| {
+        (0..2).into_iter().for_each(|pass| {
             info!("pass: {}", pass);
             let mut db = AccountsDB::new(Vec::new(), &ClusterType::Development);
             db.caching_enabled = true;
             let pubkey = Pubkey::from_str("My11111111111111111111111111111111111111111").unwrap();
-            let lamports = 0;
+            let lamports = 1;
             let account = Account::new(lamports, 1, &Account::default().owner);
             let mut slot = 1;
             let slot_orig = slot;
@@ -6771,11 +6771,13 @@ pub mod tests {
             assert_eq!(count, 1);
 
             slot += 1;
-            let lamports2 = 1;
+            let lamports2 = 0;
             let account = Account::new(lamports2, 2, &Account::default().owner);
             db.store_cached(slot, &[(&pubkey, &account)]);
             assert_load_account(&db, slot_orig, pubkey, lamports);
             db.add_root(slot);
+            db.flush_rooted_accounts_cache(Some(slot), None);
+
             // this loads the newer account... assert_load_account(&db, slot_orig, pubkey, lamports);
             if pass == 0 {
                 db.shrink_all_slots();
@@ -6792,7 +6794,9 @@ pub mod tests {
             .map(|storage| {
                 let accounts = storage.accounts.accounts(0);
                 accounts.into_iter().for_each(|stored_account| {
+                    let l = stored_account.account_meta.lamports;
                     let acct = LoadedAccount::Stored(stored_account);
+                    warn!("lamports, slot: {}, {}", storage.slot.load(Ordering::Relaxed), l);
                 assert_eq!(*acct.pubkey(), pubkey);
                 count += 1;
             })
