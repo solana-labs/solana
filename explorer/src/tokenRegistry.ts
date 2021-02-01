@@ -279,4 +279,11 @@ const MAINNET_TOKENS: { [key: string]: TokenDetails } = {
     icon: "/tokens/brz.png",
     website: "https://brztoken.io",
   },
+  MAPS41MDahZ9QdKXhVa4dWB9RuyfV4XqhyAZ8XcYepb: {
+    symbol: "MAPS",
+    name: "MAPS",
+    logo: "/tokens/maps.svg",
+    icon: "/tokens/maps.svg",
+    website: "https://maps.me/",
+  },
 };
