@@ -5055,7 +5055,7 @@ pub mod tests {
         // 3rd key - with pubkey value before 1st key so it will be sorted first
         let key = Pubkey::new(&[10u8; 32]);
         let hash = Hash::new(&[2u8; 32]);
-        let val = (0, hash, 20, 20, Slot::default());
+        let val = CalculateHashIntermediate::new(0, hash, 20, 20, Slot::default());
         account_maps.insert(key, val);
 
         let result = AccountsDB::rest_of_hash_calculation((account_maps, Measure::start("")));
