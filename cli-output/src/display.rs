@@ -7,22 +7,63 @@ use solana_sdk::{
 use solana_transaction_status::UiTransactionStatusMeta;
 use std::{collections::HashMap, fmt, io};
 
-pub fn build_balance_message(lamports: u64, use_lamports_unit: bool, show_unit: bool) -> String {
-    if use_lamports_unit {
-        let ess = if lamports == 1 { "" } else { "s" };
-        let unit = if show_unit {
-            format!(" lamport{}", ess)
-        } else {
-            "".to_string()
-        };
-        format!("{:?}{}", lamports, unit)
+#[derive(Clone, Debug)]
+pub struct BuildBalanceMessageConfig {
+    pub use_lamports_unit: bool,
+    pub show_unit: bool,
+    pub trim_trailing_zeros: bool,
+}
+
+impl Default for BuildBalanceMessageConfig {
+    fn default() -> Self {
+        Self {
+            use_lamports_unit: false,
+            show_unit: true,
+            trim_trailing_zeros: true,
+        }
+    }
+}
+
+pub fn build_balance_message_with_config(
+    lamports: u64,
+    config: &BuildBalanceMessageConfig,
+) -> String {
+    let value = if config.use_lamports_unit {
+        lamports.to_string()
     } else {
         let sol = lamports_to_sol(lamports);
         let sol_str = format!("{:.9}", sol);
-        let pretty_sol = sol_str.trim_end_matches('0').trim_end_matches('.');
-        let unit = if show_unit { " SOL" } else { "" };
-        format!("{}{}", pretty_sol, unit)
-    }
+        if config.trim_trailing_zeros {
+            sol_str
+                .trim_end_matches('0')
+                .trim_end_matches('.')
+                .to_string()
+        } else {
+            sol_str
+        }
+    };
+    let unit = if config.show_unit {
+        if config.use_lamports_unit {
+            let ess = if lamports == 1 { "" } else { "s" };
+            format!(" lamport{}", ess)
+        } else {
+            " SOL".to_string()
+        }
+    } else {
+        "".to_string()
+    };
+    format!("{}{}", value, unit)
+}
+
+pub fn build_balance_message(lamports: u64, use_lamports_unit: bool, show_unit: bool) -> String {
+    build_balance_message_with_config(
+        lamports,
+        &BuildBalanceMessageConfig {
+            use_lamports_unit,
+            show_unit,
+            ..BuildBalanceMessageConfig::default()
+        },
+    )
 }
 
 // Pretty print a "name value"
