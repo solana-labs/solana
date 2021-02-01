@@ -45,6 +45,7 @@ import { isSerumInstruction } from "components/instruction/serum/types";
 import { MemoDetailsCard } from "components/instruction/MemoDetailsCard";
 import { TokenRegistry } from "tokenRegistry";
 import { BigNumber } from "bignumber.js";
+import { BalanceDelta } from "components/common/BalanceDelta";
 
 const AUTO_REFRESH_INTERVAL = 2000;
 const ZERO_CONFIRMATION_BAILOUT = 5;
@@ -358,24 +359,16 @@ function AccountsCard({
     const post = meta.postBalances[index];
     const pubkey = account.pubkey;
     const key = account.pubkey.toBase58();
-    const renderChange = () => {
-      const change = post - pre;
-      if (change === 0) return "";
-      const sols = lamportsToSolString(change);
-      if (change > 0) {
-        return <span className="badge badge-soft-success">+{sols}</span>;
-      } else if (change < 0) {
-        return <span className="badge badge-soft-warning">-{sols}</span>;
-      }
-      return <span className="badge badge-soft-secondary">0</span>;
-    };
+    const delta = new BigNumber(post).minus(new BigNumber(pre));
 
     return (
       <tr key={key}>
         <td>
           <Address pubkey={pubkey} link />
         </td>
-        <td>{renderChange()}</td>
+        <td>
+          <BalanceDelta delta={delta} isSol />
+        </td>
         <td>{lamportsToSolString(post)}</td>
         <td>
           {index === 0 && (
@@ -518,19 +511,6 @@ function TokenBalancesCard({ signature }: SignatureProps) {
 
   const accountRows = rows.map(({ account, delta, balance, mint }) => {
     const key = account.toBase58() + mint;
-    const renderChange = () => {
-      if (delta.gt(0)) {
-        return (
-          <span className="badge badge-soft-success">+{delta.toString()}</span>
-        );
-      } else if (delta.lt(0)) {
-        return (
-          <span className="badge badge-soft-warning">{delta.toString()}</span>
-        );
-      }
-      return <span className="badge badge-soft-secondary">0</span>;
-    };
-
     const units = TokenRegistry.get(mint, cluster)?.symbol || "tokens";
 
     return (
@@ -541,7 +521,9 @@ function TokenBalancesCard({ signature }: SignatureProps) {
         <td>
           <Address pubkey={new PublicKey(mint)} link />
         </td>
-        <td>{renderChange()}</td>
+        <td>
+          <BalanceDelta delta={delta} />
+        </td>
         <td>
           {balance.uiAmount} {units}
         </td>
