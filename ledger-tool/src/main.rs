@@ -1763,7 +1763,14 @@ fn main() {
                         })
                         .clone();
 
-                    if rent_burn_percentage.is_ok() || hashes_per_tick.is_some() {
+                    let child_bank_required = rent_burn_percentage.is_ok()
+                        || hashes_per_tick.is_some()
+                        || remove_stake_accounts
+                        || !accounts_to_remove.is_empty()
+                        || faucet_pubkey.is_some()
+                        || bootstrap_validator_pubkeys.is_some();
+
+                    if child_bank_required {
                         let mut child_bank =
                             Bank::new_from_parent(&bank, bank.collector_id(), bank.slot() + 1);
 
@@ -1892,6 +1899,12 @@ fn main() {
                         } else {
                             warn!("Warping to slot {}", minimum_warp_slot);
                             warp_slot = Some(minimum_warp_slot);
+                        }
+                    }
+
+                    if child_bank_required {
+                        while !bank.is_complete() {
+                            bank.register_tick(&Hash::new_unique());
                         }
                     }
 
