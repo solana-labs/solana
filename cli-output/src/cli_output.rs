@@ -1614,6 +1614,37 @@ pub fn parse_sign_only_reply_string(reply: &str) -> SignOnly {
     }
 }
 
+#[derive(Debug)]
+pub enum CliSignatureVerificationStatus {
+    None,
+    Pass,
+    Fail,
+}
+
+impl CliSignatureVerificationStatus {
+    pub fn get(tx: &Transaction) -> Vec<Self> {
+        tx.verify_with_results()
+            .iter()
+            .zip(&tx.signatures)
+            .map(|(stat, sig)| match stat {
+                true => CliSignatureVerificationStatus::Pass,
+                false if sig == &Signature::default() => CliSignatureVerificationStatus::None,
+                false => CliSignatureVerificationStatus::Fail,
+            })
+            .collect()
+    }
+}
+
+impl fmt::Display for CliSignatureVerificationStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::None => write!(f, "none"),
+            Self::Pass => write!(f, "pass"),
+            Self::Fail => write!(f, "fail"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

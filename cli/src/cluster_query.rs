@@ -967,6 +967,7 @@ pub fn process_get_block(
             &transaction_with_meta.transaction.decode().unwrap(),
             &transaction_with_meta.meta,
             "  ",
+            None,
         );
     }
     Ok("".to_string())
@@ -1838,6 +1839,7 @@ pub fn process_transaction_history(
                                 .expect("Successful decode"),
                             &confirmed_transaction.transaction.meta,
                             "  ",
+                            None,
                         );
                     }
                     Err(err) => println!("  Unable to get confirmed transaction details: {}", err),
