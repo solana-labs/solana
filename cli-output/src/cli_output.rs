@@ -1,5 +1,8 @@
 use crate::{
-    display::{build_balance_message, format_labeled_address, writeln_name_value},
+    display::{
+        build_balance_message, build_balance_message_with_config, format_labeled_address,
+        writeln_name_value, BuildBalanceMessageConfig,
+    },
     QuietDisplay, VerboseDisplay,
 };
 use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
@@ -902,14 +905,19 @@ impl fmt::Display for CliStakeHistory {
             ))
             .bold()
         )?;
+        let config = BuildBalanceMessageConfig {
+            use_lamports_unit: self.use_lamports_unit,
+            show_unit: false,
+            trim_trailing_zeros: false,
+        };
         for entry in &self.entries {
             writeln!(
                 f,
                 "  {:>5}  {:>20}  {:>20}  {:>20} {}",
                 entry.epoch,
-                build_balance_message(entry.effective_stake, self.use_lamports_unit, false),
-                build_balance_message(entry.activating_stake, self.use_lamports_unit, false),
-                build_balance_message(entry.deactivating_stake, self.use_lamports_unit, false),
+                build_balance_message_with_config(entry.effective_stake, &config),
+                build_balance_message_with_config(entry.activating_stake, &config),
+                build_balance_message_with_config(entry.deactivating_stake, &config),
                 if self.use_lamports_unit {
                     "lamports"
                 } else {
