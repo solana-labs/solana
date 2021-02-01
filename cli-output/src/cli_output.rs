@@ -1466,6 +1466,60 @@ impl fmt::Display for CliTokenAccount {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliProgramId {
+    pub program_id: String,
+}
+
+impl QuietDisplay for CliProgramId {}
+impl VerboseDisplay for CliProgramId {}
+
+impl fmt::Display for CliProgramId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln_name_value(f, "Program Id:", &self.program_id)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliProgramBuffer {
+    pub buffer: String,
+}
+
+impl QuietDisplay for CliProgramBuffer {}
+impl VerboseDisplay for CliProgramBuffer {}
+
+impl fmt::Display for CliProgramBuffer {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln_name_value(f, "Buffer:", &self.buffer)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CliProgramAccountType {
+    Buffer,
+    Program,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliProgramAuthority {
+    pub authority: String,
+    pub account_type: CliProgramAccountType,
+}
+
+impl QuietDisplay for CliProgramAuthority {}
+impl VerboseDisplay for CliProgramAuthority {}
+
+impl fmt::Display for CliProgramAuthority {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln_name_value(f, "Account Type:", &format!("{:?}", self.account_type))?;
+        writeln_name_value(f, "Authority:", &self.authority)
+    }
+}
+
 pub fn return_signers(
     tx: &Transaction,
     output_format: &OutputFormat,
