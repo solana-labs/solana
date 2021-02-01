@@ -4,7 +4,7 @@ use clap::{
 };
 use console::style;
 use solana_clap_utils::{
-    input_validators::{is_url, is_url_or_moniker},
+    input_validators::{is_url, is_url_or_moniker, normalize_to_url_if_moniker},
     keypair::{CliSigners, DefaultSigner, SKIP_SEED_PHRASE_VALIDATION_ARG},
     DisplayError,
 };
@@ -90,7 +90,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                 }
                 ("set", Some(subcommand_matches)) => {
                     if let Some(url) = subcommand_matches.value_of("json_rpc_url") {
-                        config.json_rpc_url = url.to_string();
+                        config.json_rpc_url = normalize_to_url_if_moniker(url);
                         // Revert to a computed `websocket_url` value when `json_rpc_url` is
                         // changed
                         config.websocket_url = "".to_string();
