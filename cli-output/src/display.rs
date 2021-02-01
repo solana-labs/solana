@@ -1,3 +1,4 @@
+use crate::cli_output::CliSignatureVerificationStatus;
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
 use solana_sdk::{
@@ -126,6 +127,7 @@ pub fn write_transaction<W: io::Write>(
     transaction: &Transaction,
     transaction_status: &Option<UiTransactionStatusMeta>,
     prefix: &str,
+    sigverify_status: Option<&[CliSignatureVerificationStatus]>,
 ) -> io::Result<()> {
     let message = &transaction.message;
     writeln!(
@@ -133,11 +135,24 @@ pub fn write_transaction<W: io::Write>(
         "{}Recent Blockhash: {:?}",
         prefix, message.recent_blockhash
     )?;
-    for (signature_index, signature) in transaction.signatures.iter().enumerate() {
+    let sigverify_statuses = if let Some(sigverify_status) = sigverify_status {
+        sigverify_status
+            .iter()
+            .map(|s| format!(" ({})", s))
+            .collect()
+    } else {
+        vec!["".to_string(); transaction.signatures.len()]
+    };
+    for (signature_index, (signature, sigverify_status)) in transaction
+        .signatures
+        .iter()
+        .zip(&sigverify_statuses)
+        .enumerate()
+    {
         writeln!(
             w,
-            "{}Signature {}: {:?}",
-            prefix, signature_index, signature
+            "{}Signature {}: {:?}{}",
+            prefix, signature_index, signature, sigverify_status,
         )?;
     }
     writeln!(w, "{}{:?}", prefix, message.header)?;
@@ -258,9 +273,18 @@ pub fn println_transaction(
     transaction: &Transaction,
     transaction_status: &Option<UiTransactionStatusMeta>,
     prefix: &str,
+    sigverify_status: Option<&[CliSignatureVerificationStatus]>,
 ) {
     let mut w = Vec::new();
-    if write_transaction(&mut w, transaction, transaction_status, prefix).is_ok() {
+    if write_transaction(
+        &mut w,
+        transaction,
+        transaction_status,
+        prefix,
+        sigverify_status,
+    )
+    .is_ok()
+    {
         if let Ok(s) = String::from_utf8(w) {
             print!("{}", s);
         }
