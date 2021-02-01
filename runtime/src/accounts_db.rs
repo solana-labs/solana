@@ -3388,6 +3388,11 @@ impl AccountsDB {
             .expect("overflow is detected while summing capitalization")
     }
 
+    pub fn checked_iterative_sum_for_capitalization(total_cap: u64, new_cap: u64) -> u64 {
+        let new_total = total_cap as u128 + new_cap as u128;
+        Self::checked_cast_for_capitalization(new_total)
+    }
+
     pub fn checked_sum_for_capitalization<T: Iterator<Item = u64>>(balances: T) -> u64 {
         Self::checked_cast_for_capitalization(balances.map(|b| b as u128).sum::<u128>())
     }
