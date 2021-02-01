@@ -548,6 +548,7 @@ impl Accounts {
         simple_capitalization_enabled: bool,
     ) -> u64 {
         self.accounts_db.unchecked_scan_accounts(
+            "calculate_capitalization_scan_elapsed",
             ancestors,
             |total_capitalization: &mut u64, (_pubkey, loaded_account, _slot)| {
                 let lamports = loaded_account.lamports();
@@ -673,6 +674,7 @@ impl Accounts {
         range: R,
     ) -> Vec<(Pubkey, Account)> {
         self.accounts_db.range_scan_accounts(
+            "load_to_collect_rent_eagerly_scan_elapsed",
             ancestors,
             range,
             |collector: &mut Vec<(Pubkey, Account)>, option| {
