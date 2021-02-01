@@ -23,7 +23,12 @@ use solana_sdk::{
     system_program,
     transaction::TransactionError,
 };
-use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
+use std::{
+    cell::{Ref, RefCell},
+    collections::HashMap,
+    rc::Rc,
+    sync::Arc,
+};
 
 pub struct Executors {
     pub executors: HashMap<Pubkey, Arc<dyn Executor>>,
@@ -526,7 +531,7 @@ impl MessageProcessor {
         instruction: &Instruction,
         keyed_accounts: &[&KeyedAccount],
         signers: &[Pubkey],
-        invoke_context: &mut dyn InvokeContext,
+        invoke_context: &Ref<&mut dyn InvokeContext>,
     ) -> Result<(Message, Pubkey, usize), InstructionError> {
         // Check for privilege escalation
         for account in instruction.accounts.iter() {
@@ -606,7 +611,11 @@ impl MessageProcessor {
         keyed_accounts: &[&KeyedAccount],
         signers_seeds: &[&[&[u8]]],
     ) -> Result<(), InstructionError> {
+        let invoke_context = RefCell::new(invoke_context);
+
         let (message, executables, accounts, account_refs, caller_privileges) = {
+            let invoke_context = invoke_context.borrow();
+
             let caller_program_id = invoke_context.get_caller()?;
 
             // Translate and verify caller's data
@@ -621,7 +630,7 @@ impl MessageProcessor {
                 .collect::<Vec<bool>>();
             caller_privileges.insert(0, false);
             let (message, callee_program_id, _) =
-                Self::create_message(&instruction, &keyed_accounts, &signers, invoke_context)?;
+                Self::create_message(&instruction, &keyed_accounts, &signers, &invoke_context)?;
             let mut accounts = vec![];
             let mut account_refs = vec![];
             'root: for account_key in message.account_keys.iter() {
@@ -705,12 +714,13 @@ impl MessageProcessor {
             &executables,
             &accounts,
             &caller_privileges,
-            invoke_context,
+            *(&mut *(invoke_context.borrow_mut())),
         )?;
 
         // Copy results back to caller
 
         {
+            let invoke_context = invoke_context.borrow();
             for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
                 let account = account.borrow();
                 if message.is_writable(i) && !account.executable {

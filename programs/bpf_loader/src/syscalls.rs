@@ -60,7 +60,7 @@ pub enum SyscallError {
     MalformedSignerSeed(Utf8Error, Vec<u8>),
     #[error("Could not create program address with signer seeds: {0}")]
     BadSeeds(PubkeyError),
-    #[error("Program {0} supported by inner instructions")]
+    #[error("Program {0} not supported by inner instructions")]
     ProgramNotSupported(Pubkey),
     #[error("{0}")]
     InstructionError(InstructionError),
@@ -1516,7 +1516,7 @@ fn check_authorized_program(
 fn get_upgradeable_executable(
     callee_program_id: &Pubkey,
     program_account: &RefCell<Account>,
-    invoke_context: &mut dyn InvokeContext,
+    invoke_context: &Ref<&mut dyn InvokeContext>,
 ) -> Result<Option<(Pubkey, RefCell<Account>)>, EbpfError<BPFError>> {
     if program_account.borrow().owner == bpf_loader_upgradeable::id() {
         match program_account.borrow().state() {
@@ -1566,7 +1566,7 @@ fn call<'a>(
         caller_privileges,
         abort_on_all_cpi_failures,
     ) = {
-        let mut invoke_context = syscall.get_context_mut()?;
+        let invoke_context = syscall.get_context()?;
 
         invoke_context
             .get_compute_meter()
@@ -1594,7 +1594,7 @@ fn call<'a>(
                 &instruction,
                 &keyed_account_refs,
                 &signers,
-                *invoke_context,
+                &invoke_context,
             )
             .map_err(SyscallError::InstructionError)?;
         let caller_privileges = message
@@ -1630,7 +1630,7 @@ fn call<'a>(
         })?)
         .clone();
         let programdata_executable =
-            get_upgradeable_executable(&callee_program_id, &program_account, *invoke_context)?;
+            get_upgradeable_executable(&callee_program_id, &program_account, &invoke_context)?;
         let mut executables = vec![(callee_program_id, program_account)];
         if let Some(executable) = programdata_executable {
             executables.push(executable);
