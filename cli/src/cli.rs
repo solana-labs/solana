@@ -18,7 +18,7 @@ use solana_clap_utils::{
 };
 use solana_cli_output::{
     display::{build_balance_message, println_name_value, println_transaction},
-    return_signers, CliAccount, CliSignature, OutputFormat,
+    return_signers, CliAccount, CliSignature, CliSignatureVerificationStatus, OutputFormat,
 };
 use solana_client::{
     blockhash_query::BlockhashQuery,
@@ -1044,7 +1044,8 @@ fn process_confirm(
 
 #[allow(clippy::unnecessary_wraps)]
 fn process_decode_transaction(transaction: &Transaction) -> ProcessResult {
-    println_transaction(transaction, &None, "", None);
+    let sig_stats = CliSignatureVerificationStatus::verify_transaction(&transaction);
+    println_transaction(transaction, &None, "", Some(&sig_stats));
     Ok("".to_string())
 }
 

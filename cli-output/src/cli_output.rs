@@ -1622,7 +1622,7 @@ pub enum CliSignatureVerificationStatus {
 }
 
 impl CliSignatureVerificationStatus {
-    pub fn get(tx: &Transaction) -> Vec<Self> {
+    pub fn verify_transaction(tx: &Transaction) -> Vec<Self> {
         tx.verify_with_results()
             .iter()
             .zip(&tx.signatures)
