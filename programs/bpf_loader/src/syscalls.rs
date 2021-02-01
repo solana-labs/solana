@@ -60,7 +60,7 @@ pub enum SyscallError {
     MalformedSignerSeed(Utf8Error, Vec<u8>),
     #[error("Could not create program address with signer seeds: {0}")]
     BadSeeds(PubkeyError),
-    #[error("Program {0} supported by inner instructions")]
+    #[error("Program {0} not supported by inner instructions")]
     ProgramNotSupported(Pubkey),
     #[error("{0}")]
     InstructionError(InstructionError),
@@ -68,8 +68,8 @@ pub enum SyscallError {
     UnalignedPointer,
     #[error("Too many signers")]
     TooManySigners,
-    #[error("Instruction passed to inner instruction is too large")]
-    InstructionTooLarge,
+    #[error("Instruction passed to inner instruction is too large ({0} > {1})")]
+    InstructionTooLarge(usize, usize),
     #[error("Too many accounts passed to inner instruction")]
     TooManyAccounts,
 }
@@ -1424,7 +1424,7 @@ where
         let account = invoke_context.get_account(&account_key).ok_or_else(|| {
             ic_msg!(
                 invoke_context,
-                "Instruction references an unknown account {:?}",
+                "Instruction references an unknown account {}",
                 account_key
             );
             SyscallError::InstructionError(InstructionError::MissingAccount)
@@ -1456,7 +1456,7 @@ where
         } else {
             ic_msg!(
                 invoke_context,
-                "Instruction references an unknown account {:?}",
+                "Instruction references an unknown account {}",
                 account_key
             );
             return Err(SyscallError::InstructionError(InstructionError::MissingAccount).into());
@@ -1471,12 +1471,12 @@ fn check_instruction_size(
     data_len: usize,
     invoke_context: &Ref<&mut dyn InvokeContext>,
 ) -> Result<(), EbpfError<BPFError>> {
-    if invoke_context
+    let size = num_accounts * size_of::<AccountMeta>() + data_len;
+    let max_size = invoke_context
         .get_bpf_compute_budget()
-        .max_cpi_instruction_size
-        < num_accounts * size_of::<AccountMeta>() + data_len
-    {
-        return Err(SyscallError::InstructionTooLarge.into());
+        .max_cpi_instruction_size;
+    if size > max_size {
+        return Err(SyscallError::InstructionTooLarge(size, max_size).into());
     }
     Ok(())
 }
@@ -1528,7 +1528,7 @@ fn get_upgradeable_executable(
                 } else {
                     ic_msg!(
                         invoke_context,
-                        "Unknown upgradeable programdata account {:?}",
+                        "Unknown upgradeable programdata account {}",
                         programdata_address,
                     );
                     Err(SyscallError::InstructionError(InstructionError::MissingAccount).into())
@@ -1537,7 +1537,7 @@ fn get_upgradeable_executable(
             _ => {
                 ic_msg!(
                     invoke_context,
-                    "Invalid upgradeable program account {:?}",
+                    "Invalid upgradeable program account {}",
                     callee_program_id,
                 );
                 Err(SyscallError::InstructionError(InstructionError::InvalidAccountData).into())
@@ -1625,7 +1625,7 @@ fn call<'a>(
         // Construct executables
 
         let program_account = (**accounts.get(callee_program_id_index).ok_or_else(|| {
-            ic_msg!(invoke_context, "Unknown program {:?}", callee_program_id,);
+            ic_msg!(invoke_context, "Unknown program {}", callee_program_id,);
             SyscallError::InstructionError(InstructionError::MissingAccount)
         })?)
         .clone();
@@ -1699,7 +1699,7 @@ fn call<'a>(
                         {
                             ic_msg!(
                                 invoke_context,
-                                "SystemProgram::CreateAccount data size limited to {:?} in inner instructions",
+                                "SystemProgram::CreateAccount data size limited to {} in inner instructions",
                                 MAX_PERMITTED_DATA_INCREASE
                             );
                             return Err(SyscallError::InstructionError(
