@@ -5035,21 +5035,32 @@ pub mod tests {
     fn test_accountsdb_rest_of_hash_calculation() {
         solana_logger::setup();
 
-        let key = Pubkey::new_unique();
+        let key = Pubkey::new(&[11u8; 32]);
         let account_maps: DashMap<Pubkey, CalculateHashIntermediate> = DashMap::new();
         let hash = Hash::new(&[1u8; 32]);
         let val = CalculateHashIntermediate::new(0, hash, 88, 490, Slot::default());
         account_maps.insert(key, val);
 
-        // 2nd key
-        let key = Pubkey::new_unique();
+        // 2nd key - zero lamports, so will be removed
+        let key = Pubkey::new(&[12u8; 32]);
         let hash = Hash::new(&[2u8; 32]);
         let val = CalculateHashIntermediate::new(0, hash, 1, 0, Slot::default());
         account_maps.insert(key, val);
 
-        let result = AccountsDB::rest_of_hash_calculation((account_maps, Measure::start("")));
+        let result =
+            AccountsDB::rest_of_hash_calculation((account_maps.clone(), Measure::start("")));
         let expected_hash = Hash::from_str("8j9ARGFv4W2GfML7d3sVJK2MePwrikqYnu6yqer28cCa").unwrap();
         assert_eq!(result, (expected_hash, 88));
+
+        // 3rd key - with pubkey value before 1st key so it will be sorted first
+        let key = Pubkey::new(&[10u8; 32]);
+        let hash = Hash::new(&[2u8; 32]);
+        let val = (0, hash, 20, 20, Slot::default());
+        account_maps.insert(key, val);
+
+        let result = AccountsDB::rest_of_hash_calculation((account_maps, Measure::start("")));
+        let expected_hash = Hash::from_str("EHv9C5vX7xQjjMpsJMzudnDTzoTSRwYkqLzY8tVMihGj").unwrap();
+        assert_eq!(result, (expected_hash, 108));
     }
 
     #[test]
