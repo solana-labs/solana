@@ -376,6 +376,7 @@ fn main() {
             .rpc_config(JsonRpcConfig {
                 enable_validator_exit: true,
                 enable_rpc_transaction_history: true,
+                enable_cpi_and_log_storage: false,
                 faucet_addr,
                 ..JsonRpcConfig::default()
             })
