@@ -4773,6 +4773,7 @@ dependencies = [
  "solana-program 1.6.0",
  "solana-runtime",
  "solana-sdk",
+ "thiserror",
  "tokio 0.3.5",
 ]
 

@@ -1,8 +1,8 @@
 use {
     solana_banks_client::BanksClient,
     solana_program::{
-        account_info::AccountInfo, entrypoint::ProgramResult, hash::Hash, pubkey::Pubkey,
-        rent::Rent,
+        account_info::AccountInfo, entrypoint::ProgramResult, hash::Hash, instruction::Instruction,
+        msg, pubkey::Pubkey, rent::Rent,
     },
     solana_program_test::{processor, ProgramTest},
     solana_sdk::{
@@ -17,6 +17,8 @@ fn process_instruction(
     _accounts: &[AccountInfo],
     _input: &[u8],
 ) -> ProgramResult {
+    // if we can call `msg!` successfully, then InvokeContext exists as required
+    msg!("Processing fuzz instruction, and ensure that InvokeContext exists");
     Ok(())
 }
 
@@ -94,6 +96,7 @@ async fn run_fuzz_instructions(
             program_id,
         );
         instructions.push(instruction);
+        instructions.push(Instruction::new(*program_id, &[0], vec![]));
         signer_keypairs.push(keypair);
     }
     // Process transaction on test network
