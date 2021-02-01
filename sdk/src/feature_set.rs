@@ -66,6 +66,15 @@ pub mod full_inflation {
             solana_sdk::declare_id!("NamwT9ejvrfcPXrCHEwp7BvUUFKPgVznu66HZUgFD9w");
         }
     }
+
+    pub mod certusone {
+        pub mod vote {
+            solana_sdk::declare_id!("BzBBveUDymEYoYzcMWNQCx3cd4jQs7puaVFHLtsbB6fm");
+        }
+        pub mod enable {
+            solana_sdk::declare_id!("7XRJcS5Ud5vxGB54JbK9N2vBZVwnwdBNeJW1ibRgD9gx");
+        }
+    }
 }
 
 pub mod spl_token_v2_multisig_fix {
@@ -243,6 +252,8 @@ lazy_static! {
         (full_inflation::stakeconomy::enable::id(), "Full inflation enabled by Stakeconomy.com"),
         (full_inflation::nam::vote::id(), "community vote allowing Nam to enable full inflation"),
         (full_inflation::nam::enable::id(), "full inflation enabled by Nam"),
+        (full_inflation::certusone::vote::id(), "Community vote allowing Certus One to enable full inflation"),
+        (full_inflation::certusone::enable::id(), "Full inflation enabled by Certus One"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
@@ -281,6 +292,10 @@ lazy_static! {
         FullInflationFeaturePair {
             vote_id: full_inflation::nam::vote::id(),
             enable_id: full_inflation::nam::enable::id(),
+        },
+        FullInflationFeaturePair {
+            vote_id: full_inflation::certusone::vote::id(),
+            enable_id: full_inflation::certusone::enable::id(),
         },
     ]
     .iter()
