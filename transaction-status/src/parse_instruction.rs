@@ -12,6 +12,11 @@ use std::{
 };
 use thiserror::Error;
 
+// Inline to prevent version conflicts in v1.4 branch
+mod spl_memo_v3_0 {
+    solana_sdk::declare_id!("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+}
+
 lazy_static! {
     static ref BPF_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader::id();
     static ref MEMO_V1_PROGRAM_ID: Pubkey =
