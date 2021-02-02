@@ -17,8 +17,8 @@ enum-iterator = "0.6.0"
 flate2 = "1.0.14"
 goauth = "0.8.1"
 log = "0.4.11"
-prost = "0.6.1"
-prost-types = "0.6.1"
+prost = "0.7.0"
+prost-types = "0.7.0"
 serde = "1.0.118"
 serde_derive = "1.0.103"
 smpl_jwt = "0.5.0"
@@ -27,7 +27,7 @@ solana-storage-proto = { path = "../storage-proto", version = "1.6.0" }
 solana-transaction-status = { path = "../transaction-status", version = "1.6.0" }
 thiserror = "1.0"
 futures = "0.3.8"
-tonic = {version="0.3.0", features = ["tls", "transport"]}
+tonic = {version="0.4.0", features = ["tls", "transport"]}
 zstd = "0.5.1"
 
 [lib]
