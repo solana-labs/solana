@@ -24,7 +24,7 @@ use std::{
     thread::sleep,
     time::{Duration, Instant},
 };
-use tokio::runtime::Runtime;
+use tokio_02::runtime::Runtime;
 
 macro_rules! json_req {
     ($method: expr, $params: expr) => {{
@@ -195,7 +195,7 @@ fn test_rpc_subscriptions() {
                 .signature_subscribe(sig.clone(), None)
                 .unwrap_or_else(|err| panic!("sig sub err: {:#?}", err));
 
-            tokio::spawn(async move {
+            tokio_02::spawn(async move {
                 let response = sig_sub.next().await.unwrap();
                 status_sender
                     .send((sig.clone(), response.unwrap()))
@@ -209,7 +209,7 @@ fn test_rpc_subscriptions() {
             let mut client_sub = client
                 .account_subscribe(pubkey, None)
                 .unwrap_or_else(|err| panic!("acct sub err: {:#?}", err));
-            tokio::spawn(async move {
+            tokio_02::spawn(async move {
                 let response = client_sub.next().await.unwrap();
                 account_sender.send(response.unwrap()).unwrap();
             });
@@ -219,7 +219,7 @@ fn test_rpc_subscriptions() {
         let mut slot_sub = client
             .slot_subscribe()
             .unwrap_or_else(|err| panic!("sig sub err: {:#?}", err));
-        tokio::spawn(async move {
+        tokio_02::spawn(async move {
             let _response = slot_sub.next().await.unwrap();
             ready_sender.send(()).unwrap();
         });

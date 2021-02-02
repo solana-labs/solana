@@ -382,7 +382,7 @@ impl BigTableSubCommand for App<'_, '_> {
 }
 
 pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
-    let mut runtime = tokio::runtime::Runtime::new().unwrap();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
 
     let future = match matches.subcommand() {
         ("upload", Some(arg_matches)) => {

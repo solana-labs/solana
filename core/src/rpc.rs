@@ -84,7 +84,7 @@ use std::{
     },
     time::Duration,
 };
-use tokio::runtime;
+use tokio::runtime::Runtime;
 
 pub const MAX_REQUEST_PAYLOAD_SIZE: usize = 50 * (1 << 10); // 50kB
 pub const PERFORMANCE_SAMPLES_LIMIT: usize = 720;
@@ -133,7 +133,7 @@ pub struct JsonRpcRequestProcessor {
     cluster_info: Arc<ClusterInfo>,
     genesis_hash: Hash,
     transaction_sender: Arc<Mutex<Sender<TransactionInfo>>>,
-    runtime_handle: runtime::Handle,
+    runtime: Arc<Runtime>,
     bigtable_ledger_storage: Option<solana_storage_bigtable::LedgerStorage>,
     optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
 }
@@ -215,7 +215,7 @@ impl JsonRpcRequestProcessor {
         health: Arc<RpcHealth>,
         cluster_info: Arc<ClusterInfo>,
         genesis_hash: Hash,
-        runtime: &runtime::Runtime,
+        runtime: Arc<Runtime>,
         bigtable_ledger_storage: Option<solana_storage_bigtable::LedgerStorage>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
     ) -> (Self, Receiver<TransactionInfo>) {
@@ -232,7 +232,7 @@ impl JsonRpcRequestProcessor {
                 cluster_info,
                 genesis_hash,
                 transaction_sender: Arc::new(Mutex::new(sender)),
-                runtime_handle: runtime.handle().clone(),
+                runtime,
                 bigtable_ledger_storage,
                 optimistically_confirmed_bank,
             },
@@ -269,7 +269,7 @@ impl JsonRpcRequestProcessor {
             cluster_info,
             genesis_hash,
             transaction_sender: Arc::new(Mutex::new(sender)),
-            runtime_handle: runtime::Runtime::new().unwrap().handle().clone(),
+            runtime: Arc::new(Runtime::new().expect("Runtime")),
             bigtable_ledger_storage: None,
             optimistically_confirmed_bank: Arc::new(RwLock::new(OptimisticallyConfirmedBank {
                 bank: bank.clone(),
@@ -708,7 +708,7 @@ impl JsonRpcRequestProcessor {
             if result.is_err() {
                 if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                     let bigtable_result = self
-                        .runtime_handle
+                        .runtime
                         .block_on(bigtable_ledger_storage.get_confirmed_block(slot));
                     self.check_bigtable_result(&bigtable_result)?;
                     return Ok(bigtable_result
@@ -753,7 +753,7 @@ impl JsonRpcRequestProcessor {
             // [start_slot..end_slot] can be fetched from BigTable.
             if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                 return self
-                    .runtime_handle
+                    .runtime
                     .block_on(
                         bigtable_ledger_storage
                             .get_confirmed_blocks(start_slot, (end_slot - start_slot) as usize + 1), // increment limit by 1 to ensure returned range is inclusive of both start_slot and end_slot
@@ -798,7 +798,7 @@ impl JsonRpcRequestProcessor {
             // range can be fetched from BigTable.
             if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                 return Ok(self
-                    .runtime_handle
+                    .runtime
                     .block_on(bigtable_ledger_storage.get_confirmed_blocks(start_slot, limit))
                     .unwrap_or_else(|_| vec![]));
             }
@@ -825,7 +825,7 @@ impl JsonRpcRequestProcessor {
             if result.is_err() || matches!(result, Ok(None)) {
                 if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                     let bigtable_result = self
-                        .runtime_handle
+                        .runtime
                         .block_on(bigtable_ledger_storage.get_confirmed_block(slot));
                     self.check_bigtable_result(&bigtable_result)?;
                     return Ok(bigtable_result
@@ -904,7 +904,7 @@ impl JsonRpcRequestProcessor {
                     })
                     .or_else(|| {
                         if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
-                            self.runtime_handle
+                            self.runtime
                                 .block_on(bigtable_ledger_storage.get_signature_status(&signature))
                                 .map(Some)
                                 .unwrap_or(None)
@@ -983,7 +983,7 @@ impl JsonRpcRequestProcessor {
                 None => {
                     if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                         return self
-                            .runtime_handle
+                            .runtime
                             .block_on(bigtable_ledger_storage.get_confirmed_transaction(&signature))
                             .unwrap_or(None)
                             .map(|confirmed| confirmed.encode(encoding));
@@ -1050,7 +1050,7 @@ impl JsonRpcRequestProcessor {
                         before = results.last().map(|x| x.signature);
                     }
 
-                    let bigtable_results = self.runtime_handle.block_on(
+                    let bigtable_results = self.runtime.block_on(
                         bigtable_ledger_storage.get_confirmed_signatures_for_address(
                             &address,
                             before.as_ref(),
@@ -1083,7 +1083,7 @@ impl JsonRpcRequestProcessor {
 
         if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
             let bigtable_slot = self
-                .runtime_handle
+                .runtime
                 .block_on(bigtable_ledger_storage.get_first_available_block())
                 .unwrap_or(None)
                 .unwrap_or(slot);
@@ -3152,7 +3152,7 @@ pub mod tests {
             RpcHealth::stub(),
             cluster_info.clone(),
             Hash::default(),
-            &runtime::Runtime::new().unwrap(),
+            Arc::new(tokio::runtime::Runtime::new().unwrap()),
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
@@ -4561,7 +4561,7 @@ pub mod tests {
             health.clone(),
             cluster_info,
             Hash::default(),
-            &runtime::Runtime::new().unwrap(),
+            Arc::new(tokio::runtime::Runtime::new().unwrap()),
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
@@ -4757,7 +4757,7 @@ pub mod tests {
             RpcHealth::stub(),
             cluster_info,
             Hash::default(),
-            &runtime::Runtime::new().unwrap(),
+            Arc::new(tokio::runtime::Runtime::new().unwrap()),
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
@@ -4790,7 +4790,7 @@ pub mod tests {
             RpcHealth::stub(),
             cluster_info,
             Hash::default(),
-            &runtime::Runtime::new().unwrap(),
+            Arc::new(tokio::runtime::Runtime::new().unwrap()),
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
@@ -4882,7 +4882,7 @@ pub mod tests {
             RpcHealth::stub(),
             cluster_info,
             Hash::default(),
-            &runtime::Runtime::new().unwrap(),
+            Arc::new(tokio::runtime::Runtime::new().unwrap()),
             None,
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
@@ -6111,7 +6111,7 @@ pub mod tests {
             RpcHealth::stub(),
             cluster_info,
             Hash::default(),
-            &runtime::Runtime::new().unwrap(),
+            Arc::new(tokio::runtime::Runtime::new().unwrap()),
             None,
             optimistically_confirmed_bank.clone(),
         );

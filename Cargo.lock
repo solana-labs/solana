@@ -2781,9 +2781,9 @@ checksum = "f7505eeebd78492e0f6108f7171c4948dbb120ee8119d9d77d0afa5469bef67f"
 
 [[package]]
 name = "pin-project-lite"
-version = "0.2.0"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b063f57ec186e6140e2b8b6921e5f1bd89c7356dda5b33acc5401203ca6131c"
+checksum = "439697af366c49a6d0a010c56a0d97685bc140ce0d377b13a2ea2aa42d64a827"
 
 [[package]]
 name = "pin-utils"
@@ -4188,7 +4188,8 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio 0.2.22",
- "tokio-util 0.2.0",
+ "tokio 0.3.5",
+ "tokio-util 0.3.1",
  "trees",
 ]
 
@@ -4493,7 +4494,7 @@ dependencies = [
  "solana-vote-program",
  "tempfile",
  "thiserror",
- "tokio 0.2.22",
+ "tokio 0.3.5",
  "trees",
 ]
 
@@ -4529,7 +4530,7 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "tempfile",
- "tokio 0.2.22",
+ "tokio 0.3.5",
 ]
 
 [[package]]
@@ -5818,7 +5819,7 @@ dependencies = [
  "mio 0.7.6",
  "num_cpus",
  "parking_lot 0.11.0",
- "pin-project-lite 0.2.0",
+ "pin-project-lite 0.2.4",
  "signal-hook-registry",
  "slab",
  "tokio-macros 0.3.1",
@@ -5836,7 +5837,7 @@ dependencies = [
  "libc",
  "memchr 2.3.3",
  "mio 0.7.6",
- "pin-project-lite 0.2.0",
+ "pin-project-lite 0.2.4",
  "tokio-macros 1.0.0",
 ]
 
@@ -5989,7 +5990,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76066865172052eb8796c686f0b441a93df8b08d40a950b062ffb9a426f00edd"
 dependencies = [
  "futures-core",
- "pin-project-lite 0.2.0",
+ "pin-project-lite 0.2.4",
  "tokio 1.1.1",
 ]
 
@@ -6102,20 +6103,6 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "571da51182ec208780505a32528fc5512a8fe1443ab960b3f2f3ef093cd16930"
-dependencies = [
- "bytes 0.5.4",
- "futures-core",
- "futures-sink",
- "log 0.4.11",
- "pin-project-lite 0.1.5",
- "tokio 0.2.22",
-]
-
-[[package]]
-name = "tokio-util"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be8242891f2b6cbef26a2d7e8605133c2c554cd35b3e4948ea892d6d68436499"
@@ -6152,7 +6139,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "log 0.4.11",
- "pin-project-lite 0.2.0",
+ "pin-project-lite 0.2.4",
  "tokio 1.1.1",
 ]
 
