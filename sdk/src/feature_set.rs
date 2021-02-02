@@ -49,6 +49,17 @@ pub mod full_inflation {
         }
     }
 
+    pub mod bl {
+        pub mod vote {
+            // The private key for this address is held by the Solana Foundation
+            solana_sdk::declare_id!("HRzoLj4jufnYEWosm9kWVgBVFdxAuqB1hu7vLckCuQHa");
+        }
+        pub mod enable {
+            // The private key for this address is held by BL
+            solana_sdk::declare_id!("BLxyQtJPzYZLHyj1p9n5QHUvbPoJt4TtRh7BXbG4M6rR");
+        }
+    }
+
     pub mod stakeconomy {
         pub mod vote {
             solana_sdk::declare_id!("JCergKv4GcywaBzn4JHi3sYJfG7mWenTG3QQDNUJiGS");
@@ -254,6 +265,8 @@ lazy_static! {
         (full_inflation::nam::enable::id(), "full inflation enabled by Nam"),
         (full_inflation::certusone::vote::id(), "Community vote allowing Certus One to enable full inflation"),
         (full_inflation::certusone::enable::id(), "Full inflation enabled by Certus One"),
+        (full_inflation::bl::vote::id(), "Community vote allowing BL to enable full inflation"),
+        (full_inflation::bl::enable::id(), "Full inflation enabled by BL"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
@@ -296,6 +309,10 @@ lazy_static! {
         FullInflationFeaturePair {
             vote_id: full_inflation::certusone::vote::id(),
             enable_id: full_inflation::certusone::enable::id(),
+        },
+        FullInflationFeaturePair {
+            vote_id: full_inflation::bl::vote::id(),
+            enable_id: full_inflation::bl::enable::id(),
         },
     ]
     .iter()
