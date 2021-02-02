@@ -6738,15 +6738,8 @@ pub mod tests {
             let mut slot = 1;
             let slot_orig = slot;
             db.store_cached(slot, &[(&pubkey, &account)]);
-            //db.mark_slot_frozen(slot);
             assert_load_account(&db, slot_orig, pubkey, lamports);
             db.add_root(slot);
-            // ??? maybe db.flush_accounts_cache(true, Some(slot));
-            /*
-            let storage_entry = get_account_entry(&db);
-            storage_entry.set_status(AccountStorageStatus::Full);
-            */
-            //let store_id = storage_entry.append_vec_id();
             assert_load_account(&db, slot_orig, pubkey, lamports);
             db.flush_rooted_accounts_cache(Some(slot_orig), None);
             let snapshot = db.get_snapshot_storages(slot_orig);
@@ -6754,22 +6747,17 @@ pub mod tests {
             assert!(snapshot[0].len() == 1);
             let _store_id = &snapshot[0][0].id;
             let mut count = 0;
-            snapshot
-                .clone()
-                .into_iter()
-                .flatten()
-                .map(|storage| {
-                    storage.set_status(AccountStorageStatus::Full);
-                    let accounts = storage.accounts.accounts(0);
-                    accounts.into_iter().for_each(|stored_account| {
-                        let acct = LoadedAccount::Stored(stored_account);
-                        //assert_eq!(accounts.slot(), slot_orig);
-                        assert_eq!(*acct.pubkey(), pubkey);
-                        assert_eq!(acct.account().lamports, lamports);
-                        count += 1;
-                    })
+            snapshot.clone().into_iter().flatten().for_each(|storage| {
+                storage.set_status(AccountStorageStatus::Full);
+                let accounts = storage.accounts.accounts(0);
+                accounts.into_iter().for_each(|stored_account| {
+                    let acct = LoadedAccount::Stored(stored_account);
+                    //assert_eq!(accounts.slot(), slot_orig);
+                    assert_eq!(*acct.pubkey(), pubkey);
+                    assert_eq!(acct.account().lamports, lamports);
+                    count += 1;
                 })
-                .count();
+            });
             assert_eq!(count, 1);
 
             slot += 1;
@@ -6780,15 +6768,12 @@ pub mod tests {
             db.add_root(slot);
             db.flush_rooted_accounts_cache(Some(slot), None);
 
-            // this loads the newer account... assert_load_account(&db, slot_orig, pubkey, lamports);
             if pass == 0 {
                 db.clean_accounts(None);
                 db.shrink_all_slots();
             } else if pass == 1 {
                 db.clean_accounts(None);
             }
-            //assert_load_account(&db, slot_orig, pubkey, lamports);
-            // assert_eq!(storage_entry.status(), AccountStorageStatus::Full);
 
             let mut count = 0;
             snapshot
