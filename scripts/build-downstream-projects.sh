@@ -87,8 +87,12 @@ serum_dex() {
     update_solana_dependencies .
     patch_crates_io Cargo.toml
     patch_crates_io dex/Cargo.toml
-    echo "[workspace]" >> dex/Cargo.toml
-
+    cat >> dex/Cargo.toml <<EOF
+[workspace]
+exclude = [
+    "crank",
+]
+EOF
     $cargo build
 
     $cargo_build_bpf \
