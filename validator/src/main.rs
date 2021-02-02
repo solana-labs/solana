@@ -1429,7 +1429,8 @@ pub fn main() {
             Arg::with_name("disable_duplicate_instance_check")
                 .long("disable-duplicate-instance-check")
                 .takes_value(false)
-                .help("Disables duplicate instance check"),
+                .help("Disables duplicate instance check")
+                .hidden(true),
         )
         .after_help("The default subcommand is run")
         .subcommand(
