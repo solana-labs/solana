@@ -1934,7 +1934,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         )
         .subcommand(
             SubCommand::with_name("decode-transaction")
-                .about("Decode a base-58 binary transaction")
+                .about("Decode a serialized transaction")
                 .arg(
                     Arg::with_name("transaction")
                         .index(1)
