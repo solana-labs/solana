@@ -1,41 +1,42 @@
-use crate::{
-    display::{
-        build_balance_message, build_balance_message_with_config, format_labeled_address,
-        writeln_name_value, BuildBalanceMessageConfig,
+use {
+    crate::{
+        display::{
+            build_balance_message, build_balance_message_with_config, format_labeled_address,
+            unix_timestamp_to_string, writeln_name_value, BuildBalanceMessageConfig,
+        },
+        QuietDisplay, VerboseDisplay,
     },
-    QuietDisplay, VerboseDisplay,
-};
-use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
-use console::{style, Emoji};
-use inflector::cases::titlecase::to_title_case;
-use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
-use solana_account_decoder::parse_token::UiTokenAccount;
-use solana_clap_utils::keypair::SignOnly;
-use solana_client::rpc_response::{
-    RpcAccountBalance, RpcInflationGovernor, RpcInflationRate, RpcKeyedAccount, RpcSupply,
-    RpcVoteAccountInfo,
-};
-use solana_sdk::{
-    clock::{self, Epoch, Slot, UnixTimestamp},
-    epoch_info::EpochInfo,
-    hash::Hash,
-    native_token::lamports_to_sol,
-    pubkey::Pubkey,
-    signature::Signature,
-    stake_history::StakeHistoryEntry,
-    transaction::Transaction,
-};
-use solana_stake_program::stake_state::{Authorized, Lockup};
-use solana_vote_program::{
-    authorized_voters::AuthorizedVoters,
-    vote_state::{BlockTimestamp, Lockout},
-};
-use std::{
-    collections::{BTreeMap, HashMap},
-    fmt,
-    str::FromStr,
-    time::Duration,
+    console::{style, Emoji},
+    inflector::cases::titlecase::to_title_case,
+    serde::{Deserialize, Serialize},
+    serde_json::{Map, Value},
+    solana_account_decoder::parse_token::UiTokenAccount,
+    solana_clap_utils::keypair::SignOnly,
+    solana_client::rpc_response::{
+        RpcAccountBalance, RpcInflationGovernor, RpcInflationRate, RpcKeyedAccount, RpcSupply,
+        RpcVoteAccountInfo,
+    },
+    solana_sdk::{
+        clock::{self, Epoch, Slot, UnixTimestamp},
+        epoch_info::EpochInfo,
+        hash::Hash,
+        native_token::lamports_to_sol,
+        pubkey::Pubkey,
+        signature::Signature,
+        stake_history::StakeHistoryEntry,
+        transaction::Transaction,
+    },
+    solana_stake_program::stake_state::{Authorized, Lockup},
+    solana_vote_program::{
+        authorized_voters::AuthorizedVoters,
+        vote_state::{BlockTimestamp, Lockout},
+    },
+    std::{
+        collections::{BTreeMap, HashMap},
+        fmt,
+        str::FromStr,
+        time::Duration,
+    },
 };
 
 static WARNING: Emoji = Emoji("⚠️", "!");
@@ -1152,18 +1153,6 @@ pub struct CliBlockTime {
 
 impl QuietDisplay for CliBlockTime {}
 impl VerboseDisplay for CliBlockTime {}
-
-fn unix_timestamp_to_string(unix_timestamp: UnixTimestamp) -> String {
-    format!(
-        "{} (UnixTimestamp: {})",
-        match NaiveDateTime::from_timestamp_opt(unix_timestamp, 0) {
-            Some(ndt) =>
-                DateTime::<Utc>::from_utc(ndt, Utc).to_rfc3339_opts(SecondsFormat::Secs, true),
-            None => "unknown".to_string(),
-        },
-        unix_timestamp,
-    )
-}
 
 impl fmt::Display for CliBlockTime {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
