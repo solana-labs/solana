@@ -71,7 +71,7 @@ pub fn to_instruction_error(error: ProgramError) -> InstructionError {
 }
 
 thread_local! {
-    static INVOKE_CONTEXT:RefCell<Option<(usize, usize)>> = RefCell::new(None);
+    static INVOKE_CONTEXT: RefCell<Option<(usize, usize)>> = RefCell::new(None);
 }
 fn set_invoke_context(new: &mut dyn InvokeContext) {
     INVOKE_CONTEXT.with(|invoke_context| unsafe {
