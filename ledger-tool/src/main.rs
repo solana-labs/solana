@@ -122,6 +122,7 @@ fn output_entry(
                     &transaction,
                     &transaction_status,
                     "      ",
+                    None,
                 );
             }
         }
