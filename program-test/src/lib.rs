@@ -89,9 +89,6 @@ fn set_invoke_context(new: &mut dyn InvokeContext) {
         invoke_context.replace(Some(transmute::<_, (usize, usize)>(new)))
     });
 }
-fn clear_invoke_context() {
-    INVOKE_CONTEXT.with(|invoke_context| invoke_context.replace(None));
-}
 fn get_invoke_context<'a>() -> &'a mut dyn InvokeContext {
     let fat = INVOKE_CONTEXT.with(|invoke_context| match *invoke_context.borrow() {
         Some(val) => val,
@@ -163,8 +160,6 @@ pub fn builtin_process_instruction(
             account.data = data.borrow().to_vec();
         }
     }
-
-    clear_invoke_context();
 
     result
 }
