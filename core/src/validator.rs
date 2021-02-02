@@ -247,6 +247,7 @@ impl Validator {
         mut authorized_voter_keypairs: Vec<Arc<Keypair>>,
         cluster_entrypoints: Vec<ContactInfo>,
         config: &ValidatorConfig,
+        should_check_duplicate_instance: bool,
     ) -> Self {
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
@@ -517,6 +518,7 @@ impl Validator {
             Some(bank_forks.clone()),
             node.sockets.gossip,
             config.gossip_validators.clone(),
+            should_check_duplicate_instance,
             &exit,
         );
         let serve_repair = Arc::new(RwLock::new(ServeRepair::new(cluster_info.clone())));
@@ -1419,6 +1421,7 @@ mod tests {
             vec![voting_keypair.clone()],
             vec![leader_node.info],
             &config,
+            true, // should_check_duplicate_instance
         );
         validator.close();
         remove_dir_all(validator_ledger_path).unwrap();
@@ -1489,6 +1492,7 @@ mod tests {
                     vec![Arc::new(vote_account_keypair)],
                     vec![leader_node.info.clone()],
                     &config,
+                    true, // should_check_duplicate_instance
                 )
             })
             .collect();
