@@ -92,6 +92,8 @@ const CACHE_VIRTUAL_WRITE_VERSION: u64 = 0;
 const CACHE_VIRTUAL_OFFSET: usize = 0;
 const CACHE_VIRTUAL_STORED_SIZE: usize = 0;
 
+const MERKLE_FANOUT: usize = 16;
+
 type DashMapVersionHash = DashMap<Pubkey, (u64, Hash)>;
 
 lazy_static! {
@@ -3719,8 +3721,7 @@ impl AccountsDB {
         }
 
         let mut hash_time = Measure::start("hash");
-        let fanout = 16;
-        let res = Self::compute_merkle_root_and_capitalization(hashes, fanout);
+        let res = Self::compute_merkle_root_and_capitalization(hashes, MERKLE_FANOUT);
         hash_time.stop();
 
         (res, (sort_time, hash_time))
@@ -3777,7 +3778,7 @@ impl AccountsDB {
             .cloned()
             .collect();
         let mismatch_found = AtomicU64::new(0);
-        let hashes: Vec<(Pubkey, Hash, u64)> = {
+        let hashes: Vec<(Hash, u64)> = {
             self.thread_pool_clean.install(|| {
                 keys.par_iter()
                     .filter_map(|pubkey| {
@@ -3816,7 +3817,7 @@ impl AccountsDB {
                                         }
                                     }
 
-                                    Some((*pubkey, *loaded_hash, balance))
+                                    Some((*loaded_hash, balance))
                                 })
                             } else {
                                 None
@@ -3838,17 +3839,14 @@ impl AccountsDB {
 
         scan.stop();
         let hash_total = hashes.len();
-
-        let mut accumulate = Measure::start("accumulate");
-        let ((accumulated_hash, total_lamports), (sort_time, hash_time)) =
-            Self::accumulate_account_hashes_and_capitalization(hashes, slot, false);
-        accumulate.stop();
+        let mut hash_time = Measure::start("hash");
+        let (accumulated_hash, total_lamports) =
+            Self::compute_merkle_root_and_capitalization_recurse(hashes, MERKLE_FANOUT);
+        hash_time.stop();
         datapoint_info!(
             "update_accounts_hash",
             ("accounts_scan", scan.as_us(), i64),
-            ("hash_accumulate", accumulate.as_us(), i64),
             ("hash", hash_time.as_us(), i64),
-            ("sort", sort_time.as_us(), i64),
             ("hash_total", hash_total, i64),
         );
         Ok((accumulated_hash, total_lamports))
@@ -4711,14 +4709,13 @@ pub mod tests {
         let mut expected_index = 0;
         let start = 0;
         let default_fanout = 2;
-        let fanout_in_accumulate = 16;
         // test 0..3 recursions (at fanout = 2) and 1 item remainder. The internals have 1 special case first loop and subsequent loops are the same types.
         let iterations = default_fanout * default_fanout * default_fanout + 2;
         for pass in 0..2 {
             let fanout = if pass == 0 {
                 default_fanout
             } else {
-                fanout_in_accumulate
+                MERKLE_FANOUT
             };
             for count in start..iterations {
                 let mut input: Vec<_> = (0..count)
