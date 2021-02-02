@@ -1,0 +1,15 @@
+{
+  "presets": [
+    ["@babel/preset-env", {"targets": "> 0.25%, not dead"}],
+    ["@babel/preset-flow"]
+  ],
+  "plugins": [
+    "@babel/plugin-proposal-class-properties"
+  ],
+  "env": {
+    "test": {
+      "plugins": ["@babel/plugin-transform-runtime"],
+      "presets": ["@babel/preset-flow"]
+    }
+  }
+}

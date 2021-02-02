@@ -1,9 +1,10 @@
 // @flow
 
+import {Buffer} from 'buffer';
 import * as BufferLayout from 'buffer-layout';
 import secp256k1 from 'secp256k1';
-import createKeccakHash from 'keccak';
 import assert from 'assert';
+import {keccak_256} from 'js-sha3';
 
 import {PublicKey} from './publickey';
 import {TransactionInstruction} from './transaction';
@@ -135,9 +136,9 @@ export class Secp256k1Program {
 
     try {
       const publicKey = publicKeyCreate(privateKey, false);
-      const messageHash = createKeccakHash('keccak256')
-        .update(toBuffer(message))
-        .digest();
+      const messageHash = Buffer.from(
+        keccak_256.update(toBuffer(message)).digest(),
+      );
       const {signature, recid: recoveryId} = ecdsaSign(messageHash, privateKey);
 
       return this.createInstructionWithPublicKey({
@@ -152,11 +153,12 @@ export class Secp256k1Program {
   }
 }
 
-export function constructEthPubkey(
+function constructEthPubkey(
   publicKey: Buffer | Uint8Array | Array<number>,
 ): Buffer {
-  return createKeccakHash('keccak256')
-    .update(toBuffer(publicKey.slice(1))) // throw away leading byte
-    .digest()
-    .slice(-HASHED_PUBKEY_SERIALIZED_SIZE);
+  return Buffer.from(
+    keccak_256
+      .update(toBuffer(publicKey.slice(1))) // throw away leading byte
+      .digest(),
+  ).slice(-HASHED_PUBKEY_SERIALIZED_SIZE);
 }

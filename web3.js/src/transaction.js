@@ -3,6 +3,7 @@
 import invariant from 'assert';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
+import {Buffer} from 'buffer';
 
 import type {CompiledInstruction} from './message';
 import {Message} from './message';

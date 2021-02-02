@@ -2,12 +2,14 @@
 
 import assert from 'assert';
 import bs58 from 'bs58';
+import {Buffer} from 'buffer';
 import {parse as urlParse, format as urlFormat} from 'url';
 import fetch from 'node-fetch';
 import jayson from 'jayson/lib/client/browser';
 import {struct} from 'superstruct';
 import {Client as RpcWebSocketClient} from 'rpc-websockets';
 
+import {AgentManager} from './agent-manager';
 import {NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
 import {MS_PER_SLOT} from './timing';
@@ -21,7 +23,6 @@ import type {FeeCalculator} from './fee-calculator';
 import type {Account} from './account';
 import type {TransactionSignature} from './transaction';
 import type {CompiledInstruction} from './message';
-import {AgentManager} from './agent-manager';
 
 export const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
 
@@ -578,10 +579,13 @@ type PerfSample = {
 };
 
 function createRpcRequest(url: string, useHttps: boolean): RpcRequest {
-  const agentManager = new AgentManager(useHttps);
+  let agentManager;
+  if (!process.env.BROWSER) {
+    agentManager = new AgentManager(useHttps);
+  }
 
   const server = jayson(async (request, callback) => {
-    const agent = agentManager.requestStart();
+    const agent = agentManager ? agentManager.requestStart() : undefined;
     const options = {
       method: 'POST',
       body: request,
@@ -620,7 +624,7 @@ function createRpcRequest(url: string, useHttps: boolean): RpcRequest {
     } catch (err) {
       callback(err);
     } finally {
-      agentManager.requestEnd();
+      agentManager && agentManager.requestEnd();
     }
   });
 
