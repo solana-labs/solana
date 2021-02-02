@@ -6834,7 +6834,7 @@ pub mod tests {
     }
 
     fn verify_accounts_in_stores(
-        storages: &SnapshotStorages,
+        storages: &[SnapshotStorage],
         num_accounts: usize,
         lamport_sum: u64,
     ) {
@@ -6842,7 +6842,7 @@ pub mod tests {
     }
 
     fn verify_accounts_in_stores_with_reset(
-        storages: &SnapshotStorages,
+        storages: &[SnapshotStorage],
         num_accounts: usize,
         lamport_sum: u64,
         reset: bool,
