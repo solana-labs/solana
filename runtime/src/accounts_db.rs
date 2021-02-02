@@ -298,6 +298,11 @@ impl AccountStorage {
         self.0.get(&slot).map(|result| result.value().clone())
     }
 
+    fn get_slot_storage_entries(&self, slot: Slot) -> Option<Vec<Arc<AccountStorageEntry>>> {
+        self.get_slot_stores(slot)
+            .map(|res| res.read().unwrap().values().cloned().collect())
+    }
+
     fn slot_store_count(&self, slot: Slot, store_id: AppendVecId) -> Option<usize> {
         self.get_account_storage_entry(slot, store_id)
             .map(|store| store.count())
@@ -2018,8 +2023,7 @@ impl AccountsDB {
             // the cache *after* we've finished flushing in `flush_slot_cache`.
             let storage_maps: Vec<Arc<AccountStorageEntry>> = self
                 .storage
-                .get_slot_stores(slot)
-                .map(|res| res.read().unwrap().values().cloned().collect())
+                .get_slot_storage_entries(slot)
                 .unwrap_or_default();
             self.thread_pool.install(|| {
                 storage_maps
@@ -4155,8 +4159,7 @@ impl AccountsDB {
             }
             let storage_maps: Vec<Arc<AccountStorageEntry>> = self
                 .storage
-                .get_slot_stores(*slot)
-                .map(|res| res.read().unwrap().values().cloned().collect())
+                .get_slot_storage_entries(*slot)
                 .unwrap_or_default();
             let num_accounts = storage_maps
                 .iter()
@@ -7665,11 +7668,7 @@ pub mod tests {
     }
 
     fn slot_stores(db: &AccountsDB, slot: Slot) -> Vec<Arc<AccountStorageEntry>> {
-        if let Some(x) = db.storage.get_slot_stores(slot) {
-            x.read().unwrap().values().cloned().collect()
-        } else {
-            vec![]
-        }
+        db.storage.get_slot_storage_entries(slot).unwrap_or(vec![])
     }
 
     #[test]
@@ -7865,8 +7864,7 @@ pub mod tests {
 
         let mut storage_maps: Vec<Arc<AccountStorageEntry>> = accounts_db
             .storage
-            .get_slot_stores(slot)
-            .map(|res| res.read().unwrap().values().cloned().collect())
+            .get_slot_storage_entries(slot)
             .unwrap_or_default();
 
         // Flushing cache should only create one storage entry
@@ -8277,6 +8275,73 @@ pub mod tests {
     #[test]
     fn test_flush_rooted_accounts_cache_without_clean() {
         run_flush_rooted_accounts_cache(false);
+    }
+
+    #[test]
+    fn test_shrink_unref() {
+        // Enable caching so that we use the straightforward implementation
+        // of shrink that will shrink all candidate slots
+        let caching_enabled = true;
+        let db = AccountsDB::new_with_config(
+            Vec::new(),
+            &ClusterType::Development,
+            HashSet::default(),
+            caching_enabled,
+        );
+        let account_key1 = Pubkey::new_unique();
+        let account_key2 = Pubkey::new_unique();
+        let account1 = Account::new(1, 0, &Account::default().owner);
+
+        // Store into slot 0
+        db.store_cached(0, &[(&account_key1, &account1)]);
+        db.store_cached(0, &[(&account_key2, &account1)]);
+        db.add_root(0);
+        // Flushes all roots
+        db.flush_accounts_cache(true, None);
+
+        // Make account_key1 in slot 0 outdated by updating in rooted slot 1
+        db.store_cached(1, &[(&account_key1, &account1)]);
+        db.add_root(1);
+        // Flushes all roots
+        db.flush_accounts_cache(true, None);
+        db.get_accounts_delta_hash(0);
+        db.get_accounts_delta_hash(1);
+
+        // Clean to remove outdated entry from slot 0
+        db.clean_accounts(Some(1));
+
+        // Shrink Slot 0
+        let mut slot0_stores = db.storage.get_slot_storage_entries(0).unwrap();
+        assert_eq!(slot0_stores.len(), 1);
+        let slot0_store = slot0_stores.pop().unwrap();
+        {
+            let mut shrink_candidate_slots = db.shrink_candidate_slots.lock().unwrap();
+            shrink_candidate_slots
+                .entry(0)
+                .or_default()
+                .insert(slot0_store.append_vec_id(), slot0_store);
+        }
+        db.shrink_candidate_slots();
+
+        // Make slot 0 dead by updating the remaining key
+        db.store_cached(2, &[(&account_key2, &account1)]);
+        db.add_root(2);
+
+        // Flushes all roots
+        db.flush_accounts_cache(true, None);
+
+        // Should be one store before clean for slot 0
+        assert_eq!(db.storage.get_slot_storage_entries(0).unwrap().len(), 1);
+        db.get_accounts_delta_hash(2);
+        db.clean_accounts(Some(2));
+
+        // No stores should exist for slot 0 after clean
+        assert!(db.storage.get_slot_storage_entries(0).is_none());
+
+        // Ref count for `account_key1` (account removed earlier by shrink)
+        // should be 1, since it was only stored in slot 0 and 1, and slot 0
+        // is now dead
+        assert_eq!(db.accounts_index.ref_count_from_storage(&account_key1), 1);
     }
 
     #[test]
