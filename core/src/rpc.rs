@@ -3229,14 +3229,23 @@ pub mod tests {
         let mut io = MetaIoHandler::default();
         io.extend_with(RpcSolImpl.to_delegate());
 
+        async fn use_client(client: gen_client::Client, mint_pubkey: Pubkey) -> u64 {
+            client
+                .get_balance(mint_pubkey.to_string(), None)
+                .await
+                .unwrap()
+                .value
+        }
+
         let fut = async {
             let (client, server) =
                 local::connect_with_metadata::<gen_client::Client, _, _>(&io, meta);
+            let client = use_client(client, mint_pubkey);
 
-            futures::join!(client.get_balance(mint_pubkey.to_string(), None), server)
+            futures::join!(client, server)
         };
         let (response, _) = futures::executor::block_on(fut);
-        assert_eq!(response.unwrap().value, 20);
+        assert_eq!(response, 20);
     }
 
     #[test]
