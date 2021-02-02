@@ -6741,9 +6741,8 @@ pub mod tests {
         solana_logger::setup();
         // passes:
         // 0. clean
-        // 1. shrink (do_intra_cache_clean = false). If we don't flush, nothing goes into stores
+        // 1. shrink
         for pass in 0..2 {
-            let do_intra_cache_clean: bool = false;
             // Enable caching so that we use the straightforward implementation
             // of shrink that will shrink all candidate slots
             let caching_enabled = true;
@@ -6772,7 +6771,12 @@ pub mod tests {
             db.flush_accounts_cache(true, None);
 
             let snapshot = db.get_snapshot_storages(slot_orig);
-            verify_accounts_in_stores_with_reset(&snapshot, expected_account_count, lamports_sum, true);
+            verify_accounts_in_stores_with_reset(
+                &snapshot,
+                expected_account_count,
+                lamports_sum,
+                true,
+            );
 
             slot += 1;
             let lamports3 = 0;
@@ -6829,12 +6833,21 @@ pub mod tests {
         }
     }
 
-    fn verify_accounts_in_stores(storages: &SnapshotStorages, num_accounts: usize, lamport_sum: u64) {
+    fn verify_accounts_in_stores(
+        storages: &SnapshotStorages,
+        num_accounts: usize,
+        lamport_sum: u64,
+    ) {
         verify_accounts_in_stores_with_reset(storages, num_accounts, lamport_sum, false);
     }
 
-    fn verify_accounts_in_stores_with_reset(storages: &SnapshotStorages, num_accounts: usize, lamport_sum: u64, reset: bool) {
-            let mut count = 0;
+    fn verify_accounts_in_stores_with_reset(
+        storages: &SnapshotStorages,
+        num_accounts: usize,
+        lamport_sum: u64,
+        reset: bool,
+    ) {
+        let mut count = 0;
         let mut lamport_sum_found = 0;
         storages.iter().flatten().for_each(|storage| {
             if reset {
