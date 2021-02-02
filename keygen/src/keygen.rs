@@ -248,7 +248,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
         .subcommand(
             SubCommand::with_name("new")
-                .about("Generate new keypair file from a passphrase and random seed phrase")
+                .about("Generate new keypair file from a random seed phrase and optional BIP39 passphrase")
                 .setting(AppSettings::DisableVersion)
                 .arg(
                     Arg::with_name("outfile")
@@ -284,8 +284,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 )
                 .arg(
                     Arg::with_name("no_passphrase")
-                        .long("no-passphrase")
-                        .help("Do not prompt for a passphrase"),
+                        .long("no-bip39-passphrase")
+                        .alias("no-passphrase")
+                        .help("Do not prompt for a BIP39 passphrase"),
                 )
                 .arg(
                     Arg::with_name("no_outfile")
@@ -382,7 +383,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
         .subcommand(
             SubCommand::with_name("recover")
-                .about("Recover keypair from seed phrase and passphrase")
+                .about("Recover keypair from seed phrase and optional BIP39 passphrase")
                 .setting(AppSettings::DisableVersion)
                 .arg(
                     Arg::with_name("outfile")
@@ -462,15 +463,31 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 "italian" => Language::Italian,
                 _ => unreachable!(),
             };
+
+            let silent = matches.is_present("silent");
+            if !silent {
+                println!("Generating a new keypair");
+            }
             let mnemonic = Mnemonic::new(mnemonic_type, language);
             let passphrase = if matches.is_present("no_passphrase") {
                 NO_PASSPHRASE.to_string()
             } else {
-                println!("Generating a new keypair");
-                prompt_passphrase(
-                    "For added security, enter a passphrase (empty for no passphrase): ",
-                )?
+                let passphrase = prompt_passphrase(
+                    "\nFor added security, enter a BIP39 passphrase\n\
+                    \nNOTE! This passphrase improves security of the recovery seed phrase NOT the\n\
+                    keypair file itself, which is stored as insecure plain text\n\
+                    \nBIP39 Passphrase (empty for none): ",
+                )?;
+                println!();
+                passphrase
             };
+
+            let passphrase_message = if passphrase == NO_PASSPHRASE {
+                "".to_string()
+            } else {
+                " and your BIP39 passphrase".to_string()
+            };
+
             let seed = Seed::new(&mnemonic, &passphrase);
             let keypair = keypair_from_seed(seed.as_bytes())?;
 
@@ -479,13 +496,12 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                     .map_err(|err| format!("Unable to write {}: {}", outfile, err))?;
             }
 
-            let silent = matches.is_present("silent");
             if !silent {
                 let phrase: &str = mnemonic.phrase();
                 let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
                 println!(
-                    "{}\npubkey: {}\n{}\nSave this seed phrase to recover your new keypair:\n{}\n{}",
-                    &divider, keypair.pubkey(), &divider, phrase, &divider
+                    "{}\npubkey: {}\n{}\nSave this seed phrase{} to recover your new keypair:\n{}\n{}",
+                    &divider, keypair.pubkey(), &divider, passphrase_message, phrase, &divider
                 );
             }
         }
