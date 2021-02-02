@@ -6776,24 +6776,20 @@ pub mod tests {
             }
 
             let mut count = 0;
-            snapshot
-                .clone()
-                .into_iter()
-                .flatten()
-                .for_each(|storage| {
-                    let accounts = storage.accounts.accounts(0);
-                    accounts.into_iter().for_each(|stored_account| {
-                        let l = stored_account.account_meta.lamports;
-                        let acct = LoadedAccount::Stored(stored_account);
-                        warn!(
-                            "lamports, slot: {}, {}",
-                            storage.slot.load(Ordering::Relaxed),
-                            l
-                        );
-                        assert_eq!(*acct.pubkey(), pubkey);
-                        count += 1;
-                    })
-                });
+            snapshot.clone().into_iter().flatten().for_each(|storage| {
+                let accounts = storage.accounts.accounts(0);
+                accounts.into_iter().for_each(|stored_account| {
+                    let l = stored_account.account_meta.lamports;
+                    let acct = LoadedAccount::Stored(stored_account);
+                    warn!(
+                        "lamports, slot: {}, {}",
+                        storage.slot.load(Ordering::Relaxed),
+                        l
+                    );
+                    assert_eq!(*acct.pubkey(), pubkey);
+                    count += 1;
+                })
+            });
             assert_eq!(count, 1);
         });
     }
