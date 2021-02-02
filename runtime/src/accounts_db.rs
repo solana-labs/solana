@@ -6780,7 +6780,7 @@ pub mod tests {
                 .clone()
                 .into_iter()
                 .flatten()
-                .map(|storage| {
+                .for_each(|storage| {
                     let accounts = storage.accounts.accounts(0);
                     accounts.into_iter().for_each(|stored_account| {
                         let l = stored_account.account_meta.lamports;
@@ -6793,8 +6793,7 @@ pub mod tests {
                         assert_eq!(*acct.pubkey(), pubkey);
                         count += 1;
                     })
-                })
-                .count();
+                });
             assert_eq!(count, 1);
         });
     }
