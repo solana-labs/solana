@@ -646,6 +646,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         process::exit(1);
     }
 
+    // Sanity check that the RPC endpoint is healthy before performing too much work
+    rpc_client.get_health().unwrap_or_else(|err| {
+        error!("RPC endpoint is unhealthy: {:?}", err);
+        process::exit(1);
+    });
+
     let source_stake_balance = validate_source_stake_account(&rpc_client, &config)?;
 
     let epoch_info = rpc_client.get_epoch_info()?;
