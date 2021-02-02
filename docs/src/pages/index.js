@@ -10,21 +10,21 @@ const features = [
   {
     title: <>⛏ Start Building</>,
     imageUrl: "developing/programming-model/overview",
-    description: <>Get started building your decentralized app or marketplace.</>,
+    description: (
+      <>Get started building your decentralized app or marketplace.</>
+    ),
   },
   {
     title: <>🎛 Run a Validator Node</>,
     imageUrl: "running-validator",
-    description: <>Validate transactions, secure the network, and earn rewards.</>,
+    description: (
+      <>Validate transactions, secure the network, and earn rewards.</>
+    ),
   },
   {
     title: <>🏛 Create an SPL Token</>,
     imageUrl: "https://spl.solana.com/token",
-    description: (
-      <>
-        Launch your own SPL Token, Solana's equivalent of ERC-20.
-      </>
-    ),
+    description: <>Launch your own SPL Token, Solana's equivalent of ERC-20.</>,
   },
   {
     title: <>🏦 Integrate an Exchange</>,
@@ -40,19 +40,13 @@ const features = [
     title: <>📲 Manage a Wallet</>,
     imageUrl: "wallet-guide",
     description: (
-      <>
-        Create a wallet, check your balance, and learn about wallet options.
-      </>
+      <>Create a wallet, check your balance, and learn about wallet options.</>
     ),
   },
   {
     title: <>🤯 Learn How Solana Works</>,
     imageUrl: "cluster/overview",
-    description: (
-      <>
-        Get a high-level understanding of Solana's architecture.
-      </>
-    ),
+    description: <>Get a high-level understanding of Solana's architecture.</>,
   }, //
   // {
   //   title: <>Understand Our Economic Design</>,
@@ -90,10 +84,7 @@ function Home() {
   const context = useDocusaurusContext();
   const { siteConfig = {} } = context;
   return (
-    <Layout
-      title="Homepage"
-      description="Solana Documentation"
-    >
+    <Layout title="Homepage" description="Solana Documentation">
       {/* <header className={clsx("hero hero--primary", styles.heroBanner)}> */}
       {/* <div className="container">
           <h1 className="hero__title">{siteConfig.title}</h1>
@@ -114,6 +105,22 @@ function Home() {
         {features && features.length > 0 && (
           <section className={styles.features}>
             <div className="container">
+              <div class="alert alert--primary" role="alert">
+                <b>Announcing the Solana x Serum Hackathon</b>
+                <br />
+                Register today and join leaders from Circle, Aave, SushiSwap,
+                and more!
+                <br />
+                <a
+                  href="https://solana.com/defi"
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  <button class="button button--outline button--secondary">
+                    Register Now
+                  </button>
+                </a>
+              </div>
               <div className="row cards__container">
                 {features.map((props, idx) => (
                   <Feature key={idx} {...props} />
