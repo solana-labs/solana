@@ -2710,7 +2710,10 @@ pub(crate) mod tests {
             &bank,
             &entries,
             true,
-            Some(transaction_status_sender),
+            Some(TransactionStatusSender {
+                sender: transaction_status_sender,
+                enable_cpi_and_log_storage: false,
+            }),
             Some(&replay_vote_sender),
         );
 
