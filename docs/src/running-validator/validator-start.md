@@ -91,12 +91,12 @@ sudo sysctl -p /etc/sysctl.d/20-solana-mmaps.conf
 ```
 Add
 ```
-LimitNOFILE=500000
+LimitNOFILE=700000
 ```
 to the `[Service]` section of your systemd service file, if you use one,
 otherwise add
 ```
-DefaultLimitNOFILE=500000
+DefaultLimitNOFILE=700000
 ```
 to the `[Manager]` section of `/etc/systemd/system.conf`.
 ```bash
@@ -105,7 +105,7 @@ sudo systemctl daemon-reload
 ```bash
 sudo bash -c "cat >/etc/security/limits.d/90-solana-nofiles.conf <<EOF
 # Increase process file descriptor count limit
-* - nofile 500000
+* - nofile 700000
 EOF"
 ```
 ```bash
@@ -318,7 +318,7 @@ Type=simple
 Restart=always
 RestartSec=1
 User=sol
-LimitNOFILE=500000
+LimitNOFILE=700000
 LogRateLimitIntervalSec=0
 Environment="PATH=/bin:/usr/bin:/home/sol/.local/share/solana/install/active_release/bin"
 ExecStart=/home/sol/bin/validator.sh
