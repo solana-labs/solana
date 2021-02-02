@@ -8395,8 +8395,7 @@ pub mod tests {
         run_flush_rooted_accounts_cache(false);
     }
 
-    #[test]
-    fn test_shrink_unref() {
+    fn run_test_shrink_unref(do_intra_cache_clean: bool) {
         // Enable caching so that we use the straightforward implementation
         // of shrink that will shrink all candidate slots
         let caching_enabled = true;
@@ -8414,8 +8413,13 @@ pub mod tests {
         db.store_cached(0, &[(&account_key1, &account1)]);
         db.store_cached(0, &[(&account_key2, &account1)]);
         db.add_root(0);
-        // Flushes all roots
-        db.flush_accounts_cache(true, None);
+        if !do_intra_cache_clean {
+            // If we don't want the cache doing purges before flush,
+            // then we cannot flush multiple roots at once, otherwise the later
+            // roots will clean the earlier roots before they are stored.
+            // Thus flush the roots individually
+            db.flush_accounts_cache(true, None);
+        }
 
         // Make account_key1 in slot 0 outdated by updating in rooted slot 1
         db.store_cached(1, &[(&account_key1, &account1)]);
@@ -8460,6 +8464,16 @@ pub mod tests {
         // should be 1, since it was only stored in slot 0 and 1, and slot 0
         // is now dead
         assert_eq!(db.accounts_index.ref_count_from_storage(&account_key1), 1);
+    }
+
+    #[test]
+    fn test_shrink_unref() {
+        run_test_shrink_unref(false)
+    }
+
+    #[test]
+    fn test_shrink_unref_with_intra_slot_cleaning() {
+        run_test_shrink_unref(true)
     }
 
     #[test]
