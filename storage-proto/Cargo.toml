@@ -11,7 +11,7 @@ edition = "2018"
 [dependencies]
 bincode = "1.2.1"
 bs58 = "0.3.1"
-prost = "0.6.1"
+prost = "0.7.0"
 serde = "1.0.118"
 serde_derive = "1.0.103"
 solana-account-decoder = { path = "../account-decoder", version = "1.6.0" }
