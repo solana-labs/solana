@@ -3417,7 +3417,7 @@ impl AccountsDB {
         debug: bool,
     ) -> Hash {
         let ((hash, ..), ..) =
-            Self::accumulate_account_hashes_and_capitalization(hashes, slot, debug, false);
+            Self::accumulate_account_hashes_and_capitalization(hashes, slot, debug);
         hash
     }
 
@@ -3429,17 +3429,9 @@ impl AccountsDB {
         mut hashes: Vec<(Pubkey, Hash, u64)>,
         slot: Slot,
         debug: bool,
-        unstable_sort: bool,
     ) -> ((Hash, u64), (Measure, Measure)) {
         let mut sort_time = Measure::start("sort");
-        // Unstable and stable sorts produce the same results for the known callers.
-        // However, sort time performance can be very different for different callers.
-        // So, the option to specify which type of sort is provided.
-        if unstable_sort {
-            hashes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0));
-        } else {
-            Self::sort_hashes_by_pubkey(&mut hashes);
-        }
+        hashes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0));
         sort_time.stop();
 
         if debug {
@@ -3691,7 +3683,6 @@ impl AccountsDB {
             hashes,
             Slot::default(),
             false,
-            true,
         );
         datapoint_info!(
             "calculate_accounts_hash_without_index",
@@ -5237,22 +5228,12 @@ pub mod tests {
                     result =
                         AccountsDB::compute_merkle_root_and_capitalization(input.clone(), fanout);
                 } else {
-                    let unstable_sort = true;
                     result = AccountsDB::accumulate_account_hashes_and_capitalization(
                         input.clone(),
                         Slot::default(),
                         false,
-                        unstable_sort,
                     )
                     .0;
-                    let result2 = AccountsDB::accumulate_account_hashes_and_capitalization(
-                        input.clone(),
-                        Slot::default(),
-                        false,
-                        !unstable_sort,
-                    )
-                    .0;
-                    assert_eq!(result, result2);
                     assert_eq!(
                         AccountsDB::accumulate_account_hashes(
                             input.clone(),
