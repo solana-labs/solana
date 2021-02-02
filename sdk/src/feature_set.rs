@@ -56,7 +56,7 @@ pub mod full_inflation {
         }
         pub mod enable {
             // The private key for this address is held by BL
-            solana_sdk::declare_id!("BLxyQtJPzYZLHyj1p9n5QHUvbPoJt4TtRh7BXbG4M6rR.json");
+            solana_sdk::declare_id!("BLxyQtJPzYZLHyj1p9n5QHUvbPoJt4TtRh7BXbG4M6rR");
         }
     }
 
