@@ -585,12 +585,13 @@ fn process_program_deploy(
     allow_excessive_balance: bool,
 ) -> ProcessResult {
     let (words, mnemonic, buffer_keypair) = create_ephemeral_keypair()?;
-    let (buffer_signer, buffer_pubkey) = if let Some(i) = buffer_signer_index {
-        (Some(config.signers[i]), config.signers[i].pubkey())
+    let (buffer_provided, buffer_signer, buffer_pubkey) = if let Some(i) = buffer_signer_index {
+        (true, Some(config.signers[i]), config.signers[i].pubkey())
     } else if let Some(pubkey) = buffer_pubkey {
-        (None, pubkey)
+        (true, None, pubkey)
     } else {
         (
+            false,
             Some(&buffer_keypair as &dyn Signer),
             buffer_keypair.pubkey(),
         )
@@ -658,7 +659,7 @@ fn process_program_deploy(
         true
     };
 
-    let (program_data, buffer_data_len) = if buffer_signer.is_none() {
+    let (program_data, buffer_data_len) = if buffer_provided {
         // Check supplied buffer account
         if let Some(account) = rpc_client
             .get_account_with_commitment(&buffer_pubkey, config.commitment)?
@@ -673,7 +674,7 @@ fn process_program_deploy(
             }
             (vec![], account.data.len())
         } else {
-            return Err("Specified buffer not found, was it already consumed?".into());
+            return Err("Buffer account not found, was it already consumed?".into());
         }
     } else if let Some(program_location) = program_location {
         let program_data = read_and_verify_elf(&program_location)?;
