@@ -6736,72 +6736,119 @@ pub mod tests {
     }
 
     #[test]
+    // this test was adapted from: run_test_shrink_unref
     fn test_storage_remove_account_with_reset_then_access() {
         solana_logger::setup();
-        (0..2).into_iter().for_each(|pass| {
-            info!("pass: {}", pass);
-            let mut db = AccountsDB::new(Vec::new(), &ClusterType::Development);
-            db.caching_enabled = true;
-            let pubkey = Pubkey::from_str("My11111111111111111111111111111111111111111").unwrap();
+        // passes:
+        // 0. clean
+        // 1. shrink (do_intra_cache_clean = false). If we don't flush, nothing goes into stores
+        for pass in 0..2 {
+            let do_intra_cache_clean: bool = false;
+            // Enable caching so that we use the straightforward implementation
+            // of shrink that will shrink all candidate slots
+            let caching_enabled = true;
+            let db = AccountsDB::new_with_config(
+                Vec::new(),
+                &ClusterType::Development,
+                HashSet::default(),
+                caching_enabled,
+            );
+            let account_key1 = Pubkey::new_unique();
+            let account_key2 = Pubkey::new_unique();
             let lamports = 1;
-            let account = Account::new(lamports, 1, &Account::default().owner);
-            let mut slot = 1;
+            let lamports2 = 5;
+            let lamports_sum = lamports + lamports2;
+            let expected_account_count = 2;
+            let account1 = Account::new(lamports, 0, &Account::default().owner);
+            let account2 = Account::new(lamports2, 0, &Account::default().owner);
+
+            let mut slot = 0;
             let slot_orig = slot;
-            db.store_cached(slot, &[(&pubkey, &account)]);
-            assert_load_account(&db, slot_orig, pubkey, lamports);
+
+            // Store into slot 0
+            db.store_cached(slot, &[(&account_key1, &account1)]);
+            db.store_cached(slot, &[(&account_key2, &account2)]);
             db.add_root(slot);
-            assert_load_account(&db, slot_orig, pubkey, lamports);
-            db.flush_rooted_accounts_cache(Some(slot_orig), None);
+            db.flush_accounts_cache(true, None);
+
             let snapshot = db.get_snapshot_storages(slot_orig);
-            assert!(snapshot.len() == 1);
-            assert!(snapshot[0].len() == 1);
-            let _store_id = &snapshot[0][0].id;
-            let mut count = 0;
-            snapshot.clone().into_iter().flatten().for_each(|storage| {
-                storage.set_status(AccountStorageStatus::Full);
-                let accounts = storage.accounts.accounts(0);
-                accounts.into_iter().for_each(|stored_account| {
-                    let acct = LoadedAccount::Stored(stored_account);
-                    //assert_eq!(accounts.slot(), slot_orig);
-                    assert_eq!(*acct.pubkey(), pubkey);
-                    assert_eq!(acct.account().lamports, lamports);
-                    count += 1;
-                })
-            });
-            assert_eq!(count, 1);
+            verify_accounts_in_stores_with_reset(&snapshot, expected_account_count, lamports_sum, true);
 
             slot += 1;
-            let lamports2 = 0;
-            let account = Account::new(lamports2, 2, &Account::default().owner);
-            db.store_cached(slot, &[(&pubkey, &account)]);
-            assert_load_account(&db, slot_orig, pubkey, lamports);
-            db.add_root(slot);
-            db.flush_rooted_accounts_cache(Some(slot), None);
+            let lamports3 = 0;
 
-            if pass == 0 {
-                db.clean_accounts(None);
-                db.shrink_all_slots();
-            } else if pass == 1 {
-                db.clean_accounts(None);
+            // Make account_key1 in slot 0 outdated by updating in rooted slot 1
+            let account3 = Account::new(lamports3, 0, &Account::default().owner);
+            db.store_cached(slot, &[(&account_key1, &account3)]);
+            db.add_root(slot);
+            verify_accounts_in_stores(&snapshot, expected_account_count, lamports_sum);
+            // Flushes all roots
+            db.flush_accounts_cache(true, None);
+            verify_accounts_in_stores(&snapshot, expected_account_count, lamports_sum);
+            db.get_accounts_delta_hash(0);
+            db.get_accounts_delta_hash(1);
+
+            // Clean to remove outdated entry from slot 0
+            db.clean_accounts(Some(1));
+            verify_accounts_in_stores(&snapshot, expected_account_count, lamports_sum);
+
+            if pass != 0 {
+                // Shrink Slot 0
+                let mut slot0_stores = db.storage.get_slot_storage_entries(0).unwrap();
+                assert_eq!(slot0_stores.len(), 1);
+                let slot0_store = slot0_stores.pop().unwrap();
+                {
+                    let mut shrink_candidate_slots = db.shrink_candidate_slots.lock().unwrap();
+                    shrink_candidate_slots
+                        .entry(0)
+                        .or_default()
+                        .insert(slot0_store.append_vec_id(), slot0_store);
+                }
+                db.shrink_candidate_slots();
+                verify_accounts_in_stores(&snapshot, expected_account_count, lamports_sum);
             }
 
+            // Make slot 0 dead by updating the remaining key
+            db.store_cached(2, &[(&account_key2, &account3)]);
+            db.add_root(2);
+            verify_accounts_in_stores(&snapshot, expected_account_count, lamports_sum);
+
+            // Flushes all roots
+            db.flush_accounts_cache(true, None);
+            verify_accounts_in_stores(&snapshot, expected_account_count, lamports_sum);
+
+            // Should be one store before clean for slot 0
+            assert_eq!(db.storage.get_slot_storage_entries(0).unwrap().len(), 1);
+            db.get_accounts_delta_hash(2);
+            db.clean_accounts(Some(2));
+            verify_accounts_in_stores(&snapshot, expected_account_count, lamports_sum);
+
+            // No stores should exist for slot 0 after clean
+            assert!(db.storage.get_slot_storage_entries(0).is_none());
+            verify_accounts_in_stores(&snapshot, expected_account_count, lamports_sum);
+        }
+    }
+
+    fn verify_accounts_in_stores(storages: &SnapshotStorages, num_accounts: usize, lamport_sum: u64) {
+        verify_accounts_in_stores_with_reset(storages, num_accounts, lamport_sum, false);
+    }
+
+    fn verify_accounts_in_stores_with_reset(storages: &SnapshotStorages, num_accounts: usize, lamport_sum: u64, reset: bool) {
             let mut count = 0;
-            snapshot.clone().into_iter().flatten().for_each(|storage| {
-                let accounts = storage.accounts.accounts(0);
-                accounts.into_iter().for_each(|stored_account| {
-                    let l = stored_account.account_meta.lamports;
-                    let acct = LoadedAccount::Stored(stored_account);
-                    warn!(
-                        "lamports, slot: {}, {}",
-                        storage.slot.load(Ordering::Relaxed),
-                        l
-                    );
-                    assert_eq!(*acct.pubkey(), pubkey);
-                    count += 1;
-                })
-            });
-            assert_eq!(count, 1);
+        let mut lamport_sum_found = 0;
+        storages.iter().flatten().for_each(|storage| {
+            if reset {
+                storage.set_status(AccountStorageStatus::Full);
+            };
+            let accounts = storage.accounts.accounts(0);
+            accounts.into_iter().for_each(|stored_account| {
+                let acct = LoadedAccount::Stored(stored_account);
+                count += 1;
+                lamport_sum_found += acct.account().lamports;
+            })
         });
+        assert_eq!(count, num_accounts);
+        assert_eq!(lamport_sum_found, lamport_sum);
     }
 
     #[test]
