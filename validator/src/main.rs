@@ -1426,8 +1426,8 @@ pub fn main() {
                 .hidden(true)
         )
         .arg(
-            Arg::with_name("disable_duplicate_instance_check")
-                .long("disable-duplicate-instance-check")
+            Arg::with_name("no_duplicate_instance_check")
+                .long("no-duplicate-instance-check")
                 .takes_value(false)
                 .help("Disables duplicate instance check")
                 .hidden(true),
@@ -1907,7 +1907,7 @@ pub fn main() {
     solana_ledger::entry::init_poh();
     solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&ledger_path);
 
-    let should_check_duplicate_instance = !matches.is_present("disable_duplicate_instance_check");
+    let should_check_duplicate_instance = !matches.is_present("no_duplicate_instance_check");
     if !cluster_entrypoints.is_empty() {
         rpc_bootstrap(
             &node,
