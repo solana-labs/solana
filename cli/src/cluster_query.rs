@@ -16,7 +16,7 @@ use solana_clap_utils::{
 use solana_cli_output::{
     display::{
         build_balance_message, format_labeled_address, new_spinner_progress_bar,
-        println_name_value, println_transaction, writeln_name_value,
+        println_name_value, println_transaction, unix_timestamp_to_string, writeln_name_value,
     },
     *,
 };
@@ -1812,9 +1812,14 @@ pub fn process_transaction_history(
     for result in results {
         if config.verbose {
             println!(
-                "{} [slot={} status={}] {}",
+                "{} [slot={} {}status={}] {}",
                 result.signature,
                 result.slot,
+                match result.block_time {
+                    None => "".to_string(),
+                    Some(block_time) =>
+                        format!("timestamp={} ", unix_timestamp_to_string(block_time)),
+                },
                 match result.err {
                     None => "Confirmed".to_string(),
                     Some(err) => format!("Failed: {:?}", err),

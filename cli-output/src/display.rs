@@ -1,12 +1,15 @@
-use crate::cli_output::CliSignatureVerificationStatus;
-use console::style;
-use indicatif::{ProgressBar, ProgressStyle};
-use solana_sdk::{
-    hash::Hash, native_token::lamports_to_sol, program_utils::limited_deserialize,
-    transaction::Transaction,
+use {
+    crate::cli_output::CliSignatureVerificationStatus,
+    chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc},
+    console::style,
+    indicatif::{ProgressBar, ProgressStyle},
+    solana_sdk::{
+        clock::UnixTimestamp, hash::Hash, native_token::lamports_to_sol,
+        program_utils::limited_deserialize, transaction::Transaction,
+    },
+    solana_transaction_status::UiTransactionStatusMeta,
+    std::{collections::HashMap, fmt, io},
 };
-use solana_transaction_status::UiTransactionStatusMeta;
-use std::{collections::HashMap, fmt, io};
 
 #[derive(Clone, Debug)]
 pub struct BuildBalanceMessageConfig {
@@ -298,6 +301,13 @@ pub fn new_spinner_progress_bar() -> ProgressBar {
         .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
     progress_bar.enable_steady_tick(100);
     progress_bar
+}
+
+pub fn unix_timestamp_to_string(unix_timestamp: UnixTimestamp) -> String {
+    match NaiveDateTime::from_timestamp_opt(unix_timestamp, 0) {
+        Some(ndt) => DateTime::<Utc>::from_utc(ndt, Utc).to_rfc3339_opts(SecondsFormat::Secs, true),
+        None => format!("UnixTimestamp {}", unix_timestamp),
+    }
 }
 
 #[cfg(test)]
