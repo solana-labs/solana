@@ -1636,7 +1636,7 @@ pub fn process_show_stakes(
         CliError::RpcRequestError("Failed to deserialize stake history".to_string())
     })?;
     // At v1.6, this check can be removed and simply passed as `true`
-    let stake_program_v2_enabled = is_stake_program_v2_enabled(rpc_client);
+    let stake_program_v2_enabled = is_stake_program_v2_enabled(rpc_client)?;
 
     let mut stake_accounts: Vec<CliKeyedStakeState> = vec![];
     for (stake_pubkey, stake_account) in all_stake_accounts {

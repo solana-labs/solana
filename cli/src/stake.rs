@@ -1718,7 +1718,7 @@ pub fn process_show_stake_account(
                 use_lamports_unit,
                 &stake_history,
                 &clock,
-                is_stake_program_v2_enabled(rpc_client), // At v1.6, this check can be removed and simply passed as `true`
+                is_stake_program_v2_enabled(rpc_client)?, // At v1.6, this check can be removed and simply passed as `true`
             );
 
             if state.stake_type == CliStakeType::Stake {
@@ -1787,10 +1787,10 @@ pub fn process_delegate_stake(
         // voted at the tip of the ledger
         let vote_account_data = rpc_client
             .get_account(vote_account_pubkey)
-            .map_err(|_| {
+            .map_err(|err| {
                 CliError::RpcRequestError(format!(
-                    "Vote account not found: {}",
-                    vote_account_pubkey
+                    "Vote account not found: {}. error: {}",
+                    vote_account_pubkey, err,
                 ))
             })?
             .data;
@@ -1878,13 +1878,13 @@ pub fn process_delegate_stake(
     }
 }
 
-pub fn is_stake_program_v2_enabled(rpc_client: &RpcClient) -> bool {
-    rpc_client
-        .get_account(&feature_set::stake_program_v2::id())
-        .ok()
-        .and_then(|account| feature::from_account(&account))
+pub fn is_stake_program_v2_enabled(
+    rpc_client: &RpcClient,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let feature_account = rpc_client.get_account(&feature_set::stake_program_v2::id())?;
+    Ok(feature::from_account(&feature_account)
         .and_then(|feature| feature.activated_at)
-        .is_some()
+        .is_some())
 }
 
 #[cfg(test)]

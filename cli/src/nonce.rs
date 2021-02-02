@@ -457,11 +457,11 @@ pub fn process_new_nonce(
         (&nonce_account, "nonce_account_pubkey".to_string()),
     )?;
 
-    let nonce_account_check = rpc_client.get_account(&nonce_account);
-    if nonce_account_check.is_err() {
-        return Err(CliError::BadParameter(
-            "Unable to create new nonce, no nonce account found".to_string(),
-        )
+    if let Err(err) = rpc_client.get_account(&nonce_account) {
+        return Err(CliError::BadParameter(format!(
+            "Unable to advance nonce account {}. error: {}",
+            nonce_account, err
+        ))
         .into());
     }
 
