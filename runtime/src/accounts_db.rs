@@ -3422,7 +3422,7 @@ impl AccountsDB {
     }
 
     fn sort_hashes_by_pubkey(hashes: &mut Vec<(Pubkey, Hash, u64)>) {
-        hashes.par_sort_by(|a, b| a.0.cmp(&b.0));
+        hashes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0));
     }
 
     fn accumulate_account_hashes_and_capitalization(
@@ -3431,7 +3431,7 @@ impl AccountsDB {
         debug: bool,
     ) -> ((Hash, u64), (Measure, Measure)) {
         let mut sort_time = Measure::start("sort");
-        hashes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        Self::sort_hashes_by_pubkey(&mut hashes);
         sort_time.stop();
 
         if debug {
@@ -3679,11 +3679,8 @@ impl AccountsDB {
         let hashes = Self::remove_zero_balance_accounts(account_maps);
         zeros.stop();
         let hash_total = hashes.len();
-        let (ret, (sort_time, hash_time)) = Self::accumulate_account_hashes_and_capitalization(
-            hashes,
-            Slot::default(),
-            false,
-        );
+        let (ret, (sort_time, hash_time)) =
+            Self::accumulate_account_hashes_and_capitalization(hashes, Slot::default(), false);
         datapoint_info!(
             "calculate_accounts_hash_without_index",
             ("accounts_scan", time_scan.as_us(), i64),
@@ -5139,11 +5136,13 @@ pub mod tests {
         solana_logger::setup();
 
         let expected = 1;
-        let slot_expected: Slot = 0;
         let tf = crate::append_vec::test_utils::get_append_vec_path(
             "test_accountsdb_scan_account_storage_no_bank",
         );
-        let mut data = AccountStorageEntry::new_empty_map(0, 10000);
+        let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
+        let slot_expected: Slot = 0;
+        let size: usize = 123;
+        let mut data = AccountStorageEntry::new(&paths[0], slot_expected, 0, size as u64);
         let av = AppendVec::new(&tf.path, true, 1024 * 1024);
         data.accounts = av;
 
