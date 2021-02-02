@@ -69,6 +69,7 @@ async fn block(slot: Slot) -> Result<(), Box<dyn std::error::Error>> {
             &transaction_with_meta.transaction,
             &transaction_with_meta.meta.map(|meta| meta.into()),
             "  ",
+            None,
         );
     }
     Ok(())
@@ -104,6 +105,7 @@ async fn confirm(signature: &Signature, verbose: bool) -> Result<(), Box<dyn std
                     &confirmed_transaction.transaction.transaction,
                     &confirmed_transaction.transaction.meta.map(|m| m.into()),
                     "  ",
+                    None,
                 );
             }
             Ok(None) => println!("Finalized transaction details not available"),
@@ -183,6 +185,7 @@ pub async fn transaction_history(
                                         &transaction_with_meta.transaction,
                                         &transaction_with_meta.meta.clone().map(|m| m.into()),
                                         "  ",
+                                        None,
                                     );
                                 }
                             }
