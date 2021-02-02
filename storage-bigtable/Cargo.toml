@@ -19,7 +19,7 @@ goauth = "0.8.1"
 log = "0.4.11"
 prost = "0.6.1"
 prost-types = "0.6.1"
-serde = "1.0.112"
+serde = "1.0.118"
 serde_derive = "1.0.103"
 smpl_jwt = "0.5.0"
 solana-sdk = { path = "../sdk", version = "1.6.0" }
