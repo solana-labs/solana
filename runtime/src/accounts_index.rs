@@ -742,7 +742,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
 
     // Given a SlotSlice `L`, a list of ancestors and a maximum slot, find the latest element
     // in `L`, where the slot `S` is an ancestor or root, and if `S` is a root, then `S <= max_root`
-    fn latest_slot(
+    pub fn latest_slot(
         &self,
         ancestors: Option<&Ancestors>,
         slice: SlotSlice<T>,
@@ -974,13 +974,15 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         reclaims: &mut SlotList<T>,
         max_clean_root: Option<Slot>,
         account_indexes: &HashSet<AccountIndex>,
-    ) {
-        let roots_traker = &self.roots_tracker.read().unwrap();
-        let max_root = Self::get_max_root(&roots_traker.roots, &list, max_clean_root);
+    ) -> bool {
+        let roots_tracker = &self.roots_tracker.read().unwrap();
+        let max_present_root = Self::get_max_root(&roots_tracker.roots, &list, max_clean_root);
 
+        let max_clean_root = max_clean_root.unwrap_or(roots_tracker.max_root);
         let mut purged_slots: HashSet<Slot> = HashSet::new();
         list.retain(|(slot, value)| {
-            let should_purge = Self::can_purge(max_root, *slot) && !value.is_cached();
+            let should_purge =
+                Self::can_purge(max_clean_root, max_present_root, *slot) && !value.is_cached();
             if should_purge {
                 reclaims.push((*slot, value.clone()));
                 purged_slots.insert(*slot);
@@ -989,6 +991,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         });
 
         self.purge_secondary_indexes_by_inner_key(pubkey, Some(&purged_slots), account_indexes);
+        list.is_empty()
     }
 
     // `is_cached` closure is needed to work around the generic (`T`) indexed type.
@@ -999,9 +1002,10 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
         max_clean_root: Option<Slot>,
         account_indexes: &HashSet<AccountIndex>,
     ) {
+        let mut empty_key = false;
         if let Some(mut locked_entry) = self.get_account_write_entry(pubkey) {
             locked_entry.slot_list_mut(|slot_list| {
-                self.purge_older_root_entries(
+                empty_key = self.purge_older_root_entries(
                     pubkey,
                     slot_list,
                     reclaims,
@@ -1010,10 +1014,18 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
                 );
             });
         }
+        if empty_key {
+            let mut w_maps = self.account_maps.write().unwrap();
+            if let Some(x) = w_maps.get(pubkey) {
+                if x.slot_list.read().unwrap().is_empty() {
+                    w_maps.remove(pubkey);
+                }
+            }
+        }
     }
 
-    pub fn can_purge(max_root: Slot, slot: Slot) -> bool {
-        slot < max_root
+    pub fn can_purge(max_clean_root: Slot, max_present_root: Slot, slot: Slot) -> bool {
+        slot < max_clean_root && slot != max_present_root
     }
 
     pub fn is_root(&self, slot: Slot) -> bool {

@@ -12224,4 +12224,41 @@ pub(crate) mod tests {
             genesis_config.epoch_schedule.get_first_slot_in_epoch(1),
         );
     }
+
+    #[test]
+    fn test_drop_bank_clears_storage() {
+        use std::str::FromStr;
+        solana_logger::setup();
+        let (genesis_config, mint_keypair) = create_genesis_config(100);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+
+        let pubkey1 = Pubkey::from_str("My11111111111111111111111111111111111111111").unwrap();
+        let pubkey2 = Pubkey::from_str("My22211111111111111111111111111111111111111").unwrap();
+
+        bank0.transfer(2, &mint_keypair, &pubkey1).unwrap();
+        bank0.freeze();
+
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank1.transfer(3, &mint_keypair, &pubkey2).unwrap();
+        // todo: remove this and see that test passes
+        bank1.freeze();
+
+        let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
+        bank2.transfer(4, &mint_keypair, &pubkey1).unwrap();
+        bank2.freeze();
+        bank2.squash();
+        drop(bank1);
+        bank2.print_accounts_stats();
+        bank2.clean_accounts(false);
+        bank2.print_accounts_stats();
+        assert_eq!(
+            bank2
+                .rc
+                .accounts
+                .accounts_db
+                .accounts_index
+                .ref_count_from_storage(&pubkey2),
+            0
+        );
+    }
 }

@@ -1346,7 +1346,10 @@ impl AccountsDb {
             slots
                 .into_iter()
                 .filter_map(|slot| {
-                    let maybe_slot_keys = self.uncleaned_pubkeys.remove(&slot);
+                    self.uncleaned_pubkeys
+                        .remove(&slot)
+                        .map(|(_slot, keys)| keys)
+                    /*let maybe_slot_keys = self.uncleaned_pubkeys.remove(&slot);
                     if self.accounts_index.is_root(slot) {
                         // Safe to unwrap on rooted slots since this is called from clean_accounts
                         // and only clean_accounts operates on rooted slots. purge_slots only
@@ -1355,7 +1358,7 @@ impl AccountsDb {
                         Some(keys)
                     } else {
                         None
-                    }
+                    }*/
                 })
                 .collect(),
             max_slot_in_uncleaned_pubkeys,
@@ -1427,20 +1430,25 @@ impl AccountsDb {
                 pubkeys
                     .par_chunks(4096)
                     .map(|pubkeys: &[Pubkey]| {
-                        let mut purges_in_root = Vec::new();
+                        let purges_in_root = Vec::new();
                         let mut purges = HashMap::new();
                         for pubkey in pubkeys {
-                            if let Some((locked_entry, index)) =
-                                self.accounts_index.get(pubkey, None, max_clean_root)
+                            if let Some(locked_entry) =
+                                self.accounts_index.get_account_read_entry(pubkey)
                             {
                                 let slot_list = locked_entry.slot_list();
-                                let (slot, account_info) = &slot_list[index];
-                                if account_info.lamports == 0 {
-                                    purges.insert(
-                                        *pubkey,
-                                        self.accounts_index
-                                            .roots_and_ref_count(&locked_entry, max_clean_root),
-                                    );
+                                if let Some(index) =
+                                    self.accounts_index
+                                        .latest_slot(None, slot_list, max_clean_root)
+                                {
+                                    let (_slot, account_info) = &slot_list[index];
+                                    if account_info.lamports == 0 {
+                                        purges.insert(
+                                            *pubkey,
+                                            self.accounts_index
+                                                .roots_and_ref_count(&locked_entry, max_clean_root),
+                                        );
+                                    }
                                 }
 
                                 // prune zero_lamport_pubkey set which should contain all 0-lamport
@@ -1454,17 +1462,17 @@ impl AccountsDb {
                                 }
 
                                 // Release the lock
-                                let slot = *slot;
+                                //let slot = *slot;
                                 drop(locked_entry);
 
-                                if self.accounts_index.is_uncleaned_root(slot) {
-                                    // Assertion enforced by `accounts_index.get()`, the latest slot
-                                    // will not be greater than the given `max_clean_root`
-                                    if let Some(max_clean_root) = max_clean_root {
-                                        assert!(slot <= max_clean_root);
-                                    }
-                                    purges_in_root.push(*pubkey);
-                                }
+                                let mut reclaims = vec![];
+                                self.accounts_index.clean_rooted_entries(
+                                    pubkey,
+                                    &mut reclaims,
+                                    max_clean_root,
+                                    &self.account_indexes,
+                                );
+                                self.handle_reclaims(&reclaims, None, false, None, false);
                             } else {
                                 let r_accounts_index =
                                     self.accounts_index.account_maps.read().unwrap();
@@ -2585,7 +2593,7 @@ impl AccountsDb {
             // on bank creation.
 
             // Remove any delta pubkey set if existing.
-            self.uncleaned_pubkeys.remove(remove_slot);
+            //self.uncleaned_pubkeys.remove(remove_slot);
         }
         remove_storages_elapsed.stop();
 
