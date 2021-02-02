@@ -1646,10 +1646,17 @@ impl AccountsDB {
                     )| {
                         if let Some((locked_entry, _)) = self.accounts_index.get(pubkey, None, None)
                         {
-                            locked_entry
+                            let is_alive = locked_entry
                                 .slot_list()
                                 .iter()
-                                .any(|(_slot, i)| i.store_id == *store_id && i.offset == *offset)
+                                .any(|(_slot, i)| i.store_id == *store_id && i.offset == *offset);
+                            if !is_alive {
+                                // If the account index entry was removed, that means no other
+                                // AppendVec's for this slot contains this pubkey, so it's safe
+                                // to unref
+                                locked_entry.unref()
+                            }
+                            is_alive
                         } else {
                             false
                         }
