@@ -286,4 +286,11 @@ const MAINNET_TOKENS: { [key: string]: TokenDetails } = {
     icon: "/tokens/maps.svg",
     website: "https://maps.me/",
   },
+  Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: {
+    symbol: "USDT",
+    name: "USDT",
+    logo: "/tokens/usdt.svg",
+    icon: "/tokens/usdt.svg",
+    website: "https://tether.to",
+  },
 };
