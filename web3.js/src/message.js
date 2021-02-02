@@ -1,6 +1,7 @@
 // @flow
 
 import bs58 from 'bs58';
+import {Buffer} from 'buffer';
 import * as BufferLayout from 'buffer-layout';
 
 import {PublicKey} from './publickey';

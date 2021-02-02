@@ -1,60 +1,106 @@
-import babel from 'rollup-plugin-babel';
-import builtins from 'rollup-plugin-node-builtins';
-import commonjs from 'rollup-plugin-commonjs';
+import babel from '@rollup/plugin-babel';
+import commonjs from '@rollup/plugin-commonjs';
 import copy from 'rollup-plugin-copy';
-import globals from 'rollup-plugin-node-globals';
-import json from 'rollup-plugin-json';
-import nodeResolve from 'rollup-plugin-node-resolve';
-import replace from 'rollup-plugin-replace';
+import flowRemoveTypes from 'flow-remove-types';
+import json from '@rollup/plugin-json';
+import nodeResolve from '@rollup/plugin-node-resolve';
+import nodePolyfills from 'rollup-plugin-node-polyfills';
+import replace from '@rollup/plugin-replace';
 import {terser} from 'rollup-plugin-terser';
 
 const env = process.env.NODE_ENV;
 
-function generateConfig(configType) {
+function generateConfig(configType, format) {
+  const browser = configType === 'browser';
+  const bundle = format === 'iife';
+
   const config = {
     input: 'src/index.js',
     plugins: [
-      json(),
+      flow(),
+      commonjs(),
+      nodeResolve({browser, preferBuiltins: !browser, dedupe: ['bn.js']}),
       babel({
         exclude: '**/node_modules/**',
-        runtimeHelpers: true,
+        babelHelpers: bundle ? 'bundled' : 'runtime',
+        plugins: bundle ? [] : ['@babel/plugin-transform-runtime'],
       }),
       replace({
         'process.env.NODE_ENV': JSON.stringify(env),
+        'process.env.BROWSER': JSON.stringify(browser),
       }),
-      commonjs(),
       copy({
         targets: [{src: 'module.d.ts', dest: 'lib', rename: 'index.d.ts'}],
       }),
     ],
+    onwarn: function (warning, rollupWarn) {
+      if (warning.code !== 'CIRCULAR_DEPENDENCY') {
+        rollupWarn(warning);
+      }
+    },
+    treeshake: {
+      moduleSideEffects: false,
+    },
   };
 
   switch (configType) {
     case 'browser':
-      config.output = [
-        {
-          file: 'lib/index.iife.js',
-          format: 'iife',
-          name: 'solanaWeb3',
-          sourcemap: true,
-        },
-      ];
-      config.plugins.push(builtins());
-      config.plugins.push(globals());
-      config.plugins.push(
-        nodeResolve({
-          browser: true,
-        }),
-      );
+      switch (format) {
+        case 'esm': {
+          config.output = [
+            {
+              file: 'lib/index.browser.esm.js',
+              format: 'es',
+              sourcemap: true,
+            },
+          ];
 
-      if (env === 'production') {
-        config.plugins.push(
-          terser({
-            mangle: false,
-            compress: false,
-          }),
-        );
+          // Prevent dependencies from being bundled
+          config.external = [
+            /@babel\/runtime/,
+            'bn.js',
+            'bs58',
+            'buffer',
+            'buffer-layout',
+            'crypto-hash',
+            'jayson/lib/client/browser',
+            'js-sha3',
+            'node-fetch',
+            'rpc-websockets',
+            'secp256k1',
+            'superstruct',
+            'tweetnacl',
+          ];
+
+          break;
+        }
+        case 'iife': {
+          config.output = [
+            {
+              file: 'lib/index.iife.js',
+              format: 'iife',
+              name: 'solanaWeb3',
+              sourcemap: true,
+            },
+            {
+              file: 'lib/index.iife.min.js',
+              format: 'iife',
+              name: 'solanaWeb3',
+              sourcemap: true,
+              plugins: [terser({mangle: false, compress: false})],
+            },
+          ];
+
+          break;
+        }
+        default:
+          throw new Error(`Unknown format: ${format}`);
       }
+
+      // TODO: Find a workaround to avoid resolving the following JSON file:
+      // `node_modules/secp256k1/node_modules/elliptic/package.json`
+      config.plugins.push(json());
+      config.plugins.push(nodePolyfills());
 
       break;
     case 'node':
@@ -71,43 +117,20 @@ function generateConfig(configType) {
         },
       ];
 
-      // Quash 'Unresolved dependencies' complaints for modules listed in the
-      // package.json "dependencies" section.  Unfortunately this list is manually
-      // maintained.
+      // Prevent dependencies from being bundled
       config.external = [
-        'assert',
-        '@babel/runtime/core-js/get-iterator',
-        '@babel/runtime/core-js/json/stringify',
-        '@babel/runtime/core-js/object/assign',
-        '@babel/runtime/core-js/object/get-prototype-of',
-        '@babel/runtime/core-js/object/keys',
-        '@babel/runtime/core-js/promise',
-        '@babel/runtime/helpers/asyncToGenerator',
-        '@babel/runtime/helpers/classCallCheck',
-        '@babel/runtime/helpers/createClass',
-        '@babel/runtime/helpers/defineProperty',
-        '@babel/runtime/helpers/get',
-        '@babel/runtime/helpers/getPrototypeOf',
-        '@babel/runtime/helpers/inherits',
-        '@babel/runtime/helpers/possibleConstructorReturn',
-        '@babel/runtime/helpers/slicedToArray',
-        '@babel/runtime/helpers/toConsumableArray',
-        '@babel/runtime/helpers/typeof',
-        '@babel/runtime/regenerator',
+        /@babel\/runtime/,
         'bn.js',
         'bs58',
         'buffer-layout',
         'crypto-hash',
-        'http',
-        'https',
         'jayson/lib/client/browser',
+        'js-sha3',
         'node-fetch',
         'rpc-websockets',
+        'secp256k1',
         'superstruct',
         'tweetnacl',
-        'url',
-        'secp256k1',
-        'keccak',
       ];
       break;
     default:
@@ -117,4 +140,20 @@ function generateConfig(configType) {
   return config;
 }
 
-export default [generateConfig('node'), generateConfig('browser')];
+export default [
+  generateConfig('node'),
+  generateConfig('browser', 'esm'),
+  generateConfig('browser', 'iife'),
+];
+
+// Using this instead of rollup-plugin-flow due to
+// https://github.com/leebyron/rollup-plugin-flow/issues/5
+function flow() {
+  return {
+    name: 'flow-remove-types',
+    transform: code => ({
+      code: flowRemoveTypes(code).toString(),
+      map: null,
+    }),
+  };
+}

@@ -1,5 +1,6 @@
 // @flow
 
+import {Buffer} from 'buffer';
 import {struct} from 'superstruct';
 
 import * as Layout from './layout';

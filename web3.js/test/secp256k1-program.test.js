@@ -1,6 +1,6 @@
 // @flow
 
-import createKeccakHash from 'keccak';
+import {keccak_256} from 'js-sha3';
 import secp256k1 from 'secp256k1';
 import {randomBytes} from 'crypto';
 
@@ -35,7 +35,7 @@ test('live create secp256k1 instruction with public key', async () => {
   } while (!privateKeyVerify(privateKey));
 
   const publicKey = publicKeyCreate(privateKey, false);
-  const messageHash = createKeccakHash('keccak256').update(message).digest();
+  const messageHash = Buffer.from(keccak_256.update(message).digest());
   const {signature, recid: recoveryId} = ecdsaSign(messageHash, privateKey);
 
   const instruction = Secp256k1Program.createInstructionWithPublicKey({

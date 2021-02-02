@@ -4,6 +4,7 @@ import BN from 'bn.js';
 import bs58 from 'bs58';
 import nacl from 'tweetnacl';
 import {sha256} from 'crypto-hash';
+import {Buffer} from 'buffer';
 
 //$FlowFixMe
 let naclLowLevel = nacl.lowlevel;

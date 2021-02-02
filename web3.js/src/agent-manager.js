@@ -26,9 +26,6 @@ export class AgentManager {
   }
 
   requestStart(): http.Agent | https.Agent {
-    // $FlowExpectedError - Don't manage agents in the browser
-    if (process.browser) return;
-
     this._activeRequests++;
     clearTimeout(this._destroyTimeout);
     this._destroyTimeout = null;
@@ -36,9 +33,6 @@ export class AgentManager {
   }
 
   requestEnd() {
-    // $FlowExpectedError - Don't manage agents in the browser
-    if (process.browser) return;
-
     this._activeRequests--;
     if (this._activeRequests === 0 && this._destroyTimeout === null) {
       this._destroyTimeout = setTimeout(() => {
