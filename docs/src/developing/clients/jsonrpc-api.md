@@ -162,7 +162,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
     "params": [
       "83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri",
       {
-        "commitment": "max"
+        "commitment": "finalized"
       }
     ]
   }
@@ -171,7 +171,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 #### Default:
 
-If commitment configuration is not provided, the node will default to `"max"` commitment
+If commitment configuration is not provided, the node will default to `"finalized"` commitment
 
 Only methods that query bank state accept the commitment parameter. They are indicated in the API Reference below.
 
@@ -2853,7 +2853,7 @@ submission.
 - `<string>` - fully-signed Transaction, as encoded string
 - `<object>` - (optional) Configuration object containing the following field:
   - `skipPreflight: <bool>` - if true, skip the preflight transaction checks (default: false)
-  - `preflightCommitment: <string>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to use for preflight (default: `"max"`).
+  - `preflightCommitment: <string>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to use for preflight (default: `"finalized"`).
   - `encoding: <string>` - (optional) Encoding used for the transaction data. Either `"base58"` (*slow*, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
 
 #### Results:
@@ -2890,7 +2890,7 @@ Simulate sending a transaction
 - `<string>` - Transaction, as an encoded string. The transaction must have a valid blockhash, but is not required to be signed.
 - `<object>` - (optional) Configuration object containing the following field:
   - `sigVerify: <bool>` - if true the transaction signatures will be verified (default: false)
-  - `commitment: <string>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to simulate the transaction at (default: `"max"`).
+  - `commitment: <string>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to simulate the transaction at (default: `"finalized"`).
   - `encoding: <string>` - (optional) Encoding used for the transaction data. Either `"base58"` (*slow*, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
 
 #### Results:
@@ -3022,7 +3022,7 @@ Request:
     "CM78CPUeXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNH12",
     {
       "encoding": "base64",
-      "commitment": "root"
+      "commitment": "finalized"
     }
   ]
 }
@@ -3159,7 +3159,7 @@ Request:
       "mentions": [ "11111111111111111111111111111111" ]
     },
     {
-      "commitment": "max"
+      "commitment": "finalized"
     }
   ]
 }
@@ -3255,7 +3255,7 @@ Request:
     "11111111111111111111111111111111",
     {
       "encoding": "base64",
-      "commitment": "max"
+      "commitment": "finalized"
     }
   ]
 }
@@ -3417,7 +3417,7 @@ Request:
   "params": [
     "2EBVM6cB8vAAD93Ktr6Vd8p67XPbQzCJX47MpReuiCXJAtcjaxpvWpcg9Ege1Nr5Tk3a2GFrByT7WPBjdsTycY9b",
     {
-      "commitment": "max"
+      "commitment": "finalized"
     }
   ]
 }
