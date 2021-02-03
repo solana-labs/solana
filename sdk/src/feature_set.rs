@@ -49,6 +49,17 @@ pub mod full_inflation {
         }
     }
 
+    pub mod bunghi {
+        pub mod vote {
+            // The private key for this address is held by the Solana Foundation
+            solana_sdk::declare_id!("E9hFUVEz29H8XMXk7ygk7ZpCuEuZQ8DJvJKJSTGu1RM6");
+        }
+        pub mod enable {
+            // The private key for this address is held by candidate_example
+            solana_sdk::declare_id!("5S9JDUb4vKY1CUxLf5oc96ZxjGrephj1jcPeTi62sYmP");
+        }
+    }
+    
     pub mod bl {
         pub mod vote {
             // The private key for this address is held by the Solana Foundation
