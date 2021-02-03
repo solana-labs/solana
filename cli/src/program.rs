@@ -13,14 +13,9 @@ use log::*;
 use serde_json::{self, json, Value};
 use solana_bpf_loader_program::{bpf_verifier, BPFError, ThisInstructionMeter};
 use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
-<<<<<<< HEAD
-use solana_cli_output::display::new_spinner_progress_bar;
-=======
 use solana_cli_output::{
-    display::new_spinner_progress_bar, CliProgramAccountType, CliProgramAuthority,
-    CliProgramBuffer, CliProgramId, CliUpgradeableBuffer, CliUpgradeableProgram,
+    display::new_spinner_progress_bar, CliUpgradeableBuffer, CliUpgradeableProgram,
 };
->>>>>>> 6cf6ef3a3... cli: add query command to solana program (#15017)
 use solana_client::{
     rpc_client::RpcClient, rpc_config::RpcSendTransactionConfig,
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, rpc_response::RpcLeaderSchedule,

@@ -1477,8 +1477,6 @@ impl fmt::Display for CliTokenAccount {
     }
 }
 
-<<<<<<< HEAD
-=======
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliProgramId {
@@ -1627,7 +1625,6 @@ impl fmt::Display for CliUpgradeableBuffer {
     }
 }
 
->>>>>>> 6cf6ef3a3... cli: add query command to solana program (#15017)
 pub fn return_signers(
     tx: &Transaction,
     output_format: &OutputFormat,
