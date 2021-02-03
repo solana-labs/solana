@@ -817,26 +817,29 @@ pub fn gc(config_file: &str) -> Result<(), String> {
         .collect::<Vec<_>>();
     releases.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap()); // order by newest releases
 
-    let old_releases = releases.split_off(5); // Delete all but the 5 newest releases
+    const MAX_CACHE_LEN: usize = 5;
+    if releases.len() > MAX_CACHE_LEN {
+        let old_releases = releases.split_off(MAX_CACHE_LEN);
 
-    if !old_releases.is_empty() {
-        let progress_bar = new_spinner_progress_bar();
-        progress_bar.set_length(old_releases.len() as u64);
-        progress_bar.set_style(
-            ProgressStyle::default_bar()
-                .template(&format!(
-                    "{}{}{}",
-                    "{spinner:.green} ",
-                    RECYCLING,
-                    "Removing old releases [{bar:40.cyan/blue}] {pos}/{len} ({eta})"
-                ))
-                .progress_chars("=> "),
-        );
-        for (release, _modified_type) in old_releases {
-            progress_bar.inc(1);
-            let _ = fs::remove_dir_all(&release);
+        if !old_releases.is_empty() {
+            let progress_bar = new_spinner_progress_bar();
+            progress_bar.set_length(old_releases.len() as u64);
+            progress_bar.set_style(
+                ProgressStyle::default_bar()
+                    .template(&format!(
+                        "{}{}{}",
+                        "{spinner:.green} ",
+                        RECYCLING,
+                        "Removing old releases [{bar:40.cyan/blue}] {pos}/{len} ({eta})"
+                    ))
+                    .progress_chars("=> "),
+            );
+            for (release, _modified_type) in old_releases {
+                progress_bar.inc(1);
+                let _ = fs::remove_dir_all(&release);
+            }
+            progress_bar.finish_and_clear();
         }
-        progress_bar.finish_and_clear();
     }
 
     Ok(())
