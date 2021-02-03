@@ -2540,6 +2540,7 @@ impl ClusterInfo {
         stakes: HashMap<Pubkey, u64>,
         feature_set: Option<&FeatureSet>,
         epoch_time_ms: u64,
+        should_check_duplicate_instance: bool,
     ) -> Result<()> {
         let _st = ScopedTimer::from(&self.stats.process_gossip_packets_time);
         let packets: Vec<_> = thread_pool.install(|| {
@@ -2557,9 +2558,11 @@ impl ClusterInfo {
         // Check if there is a duplicate instance of
         // this node with more recent timestamp.
         let check_duplicate_instance = |values: &[CrdsValue]| {
-            for value in values {
-                if self.instance.check_duplicate(value) {
-                    return Err(Error::DuplicateNodeInstance);
+            if should_check_duplicate_instance {
+                for value in values {
+                    if self.instance.check_duplicate(value) {
+                        return Err(Error::DuplicateNodeInstance);
+                    }
                 }
             }
             Ok(())
@@ -2620,6 +2623,7 @@ impl ClusterInfo {
         response_sender: &PacketSender,
         thread_pool: &ThreadPool,
         last_print: &mut Instant,
+        should_check_duplicate_instance: bool,
     ) -> Result<()> {
         const RECV_TIMEOUT: Duration = Duration::from_secs(1);
         let packets: Vec<_> = requests_receiver.recv_timeout(RECV_TIMEOUT)?.packets.into();
@@ -2655,6 +2659,7 @@ impl ClusterInfo {
             stakes,
             feature_set.as_deref(),
             epoch_time_ms,
+            should_check_duplicate_instance,
         )?;
 
         self.print_reset_stats(last_print);
@@ -2900,6 +2905,7 @@ impl ClusterInfo {
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         requests_receiver: PacketReceiver,
         response_sender: PacketSender,
+        should_check_duplicate_instance: bool,
         exit: &Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
@@ -2921,6 +2927,7 @@ impl ClusterInfo {
                         &response_sender,
                         &thread_pool,
                         &mut last_print,
+                        should_check_duplicate_instance,
                     ) {
                         match err {
                             Error::RecvTimeoutError(_) => {
