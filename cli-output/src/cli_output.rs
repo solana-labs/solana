@@ -359,6 +359,42 @@ impl fmt::Display for CliValidators {
                 },
             )
         }
+        writeln!(
+            f,
+            "{}",
+            style(format!(
+                "  {:<44}  {:<38}  {}  {}  {}  {:>10}  {:^8}  {}",
+                "Identity",
+                "Vote Account",
+                "Commission",
+                "Last Vote",
+                "Root Block",
+                "Credits",
+                "Version",
+                "Active Stake",
+            ))
+            .bold()
+        )?;
+        for validator in &self.current_validators {
+            write_vote_account(
+                f,
+                validator,
+                self.total_active_stake,
+                self.use_lamports_unit,
+                false,
+            )?;
+        }
+        for validator in &self.delinquent_validators {
+            write_vote_account(
+                f,
+                validator,
+                self.total_active_stake,
+                self.use_lamports_unit,
+                true,
+            )?;
+        }
+
+        writeln!(f)?;
         writeln_name_value(
             f,
             "Active Stake:",
@@ -410,41 +446,6 @@ impl fmt::Display for CliValidators {
             )?;
         }
 
-        writeln!(f)?;
-        writeln!(
-            f,
-            "{}",
-            style(format!(
-                "  {:<44}  {:<38}  {}  {}  {}  {:>10}  {:^8}  {}",
-                "Identity",
-                "Vote Account",
-                "Commission",
-                "Last Vote",
-                "Root Block",
-                "Credits",
-                "Version",
-                "Active Stake",
-            ))
-            .bold()
-        )?;
-        for validator in &self.current_validators {
-            write_vote_account(
-                f,
-                validator,
-                self.total_active_stake,
-                self.use_lamports_unit,
-                false,
-            )?;
-        }
-        for validator in &self.delinquent_validators {
-            write_vote_account(
-                f,
-                validator,
-                self.total_active_stake,
-                self.use_lamports_unit,
-                true,
-            )?;
-        }
         Ok(())
     }
 }
