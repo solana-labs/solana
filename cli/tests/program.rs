@@ -434,25 +434,6 @@ fn test_cli_program_deploy_with_authority() {
         program_data[..]
     );
 
-    // Get upgrade authority
-    config.signers = vec![&keypair];
-    config.command = CliCommand::Program(ProgramCliCommand::GetAuthority {
-        account_pubkey: Some(program_pubkey),
-    });
-    let response = process_command(&config);
-    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
-    let authority_pubkey_str = json
-        .as_object()
-        .unwrap()
-        .get("authority")
-        .unwrap()
-        .as_str()
-        .unwrap();
-    assert_eq!(
-        new_upgrade_authority.pubkey(),
-        Pubkey::from_str(&authority_pubkey_str).unwrap()
-    );
-
     // Set no authority
     config.signers = vec![&keypair, &new_upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::SetUpgradeAuthority {
@@ -521,22 +502,6 @@ fn test_cli_program_deploy_with_authority() {
     } else {
         panic!("not a buffer account");
     }
-
-    // Get buffer authority
-    config.signers = vec![&keypair];
-    config.command = CliCommand::Program(ProgramCliCommand::GetAuthority {
-        account_pubkey: Some(program_pubkey),
-    });
-    let response = process_command(&config);
-    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
-    let authority_pubkey_str = json
-        .as_object()
-        .unwrap()
-        .get("authority")
-        .unwrap()
-        .as_str()
-        .unwrap();
-    assert_eq!("none", authority_pubkey_str);
 }
 
 #[test]
@@ -651,25 +616,6 @@ fn test_cli_program_write_buffer() {
         program_data[..]
     );
 
-    // Get buffer authority
-    config.signers = vec![&keypair];
-    config.command = CliCommand::Program(ProgramCliCommand::GetAuthority {
-        account_pubkey: Some(buffer_keypair.pubkey()),
-    });
-    let response = process_command(&config);
-    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
-    let authority_pubkey_str = json
-        .as_object()
-        .unwrap()
-        .get("authority")
-        .unwrap()
-        .as_str()
-        .unwrap();
-    assert_eq!(
-        keypair.pubkey(),
-        Pubkey::from_str(&authority_pubkey_str).unwrap()
-    );
-
     // Specify buffer authority
     let buffer_keypair = Keypair::new();
     let authority_keypair = Keypair::new();
@@ -739,25 +685,6 @@ fn test_cli_program_write_buffer() {
     assert_eq!(
         buffer_account.data[UpgradeableLoaderState::buffer_data_offset().unwrap()..],
         program_data[..]
-    );
-
-    // Get buffer authority
-    config.signers = vec![&keypair];
-    config.command = CliCommand::Program(ProgramCliCommand::GetAuthority {
-        account_pubkey: Some(buffer_pubkey),
-    });
-    let response = process_command(&config);
-    let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
-    let authority_pubkey_str = json
-        .as_object()
-        .unwrap()
-        .get("authority")
-        .unwrap()
-        .as_str()
-        .unwrap();
-    assert_eq!(
-        authority_keypair.pubkey(),
-        Pubkey::from_str(&authority_pubkey_str).unwrap()
     );
 }
 
