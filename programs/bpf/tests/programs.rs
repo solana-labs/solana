@@ -1552,7 +1552,7 @@ fn test_program_bpf_upgrade_and_invoke_in_same_tx() {
 
     // Prepare for upgrade
     let buffer_keypair = Keypair::new();
-    let path = create_bpf_path("panic");
+    let path = create_bpf_path("solana_bpf_rust_panic");
     let mut file = File::open(&path).unwrap_or_else(|err| {
         panic!("Failed to open {}: {}", path.display(), err);
     });
@@ -1563,11 +1563,7 @@ fn test_program_bpf_upgrade_and_invoke_in_same_tx() {
         &mint_keypair,
         &buffer_keypair,
         &authority_keypair,
-<<<<<<< HEAD
         &elf,
-=======
-        "solana_bpf_rust_panic",
->>>>>>> 02a5f7104... Fix which shared object the test uses (#15060)
     );
 
     // Invoke, then upgrade the program, and then invoke again in same tx
@@ -1897,7 +1893,7 @@ fn test_program_bpf_upgrade_self_via_cpi() {
 
     // Prepare for upgrade
     let buffer_keypair = Keypair::new();
-    let path = create_bpf_path("panic");
+    let path = create_bpf_path("solana_bpf_rust_panic");
     let mut file = File::open(&path).unwrap_or_else(|err| {
         panic!("Failed to open {}: {}", path.display(), err);
     });
@@ -1908,11 +1904,7 @@ fn test_program_bpf_upgrade_self_via_cpi() {
         &mint_keypair,
         &buffer_keypair,
         &authority_keypair,
-<<<<<<< HEAD
         &elf,
-=======
-        "solana_bpf_rust_panic",
->>>>>>> 02a5f7104... Fix which shared object the test uses (#15060)
     );
 
     // Invoke, then upgrade the program, and then invoke again in same tx
