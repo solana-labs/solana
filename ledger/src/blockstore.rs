@@ -487,8 +487,9 @@ impl Blockstore {
         Ok(meta_iter.map(|(slot, slot_meta_bytes)| {
             (
                 slot,
-                deserialize(&slot_meta_bytes)
-                    .unwrap_or_else(|_| panic!("Could not deserialize SlotMeta for slot {}", slot)),
+                deserialize(&slot_meta_bytes).unwrap_or_else(|e| {
+                    panic!("Could not deserialize SlotMeta for slot {}: {:?}", slot, e)
+                }),
             )
         }))
     }
@@ -2598,10 +2599,11 @@ impl Blockstore {
         })?;
 
         debug!("{:?} shreds in last FEC set", data_shreds.len(),);
-        bincode::deserialize::<Vec<Entry>>(&deshred_payload).map_err(|_| {
-            BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
-                "could not reconstruct entries".to_string(),
-            )))
+        bincode::deserialize::<Vec<Entry>>(&deshred_payload).map_err(|e| {
+            BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(format!(
+                "could not reconstruct entries: {:?}",
+                e
+            ))))
         })
     }
 
