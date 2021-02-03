@@ -348,7 +348,7 @@ fn translate_slice_inner<'a, T>(
     {
         Err(SyscallError::UnalignedPointer.into())
     } else if len == 0 {
-        Ok(unsafe { from_raw_parts_mut(0x1 as *mut T, len as usize) })
+        Ok(&mut [])
     } else {
         match translate(
             memory_mapping,
@@ -1471,7 +1471,9 @@ fn check_instruction_size(
     data_len: usize,
     invoke_context: &Ref<&mut dyn InvokeContext>,
 ) -> Result<(), EbpfError<BPFError>> {
-    let size = num_accounts * size_of::<AccountMeta>() + data_len;
+    let size = num_accounts
+        .saturating_mul(size_of::<AccountMeta>())
+        .saturating_add(data_len);
     let max_size = invoke_context
         .get_bpf_compute_budget()
         .max_cpi_instruction_size;
