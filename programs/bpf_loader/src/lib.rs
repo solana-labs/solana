@@ -365,7 +365,7 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::AccountDataTooSmall);
             }
             if programdata_len > MAX_PERMITTED_DATA_LENGTH as usize {
-                ic_logger_msg!(logger, "Max data length is too large");
+                log!(logger, "Max data length is too large");
                 return Err(InstructionError::InvalidArgument);
             }
 
