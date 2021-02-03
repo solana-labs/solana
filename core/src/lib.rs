@@ -47,7 +47,6 @@ pub mod ping_pong;
 pub mod poh_recorder;
 pub mod poh_service;
 pub mod progress_map;
-pub mod pubkey_references;
 pub mod repair_response;
 pub mod repair_service;
 pub mod repair_weight;

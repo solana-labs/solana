@@ -1,10 +1,10 @@
 use solana_runtime::commitment::VOTE_THRESHOLD_SIZE;
 use solana_sdk::pubkey::Pubkey;
-use std::{collections::HashSet, sync::Arc};
+use std::collections::HashSet;
 
 #[derive(Default)]
 pub struct VoteStakeTracker {
-    voted: HashSet<Arc<Pubkey>>,
+    voted: HashSet<Pubkey>,
     stake: u64,
 }
 
@@ -15,7 +15,7 @@ impl VoteStakeTracker {
     // `is_new` is true if the vote has not been seen before
     pub fn add_vote_pubkey(
         &mut self,
-        vote_pubkey: Arc<Pubkey>,
+        vote_pubkey: Pubkey,
         stake: u64,
         total_stake: u64,
     ) -> (bool, bool) {
@@ -35,7 +35,7 @@ impl VoteStakeTracker {
         }
     }
 
-    pub fn voted(&self) -> &HashSet<Arc<Pubkey>> {
+    pub fn voted(&self) -> &HashSet<Pubkey> {
         &self.voted
     }
 
@@ -53,12 +53,12 @@ mod test {
         let total_epoch_stake = 10;
         let mut vote_stake_tracker = VoteStakeTracker::default();
         for i in 0..10 {
-            let pubkey = Arc::new(solana_sdk::pubkey::new_rand());
+            let pubkey = solana_sdk::pubkey::new_rand();
             let (is_confirmed, is_new) =
-                vote_stake_tracker.add_vote_pubkey(pubkey.clone(), 1, total_epoch_stake);
+                vote_stake_tracker.add_vote_pubkey(pubkey, 1, total_epoch_stake);
             let stake = vote_stake_tracker.stake();
             let (is_confirmed2, is_new2) =
-                vote_stake_tracker.add_vote_pubkey(pubkey.clone(), 1, total_epoch_stake);
+                vote_stake_tracker.add_vote_pubkey(pubkey, 1, total_epoch_stake);
             let stake2 = vote_stake_tracker.stake();
 
             // Stake should not change from adding same pubkey twice
