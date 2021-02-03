@@ -4370,7 +4370,7 @@ dependencies = [
  "solana-metrics",
  "solana-sdk",
  "solana-version",
- "tokio 0.3.5",
+ "tokio 1.1.1",
 ]
 
 [[package]]
@@ -4749,7 +4749,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-logger 1.6.0",
  "solana-version",
- "tokio 0.3.5",
+ "tokio 1.1.1",
  "url 2.2.0",
 ]
 
