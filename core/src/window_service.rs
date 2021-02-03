@@ -28,8 +28,9 @@ use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms};
 use solana_streamer::streamer::PacketSender;
+use solana_net_utils::UdpSocket;
 use std::{
-    net::{SocketAddr, UdpSocket},
+    net::{SocketAddr},
     sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, RwLock},
     thread::{self, Builder, JoinHandle},

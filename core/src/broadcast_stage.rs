@@ -20,6 +20,7 @@ use crossbeam_channel::{
 use solana_ledger::{blockstore::Blockstore, shred::Shred};
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
+use solana_net_utils::UdpSocket;
 use solana_runtime::bank::Bank;
 use solana_sdk::timing::timestamp;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
@@ -27,7 +28,6 @@ use solana_streamer::sendmmsg::send_mmsg;
 use std::sync::atomic::AtomicU64;
 use std::{
     collections::HashMap,
-    net::UdpSocket,
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender},
     sync::{Arc, Mutex},

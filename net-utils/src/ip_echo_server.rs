@@ -82,7 +82,7 @@ async fn process_connection(mut socket: TcpStream, peer_addr: SocketAddr) -> io:
     trace!("request: {:?}", msg);
 
     // Fire a datagram at each non-zero UDP port
-    match std::net::UdpSocket::bind("0.0.0.0:0") {
+    match crate::UdpSocket::bind("0.0.0.0:0") {
         Ok(udp_socket) => {
             for udp_port in &msg.udp_ports {
                 if *udp_port != 0 {

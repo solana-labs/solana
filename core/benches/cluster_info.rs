@@ -8,11 +8,11 @@ use solana_core::broadcast_stage::{broadcast_shreds, get_broadcast_peers};
 use solana_core::cluster_info::{ClusterInfo, Node};
 use solana_core::contact_info::ContactInfo;
 use solana_ledger::shred::Shred;
+use solana_net_utils::UdpSocket;
 use solana_sdk::pubkey;
 use solana_sdk::timing::timestamp;
 use std::{
     collections::HashMap,
-    net::UdpSocket,
     sync::{atomic::AtomicU64, Arc},
 };
 use test::Bencher;

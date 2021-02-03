@@ -1,12 +1,13 @@
 //! The `recvmmsg` module provides recvmmsg() API implementation
 
 use crate::packet::Packet;
+use solana_net_utils::UdpSocket;
 pub use solana_perf::packet::NUM_RCVMMSGS;
 use std::cmp;
 use std::io;
-use std::net::UdpSocket;
 
-#[cfg(not(target_os = "linux"))]
+
+#[cfg(any(not(target_os = "linux"), feature="mock-udp"))]
 pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize, usize)> {
     let mut i = 0;
     let count = cmp::min(NUM_RCVMMSGS, packets.len());
@@ -34,7 +35,7 @@ pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usiz
     Ok((total_size, i))
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(feature="mock-udp")))]
 pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize, usize)> {
     use libc::{
         c_void, iovec, mmsghdr, recvmmsg, sockaddr_in, socklen_t, timespec, MSG_WAITFORONE,

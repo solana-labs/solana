@@ -20,6 +20,7 @@ use solana_client::{
     rpc_client::RpcClient, rpc_config::RpcSendTransactionConfig,
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, rpc_response::RpcLeaderSchedule,
 };
+use solana_net_utils::UdpSocket;
 use solana_rbpf::vm::{Config, Executable};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
@@ -47,7 +48,6 @@ use std::{
     error,
     fs::File,
     io::{Read, Write},
-    net::UdpSocket,
     path::PathBuf,
     sync::Arc,
     thread::sleep,

@@ -4022,6 +4022,7 @@ dependencies = [
  "mio 0.7.6",
  "solana-banks-interface",
  "solana-metrics",
+ "solana-net-utils",
  "solana-runtime",
  "solana-sdk",
  "tarpc",
@@ -4837,6 +4838,8 @@ version = "1.6.0"
 dependencies = [
  "bincode",
  "clap",
+ "crossbeam-channel 0.4.4",
+ "lazy_static",
  "log 0.4.11",
  "nix 0.19.0",
  "rand 0.7.3",
@@ -4846,6 +4849,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-logger 1.6.0",
  "solana-version",
+ "thiserror",
  "tokio 1.1.1",
  "url 2.2.0",
 ]
@@ -5338,6 +5342,7 @@ dependencies = [
  "solana-logger 1.6.0",
  "solana-measure",
  "solana-metrics",
+ "solana-net-utils",
  "solana-perf",
  "solana-sdk",
  "thiserror",

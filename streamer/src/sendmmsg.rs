@@ -1,9 +1,10 @@
 //! The `sendmmsg` module provides sendmmsg() API implementation
 
 use std::io;
-use std::net::{SocketAddr, UdpSocket};
+use solana_net_utils::UdpSocket;
+use std::net::{SocketAddr};
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(any(not(target_os = "linux"), feature="mock-udp"))]
 pub fn send_mmsg(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::Result<usize> {
     let count = packets.len();
     for (p, a) in packets {
@@ -13,10 +14,10 @@ pub fn send_mmsg(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::R
     Ok(count)
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(feature="mock-udp")))]
 use libc::{iovec, mmsghdr, sockaddr_in, sockaddr_in6};
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(feature="mock-udp")))]
 fn mmsghdr_for_packet(
     packet: &[u8],
     dest: &SocketAddr,
@@ -56,7 +57,7 @@ fn mmsghdr_for_packet(
     hdr
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(feature="mock-udp")))]
 pub fn send_mmsg(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::Result<usize> {
     use libc::{sendmmsg, socklen_t};
     use std::mem;
@@ -96,7 +97,7 @@ pub fn send_mmsg(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::R
     Ok(npkts)
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(any(not(target_os = "linux"), feature="mock-udp"))]
 pub fn multicast(sock: &UdpSocket, packet: &mut [u8], dests: &[&SocketAddr]) -> io::Result<usize> {
     let count = dests.len();
     for a in dests {
@@ -106,7 +107,7 @@ pub fn multicast(sock: &UdpSocket, packet: &mut [u8], dests: &[&SocketAddr]) -> 
     Ok(count)
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(feature="mock-udp")))]
 pub fn multicast(sock: &UdpSocket, packet: &mut [u8], dests: &[&SocketAddr]) -> io::Result<usize> {
     use libc::{sendmmsg, socklen_t};
     use std::mem;
@@ -152,7 +153,7 @@ mod tests {
     use crate::recvmmsg::recv_mmsg;
     use crate::sendmmsg::{multicast, send_mmsg};
     use solana_sdk::packet::PACKET_DATA_SIZE;
-    use std::net::UdpSocket;
+    use solana_net_utils::UdpSocket;
 
     #[test]
     pub fn test_send_mmsg_one_dest() {

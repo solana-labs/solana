@@ -6,8 +6,9 @@ pub use solana_perf::packet::{
 };
 
 use solana_metrics::inc_new_counter_debug;
+use solana_net_utils::UdpSocket;
 pub use solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
-use std::{io::Result, net::UdpSocket, time::Instant};
+use std::{io::Result, time::Instant};
 
 pub fn recv_from(obj: &mut Packets, socket: &UdpSocket, max_wait_ms: usize) -> Result<usize> {
     let mut i = 0;
@@ -67,7 +68,8 @@ mod tests {
     use super::*;
     use std::io;
     use std::io::Write;
-    use std::net::{SocketAddr, UdpSocket};
+    use std::net::{SocketAddr};
+    use solana_net_utils::UdpSocket;
 
     #[test]
     fn test_packets_set_addr() {

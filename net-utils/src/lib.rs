@@ -3,16 +3,19 @@
 use {
     log::*,
     rand::{thread_rng, Rng},
-    socket2::{Domain, SockAddr, Socket, Type},
+    socket2::{Domain, SockAddr, Type},
     std::{
         collections::{BTreeMap, HashSet},
         io::{self, Read, Write},
-        net::{IpAddr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs, UdpSocket},
+        net::{IpAddr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs},
         sync::{mpsc::channel, Arc, RwLock},
         time::{Duration, Instant},
     },
     url::Url,
 };
+
+mod mock_udp;
+pub use mock_udp::*;
 
 mod ip_echo_server;
 use ip_echo_server::IpEchoServerMessage;
@@ -375,7 +378,7 @@ fn udp_socket(_reuseaddr: bool) -> io::Result<Socket> {
     Ok(sock)
 }
 
-#[cfg(not(windows))]
+#[cfg(all(not(windows), not(feature="mock-udp")))]
 fn udp_socket(reuseaddr: bool) -> io::Result<Socket> {
     use nix::sys::socket::setsockopt;
     use nix::sys::socket::sockopt::{ReuseAddr, ReusePort};
@@ -391,6 +394,11 @@ fn udp_socket(reuseaddr: bool) -> io::Result<Socket> {
     }
 
     Ok(sock)
+}
+
+#[cfg(feature="mock-udp")]
+fn udp_socket(reuseaddr: bool) -> io::Result<Socket> {
+    Ok(Socket::new(reuseaddr))
 }
 
 // Find a port in the given range that is available for both TCP and UDP

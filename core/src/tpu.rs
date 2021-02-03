@@ -19,8 +19,8 @@ use solana_runtime::{
     bank_forks::BankForks,
     vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
 };
+use solana_net_utils::UdpSocket;
 use std::{
-    net::UdpSocket,
     sync::{
         atomic::AtomicBool,
         mpsc::{channel, Receiver},

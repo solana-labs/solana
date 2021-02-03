@@ -1,7 +1,8 @@
 use log::*;
 use solana_client::rpc_response::{RpcContactInfo, RpcLeaderSchedule};
+use solana_net_utils::UdpSocket;
 use solana_sdk::clock::NUM_CONSECUTIVE_LEADER_SLOTS;
-use std::net::{SocketAddr, UdpSocket};
+use std::net::SocketAddr;
 
 pub fn get_leader_tpus(
     slot_index: u64,

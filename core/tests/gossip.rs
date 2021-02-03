@@ -5,8 +5,8 @@ extern crate log;
 use rayon::iter::*;
 use solana_core::cluster_info::{ClusterInfo, Node};
 use solana_core::gossip_service::GossipService;
+use solana_net_utils::UdpSocket;
 use solana_runtime::bank_forks::BankForks;
-
 use solana_perf::packet::Packet;
 use solana_sdk::{
     hash::Hash,
@@ -16,7 +16,6 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_vote_program::{vote_instruction, vote_state::Vote};
-use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;

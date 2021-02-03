@@ -1,11 +1,12 @@
 // TODO: Merge this implementation with the one at `core/src/send_transaction_service.rs`
 use log::*;
 use solana_metrics::{datapoint_warn, inc_new_counter_info};
+use solana_net_utils::UdpSocket;
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{clock::Slot, signature::Signature};
 use std::{
     collections::HashMap,
-    net::{SocketAddr, UdpSocket},
+    net::{SocketAddr},
     sync::{
         mpsc::{Receiver, RecvTimeoutError},
         Arc, RwLock,

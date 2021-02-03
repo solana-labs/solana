@@ -41,10 +41,10 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
+use solana_net_utils::UdpSocket;
 use std::{
     boxed::Box,
     collections::HashSet,
-    net::UdpSocket,
     sync::{
         atomic::AtomicBool,
         mpsc::{channel, Receiver},

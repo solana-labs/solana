@@ -28,11 +28,11 @@ use solana_sdk::{
     clock::Slot, epoch_schedule::EpochSchedule, feature_set, pubkey::Pubkey, timing::timestamp,
 };
 use solana_streamer::streamer::PacketReceiver;
+use solana_net_utils::UdpSocket;
 use std::{
     cmp,
     collections::hash_set::HashSet,
     collections::{BTreeMap, HashMap},
-    net::UdpSocket,
     ops::{Deref, DerefMut},
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     sync::mpsc::channel,

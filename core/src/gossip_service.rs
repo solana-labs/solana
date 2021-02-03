@@ -4,6 +4,7 @@ use crate::cluster_info::{ClusterInfo, VALIDATOR_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use rand::{thread_rng, Rng};
 use solana_client::thin_client::{create_client, ThinClient};
+use solana_net_utils::UdpSocket;
 use solana_perf::recycler::Recycler;
 use solana_runtime::bank_forks::BankForks;
 use solana_sdk::{
@@ -13,7 +14,7 @@ use solana_sdk::{
 use solana_streamer::streamer;
 use std::{
     collections::HashSet,
-    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::channel,

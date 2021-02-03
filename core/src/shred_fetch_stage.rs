@@ -9,7 +9,7 @@ use solana_perf::recycler::Recycler;
 use solana_runtime::bank_forks::BankForks;
 use solana_sdk::clock::{Slot, DEFAULT_MS_PER_SLOT};
 use solana_streamer::streamer::{self, PacketReceiver, PacketSender};
-use std::net::UdpSocket;
+use solana_net_utils::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
 use std::sync::Arc;

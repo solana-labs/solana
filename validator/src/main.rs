@@ -28,6 +28,7 @@ use solana_core::{
 };
 use solana_download_utils::{download_genesis_if_missing, download_snapshot};
 use solana_ledger::blockstore_db::BlockstoreRecoveryMode;
+use solana_net_utils::UdpSocket;
 use solana_perf::recycler::enable_recycler_warming;
 use solana_runtime::{
     accounts_index::AccountIndex,
@@ -48,7 +49,7 @@ use std::{
     collections::HashSet,
     env,
     fs::{self, File},
-    net::{IpAddr, SocketAddr, TcpListener, UdpSocket},
+    net::{IpAddr, SocketAddr, TcpListener},
     path::{Path, PathBuf},
     process::exit,
     str::FromStr,

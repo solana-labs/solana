@@ -2,8 +2,9 @@
 use clap::{crate_description, crate_name, App, Arg};
 use solana_streamer::packet::{Packet, Packets, PacketsRecycler, PACKET_DATA_SIZE};
 use solana_streamer::streamer::{receiver, PacketReceiver};
+use solana_net_utils::UdpSocket;
 use std::cmp::max;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::Arc;

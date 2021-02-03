@@ -45,6 +45,7 @@ use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_net_utils::{
     bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
     multi_bind_in_range, PortRange,
+    UdpSocket,
 };
 use solana_perf::packet::{
     limited_deserialize, to_packets_with_destination, Packet, Packets, PacketsRecycler,
@@ -70,7 +71,7 @@ use std::{
     fmt::Debug,
     fs::{self, File},
     io::BufReader,
-    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU64, Ordering},

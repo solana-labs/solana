@@ -2,6 +2,7 @@
 use crate::cluster_info::ClusterInfo;
 use crate::poh_recorder::PohRecorder;
 use log::*;
+use solana_net_utils::UdpSocket;
 use solana_metrics::{datapoint_warn, inc_new_counter_info};
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::{
@@ -14,7 +15,7 @@ use solana_sdk::{
 use std::sync::Mutex;
 use std::{
     collections::HashMap,
-    net::{SocketAddr, UdpSocket},
+    net::{SocketAddr},
     sync::{
         mpsc::{Receiver, RecvTimeoutError},
         Arc, RwLock,

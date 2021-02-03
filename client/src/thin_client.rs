@@ -25,9 +25,10 @@ use solana_sdk::{
     transaction::{self, Transaction},
     transport::Result as TransportResult,
 };
+use solana_net_utils::UdpSocket;
 use std::{
     io,
-    net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         RwLock,

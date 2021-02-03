@@ -17,6 +17,7 @@ use solana_ledger::{
 };
 use solana_measure::{measure::Measure, thread_mem_usage};
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
+use solana_net_utils::UdpSocket;
 use solana_perf::{
     cuda_runtime::PinnedVec,
     packet::{limited_deserialize, Packet, Packets, PACKETS_PER_BATCH},
@@ -49,7 +50,6 @@ use std::{
     cmp,
     collections::{HashMap, VecDeque},
     env,
-    net::UdpSocket,
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     sync::mpsc::Receiver,
     sync::{Arc, Mutex},
@@ -240,7 +240,7 @@ impl BankingStage {
     }
 
     fn forward_buffered_packets(
-        socket: &std::net::UdpSocket,
+        socket: &UdpSocket,
         tpu_forwards: &std::net::SocketAddr,
         unprocessed_packets: &VecDeque<PacketsAndOffsets>,
     ) -> std::io::Result<()> {
@@ -389,7 +389,7 @@ impl BankingStage {
     #[allow(clippy::too_many_arguments)]
     fn process_buffered_packets(
         my_pubkey: &Pubkey,
-        socket: &std::net::UdpSocket,
+        socket: &UdpSocket,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &ClusterInfo,
         buffered_packets: &mut UnprocessedPackets,

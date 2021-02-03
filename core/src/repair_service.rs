@@ -14,6 +14,7 @@ use solana_ledger::{
     shred::Nonce,
 };
 use solana_measure::measure::Measure;
+use solana_net_utils::UdpSocket;
 use solana_runtime::{
     bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE, contains::Contains,
 };
@@ -22,7 +23,6 @@ use std::{
     collections::{HashMap, HashSet},
     iter::Iterator,
     net::SocketAddr,
-    net::UdpSocket,
     sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, RwLock},
     thread::sleep,
