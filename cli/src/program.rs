@@ -46,7 +46,7 @@ use std::{
     collections::HashMap,
     error,
     fs::File,
-    io::Read,
+    io::{Read, Write},
     net::UdpSocket,
     path::PathBuf,
     sync::Arc,
@@ -86,12 +86,12 @@ pub enum ProgramCliCommand {
         upgrade_authority_index: Option<SignerIndex>,
         new_upgrade_authority: Option<Pubkey>,
     },
-    GetAuthority {
+    Show {
         account_pubkey: Option<Pubkey>,
     },
-    GetInfo {
+    Dump {
         account_pubkey: Option<Pubkey>,
-        use_lamports_unit: bool,
+        output_location: String,
     },
 }
 
@@ -234,7 +234,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("PROGRAM_ADDRESS")
                                 .takes_value(true)
                                 .required(true)
-                                .help("Public key of the program to upgrade")
+                                .help("Address of the program to upgrade")
                         )
                         .arg(
                             Arg::with_name("upgrade_authority")
@@ -259,33 +259,35 @@ impl ProgramSubCommands for App<'_, '_> {
                         )
                 )
                 .subcommand(
-                    SubCommand::with_name("get-authority")
-                        .about("Gets a buffer or program account's authority")
+                    SubCommand::with_name("show")
+                        .about("Display information about a buffer or program")
                         .arg(
                             Arg::with_name("account")
                                 .index(1)
                                 .value_name("ACCOUNT_ADDRESS")
                                 .takes_value(true)
                                 .required(true)
-                                .help("Public key of the account to query")
-                        ),
+                                .help("Address of the buffer or program to show")
+                        )
                 )
                 .subcommand(
-                    SubCommand::with_name("get-info")
-                        .about("Display a buffer or program")
+                    SubCommand::with_name("dump")
+                        .about("Write the program data to a file")
                         .arg(
                             Arg::with_name("account")
                                 .index(1)
                                 .value_name("ACCOUNT_ADDRESS")
                                 .takes_value(true)
                                 .required(true)
-                                .help("Public key of the buffer or program to query")
+                                .help("Address of the buffer or program")
                         )
                         .arg(
-                            Arg::with_name("lamports")
-                                .long("lamports")
-                                .takes_value(false)
-                                .help("Display balance in lamports instead of SOL"),
+                            Arg::with_name("output_location")
+                                .index(2)
+                                .value_name("OUTPUT_FILEPATH")
+                                .takes_value(true)
+                                .required(true)
+                                .help("/path/to/program.so"),
                         ),
                 )
         )
@@ -485,16 +487,16 @@ pub fn parse_program_subcommand(
                 signers: signer_info.signers,
             }
         }
-        ("get-authority", Some(matches)) => CliCommandInfo {
-            command: CliCommand::Program(ProgramCliCommand::GetAuthority {
+        ("show", Some(matches)) => CliCommandInfo {
+            command: CliCommand::Program(ProgramCliCommand::Show {
                 account_pubkey: pubkey_of(matches, "account"),
             }),
             signers: vec![],
         },
-        ("get-info", Some(matches)) => CliCommandInfo {
-            command: CliCommand::Program(ProgramCliCommand::GetInfo {
+        ("dump", Some(matches)) => CliCommandInfo {
+            command: CliCommand::Program(ProgramCliCommand::Dump {
                 account_pubkey: pubkey_of(matches, "account"),
-                use_lamports_unit: matches.is_present("lamports"),
+                output_location: matches.value_of("output_location").unwrap().to_string(),
             }),
             signers: vec![],
         },
@@ -571,13 +573,13 @@ pub fn process_program_subcommand(
             *upgrade_authority_index,
             *new_upgrade_authority,
         ),
-        ProgramCliCommand::GetAuthority { account_pubkey } => {
-            process_get_authority(&rpc_client, config, *account_pubkey)
+        ProgramCliCommand::Show { account_pubkey } => {
+            process_show(&rpc_client, config, *account_pubkey)
         }
-        ProgramCliCommand::GetInfo {
+        ProgramCliCommand::Dump {
             account_pubkey,
-            use_lamports_unit,
-        } => process_get_info(&rpc_client, config, *account_pubkey, *use_lamports_unit),
+            output_location,
+        } => process_dump(&rpc_client, config, *account_pubkey, output_location),
     }
 }
 
@@ -918,70 +920,10 @@ fn process_set_authority(
     Ok(config.output_format.formatted_string(&authority))
 }
 
-fn process_get_authority(
+fn process_show(
     rpc_client: &RpcClient,
     config: &CliConfig,
     account_pubkey: Option<Pubkey>,
-) -> ProcessResult {
-    if let Some(account_pubkey) = account_pubkey {
-        if let Some(account) = rpc_client
-            .get_account_with_commitment(&account_pubkey, config.commitment)?
-            .value
-        {
-            if let Ok(UpgradeableLoaderState::Program {
-                programdata_address,
-            }) = account.state()
-            {
-                if let Some(account) = rpc_client
-                    .get_account_with_commitment(&programdata_address, config.commitment)?
-                    .value
-                {
-                    if let Ok(UpgradeableLoaderState::ProgramData {
-                        upgrade_authority_address,
-                        ..
-                    }) = account.state()
-                    {
-                        let authority = CliProgramAuthority {
-                            authority: upgrade_authority_address
-                                .map(|pubkey| pubkey.to_string())
-                                .unwrap_or_else(|| "none".to_string()),
-                            account_type: CliProgramAccountType::Program,
-                        };
-                        Ok(config.output_format.formatted_string(&authority))
-                    } else {
-                        Err("Invalid associated ProgramData account found for the program".into())
-                    }
-                } else {
-                    Err(
-                        "Failed to find associated ProgramData account for the provided program"
-                            .into(),
-                    )
-                }
-            } else if let Ok(UpgradeableLoaderState::Buffer { authority_address }) = account.state()
-            {
-                let authority = CliProgramAuthority {
-                    authority: authority_address
-                        .map(|pubkey| pubkey.to_string())
-                        .unwrap_or_else(|| "none".to_string()),
-                    account_type: CliProgramAccountType::Buffer,
-                };
-                Ok(config.output_format.formatted_string(&authority))
-            } else {
-                Err("Not a buffer or program account".into())
-            }
-        } else {
-            Err("Unable to find the account".into())
-        }
-    } else {
-        Err("No account specified".into())
-    }
-}
-
-fn process_get_info(
-    rpc_client: &RpcClient,
-    config: &CliConfig,
-    account_pubkey: Option<Pubkey>,
-    use_lamports_unit: bool,
 ) -> ProcessResult {
     if let Some(account_pubkey) = account_pubkey {
         if let Some(account) = rpc_client
@@ -1005,18 +947,13 @@ fn process_get_info(
                             .output_format
                             .formatted_string(&CliUpgradeableProgram {
                                 program_id: account_pubkey.to_string(),
-                                program_executable: account.executable,
-                                program_lamports: account.lamports,
                                 programdata_address: programdata_address.to_string(),
-                                programdata_lamports: programdata_account.lamports,
-                                programdata_authority: upgrade_authority_address
+                                authority: upgrade_authority_address
                                     .map(|pubkey| pubkey.to_string())
                                     .unwrap_or_else(|| "none".to_string()),
-                                programdata_slot: slot,
-                                programdata_data_len: programdata_account.data.len(),
-                                programdata_program_len: programdata_account.data.len()
+                                last_upgrade_slot: slot,
+                                program_len: programdata_account.data.len()
                                     - UpgradeableLoaderState::programdata_data_offset()?,
-                                use_lamports_unit,
                             }))
                     } else {
                         Err("Invalid associated ProgramData account found for the program".into())
@@ -1033,15 +970,65 @@ fn process_get_info(
                     .output_format
                     .formatted_string(&CliUpgradeableBuffer {
                         address: account_pubkey.to_string(),
-                        lamports: account.lamports,
                         authority: authority_address
                             .map(|pubkey| pubkey.to_string())
                             .unwrap_or_else(|| "none".to_string()),
-                        data_len: account.data.len(),
                         program_len: account.data.len()
                             - UpgradeableLoaderState::buffer_data_offset()?,
-                        use_lamports_unit,
                     }))
+            } else {
+                Err("Not a buffer or program account".into())
+            }
+        } else {
+            Err("Unable to find the account".into())
+        }
+    } else {
+        Err("No account specified".into())
+    }
+}
+
+fn process_dump(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    account_pubkey: Option<Pubkey>,
+    output_location: &str,
+) -> ProcessResult {
+    if let Some(account_pubkey) = account_pubkey {
+        if let Some(account) = rpc_client
+            .get_account_with_commitment(&account_pubkey, config.commitment)?
+            .value
+        {
+            if let Ok(UpgradeableLoaderState::Program {
+                programdata_address,
+            }) = account.state()
+            {
+                if let Some(programdata_account) = rpc_client
+                    .get_account_with_commitment(&programdata_address, config.commitment)?
+                    .value
+                {
+                    if let Ok(UpgradeableLoaderState::ProgramData { .. }) =
+                        programdata_account.state()
+                    {
+                        let offset = UpgradeableLoaderState::programdata_data_offset().unwrap_or(0);
+                        let program_data = &programdata_account.data[offset..];
+                        let mut f = File::create(output_location)?;
+                        f.write_all(&program_data)?;
+                        Ok(format!("Wrote program to {}", output_location))
+                    } else {
+                        Err("Invalid associated ProgramData account found for the program".into())
+                    }
+                } else {
+                    Err(
+                        "Failed to find associated ProgramData account for the provided program"
+                            .into(),
+                    )
+                }
+            } else if let Ok(UpgradeableLoaderState::Buffer { .. }) = account.state() {
+                let offset = UpgradeableLoaderState::buffer_data_offset().unwrap_or(0);
+                let program_data = &account.data[offset..];
+                let mut f = File::create(output_location)?;
+                f.write_all(&program_data)?;
+                Ok(format!("Wrote program to {}", output_location))
             } else {
                 Err("Not a buffer or program account".into())
             }
@@ -2294,37 +2281,6 @@ mod tests {
                     new_buffer_authority: new_authority_pubkey.pubkey(),
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
-            }
-        );
-    }
-
-    #[test]
-    #[allow(clippy::cognitive_complexity)]
-    fn test_cli_parse_get_authority() {
-        let test_commands = app("test", "desc", "version");
-
-        let default_keypair = Keypair::new();
-        let keypair_file = make_tmp_path("keypair_file");
-        write_keypair_file(&default_keypair, &keypair_file).unwrap();
-        let default_signer = DefaultSigner {
-            path: keypair_file,
-            arg_name: "".to_string(),
-        };
-
-        let buffer_pubkey = Pubkey::new_unique();
-        let test_deploy = test_commands.clone().get_matches_from(vec![
-            "test",
-            "program",
-            "get-authority",
-            &buffer_pubkey.to_string(),
-        ]);
-        assert_eq!(
-            parse_command(&test_deploy, &default_signer, &mut None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::Program(ProgramCliCommand::GetAuthority {
-                    account_pubkey: Some(buffer_pubkey)
-                }),
-                signers: vec![],
             }
         );
     }
