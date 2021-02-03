@@ -204,6 +204,10 @@ pub mod abort_on_all_cpi_failures {
     solana_sdk::declare_id!("ED5D5a2hQaECHaMmKpnU48GdsfafdCjkb3pgAw5RKbb2");
 }
 
+pub mod use_loaded_executables {
+    solana_sdk::declare_id!("3Jq7mE2chDpf6oeEDsuGK7orTYEgyQjCPvaRppTNdVGK");
+}
+
 pub mod warp_timestamp {
     solana_sdk::declare_id!("Bfqm7fGk5MBptqa2WHXWFLH7uJvq8hkJcAQPipy2bAMk");
 }
@@ -214,6 +218,10 @@ pub mod turbine_retransmit_peers_patch {
 
 pub mod prevent_upgrade_and_invoke {
     solana_sdk::declare_id!("BiNjYd8jCYDgAwMqP91uwZs6skWpuHtKrZbckuKESs8N");
+}
+
+pub mod track_writable_deescalation {
+    solana_sdk::declare_id!("HVPSxqskEtRLRT2ZeEMmkmt9FWqoFX4vrN6f5VaadLED");
 }
 
 pub mod spl_token_v2_self_transfer_fix {
@@ -259,10 +267,12 @@ lazy_static! {
         (use_loaded_program_accounts::id(), "Use loaded program accounts"),
         (abort_on_all_cpi_failures::id(), "Abort on all CPI failures"),
         (warp_timestamp::id(), "warp timestamp to current, adjust bounding to 50% #14532"),
+        (use_loaded_executables::id(), "use loaded executable accounts"),
         (turbine_retransmit_peers_patch::id(), "turbine retransmit peers patch #14631"),
         (prevent_upgrade_and_invoke::id(), "Prevent upgrade and invoke in same tx batch"),
         (full_inflation::candidate_example::vote::id(), "Community vote allowing candidate_example to enable full inflation"),
         (full_inflation::candidate_example::enable::id(), "Full inflation enabled by candidate_example"),
+        (track_writable_deescalation::id(), "track account writable deescalation"),
         (spl_token_v2_self_transfer_fix::id(), "spl-token self-transfer fix"),
         (matching_buffer_upgrade_authorities::id(), "Upgradeable buffer and program authorities must match"),
         (full_inflation::stakeconomy::vote::id(), "Community vote allowing Stakeconomy.com to enable full inflation"),
