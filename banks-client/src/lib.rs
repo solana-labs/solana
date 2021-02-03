@@ -289,7 +289,10 @@ pub async fn start_tcp_client<T: ToSocketAddrs>(addr: T) -> io::Result<BanksClie
 mod tests {
     use super::*;
     use solana_banks_server::banks_server::start_local_server;
-    use solana_runtime::{bank::Bank, bank_forks::BankForks, genesis_utils::create_genesis_config};
+    use solana_runtime::{
+        bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache,
+        genesis_utils::create_genesis_config,
+    };
     use solana_sdk::{message::Message, signature::Signer, system_instruction};
     use std::sync::{Arc, RwLock};
     use tarpc::transport;
@@ -308,9 +311,12 @@ mod tests {
         // `runtime.block_on()` just once, to run all the async code.
 
         let genesis = create_genesis_config(10);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(
-            &genesis.genesis_config,
-        ))));
+        let bank = Bank::new(&genesis.genesis_config);
+        let slot = bank.slot();
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::new_for_tests_with_slots(slot, slot),
+        ));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let mint_pubkey = genesis.mint_keypair.pubkey();
@@ -318,7 +324,7 @@ mod tests {
         let message = Message::new(&[instruction], Some(&mint_pubkey));
 
         Runtime::new()?.block_on(async {
-            let client_transport = start_local_server(&bank_forks).await;
+            let client_transport = start_local_server(bank_forks, block_commitment_cache).await;
             let mut banks_client = start_client(client_transport).await?;
 
             let recent_blockhash = banks_client.get_recent_blockhash().await?;
@@ -336,9 +342,12 @@ mod tests {
         // server-side functionality is available to the client.
 
         let genesis = create_genesis_config(10);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(
-            &genesis.genesis_config,
-        ))));
+        let bank = Bank::new(&genesis.genesis_config);
+        let slot = bank.slot();
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::new_for_tests_with_slots(slot, slot),
+        ));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
         let mint_pubkey = &genesis.mint_keypair.pubkey();
         let bob_pubkey = solana_sdk::pubkey::new_rand();
@@ -346,7 +355,7 @@ mod tests {
         let message = Message::new(&[instruction], Some(&mint_pubkey));
 
         Runtime::new()?.block_on(async {
-            let client_transport = start_local_server(&bank_forks).await;
+            let client_transport = start_local_server(bank_forks, block_commitment_cache).await;
             let mut banks_client = start_client(client_transport).await?;
             let (_, recent_blockhash, last_valid_slot) = banks_client.get_fees().await?;
             let transaction = Transaction::new(&[&genesis.mint_keypair], message, recent_blockhash);

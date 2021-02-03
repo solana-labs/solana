@@ -15,10 +15,12 @@ use {
     solana_runtime::{
         bank::{Bank, Builtin, ExecuteTimings},
         bank_forks::BankForks,
+        commitment::BlockCommitmentCache,
         genesis_utils::create_genesis_config_with_leader,
     },
     solana_sdk::{
         account::Account,
+        clock::Slot,
         genesis_config::GenesisConfig,
         keyed_account::KeyedAccount,
         process_instruction::{
@@ -41,6 +43,7 @@ use {
         },
         time::{Duration, Instant},
     },
+    thiserror::Error,
     tokio::task::JoinHandle,
 };
 
@@ -68,6 +71,14 @@ pub fn to_instruction_error(error: ProgramError) -> InstructionError {
         ProgramError::MaxSeedLengthExceeded => InstructionError::MaxSeedLengthExceeded,
         ProgramError::InvalidSeeds => InstructionError::InvalidSeeds,
     }
+}
+
+/// Errors from the program test environment
+#[derive(Error, Debug, PartialEq)]
+pub enum ProgramTestError {
+    /// The chosen warp slot is not in the future, so warp is not performed
+    #[error("Warp slot not in the future")]
+    InvalidWarpSlot,
 }
 
 thread_local! {
@@ -577,7 +588,15 @@ impl ProgramTest {
         }
     }
 
-    fn setup_bank(&self) -> (Arc<RwLock<BankForks>>, Keypair, Hash, GenesisConfig) {
+    fn setup_bank(
+        &self,
+    ) -> (
+        Arc<RwLock<BankForks>>,
+        Arc<RwLock<BlockCommitmentCache>>,
+        Keypair,
+        Hash,
+        GenesisConfig,
+    ) {
         {
             use std::sync::Once;
             static ONCE: Once = Once::new();
@@ -640,15 +659,27 @@ impl ProgramTest {
             }));
         }
         let bank = setup_fee_calculator(bank);
+        let slot = bank.slot();
         let last_blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let block_commitment_cache = Arc::new(RwLock::new(
+            BlockCommitmentCache::new_for_tests_with_slots(slot, slot),
+        ));
 
-        (bank_forks, payer, last_blockhash, genesis_config)
+        (
+            bank_forks,
+            block_commitment_cache,
+            payer,
+            last_blockhash,
+            genesis_config,
+        )
     }
 
     pub async fn start(self) -> (BanksClient, Keypair, Hash) {
-        let (bank_forks, payer, last_blockhash, genesis_config) = self.setup_bank();
-        let transport = start_local_server(&bank_forks).await;
+        let (bank_forks, block_commitment_cache, payer, last_blockhash, genesis_config) =
+            self.setup_bank();
+        let transport =
+            start_local_server(bank_forks.clone(), block_commitment_cache.clone()).await;
         let banks_client = start_client(transport)
             .await
             .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
@@ -675,14 +706,17 @@ impl ProgramTest {
     /// Returns a `BanksClient` interface into the test environment as well as a payer `Keypair`
     /// with SOL for sending transactions
     pub async fn start_with_context(self) -> ProgramTestContext {
-        let (bank_forks, payer, last_blockhash, genesis_config) = self.setup_bank();
-        let transport = start_local_server(&bank_forks).await;
+        let (bank_forks, block_commitment_cache, payer, last_blockhash, genesis_config) =
+            self.setup_bank();
+        let transport =
+            start_local_server(bank_forks.clone(), block_commitment_cache.clone()).await;
         let banks_client = start_client(transport)
             .await
             .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
 
         ProgramTestContext::new(
             bank_forks,
+            block_commitment_cache,
             banks_client,
             payer,
             last_blockhash,
@@ -740,12 +774,15 @@ pub struct ProgramTestContext {
     pub banks_client: BanksClient,
     pub payer: Keypair,
     pub last_blockhash: Hash,
+    bank_forks: Arc<RwLock<BankForks>>,
+    block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     _bank_task: DroppableTask<()>,
 }
 
 impl ProgramTestContext {
     fn new(
         bank_forks: Arc<RwLock<BankForks>>,
+        block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         banks_client: BanksClient,
         payer: Keypair,
         last_blockhash: Hash,
@@ -754,6 +791,7 @@ impl ProgramTestContext {
         // Run a simulated PohService to provide the client with new blockhashes.  New blockhashes
         // are required when sending multiple otherwise identical transactions in series from a
         // test
+        let running_bank_forks = bank_forks.clone();
         let target_tick_duration = genesis_config.poh_config.target_tick_duration;
         let exit = Arc::new(AtomicBool::new(false));
         let bank_task = DroppableTask(
@@ -763,7 +801,7 @@ impl ProgramTestContext {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
-                    bank_forks
+                    running_bank_forks
                         .read()
                         .unwrap()
                         .working_bank()
@@ -775,9 +813,58 @@ impl ProgramTestContext {
 
         Self {
             banks_client,
+            block_commitment_cache,
             payer,
             last_blockhash,
+            bank_forks,
             _bank_task: bank_task,
         }
+    }
+
+    /// Force the working bank ahead to a new slot
+    pub fn warp_to_slot(&mut self, warp_slot: Slot) -> Result<(), ProgramTestError> {
+        let mut bank_forks = self.bank_forks.write().unwrap();
+        let bank = bank_forks.working_bank();
+
+        // Force ticks until a new blockhash, otherwise retried transactions will have
+        // the same signature
+        let last_blockhash = bank.last_blockhash();
+        while last_blockhash == bank.last_blockhash() {
+            bank.register_tick(&Hash::new_unique());
+        }
+
+        // warp ahead to one slot *before* the desired slot because the warped
+        // bank is frozen
+        let working_slot = bank.slot();
+        if warp_slot <= working_slot {
+            return Err(ProgramTestError::InvalidWarpSlot);
+        }
+        let pre_warp_slot = warp_slot - 1;
+        let warp_bank = bank_forks.insert(Bank::warp_from_parent(
+            &bank,
+            &Pubkey::default(),
+            pre_warp_slot,
+        ));
+        bank_forks.set_root(
+            pre_warp_slot,
+            &solana_runtime::accounts_background_service::ABSRequestSender::default(),
+            Some(warp_slot),
+        );
+
+        // warp bank is frozen, so go forward one slot from it
+        bank_forks.insert(Bank::new_from_parent(
+            &warp_bank,
+            &Pubkey::default(),
+            warp_slot,
+        ));
+
+        // Update block commitment cache, otherwise banks server will poll at
+        // the wrong slot
+        let mut w_block_commitment_cache = self.block_commitment_cache.write().unwrap();
+        w_block_commitment_cache.set_all_slots(pre_warp_slot, warp_slot);
+
+        let bank = bank_forks.working_bank();
+        self.last_blockhash = bank.last_blockhash();
+        Ok(())
     }
 }
