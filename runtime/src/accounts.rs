@@ -547,19 +547,26 @@ impl Accounts {
         ancestors: &Ancestors,
         simple_capitalization_enabled: bool,
     ) -> u64 {
-        let balances =
-            self.load_all_unchecked(ancestors)
-                .into_iter()
-                .map(|(_pubkey, account, _slot)| {
-                    AccountsDB::account_balance_for_capitalization(
-                        account.lamports,
-                        &account.owner,
-                        account.executable,
+        self.accounts_db.unchecked_scan_accounts(
+            "calculate_capitalization_scan_elapsed",
+            ancestors,
+            |total_capitalization: &mut u64, (_pubkey, loaded_account, _slot)| {
+                let lamports = loaded_account.lamports();
+                if Self::is_loadable(lamports) {
+                    let account_cap = AccountsDB::account_balance_for_capitalization(
+                        lamports,
+                        &loaded_account.owner(),
+                        loaded_account.executable(),
                         simple_capitalization_enabled,
-                    )
-                });
+                    );
 
-        AccountsDB::checked_sum_for_capitalization(balances)
+                    *total_capitalization = AccountsDB::checked_iterative_sum_for_capitalization(
+                        *total_capitalization,
+                        account_cap,
+                    );
+                }
+            },
+        )
     }
 
     #[must_use]
@@ -583,10 +590,10 @@ impl Accounts {
         }
     }
 
-    fn is_loadable(account: &Account) -> bool {
+    fn is_loadable(lamports: u64) -> bool {
         // Don't ever load zero lamport accounts into runtime because
         // the existence of zero-lamport accounts are never deterministic!!
-        account.lamports > 0
+        lamports > 0
     }
 
     fn load_while_filtering<F: Fn(&Account) -> bool>(
@@ -595,7 +602,7 @@ impl Accounts {
         filter: F,
     ) {
         if let Some(mapped_account_tuple) = some_account_tuple
-            .filter(|(_, account, _)| Self::is_loadable(account) && filter(account))
+            .filter(|(_, account, _)| Self::is_loadable(account.lamports) && filter(account))
             .map(|(pubkey, account, _slot)| (*pubkey, account))
         {
             collector.push(mapped_account_tuple)
@@ -653,20 +660,7 @@ impl Accounts {
             ancestors,
             |collector: &mut Vec<(Pubkey, Account, Slot)>, some_account_tuple| {
                 if let Some((pubkey, account, slot)) =
-                    some_account_tuple.filter(|(_, account, _)| Self::is_loadable(account))
-                {
-                    collector.push((*pubkey, account, slot))
-                }
-            },
-        )
-    }
-
-    fn load_all_unchecked(&self, ancestors: &Ancestors) -> Vec<(Pubkey, Account, Slot)> {
-        self.accounts_db.unchecked_scan_accounts(
-            ancestors,
-            |collector: &mut Vec<(Pubkey, Account, Slot)>, some_account_tuple| {
-                if let Some((pubkey, account, slot)) =
-                    some_account_tuple.filter(|(_, account, _)| Self::is_loadable(account))
+                    some_account_tuple.filter(|(_, account, _)| Self::is_loadable(account.lamports))
                 {
                     collector.push((*pubkey, account, slot))
                 }
@@ -680,6 +674,7 @@ impl Accounts {
         range: R,
     ) -> Vec<(Pubkey, Account)> {
         self.accounts_db.range_scan_accounts(
+            "load_to_collect_rent_eagerly_scan_elapsed",
             ancestors,
             range,
             |collector: &mut Vec<(Pubkey, Account)>, option| {
