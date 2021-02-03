@@ -156,7 +156,7 @@ mod tests {
 
         // Create a packageable snapshot
         let output_tar_path = snapshot_utils::get_snapshot_archive_path(
-            &snapshot_package_output_path,
+            snapshot_package_output_path,
             &(42, Hash::default()),
             ArchiveFormat::TarBzip2,
         );
