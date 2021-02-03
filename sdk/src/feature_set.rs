@@ -57,7 +57,6 @@ pub mod full_inflation {
             solana_sdk::declare_id!("5S9JDUb4vKY1CUxLf5oc96ZxjGrephj1jcPeTi62sYmP");
         }
     }
-    
     pub mod bl {
         pub mod vote {
             // The private key for this address is held by the Solana Foundation
