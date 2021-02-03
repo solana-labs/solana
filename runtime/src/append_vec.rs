@@ -115,9 +115,11 @@ pub struct AppendVec {
 
 impl Drop for AppendVec {
     fn drop(&mut self) {
-        if let Err(e) = remove_file(&self.path) {
+        if let Err(_e) = remove_file(&self.path) {
             // promote this to panic soon.
-            error!("AppendVec failed to remove {:?}: {:?}", &self.path, e);
+            // disabled due to many false positive warnings while running tests.
+            // blocked by rpc's updrade to jsonrpc v17
+            //error!("AppendVec failed to remove {:?}: {:?}", &self.path, e);
         }
     }
 }
