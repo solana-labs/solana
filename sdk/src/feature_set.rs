@@ -286,7 +286,7 @@ lazy_static! {
         (full_inflation::bunghi::vote::id(), "Community vote allowing bunghi to enable full inflation"),
         (full_inflation::bunghi::enable::id(), "Full inflation enabled by bunghi"),
         (full_inflation::buburuza::vote::id(), "Community vote allowing buburuza to enable full inflation"),
-        (full_inflation::buburuza::enable::id(), "Full inflation enabled by buburuza"),        
+        (full_inflation::buburuza::enable::id(), "Full inflation enabled by buburuza"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
