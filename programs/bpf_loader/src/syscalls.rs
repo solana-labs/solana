@@ -263,53 +263,11 @@ macro_rules! translate_type_mut {
         }
     }};
 }
-<<<<<<< HEAD
 #[macro_export]
 macro_rules! translate_type {
     ($t:ty, $vm_addr:expr, $regions:expr, $loader_id: expr) => {
         match translate_type_mut!($t, $vm_addr, $regions, $loader_id) {
             Ok(value) => Ok(&*value),
-=======
-fn translate_type_mut<'a, T>(
-    memory_mapping: &MemoryMapping,
-    vm_addr: u64,
-    loader_id: &Pubkey,
-) -> Result<&'a mut T, EbpfError<BPFError>> {
-    translate_type_inner::<T>(memory_mapping, AccessType::Store, vm_addr, loader_id)
-}
-fn translate_type<'a, T>(
-    memory_mapping: &MemoryMapping,
-    vm_addr: u64,
-    loader_id: &Pubkey,
-) -> Result<&'a T, EbpfError<BPFError>> {
-    match translate_type_inner::<T>(memory_mapping, AccessType::Load, vm_addr, loader_id) {
-        Ok(value) => Ok(&*value),
-        Err(e) => Err(e),
-    }
-}
-
-fn translate_slice_inner<'a, T>(
-    memory_mapping: &MemoryMapping,
-    access_type: AccessType,
-    vm_addr: u64,
-    len: u64,
-    loader_id: &Pubkey,
-) -> Result<&'a mut [T], EbpfError<BPFError>> {
-    if loader_id != &bpf_loader_deprecated::id()
-        && (vm_addr as u64 as *mut T).align_offset(align_of::<T>()) != 0
-    {
-        Err(SyscallError::UnalignedPointer.into())
-    } else if len == 0 {
-        Ok(&mut [])
-    } else {
-        match translate(
-            memory_mapping,
-            access_type,
-            vm_addr,
-            len.saturating_mul(size_of::<T>() as u64),
-        ) {
-            Ok(value) => Ok(unsafe { from_raw_parts_mut(value as *mut T, len as usize) }),
->>>>>>> ebbaa1f8e... Fix integer overflow in degenerate invoke_signed BPF syscalls (#15051)
             Err(e) => Err(e),
         }
     };
@@ -1312,21 +1270,13 @@ fn check_instruction_size(
     data_len: usize,
     max_size: usize,
 ) -> Result<(), EbpfError<BPFError>> {
-<<<<<<< HEAD
-    if max_size < num_accounts * size_of::<AccountMeta>() + data_len {
-        return Err(
-            SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded).into(),
-        );
-=======
     let size = num_accounts
         .saturating_mul(size_of::<AccountMeta>())
         .saturating_add(data_len);
-    let max_size = invoke_context
-        .get_bpf_compute_budget()
-        .max_cpi_instruction_size;
     if size > max_size {
-        return Err(SyscallError::InstructionTooLarge(size, max_size).into());
->>>>>>> ebbaa1f8e... Fix integer overflow in degenerate invoke_signed BPF syscalls (#15051)
+        return Err(
+            SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded).into(),
+        );
     }
     Ok(())
 }
