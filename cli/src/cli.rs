@@ -471,11 +471,15 @@ impl CliConfig<'_> {
             (SettingType::Explicit, websocket_cfg_url.to_string()),
             (
                 SettingType::Computed,
-                solana_cli_config::Config::compute_websocket_url(json_rpc_cmd_url),
+                solana_cli_config::Config::compute_websocket_url(&normalize_to_url_if_moniker(
+                    json_rpc_cmd_url,
+                )),
             ),
             (
                 SettingType::Computed,
-                solana_cli_config::Config::compute_websocket_url(json_rpc_cfg_url),
+                solana_cli_config::Config::compute_websocket_url(&normalize_to_url_if_moniker(
+                    json_rpc_cfg_url,
+                )),
             ),
             (SettingType::SystemDefault, Self::default_websocket_url()),
         ])
