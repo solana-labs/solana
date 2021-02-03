@@ -270,6 +270,13 @@ impl<'a> LoadedAccount<'a> {
         }
     }
 
+    pub fn lamports(&self) -> u64 {
+        match self {
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.account_meta.lamports,
+            LoadedAccount::Cached((_, cached_account)) => cached_account.account.lamports,
+        }
+    }
+
     pub fn account(self) -> Account {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.clone_account(),
@@ -1921,15 +1928,22 @@ impl AccountsDB {
         collector
     }
 
-    pub fn unchecked_scan_accounts<F, A>(&self, ancestors: &Ancestors, scan_func: F) -> A
+    pub fn unchecked_scan_accounts<F, A>(
+        &self,
+        metric_name: &'static str,
+        ancestors: &Ancestors,
+        scan_func: F,
+    ) -> A
     where
-        F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>),
+        F: Fn(&mut A, (&Pubkey, LoadedAccount, Slot)),
         A: Default,
     {
         let mut collector = A::default();
-        self.accounts_index
-            .unchecked_scan_accounts(ancestors, |pubkey, (account_info, slot)| {
-                let account_slot = self
+        self.accounts_index.unchecked_scan_accounts(
+            metric_name,
+            ancestors,
+            |pubkey, (account_info, slot)| {
+                if let Some(loaded_account) = self
                     .get_account_accessor_from_cache_or_storage(
                         slot,
                         pubkey,
@@ -1937,13 +1951,21 @@ impl AccountsDB {
                         account_info.offset,
                     )
                     .get_loaded_account()
-                    .map(|loaded_account| (pubkey, loaded_account.account(), slot));
-                scan_func(&mut collector, account_slot)
-            });
+                {
+                    scan_func(&mut collector, (pubkey, loaded_account, slot));
+                }
+            },
+        );
         collector
     }
 
-    pub fn range_scan_accounts<F, A, R>(&self, ancestors: &Ancestors, range: R, scan_func: F) -> A
+    pub fn range_scan_accounts<F, A, R>(
+        &self,
+        metric_name: &'static str,
+        ancestors: &Ancestors,
+        range: R,
+        scan_func: F,
+    ) -> A
     where
         F: Fn(&mut A, Option<(&Pubkey, Account, Slot)>),
         A: Default,
@@ -1951,6 +1973,7 @@ impl AccountsDB {
     {
         let mut collector = A::default();
         self.accounts_index.range_scan_accounts(
+            metric_name,
             ancestors,
             range,
             |pubkey, (account_info, slot)| {
@@ -3413,6 +3436,11 @@ impl AccountsDB {
         balance
             .try_into()
             .expect("overflow is detected while summing capitalization")
+    }
+
+    pub fn checked_iterative_sum_for_capitalization(total_cap: u64, new_cap: u64) -> u64 {
+        let new_total = total_cap as u128 + new_cap as u128;
+        Self::checked_cast_for_capitalization(new_total)
     }
 
     pub fn checked_sum_for_capitalization<T: Iterator<Item = u64>>(balances: T) -> u64 {
@@ -4890,10 +4918,8 @@ pub mod tests {
         assert_eq!(&db.load_slow(&ancestors, &key).unwrap().0, &account1);
 
         let accounts: Vec<Account> =
-            db.unchecked_scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
-                if let Some(data) = option {
-                    accounts.push(data.1);
-                }
+            db.unchecked_scan_accounts("", &ancestors, |accounts: &mut Vec<Account>, option| {
+                accounts.push(option.1.account());
             });
         assert_eq!(accounts, vec![account1]);
     }
@@ -6243,19 +6269,15 @@ pub mod tests {
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         let accounts: Vec<Account> =
-            db.unchecked_scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
-                if let Some(data) = option {
-                    accounts.push(data.1);
-                }
+            db.unchecked_scan_accounts("", &ancestors, |accounts: &mut Vec<Account>, option| {
+                accounts.push(option.1.account());
             });
         assert_eq!(accounts, vec![account0]);
 
         let ancestors = vec![(1, 1), (0, 0)].into_iter().collect();
         let accounts: Vec<Account> =
-            db.unchecked_scan_accounts(&ancestors, |accounts: &mut Vec<Account>, option| {
-                if let Some(data) = option {
-                    accounts.push(data.1);
-                }
+            db.unchecked_scan_accounts("", &ancestors, |accounts: &mut Vec<Account>, option| {
+                accounts.push(option.1.account());
             });
         assert_eq!(accounts.len(), 2);
     }
