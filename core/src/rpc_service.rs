@@ -10,7 +10,7 @@ use crate::{
     send_transaction_service::{LeaderInfo, SendTransactionService},
     validator::ValidatorExit,
 };
-use jsonrpc_core::MetaIoHandler;
+use jsonrpc_core::{futures::prelude::*, MetaIoHandler};
 use jsonrpc_http_server::{
     hyper, AccessControlAllowOrigin, CloseHandle, DomainsValidation, RequestMiddleware,
     RequestMiddlewareAction, ServerBuilder,
@@ -32,7 +32,8 @@ use std::{
     sync::{mpsc::channel, Arc, Mutex, RwLock},
     thread::{self, Builder, JoinHandle},
 };
-use tokio::runtime;
+use tokio::{self, runtime};
+use tokio_util::codec::{BytesCodec, FramedRead};
 
 pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
@@ -108,9 +109,6 @@ impl RpcRequestMiddleware {
     }
 
     fn process_file_get(&self, path: &str) -> RequestMiddlewareAction {
-        // Stuck on tokio 0.1 until the jsonrpc-http-server crate upgrades to tokio 0.2
-        use tokio_01::prelude::*;
-
         let stem = path.split_at(1).1; // Drop leading '/' from path
         let filename = {
             match path {
@@ -134,25 +132,23 @@ impl RpcRequestMiddleware {
             .unwrap_or(0)
             .to_string();
         info!("get {} -> {:?} ({} bytes)", path, filename, file_length);
-
         RequestMiddlewareAction::Respond {
             should_validate_hosts: true,
-            response: Box::new(
-                tokio_fs_01::file::File::open(filename)
-                    .and_then(|file| {
-                        use tokio_codec_01::{BytesCodec, FramedRead};
-
-                        let stream = FramedRead::new(file, BytesCodec::new())
-                            .map(tokio_01_bytes::BytesMut::freeze);
+            response: Box::pin(async {
+                match tokio::fs::File::open(filename).await {
+                    Err(_) => Ok(Self::internal_server_error()),
+                    Ok(file) => {
+                        let stream =
+                            FramedRead::new(file, BytesCodec::new()).map_ok(|b| b.freeze());
                         let body = hyper::Body::wrap_stream(stream);
 
                         Ok(hyper::Response::builder()
                             .header(hyper::header::CONTENT_LENGTH, file_length)
                             .body(body)
                             .unwrap())
-                    })
-                    .or_else(|_| Ok(RpcRequestMiddleware::not_found())),
-            ),
+                    }
+                }
+            }),
         }
     }
 
@@ -173,57 +169,41 @@ impl RequestMiddleware for RpcRequestMiddleware {
         if let Some(ref snapshot_config) = self.snapshot_config {
             if request.uri().path() == "/snapshot.tar.bz2" {
                 // Convenience redirect to the latest snapshot
-                return RequestMiddlewareAction::Respond {
-                    should_validate_hosts: true,
-                    response: Box::new(jsonrpc_core::futures::future::ok(
-                        if let Some((snapshot_archive, _)) =
-                            snapshot_utils::get_highest_snapshot_archive_path(
-                                &snapshot_config.snapshot_package_output_path,
-                            )
-                        {
-                            RpcRequestMiddleware::redirect(&format!(
-                                "/{}",
-                                snapshot_archive
-                                    .file_name()
-                                    .unwrap_or_else(|| std::ffi::OsStr::new(""))
-                                    .to_str()
-                                    .unwrap_or(&"")
-                            ))
-                        } else {
-                            RpcRequestMiddleware::not_found()
-                        },
-                    )),
-                };
+                return if let Some((snapshot_archive, _)) =
+                    snapshot_utils::get_highest_snapshot_archive_path(
+                        &snapshot_config.snapshot_package_output_path,
+                    ) {
+                    RpcRequestMiddleware::redirect(&format!(
+                        "/{}",
+                        snapshot_archive
+                            .file_name()
+                            .unwrap_or_else(|| std::ffi::OsStr::new(""))
+                            .to_str()
+                            .unwrap_or(&"")
+                    ))
+                } else {
+                    RpcRequestMiddleware::not_found()
+                }
+                .into();
             }
         }
 
         if let Some(result) = process_rest(&self.bank_forks, request.uri().path()) {
-            RequestMiddlewareAction::Respond {
-                should_validate_hosts: true,
-                response: Box::new(jsonrpc_core::futures::future::ok(
-                    hyper::Response::builder()
-                        .status(hyper::StatusCode::OK)
-                        .body(hyper::Body::from(result))
-                        .unwrap(),
-                )),
-            }
+            hyper::Response::builder()
+                .status(hyper::StatusCode::OK)
+                .body(hyper::Body::from(result))
+                .unwrap()
+                .into()
         } else if self.is_file_get_path(request.uri().path()) {
             self.process_file_get(request.uri().path())
         } else if request.uri().path() == "/health" {
-            RequestMiddlewareAction::Respond {
-                should_validate_hosts: true,
-                response: Box::new(jsonrpc_core::futures::future::ok(
-                    hyper::Response::builder()
-                        .status(hyper::StatusCode::OK)
-                        .body(hyper::Body::from(self.health_check()))
-                        .unwrap(),
-                )),
-            }
+            hyper::Response::builder()
+                .status(hyper::StatusCode::OK)
+                .body(hyper::Body::from(self.health_check()))
+                .unwrap()
+                .into()
         } else {
-            RequestMiddlewareAction::Proceed {
-                should_continue_on_invalid_cors: false,
-                request,
-            }
+            request.into()
         }
     }
 }
@@ -366,9 +346,11 @@ impl JsonRpcService {
         // so that we avoid the single-threaded event loops from being created automatically by
         // jsonrpc for threads when .threads(N > 1) is given.
         let event_loop = {
-            tokio_01::runtime::Builder::new()
+            runtime::Builder::new()
                 .core_threads(rpc_threads)
-                .name_prefix("sol-rpc-el")
+                .threaded_scheduler()
+                .enable_all()
+                .thread_name("sol-rpc-el")
                 .build()
                 .unwrap()
         };
@@ -391,7 +373,7 @@ impl JsonRpcService {
                     io,
                     move |_req: &hyper::Request<hyper::Body>| request_processor.clone(),
                 )
-                .event_loop_executor(event_loop.executor())
+                .event_loop_executor(event_loop.handle().clone())
                 .threads(1)
                 .cors(DomainsValidation::AllowOnly(vec![
                     AccessControlAllowOrigin::Any,

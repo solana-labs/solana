@@ -1,8 +1,5 @@
 use bincode::serialize;
-use jsonrpc_core::futures::{
-    future::{self, Future},
-    stream::Stream,
-};
+use jsonrpc_core::futures::StreamExt;
 use jsonrpc_core_client::transports::ws;
 use log::*;
 use reqwest::{self, header::CONTENT_TYPE};
@@ -27,7 +24,7 @@ use std::{
     thread::sleep,
     time::{Duration, Instant},
 };
-use tokio_01::runtime::Runtime;
+use tokio::runtime::Runtime;
 
 macro_rules! json_req {
     ($method: expr, $params: expr) => {{
@@ -184,62 +181,48 @@ fn test_rpc_subscriptions() {
     let (status_sender, status_receiver) = channel::<(String, Response<RpcSignatureResult>)>();
 
     // Create the pub sub runtime
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
+    let rpc_pubsub_url = test_validator.rpc_pubsub_url();
+    let signature_set_clone = signature_set.clone();
+    rt.spawn(async move {
+        let connect = ws::try_connect::<PubsubClient>(&rpc_pubsub_url).unwrap();
+        let client = connect.await.unwrap();
 
-    // Subscribe to all signatures
-    rt.spawn({
-        let connect = ws::try_connect::<PubsubClient>(&test_validator.rpc_pubsub_url()).unwrap();
-        let signature_set = signature_set.clone();
-        connect
-            .and_then(move |client| {
-                for sig in signature_set {
-                    let status_sender = status_sender.clone();
-                    tokio_01::spawn(
-                        client
-                            .signature_subscribe(sig.clone(), None)
-                            .and_then(move |sig_stream| {
-                                sig_stream.for_each(move |result| {
-                                    status_sender.send((sig.clone(), result)).unwrap();
-                                    future::ok(())
-                                })
-                            })
-                            .map_err(|err| {
-                                eprintln!("sig sub err: {:#?}", err);
-                            }),
-                    );
-                }
-                tokio_01::spawn(
-                    client
-                        .slot_subscribe()
-                        .and_then(move |slot_stream| {
-                            slot_stream.for_each(move |_| {
-                                ready_sender.send(()).unwrap();
-                                future::ok(())
-                            })
-                        })
-                        .map_err(|err| {
-                            eprintln!("slot sub err: {:#?}", err);
-                        }),
-                );
-                for pubkey in account_set {
-                    let account_sender = account_sender.clone();
-                    tokio_01::spawn(
-                        client
-                            .account_subscribe(pubkey, None)
-                            .and_then(move |account_stream| {
-                                account_stream.for_each(move |result| {
-                                    account_sender.send(result).unwrap();
-                                    future::ok(())
-                                })
-                            })
-                            .map_err(|err| {
-                                eprintln!("acct sub err: {:#?}", err);
-                            }),
-                    );
-                }
-                future::ok(())
-            })
-            .map_err(|_| ())
+        // Subscribe to signature notifications
+        for sig in signature_set_clone {
+            let status_sender = status_sender.clone();
+            let mut sig_sub = client
+                .signature_subscribe(sig.clone(), None)
+                .unwrap_or_else(|err| panic!("sig sub err: {:#?}", err));
+
+            tokio::spawn(async move {
+                let response = sig_sub.next().await.unwrap();
+                status_sender
+                    .send((sig.clone(), response.unwrap()))
+                    .unwrap();
+            });
+        }
+
+        // Subscribe to account notifications
+        for pubkey in account_set {
+            let account_sender = account_sender.clone();
+            let mut client_sub = client
+                .account_subscribe(pubkey, None)
+                .unwrap_or_else(|err| panic!("acct sub err: {:#?}", err));
+            tokio::spawn(async move {
+                let response = client_sub.next().await.unwrap();
+                account_sender.send(response.unwrap()).unwrap();
+            });
+        }
+
+        // Signal ready after the next slot notification
+        let mut slot_sub = client
+            .slot_subscribe()
+            .unwrap_or_else(|err| panic!("sig sub err: {:#?}", err));
+        tokio::spawn(async move {
+            let _response = slot_sub.next().await.unwrap();
+            ready_sender.send(()).unwrap();
+        });
     });
 
     // Wait for signature subscriptions
@@ -311,6 +294,4 @@ fn test_rpc_subscriptions() {
             }
         }
     }
-
-    rt.shutdown_now().wait().unwrap();
 }
