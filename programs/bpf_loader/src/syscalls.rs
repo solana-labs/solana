@@ -348,7 +348,7 @@ fn translate_slice_inner<'a, T>(
     {
         Err(SyscallError::UnalignedPointer.into())
     } else if len == 0 {
-        Ok(unsafe { from_raw_parts_mut(0x1 as *mut T, len as usize) })
+        Ok(&mut [])
     } else {
         match translate(
             memory_mapping,
