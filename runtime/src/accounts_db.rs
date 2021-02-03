@@ -3473,8 +3473,11 @@ impl AccountsDB {
         sort_time.stop();
 
         if debug {
-            for (key, hash, _lamports) in &hashes {
-                info!("slot: {} key {} hash {}", slot, key, hash);
+            for (key, hash, lamports) in &hashes {
+                info!(
+                    "slot: {} key {} hash {}, lamports: {}",
+                    slot, key, hash, lamports
+                );
             }
         }
 
@@ -3947,7 +3950,7 @@ impl AccountsDB {
             .iter()
             .map(|(pubkey, _hash, _lamports)| *pubkey)
             .collect();
-        let ret = Self::accumulate_account_hashes(hashes, slot, false);
+        let ret = Self::accumulate_account_hashes(hashes, slot, true);
         accumulate.stop();
         let mut uncleaned_time = Measure::start("uncleaned_index");
         self.uncleaned_pubkeys.insert(slot, dirty_keys);
