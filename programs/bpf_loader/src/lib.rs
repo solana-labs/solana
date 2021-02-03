@@ -39,7 +39,7 @@ use solana_sdk::{
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     rent::Rent,
-    system_instruction,
+    system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
 };
 use std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
 use thiserror::Error;
@@ -406,6 +406,7 @@ fn process_loader_upgradeable_instruction(
             let buffer_data_offset = UpgradeableLoaderState::buffer_data_offset()?;
             let buffer_data_len = buffer.data_len()?.saturating_sub(buffer_data_offset);
             let programdata_data_offset = UpgradeableLoaderState::programdata_data_offset()?;
+            let programdata_len = UpgradeableLoaderState::programdata_len(max_data_len)?;
 
             if buffer.data_len()? < UpgradeableLoaderState::buffer_data_offset()?
                 || buffer_data_len == 0
@@ -416,6 +417,10 @@ fn process_loader_upgradeable_instruction(
             if max_data_len < buffer_data_len {
                 ic_logger_msg!(logger, "Max data length is too small to hold Buffer data");
                 return Err(InstructionError::AccountDataTooSmall);
+            }
+            if programdata_len > MAX_PERMITTED_DATA_LENGTH as usize {
+                ic_logger_msg!(logger, "Max data length is too large");
+                return Err(InstructionError::InvalidArgument);
             }
 
             // Create ProgramData account
@@ -432,12 +437,8 @@ fn process_loader_upgradeable_instruction(
                 system_instruction::create_account(
                     payer.unsigned_key(),
                     programdata.unsigned_key(),
-                    1.max(
-                        rent.minimum_balance(UpgradeableLoaderState::programdata_len(
-                            max_data_len,
-                        )?),
-                    ),
-                    UpgradeableLoaderState::programdata_len(max_data_len)? as u64,
+                    1.max(rent.minimum_balance(programdata_len)),
+                    programdata_len as u64,
                     program_id,
                 ),
                 &[payer, programdata, system],
@@ -1930,6 +1931,40 @@ mod tests {
         );
         assert_eq!(
             TransactionError::InstructionError(1, InstructionError::AccountDataTooSmall),
+            bank_client
+                .send_and_confirm_message(
+                    &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
+                    message
+                )
+                .unwrap_err()
+                .unwrap()
+        );
+
+        // Test max_data_len too large
+        bank.clear_signatures();
+        bank.store_account(
+            &mint_keypair.pubkey(),
+            &Account::new(u64::MAX / 2, 0, &system_program::id()),
+        );
+        let mut modified_buffer_account = buffer_account.clone();
+        modified_buffer_account.lamports = u64::MAX / 2;
+        bank.store_account(&buffer_address, &modified_buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &Account::default());
+        bank.store_account(&programdata_address, &Account::default());
+        let message = Message::new(
+            &bpf_loader_upgradeable::deploy_with_max_program_len(
+                &mint_keypair.pubkey(),
+                &program_keypair.pubkey(),
+                &buffer_address,
+                &upgrade_authority_keypair.pubkey(),
+                min_program_balance,
+                usize::MAX,
+            )
+            .unwrap(),
+            Some(&mint_keypair.pubkey()),
+        );
+        assert_eq!(
+            TransactionError::InstructionError(1, InstructionError::InvalidArgument),
             bank_client
                 .send_and_confirm_message(
                     &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
