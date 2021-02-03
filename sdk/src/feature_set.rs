@@ -49,6 +49,14 @@ pub mod full_inflation {
         }
     }
 
+    pub mod bunghi {
+        pub mod vote {
+            solana_sdk::declare_id!("E9hFUVEz29H8XMXk7ygk7ZpCuEuZQ8DJvJKJSTGu1RM6");
+        }
+        pub mod enable {
+            solana_sdk::declare_id!("5S9JDUb4vKY1CUxLf5oc96ZxjGrephj1jcPeTi62sYmP");
+        }
+    }
     pub mod bl {
         pub mod vote {
             // The private key for this address is held by the Solana Foundation
@@ -267,6 +275,8 @@ lazy_static! {
         (full_inflation::certusone::enable::id(), "Full inflation enabled by Certus One"),
         (full_inflation::bl::vote::id(), "Community vote allowing BL to enable full inflation"),
         (full_inflation::bl::enable::id(), "Full inflation enabled by BL"),
+        (full_inflation::bunghi::vote::id(), "Community vote allowing bunghi to enable full inflation"),
+        (full_inflation::bunghi::enable::id(), "Full inflation enabled by bunghi"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
@@ -313,6 +323,10 @@ lazy_static! {
         FullInflationFeaturePair {
             vote_id: full_inflation::bl::vote::id(),
             enable_id: full_inflation::bl::enable::id(),
+        },
+        FullInflationFeaturePair {
+            vote_id: full_inflation::bunghi::vote::id(),
+            enable_id: full_inflation::bunghi::enable::id(),
         },
     ]
     .iter()
