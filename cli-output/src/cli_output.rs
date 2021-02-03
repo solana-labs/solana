@@ -1478,6 +1478,154 @@ impl fmt::Display for CliTokenAccount {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliProgramId {
+    pub program_id: String,
+}
+
+impl QuietDisplay for CliProgramId {}
+impl VerboseDisplay for CliProgramId {}
+
+impl fmt::Display for CliProgramId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln_name_value(f, "Program Id:", &self.program_id)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliProgramBuffer {
+    pub buffer: String,
+}
+
+impl QuietDisplay for CliProgramBuffer {}
+impl VerboseDisplay for CliProgramBuffer {}
+
+impl fmt::Display for CliProgramBuffer {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln_name_value(f, "Buffer:", &self.buffer)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CliProgramAccountType {
+    Buffer,
+    Program,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliProgramAuthority {
+    pub authority: String,
+    pub account_type: CliProgramAccountType,
+}
+
+impl QuietDisplay for CliProgramAuthority {}
+impl VerboseDisplay for CliProgramAuthority {}
+
+impl fmt::Display for CliProgramAuthority {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln_name_value(f, "Account Type:", &format!("{:?}", self.account_type))?;
+        writeln_name_value(f, "Authority:", &self.authority)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliUpgradeableProgram {
+    pub program_id: String,
+    pub program_executable: bool,
+    pub program_lamports: u64,
+    pub programdata_address: String,
+    pub programdata_lamports: u64,
+    pub programdata_authority: String,
+    pub programdata_slot: u64,
+    pub programdata_data_len: usize,
+    pub programdata_program_len: usize,
+    pub use_lamports_unit: bool,
+}
+impl QuietDisplay for CliUpgradeableProgram {}
+impl VerboseDisplay for CliUpgradeableProgram {}
+impl fmt::Display for CliUpgradeableProgram {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln_name_value(f, "Program Address:", &self.program_id)?;
+        writeln_name_value(f, "  Executable:", &self.program_executable.to_string())?;
+        writeln_name_value(
+            f,
+            "  Balance:",
+            &build_balance_message(self.program_lamports, self.use_lamports_unit, true),
+        )?;
+        writeln_name_value(f, "  ProgramData Address:", &self.programdata_address)?;
+        writeln_name_value(f, "    Authority:", &self.programdata_authority)?;
+        writeln_name_value(
+            f,
+            "    Balance:",
+            &build_balance_message(self.programdata_lamports, self.use_lamports_unit, true),
+        )?;
+        writeln_name_value(
+            f,
+            "    Total Length:",
+            &format!(
+                "{:?} ({:#x?}) bytes",
+                self.programdata_data_len, self.programdata_data_len
+            ),
+        )?;
+        writeln_name_value(
+            f,
+            "    Program Length:",
+            &format!(
+                "{:?} ({:#x?}) bytes",
+                self.programdata_program_len, self.programdata_program_len
+            ),
+        )?;
+        writeln_name_value(
+            f,
+            "    Last Upgraded In Slot:",
+            &self.programdata_slot.to_string(),
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliUpgradeableBuffer {
+    pub address: String,
+    pub lamports: u64,
+    pub authority: String,
+    pub data_len: usize,
+    pub program_len: usize,
+    pub use_lamports_unit: bool,
+}
+impl QuietDisplay for CliUpgradeableBuffer {}
+impl VerboseDisplay for CliUpgradeableBuffer {}
+impl fmt::Display for CliUpgradeableBuffer {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln_name_value(f, "Buffer Address:", &self.address)?;
+        writeln_name_value(f, "  Authority:", &self.authority)?;
+        writeln_name_value(
+            f,
+            "  Balance:",
+            &build_balance_message(self.lamports, self.use_lamports_unit, true),
+        )?;
+        writeln_name_value(
+            f,
+            "  Total Length:",
+            &format!("{:?} ({:#x?}) bytes", self.data_len, self.data_len),
+        )?;
+        writeln_name_value(
+            f,
+            "  Program Length:",
+            &format!("{:?} ({:#x?}) bytes", self.program_len, self.program_len),
+        )?;
+        Ok(())
+    }
+}
+
 pub fn return_signers(
     tx: &Transaction,
     output_format: &OutputFormat,
