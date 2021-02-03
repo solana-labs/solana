@@ -1532,7 +1532,7 @@ fn test_program_bpf_upgrade_and_invoke_in_same_tx() {
         &buffer_keypair,
         &program_keypair,
         &authority_keypair,
-        "noop",
+        "solana_bpf_rust_noop",
     );
 
     let invoke_instruction = Instruction::new(
@@ -1563,7 +1563,11 @@ fn test_program_bpf_upgrade_and_invoke_in_same_tx() {
         &mint_keypair,
         &buffer_keypair,
         &authority_keypair,
+<<<<<<< HEAD
         &elf,
+=======
+        "solana_bpf_rust_panic",
+>>>>>>> 02a5f7104... Fix which shared object the test uses (#15060)
     );
 
     // Invoke, then upgrade the program, and then invoke again in same tx
@@ -1709,7 +1713,7 @@ fn test_program_bpf_disguised_as_bpf_loader() {
     }
     #[cfg(feature = "bpf_rust")]
     {
-        programs.extend_from_slice(&[("noop")]);
+        programs.extend_from_slice(&[("solana_bpf_rust_noop")]);
     }
 
     for program in programs.iter() {
@@ -1853,7 +1857,12 @@ fn test_program_bpf_upgrade_self_via_cpi() {
     bank.add_builtin(&name, id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
-    let noop_program_id = load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, "noop");
+    let noop_program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_noop",
+    );
 
     // Deploy upgradeable program
     let buffer_keypair = Keypair::new();
@@ -1899,7 +1908,11 @@ fn test_program_bpf_upgrade_self_via_cpi() {
         &mint_keypair,
         &buffer_keypair,
         &authority_keypair,
+<<<<<<< HEAD
         &elf,
+=======
+        "solana_bpf_rust_panic",
+>>>>>>> 02a5f7104... Fix which shared object the test uses (#15060)
     );
 
     // Invoke, then upgrade the program, and then invoke again in same tx
