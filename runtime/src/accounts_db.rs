@@ -1667,9 +1667,10 @@ impl AccountsDB {
                             .iter()
                             .any(|(_slot, i)| i.store_id == *store_id && i.offset == *offset);
                         if !is_alive {
-                            // If the account index entry was removed, that means no other
-                            // AppendVec's for this slot contains this pubkey, so it's safe
-                            // to unref
+                            // This pubkey was found in the storage, but no longer exists in the index.
+                            // It would have had a ref to the storage from the initial store, but it will
+                            // not exist in the re-written slot. Unref it to keep the index consistent with
+                            // rewriting the storage entries.
                             locked_entry.unref()
                         } else {
                             alive_total += *account_size as u64;
@@ -4456,9 +4457,10 @@ impl AccountsDB {
                             .iter()
                             .any(|(_slot, i)| i.store_id == *store_id && i.offset == *offset);
                         if !is_alive {
-                            // If the account index entry was removed, that means no other
-                            // AppendVec's for this slot contains this pubkey, so it's safe
-                            // to unref
+                            // This pubkey was found in the storage, but no longer exists in the index.
+                            // It would have had a ref to the storage from the initial store, but it will
+                            // not exist in the re-written slot. Unref it to keep the index consistent with
+                            // rewriting the storage entries.
                             locked_entry.unref()
                         } else {
                             alive_total += *account_size as u64;
@@ -7708,7 +7710,9 @@ pub mod tests {
     }
 
     fn slot_stores(db: &AccountsDB, slot: Slot) -> Vec<Arc<AccountStorageEntry>> {
-        db.storage.get_slot_storage_entries(slot).unwrap_or(vec![])
+        db.storage
+            .get_slot_storage_entries(slot)
+            .unwrap_or_default()
     }
 
     #[test]
@@ -8341,6 +8345,9 @@ pub mod tests {
             // roots will clean the earlier roots before they are stored.
             // Thus flush the roots individually
             db.flush_accounts_cache(true, None);
+
+            // Add an additional ref within the same slot to pubkey 1
+            db.store_uncached(0, &[(&account_key1, &account1)]);
         }
 
         // Make account_key1 in slot 0 outdated by updating in rooted slot 1
