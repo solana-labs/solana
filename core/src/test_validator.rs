@@ -405,6 +405,7 @@ impl TestValidator {
             vec![Arc::new(validator_vote_account)],
             vec![],
             &validator_config,
+            true, // should_check_duplicate_instance
         ));
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of

@@ -207,6 +207,7 @@ impl LocalCluster {
             vec![leader_vote_keypair.clone()],
             vec![],
             &leader_config,
+            true, // should_check_duplicate_instance
         );
 
         let mut validators = HashMap::new();
@@ -350,6 +351,7 @@ impl LocalCluster {
             vec![voting_keypair.clone()],
             vec![self.entry_point_info.clone()],
             &config,
+            true, // should_check_duplicate_instance
         );
 
         let validator_pubkey = validator_keypair.pubkey();
@@ -665,6 +667,7 @@ impl Cluster for LocalCluster {
                 .map(|entry_point_info| vec![entry_point_info])
                 .unwrap_or_default(),
             &cluster_validator_info.config,
+            true, // should_check_duplicate_instance
         );
         cluster_validator_info.validator = Some(restarted_node);
         cluster_validator_info
