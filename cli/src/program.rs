@@ -88,7 +88,6 @@ pub enum ProgramCliCommand {
     },
     Show {
         account_pubkey: Option<Pubkey>,
-        use_lamports_unit: bool,
     },
     Dump {
         account_pubkey: Option<Pubkey>,
@@ -235,7 +234,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("PROGRAM_ADDRESS")
                                 .takes_value(true)
                                 .required(true)
-                                .help("Public key of the program to upgrade")
+                                .help("Address of the program to upgrade")
                         )
                         .arg(
                             Arg::with_name("upgrade_authority")
@@ -268,14 +267,8 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("ACCOUNT_ADDRESS")
                                 .takes_value(true)
                                 .required(true)
-                                .help("Public key of the buffer or program to show")
+                                .help("Address of the buffer or program to show")
                         )
-                        .arg(
-                            Arg::with_name("lamports")
-                                .long("lamports")
-                                .takes_value(false)
-                                .help("Display balance in lamports instead of SOL"),
-                        ),
                 )
                 .subcommand(
                     SubCommand::with_name("dump")
@@ -286,7 +279,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .value_name("ACCOUNT_ADDRESS")
                                 .takes_value(true)
                                 .required(true)
-                                .help("Public key of the buffer or program")
+                                .help("Address of the buffer or program")
                         )
                         .arg(
                             Arg::with_name("output_location")
@@ -497,7 +490,6 @@ pub fn parse_program_subcommand(
         ("show", Some(matches)) => CliCommandInfo {
             command: CliCommand::Program(ProgramCliCommand::Show {
                 account_pubkey: pubkey_of(matches, "account"),
-                use_lamports_unit: matches.is_present("lamports"),
             }),
             signers: vec![],
         },
@@ -581,10 +573,9 @@ pub fn process_program_subcommand(
             *upgrade_authority_index,
             *new_upgrade_authority,
         ),
-        ProgramCliCommand::Show {
-            account_pubkey,
-            use_lamports_unit,
-        } => process_get_info(&rpc_client, config, *account_pubkey, *use_lamports_unit),
+        ProgramCliCommand::Show { account_pubkey } => {
+            process_show(&rpc_client, config, *account_pubkey)
+        }
         ProgramCliCommand::Dump {
             account_pubkey,
             output_location,
@@ -929,11 +920,10 @@ fn process_set_authority(
     Ok(config.output_format.formatted_string(&authority))
 }
 
-fn process_get_info(
+fn process_show(
     rpc_client: &RpcClient,
     config: &CliConfig,
     account_pubkey: Option<Pubkey>,
-    use_lamports_unit: bool,
 ) -> ProcessResult {
     if let Some(account_pubkey) = account_pubkey {
         if let Some(account) = rpc_client
@@ -957,18 +947,13 @@ fn process_get_info(
                             .output_format
                             .formatted_string(&CliUpgradeableProgram {
                                 program_id: account_pubkey.to_string(),
-                                program_executable: account.executable,
-                                program_lamports: account.lamports,
                                 programdata_address: programdata_address.to_string(),
-                                programdata_lamports: programdata_account.lamports,
-                                programdata_authority: upgrade_authority_address
+                                authority: upgrade_authority_address
                                     .map(|pubkey| pubkey.to_string())
                                     .unwrap_or_else(|| "none".to_string()),
-                                programdata_slot: slot,
-                                programdata_data_len: programdata_account.data.len(),
-                                programdata_program_len: programdata_account.data.len()
+                                last_upgrade_slot: slot,
+                                program_len: programdata_account.data.len()
                                     - UpgradeableLoaderState::programdata_data_offset()?,
-                                use_lamports_unit,
                             }))
                     } else {
                         Err("Invalid associated ProgramData account found for the program".into())
@@ -985,14 +970,11 @@ fn process_get_info(
                     .output_format
                     .formatted_string(&CliUpgradeableBuffer {
                         address: account_pubkey.to_string(),
-                        lamports: account.lamports,
                         authority: authority_address
                             .map(|pubkey| pubkey.to_string())
                             .unwrap_or_else(|| "none".to_string()),
-                        data_len: account.data.len(),
                         program_len: account.data.len()
                             - UpgradeableLoaderState::buffer_data_offset()?,
-                        use_lamports_unit,
                     }))
             } else {
                 Err("Not a buffer or program account".into())
