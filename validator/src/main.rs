@@ -121,6 +121,7 @@ fn start_gossip_node(
     gossip_socket: UdpSocket,
     expected_shred_version: Option<u16>,
     gossip_validators: Option<HashSet<Pubkey>>,
+    should_check_duplicate_instance: bool,
 ) -> (Arc<ClusterInfo>, Arc<AtomicBool>, GossipService) {
     let mut cluster_info = ClusterInfo::new(
         ClusterInfo::gossip_contact_info(
@@ -140,6 +141,7 @@ fn start_gossip_node(
         None,
         gossip_socket,
         gossip_validators,
+        should_check_duplicate_instance,
         &gossip_exit_flag,
     );
     (cluster_info, gossip_exit_flag, gossip_service)
@@ -577,6 +579,7 @@ fn rpc_bootstrap(
     no_port_check: bool,
     use_progress_bar: bool,
     maximum_local_snapshot_age: Slot,
+    should_check_duplicate_instance: bool,
 ) {
     if !no_port_check {
         let mut order: Vec<_> = (0..cluster_entrypoints.len()).collect();
@@ -605,6 +608,7 @@ fn rpc_bootstrap(
                 node.sockets.gossip.try_clone().unwrap(),
                 validator_config.expected_shred_version,
                 validator_config.gossip_validators.clone(),
+                should_check_duplicate_instance,
             ));
         }
 
@@ -1421,6 +1425,13 @@ pub fn main() {
                 .conflicts_with("no_accounts_db_caching")
                 .hidden(true)
         )
+        .arg(
+            Arg::with_name("no_duplicate_instance_check")
+                .long("no-duplicate-instance-check")
+                .takes_value(false)
+                .help("Disables duplicate instance check")
+                .hidden(true),
+        )
         .after_help("The default subcommand is run")
         .subcommand(
              SubCommand::with_name("init")
@@ -1896,6 +1907,7 @@ pub fn main() {
     solana_ledger::entry::init_poh();
     solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&ledger_path);
 
+    let should_check_duplicate_instance = !matches.is_present("no_duplicate_instance_check");
     if !cluster_entrypoints.is_empty() {
         rpc_bootstrap(
             &node,
@@ -1909,6 +1921,7 @@ pub fn main() {
             no_port_check,
             use_progress_bar,
             maximum_local_snapshot_age,
+            should_check_duplicate_instance,
         );
     }
 
@@ -1916,7 +1929,6 @@ pub fn main() {
         info!("Validator ledger initialization complete");
         return;
     }
-
     let validator = Validator::new(
         node,
         &identity_keypair,
@@ -1925,6 +1937,7 @@ pub fn main() {
         authorized_voter_keypairs,
         cluster_entrypoints,
         &validator_config,
+        should_check_duplicate_instance,
     );
 
     if let Some(filename) = init_complete_file {
