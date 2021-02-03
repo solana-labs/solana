@@ -53,7 +53,7 @@ impl UpgradeableLoaderState {
         })
         .map(|len| len as usize)
         .map_err(|_| InstructionError::InvalidInstructionData)?
-            + program_len)
+        .saturating_add(program_len))
     }
     /// Offset into the ProgramData account's data of the program bits.
     pub fn buffer_data_offset() -> Result<usize, InstructionError> {
@@ -75,7 +75,7 @@ impl UpgradeableLoaderState {
         })
         .map(|len| len as usize)
         .map_err(|_| InstructionError::InvalidInstructionData)?
-            + program_len)
+        .saturating_add(program_len))
     }
     /// Offset into the ProgramData account's data of the program bits.
     pub fn programdata_data_offset() -> Result<usize, InstructionError> {
