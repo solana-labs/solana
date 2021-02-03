@@ -71,13 +71,11 @@ pub fn to_instruction_error(error: ProgramError) -> InstructionError {
 }
 
 thread_local! {
-    static INVOKE_CONTEXT:RefCell<Option<(usize, usize)>> = RefCell::new(None);
+    static INVOKE_CONTEXT: RefCell<Option<(usize, usize)>> = RefCell::new(None);
 }
 fn set_invoke_context(new: &mut dyn InvokeContext) {
-    INVOKE_CONTEXT.with(|invoke_context| {
-        if unsafe { invoke_context.replace(Some(transmute::<_, (usize, usize)>(new))) }.is_some() {
-            panic!("Overwiting invoke context!")
-        }
+    INVOKE_CONTEXT.with(|invoke_context| unsafe {
+        invoke_context.replace(Some(transmute::<_, (usize, usize)>(new)))
     });
 }
 fn get_invoke_context<'a>() -> &'a mut dyn InvokeContext {
