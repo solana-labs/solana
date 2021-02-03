@@ -16,7 +16,6 @@ fn process_instruction(
     _accounts: &[AccountInfo],
     _input: &[u8],
 ) -> ProgramResult {
-    // if we can call `msg!` successfully, then InvokeContext exists as required
     msg!("Processing instruction");
     Ok(())
 }
