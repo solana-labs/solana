@@ -20,6 +20,7 @@ pub struct AccountsPackagePre {
     pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
     pub storages: SnapshotStorages,
+    pub hash: Hash, // temporarily here while we still have to calculate hash before serializing bank
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
     pub snapshot_output_dir: PathBuf,
@@ -36,6 +37,7 @@ impl AccountsPackagePre {
         slot_deltas: Vec<BankSlotDelta>,
         snapshot_links: TempDir,
         storages: SnapshotStorages,
+        hash: Hash,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
         snapshot_output_dir: PathBuf,
@@ -49,6 +51,7 @@ impl AccountsPackagePre {
             slot_deltas,
             snapshot_links,
             storages,
+            hash,
             archive_format,
             snapshot_version,
             snapshot_output_dir,
