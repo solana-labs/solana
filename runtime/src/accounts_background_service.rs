@@ -91,9 +91,6 @@ impl SnapshotRequestHandler {
                     status_cache_slot_deltas,
                 } = snapshot_request;
 
-                snapshot_root_bank.update_accounts_hash_with_index_option(true, test_hash_calculation);
-                let hash_for_testing = Some(snapshot_root_bank.get_accounts_hash());
-
                 let mut shrink_time = Measure::start("shrink_time");
                 if !accounts_db_caching_enabled {
                     snapshot_root_bank
@@ -122,6 +119,13 @@ impl SnapshotRequestHandler {
                     );
                 }
                 flush_accounts_cache_time.stop();
+
+                let mut hash_for_testing = None;
+                snapshot_root_bank
+                    .update_accounts_hash_with_index_option(true, test_hash_calculation);
+                if test_hash_calculation {
+                    hash_for_testing = Some(snapshot_root_bank.get_accounts_hash());
+                }
 
                 let mut clean_time = Measure::start("clean_time");
                 // Don't clean the slot we're snapshotting because it may have zero-lamport
