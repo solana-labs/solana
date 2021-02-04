@@ -120,7 +120,6 @@ pub mod full_inflation {
             solana_sdk::declare_id!("C89S2MdjXuP6UmgmqKpszoUahfXLd4xVeikP8vJMioNE");
         }
     }
-    
     pub mod lowfeevalidation {
         pub mod vote {
             solana_sdk::declare_id!("DcbTexLyN3fM3Y6UtteiYEpgDPbr3PrapczHYFagTPci");
