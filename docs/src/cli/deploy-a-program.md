@@ -3,7 +3,7 @@ title: Deploy a Program
 ---
 
 Developers can deploy on-chain [programs](terminology.md#program) (often called
-smart contracts) with the Solana tools.
+smart contracts elsewhere) with the Solana tools.
 
 To learn about developing and executing programs on Solana, start with the
 [overview](developing/programming-model/overview.md) and then dig into the
@@ -44,8 +44,9 @@ Specify the keypair in the deploy command to deploy to a specific program id:
 solana program deploy --program-id <KEYPAIR_FILEPATH> <PROGRAM_FILEPATH>
 ```
 
-By default, the tools will first look for a keypair file matching the
-`<PROGRAM_FILEPATH>`, or internally generate a new keypair.
+If the program id is not specified on the command line the tools will first look
+for a keypair file matching the `<PROGRAM_FILEPATH>`, or internally generate a
+new keypair.
 
 A matching program/keypair file is generated automatically by the program build
 tools and looks like:
@@ -78,8 +79,8 @@ Program Length: 64048 (0xfa30) bytes
 - `ProgramData Address` is the account associated with the program account that
   holds the program's data (shared object).
 - `Authority` is the program's upgrade authority.
-- `Last Upgraded In Slot` is the slot in which the program was last deployed.
-- `Program Length` is the size of the space reserved for deployments.  The
+- `Last Deployed In Slot` is the slot in which the program was last deployed.
+- `Data Length` is the size of the space reserved for deployments.  The
   actual space used by the currently deployed program may be less.
 
 ### Redeploy a program
@@ -196,9 +197,21 @@ The buffer account, once entirely written, can be passed to `deploy` to deploy
 the program:
 
 ```bash
-solana program deploy --buffer <BUFFER_ADDRESS>
+solana program deploy --program-id <PROGRAM_ADDRESS> --buffer <BUFFER_ADDRESS>
 ```
 
 Note, the buffer's authority must match the program's upgrade authority.
 
 Buffers also support `show` and `dump` just like programs do.
+
+### Non-redeployable programs
+
+Using `solana program ...` utilizes Solana's upgradeable loader, but there is
+another way to deploy programs using the original on-chain loader.
+
+```bash
+solana deploy <PROGRAM_FILEPATH>
+```
+
+Programs deployed with `solana deploy ...` are not upgradeable and are not
+compatible with the `solana program ...` commands.
