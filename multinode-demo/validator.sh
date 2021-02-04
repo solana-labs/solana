@@ -229,6 +229,7 @@ default_arg --log -
 default_arg --enable-rpc-exit
 default_arg --enable-rpc-set-log-filter
 default_arg --require-tower
+default_arg --no-poh-speed-test
 
 if [[ -n $SOLANA_CUDA ]]; then
   program=$solana_validator_cuda
