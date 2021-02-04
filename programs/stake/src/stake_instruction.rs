@@ -490,13 +490,17 @@ pub fn process_instruction(
             );
 
             if require_custodian_for_locked_stake_authorize {
+                let clock = from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?;
+                let _current_authority = next_keyed_account(keyed_accounts)?;
+                let custodian = keyed_accounts.next().map(|ka| ka.unsigned_key());
+
                 me.authorize(
                     &signers,
                     &authorized_pubkey,
                     stake_authorize,
                     require_custodian_for_locked_stake_authorize,
-                    &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
-                    keyed_accounts.next().map(|ka| ka.unsigned_key()),
+                    &clock,
+                    custodian,
                 )
             } else {
                 me.authorize(
@@ -516,6 +520,9 @@ pub fn process_instruction(
             );
 
             if require_custodian_for_locked_stake_authorize {
+                let clock = from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?;
+                let custodian = keyed_accounts.next().map(|ka| ka.unsigned_key());
+
                 me.authorize_with_seed(
                     &authority_base,
                     &args.authority_seed,
@@ -523,8 +530,8 @@ pub fn process_instruction(
                     &args.new_authorized_pubkey,
                     args.stake_authorize,
                     require_custodian_for_locked_stake_authorize,
-                    &from_keyed_account::<Clock>(next_keyed_account(keyed_accounts)?)?,
-                    keyed_accounts.next().map(|ka| ka.unsigned_key()),
+                    &clock,
+                    custodian,
                 )
             } else {
                 me.authorize_with_seed(
