@@ -5414,6 +5414,12 @@ pub mod tests {
         let (list, _) = AccountsDB::sort_hash_intermediate(list);
         assert_eq!(list, list_bkup);
 
+        let list = vec![val2.clone(), val.clone()]; // reverse args
+        let mut list_bkup = list.clone();
+        list_bkup.sort_by(AccountsDB::compare_two_hash_entries);
+        let (list, _) = AccountsDB::sort_hash_intermediate(list);
+        assert_eq!(list, list_bkup);
+
         // slot same, vers =
         let hash3 = Hash::new_unique();
         let val3 = CalculateHashIntermediate::new(1, hash3, 2, 1, key);
