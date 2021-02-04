@@ -120,6 +120,15 @@ pub mod full_inflation {
             solana_sdk::declare_id!("C89S2MdjXuP6UmgmqKpszoUahfXLd4xVeikP8vJMioNE");
         }
     }
+    
+    pub mod lowfeevalidation {
+        pub mod vote {
+            solana_sdk::declare_id!("DcbTexLyN3fM3Y6UtteiYEpgDPbr3PrapczHYFagTPci");
+        }
+        pub mod enable {
+            solana_sdk::declare_id!("2wftmZhmArxv3eKjoRz4ffw385eZunydQU3Ruku1kvRX");
+        }
+    }
 }
 
 pub mod spl_token_v2_multisig_fix {
@@ -309,6 +318,8 @@ lazy_static! {
         (full_inflation::diman::enable::id(), "Full inflation enabled by Diman"),
         (full_inflation::p2pvalidator::vote::id(), "Community vote allowing p2pvalidator to enable full inflation"),
         (full_inflation::p2pvalidator::enable::id(), "Full inflation enabled by p2pvalidator"),
+        (full_inflation::lowfeevalidation::vote::id(), "Community vote allowing lowfeevalidation to enable full inflation"),
+        (full_inflation::lowfeevalidation::enable::id(), "Full inflation enabled by lowfeevalidation"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
