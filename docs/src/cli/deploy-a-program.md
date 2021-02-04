@@ -35,7 +35,7 @@ Successful deployment will return the program id of the deployed program, for
 example:
 
 ```bash
-Program Id: 3xZDPPb9b9yPfVWi7JD6n1RPmFiAA3L9Y2Y6S8w42om9
+Program Id: 3KS2k14CmtnuVv2fvYcvdrNgC94Y11WETBpMUGgXyWZL
 ```
 
 Specify the keypair in the deploy command to deploy to a specific program id:
@@ -67,11 +67,11 @@ solana show <ACCOUNT_ADDRESS>
 An example output looks like:
 
 ```bash
-Program Id: 3xZDPPb9b9yPfVWi7JD6n1RPmFiAA3L9Y2Y6S8w42om9
-ProgramData Address: FFfwhTjGh8a5ZZHLFTbf8dvUo1rthwjzu5c9nxLtA5oX
+Program Id: 3KS2k14CmtnuVv2fvYcvdrNgC94Y11WETBpMUGgXyWZL
+ProgramData Address: EHsACWBhgmw8iq5dmUZzTA1esRqcTognhKNHUkPi4q4g
 Authority: FwoGJNUaJN2zfVEex9BB11Dqb3NJKy3e9oY3KTh9XzCU
-Last Upgraded In Slot: 34457234
-Program Length: 64048 (0xfa30) bytes
+Last Upgraded In Slot: 63890568
+Program Length: 5216 (0x1460) bytes
 ```
 
 - `Program Id` is the address that can be referenced in an instruction's
@@ -80,8 +80,8 @@ Program Length: 64048 (0xfa30) bytes
   holds the program's data (shared object).
 - `Authority` is the program's upgrade authority.
 - `Last Deployed In Slot` is the slot in which the program was last deployed.
-- `Data Length` is the size of the space reserved for deployments.  The
-  actual space used by the currently deployed program may be less.
+- `Data Length` is the size of the space reserved for deployments.  The actual
+  space used by the currently deployed program may be less.
 
 ### Redeploy a program
 
