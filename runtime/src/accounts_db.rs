@@ -3724,7 +3724,8 @@ impl AccountsDB {
         //   vec: sorted sections from parallelism, in pubkey order
         //     vec: individual hashes in pubkey order
         let mut zeros = Measure::start("eliminate zeros");
-        let (hashes, sum) = Self::de_dup_accounts_in_parallel(&sorted_data_by_pubkey);
+        const CHUNKS: usize = 10;
+        let (hashes, sum) = Self::de_dup_accounts_in_parallel(&sorted_data_by_pubkey, CHUNKS);
         zeros.stop();
         (hashes, zeros, sum)
     }
@@ -3736,10 +3737,10 @@ impl AccountsDB {
     //     vec: individual hashes in pubkey order
     fn de_dup_accounts_in_parallel(
         pubkey_division: &[CalculateHashIntermediate],
+        chunk_count: usize,
     ) -> (Vec<Vec<Hash>>, u64) {
         let len = pubkey_division.len();
-        let chunk = 10;
-        let max = if len > chunk { chunk } else { 1 };
+        let max = if len > chunk_count { chunk_count } else { 1 };
         let chunk_size = len / max;
         let overall_sum = Mutex::new(0u64);
         let hashes: Vec<Vec<Hash>> = (0..max)
@@ -5315,9 +5316,27 @@ pub mod tests {
         for first_slice in 0..2 {
             for start in 0..COUNT {
                 for end in start + 1..COUNT {
+                    let first_slice = first_slice == 1;
                     let accounts = accounts.clone();
                     let slice = &accounts[start..end];
-                    let result = AccountsDB::de_dup_accounts_from_stores(first_slice == 1, slice);
+
+                    let result = AccountsDB::de_dup_accounts_from_stores(first_slice, slice);
+                    let (hashes2, lamports2) = AccountsDB::de_dup_accounts_in_parallel(slice, 1);
+                    let (hashes3, lamports3) = AccountsDB::de_dup_accounts_in_parallel(slice, 2);
+                    let (hashes4, _, lamports4) =
+                        AccountsDB::de_dup_and_eliminate_zeros(slice.to_vec());
+
+                    assert_eq!(
+                        hashes2.iter().flatten().collect::<Vec<_>>(),
+                        hashes3.iter().flatten().collect::<Vec<_>>()
+                    );
+                    assert_eq!(
+                        hashes2.iter().flatten().collect::<Vec<_>>(),
+                        hashes4.iter().flatten().collect::<Vec<_>>()
+                    );
+                    assert_eq!(lamports2, lamports3);
+                    assert_eq!(lamports2, lamports4);
+                    let hashes: Vec<_> = hashes2.into_iter().flatten().collect();
 
                     let human_readable = slice
                         .iter()
@@ -5337,12 +5356,27 @@ pub mod tests {
                         .collect::<String>();
 
                     let hash_result_as_string = format!("{:?}", result.0);
+
                     let packaged_result: ExpectedType = (
                         human_readable,
-                        first_slice == 1,
+                        first_slice,
                         result.1 as u64,
                         hash_result_as_string,
                     );
+
+                    if first_slice {
+                        // the parallel version always starts with 'first slice'
+                        assert_eq!(
+                            result.0, hashes,
+                            "description: {:?}, expected index: {}",
+                            packaged_result, expected_index
+                        );
+                        assert_eq!(
+                            result.1 as u64, lamports2,
+                            "description: {:?}, expected index: {}",
+                            packaged_result, expected_index
+                        );
+                    }
 
                     assert_eq!(expected[expected_index], packaged_result);
 
