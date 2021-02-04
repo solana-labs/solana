@@ -42,6 +42,12 @@ pub enum StakeError {
 
     #[error("stake account merge failed due to different authority, lockups or state")]
     MergeMismatch,
+
+    #[error("custodian address not present")]
+    CustodianMissing,
+
+    #[error("custodian signature not present")]
+    CustodianSignatureMissing,
 }
 
 impl<E> DecodeError<E> for StakeError {

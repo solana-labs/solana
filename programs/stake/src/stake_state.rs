@@ -490,10 +490,21 @@ impl Authorized {
             }
             StakeAuthorize::Withdrawer => {
                 if let Some((lockup, clock, custodian)) = lockup_custodian_args {
-                    if !custodian.map_or(false, |c| signers.contains(c))
-                        || lockup.is_in_force(&clock, custodian)
-                    {
-                        return Err(StakeError::LockupInForce.into());
+                    if lockup.is_in_force(&clock, None) {
+                        match custodian {
+                            None => {
+                                return Err(StakeError::CustodianMissing.into());
+                            }
+                            Some(custodian) => {
+                                if !signers.contains(custodian) {
+                                    return Err(StakeError::CustodianSignatureMissing.into());
+                                }
+
+                                if lockup.is_in_force(&clock, Some(custodian)) {
+                                    return Err(StakeError::LockupInForce.into());
+                                }
+                            }
+                        }
                     }
                 }
                 self.check(signers, stake_authorize)?;
@@ -1694,6 +1705,7 @@ mod tests {
     fn test_authorized_authorize_with_custodian() {
         let staker = solana_sdk::pubkey::new_rand();
         let custodian = solana_sdk::pubkey::new_rand();
+        let invalid_custodian = solana_sdk::pubkey::new_rand();
         let mut authorized = Authorized::auto(&staker);
         let mut signers = HashSet::new();
         signers.insert(staker);
@@ -1716,7 +1728,67 @@ mod tests {
             Ok(())
         );
 
-        // Custodian not provided
+        // No lockup, no custodian
+        assert_eq!(
+            authorized.authorize(
+                &signers,
+                &staker,
+                StakeAuthorize::Withdrawer,
+                Some((&Lockup::default(), &clock, None))
+            ),
+            Ok(())
+        );
+
+        // No lockup, invalid custodian not a signer
+        assert_eq!(
+            authorized.authorize(
+                &signers,
+                &staker,
+                StakeAuthorize::Withdrawer,
+                Some((&Lockup::default(), &clock, Some(&invalid_custodian)))
+            ),
+            Ok(()) // <== invalid custodian doesn't matter, there's no lockup
+        );
+
+        // Lockup active, invalid custodian not a signer
+        assert_eq!(
+            authorized.authorize(
+                &signers,
+                &staker,
+                StakeAuthorize::Withdrawer,
+                Some((&lockup, &clock, Some(&invalid_custodian)))
+            ),
+            Err(StakeError::CustodianSignatureMissing.into()),
+        );
+
+        signers.insert(invalid_custodian);
+
+        // No lockup, invalid custodian is a signer
+        assert_eq!(
+            authorized.authorize(
+                &signers,
+                &staker,
+                StakeAuthorize::Withdrawer,
+                Some((&Lockup::default(), &clock, Some(&invalid_custodian)))
+            ),
+            Ok(()) // <== invalid custodian doesn't matter, there's no lockup
+        );
+
+        // Lockup active, invalid custodian is a signer
+        signers.insert(invalid_custodian);
+        assert_eq!(
+            authorized.authorize(
+                &signers,
+                &staker,
+                StakeAuthorize::Withdrawer,
+                Some((&lockup, &clock, Some(&invalid_custodian)))
+            ),
+            Err(StakeError::LockupInForce.into()), // <== invalid custodian rejected
+        );
+
+        signers.remove(&invalid_custodian);
+
+        // Lockup active, no custodian
         assert_eq!(
             authorized.authorize(
                 &signers,
@@ -1724,10 +1796,10 @@ mod tests {
                 StakeAuthorize::Withdrawer,
                 Some((&lockup, &clock, None))
             ),
-            Err(StakeError::LockupInForce.into()),
+            Err(StakeError::CustodianMissing.into()),
         );
 
-        // Custodian provided but not a signer
+        // Lockup active, custodian not a signer
         assert_eq!(
             authorized.authorize(
                 &signers,
@@ -1735,10 +1807,10 @@ mod tests {
                 StakeAuthorize::Withdrawer,
                 Some((&lockup, &clock, Some(&custodian)))
             ),
-            Err(StakeError::LockupInForce.into()),
+            Err(StakeError::CustodianSignatureMissing.into()),
         );
 
-        // Custodian is present and is a signer
+        // Lockup active, custodian is a signer
         signers.insert(custodian);
         assert_eq!(
             authorized.authorize(
