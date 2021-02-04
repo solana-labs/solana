@@ -1270,7 +1270,10 @@ fn check_instruction_size(
     data_len: usize,
     max_size: usize,
 ) -> Result<(), EbpfError<BPFError>> {
-    if max_size < num_accounts * size_of::<AccountMeta>() + data_len {
+    let size = num_accounts
+        .saturating_mul(size_of::<AccountMeta>())
+        .saturating_add(data_len);
+    if size > max_size {
         return Err(
             SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded).into(),
         );
