@@ -180,7 +180,7 @@ pub fn download_snapshot(
         ArchiveFormat::TarBzip2,
     ] {
         let desired_snapshot_package = snapshot_utils::get_snapshot_archive_path(
-            ledger_path,
+            ledger_path.to_path_buf(),
             &desired_snapshot_hash,
             *compression,
         );

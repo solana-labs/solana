@@ -4299,14 +4299,28 @@ impl Bank {
         self.rc.accounts.accounts_db.get_accounts_hash(self.slot)
     }
 
-    pub fn update_accounts_hash(&self) -> Hash {
-        let (hash, total_lamports) = self.rc.accounts.accounts_db.update_accounts_hash(
-            self.slot(),
-            &self.ancestors,
-            self.simple_capitalization_enabled(),
-        );
+    pub fn update_accounts_hash_with_index_option(
+        &self,
+        do_not_use_index: bool,
+        debug_verify: bool,
+    ) -> Hash {
+        let (hash, total_lamports) = self
+            .rc
+            .accounts
+            .accounts_db
+            .update_accounts_hash_with_index_option(
+                do_not_use_index,
+                debug_verify,
+                self.slot(),
+                &self.ancestors,
+                self.simple_capitalization_enabled(),
+            );
         assert_eq!(total_lamports, self.capitalization());
         hash
+    }
+
+    pub fn update_accounts_hash(&self) -> Hash {
+        self.update_accounts_hash_with_index_option(false, false)
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
@@ -4942,7 +4956,10 @@ fn is_simple_vote_transaction(transaction: &Transaction) -> bool {
         if program_pubkey == solana_vote_program::id() {
             if let Ok(vote_instruction) = limited_deserialize::<VoteInstruction>(&instruction.data)
             {
-                return matches!(vote_instruction, VoteInstruction::Vote(_) | VoteInstruction::VoteSwitch(_, _));
+                return matches!(
+                    vote_instruction,
+                    VoteInstruction::Vote(_) | VoteInstruction::VoteSwitch(_, _)
+                );
             }
         }
     }
@@ -7955,6 +7972,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_verify_snapshot_bank() {
+        solana_logger::setup();
         let pubkey = solana_sdk::pubkey::new_rand();
         let (genesis_config, mint_keypair) = create_genesis_config(2_000);
         let bank = Bank::new(&genesis_config);
