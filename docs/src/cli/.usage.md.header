@@ -50,7 +50,7 @@ $ solana confirm <TX_SIGNATURE>
 
 ```bash
 // Command
-$ solana deploy <PATH>
+$ solana program deploy <PATH>
 
 // Return
 <PROGRAM_ID>
