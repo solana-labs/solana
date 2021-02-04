@@ -1524,8 +1524,8 @@ pub struct CliUpgradeableProgram {
     pub program_id: String,
     pub programdata_address: String,
     pub authority: String,
-    pub last_upgrade_slot: u64,
-    pub program_len: usize,
+    pub last_deploy_slot: u64,
+    pub data_len: usize,
 }
 impl QuietDisplay for CliUpgradeableProgram {}
 impl VerboseDisplay for CliUpgradeableProgram {}
@@ -1537,13 +1537,13 @@ impl fmt::Display for CliUpgradeableProgram {
         writeln_name_value(f, "Authority:", &self.authority)?;
         writeln_name_value(
             f,
-            "Last Upgraded In Slot:",
-            &self.last_upgrade_slot.to_string(),
+            "Last Deployed In Slot:",
+            &self.last_deploy_slot.to_string(),
         )?;
         writeln_name_value(
             f,
-            "Program Length:",
-            &format!("{:?} ({:#x?}) bytes", self.program_len, self.program_len),
+            "Data Length:",
+            &format!("{:?} ({:#x?}) bytes", self.data_len, self.data_len),
         )?;
         Ok(())
     }

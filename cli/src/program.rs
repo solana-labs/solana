@@ -951,8 +951,8 @@ fn process_show(
                                 authority: upgrade_authority_address
                                     .map(|pubkey| pubkey.to_string())
                                     .unwrap_or_else(|| "none".to_string()),
-                                last_upgrade_slot: slot,
-                                program_len: programdata_account.data.len()
+                                last_deploy_slot: slot,
+                                data_len: programdata_account.data.len()
                                     - UpgradeableLoaderState::programdata_data_offset()?,
                             }))
                     } else {
