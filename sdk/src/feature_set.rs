@@ -383,6 +383,10 @@ lazy_static! {
             vote_id: full_inflation::p2pvalidator::vote::id(),
             enable_id: full_inflation::p2pvalidator::enable::id(),
         },
+        FullInflationFeaturePair {
+            vote_id: full_inflation::lowfeevalidation::vote::id(),
+            enable_id: full_inflation::lowfeevalidation::enable::id(),
+        },
     ]
     .iter()
     .cloned()
