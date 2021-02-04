@@ -5394,6 +5394,29 @@ pub mod tests {
     }
 
     #[test]
+    fn test_accountsdb_flatten_hashes() {
+        solana_logger::setup();
+        const COUNT: usize = 4;
+        let hashes: Vec<_> = (0..COUNT)
+            .into_iter()
+            .map(|i| Hash::new(&[(i) as u8; 32]))
+            .collect();
+        let expected = hashes.clone();
+
+        assert_eq!(AccountsDB::flatten_hashes(vec![hashes.clone()]).0, expected);
+        for in_first in 1..COUNT - 1 {
+            assert_eq!(
+                AccountsDB::flatten_hashes(vec![
+                    hashes.clone()[0..in_first].to_vec(),
+                    hashes.clone()[in_first..COUNT].to_vec()
+                ])
+                .0,
+                expected
+            );
+        }
+    }
+
+    #[test]
     fn test_accountsdb_compare_two_hash_entries() {
         solana_logger::setup();
         let key = Pubkey::new_unique();
