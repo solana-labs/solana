@@ -964,7 +964,7 @@ pub fn process_accounts_package_pre(accounts_package: AccountsPackagePre) -> Acc
     let hash = accounts_package.hash; // temporarily remaining here
     if let Some(expected_hash) = accounts_package.hash_for_testing {
         let (hash, lamports) = AccountsDB::calculate_accounts_hash_without_index(
-            accounts_package.storages.clone(),
+            &accounts_package.storages,
             accounts_package.simple_capitalization_testing,
         );
         time.stop();
