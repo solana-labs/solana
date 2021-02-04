@@ -4605,7 +4605,7 @@ impl AccountsDB {
         roots.sort();
         info!("{}: accounts_index roots: {:?}", label, roots,);
         for (pubkey, account_entry) in self.accounts_index.account_maps.read().unwrap().iter() {
-            info!("  key: {}", pubkey);
+            info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
             info!(
                 "      slots: {:?}",
                 *account_entry.slot_list.read().unwrap()
