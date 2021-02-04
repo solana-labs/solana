@@ -9,11 +9,59 @@ use std::{
 };
 use tempfile::TempDir;
 
-pub type AccountsPackageSender = Sender<AccountsPackage>;
-pub type AccountsPackageReceiver = Receiver<AccountsPackage>;
-pub type AccountsPackageSendError = SendError<AccountsPackage>;
+pub type AccountsPackageSender = Sender<AccountsPackagePre>;
+pub type AccountsPackageReceiver = Receiver<AccountsPackagePre>;
+pub type AccountsPackageSendError = SendError<AccountsPackagePre>;
 
 #[derive(Debug)]
+pub struct AccountsPackagePre {
+    pub slot: Slot,
+    pub block_height: Slot,
+    pub slot_deltas: Vec<BankSlotDelta>,
+    pub snapshot_links: TempDir,
+    pub storages: SnapshotStorages,
+    pub hash: Hash, // temporarily here while we still have to calculate hash before serializing bank
+    pub archive_format: ArchiveFormat,
+    pub snapshot_version: SnapshotVersion,
+    pub snapshot_output_dir: PathBuf,
+    pub expected_capitalization: u64,
+    pub hash_for_testing: Option<Hash>,
+    pub simple_capitalization_testing: bool,
+}
+
+impl AccountsPackagePre {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        slot: Slot,
+        block_height: u64,
+        slot_deltas: Vec<BankSlotDelta>,
+        snapshot_links: TempDir,
+        storages: SnapshotStorages,
+        hash: Hash,
+        archive_format: ArchiveFormat,
+        snapshot_version: SnapshotVersion,
+        snapshot_output_dir: PathBuf,
+        expected_capitalization: u64,
+        hash_for_testing: Option<Hash>,
+        simple_capitalization_testing: bool,
+    ) -> Self {
+        Self {
+            slot,
+            block_height,
+            slot_deltas,
+            snapshot_links,
+            storages,
+            hash,
+            archive_format,
+            snapshot_version,
+            snapshot_output_dir,
+            expected_capitalization,
+            hash_for_testing,
+            simple_capitalization_testing,
+        }
+    }
+}
+
 pub struct AccountsPackage {
     pub slot: Slot,
     pub block_height: Slot,

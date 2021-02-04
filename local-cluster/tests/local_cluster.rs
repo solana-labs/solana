@@ -1052,7 +1052,10 @@ fn test_snapshot_download() {
 
     trace!("found: {:?}", archive_filename);
     let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
-        &validator_snapshot_test_config.snapshot_output_path,
+        validator_snapshot_test_config
+            .snapshot_output_path
+            .path()
+            .to_path_buf(),
         &archive_snapshot_hash,
         ArchiveFormat::TarBzip2,
     );
@@ -1122,7 +1125,10 @@ fn test_snapshot_restart_tower() {
 
     // Copy archive to validator's snapshot output directory
     let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
-        &validator_snapshot_test_config.snapshot_output_path,
+        validator_snapshot_test_config
+            .snapshot_output_path
+            .path()
+            .to_path_buf(),
         &archive_snapshot_hash,
         ArchiveFormat::TarBzip2,
     );
@@ -1187,7 +1193,10 @@ fn test_snapshots_blockstore_floor() {
 
     // Copy archive to validator's snapshot output directory
     let validator_archive_path = snapshot_utils::get_snapshot_archive_path(
-        &validator_snapshot_test_config.snapshot_output_path,
+        validator_snapshot_test_config
+            .snapshot_output_path
+            .path()
+            .to_path_buf(),
         &(archive_slot, archive_hash),
         ArchiveFormat::TarBzip2,
     );
