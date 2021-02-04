@@ -5124,7 +5124,8 @@ pub mod tests {
 
         // zero original lamports
         let account_maps: DashMap<Pubkey, CalculateHashIntermediate> = DashMap::new();
-        let val = CalculateHashIntermediate::new(0, hash, 1, Slot::default());
+        let val =
+            CalculateHashIntermediate::new(0, hash, ZERO_RAW_LAMPORTS_SENTINEL, Slot::default());
         account_maps.insert(key, val);
 
         let result = AccountsDB::remove_zero_balance_accounts(account_maps);
