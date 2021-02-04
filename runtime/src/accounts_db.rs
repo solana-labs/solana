@@ -5528,6 +5528,45 @@ pub mod tests {
     }
 
     #[test]
+    fn test_accountsdb_flatten_hash_intermediate() {
+        solana_logger::setup();
+        let test = vec![vec![CalculateHashIntermediate::new(
+            1,
+            Hash::new_unique(),
+            2,
+            3,
+            Pubkey::new_unique(),
+        )]];
+        let (result, _, len) = AccountsDB::flatten_hash_intermediate(test.clone());
+        assert_eq!(result, test[0]);
+        assert_eq!(len, 1);
+
+        let (result, _, len) = AccountsDB::flatten_hash_intermediate(vec![
+            vec![CalculateHashIntermediate::default(); 0],
+        ]);
+        assert_eq!(result.len(), 0);
+        assert_eq!(len, 0);
+
+        let test = vec![
+            vec![
+                CalculateHashIntermediate::new(1, Hash::new_unique(), 2, 3, Pubkey::new_unique()),
+                CalculateHashIntermediate::new(8, Hash::new_unique(), 9, 10, Pubkey::new_unique()),
+            ],
+            vec![CalculateHashIntermediate::new(
+                4,
+                Hash::new_unique(),
+                5,
+                6,
+                Pubkey::new_unique(),
+            )],
+        ];
+        let (result, _, len) = AccountsDB::flatten_hash_intermediate(test.clone());
+        let expected = test.into_iter().flatten().collect::<Vec<_>>();
+        assert_eq!(result, expected);
+        assert_eq!(len, expected.len());
+    }
+
+    #[test]
     fn test_accountsdb_compute_merkle_root_and_capitalization() {
         solana_logger::setup();
 
