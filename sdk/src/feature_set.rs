@@ -102,6 +102,15 @@ pub mod full_inflation {
             solana_sdk::declare_id!("7XRJcS5Ud5vxGB54JbK9N2vBZVwnwdBNeJW1ibRgD9gx");
         }
     }
+
+    pub mod diman {
+        pub mod vote {
+            solana_sdk::declare_id!("9fHeFGjnequiB366D28ELiAQQ6vqzxwxgsATJ5ELxEvd");
+        }
+        pub mod enable {
+            solana_sdk::declare_id!("DimAnioV7WQM2L41fckvg2ei3NLHV2ACy5qoTKpi8Uz5");
+        }
+    }
 }
 
 pub mod spl_token_v2_multisig_fix {
@@ -287,6 +296,8 @@ lazy_static! {
         (full_inflation::bunghi::enable::id(), "Full inflation enabled by bunghi"),
         (full_inflation::buburuza::vote::id(), "Community vote allowing buburuza to enable full inflation"),
         (full_inflation::buburuza::enable::id(), "Full inflation enabled by buburuza"),
+        (full_inflation::diman::vote::id(), "Community vote allowing Diman to enable full inflation"),
+        (full_inflation::diman::enable::id(), "Full inflation enabled by Diman"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
@@ -341,6 +352,10 @@ lazy_static! {
         FullInflationFeaturePair {
             vote_id: full_inflation::buburuza::vote::id(),
             enable_id: full_inflation::buburuza::enable::id(),
+        },
+        FullInflationFeaturePair {
+            vote_id: full_inflation::diman::vote::id(),
+            enable_id: full_inflation::diman::enable::id(),
         },
     ]
     .iter()
