@@ -92,8 +92,8 @@ impl SnapshotRequestHandler {
                 } = snapshot_request;
 
                 let mut hash_for_testing: Option<solana_sdk::hash::Hash> = None;
-                if test_hash_calculation {
-                    snapshot_root_bank.update_accounts_hash();
+                if true { //test_hash_calculation {
+                    snapshot_root_bank.update_accounts_hash_with_index_option(true, true);
                     hash_for_testing = Some(snapshot_root_bank.get_accounts_hash());
                 }
 
