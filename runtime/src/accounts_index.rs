@@ -78,6 +78,12 @@ pub struct AccountMapEntryInner<T> {
     pub slot_list: RwLock<SlotList<T>>,
 }
 
+impl<T> AccountMapEntryInner<T> {
+    pub fn ref_count(&self) -> u64 {
+        self.ref_count.load(Ordering::Relaxed)
+    }
+}
+
 #[self_referencing]
 pub struct ReadAccountMapEntry<T: 'static> {
     owned_entry: AccountMapEntry<T>,
