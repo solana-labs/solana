@@ -77,7 +77,11 @@ pub struct SnapshotRequestHandler {
 
 impl SnapshotRequestHandler {
     // Returns the latest requested snapshot slot, if one exists
-    pub fn handle_snapshot_requests(&self, accounts_db_caching_enabled: bool) -> Option<u64> {
+    pub fn handle_snapshot_requests(
+        &self,
+        accounts_db_caching_enabled: bool,
+        test_hash_calculation: bool,
+    ) -> Option<u64> {
         self.snapshot_request_receiver
             .try_iter()
             .last()
@@ -86,10 +90,6 @@ impl SnapshotRequestHandler {
                     snapshot_root_bank,
                     status_cache_slot_deltas,
                 } = snapshot_request;
-
-                let mut hash_time = Measure::start("hash_time");
-                snapshot_root_bank.update_accounts_hash();
-                hash_time.stop();
 
                 let mut shrink_time = Measure::start("shrink_time");
                 if !accounts_db_caching_enabled {
@@ -120,6 +120,15 @@ impl SnapshotRequestHandler {
                 }
                 flush_accounts_cache_time.stop();
 
+                let mut hash_time = Measure::start("hash_time");
+                let mut hash_for_testing = None;
+                snapshot_root_bank
+                    .update_accounts_hash_with_index_option(true, test_hash_calculation);
+                if test_hash_calculation {
+                    hash_for_testing = Some(snapshot_root_bank.get_accounts_hash());
+                }
+                hash_time.stop();
+
                 let mut clean_time = Measure::start("clean_time");
                 // Don't clean the slot we're snapshotting because it may have zero-lamport
                 // accounts that were included in the bank delta hash when the bank was frozen,
@@ -144,6 +153,7 @@ impl SnapshotRequestHandler {
                     &self.snapshot_config.snapshot_package_output_path,
                     self.snapshot_config.snapshot_version,
                     &self.snapshot_config.archive_format,
+                    hash_for_testing,
                 );
                 if r.is_err() {
                     warn!(
@@ -216,11 +226,16 @@ pub struct ABSRequestHandler {
 
 impl ABSRequestHandler {
     // Returns the latest requested snapshot block height, if one exists
-    pub fn handle_snapshot_requests(&self, accounts_db_caching_enabled: bool) -> Option<u64> {
+    pub fn handle_snapshot_requests(
+        &self,
+        accounts_db_caching_enabled: bool,
+        test_hash_calculation: bool,
+    ) -> Option<u64> {
         self.snapshot_request_handler
             .as_ref()
             .and_then(|snapshot_request_handler| {
-                snapshot_request_handler.handle_snapshot_requests(accounts_db_caching_enabled)
+                snapshot_request_handler
+                    .handle_snapshot_requests(accounts_db_caching_enabled, test_hash_calculation)
             })
     }
 
@@ -245,6 +260,7 @@ impl AccountsBackgroundService {
         exit: &Arc<AtomicBool>,
         request_handler: ABSRequestHandler,
         accounts_db_caching_enabled: bool,
+        test_hash_calculation: bool,
     ) -> Self {
         info!("AccountsBackgroundService active");
         let exit = exit.clone();
@@ -287,8 +303,8 @@ impl AccountsBackgroundService {
                 // request for `N` to the snapshot request channel before setting a root `R > N`, and
                 // snapshot_request_handler.handle_requests() will always look for the latest
                 // available snapshot in the channel.
-                let snapshot_block_height =
-                    request_handler.handle_snapshot_requests(accounts_db_caching_enabled);
+                let snapshot_block_height = request_handler
+                    .handle_snapshot_requests(accounts_db_caching_enabled, test_hash_calculation);
                 if accounts_db_caching_enabled {
                     // Note that the flush will do an internal clean of the
                     // cache up to bank.slot(), so should be safe as long

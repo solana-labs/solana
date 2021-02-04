@@ -153,7 +153,7 @@ mod tests {
                 .unwrap()
                 .snapshot_path,
             snapshot_utils::get_snapshot_archive_path(
-                snapshot_package_output_path,
+                snapshot_package_output_path.to_path_buf(),
                 &(old_last_bank.slot(), old_last_bank.get_accounts_hash()),
                 ArchiveFormat::TarBzip2,
             ),
@@ -218,7 +218,8 @@ mod tests {
             if slot % set_root_interval == 0 || slot == last_slot - 1 {
                 // set_root should send a snapshot request
                 bank_forks.set_root(bank.slot(), &request_sender, None);
-                snapshot_request_handler.handle_snapshot_requests(false);
+                bank.update_accounts_hash();
+                snapshot_request_handler.handle_snapshot_requests(false, false);
             }
         }
 
@@ -238,8 +239,10 @@ mod tests {
             last_bank.get_snapshot_storages(),
             ArchiveFormat::TarBzip2,
             snapshot_version,
+            None,
         )
         .unwrap();
+        let snapshot_package = snapshot_utils::process_accounts_package_pre(snapshot_package);
         snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
 
         // Restore bank from snapshot
@@ -358,6 +361,7 @@ mod tests {
                 &snapshot_package_output_path,
                 snapshot_config.snapshot_version,
                 &snapshot_config.archive_format,
+                None,
             )
             .unwrap();
 
@@ -383,7 +387,7 @@ mod tests {
                 fs_extra::dir::copy(&last_snapshot_path, &saved_snapshots_dir, &options).unwrap();
 
                 saved_archive_path = Some(snapshot_utils::get_snapshot_archive_path(
-                    snapshot_package_output_path,
+                    snapshot_package_output_path.to_path_buf(),
                     &(slot, accounts_hash),
                     ArchiveFormat::TarBzip2,
                 ));
@@ -425,6 +429,10 @@ mod tests {
                         snapshot_package = new_snapshot_package;
                     }
 
+                    let snapshot_package =
+                        solana_runtime::snapshot_utils::process_accounts_package_pre(
+                            snapshot_package,
+                        );
                     *pending_snapshot_package.lock().unwrap() = Some(snapshot_package);
                 }
 

@@ -1419,6 +1419,11 @@ pub fn main() {
                 .help("Disables accounts caching"),
         )
         .arg(
+            Arg::with_name("accounts_db_test_hash_calculation")
+                .long("accounts-db-test-hash-calculation")
+                .help("Enables testing of hash calculation using stores in AccountsHashVerifier. This has a computational cost."),
+        )
+        .arg(
             // legacy nop argument
             Arg::with_name("accounts_db_caching_enabled")
                 .long("accounts-db-caching-enabled")
@@ -1623,6 +1628,7 @@ pub fn main() {
             .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),
         account_indexes,
         accounts_db_caching_enabled: !matches.is_present("no_accounts_db_caching"),
+        accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
         ..ValidatorConfig::default()
     };
 
