@@ -5241,7 +5241,122 @@ pub mod tests {
     #[test]
     fn test_accountsdb_de_dup_accounts_from_stores() {
         solana_logger::setup();
-        // ??? TODO
+
+        let key_a = Pubkey::new(&[1u8; 32]);
+        let key_b = Pubkey::new(&[2u8; 32]);
+        let key_c = Pubkey::new(&[3u8; 32]);
+        const COUNT: usize = 6;
+        const VERSION: u64 = 0;
+        let hashes: Vec<_> = (0..COUNT)
+            .into_iter()
+            .map(|i| Hash::new(&[i as u8; 32]))
+            .collect();
+        // create this vector
+        // abbbcc
+        let keys = [key_a, key_b, key_b, key_b, key_c, key_c];
+
+        let accounts: Vec<_> = hashes
+            .into_iter()
+            .zip(keys.iter())
+            .enumerate()
+            .map(|(i, (hash, key))| {
+                CalculateHashIntermediate::new(VERSION, hash, (i + 1) as u64, Slot::default(), *key)
+            })
+            .collect();
+
+        type ExpectedType = (String, bool, u64, String);
+        let expected:Vec<ExpectedType> = vec![
+            // ("key/lamports key2/lamports ...",
+            // first_slice
+            // result lamports
+            // result hashes)
+            // "a5" = key_a, 5 lamports
+            ("a1", false, 0, "[]"),
+            ("a1b2", false, 2, "[4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi]"),
+            ("a1b2b3", false, 2, "[4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi]"),
+            ("a1b2b3b4", false, 2, "[4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi]"),
+            ("a1b2b3b4c5", false, 7, "[4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi, GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq]"),
+            ("b2", false, 0, "[]"),
+            ("b2b3", false, 0, "[]"),
+            ("b2b3b4", false, 0, "[]"),
+            ("b2b3b4c5", false, 5, "[GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq]"),
+            ("b3", false, 0, "[]"),
+            ("b3b4", false, 0, "[]"),
+            ("b3b4c5", false, 5, "[GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq]"),
+            ("b4", false, 0, "[]"),
+            ("b4c5", false, 5, "[GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq]"),
+            ("c5", false, 0, "[]"),
+            ("a1", true, 1, "[11111111111111111111111111111111]"),
+            ("a1b2", true, 3, "[11111111111111111111111111111111, 4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi]"),
+            ("a1b2b3", true, 3, "[11111111111111111111111111111111, 4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi]"),
+            ("a1b2b3b4", true, 3, "[11111111111111111111111111111111, 4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi]"),
+            ("a1b2b3b4c5", true, 8, "[11111111111111111111111111111111, 4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi, GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq]"),
+            ("b2", true, 2, "[4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi]"),
+            ("b2b3", true, 2, "[4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi]"),
+            ("b2b3b4", true, 2, "[4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi]"),
+            ("b2b3b4c5", true, 7, "[4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi, GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq]"),
+            ("b3", true, 3, "[8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR]"),
+            ("b3b4", true, 3, "[8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR]"),
+            ("b3b4c5", true, 8, "[8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR, GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq]"),
+            ("b4", true, 4, "[CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8]"),
+            ("b4c5", true, 9, "[CktRuQ2mttgRGkXJtyksdKHjUdc2C4TgDzyB98oEzy8, GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq]"),
+            ("c5", true, 5, "[GgBaCs3NCBuZN12kCJgAW63ydqohFkHEdfdEXBPzLHq]"),
+            ].into_iter().map(|item| {
+                let result: ExpectedType = (
+                    item.0.to_string(),
+                    item.1,
+                    item.2,
+                    item.3.to_string(),
+                );
+                result
+            }).collect();
+
+        let mut expected_index = 0;
+        for first_slice in 0..2 {
+            for start in 0..COUNT {
+                for end in start + 1..COUNT {
+                    let accounts = accounts.clone();
+                    let slice = &accounts[start..end];
+                    let result = AccountsDB::de_dup_accounts_from_stores(first_slice == 1, slice);
+
+                    let human_readable = slice
+                        .iter()
+                        .map(|v| {
+                            let mut s = (if v.pubkey == key_a {
+                                "a"
+                            } else if v.pubkey == key_b {
+                                "b"
+                            } else {
+                                "c"
+                            })
+                            .to_string();
+
+                            s.push_str(&v.lamports.to_string());
+                            s
+                        })
+                        .collect::<String>();
+
+                    let hash_result_as_string = format!("{:?}", result.0);
+                    let packaged_result: ExpectedType = (
+                        human_readable,
+                        first_slice == 1,
+                        result.1 as u64,
+                        hash_result_as_string,
+                    );
+
+                    assert_eq!(expected[expected_index], packaged_result);
+
+                    // for generating expected results
+                    // error!("{:?},", packaged_result);
+                    expected_index += 1;
+                }
+            }
+        }
+
+        for first_slice in 0..2 {
+            let result = AccountsDB::de_dup_accounts_from_stores(first_slice == 1, &[]);
+            assert_eq!((vec![Hash::default(); 0], 0), result);
+        }
     }
 
     #[test]
