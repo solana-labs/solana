@@ -3628,7 +3628,7 @@ impl AccountsDB {
 
     /// Scan through all the account storage in parallel
     fn scan_account_storage_no_bank<F, B>(
-        snapshot_storages: SnapshotStorages,
+        snapshot_storages: &[SnapshotStorage],
         scan_func: F,
     ) -> Vec<B>
     where
@@ -3722,7 +3722,7 @@ impl AccountsDB {
             let combined_maps = self.get_snapshot_storages(slot);
 
             Self::calculate_accounts_hash_without_index(
-                combined_maps,
+                &combined_maps,
                 simple_capitalization_enabled,
             )
         } else {
@@ -3786,13 +3786,13 @@ impl AccountsDB {
     }
 
     fn scan_snapshot_stores(
-        storage: SnapshotStorages,
+        storage: &[SnapshotStorage],
         simple_capitalization_enabled: bool,
     ) -> (DashMap<Pubkey, CalculateHashIntermediate>, Measure) {
         let map: DashMap<Pubkey, CalculateHashIntermediate> = DashMap::new();
         let mut time = Measure::start("scan all accounts");
         Self::scan_account_storage_no_bank(
-            storage,
+            &storage,
             |loaded_account: LoadedAccount,
              _store_id: AppendVecId,
              _accum: &mut Vec<(Pubkey, CalculateHashIntermediate)>,
@@ -3824,7 +3824,7 @@ impl AccountsDB {
     // modeled after get_accounts_delta_hash
     // intended to be faster than calculate_accounts_hash
     pub fn calculate_accounts_hash_without_index(
-        storages: SnapshotStorages,
+        storages: &[SnapshotStorage],
         simple_capitalization_enabled: bool,
     ) -> (Hash, u64) {
         let result = Self::scan_snapshot_stores(storages, simple_capitalization_enabled);
@@ -5133,7 +5133,7 @@ pub mod tests {
         solana_logger::setup();
 
         let (storages, _size, _slot_expected) = sample_storage();
-        let result = AccountsDB::calculate_accounts_hash_without_index(storages, true);
+        let result = AccountsDB::calculate_accounts_hash_without_index(&storages, true);
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
         assert_eq!(result, (expected_hash, 0));
     }
@@ -5179,7 +5179,7 @@ pub mod tests {
 
         let calls = AtomicU64::new(0);
         let result = AccountsDB::scan_account_storage_no_bank(
-            storages,
+            &storages,
             |loaded_account: LoadedAccount,
              _store_id: AppendVecId,
              accum: &mut Vec<u64>,
