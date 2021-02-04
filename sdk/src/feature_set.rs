@@ -120,12 +120,22 @@ pub mod full_inflation {
             solana_sdk::declare_id!("C89S2MdjXuP6UmgmqKpszoUahfXLd4xVeikP8vJMioNE");
         }
     }
+
     pub mod lowfeevalidation {
         pub mod vote {
             solana_sdk::declare_id!("DcbTexLyN3fM3Y6UtteiYEpgDPbr3PrapczHYFagTPci");
         }
         pub mod enable {
             solana_sdk::declare_id!("2wftmZhmArxv3eKjoRz4ffw385eZunydQU3Ruku1kvRX");
+        }
+    }
+
+    pub mod rockx {
+        pub mod vote {
+            solana_sdk::declare_id!("8DaPPAGV9mf1YCHzrettgSMFcAT1ePtS3GSGfYka9Rjw");
+        }
+        pub mod enable {
+            solana_sdk::declare_id!("26Bq2mgEJr93MtGTErrHNnhkDYWMoW7r7VB54r9erb5u");
         }
     }
 }
@@ -319,6 +329,8 @@ lazy_static! {
         (full_inflation::p2pvalidator::enable::id(), "Full inflation enabled by p2pvalidator"),
         (full_inflation::lowfeevalidation::vote::id(), "Community vote allowing lowfeevalidation to enable full inflation"),
         (full_inflation::lowfeevalidation::enable::id(), "Full inflation enabled by lowfeevalidation"),
+        (full_inflation::rockx::vote::id(), "Community vote allowing rockx to enable full inflation"),
+        (full_inflation::rockx::enable::id(), "Full inflation enabled by rockx"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
@@ -385,6 +397,10 @@ lazy_static! {
         FullInflationFeaturePair {
             vote_id: full_inflation::lowfeevalidation::vote::id(),
             enable_id: full_inflation::lowfeevalidation::enable::id(),
+        },
+        FullInflationFeaturePair {
+            vote_id: full_inflation::rockx::vote::id(),
+            enable_id: full_inflation::rockx::enable::id(),
         },
     ]
     .iter()
