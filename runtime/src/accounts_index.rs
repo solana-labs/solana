@@ -107,6 +107,10 @@ impl<T: Clone> ReadAccountMapEntry<T> {
     pub fn ref_count(&self) -> &AtomicU64 {
         &self.borrow_owned_entry_contents().ref_count
     }
+
+    pub fn unref(&self) {
+        self.ref_count().fetch_sub(1, Ordering::Relaxed);
+    }
 }
 
 #[self_referencing]
@@ -116,7 +120,7 @@ pub struct WriteAccountMapEntry<T: 'static> {
     slot_list_guard: RwLockWriteGuard<'this, SlotList<T>>,
 }
 
-impl<T: 'static + Clone> WriteAccountMapEntry<T> {
+impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
     pub fn from_account_map_entry(account_map_entry: AccountMapEntry<T>) -> Self {
         WriteAccountMapEntryBuilder {
             owned_entry: account_map_entry,
@@ -153,12 +157,18 @@ impl<T: 'static + Clone> WriteAccountMapEntry<T> {
             .collect();
         assert!(same_slot_previous_updates.len() <= 1);
         if let Some((list_index, (s, previous_update_value))) = same_slot_previous_updates.pop() {
+            let is_flush_from_cache =
+                previous_update_value.is_cached() && !account_info.is_cached();
             reclaims.push((*s, previous_update_value.clone()));
             self.slot_list_mut(|list| list.remove(list_index));
-        } else {
-            // Only increment ref count if the account was not prevously updated in this slot
+            if is_flush_from_cache {
+                self.ref_count().fetch_add(1, Ordering::Relaxed);
+            }
+        } else if !account_info.is_cached() {
+            // If it's the first non-cache insert, also bump the stored ref count
             self.ref_count().fetch_add(1, Ordering::Relaxed);
         }
+
         self.slot_list_mut(|list| list.push((slot, account_info)));
     }
 }
@@ -921,7 +931,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport> AccountsIndex<T> {
 
     pub fn unref_from_storage(&self, pubkey: &Pubkey) {
         if let Some(locked_entry) = self.get_account_read_entry(pubkey) {
-            locked_entry.ref_count().fetch_sub(1, Ordering::Relaxed);
+            locked_entry.unref();
         }
     }
 
