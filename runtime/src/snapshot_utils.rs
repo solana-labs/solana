@@ -179,6 +179,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         status_cache_slot_deltas,
         snapshot_tmpdir,
         snapshot_storages,
+        bank.get_accounts_hash(),
         archive_format,
         snapshot_version,
         snapshot_package_output_path.as_ref().to_path_buf(),
@@ -960,15 +961,16 @@ pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
 pub fn process_accounts_package_pre(accounts_package: AccountsPackagePre) -> AccountsPackage {
     let mut time = Measure::start("hash");
 
-    let (hash, lamports) = AccountsDB::calculate_accounts_hash_without_index(
-        accounts_package.storages.clone(),
-        accounts_package.simple_capitalization_testing,
-    );
-    time.stop();
-
-    assert_eq!(accounts_package.expected_capitalization, lamports);
-
+    let hash = accounts_package.hash; // temporarily remaining here
     if let Some(expected_hash) = accounts_package.hash_for_testing {
+        let (hash, lamports) = AccountsDB::calculate_accounts_hash_without_index(
+            accounts_package.storages.clone(),
+            accounts_package.simple_capitalization_testing,
+        );
+        time.stop();
+
+        assert_eq!(accounts_package.expected_capitalization, lamports);
+
         assert_eq!(expected_hash, hash);
     };
 
