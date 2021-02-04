@@ -121,6 +121,7 @@ pub struct ValidatorConfig {
     pub account_indexes: HashSet<AccountIndex>,
     pub accounts_db_caching_enabled: bool,
     pub warp_slot: Option<Slot>,
+    pub accounts_db_test_hash_calculation: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -168,6 +169,7 @@ impl Default for ValidatorConfig {
             account_indexes: HashSet::new(),
             accounts_db_caching_enabled: false,
             warp_slot: None,
+            accounts_db_test_hash_calculation: false,
         }
     }
 }
@@ -641,6 +643,7 @@ impl Validator {
                 repair_validators: config.repair_validators.clone(),
                 accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
                 accounts_db_caching_enabled: config.accounts_db_caching_enabled,
+                test_hash_calculation: config.accounts_db_test_hash_calculation,
             },
         );
 
