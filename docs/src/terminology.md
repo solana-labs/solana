@@ -136,7 +136,7 @@ The role of a [validator](terminology.md#validator) when it is appending [entrie
 
 ## leader schedule
 
-A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key). The cluster uses the leader schedule to determine which validator is the [leader](terminology.md#leader) at any moment in time.
+A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key) ordered by [slots](terminology.md#slot). The cluster uses the leader schedule to determine which validator is the [leader](terminology.md#leader) at any moment in time.
 
 ## ledger
 
@@ -217,9 +217,16 @@ A 64-byte ed25519 signature of R (32-bytes) and S (32-bytes). With the requireme
 This requirement ensures no signature malleability. Each transaction must have at least one signature for [fee account](terminology#fee-account).
 Thus, the first signature in transaction can be treated as [transacton id](terminology.md#transaction-id)
 
+## skipped slot
+
+A past [slot](terminology.md#slot) where its scheduled leader didn't produce a [block](terminology.md#block) due to off-line or the [fork](terminology.md#fork) containing the slot was abandoned over a better alternative at the time by the cluster consensus. Being _skipped_ means that blocks at subsequent slots omits to include the skipped slots as ancestors, possibly creating an after-the-fact short cluster stall of transaction processing, oldest `recent_blockhash` expiration, [block height](terminology#block-height) increment, etc.
+
+By definition, being skipped can be determined only after being older than the latest [rooted](terminology.md#root) (thus not-skipped) slot.
+
 ## slot
 
-The period of time for which a [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block).
+A numbered non-overlapping slice of logical time, ordered sequentially with roughly equal passage of real wall-clock utilizing [PoH](terminology.md#proof-of-history).
+Abiding by [leader schedule](terminology.md#leader-schedule), the [leader](terminology.md#leader) of newest slot can ingest transactions and produce a [block](terminology.md#block).
 
 ## smart contract
 

@@ -468,18 +468,11 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 #### Blockhash Expiration
 
-When you request a recent blockhash for your withdrawal transaction using the
-[`getFees` endpoint](developing/clients/jsonrpc-api.md#getfees) or `solana fees`, the
-response will include the `lastValidSlot`, the last slot in which the blockhash
-will be valid. You can check the cluster slot with a
-[`getSlot` query](developing/clients/jsonrpc-api.md#getslot); once the cluster slot is
-greater than `lastValidSlot`, the withdrawal transaction using that blockhash
-should never succeed.
-
-You can also doublecheck whether a particular blockhash is still valid by sending a
+You can check whether a particular blockhash is still valid by sending a
 [`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash)
-request with the blockhash as a parameter. If the response value is null, the
-blockhash is expired, and the withdrawal transaction should never succeed.
+request with the blockhash as a parameter. If the response value is `null`, the
+blockhash is expired, and the withdrawal transaction using that blockhash should
+never succeed.
 
 ### Validating User-supplied Account Addresses for Withdrawals
 
