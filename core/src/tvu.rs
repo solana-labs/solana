@@ -217,7 +217,7 @@ impl Tvu {
         let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
 
         // Before replay starts, set the callbacks in each of the banks in BankForks
-        for bank in bank_forks.read().unwrap().banks.values() {
+        for bank in bank_forks.read().unwrap().banks().values() {
             bank.set_callback(Some(Box::new(SendDroppedBankCallback::new(
                 pruned_banks_sender.clone(),
             ))));

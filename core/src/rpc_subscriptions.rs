@@ -1587,7 +1587,7 @@ pub(crate) mod tests {
             .unwrap();
 
         let next_bank = Bank::new_from_parent(
-            &bank_forks.banks[&0].clone(),
+            &bank_forks.get(0).unwrap().clone(),
             &solana_sdk::pubkey::new_rand(),
             1,
         );

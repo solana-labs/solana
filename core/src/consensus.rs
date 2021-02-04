@@ -1386,7 +1386,7 @@ pub mod test {
                 .clone();
 
             // Try to vote on the given slot
-            let descendants = self.bank_forks.read().unwrap().descendants();
+            let descendants = self.bank_forks.read().unwrap().descendants().clone();
             let SelectVoteAndResetForkResult {
                 heaviest_fork_failures,
                 ..
@@ -1688,7 +1688,12 @@ pub mod test {
             fork_progress.fork_stats.computed = true;
         }
         let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
-        let mut descendants = vote_simulator.bank_forks.read().unwrap().descendants();
+        let mut descendants = vote_simulator
+            .bank_forks
+            .read()
+            .unwrap()
+            .descendants()
+            .clone();
         let mut tower = Tower::new_with_key(&my_pubkey);
 
         // Last vote is 47
@@ -1819,7 +1824,12 @@ pub mod test {
         tower.lockouts.root_slot = Some(43);
         // Refresh ancestors and descendants for new root.
         let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
-        let descendants = vote_simulator.bank_forks.read().unwrap().descendants();
+        let descendants = vote_simulator
+            .bank_forks
+            .read()
+            .unwrap()
+            .descendants()
+            .clone();
 
         assert_eq!(
             tower.check_switch_threshold(
@@ -2470,7 +2480,12 @@ pub mod test {
         }
 
         let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
-        let descendants = vote_simulator.bank_forks.read().unwrap().descendants();
+        let descendants = vote_simulator
+            .bank_forks
+            .read()
+            .unwrap()
+            .descendants()
+            .clone();
         let mut tower = Tower::new_with_key(&my_pubkey);
 
         tower.record_vote(43, Hash::default());
@@ -2562,7 +2577,12 @@ pub mod test {
         let mut slot_history = SlotHistory::default();
         vote_simulator.set_root(replayed_root_slot);
         let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
-        let descendants = vote_simulator.bank_forks.read().unwrap().descendants();
+        let descendants = vote_simulator
+            .bank_forks
+            .read()
+            .unwrap()
+            .descendants()
+            .clone();
         for slot in &[0, 1, 2, 43, replayed_root_slot] {
             slot_history.add(*slot);
         }
