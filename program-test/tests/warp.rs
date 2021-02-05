@@ -12,6 +12,7 @@ use {
     },
     solana_program_test::{processor, ProgramTest, ProgramTestError},
     solana_sdk::{
+        epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         signature::{Keypair, Signer},
         transaction::{Transaction, TransactionError},
     },
@@ -222,8 +223,8 @@ async fn stake_rewards_from_warp() {
         .unwrap();
     assert_eq!(account.lamports, stake_lamports);
 
-    // warp a few slots, no rewards collected
-    context.warp_to_slot(10).unwrap();
+    // warp one epoch forward for normal inflation, no rewards collected
+    context.warp_to_slot(MINIMUM_SLOTS_PER_EPOCH).unwrap();
     let account = context
         .banks_client
         .get_account(stake_keypair.pubkey())
@@ -232,7 +233,7 @@ async fn stake_rewards_from_warp() {
         .unwrap();
     assert_eq!(account.lamports, stake_lamports);
 
-    context.simulate_vote_activity(&vote_keypair.pubkey(), 100);
+    context.increment_vote_account_credits(&vote_keypair.pubkey(), 100);
 
     // go forward and see that rewards have been distributed
     context

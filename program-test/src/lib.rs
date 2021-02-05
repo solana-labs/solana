@@ -821,20 +821,18 @@ impl ProgramTestContext {
     pub fn increment_vote_account_credits(&mut self, vote_account_address: &Pubkey, number_of_credits: u64) {
         let bank_forks = self.bank_forks.read().unwrap();
         let bank = bank_forks.working_bank();
-        let working_slot = bank.slot();
 
         // generate some vote activity for rewards
-        let mut voter_account = bank.get_account(voter).unwrap();
-        let mut vote_state = VoteState::from(&voter_account).unwrap();
+        let mut vote_account = bank.get_account(vote_account_address).unwrap();
+        let mut vote_state = VoteState::from(&vote_account).unwrap();
 
-        // This can slow down testing for huge warp amounts, so limit to 2 dev epochs
-        for i in working_slot..=(working_slot + number_of_slots) {
-            let (epoch, _) = bank.get_epoch_and_slot_index(i);
+        let epoch = bank.epoch();
+        for _ in 0..number_of_credits {
             vote_state.increment_credits(epoch);
         }
         let versioned = VoteStateVersions::new_current(vote_state);
-        VoteState::to(&versioned, &mut voter_account).unwrap();
-        bank.store_account(voter, &voter_account);
+        VoteState::to(&versioned, &mut vote_account).unwrap();
+        bank.store_account(vote_account_address, &vote_account);
     }
 
     /// Force the working bank ahead to a new slot
