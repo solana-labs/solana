@@ -6,12 +6,22 @@ use {
         instruction::{AccountMeta, Instruction, InstructionError},
         program_error::ProgramError,
         pubkey::Pubkey,
+        rent::Rent,
+        system_instruction, system_program,
         sysvar::{clock, Sysvar},
     },
     solana_program_test::{processor, ProgramTest, ProgramTestError},
     solana_sdk::{
-        signature::Signer,
+        signature::{Keypair, Signer},
         transaction::{Transaction, TransactionError},
+    },
+    solana_stake_program::{
+        stake_instruction,
+        stake_state::{Authorized, Lockup},
+    },
+    solana_vote_program::{
+        vote_instruction,
+        vote_state::{VoteInit, VoteState},
     },
     std::convert::TryInto,
 };
@@ -36,7 +46,7 @@ fn process_instruction(
 }
 
 #[tokio::test]
-async fn custom_warp() {
+async fn clock_sysvar_updated_from_warp() {
     let program_id = Pubkey::new_unique();
     // Initialize and start the test network
     let program_test = ProgramTest::new(
@@ -94,4 +104,147 @@ async fn custom_warp() {
         context.warp_to_slot(expected_slot).unwrap_err(),
         ProgramTestError::InvalidWarpSlot,
     );
+}
+
+#[tokio::test]
+async fn rent_collected_from_warp() {
+    let program_id = Pubkey::new_unique();
+    // Initialize and start the test network
+    let program_test = ProgramTest::default();
+
+    let mut context = program_test.start_with_context().await;
+    let account_size = 100;
+    let keypair = Keypair::new();
+    let account_lamports = Rent::default().minimum_balance(account_size) - 100; // not rent exempt
+    let instruction = system_instruction::create_account(
+        &context.payer.pubkey(),
+        &keypair.pubkey(),
+        account_lamports,
+        account_size as u64,
+        &program_id,
+    );
+    let transaction = Transaction::new_signed_with_payer(
+        &[instruction],
+        Some(&context.payer.pubkey()),
+        &[&context.payer, &keypair],
+        context.last_blockhash,
+    );
+    context
+        .banks_client
+        .process_transaction(transaction)
+        .await
+        .unwrap();
+    let account = context
+        .banks_client
+        .get_account(keypair.pubkey())
+        .await
+        .expect("account exists")
+        .unwrap();
+    assert_eq!(account.lamports, account_lamports);
+
+    // Warp forward and see that rent has been collected
+    // This test was a bit flaky with one warp, but two warps always works
+    let slots_per_epoch = context.genesis_config().epoch_schedule.slots_per_epoch;
+    context.warp_to_slot(slots_per_epoch).unwrap();
+    context.warp_to_slot(slots_per_epoch * 2).unwrap();
+
+    let account = context
+        .banks_client
+        .get_account(keypair.pubkey())
+        .await
+        .expect("account exists")
+        .unwrap();
+    assert!(account.lamports < account_lamports);
+}
+
+#[tokio::test]
+async fn stake_rewards_from_warp() {
+    // Initialize and start the test network
+    let program_test = ProgramTest::default();
+
+    let mut context = program_test.start_with_context().await;
+    let mut instructions = vec![];
+    let validator_keypair = Keypair::new();
+    instructions.push(system_instruction::create_account(
+        &context.payer.pubkey(),
+        &validator_keypair.pubkey(),
+        42,
+        0,
+        &system_program::id(),
+    ));
+    let vote_lamports = Rent::default().minimum_balance(VoteState::size_of());
+    let vote_keypair = Keypair::new();
+    let user_keypair = Keypair::new();
+    instructions.append(&mut vote_instruction::create_account(
+        &context.payer.pubkey(),
+        &vote_keypair.pubkey(),
+        &VoteInit {
+            node_pubkey: validator_keypair.pubkey(),
+            authorized_voter: user_keypair.pubkey(),
+            ..VoteInit::default()
+        },
+        vote_lamports,
+    ));
+
+    let stake_keypair = Keypair::new();
+    let stake_lamports = 1_000_000_000_000;
+    instructions.append(&mut stake_instruction::create_account_and_delegate_stake(
+        &context.payer.pubkey(),
+        &stake_keypair.pubkey(),
+        &vote_keypair.pubkey(),
+        &Authorized::auto(&user_keypair.pubkey()),
+        &Lockup::default(),
+        stake_lamports,
+    ));
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&context.payer.pubkey()),
+        &vec![
+            &context.payer,
+            &validator_keypair,
+            &vote_keypair,
+            &stake_keypair,
+            &user_keypair,
+        ],
+        context.last_blockhash,
+    );
+    context
+        .banks_client
+        .process_transaction(transaction)
+        .await
+        .unwrap();
+    let account = context
+        .banks_client
+        .get_account(stake_keypair.pubkey())
+        .await
+        .expect("account exists")
+        .unwrap();
+    assert_eq!(account.lamports, stake_lamports);
+
+    // warp one epoch forward for normal inflation, no rewards collected
+    let first_normal_slot = context.genesis_config().epoch_schedule.first_normal_slot;
+    context.warp_to_slot(first_normal_slot).unwrap();
+    let account = context
+        .banks_client
+        .get_account(stake_keypair.pubkey())
+        .await
+        .expect("account exists")
+        .unwrap();
+    assert_eq!(account.lamports, stake_lamports);
+
+    context.increment_vote_account_credits(&vote_keypair.pubkey(), 100);
+
+    // go forward and see that rewards have been distributed
+    let slots_per_epoch = context.genesis_config().epoch_schedule.slots_per_epoch;
+    context
+        .warp_to_slot(first_normal_slot + slots_per_epoch)
+        .unwrap();
+
+    let account = context
+        .banks_client
+        .get_account(stake_keypair.pubkey())
+        .await
+        .expect("account exists")
+        .unwrap();
+    assert!(account.lamports > stake_lamports);
 }
