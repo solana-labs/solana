@@ -57,7 +57,6 @@ pub mod full_inflation {
             solana_sdk::declare_id!("6f8Y2dACzRjM9R9RwiLp9HuAxo43QwtztgHm4BKUGyxU");
         }
     }
-
 }
 
 pub mod spl_token_v2_multisig_fix {
