@@ -1,7 +1,7 @@
 use {
     solana_program::{
         account_info::{next_account_info, AccountInfo},
-        clock::{Clock, DEFAULT_DEV_SLOTS_PER_EPOCH},
+        clock::Clock,
         entrypoint::ProgramResult,
         instruction::{AccountMeta, Instruction, InstructionError},
         program_error::ProgramError,
@@ -12,7 +12,6 @@ use {
     },
     solana_program_test::{processor, ProgramTest, ProgramTestError},
     solana_sdk::{
-        epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         signature::{Keypair, Signer},
         transaction::{Transaction, TransactionError},
     },
@@ -145,10 +144,9 @@ async fn rent_collected_from_warp() {
 
     // Warp forward and see that rent has been collected
     // This test was a bit flaky with one warp, but two warps always works
-    context.warp_to_slot(DEFAULT_DEV_SLOTS_PER_EPOCH).unwrap();
-    context
-        .warp_to_slot(DEFAULT_DEV_SLOTS_PER_EPOCH * 2)
-        .unwrap();
+    let slots_per_epoch = context.genesis_config().epoch_schedule.slots_per_epoch;
+    context.warp_to_slot(slots_per_epoch).unwrap();
+    context.warp_to_slot(slots_per_epoch * 2).unwrap();
 
     let account = context
         .banks_client
@@ -224,7 +222,8 @@ async fn stake_rewards_from_warp() {
     assert_eq!(account.lamports, stake_lamports);
 
     // warp one epoch forward for normal inflation, no rewards collected
-    context.warp_to_slot(MINIMUM_SLOTS_PER_EPOCH).unwrap();
+    let first_normal_slot = context.genesis_config().epoch_schedule.first_normal_slot;
+    context.warp_to_slot(first_normal_slot).unwrap();
     let account = context
         .banks_client
         .get_account(stake_keypair.pubkey())
@@ -236,8 +235,9 @@ async fn stake_rewards_from_warp() {
     context.increment_vote_account_credits(&vote_keypair.pubkey(), 100);
 
     // go forward and see that rewards have been distributed
+    let slots_per_epoch = context.genesis_config().epoch_schedule.slots_per_epoch;
     context
-        .warp_to_slot(DEFAULT_DEV_SLOTS_PER_EPOCH * 2)
+        .warp_to_slot(first_normal_slot + slots_per_epoch)
         .unwrap();
 
     let account = context

@@ -817,6 +817,10 @@ impl ProgramTestContext {
         }
     }
 
+    pub fn genesis_config(&self) -> &GenesisConfig {
+        &self.genesis_config
+    }
+
     /// Manually increment vote credits for the current epoch in the specified vote account to simulate validator voting activity
     pub fn increment_vote_account_credits(
         &mut self,
