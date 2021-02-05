@@ -818,7 +818,11 @@ impl ProgramTestContext {
     }
 
     /// Manually increment vote credits for the current epoch in the specified vote account to simulate validator voting activity
-    pub fn increment_vote_account_credits(&mut self, vote_account_address: &Pubkey, number_of_credits: u64) {
+    pub fn increment_vote_account_credits(
+        &mut self,
+        vote_account_address: &Pubkey,
+        number_of_credits: u64,
+    ) {
         let bank_forks = self.bank_forks.read().unwrap();
         let bank = bank_forks.working_bank();
 
