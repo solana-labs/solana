@@ -3752,8 +3752,8 @@ impl AccountsDB {
                     end_index = len;
                 }
 
-                let first_slice = chunk_index == 0;
-                if !first_slice {
+                let is_first_slice = chunk_index == 0;
+                if !is_first_slice {
                     start_index -= 1;
                 }
 
@@ -3773,7 +3773,7 @@ impl AccountsDB {
     }
 
     fn de_dup_accounts_from_stores(
-        first_slice: bool,
+        is_first_slice: bool,
         slice: &[CalculateHashIntermediate],
     ) -> (Vec<Hash>, u128) {
         let len = slice.len();
@@ -3782,7 +3782,7 @@ impl AccountsDB {
         let mut sum: u128 = 0;
         if len > 0 {
             let mut i = 0;
-            let mut look_for_first_key = !first_slice;
+            let mut look_for_first_key = !is_first_slice;
             'outer: loop {
                 // at start of loop, item at 'i' is the first entry for a given pubkey - unless look_for_first
                 let now = &slice[i];
@@ -5268,7 +5268,7 @@ pub mod tests {
         type ExpectedType = (String, bool, u64, String);
         let expected:Vec<ExpectedType> = vec![
             // ("key/lamports key2/lamports ...",
-            // first_slice
+            // is_first_slice
             // result lamports
             // result hashes)
             // "a5" = key_a, 5 lamports
@@ -5316,11 +5316,11 @@ pub mod tests {
         for first_slice in 0..2 {
             for start in 0..COUNT {
                 for end in start + 1..COUNT {
-                    let first_slice = first_slice == 1;
+                    let is_first_slice = first_slice == 1;
                     let accounts = accounts.clone();
                     let slice = &accounts[start..end];
 
-                    let result = AccountsDB::de_dup_accounts_from_stores(first_slice, slice);
+                    let result = AccountsDB::de_dup_accounts_from_stores(is_first_slice, slice);
                     let (hashes2, lamports2) = AccountsDB::de_dup_accounts_in_parallel(slice, 1);
                     let (hashes3, lamports3) = AccountsDB::de_dup_accounts_in_parallel(slice, 2);
                     let (hashes4, _, lamports4) =
@@ -5359,12 +5359,12 @@ pub mod tests {
 
                     let packaged_result: ExpectedType = (
                         human_readable,
-                        first_slice,
+                        is_first_slice,
                         result.1 as u64,
                         hash_result_as_string,
                     );
 
-                    if first_slice {
+                    if is_first_slice {
                         // the parallel version always starts with 'first slice'
                         assert_eq!(
                             result.0, hashes,
