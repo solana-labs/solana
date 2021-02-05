@@ -1,7 +1,8 @@
 use rand::{thread_rng, Rng};
-use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Weak};
+use std::time::Instant;
+use std::{collections::VecDeque, sync::atomic::AtomicBool};
 
 #[derive(Debug, Default)]
 struct RecyclerStats {
@@ -18,7 +19,7 @@ pub struct Recycler<T> {
 
 #[derive(Debug)]
 pub struct RecyclerX<T> {
-    gc: Mutex<Vec<T>>,
+    gc: Mutex<VecDeque<(Instant, T)>>,
     stats: RecyclerStats,
     id: usize,
 }
@@ -28,7 +29,7 @@ impl<T: Default> Default for RecyclerX<T> {
         let id = thread_rng().gen_range(0, 1000);
         trace!("new recycler..{}", id);
         RecyclerX {
-            gc: Mutex::new(vec![]),
+            gc: Mutex::new(VecDeque::new()),
             stats: RecyclerStats::default(),
             id,
         }
@@ -74,12 +75,19 @@ impl<T: Default + Reset + Sized> Recycler<T> {
     }
 
     pub fn allocate(&self, name: &'static str) -> T {
-        let new = self
-            .recycler
-            .gc
-            .lock()
-            .expect("recycler lock in pb fn allocate")
-            .pop();
+        let new = {
+            let mut gc = self
+                .recycler
+                .gc
+                .lock()
+                .expect("recycler lock in pb fn allocate");
+            if let Some((oldest_time, _old_item)) = gc.front() {
+                if oldest_time.elapsed().as_secs() > 3600 {
+                    gc.pop_front().unwrap();
+                }
+            }
+            gc.pop_back().map(|(_added_time, item)| item)
+        };
 
         if let Some(mut x) = new {
             self.recycler.stats.reuse.fetch_add(1, Ordering::Relaxed);
@@ -107,7 +115,7 @@ impl<T: Default + Reset> RecyclerX<T> {
     pub fn recycle(&self, x: T) {
         let len = {
             let mut gc = self.gc.lock().expect("recycler lock in pub fn recycle");
-            gc.push(x);
+            gc.push_back((Instant::now(), x));
             gc.len()
         };
 
@@ -138,9 +146,10 @@ impl<T: Default + Reset> RecyclerX<T> {
 mod tests {
     use super::*;
 
+    const RESET_VALUE: u64 = 10;
     impl Reset for u64 {
         fn reset(&mut self) {
-            *self = 10;
+            *self = RESET_VALUE;
         }
         fn warm(&mut self, _size_hint: usize) {}
         fn set_recycler(&mut self, _recycler: Weak<RecyclerX<Self>>) {}
@@ -156,7 +165,22 @@ mod tests {
         recycler2.recycler.recycle(y);
         assert_eq!(recycler.recycler.gc.lock().unwrap().len(), 1);
         let z = recycler.allocate("test_recycler2");
-        assert_eq!(z, 10);
+        assert_eq!(z, RESET_VALUE);
         assert_eq!(recycler.recycler.gc.lock().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_recycler_ttl() {
+        let recycler = Recycler::default();
+        recycler.recycler.recycle(42);
+        recycler.recycler.recycle(42);
+
+        let y: u64 = recycler.allocate("test_recycler1");
+        assert_eq!(y, RESET_VALUE);
+
+        recycler.recycler.gc.lock().unwrap().front_mut().unwrap().0 =
+            Instant::now() - std::time::Duration::from_secs(7200);
+        let y: u64 = recycler.allocate("test_recycler1");
+        assert_eq!(y, u64::default());
     }
 }
