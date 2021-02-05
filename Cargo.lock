@@ -5209,7 +5209,7 @@ dependencies = [
 name = "solana-storage-bigtable"
 version = "1.6.0"
 dependencies = [
- "arc-swap 0.4.8",
+ "arc-swap 1.2.0",
  "backoff",
  "bincode",
  "bzip2",
