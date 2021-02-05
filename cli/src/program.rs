@@ -973,7 +973,7 @@ fn process_show(
                         authority: authority_address
                             .map(|pubkey| pubkey.to_string())
                             .unwrap_or_else(|| "none".to_string()),
-                        program_len: account.data.len()
+                        data_len: account.data.len()
                             - UpgradeableLoaderState::buffer_data_offset()?,
                     }))
             } else {
