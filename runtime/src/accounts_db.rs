@@ -3695,9 +3695,10 @@ impl AccountsDB {
         a: &CalculateHashIntermediate,
         b: &CalculateHashIntermediate,
     ) -> std::cmp::Ordering {
-        match a.pubkey.cmp(&b.pubkey) {
-            std::cmp::Ordering::Equal => match a.slot.cmp(&b.slot).reverse() {
-                std::cmp::Ordering::Equal => a.version.cmp(&b.version).reverse(),
+        // note partial_cmp only returns None with floating point comparisons
+        match a.pubkey.partial_cmp(&b.pubkey).unwrap() {
+            std::cmp::Ordering::Equal => match b.slot.partial_cmp(&a.slot).unwrap() {
+                std::cmp::Ordering::Equal => b.version.partial_cmp(&a.version).unwrap(),
                 other => other,
             },
             other => other,
@@ -3754,6 +3755,7 @@ impl AccountsDB {
 
                 let is_first_slice = chunk_index == 0;
                 if !is_first_slice {
+                    // note that this causes all regions after region 0 to have 1 item that overlaps with the previous region
                     start_index -= 1;
                 }
 
@@ -3797,7 +3799,7 @@ impl AccountsDB {
                     result.push(now.hash);
                     sum += now.lamports as u128;
                 }
-                for (k, now) in slice.iter().enumerate().take(len).skip(i + 1) {
+                for (k, now) in slice.iter().enumerate().skip(i + 1) {
                     if now.pubkey != last {
                         i = k;
                         look_for_first_key = false;
