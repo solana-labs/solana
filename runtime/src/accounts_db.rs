@@ -3782,6 +3782,11 @@ impl AccountsDB {
         let mut sum: u128 = 0;
         if len > 0 {
             let mut i = 0;
+            // look_for_first_key means the first key we find in our slice may be a
+            //  continuation of accounts belonging to a key that started in the last slice.
+            // so, look_for_first_key=true means we have to find the first key different than
+            //  the first key we encounter in our slice. Note that if this is true,
+            //  our slice begins one index prior to the 'actual' start of our logical range.
             let mut look_for_first_key = !is_first_slice;
             'outer: loop {
                 // at start of loop, item at 'i' is the first entry for a given pubkey - unless look_for_first
