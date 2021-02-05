@@ -15,7 +15,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use std::{env::temp_dir, fs::File, io::Read, path::PathBuf, str::FromStr};
+use std::{env, fs::File, io::Read, path::PathBuf, str::FromStr};
 
 #[test]
 fn test_cli_program_deploy_non_upgradeable() {
@@ -1132,7 +1132,6 @@ fn test_cli_program_show() {
         .unwrap()
         .as_u64()
         .unwrap();
-    println!("slot {:?}", slot);
     assert_eq!(slot, deployed_slot);
     let data_len = json
         .as_object()
@@ -1200,8 +1199,10 @@ fn test_cli_program_dump() {
     process_command(&config).unwrap();
 
     // Verify dump
-    // let mut out_file = env::var("OUT_DIR").unwrap();
-    let mut out_file = temp_dir();
+    let mut out_file = {
+        let current_exe = env::current_exe().unwrap();
+        PathBuf::from(current_exe.parent().unwrap().parent().unwrap())
+    };
     out_file.set_file_name("out.txt");
     config.signers = vec![&keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Dump {
