@@ -3854,15 +3854,15 @@ impl AccountsDB {
         simple_capitalization_enabled: bool,
         thread_pool: Option<&ThreadPool>,
     ) -> (Hash, u64) {
-        let function = || {
+        let scan_and_hash = || {
             let result = Self::scan_snapshot_stores(storages, simple_capitalization_enabled);
 
             Self::rest_of_hash_calculation(result)
         };
         if let Some(thread_pool) = thread_pool {
-            thread_pool.install(function)
+            thread_pool.install(scan_and_hash)
         } else {
-            function()
+            scan_and_hash()
         }
     }
 
