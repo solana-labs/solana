@@ -16,7 +16,7 @@ use {
         bank::{Bank, Builtin, ExecuteTimings},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
-        genesis_utils::create_genesis_config_with_leader,
+        genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
     },
     solana_sdk::{
         account::Account,
@@ -28,6 +28,7 @@ use {
         },
         signature::{Keypair, Signer},
     },
+    solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     std::{
         cell::RefCell,
         collections::HashMap,
@@ -593,9 +594,8 @@ impl ProgramTest {
     ) -> (
         Arc<RwLock<BankForks>>,
         Arc<RwLock<BlockCommitmentCache>>,
-        Keypair,
         Hash,
-        GenesisConfig,
+        GenesisConfigInfo,
     ) {
         {
             use std::sync::Once;
@@ -606,20 +606,20 @@ impl ProgramTest {
             });
         }
 
+        let rent = Rent::default();
         let bootstrap_validator_pubkey = Pubkey::new_unique();
-        let bootstrap_validator_stake_lamports = 42;
+        let bootstrap_validator_lamports = rent.minimum_balance(VoteState::size_of());
 
-        let gci = create_genesis_config_with_leader(
+        let mut gci = create_genesis_config_with_leader(
             sol_to_lamports(1_000_000.0),
             &bootstrap_validator_pubkey,
-            bootstrap_validator_stake_lamports,
+            bootstrap_validator_lamports,
         );
-        let mut genesis_config = gci.genesis_config;
-        genesis_config.rent = Rent::default();
+        let genesis_config = &mut gci.genesis_config;
+        genesis_config.rent = rent;
         genesis_config.fee_rate_governor =
             solana_program::fee_calculator::FeeRateGovernor::default();
-        let payer = gci.mint_keypair;
-        debug!("Payer address: {}", payer.pubkey());
+        debug!("Payer address: {}", gci.mint_keypair.pubkey());
         debug!("Genesis config: {}", genesis_config);
 
         let mut bank = Bank::new(&genesis_config);
@@ -666,18 +666,11 @@ impl ProgramTest {
             BlockCommitmentCache::new_for_tests_with_slots(slot, slot),
         ));
 
-        (
-            bank_forks,
-            block_commitment_cache,
-            payer,
-            last_blockhash,
-            genesis_config,
-        )
+        (bank_forks, block_commitment_cache, last_blockhash, gci)
     }
 
     pub async fn start(self) -> (BanksClient, Keypair, Hash) {
-        let (bank_forks, block_commitment_cache, payer, last_blockhash, genesis_config) =
-            self.setup_bank();
+        let (bank_forks, block_commitment_cache, last_blockhash, gci) = self.setup_bank();
         let transport =
             start_local_server(bank_forks.clone(), block_commitment_cache.clone()).await;
         let banks_client = start_client(transport)
@@ -687,6 +680,7 @@ impl ProgramTest {
         // Run a simulated PohService to provide the client with new blockhashes.  New blockhashes
         // are required when sending multiple otherwise identical transactions in series from a
         // test
+        let target_tick_duration = gci.genesis_config.poh_config.target_tick_duration;
         tokio::spawn(async move {
             loop {
                 bank_forks
@@ -694,11 +688,11 @@ impl ProgramTest {
                     .unwrap()
                     .working_bank()
                     .register_tick(&Hash::new_unique());
-                tokio::time::sleep(genesis_config.poh_config.target_tick_duration).await;
+                tokio::time::sleep(target_tick_duration).await;
             }
         });
 
-        (banks_client, payer, last_blockhash)
+        (banks_client, gci.mint_keypair, last_blockhash)
     }
 
     /// Start the test client
@@ -706,8 +700,7 @@ impl ProgramTest {
     /// Returns a `BanksClient` interface into the test environment as well as a payer `Keypair`
     /// with SOL for sending transactions
     pub async fn start_with_context(self) -> ProgramTestContext {
-        let (bank_forks, block_commitment_cache, payer, last_blockhash, genesis_config) =
-            self.setup_bank();
+        let (bank_forks, block_commitment_cache, last_blockhash, gci) = self.setup_bank();
         let transport =
             start_local_server(bank_forks.clone(), block_commitment_cache.clone()).await;
         let banks_client = start_client(transport)
@@ -718,9 +711,8 @@ impl ProgramTest {
             bank_forks,
             block_commitment_cache,
             banks_client,
-            payer,
             last_blockhash,
-            genesis_config,
+            gci,
         )
     }
 }
@@ -772,8 +764,9 @@ impl<T> Drop for DroppableTask<T> {
 
 pub struct ProgramTestContext {
     pub banks_client: BanksClient,
-    pub payer: Keypair,
     pub last_blockhash: Hash,
+    pub payer: Keypair,
+    genesis_config: GenesisConfig,
     bank_forks: Arc<RwLock<BankForks>>,
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     _bank_task: DroppableTask<()>,
@@ -784,15 +777,17 @@ impl ProgramTestContext {
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         banks_client: BanksClient,
-        payer: Keypair,
         last_blockhash: Hash,
-        genesis_config: GenesisConfig,
+        genesis_config_info: GenesisConfigInfo,
     ) -> Self {
         // Run a simulated PohService to provide the client with new blockhashes.  New blockhashes
         // are required when sending multiple otherwise identical transactions in series from a
         // test
         let running_bank_forks = bank_forks.clone();
-        let target_tick_duration = genesis_config.poh_config.target_tick_duration;
+        let target_tick_duration = genesis_config_info
+            .genesis_config
+            .poh_config
+            .target_tick_duration;
         let exit = Arc::new(AtomicBool::new(false));
         let bank_task = DroppableTask(
             exit.clone(),
@@ -813,12 +808,39 @@ impl ProgramTestContext {
 
         Self {
             banks_client,
-            block_commitment_cache,
-            payer,
             last_blockhash,
+            payer: genesis_config_info.mint_keypair,
+            genesis_config: genesis_config_info.genesis_config,
             bank_forks,
+            block_commitment_cache,
             _bank_task: bank_task,
         }
+    }
+
+    pub fn genesis_config(&self) -> &GenesisConfig {
+        &self.genesis_config
+    }
+
+    /// Manually increment vote credits for the current epoch in the specified vote account to simulate validator voting activity
+    pub fn increment_vote_account_credits(
+        &mut self,
+        vote_account_address: &Pubkey,
+        number_of_credits: u64,
+    ) {
+        let bank_forks = self.bank_forks.read().unwrap();
+        let bank = bank_forks.working_bank();
+
+        // generate some vote activity for rewards
+        let mut vote_account = bank.get_account(vote_account_address).unwrap();
+        let mut vote_state = VoteState::from(&vote_account).unwrap();
+
+        let epoch = bank.epoch();
+        for _ in 0..number_of_credits {
+            vote_state.increment_credits(epoch);
+        }
+        let versioned = VoteStateVersions::new_current(vote_state);
+        VoteState::to(&versioned, &mut vote_account).unwrap();
+        bank.store_account(vote_account_address, &vote_account);
     }
 
     /// Force the working bank ahead to a new slot
@@ -839,6 +861,7 @@ impl ProgramTestContext {
         if warp_slot <= working_slot {
             return Err(ProgramTestError::InvalidWarpSlot);
         }
+
         let pre_warp_slot = warp_slot - 1;
         let warp_bank = bank_forks.insert(Bank::warp_from_parent(
             &bank,

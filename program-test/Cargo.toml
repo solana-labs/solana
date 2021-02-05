@@ -21,5 +21,9 @@ solana-logger = { path = "../logger", version = "1.5.6" }
 solana-program = { path = "../sdk/program", version = "1.5.6" }
 solana-runtime = { path = "../runtime", version = "1.5.6" }
 solana-sdk = { path = "../sdk", version = "1.5.6" }
+solana-vote-program = { path = "../programs/vote", version = "1.5.6" }
 thiserror = "1.0"
 tokio = { version = "0.3.5", features = ["full"] }
+
+[dev-dependencies]
+solana-stake-program = { path = "../programs/stake", version = "1.5.6" }
