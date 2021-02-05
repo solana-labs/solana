@@ -229,7 +229,6 @@ lazy_static! {
         /*************** ADD NEW FEATURES HERE ***************/
         (full_inflation::sotcsa::vote::id(), "community vote allowing sotcsa to enable full inflation"),
         (full_inflation::sotcsa::enable::id(), "full inflation enabled by sotcsa"),
-
     ]
     .iter()
     .cloned()
