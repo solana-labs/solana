@@ -35,7 +35,7 @@ solana-transaction-status = { path = "../transaction-status", version = "1.6.0" 
 solana-version = { path = "../version", version = "1.6.0" }
 solana-vote-program = { path = "../programs/vote", version = "1.6.0" }
 tempfile = "3.1.0"
-tokio = { version = "0.2.22", features = ["full"] }
+tokio = { version = "1.1", features = ["full"] }
 
 [dev-dependencies]
 assert_cmd = "1.0"

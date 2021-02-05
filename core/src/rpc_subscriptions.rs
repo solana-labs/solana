@@ -1291,7 +1291,7 @@ pub(crate) mod tests {
     use std::{fmt::Debug, sync::mpsc::channel};
     use tokio::{
         runtime::Runtime,
-        time::{delay_for, timeout},
+        time::{sleep, timeout},
     };
 
     pub(crate) fn robust_poll_or_panic<T: Debug + Send + 'static>(
@@ -1317,7 +1317,7 @@ pub(crate) mod tests {
                 (None, _) => panic!("unexpected end of stream"),
             }
 
-            delay_for(Duration::from_millis(RECEIVE_DELAY_MILLIS * 2)).await;
+            sleep(Duration::from_millis(RECEIVE_DELAY_MILLIS * 2)).await;
         });
         inner_receiver.recv().expect("recv error")
     }

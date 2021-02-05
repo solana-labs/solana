@@ -21,7 +21,7 @@ solana-logger = { path = "../logger", version = "1.6.0" }
 solana-metrics = { path = "../metrics", version = "1.6.0" }
 solana-sdk = { path = "../sdk", version = "1.6.0" }
 solana-version = { path = "../version", version = "1.6.0" }
-tokio = { version = "0.3.5", features = ["full"] }
+tokio = { version = "1.1", features = ["full"] }
 
 [lib]
 crate-type = ["lib"]

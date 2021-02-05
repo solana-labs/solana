@@ -4,8 +4,8 @@ use {
     serde_derive::{Deserialize, Serialize},
     std::{io, net::SocketAddr, time::Duration},
     tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
         net::{TcpListener, TcpStream},
-        prelude::*,
         runtime::{self, Runtime},
         time::timeout,
     },
@@ -103,14 +103,14 @@ async fn process_connection(mut socket: TcpStream, peer_addr: SocketAddr) -> io:
         if *tcp_port != 0 {
             debug!("Connecting to tcp/{}", tcp_port);
 
-            let tcp_stream = timeout(
+            let mut tcp_stream = timeout(
                 IO_TIMEOUT,
                 TcpStream::connect(&SocketAddr::new(peer_addr.ip(), *tcp_port)),
             )
             .await??;
 
             debug!("Connection established to tcp/{}", *tcp_port);
-            let _ = tcp_stream.shutdown(std::net::Shutdown::Both);
+            let _ = tcp_stream.shutdown();
         }
     }
 

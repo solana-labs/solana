@@ -32,7 +32,7 @@ use std::{
     sync::{mpsc::channel, Arc, Mutex, RwLock},
     thread::{self, Builder, JoinHandle},
 };
-use tokio::{self, runtime};
+use tokio::runtime;
 use tokio_util::codec::{BytesCodec, FramedRead};
 
 pub struct JsonRpcService {
@@ -42,7 +42,6 @@ pub struct JsonRpcService {
     pub request_processor: JsonRpcRequestProcessor, // Used only by test_rpc_new()...
 
     close_handle: Option<CloseHandle>,
-    runtime: runtime::Runtime,
 }
 
 struct RpcRequestMiddleware {
@@ -135,7 +134,8 @@ impl RpcRequestMiddleware {
         RequestMiddlewareAction::Respond {
             should_validate_hosts: true,
             response: Box::pin(async {
-                match tokio::fs::File::open(filename).await {
+                // Stuck on tokio 0.2 until the jsonrpc crates upgrade
+                match tokio_02::fs::File::open(filename).await {
                     Err(_) => Ok(Self::internal_server_error()),
                     Ok(file) => {
                         let stream =
@@ -263,12 +263,13 @@ impl JsonRpcService {
         ));
 
         let tpu_address = cluster_info.my_contact_info().tpu;
-        let mut runtime = runtime::Builder::new()
-            .threaded_scheduler()
-            .thread_name("rpc-runtime")
-            .enable_all()
-            .build()
-            .expect("Runtime");
+        let runtime = Arc::new(
+            runtime::Builder::new_multi_thread()
+                .thread_name("rpc-runtime")
+                .enable_all()
+                .build()
+                .expect("Runtime"),
+        );
 
         let exit_bigtable_ledger_upload_service = Arc::new(AtomicBool::new(false));
 
@@ -285,7 +286,7 @@ impl JsonRpcService {
                         let bigtable_ledger_upload_service = if config.enable_bigtable_ledger_upload
                         {
                             Some(Arc::new(BigTableUploadService::new(
-                                runtime.handle().clone(),
+                                runtime.clone(),
                                 bigtable_ledger_storage.clone(),
                                 blockstore.clone(),
                                 block_commitment_cache.clone(),
@@ -318,7 +319,7 @@ impl JsonRpcService {
             health.clone(),
             cluster_info.clone(),
             genesis_hash,
-            &runtime,
+            runtime,
             bigtable_ledger_storage,
             optimistically_confirmed_bank,
         );
@@ -346,7 +347,8 @@ impl JsonRpcService {
         // so that we avoid the single-threaded event loops from being created automatically by
         // jsonrpc for threads when .threads(N > 1) is given.
         let event_loop = {
-            runtime::Builder::new()
+            // Stuck on tokio 0.2 until the jsonrpc crates upgrade
+            tokio_02::runtime::Builder::new()
                 .core_threads(rpc_threads)
                 .threaded_scheduler()
                 .enable_all()
@@ -409,7 +411,6 @@ impl JsonRpcService {
             .register_exit(Box::new(move || close_handle_.close()));
         Self {
             thread_hdl,
-            runtime,
             #[cfg(test)]
             request_processor: test_request_processor,
             close_handle: Some(close_handle),
@@ -423,7 +424,6 @@ impl JsonRpcService {
     }
 
     pub fn join(self) -> thread::Result<()> {
-        self.runtime.shutdown_background();
         self.thread_hdl.join()
     }
 }
