@@ -70,8 +70,8 @@ impl fmt::Display for CliFeatures {
                 f,
                 "{}",
                 style(format!(
-                    "{:<44} {:<40} {}",
-                    "Feature", "Description", "Status"
+                    "{:<44} {:<28} {}",
+                    "Feature", "Status", "Description"
                 ))
                 .bold()
             )?;
@@ -79,15 +79,15 @@ impl fmt::Display for CliFeatures {
         for feature in &self.features {
             writeln!(
                 f,
-                "{:<44} {:<40} {}",
+                "{:<44} {:<28} {}",
                 feature.id,
-                feature.description,
                 match feature.status {
                     CliFeatureStatus::Inactive => style("inactive".to_string()).red(),
                     CliFeatureStatus::Pending => style("activation pending".to_string()).yellow(),
                     CliFeatureStatus::Active(activation_slot) =>
                         style(format!("active since slot {}", activation_slot)).green(),
-                }
+                },
+                feature.description,
             )?;
         }
         if self.inactive && !self.feature_activation_allowed {
