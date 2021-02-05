@@ -219,9 +219,9 @@ Thus, the first signature in transaction can be treated as [transacton id](termi
 
 ## skipped slot
 
-A past [slot](terminology.md#slot) where its scheduled leader didn't produce a [block](terminology.md#block) due to off-line or the [fork](terminology.md#fork) containing the slot was abandoned over a better alternative at the time by the cluster consensus. Being _skipped_ means that blocks at subsequent slots omits to include the skipped slots as ancestors, possibly creating an after-the-fact short cluster stall of transaction processing, oldest `recent_blockhash` expiration, [block height](terminology#block-height) increment, etc.
+A past [slot](terminology.md#slot) that did not produce a [block](terminology.md#block), because the leader was offline or the [fork](terminology.md#fork) containing the slot was abandoned for a better alternative by cluster consensus. A skipped slot will not appear as an ancestor for blocks at subsequent slots, increment the [block height](terminology#block-height), nor expire the oldest `recent_blockhash`.
 
-By definition, being skipped can be determined only after being older than the latest [rooted](terminology.md#root) (thus not-skipped) slot.
+Whether a slot has been skipped can only be determined when it becomes older than the latest [rooted](terminology.md#root) (thus not-skipped) slot.
 
 ## slot
 
