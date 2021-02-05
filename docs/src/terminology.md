@@ -225,8 +225,9 @@ Whether a slot has been skipped can only be determined when it becomes older tha
 
 ## slot
 
-A numbered non-overlapping slice of logical time, ordered sequentially with roughly equal passage of real wall-clock utilizing [PoH](terminology.md#proof-of-history).
-Abiding by [leader schedule](terminology.md#leader-schedule), the [leader](terminology.md#leader) of newest slot can ingest transactions and produce a [block](terminology.md#block).
+The period of time for which each [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block) by rotation, abiding by [leader schedule](terminology.md#leader-schedule).
+
+Collectively, slots create a logical clock as non-overlapping slices of the time. And they're ordered sequentially and numbered accordingly with roughly equal passage of real wall-clock utilizing [PoH](terminology.md#proof-of-history).
 
 ## smart contract
 
