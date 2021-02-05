@@ -136,7 +136,7 @@ The role of a [validator](terminology.md#validator) when it is appending [entrie
 
 ## leader schedule
 
-A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key) ordered by [slots](terminology.md#slot). The cluster uses the leader schedule to determine which validator is the [leader](terminology.md#leader) at any moment in time.
+A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key) mapped to [slots](terminology.md#slot). The cluster uses the leader schedule to determine which validator is the [leader](terminology.md#leader) at any moment in time.
 
 ## ledger
 
@@ -219,15 +219,15 @@ Thus, the first signature in transaction can be treated as [transacton id](termi
 
 ## skipped slot
 
-A past [slot](terminology.md#slot) that did not produce a [block](terminology.md#block), because the leader was offline or the [fork](terminology.md#fork) containing the slot was abandoned for a better alternative by cluster consensus. A skipped slot will not appear as an ancestor for blocks at subsequent slots, increment the [block height](terminology#block-height), nor expire the oldest `recent_blockhash`.
+A past [slot](terminology.md#slot) that did not produce a [block](terminology.md#block), because the leader was offline or the [fork](terminology.md#fork) containing the slot was abandoned for a better alternative by cluster consensus. A skipped slot will not appear as an ancestor for blocks at subsequent slots, nor increment the [block height](terminology#block-height), nor expire the oldest `recent_blockhash`.
 
 Whether a slot has been skipped can only be determined when it becomes older than the latest [rooted](terminology.md#root) (thus not-skipped) slot.
 
 ## slot
 
-The period of time for which each [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block) by rotation, abiding by [leader schedule](terminology.md#leader-schedule).
+The period of time for which each [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block).
 
-Collectively, slots create a logical clock as non-overlapping slices of the time. And they're ordered sequentially and numbered accordingly with roughly equal passage of real wall-clock utilizing [PoH](terminology.md#proof-of-history).
+Collectively, slots create a logical clock. Slots are ordered sequentially and non-overlapping, comprising roughly equal real-world time as per [PoH](terminology.md#proof-of-history).
 
 ## smart contract
 
