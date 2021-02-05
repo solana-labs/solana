@@ -310,7 +310,7 @@ impl ReplayStage {
 
                     let mut reset_duplicate_slots_time = Measure::start("reset_duplicate_slots");
                     let mut ancestors = bank_forks.read().unwrap().ancestors();
-                    let mut descendants = bank_forks.read().unwrap().descendants();
+                    let mut descendants = bank_forks.read().unwrap().descendants().clone();
                     let forks_root = bank_forks.read().unwrap().root();
                     let start = allocated.get();
 
@@ -3642,7 +3642,7 @@ pub(crate) mod tests {
     #[test]
     fn test_purge_unconfirmed_duplicate_slot() {
         let (bank_forks, mut progress) = setup_forks();
-        let mut descendants = bank_forks.read().unwrap().descendants();
+        let mut descendants = bank_forks.read().unwrap().descendants().clone();
         let mut ancestors = bank_forks.read().unwrap().ancestors();
 
         // Purging slot 5 should purge only slots 5 and its descendant 6
@@ -3663,7 +3663,7 @@ pub(crate) mod tests {
         }
 
         // Purging slot 4 should purge only slot 4
-        let mut descendants = bank_forks.read().unwrap().descendants();
+        let mut descendants = bank_forks.read().unwrap().descendants().clone();
         let mut ancestors = bank_forks.read().unwrap().ancestors();
         ReplayStage::purge_unconfirmed_duplicate_slot(
             4,
@@ -3682,7 +3682,7 @@ pub(crate) mod tests {
         }
 
         // Purging slot 1 should purge both forks 2 and 3
-        let mut descendants = bank_forks.read().unwrap().descendants();
+        let mut descendants = bank_forks.read().unwrap().descendants().clone();
         let mut ancestors = bank_forks.read().unwrap().ancestors();
         ReplayStage::purge_unconfirmed_duplicate_slot(
             1,
@@ -3704,7 +3704,7 @@ pub(crate) mod tests {
         let (bank_forks, _) = setup_forks();
 
         // Purge branch rooted at slot 2
-        let mut descendants = bank_forks.read().unwrap().descendants();
+        let mut descendants = bank_forks.read().unwrap().descendants().clone();
         let mut ancestors = bank_forks.read().unwrap().ancestors();
         let slot_2_descendants = descendants.get(&2).unwrap().clone();
         ReplayStage::purge_ancestors_descendants(
@@ -3734,7 +3734,7 @@ pub(crate) mod tests {
             .write()
             .unwrap()
             .set_root(3, &ABSRequestSender::default(), None);
-        let mut descendants = bank_forks.read().unwrap().descendants();
+        let mut descendants = bank_forks.read().unwrap().descendants().clone();
         let mut ancestors = bank_forks.read().unwrap().ancestors();
         let slot_3_descendants = descendants.get(&3).unwrap().clone();
         ReplayStage::purge_ancestors_descendants(

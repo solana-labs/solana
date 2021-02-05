@@ -167,8 +167,7 @@ mod tests {
         .unwrap();
 
         let bank = old_bank_forks
-            .banks
-            .get(&deserialized_bank.slot())
+            .get(deserialized_bank.slot())
             .unwrap()
             .clone();
         assert_eq!(*bank, deserialized_bank);
