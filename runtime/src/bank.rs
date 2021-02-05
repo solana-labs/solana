@@ -1094,6 +1094,14 @@ impl Bank {
         new
     }
 
+    /// Returns all ancestors excluding self.slot.
+    pub(crate) fn proper_ancestors(&self) -> impl Iterator<Item = Slot> + '_ {
+        self.ancestors
+            .keys()
+            .copied()
+            .filter(move |slot| *slot != self.slot)
+    }
+
     pub fn set_callback(&self, callback: Option<Box<dyn DropCallback + Send + Sync>>) {
         *self.drop_callback.write().unwrap() = OptionalDropCallback(callback);
     }

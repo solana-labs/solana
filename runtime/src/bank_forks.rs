@@ -8,7 +8,7 @@ use log::*;
 use solana_metrics::inc_new_counter_info;
 use solana_sdk::{clock::Slot, timing};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap, HashSet},
     ops::Index,
     path::PathBuf,
     sync::Arc,
@@ -43,7 +43,8 @@ pub struct SnapshotConfig {
 }
 
 pub struct BankForks {
-    pub banks: HashMap<Slot, Arc<Bank>>,
+    banks: HashMap<Slot, Arc<Bank>>,
+    descendants: HashMap<Slot, HashSet<Slot>>,
     root: Slot,
     pub snapshot_config: Option<SnapshotConfig>,
 
@@ -64,39 +65,25 @@ impl BankForks {
         Self::new_from_banks(&[Arc::new(bank)], root)
     }
 
+    pub fn banks(&self) -> &HashMap<Slot, Arc<Bank>> {
+        &self.banks
+    }
+
     /// Create a map of bank slot id to the set of ancestors for the bank slot.
     pub fn ancestors(&self) -> HashMap<Slot, HashSet<Slot>> {
-        let mut ancestors = HashMap::new();
         let root = self.root;
-        for bank in self.banks.values() {
-            let mut set: HashSet<Slot> = bank
-                .ancestors
-                .keys()
-                .filter(|k| **k >= root)
-                .cloned()
-                .collect();
-            set.remove(&bank.slot());
-            ancestors.insert(bank.slot(), set);
-        }
-        ancestors
+        self.banks
+            .iter()
+            .map(|(slot, bank)| {
+                let ancestors = bank.proper_ancestors().filter(|k| *k >= root);
+                (*slot, ancestors.collect())
+            })
+            .collect()
     }
 
     /// Create a map of bank slot id to the set of all of its descendants
-    #[allow(clippy::or_fun_call)]
-    pub fn descendants(&self) -> HashMap<Slot, HashSet<Slot>> {
-        let mut descendants = HashMap::new();
-        for bank in self.banks.values() {
-            let _ = descendants.entry(bank.slot()).or_insert(HashSet::new());
-            let mut set: HashSet<Slot> = bank.ancestors.keys().cloned().collect();
-            set.remove(&bank.slot());
-            for parent in set {
-                descendants
-                    .entry(parent)
-                    .or_insert(HashSet::new())
-                    .insert(bank.slot());
-            }
-        }
-        descendants
+    pub fn descendants(&self) -> &HashMap<Slot, HashSet<Slot>> {
+        &self.descendants
     }
 
     pub fn frozen_banks(&self) -> HashMap<Slot, Arc<Bank>> {
@@ -138,10 +125,17 @@ impl BankForks {
                 banks.insert(parent.slot(), parent.clone());
             }
         }
-
+        let mut descendants = HashMap::<_, HashSet<_>>::new();
+        for (slot, bank) in &banks {
+            descendants.entry(*slot).or_default();
+            for parent in bank.proper_ancestors() {
+                descendants.entry(parent).or_default().insert(*slot);
+            }
+        }
         Self {
             root,
             banks,
+            descendants,
             snapshot_config: None,
             accounts_hash_interval_slots: std::u64::MAX,
             last_accounts_hash_slot: root,
@@ -152,11 +146,34 @@ impl BankForks {
         let bank = Arc::new(bank);
         let prev = self.banks.insert(bank.slot(), bank.clone());
         assert!(prev.is_none());
+        let slot = bank.slot();
+        self.descendants.entry(slot).or_default();
+        for parent in bank.proper_ancestors() {
+            self.descendants.entry(parent).or_default().insert(slot);
+        }
         bank
     }
 
     pub fn remove(&mut self, slot: Slot) -> Option<Arc<Bank>> {
-        self.banks.remove(&slot)
+        let bank = self.banks.remove(&slot)?;
+        for parent in bank.proper_ancestors() {
+            let mut entry = match self.descendants.entry(parent) {
+                Entry::Vacant(_) => panic!("this should not happen!"),
+                Entry::Occupied(entry) => entry,
+            };
+            entry.get_mut().remove(&slot);
+            if entry.get().is_empty() && !self.banks.contains_key(&parent) {
+                entry.remove_entry();
+            }
+        }
+        let entry = match self.descendants.entry(slot) {
+            Entry::Vacant(_) => panic!("this should not happen!"),
+            Entry::Occupied(entry) => entry,
+        };
+        if entry.get().is_empty() {
+            entry.remove_entry();
+        }
+        Some(bank)
     }
 
     pub fn highest_slot(&self) -> Slot {
@@ -260,14 +277,23 @@ impl BankForks {
     }
 
     fn prune_non_root(&mut self, root: Slot, highest_confirmed_root: Option<Slot>) {
-        let descendants = self.descendants();
-        self.banks.retain(|slot, _| {
-            *slot == root
-                || descendants[&root].contains(slot)
-                || (*slot < root
-                    && *slot >= highest_confirmed_root.unwrap_or(root)
-                    && descendants[slot].contains(&root))
-        });
+        let highest_confirmed_root = highest_confirmed_root.unwrap_or(root);
+        let prune_slots: Vec<_> = self
+            .banks
+            .keys()
+            .copied()
+            .filter(|slot| {
+                let keep = *slot == root
+                    || self.descendants[&root].contains(slot)
+                    || (*slot < root
+                        && *slot >= highest_confirmed_root
+                        && self.descendants[slot].contains(&root));
+                !keep
+            })
+            .collect();
+        for slot in prune_slots {
+            self.remove(slot);
+        }
         datapoint_debug!(
             "bank_forks_purge_non_root",
             ("num_banks_retained", self.banks.len(), i64),
@@ -450,5 +476,137 @@ mod tests {
         info!("child0.ancestors: {:?}", child1.ancestors);
         info!("child1.ancestors: {:?}", child2.ancestors);
         assert_eq!(child1.hash(), child2.hash());
+    }
+
+    fn make_hash_map(data: Vec<(Slot, Vec<Slot>)>) -> HashMap<Slot, HashSet<Slot>> {
+        data.into_iter()
+            .map(|(k, v)| (k, v.into_iter().collect()))
+            .collect()
+    }
+
+    #[test]
+    fn test_bank_forks_with_set_root() {
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let mut banks = vec![Arc::new(Bank::new(&genesis_config))];
+        assert_eq!(banks[0].slot(), 0);
+        let mut bank_forks = BankForks::new_from_banks(&banks, 0);
+        banks.push(bank_forks.insert(Bank::new_from_parent(&banks[0], &Pubkey::default(), 1)));
+        banks.push(bank_forks.insert(Bank::new_from_parent(&banks[1], &Pubkey::default(), 2)));
+        banks.push(bank_forks.insert(Bank::new_from_parent(&banks[0], &Pubkey::default(), 3)));
+        banks.push(bank_forks.insert(Bank::new_from_parent(&banks[3], &Pubkey::default(), 4)));
+        assert_eq!(
+            bank_forks.ancestors(),
+            make_hash_map(vec![
+                (0, vec![]),
+                (1, vec![0]),
+                (2, vec![0, 1]),
+                (3, vec![0]),
+                (4, vec![0, 3]),
+            ])
+        );
+        assert_eq!(
+            *bank_forks.descendants(),
+            make_hash_map(vec![
+                (0, vec![1, 2, 3, 4]),
+                (1, vec![2]),
+                (2, vec![]),
+                (3, vec![4]),
+                (4, vec![]),
+            ])
+        );
+        bank_forks.set_root(
+            2,
+            &ABSRequestSender::default(),
+            None, // highest confirmed root
+        );
+        banks[2].squash();
+        assert_eq!(bank_forks.ancestors(), make_hash_map(vec![(2, vec![]),]));
+        assert_eq!(
+            *bank_forks.descendants(),
+            make_hash_map(vec![(0, vec![2]), (1, vec![2]), (2, vec![]),])
+        );
+        banks.push(bank_forks.insert(Bank::new_from_parent(&banks[2], &Pubkey::default(), 5)));
+        banks.push(bank_forks.insert(Bank::new_from_parent(&banks[5], &Pubkey::default(), 6)));
+        assert_eq!(
+            bank_forks.ancestors(),
+            make_hash_map(vec![(2, vec![]), (5, vec![2]), (6, vec![2, 5])])
+        );
+        assert_eq!(
+            *bank_forks.descendants(),
+            make_hash_map(vec![
+                (0, vec![2]),
+                (1, vec![2]),
+                (2, vec![5, 6]),
+                (5, vec![6]),
+                (6, vec![])
+            ])
+        );
+    }
+
+    #[test]
+    fn test_bank_forks_with_highest_confirmed_root() {
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let mut banks = vec![Arc::new(Bank::new(&genesis_config))];
+        assert_eq!(banks[0].slot(), 0);
+        let mut bank_forks = BankForks::new_from_banks(&banks, 0);
+        banks.push(bank_forks.insert(Bank::new_from_parent(&banks[0], &Pubkey::default(), 1)));
+        banks.push(bank_forks.insert(Bank::new_from_parent(&banks[1], &Pubkey::default(), 2)));
+        banks.push(bank_forks.insert(Bank::new_from_parent(&banks[0], &Pubkey::default(), 3)));
+        banks.push(bank_forks.insert(Bank::new_from_parent(&banks[3], &Pubkey::default(), 4)));
+        assert_eq!(
+            bank_forks.ancestors(),
+            make_hash_map(vec![
+                (0, vec![]),
+                (1, vec![0]),
+                (2, vec![0, 1]),
+                (3, vec![0]),
+                (4, vec![0, 3]),
+            ])
+        );
+        assert_eq!(
+            *bank_forks.descendants(),
+            make_hash_map(vec![
+                (0, vec![1, 2, 3, 4]),
+                (1, vec![2]),
+                (2, vec![]),
+                (3, vec![4]),
+                (4, vec![]),
+            ])
+        );
+        bank_forks.set_root(
+            2,
+            &ABSRequestSender::default(),
+            Some(1), // highest confirmed root
+        );
+        banks[2].squash();
+        assert_eq!(
+            bank_forks.ancestors(),
+            make_hash_map(vec![(1, vec![]), (2, vec![]),])
+        );
+        assert_eq!(
+            *bank_forks.descendants(),
+            make_hash_map(vec![(0, vec![1, 2]), (1, vec![2]), (2, vec![]),])
+        );
+        banks.push(bank_forks.insert(Bank::new_from_parent(&banks[2], &Pubkey::default(), 5)));
+        banks.push(bank_forks.insert(Bank::new_from_parent(&banks[5], &Pubkey::default(), 6)));
+        assert_eq!(
+            bank_forks.ancestors(),
+            make_hash_map(vec![
+                (1, vec![]),
+                (2, vec![]),
+                (5, vec![2]),
+                (6, vec![2, 5])
+            ])
+        );
+        assert_eq!(
+            *bank_forks.descendants(),
+            make_hash_map(vec![
+                (0, vec![1, 2]),
+                (1, vec![2]),
+                (2, vec![5, 6]),
+                (5, vec![6]),
+                (6, vec![])
+            ])
+        );
     }
 }
