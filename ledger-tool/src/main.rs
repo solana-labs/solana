@@ -1933,7 +1933,7 @@ fn main() {
                         Some(snapshot_version),
                         output_directory,
                         ArchiveFormat::TarZstd,
-                        &bank.get_thread_pool(),
+                        None,
                     )
                     .unwrap_or_else(|err| {
                         eprintln!("Unable to create snapshot: {}", err);

@@ -1050,7 +1050,7 @@ fn new_banks_from_ledger(
             None,
             &snapshot_config.snapshot_package_output_path,
             snapshot_config.archive_format,
-            &bank_forks.root_bank().get_thread_pool(),
+            Some(&bank_forks.root_bank().get_thread_pool()),
         )
         .unwrap_or_else(|err| {
             error!("Unable to create snapshot: {}", err);
