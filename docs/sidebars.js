@@ -54,6 +54,7 @@ module.exports = {
 	    "cli/transfer-tokens",
 	    "cli/delegate-stake",
 	    "cli/manage-stake-accounts",
+	    "cli/deploy-a-program",
 	    "offline-signing",
 	    "offline-signing/durable-nonce",
 	    "cli/usage",

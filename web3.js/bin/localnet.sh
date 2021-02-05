@@ -100,7 +100,7 @@ up)
       --publish 8007:8007/udp # serve_repair
       --publish 8008:8008/udp # broadcast
       --tty
-      --ulimit "nofile=500000"
+      --ulimit "nofile=700000"
       --env "RUST_LOG=$RUST_LOG"
     )
     if [[ -n $network ]]; then

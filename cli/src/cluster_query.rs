@@ -16,7 +16,7 @@ use solana_clap_utils::{
 use solana_cli_output::{
     display::{
         build_balance_message, format_labeled_address, new_spinner_progress_bar,
-        println_name_value, println_transaction, writeln_name_value,
+        println_name_value, println_transaction, unix_timestamp_to_string, writeln_name_value,
     },
     *,
 };
@@ -967,6 +967,7 @@ pub fn process_get_block(
             &transaction_with_meta.transaction.decode().unwrap(),
             &transaction_with_meta.meta,
             "  ",
+            None,
         );
     }
     Ok("".to_string())
@@ -1635,7 +1636,7 @@ pub fn process_show_stakes(
         CliError::RpcRequestError("Failed to deserialize stake history".to_string())
     })?;
     // At v1.6, this check can be removed and simply passed as `true`
-    let stake_program_v2_enabled = is_stake_program_v2_enabled(rpc_client);
+    let stake_program_v2_enabled = is_stake_program_v2_enabled(rpc_client)?;
 
     let mut stake_accounts: Vec<CliKeyedStakeState> = vec![];
     for (stake_pubkey, stake_account) in all_stake_accounts {
@@ -1811,9 +1812,14 @@ pub fn process_transaction_history(
     for result in results {
         if config.verbose {
             println!(
-                "{} [slot={} status={}] {}",
+                "{} [slot={} {}status={}] {}",
                 result.signature,
                 result.slot,
+                match result.block_time {
+                    None => "".to_string(),
+                    Some(block_time) =>
+                        format!("timestamp={} ", unix_timestamp_to_string(block_time)),
+                },
                 match result.err {
                     None => "Confirmed".to_string(),
                     Some(err) => format!("Failed: {:?}", err),
@@ -1838,6 +1844,7 @@ pub fn process_transaction_history(
                                 .expect("Successful decode"),
                             &confirmed_transaction.transaction.meta,
                             "  ",
+                            None,
                         );
                     }
                     Err(err) => println!("  Unable to get confirmed transaction details: {}", err),

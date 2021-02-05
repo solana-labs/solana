@@ -279,4 +279,18 @@ const MAINNET_TOKENS: { [key: string]: TokenDetails } = {
     icon: "/tokens/brz.png",
     website: "https://brztoken.io",
   },
+  MAPS41MDahZ9QdKXhVa4dWB9RuyfV4XqhyAZ8XcYepb: {
+    symbol: "MAPS",
+    name: "MAPS",
+    logo: "/tokens/maps.svg",
+    icon: "/tokens/maps.svg",
+    website: "https://maps.me/",
+  },
+  Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: {
+    symbol: "USDT",
+    name: "USDT",
+    logo: "/tokens/usdt.svg",
+    icon: "/tokens/usdt.svg",
+    website: "https://tether.to",
+  },
 };

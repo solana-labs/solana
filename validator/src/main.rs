@@ -1,6 +1,6 @@
 use clap::{
-    crate_description, crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, App, Arg,
-    ArgMatches,
+    crate_description, crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, App,
+    AppSettings, Arg, ArgMatches, SubCommand,
 };
 use log::*;
 use rand::{seq::SliceRandom, thread_rng, Rng};
@@ -57,6 +57,12 @@ use std::{
     thread::sleep,
     time::{Duration, Instant},
 };
+
+#[derive(Debug, PartialEq)]
+enum Operation {
+    Initialize,
+    Run,
+}
 
 fn port_range_validator(port_range: String) -> Result<(), String> {
     if let Some((start, end)) = solana_net_utils::parse_port_range(&port_range) {
@@ -115,6 +121,7 @@ fn start_gossip_node(
     gossip_socket: UdpSocket,
     expected_shred_version: Option<u16>,
     gossip_validators: Option<HashSet<Pubkey>>,
+    should_check_duplicate_instance: bool,
 ) -> (Arc<ClusterInfo>, Arc<AtomicBool>, GossipService) {
     let mut cluster_info = ClusterInfo::new(
         ClusterInfo::gossip_contact_info(
@@ -134,6 +141,7 @@ fn start_gossip_node(
         None,
         gossip_socket,
         gossip_validators,
+        should_check_duplicate_instance,
         &gossip_exit_flag,
     );
     (cluster_info, gossip_exit_flag, gossip_service)
@@ -571,6 +579,7 @@ fn rpc_bootstrap(
     no_port_check: bool,
     use_progress_bar: bool,
     maximum_local_snapshot_age: Slot,
+    should_check_duplicate_instance: bool,
 ) {
     if !no_port_check {
         let mut order: Vec<_> = (0..cluster_entrypoints.len()).collect();
@@ -599,6 +608,7 @@ fn rpc_bootstrap(
                 node.sockets.gossip.try_clone().unwrap(),
                 validator_config.expected_shred_version,
                 validator_config.gossip_validators.clone(),
+                should_check_duplicate_instance,
             ));
         }
 
@@ -760,54 +770,6 @@ fn rpc_bootstrap(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn create_validator(
-    node: Node,
-    identity_keypair: &Arc<Keypair>,
-    ledger_path: &Path,
-    vote_account: &Pubkey,
-    authorized_voter_keypairs: Vec<Arc<Keypair>>,
-    cluster_entrypoints: Vec<ContactInfo>,
-    mut validator_config: ValidatorConfig,
-    rpc_bootstrap_config: RpcBootstrapConfig,
-    no_port_check: bool,
-    use_progress_bar: bool,
-    maximum_local_snapshot_age: Slot,
-) -> Validator {
-    if validator_config.cuda {
-        solana_perf::perf_libs::init_cuda();
-        enable_recycler_warming();
-    }
-    solana_ledger::entry::init_poh();
-    solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(ledger_path);
-
-    if !cluster_entrypoints.is_empty() {
-        rpc_bootstrap(
-            &node,
-            &identity_keypair,
-            &ledger_path,
-            &vote_account,
-            &authorized_voter_keypairs,
-            &cluster_entrypoints,
-            &mut validator_config,
-            rpc_bootstrap_config,
-            no_port_check,
-            use_progress_bar,
-            maximum_local_snapshot_age,
-        );
-    }
-
-    Validator::new(
-        node,
-        &identity_keypair,
-        &ledger_path,
-        &vote_account,
-        authorized_voter_keypairs,
-        cluster_entrypoints,
-        &validator_config,
-    )
-}
-
 pub fn main() {
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
@@ -830,6 +792,7 @@ pub fn main() {
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
+        .setting(AppSettings::VersionlessSubcommands)
         .arg(
             Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
                 .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
@@ -997,6 +960,14 @@ pub fn main() {
                 .requires("enable_rpc_transaction_history")
                 .takes_value(false)
                 .help("Upload new confirmed blocks into a BigTable instance"),
+        )
+        .arg(
+            Arg::with_name("enable_cpi_and_log_storage")
+                .long("enable-cpi-and-log-storage")
+                .requires("enable_rpc_transaction_history")
+                .takes_value(false)
+                .help("Include CPI inner instructions and logs in the \
+                        historical transaction info stored"),
         )
         .arg(
             Arg::with_name("rpc_max_multiple_accounts")
@@ -1448,13 +1419,40 @@ pub fn main() {
                 .help("Disables accounts caching"),
         )
         .arg(
+            Arg::with_name("accounts_db_test_hash_calculation")
+                .long("accounts-db-test-hash-calculation")
+                .help("Enables testing of hash calculation using stores in AccountsHashVerifier. This has a computational cost."),
+        )
+        .arg(
             // legacy nop argument
             Arg::with_name("accounts_db_caching_enabled")
                 .long("accounts-db-caching-enabled")
                 .conflicts_with("no_accounts_db_caching")
                 .hidden(true)
         )
+        .arg(
+            Arg::with_name("no_duplicate_instance_check")
+                .long("no-duplicate-instance-check")
+                .takes_value(false)
+                .help("Disables duplicate instance check")
+                .hidden(true),
+        )
+        .after_help("The default subcommand is run")
+        .subcommand(
+             SubCommand::with_name("init")
+             .about("Initialize the ledger directory then exit")
+         )
+        .subcommand(
+             SubCommand::with_name("run")
+             .about("Run the validator")
+         )
         .get_matches();
+
+    let operation = match matches.subcommand().0 {
+        "" | "run" => Operation::Run,
+        "init" => Operation::Initialize,
+        _ => unreachable!(),
+    };
 
     let identity_keypair = Arc::new(keypair_of(&matches, "identity").unwrap_or_else(Keypair::new));
 
@@ -1559,6 +1557,7 @@ pub fn main() {
             enable_validator_exit: matches.is_present("enable_rpc_exit"),
             enable_set_log_filter: matches.is_present("enable_rpc_set_log_filter"),
             enable_rpc_transaction_history: matches.is_present("enable_rpc_transaction_history"),
+            enable_cpi_and_log_storage: matches.is_present("enable_cpi_and_log_storage"),
             enable_bigtable_ledger_storage: matches
                 .is_present("enable_rpc_bigtable_ledger_storage"),
             enable_bigtable_ledger_upload: matches.is_present("enable_bigtable_ledger_upload"),
@@ -1629,6 +1628,7 @@ pub fn main() {
             .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),
         account_indexes,
         accounts_db_caching_enabled: !matches.is_present("no_accounts_db_caching"),
+        accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
         ..ValidatorConfig::default()
     };
 
@@ -1906,18 +1906,44 @@ pub fn main() {
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
     solana_metrics::set_panic_hook("validator");
 
-    let validator = create_validator(
+    if validator_config.cuda {
+        solana_perf::perf_libs::init_cuda();
+        enable_recycler_warming();
+    }
+    solana_ledger::entry::init_poh();
+    solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&ledger_path);
+
+    let should_check_duplicate_instance = !matches.is_present("no_duplicate_instance_check");
+    if !cluster_entrypoints.is_empty() {
+        rpc_bootstrap(
+            &node,
+            &identity_keypair,
+            &ledger_path,
+            &vote_account,
+            &authorized_voter_keypairs,
+            &cluster_entrypoints,
+            &mut validator_config,
+            rpc_bootstrap_config,
+            no_port_check,
+            use_progress_bar,
+            maximum_local_snapshot_age,
+            should_check_duplicate_instance,
+        );
+    }
+
+    if operation == Operation::Initialize {
+        info!("Validator ledger initialization complete");
+        return;
+    }
+    let validator = Validator::new(
         node,
         &identity_keypair,
         &ledger_path,
         &vote_account,
         authorized_voter_keypairs,
         cluster_entrypoints,
-        validator_config,
-        rpc_bootstrap_config,
-        no_port_check,
-        use_progress_bar,
-        maximum_local_snapshot_age,
+        &validator_config,
+        should_check_duplicate_instance,
     );
 
     if let Some(filename) = init_complete_file {

@@ -646,6 +646,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         process::exit(1);
     }
 
+    // Sanity check that the RPC endpoint is healthy before performing too much work
+    rpc_client.get_health().unwrap_or_else(|err| {
+        error!("RPC endpoint is unhealthy: {:?}", err);
+        process::exit(1);
+    });
+
     let source_stake_balance = validate_source_stake_account(&rpc_client, &config)?;
 
     let epoch_info = rpc_client.get_epoch_info()?;
@@ -706,6 +712,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             &solana_stake_program::id(),
         )
         .unwrap();
+
+        debug!(
+            "\nidentity: {}\n - vote address: {}\n - baseline stake: {}\n - bonus stake: {}",
+            node_pubkey, vote_pubkey, baseline_stake_address, bonus_stake_address
+        );
 
         // Transactions to create the baseline and bonus stake accounts
         if let Ok((balance, stake_state)) = get_stake_account(&rpc_client, &baseline_stake_address)

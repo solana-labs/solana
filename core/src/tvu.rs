@@ -79,6 +79,7 @@ pub struct TvuConfig {
     pub repair_validators: Option<HashSet<Pubkey>>,
     pub accounts_hash_fault_injection_slots: u64,
     pub accounts_db_caching_enabled: bool,
+    pub test_hash_calculation: bool,
 }
 
 impl Tvu {
@@ -274,6 +275,7 @@ impl Tvu {
             &exit,
             accounts_background_request_handler,
             tvu_config.accounts_db_caching_enabled,
+            tvu_config.test_hash_calculation,
         );
 
         Tvu {

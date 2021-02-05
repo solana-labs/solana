@@ -133,6 +133,7 @@ fn load_upgradeable_buffer(
     bank_client: &BankClient,
     payer_keypair: &Keypair,
     buffer_keypair: &Keypair,
+    buffer_authority_keypair: &Keypair,
     name: &str,
 ) {
     let path = create_bpf_path(name);
@@ -141,7 +142,13 @@ fn load_upgradeable_buffer(
     });
     let mut elf = Vec::new();
     file.read_to_end(&mut elf).unwrap();
-    load_buffer_account(bank_client, payer_keypair, &buffer_keypair, &elf);
+    load_buffer_account(
+        bank_client,
+        payer_keypair,
+        &buffer_keypair,
+        buffer_authority_keypair,
+        &elf,
+    );
 }
 
 fn upgrade_bpf_program(
@@ -152,7 +159,13 @@ fn upgrade_bpf_program(
     authority_keypair: &Keypair,
     name: &str,
 ) {
-    load_upgradeable_buffer(bank_client, payer_keypair, buffer_keypair, name);
+    load_upgradeable_buffer(
+        bank_client,
+        payer_keypair,
+        buffer_keypair,
+        authority_keypair,
+        name,
+    );
     upgrade_program(
         bank_client,
         payer_keypair,
@@ -374,7 +387,7 @@ fn print_confirmed_tx(name: &str, confirmed_tx: ConfirmedTransaction) {
     let tx = confirmed_tx.transaction.transaction.clone();
     let encoded = confirmed_tx.encode(UiTransactionEncoding::JsonParsed);
     println!("EXECUTE {} (slot {})", name, encoded.slot);
-    println_transaction(&tx, &encoded.transaction.meta, "  ");
+    println_transaction(&tx, &encoded.transaction.meta, "  ", None);
 }
 
 #[test]
@@ -1642,7 +1655,7 @@ fn test_program_bpf_upgrade_and_invoke_in_same_tx() {
         &buffer_keypair,
         &program_keypair,
         &authority_keypair,
-        "noop",
+        "solana_bpf_rust_noop",
     );
 
     let invoke_instruction = Instruction::new(
@@ -1662,7 +1675,13 @@ fn test_program_bpf_upgrade_and_invoke_in_same_tx() {
 
     // Prepare for upgrade
     let buffer_keypair = Keypair::new();
-    load_upgradeable_buffer(&bank_client, &mint_keypair, &buffer_keypair, "panic");
+    load_upgradeable_buffer(
+        &bank_client,
+        &mint_keypair,
+        &buffer_keypair,
+        &authority_keypair,
+        "solana_bpf_rust_panic",
+    );
 
     // Invoke, then upgrade the program, and then invoke again in same tx
     let message = Message::new(
@@ -1807,7 +1826,7 @@ fn test_program_bpf_disguised_as_bpf_loader() {
     }
     #[cfg(feature = "bpf_rust")]
     {
-        programs.extend_from_slice(&[("noop")]);
+        programs.extend_from_slice(&[("solana_bpf_rust_noop")]);
     }
 
     for program in programs.iter() {
@@ -1901,7 +1920,13 @@ fn test_program_bpf_upgrade_via_cpi() {
     let mut elf = Vec::new();
     file.read_to_end(&mut elf).unwrap();
     let buffer_keypair = Keypair::new();
-    load_buffer_account(&bank_client, &mint_keypair, &buffer_keypair, &elf);
+    load_buffer_account(
+        &bank_client,
+        &mint_keypair,
+        &buffer_keypair,
+        &authority_keypair,
+        &elf,
+    );
 
     // Upgrade program via CPI
     let mut upgrade_instruction = bpf_loader_upgradeable::upgrade(
@@ -1945,7 +1970,12 @@ fn test_program_bpf_upgrade_self_via_cpi() {
     bank.add_builtin(&name, id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
-    let noop_program_id = load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, "noop");
+    let noop_program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_noop",
+    );
 
     // Deploy upgradeable program
     let buffer_keypair = Keypair::new();
@@ -1980,7 +2010,13 @@ fn test_program_bpf_upgrade_self_via_cpi() {
 
     // Prepare for upgrade
     let buffer_keypair = Keypair::new();
-    load_upgradeable_buffer(&bank_client, &mint_keypair, &buffer_keypair, "panic");
+    load_upgradeable_buffer(
+        &bank_client,
+        &mint_keypair,
+        &buffer_keypair,
+        &authority_keypair,
+        "solana_bpf_rust_panic",
+    );
 
     // Invoke, then upgrade the program, and then invoke again in same tx
     let message = Message::new(
@@ -2045,7 +2081,13 @@ fn test_program_upgradeable_locks() {
         });
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
-        load_buffer_account(&bank_client, &mint_keypair, buffer_keypair, &elf);
+        load_buffer_account(
+            &bank_client,
+            &mint_keypair,
+            buffer_keypair,
+            &payer_keypair,
+            &elf,
+        );
 
         bank_client
             .send_and_confirm_instruction(

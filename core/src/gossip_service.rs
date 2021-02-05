@@ -33,6 +33,7 @@ impl GossipService {
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         gossip_socket: UdpSocket,
         gossip_validators: Option<HashSet<Pubkey>>,
+        should_check_duplicate_instance: bool,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         let (request_sender, request_receiver) = channel();
@@ -56,6 +57,7 @@ impl GossipService {
             bank_forks.clone(),
             request_receiver,
             response_sender.clone(),
+            should_check_duplicate_instance,
             exit,
         );
         let t_gossip = ClusterInfo::gossip(
@@ -108,8 +110,14 @@ pub fn discover(
     let keypair = keypair.unwrap_or_else(|| Arc::new(Keypair::new()));
 
     let exit = Arc::new(AtomicBool::new(false));
-    let (gossip_service, ip_echo, spy_ref) =
-        make_gossip_node(keypair, entrypoint, &exit, my_gossip_addr, my_shred_version);
+    let (gossip_service, ip_echo, spy_ref) = make_gossip_node(
+        keypair,
+        entrypoint,
+        &exit,
+        my_gossip_addr,
+        my_shred_version,
+        true, // should_check_duplicate_instance,
+    );
 
     let id = spy_ref.id();
     info!("Entrypoint: {:?}", entrypoint);
@@ -268,6 +276,7 @@ fn make_gossip_node(
     exit: &Arc<AtomicBool>,
     gossip_addr: Option<&SocketAddr>,
     shred_version: u16,
+    should_check_duplicate_instance: bool,
 ) -> (GossipService, Option<TcpListener>, Arc<ClusterInfo>) {
     let (node, gossip_socket, ip_echo) = if let Some(gossip_addr) = gossip_addr {
         ClusterInfo::gossip_node(&keypair.pubkey(), gossip_addr, shred_version)
@@ -279,7 +288,14 @@ fn make_gossip_node(
         cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint));
     }
     let cluster_info = Arc::new(cluster_info);
-    let gossip_service = GossipService::new(&cluster_info, None, gossip_socket, None, &exit);
+    let gossip_service = GossipService::new(
+        &cluster_info,
+        None,
+        gossip_socket,
+        None,
+        should_check_duplicate_instance,
+        &exit,
+    );
     (gossip_service, ip_echo, cluster_info)
 }
 
@@ -298,7 +314,14 @@ mod tests {
         let tn = Node::new_localhost();
         let cluster_info = ClusterInfo::new_with_invalid_keypair(tn.info.clone());
         let c = Arc::new(cluster_info);
-        let d = GossipService::new(&c, None, tn.sockets.gossip, None, &exit);
+        let d = GossipService::new(
+            &c,
+            None,
+            tn.sockets.gossip,
+            None,
+            true, // should_check_duplicate_instance
+            &exit,
+        );
         exit.store(true, Ordering::Relaxed);
         d.join().unwrap();
     }

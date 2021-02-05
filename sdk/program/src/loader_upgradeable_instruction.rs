@@ -36,7 +36,7 @@ pub enum UpgradeableLoaderInstruction {
     /// Deploy an executable program.
     ///
     /// A program consists of a Program and ProgramData account pair.
-    ///   - The Program account's address will serve as the program id any
+    ///   - The Program account's address will serve as the program id for any
     ///     instructions that execute this program.
     ///   - The ProgramData account will remain mutable by the loader only and
     ///     holds the program data and authority information.  The ProgramData
@@ -54,21 +54,21 @@ pub enum UpgradeableLoaderInstruction {
     /// The `DeployWithMaxDataLen` instruction does not require the ProgramData
     /// account be a signer and therefore MUST be included within the same
     /// Transaction as the system program's `CreateAccount` instruction that
-    /// creates the Program account. Otherwise another party may initialize
-    /// the account.
+    /// creates the Program account. Otherwise another party may initialize the
+    /// account.
     ///
     /// # Account references
-    ///   0. [Signer] The payer account that will pay to create the ProgramData
+    ///   0. [signer] The payer account that will pay to create the ProgramData
     ///      account.
     ///   1. [writable] The uninitialized ProgramData account.
     ///   2. [writable] The uninitialized Program account.
     ///   3. [writable] The Buffer account where the program data has been
-    ///      written.
+    ///      written.  The buffer account's authority must match the program's
+    ///      authority
     ///   4. [] Rent sysvar.
     ///   5. [] Clock sysvar.
     ///   6. [] System program (`solana_sdk::system_program::id()`).
-    ///   7. [] The program's authority, optional, if omitted then the program
-    ///      will no longer upgradeable.
+    ///   7. [signer] The program's authority
     DeployWithMaxDataLen {
         /// Maximum length that the program can be upgraded to.
         max_data_len: usize,
@@ -81,14 +81,15 @@ pub enum UpgradeableLoaderInstruction {
     ///
     /// The Buffer account must contain sufficient lamports to fund the
     /// ProgramData account to be rent-exempt, any additional lamports left over
-    /// will be transferred to the spill, account leaving the Buffer account
+    /// will be transferred to the spill account, leaving the Buffer account
     /// balance at zero.
     ///
     /// # Account references
     ///   0. [writable] The ProgramData account.
     ///   1. [writable] The Program account.
     ///   2. [writable] The Buffer account where the program data has been
-    ///      written.
+    ///      written.  The buffer account's authority must match the program's
+    ///      authority
     ///   3. [writable] The spill account.
     ///   4. [] Rent sysvar.
     ///   5. [] Clock sysvar.

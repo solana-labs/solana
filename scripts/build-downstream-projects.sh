@@ -83,14 +83,16 @@ serum_dex() {
     rm -rf serum-dex
     git clone https://github.com/project-serum/serum-dex.git
     cd serum-dex
-    # TODO: Remove next line and debug build failure
-    git checkout 54400763dbcc64bc955621298f0bada33b591f53
 
     update_solana_dependencies .
     patch_crates_io Cargo.toml
     patch_crates_io dex/Cargo.toml
-    echo "[workspace]" >> dex/Cargo.toml
-
+    cat >> dex/Cargo.toml <<EOF
+[workspace]
+exclude = [
+    "crank",
+]
+EOF
     $cargo build
 
     $cargo_build_bpf \

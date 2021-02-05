@@ -187,7 +187,7 @@ account's data.
 
 An example of where this could be a problem is if a token program, upon
 transferring the token out of an account, sets the account's lamports to zero,
-assuming it will be deleted by the runtime.  If the program does zero out the
+assuming it will be deleted by the runtime.  If the program does not zero out the
 account's data, a malicious user could trail this instruction with another that
 transfers the tokens a second time.
 

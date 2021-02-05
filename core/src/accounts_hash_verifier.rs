@@ -8,7 +8,9 @@ use crate::{
     cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
     snapshot_packager_service::PendingSnapshotPackage,
 };
-use solana_runtime::snapshot_package::{AccountsPackage, AccountsPackageReceiver};
+use solana_runtime::snapshot_package::{
+    AccountsPackage, AccountsPackagePre, AccountsPackageReceiver,
+};
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::collections::{HashMap, HashSet};
 use std::{
@@ -49,7 +51,7 @@ impl AccountsHashVerifier {
 
                     match accounts_package_receiver.recv_timeout(Duration::from_secs(1)) {
                         Ok(accounts_package) => {
-                            Self::process_accounts_package(
+                            Self::process_accounts_package_pre(
                                 accounts_package,
                                 &cluster_info,
                                 &trusted_validators,
@@ -72,6 +74,32 @@ impl AccountsHashVerifier {
         }
     }
 
+    fn process_accounts_package_pre(
+        accounts_package: AccountsPackagePre,
+        cluster_info: &ClusterInfo,
+        trusted_validators: &Option<HashSet<Pubkey>>,
+        halt_on_trusted_validator_accounts_hash_mismatch: bool,
+        pending_snapshot_package: &Option<PendingSnapshotPackage>,
+        hashes: &mut Vec<(Slot, Hash)>,
+        exit: &Arc<AtomicBool>,
+        fault_injection_rate_slots: u64,
+        snapshot_interval_slots: u64,
+    ) {
+        let accounts_package =
+            solana_runtime::snapshot_utils::process_accounts_package_pre(accounts_package);
+        Self::process_accounts_package(
+            accounts_package,
+            cluster_info,
+            trusted_validators,
+            halt_on_trusted_validator_accounts_hash_mismatch,
+            pending_snapshot_package,
+            hashes,
+            exit,
+            fault_injection_rate_slots,
+            snapshot_interval_slots,
+        );
+    }
+
     fn process_accounts_package(
         accounts_package: AccountsPackage,
         cluster_info: &ClusterInfo,
@@ -83,6 +111,7 @@ impl AccountsHashVerifier {
         fault_injection_rate_slots: u64,
         snapshot_interval_slots: u64,
     ) {
+        let hash = accounts_package.hash;
         if fault_injection_rate_slots != 0
             && accounts_package.slot % fault_injection_rate_slots == 0
         {
@@ -91,10 +120,10 @@ impl AccountsHashVerifier {
             use solana_sdk::hash::extend_and_hash;
             warn!("inserting fault at slot: {}", accounts_package.slot);
             let rand = thread_rng().gen_range(0, 10);
-            let hash = extend_and_hash(&accounts_package.hash, &[rand]);
+            let hash = extend_and_hash(&hash, &[rand]);
             hashes.push((accounts_package.slot, hash));
         } else {
-            hashes.push((accounts_package.slot, accounts_package.hash));
+            hashes.push((accounts_package.slot, hash));
         }
 
         while hashes.len() > MAX_SNAPSHOT_HASHES {

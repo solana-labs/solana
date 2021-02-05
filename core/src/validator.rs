@@ -121,6 +121,7 @@ pub struct ValidatorConfig {
     pub account_indexes: HashSet<AccountIndex>,
     pub accounts_db_caching_enabled: bool,
     pub warp_slot: Option<Slot>,
+    pub accounts_db_test_hash_calculation: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -168,6 +169,7 @@ impl Default for ValidatorConfig {
             account_indexes: HashSet::new(),
             accounts_db_caching_enabled: false,
             warp_slot: None,
+            accounts_db_test_hash_calculation: false,
         }
     }
 }
@@ -247,6 +249,7 @@ impl Validator {
         mut authorized_voter_keypairs: Vec<Arc<Keypair>>,
         cluster_entrypoints: Vec<ContactInfo>,
         config: &ValidatorConfig,
+        should_check_duplicate_instance: bool,
     ) -> Self {
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
@@ -517,6 +520,7 @@ impl Validator {
             Some(bank_forks.clone()),
             node.sockets.gossip,
             config.gossip_validators.clone(),
+            should_check_duplicate_instance,
             &exit,
         );
         let serve_repair = Arc::new(RwLock::new(ServeRepair::new(cluster_info.clone())));
@@ -639,6 +643,7 @@ impl Validator {
                 repair_validators: config.repair_validators.clone(),
                 accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
                 accounts_db_caching_enabled: config.accounts_db_caching_enabled,
+                test_hash_calculation: config.accounts_db_test_hash_calculation,
             },
         );
 
@@ -984,7 +989,11 @@ fn new_banks_from_ledger(
     let blockstore = Arc::new(blockstore);
     let transaction_history_services =
         if config.rpc_addrs.is_some() && config.rpc_config.enable_rpc_transaction_history {
-            initialize_rpc_transaction_history_services(blockstore.clone(), exit)
+            initialize_rpc_transaction_history_services(
+                blockstore.clone(),
+                exit,
+                config.rpc_config.enable_cpi_and_log_storage,
+            )
         } else {
             TransactionHistoryServices::default()
         };
@@ -1153,9 +1162,13 @@ fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_versi
 fn initialize_rpc_transaction_history_services(
     blockstore: Arc<Blockstore>,
     exit: &Arc<AtomicBool>,
+    enable_cpi_and_log_storage: bool,
 ) -> TransactionHistoryServices {
     let (transaction_status_sender, transaction_status_receiver) = unbounded();
-    let transaction_status_sender = Some(transaction_status_sender);
+    let transaction_status_sender = Some(TransactionStatusSender {
+        sender: transaction_status_sender,
+        enable_cpi_and_log_storage,
+    });
     let transaction_status_service = Some(TransactionStatusService::new(
         transaction_status_receiver,
         blockstore.clone(),
@@ -1411,6 +1424,7 @@ mod tests {
             vec![voting_keypair.clone()],
             vec![leader_node.info],
             &config,
+            true, // should_check_duplicate_instance
         );
         validator.close();
         remove_dir_all(validator_ledger_path).unwrap();
@@ -1481,6 +1495,7 @@ mod tests {
                     vec![Arc::new(vote_account_keypair)],
                     vec![leader_node.info.clone()],
                     &config,
+                    true, // should_check_duplicate_instance
                 )
             })
             .collect();
