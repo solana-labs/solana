@@ -9,8 +9,6 @@ This document makes no suggestion as to the monetary value of SOL at any time.*
 Staking your SOL tokens on Solana is the best way you can help secure the world's
 highest-performing blockchain network, and
 [earn rewards](implemented-proposals/staking-rewards.md) for doing so!
-Inflation and network rewards are *NOT* presently enabled on Solana's
-Mainnet Beta network, but may be enabled in the future.
 
 Solana is a Proof-of-Stake (PoS) network with delegations, which means that
 anyone who holds SOL tokens can choose to delegate some of their SOL to one or
@@ -36,25 +34,21 @@ to offer the lowest commission for their services, in order to attract more
 delegated stake.
 
 There is a risk of loss of tokens when staking, through a process known as
-*slashing*.  Slashing is *NOT* presently enabled on Solana's Mainnet Beta
-network, but may be enabled in the future.  Slashing involves the automatic
-removal and destruction of a portion of a validator's delegated stake in
-response to intentional malicious behavior, such as creating invalid
-transactions or censoring certain types of transactions or network participants.
+*slashing*.  Slashing involves the removal and destruction of a portion of a
+validator's delegated stake in response to intentional malicious behavior,
+such as creating invalid transactions or censoring certain types of transactions
+or network participants.
+
 If a validator is slashed, all token holders who have delegated stake to that
 validator will lose a portion of their delegation.  While this means an immediate
 loss for the token holder, it also is a loss of future rewards for the validator
-due to their reduced total delegation.
+due to their reduced total delegation.  More details on the slashing roadmap can
+be found
+[here](proposals/optimistic-confirmation-and-slashing.md#slashing-roadmap).
 
 It is the goal of the network rewards and slashing to align both validators'
 and token holders' financial incentives, which in turn help keeps the network
 secure, robust and performing at its best.
-
-*Note: Network rewards for stakers and validators are not presently enabled on
-Mainnet Beta.*
-
-*Note: Slashing is not enabled on Mainnet Beta at this time.*
-
 
 ## How do I stake my SOL tokens?
 In order to stake tokens on Solana, you first will need to transfer some SOL
