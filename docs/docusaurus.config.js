@@ -10,7 +10,7 @@ module.exports = {
 	onBrokenLinks: 'throw',
 	i18n: {
 		defaultLocale: 'en',
-		locales: ['en', 'de', 'es', 'ru', 'ar', 'ko'],
+		locales: ['en', 'de', 'es', 'ru', 'ar', 'ko', 'zh'],
 		localeConfigs: {
 			en: {
 			  label: 'English',

@@ -1,0 +1,30 @@
+{
+  "item.label.Program Library »": {
+    "message": "Program Library »",
+    "description": "Navbar item with label Program Library »"
+  },
+  "item.label.Develop": {
+    "message": "Develop",
+    "description": "Navbar item with label Develop"
+  },
+  "item.label.Validate": {
+    "message": "Validate",
+    "description": "Navbar item with label Validate"
+  },
+  "item.label.Integrate": {
+    "message": "Integrate",
+    "description": "Navbar item with label Integrate"
+  },
+  "item.label.Learn": {
+    "message": "Learn",
+    "description": "Navbar item with label Learn"
+  },
+  "item.label.Chat": {
+    "message": "Chat",
+    "description": "Navbar item with label Chat"
+  },
+  "item.label.GitHub": {
+    "message": "GitHub",
+    "description": "Navbar item with label GitHub"
+  }
+}

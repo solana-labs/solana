@@ -9,12 +9,15 @@
     "help": "docusaurus --help",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
+    "write-translations": "docusaurus write-translations",
     "format": "prettier --check \"**/*.{js,jsx,json,md,scss}\"",
     "format:fix": "prettier --write \"**/*.{js,jsx,json,md,scss}\"",
     "lint": "set -ex; eslint .",
-    "lint:fix": "npm run lint -- --fix"
+    "lint:fix": "npm run lint -- --fix",
+    "crowdin": "crowdin"
   },
   "dependencies": {
+    "@crowdin/cli": "^3.5.2",
     "@docusaurus/core": "^2.0.0-alpha.70",
     "@docusaurus/preset-classic": "^2.0.0-alpha.70",
     "@docusaurus/theme-search-algolia": "^2.0.0-alpha.32",

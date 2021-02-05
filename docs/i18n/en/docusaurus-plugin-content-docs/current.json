@@ -1,0 +1,110 @@
+{
+  "version.label": {
+    "message": "Next",
+    "description": "The label for version current"
+  },
+  "sidebar.docs.category.About": {
+    "message": "About",
+    "description": "The label for category About in sidebar docs"
+  },
+  "sidebar.docs.category.Wallets": {
+    "message": "Wallets",
+    "description": "The label for category Wallets in sidebar docs"
+  },
+  "sidebar.docs.category.Web Wallets": {
+    "message": "Web Wallets",
+    "description": "The label for category Web Wallets in sidebar docs"
+  },
+  "sidebar.docs.category.Hardware Wallets": {
+    "message": "Hardware Wallets",
+    "description": "The label for category Hardware Wallets in sidebar docs"
+  },
+  "sidebar.docs.category.Command-line Wallets": {
+    "message": "Command-line Wallets",
+    "description": "The label for category Command-line Wallets in sidebar docs"
+  },
+  "sidebar.docs.category.Staking": {
+    "message": "Staking",
+    "description": "The label for category Staking in sidebar docs"
+  },
+  "sidebar.docs.category.Command Line": {
+    "message": "Command Line",
+    "description": "The label for category Command Line in sidebar docs"
+  },
+  "sidebar.docs.category.Developing": {
+    "message": "Developing",
+    "description": "The label for category Developing in sidebar docs"
+  },
+  "sidebar.docs.category.Programming Model": {
+    "message": "Programming Model",
+    "description": "The label for category Programming Model in sidebar docs"
+  },
+  "sidebar.docs.category.Clients": {
+    "message": "Clients",
+    "description": "The label for category Clients in sidebar docs"
+  },
+  "sidebar.docs.category.Builtins": {
+    "message": "Builtins",
+    "description": "The label for category Builtins in sidebar docs"
+  },
+  "sidebar.docs.category.Deployed Programs": {
+    "message": "Deployed Programs",
+    "description": "The label for category Deployed Programs in sidebar docs"
+  },
+  "sidebar.docs.category.Integrating": {
+    "message": "Integrating",
+    "description": "The label for category Integrating in sidebar docs"
+  },
+  "sidebar.docs.category.Validating": {
+    "message": "Validating",
+    "description": "The label for category Validating in sidebar docs"
+  },
+  "sidebar.docs.category.Incenvitized Testnet": {
+    "message": "Incenvitized Testnet",
+    "description": "The label for category Incenvitized Testnet in sidebar docs"
+  },
+  "sidebar.docs.category.Registration": {
+    "message": "Registration",
+    "description": "The label for category Registration in sidebar docs"
+  },
+  "sidebar.docs.category.Participation": {
+    "message": "Participation",
+    "description": "The label for category Participation in sidebar docs"
+  },
+  "sidebar.docs.category.Clusters": {
+    "message": "Clusters",
+    "description": "The label for category Clusters in sidebar docs"
+  },
+  "sidebar.docs.category.Architecture": {
+    "message": "Architecture",
+    "description": "The label for category Architecture in sidebar docs"
+  },
+  "sidebar.docs.category.Cluster": {
+    "message": "Cluster",
+    "description": "The label for category Cluster in sidebar docs"
+  },
+  "sidebar.docs.category.Validator": {
+    "message": "Validator",
+    "description": "The label for category Validator in sidebar docs"
+  },
+  "sidebar.docs.category.Design Proposals": {
+    "message": "Design Proposals",
+    "description": "The label for category Design Proposals in sidebar docs"
+  },
+  "sidebar.docs.category.Implemented": {
+    "message": "Implemented",
+    "description": "The label for category Implemented in sidebar docs"
+  },
+  "sidebar.docs.category.Economic Design": {
+    "message": "Economic Design",
+    "description": "The label for category Economic Design in sidebar docs"
+  },
+  "sidebar.docs.category.Validation Client Economics": {
+    "message": "Validation Client Economics",
+    "description": "The label for category Validation Client Economics in sidebar docs"
+  },
+  "sidebar.docs.category.Accepted": {
+    "message": "Accepted",
+    "description": "The label for category Accepted in sidebar docs"
+  }
+}

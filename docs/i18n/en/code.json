@@ -1,0 +1,50 @@
+{
+  "⛏ Start Building": {
+    "message": "⛏ Start Building",
+    "description": "start-building"
+  },
+  "Get started building your decentralized app or marketplace.": {
+    "message": "Get started building your decentralized app or marketplace.",
+    "description": "get-started-building"
+  },
+  "🎛 Run a Validator Node": {
+    "message": "🎛 Run a Validator Node",
+    "description": "run-validator"
+  },
+  "Validate transactions, secure the network, and earn rewards.": {
+    "message": "Validate transactions, secure the network, and earn rewards.",
+    "description": "validate-transactions"
+  },
+  "🏛 Create an SPL Token": {
+    "message": "🏛 Create an SPL Token",
+    "description": "create-spl"
+  },
+  "Launch your own SPL Token, Solana's equivalent of ERC-20.": {
+    "message": "Launch your own SPL Token, Solana's equivalent of ERC-20.",
+    "description": "erc-20"
+  },
+  "🏦 Integrate an Exchange": {
+    "message": "🏦 Integrate an Exchange",
+    "description": "integrate-exchange"
+  },
+  "Follow our extensive integration guide to ensure a seamless user experience.": {
+    "message": "Follow our extensive integration guide to ensure a seamless user experience.",
+    "description": "integration-guide"
+  },
+  "📲 Manage a Wallet": {
+    "message": "📲 Manage a Wallet",
+    "description": "manage-wallet"
+  },
+  "Create a wallet, check your balance, and learn about wallet options.": {
+    "message": "Create a wallet, check your balance, and learn about wallet options.",
+    "description": "wallet-options"
+  },
+  "🤯 Learn How Solana Works": {
+    "message": "🤯 Learn How Solana Works",
+    "description": "learn-how"
+  },
+  "Get a high-level understanding of Solana's architecture.": {
+    "message": "Get a high-level understanding of Solana's architecture.",
+    "description": "high-level"
+  }
+}

@@ -1,0 +1,16 @@
+project_id: '2'
+api_token_env: 'CROWDIN_PERSONAL_TOKEN'
+base_url: 'https://solana.crowdin.com'
+preserve_hierarchy: true
+files: [
+    # JSON translation files
+    # {
+    # source: '/i18n/en/**/*',
+    # translation: '/i18n/%two_letters_code%/**/%original_file_name%',
+    #},
+    # Docs Markdown files
+    {
+      source: '/src/**/*.md',
+      translation: '/i18n/%two_letters_code%/docusaurus-plugin-content-docs/current/**/%original_file_name%',
+    },
+  ]
