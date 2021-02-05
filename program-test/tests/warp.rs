@@ -7,7 +7,7 @@ use {
         program_error::ProgramError,
         pubkey::Pubkey,
         rent::Rent,
-        system_instruction,
+        system_instruction, system_program,
         sysvar::{clock, Sysvar},
     },
     solana_program_test::{processor, ProgramTest, ProgramTestError},
@@ -18,6 +18,10 @@ use {
     solana_stake_program::{
         stake_instruction,
         stake_state::{Authorized, Lockup},
+    },
+    solana_vote_program::{
+        vote_instruction,
+        vote_state::{VoteInit, VoteState},
     },
     std::convert::TryInto,
 };
@@ -164,21 +168,49 @@ async fn stake_rewards_from_warp() {
     let program_test = ProgramTest::default();
 
     let mut context = program_test.start_with_context().await;
-    let staker_keypair = Keypair::new();
+    let mut instructions = vec![];
+    let validator_keypair = Keypair::new();
+    instructions.push(system_instruction::create_account(
+        &context.payer.pubkey(),
+        &validator_keypair.pubkey(),
+        42,
+        0,
+        &system_program::id(),
+    ));
+    let vote_lamports = Rent::default().minimum_balance(VoteState::size_of());
+    let vote_keypair = Keypair::new();
+    let user_keypair = Keypair::new();
+    instructions.append(&mut vote_instruction::create_account(
+        &context.payer.pubkey(),
+        &vote_keypair.pubkey(),
+        &VoteInit {
+            node_pubkey: validator_keypair.pubkey(),
+            authorized_voter: user_keypair.pubkey(),
+            ..VoteInit::default()
+        },
+        vote_lamports,
+    ));
+
     let stake_keypair = Keypair::new();
     let stake_lamports = 1_000_000_000_000;
-    let instructions = stake_instruction::create_account_and_delegate_stake(
+    instructions.append(&mut stake_instruction::create_account_and_delegate_stake(
         &context.payer.pubkey(),
         &stake_keypair.pubkey(),
-        &context.voter.pubkey(),
-        &Authorized::auto(&staker_keypair.pubkey()),
+        &vote_keypair.pubkey(),
+        &Authorized::auto(&user_keypair.pubkey()),
         &Lockup::default(),
         stake_lamports,
-    );
+    ));
     let transaction = Transaction::new_signed_with_payer(
         &instructions,
         Some(&context.payer.pubkey()),
-        &[&context.payer, &stake_keypair, &staker_keypair],
+        &vec![
+            &context.payer,
+            &validator_keypair,
+            &vote_keypair,
+            &stake_keypair,
+            &user_keypair,
+        ],
         context.last_blockhash,
     );
     context
@@ -203,6 +235,8 @@ async fn stake_rewards_from_warp() {
         .expect("account exists")
         .unwrap();
     assert_eq!(account.lamports, stake_lamports);
+
+    context.simulate_vote_activity(&vote_keypair.pubkey(), 100);
 
     // go forward and see that rewards have been distributed
     context

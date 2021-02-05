@@ -606,16 +606,17 @@ impl ProgramTest {
             });
         }
 
+        let rent = Rent::default();
         let bootstrap_validator_pubkey = Pubkey::new_unique();
-        let bootstrap_validator_stake_lamports = 10_000;
+        let bootstrap_validator_lamports = rent.minimum_balance(VoteState::size_of());
 
         let mut gci = create_genesis_config_with_leader(
             sol_to_lamports(1_000_000.0),
             &bootstrap_validator_pubkey,
-            bootstrap_validator_stake_lamports,
+            bootstrap_validator_lamports,
         );
         let genesis_config = &mut gci.genesis_config;
-        genesis_config.rent = Rent::default();
+        genesis_config.rent = rent;
         genesis_config.fee_rate_governor =
             solana_program::fee_calculator::FeeRateGovernor::default();
         debug!("Payer address: {}", gci.mint_keypair.pubkey());
@@ -765,7 +766,6 @@ pub struct ProgramTestContext {
     pub banks_client: BanksClient,
     pub last_blockhash: Hash,
     pub payer: Keypair,
-    pub voter: Keypair,
     pub genesis_config: GenesisConfig,
     bank_forks: Arc<RwLock<BankForks>>,
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
@@ -810,12 +810,31 @@ impl ProgramTestContext {
             banks_client,
             last_blockhash,
             payer: genesis_config_info.mint_keypair,
-            voter: genesis_config_info.voting_keypair,
             genesis_config: genesis_config_info.genesis_config,
             bank_forks,
             block_commitment_cache,
             _bank_task: bank_task,
         }
+    }
+
+    /// Fake vote activity to accrue vote credits, and eventually stake rewards
+    pub fn simulate_vote_activity(&mut self, voter: &Pubkey, number_of_slots: u64) {
+        let bank_forks = self.bank_forks.read().unwrap();
+        let bank = bank_forks.working_bank();
+        let working_slot = bank.slot();
+
+        // generate some vote activity for rewards
+        let mut voter_account = bank.get_account(voter).unwrap();
+        let mut vote_state = VoteState::from(&voter_account).unwrap();
+
+        // This can slow down testing for huge warp amounts, so limit to 2 dev epochs
+        for i in working_slot..=(working_slot + number_of_slots) {
+            let (epoch, _) = bank.get_epoch_and_slot_index(i);
+            vote_state.increment_credits(epoch);
+        }
+        let versioned = VoteStateVersions::new_current(vote_state);
+        VoteState::to(&versioned, &mut voter_account).unwrap();
+        bank.store_account(voter, &voter_account);
     }
 
     /// Force the working bank ahead to a new slot
@@ -836,18 +855,6 @@ impl ProgramTestContext {
         if warp_slot <= working_slot {
             return Err(ProgramTestError::InvalidWarpSlot);
         }
-
-        // generate some vote activity for rewards
-        let mut vote_account = bank.get_account(&self.voter.pubkey()).unwrap();
-        let mut vote_state = VoteState::from(&vote_account).unwrap();
-        for i in working_slot..=warp_slot.max(10) {
-            let (epoch, _) = bank.get_epoch_and_slot_index(i);
-            vote_state.increment_credits(epoch);
-        }
-        let versioned = VoteStateVersions::new_current(vote_state);
-        VoteState::to(&versioned, &mut vote_account).unwrap();
-        bank.store_account(&self.voter.pubkey(), &vote_account);
-        bank.force_flush_accounts_cache();
 
         let pre_warp_slot = warp_slot - 1;
         let warp_bank = bank_forks.insert(Bank::warp_from_parent(
