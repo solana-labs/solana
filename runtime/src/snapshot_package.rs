@@ -1,11 +1,12 @@
 use crate::bank_forks::ArchiveFormat;
 use crate::snapshot_utils::SnapshotVersion;
-use crate::{accounts_db::SnapshotStorages, bank::BankSlotDelta};
+use crate::{accounts_db::SnapshotStorages, bank::Bank, bank::BankSlotDelta};
 use solana_sdk::clock::Slot;
 use solana_sdk::hash::Hash;
 use std::{
     path::PathBuf,
     sync::mpsc::{Receiver, SendError, Sender},
+    sync::Arc,
 };
 use tempfile::TempDir;
 
@@ -27,6 +28,7 @@ pub struct AccountsPackagePre {
     pub expected_capitalization: u64,
     pub hash_for_testing: Option<Hash>,
     pub simple_capitalization_testing: bool,
+    pub bank: Arc<Bank>,
 }
 
 impl AccountsPackagePre {
@@ -44,6 +46,7 @@ impl AccountsPackagePre {
         expected_capitalization: u64,
         hash_for_testing: Option<Hash>,
         simple_capitalization_testing: bool,
+        bank: Arc<Bank>,
     ) -> Self {
         Self {
             slot,
@@ -58,6 +61,7 @@ impl AccountsPackagePre {
             expected_capitalization,
             hash_for_testing,
             simple_capitalization_testing,
+            bank,
         }
     }
 }
@@ -72,6 +76,7 @@ pub struct AccountsPackage {
     pub hash: Hash,
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
+    pub bank: Arc<Bank>,
 }
 
 impl AccountsPackage {
@@ -85,6 +90,7 @@ impl AccountsPackage {
         hash: Hash,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
+        bank: Arc<Bank>,
     ) -> Self {
         Self {
             slot,
@@ -96,6 +102,7 @@ impl AccountsPackage {
             hash,
             archive_format,
             snapshot_version,
+            bank,
         }
     }
 }

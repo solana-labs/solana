@@ -140,7 +140,7 @@ impl Ord for SlotSnapshotPaths {
 }
 
 pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
-    bank: &Bank,
+    bank: &Arc<Bank>,
     snapshot_files: &SlotSnapshotPaths,
     snapshot_path: Q,
     status_cache_slot_deltas: Vec<BankSlotDelta>,
@@ -187,6 +187,7 @@ pub fn package_snapshot<P: AsRef<Path>, Q: AsRef<Path>>(
         bank.capitalization(),
         hash_for_testing,
         bank.simple_capitalization_enabled(),
+        bank.clone(),
     );
 
     Ok(package)
@@ -881,7 +882,7 @@ pub fn purge_old_snapshots(snapshot_path: &Path) {
 
 // Gather the necessary elements for a snapshot of the given `root_bank`
 pub fn snapshot_bank(
-    root_bank: &Bank,
+    root_bank: &Arc<Bank>,
     status_cache_slot_deltas: Vec<BankSlotDelta>,
     accounts_package_sender: &AccountsPackageSender,
     snapshot_path: &Path,
@@ -923,7 +924,7 @@ pub fn snapshot_bank(
 /// Bank will be frozen during the process.
 pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_path: P,
-    bank: &Bank,
+    bank: &Arc<Bank>,
     snapshot_version: Option<SnapshotVersion>,
     snapshot_package_output_path: Q,
     archive_format: ArchiveFormat,
@@ -1001,6 +1002,7 @@ pub fn process_accounts_package_pre(
         hash,
         accounts_package.archive_format,
         accounts_package.snapshot_version,
+        accounts_package.bank,
     )
 }
 
