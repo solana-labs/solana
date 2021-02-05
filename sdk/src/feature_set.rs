@@ -49,6 +49,15 @@ pub mod full_inflation {
         }
     }
 
+    pub mod sotcsa {
+        pub mod vote {
+            solana_sdk::declare_id!("EgoekfqCYoraFE5ZkiECGQ945Y5rGBXh3n85sQPuR85r");
+        }
+        pub mod enable {
+            solana_sdk::declare_id!("6f8Y2dACzRjM9R9RwiLp9HuAxo43QwtztgHm4BKUGyxU");
+        }
+    }
+
     pub mod buburuza {
         pub mod vote {
             solana_sdk::declare_id!("4qp2VKAPgmi53N7DkobejdbPgkpP2316mSAZnKaWeDtR");
@@ -332,6 +341,8 @@ lazy_static! {
         (full_inflation::rockx::vote::id(), "Community vote allowing rockx to enable full inflation"),
         (full_inflation::rockx::enable::id(), "Full inflation enabled by rockx"),
         /*************** ADD NEW FEATURES HERE ***************/
+        (full_inflation::sotcsa::vote::id(), "community vote allowing sotcsa to enable full inflation"),
+        (full_inflation::sotcsa::enable::id(), "full inflation enabled by sotcsa"),
     ]
     .iter()
     .cloned()
@@ -361,6 +372,10 @@ lazy_static! {
         FullInflationFeaturePair {
             vote_id: full_inflation::candidate_example::vote::id(),
             enable_id: full_inflation::candidate_example::enable::id(),
+        },
+        FullInflationFeaturePair {
+            vote_id: full_inflation::sotcsa::vote::id(),
+            enable_id: full_inflation::sotcsa::enable::id(),
         },
         FullInflationFeaturePair {
             vote_id: full_inflation::stakeconomy::vote::id(),
