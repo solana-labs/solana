@@ -766,7 +766,7 @@ pub struct ProgramTestContext {
     pub banks_client: BanksClient,
     pub last_blockhash: Hash,
     pub payer: Keypair,
-    pub genesis_config: GenesisConfig,
+    genesis_config: GenesisConfig,
     bank_forks: Arc<RwLock<BankForks>>,
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     _bank_task: DroppableTask<()>,
