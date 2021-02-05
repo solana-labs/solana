@@ -15,6 +15,7 @@ use bincode::{config::Options, serialize_into};
 use bzip2::bufread::BzDecoder;
 use flate2::read::GzDecoder;
 use log::*;
+use rayon::ThreadPool;
 use regex::Regex;
 use solana_measure::measure::Measure;
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey};
@@ -926,6 +927,7 @@ pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
     snapshot_version: Option<SnapshotVersion>,
     snapshot_package_output_path: Q,
     archive_format: ArchiveFormat,
+    thread_pool: &ThreadPool,
 ) -> Result<PathBuf> {
     let snapshot_version = snapshot_version.unwrap_or_default();
 
@@ -952,13 +954,16 @@ pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
         None,
     )?;
 
-    let package = process_accounts_package_pre(package);
+    let package = process_accounts_package_pre(package, Some(&thread_pool));
 
     archive_snapshot_package(&package)?;
     Ok(package.tar_output_file)
 }
 
-pub fn process_accounts_package_pre(accounts_package: AccountsPackagePre) -> AccountsPackage {
+pub fn process_accounts_package_pre(
+    accounts_package: AccountsPackagePre,
+    thread_pool: Option<&ThreadPool>,
+) -> AccountsPackage {
     let mut time = Measure::start("hash");
 
     let hash = accounts_package.hash; // temporarily remaining here
@@ -966,6 +971,7 @@ pub fn process_accounts_package_pre(accounts_package: AccountsPackagePre) -> Acc
         let (hash, lamports) = AccountsDB::calculate_accounts_hash_without_index(
             &accounts_package.storages,
             accounts_package.simple_capitalization_testing,
+            &thread_pool.unwrap(),
         );
 
         assert_eq!(accounts_package.expected_capitalization, lamports);

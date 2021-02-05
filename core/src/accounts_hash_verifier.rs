@@ -8,8 +8,10 @@ use crate::{
     cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
     snapshot_packager_service::PendingSnapshotPackage,
 };
-use solana_runtime::snapshot_package::{
-    AccountsPackage, AccountsPackagePre, AccountsPackageReceiver,
+use rayon::ThreadPool;
+use solana_runtime::{
+    accounts_db,
+    snapshot_package::{AccountsPackage, AccountsPackagePre, AccountsPackageReceiver},
 };
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::collections::{HashMap, HashSet};
@@ -44,6 +46,7 @@ impl AccountsHashVerifier {
             .name("solana-accounts-hash".to_string())
             .spawn(move || {
                 let mut hashes = vec![];
+                let mut thread_pool_storage = None;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -51,6 +54,13 @@ impl AccountsHashVerifier {
 
                     match accounts_package_receiver.recv_timeout(Duration::from_secs(1)) {
                         Ok(accounts_package) => {
+                            if accounts_package.hash_for_testing.is_some()
+                                && thread_pool_storage.is_none()
+                            {
+                                thread_pool_storage =
+                                    Some(accounts_db::make_min_priority_thread_pool());
+                            }
+
                             Self::process_accounts_package_pre(
                                 accounts_package,
                                 &cluster_info,
@@ -61,6 +71,7 @@ impl AccountsHashVerifier {
                                 &exit,
                                 fault_injection_rate_slots,
                                 snapshot_interval_slots,
+                                thread_pool_storage.as_ref(),
                             );
                         }
                         Err(RecvTimeoutError::Disconnected) => break,
@@ -74,6 +85,7 @@ impl AccountsHashVerifier {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn process_accounts_package_pre(
         accounts_package: AccountsPackagePre,
         cluster_info: &ClusterInfo,
@@ -84,9 +96,12 @@ impl AccountsHashVerifier {
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
         snapshot_interval_slots: u64,
+        thread_pool: Option<&ThreadPool>,
     ) {
-        let accounts_package =
-            solana_runtime::snapshot_utils::process_accounts_package_pre(accounts_package);
+        let accounts_package = solana_runtime::snapshot_utils::process_accounts_package_pre(
+            accounts_package,
+            thread_pool,
+        );
         Self::process_accounts_package(
             accounts_package,
             cluster_info,

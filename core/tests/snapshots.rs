@@ -45,6 +45,7 @@ mod tests {
     };
     use solana_runtime::{
         accounts_background_service::{ABSRequestSender, SnapshotRequestHandler},
+        accounts_db,
         bank::{Bank, BankSlotDelta},
         bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
@@ -241,7 +242,10 @@ mod tests {
             None,
         )
         .unwrap();
-        let snapshot_package = snapshot_utils::process_accounts_package_pre(snapshot_package);
+        let snapshot_package = snapshot_utils::process_accounts_package_pre(
+            snapshot_package,
+            Some(&last_bank.get_thread_pool()),
+        );
         snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
 
         // Restore bank from snapshot
@@ -419,6 +423,8 @@ mod tests {
             &cluster_info,
         );
 
+        let thread_pool = accounts_db::make_min_priority_thread_pool();
+
         let _package_receiver = std::thread::Builder::new()
             .name("package-receiver".to_string())
             .spawn(move || {
@@ -431,6 +437,7 @@ mod tests {
                     let snapshot_package =
                         solana_runtime::snapshot_utils::process_accounts_package_pre(
                             snapshot_package,
+                            Some(&thread_pool),
                         );
                     *pending_snapshot_package.lock().unwrap() = Some(snapshot_package);
                 }

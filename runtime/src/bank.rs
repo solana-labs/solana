@@ -27,6 +27,7 @@ use crate::{
 use byteorder::{ByteOrder, LittleEndian};
 use itertools::Itertools;
 use log::*;
+use rayon::ThreadPool;
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_info};
 use solana_sdk::{
@@ -4305,6 +4306,10 @@ impl Bank {
 
     pub fn get_accounts_hash(&self) -> Hash {
         self.rc.accounts.accounts_db.get_accounts_hash(self.slot)
+    }
+
+    pub fn get_thread_pool(&self) -> &ThreadPool {
+        &self.rc.accounts.accounts_db.thread_pool_clean
     }
 
     pub fn update_accounts_hash_with_index_option(

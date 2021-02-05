@@ -983,7 +983,7 @@ impl ShrinkStats {
     }
 }
 
-fn make_min_priority_thread_pool() -> ThreadPool {
+pub fn make_min_priority_thread_pool() -> ThreadPool {
     // Use lower thread count to reduce priority.
     let num_threads = std::cmp::max(2, num_cpus::get() / 4);
     rayon::ThreadPoolBuilder::new()
@@ -3748,6 +3748,7 @@ impl AccountsDB {
             Self::calculate_accounts_hash_without_index(
                 &combined_maps,
                 simple_capitalization_enabled,
+                &self.thread_pool_clean,
             )
         } else {
             self.calculate_accounts_hash(slot, ancestors, false, simple_capitalization_enabled)
@@ -3851,10 +3852,13 @@ impl AccountsDB {
     pub fn calculate_accounts_hash_without_index(
         storages: &[SnapshotStorage],
         simple_capitalization_enabled: bool,
+        thread_pool: &ThreadPool,
     ) -> (Hash, u64) {
-        let result = Self::scan_snapshot_stores(storages, simple_capitalization_enabled);
+        thread_pool.install(|| {
+            let result = Self::scan_snapshot_stores(storages, simple_capitalization_enabled);
 
-        Self::rest_of_hash_calculation(result)
+            Self::rest_of_hash_calculation(result)
+        })
     }
 
     pub fn verify_bank_hash_and_lamports(
@@ -5180,7 +5184,11 @@ pub mod tests {
         solana_logger::setup();
 
         let (storages, _size, _slot_expected) = sample_storage();
-        let result = AccountsDB::calculate_accounts_hash_without_index(&storages, true);
+        let result = AccountsDB::calculate_accounts_hash_without_index(
+            &storages,
+            true,
+            &make_min_priority_thread_pool(),
+        );
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
         assert_eq!(result, (expected_hash, 0));
     }
