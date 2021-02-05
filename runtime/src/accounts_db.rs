@@ -3657,7 +3657,7 @@ impl AccountsDB {
         scan_func: F,
     ) -> Vec<B>
     where
-        F: Fn(LoadedAccount, AppendVecId, &mut B, Slot) + Send + Sync,
+        F: Fn(LoadedAccount, &mut B, Slot) + Send + Sync,
         B: Send + Default,
     {
         snapshot_storages
@@ -3669,7 +3669,6 @@ impl AccountsDB {
                 accounts.into_iter().for_each(|stored_account| {
                     scan_func(
                         LoadedAccount::Stored(stored_account),
-                        storage.append_vec_id(),
                         &mut retval,
                         storage.slot(),
                     )
@@ -3819,7 +3818,6 @@ impl AccountsDB {
         Self::scan_account_storage_no_bank(
             &storage,
             |loaded_account: LoadedAccount,
-             _store_id: AppendVecId,
              _accum: &mut Vec<(Pubkey, CalculateHashIntermediate)>,
              slot: Slot| {
                 let version = loaded_account.write_version();
@@ -5225,10 +5223,7 @@ pub mod tests {
         let calls = AtomicU64::new(0);
         let result = AccountsDB::scan_account_storage_no_bank(
             &storages,
-            |loaded_account: LoadedAccount,
-             _store_id: AppendVecId,
-             accum: &mut Vec<u64>,
-             slot: Slot| {
+            |loaded_account: LoadedAccount, accum: &mut Vec<u64>, slot: Slot| {
                 calls.fetch_add(1, Ordering::Relaxed);
                 assert_eq!(loaded_account.pubkey(), &pubkey);
                 assert_eq!(slot_expected, slot);
