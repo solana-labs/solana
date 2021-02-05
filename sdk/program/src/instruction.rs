@@ -186,6 +186,9 @@ pub enum InstructionError {
 
     #[error("Incorrect authority provided")]
     IncorrectAuthority,
+
+    #[error("Failed to serialize or deserialize account data: {0}")]
+    SerializationError(String),
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]

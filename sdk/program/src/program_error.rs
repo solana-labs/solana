@@ -1,4 +1,5 @@
 use crate::{decode_error::DecodeError, instruction::InstructionError, msg, pubkey::PubkeyError};
+use borsh::maybestd::io::Error as IOError;
 use num_traits::{FromPrimitive, ToPrimitive};
 use std::convert::TryFrom;
 use thiserror::Error;
@@ -37,6 +38,8 @@ pub enum ProgramError {
     MaxSeedLengthExceeded,
     #[error("Provided seeds do not result in a valid address")]
     InvalidSeeds,
+    #[error("Failed to serialize or deserialize account state: {0}")]
+    SerializationError(String),
 }
 
 pub trait PrintProgramError {
@@ -71,6 +74,7 @@ impl PrintProgramError for ProgramError {
             Self::AccountBorrowFailed => msg!("Error: AccountBorrowFailed"),
             Self::MaxSeedLengthExceeded => msg!("Error: MaxSeedLengthExceeded"),
             Self::InvalidSeeds => msg!("Error: InvalidSeeds"),
+            Self::SerializationError(_) => msg!("Error: SerializationError"),
         }
     }
 }
@@ -97,6 +101,7 @@ pub const NOT_ENOUGH_ACCOUNT_KEYS: u64 = to_builtin!(11);
 pub const ACCOUNT_BORROW_FAILED: u64 = to_builtin!(12);
 pub const MAX_SEED_LENGTH_EXCEEDED: u64 = to_builtin!(13);
 pub const INVALID_SEEDS: u64 = to_builtin!(14);
+pub const SERIALIZATION_ERROR: u64 = to_builtin!(15);
 
 impl From<ProgramError> for u64 {
     fn from(error: ProgramError) -> Self {
@@ -114,6 +119,7 @@ impl From<ProgramError> for u64 {
             ProgramError::AccountBorrowFailed => ACCOUNT_BORROW_FAILED,
             ProgramError::MaxSeedLengthExceeded => MAX_SEED_LENGTH_EXCEEDED,
             ProgramError::InvalidSeeds => INVALID_SEEDS,
+            ProgramError::SerializationError(_) => SERIALIZATION_ERROR,
 
             ProgramError::Custom(error) => {
                 if error == 0 {
@@ -166,6 +172,7 @@ impl TryFrom<InstructionError> for ProgramError {
             Self::Error::NotEnoughAccountKeys => Ok(Self::NotEnoughAccountKeys),
             Self::Error::AccountBorrowFailed => Ok(Self::AccountBorrowFailed),
             Self::Error::MaxSeedLengthExceeded => Ok(Self::MaxSeedLengthExceeded),
+            Self::Error::SerializationError(err) => Ok(Self::SerializationError(err)),
             _ => Err(error),
         }
     }
@@ -210,5 +217,11 @@ impl From<PubkeyError> for ProgramError {
             PubkeyError::MaxSeedLengthExceeded => ProgramError::MaxSeedLengthExceeded,
             PubkeyError::InvalidSeeds => ProgramError::InvalidSeeds,
         }
+    }
+}
+
+impl From<IOError> for ProgramError {
+    fn from(error: IOError) -> Self {
+        ProgramError::SerializationError(format!("{}", error))
     }
 }

@@ -71,6 +71,7 @@ pub fn to_instruction_error(error: ProgramError) -> InstructionError {
         ProgramError::AccountBorrowFailed => InstructionError::AccountBorrowFailed,
         ProgramError::MaxSeedLengthExceeded => InstructionError::MaxSeedLengthExceeded,
         ProgramError::InvalidSeeds => InstructionError::InvalidSeeds,
+        ProgramError::SerializationError(err) => InstructionError::SerializationError(err),
     }
 }
 
