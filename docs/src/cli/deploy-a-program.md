@@ -48,8 +48,9 @@ If the program id is not specified on the command line the tools will first look
 for a keypair file matching the `<PROGRAM_FILEPATH>`, or internally generate a
 new keypair.
 
-A matching program/keypair file is generated automatically by the program build
-tools and looks like:
+A matching program keypair file is in the same directory as the program's shared
+object, and named <PROGRAM_NAME>-keypair.json. Matching program keypairs are
+generated automatically by the program build tools:
 
 ```bash
 ./path-to-program/program.so
@@ -61,7 +62,7 @@ tools and looks like:
 To get information about a deployed program:
 
 ```bash
-solana show <ACCOUNT_ADDRESS>
+solana program show <ACCOUNT_ADDRESS>
 ```
 
 An example output looks like:
@@ -70,8 +71,8 @@ An example output looks like:
 Program Id: 3KS2k14CmtnuVv2fvYcvdrNgC94Y11WETBpMUGgXyWZL
 ProgramData Address: EHsACWBhgmw8iq5dmUZzTA1esRqcTognhKNHUkPi4q4g
 Authority: FwoGJNUaJN2zfVEex9BB11Dqb3NJKy3e9oY3KTh9XzCU
-Last Upgraded In Slot: 63890568
-Program Length: 5216 (0x1460) bytes
+Last Deployed In Slot: 63890568
+Data Length: 5216 (0x1460) bytes
 ```
 
 - `Program Id` is the address that can be referenced in an instruction's
@@ -96,18 +97,18 @@ solana program deploy <PROGRAM_FILEPATH>
 ```
 
 By default, programs are deployed to accounts that are twice the size of the
-original deployment.  Doing so leaves room for further redeployments.  But, if
-the initially deployed program is very small (like a simple helloworld program)
-and then later grows substantially, the redeployment may fail.  To avoid this,
-specify a `max_len` that is at least the size (in bytes) that the program is
-expected to become (plus some wiggle room).
+original deployment.  Doing so leaves room for program growth in future
+redeployments.  But, if the initially deployed program is very small (like a
+simple helloworld program) and then later grows substantially, the redeployment
+may fail.  To avoid this, specify a `max_len` that is at least the size (in
+bytes) that the program is expected to become (plus some wiggle room).
 
 ```bash
 solana program deploy --max-len 200000 <PROGRAM_FILEPATH>
 ```
 
 Note that program accounts are required to be
-[rent-excempt](developing/programming-model/accounts.md#rent-exemption), and the
+[rent-exempt](developing/programming-model/accounts.md#rent-exemption), and the
 `max-len` is fixed after initial deployment, so any SOL in the program accounts
 is locked up permanently.
 
@@ -138,7 +139,7 @@ solana program set-upgrade-authority <PROGRAM_ADDRESS> --upgrade-authority <UPGR
 
 ### Immutable programs
 
-A program can be marked immutable, which prevents all further redeployments by
+A program can be marked immutable, which prevents all further redeployments, by
 specifying the `--final` flag during deployment:
 
 ```bash
@@ -150,6 +151,16 @@ Or anytime after:
 ```bash
 solana program set-upgrade-authority <PROGRAM_ADDRESS> --final
 ```
+
+`solana program deploy ...` utilizes Solana's upgradeable loader, but there is
+another way to deploy immutable programs using the original on-chain loader:
+
+```bash
+solana deploy <PROGRAM_FILEPATH>
+```
+
+Programs deployed with `solana deploy ...` are not redeployable and are not
+compatible with the `solana program ...` commands.
 
 ### Dumping a program to a file
 
@@ -177,8 +188,9 @@ $ sha256sum extended.so dump.so
 ### Using an intermediary Buffer account
 
 Instead of deploying directly to the program account, the program can be written
-to an intermediary buffer account.  Doing so can be useful for things like
-multi-entity governed programs.
+to an intermediary buffer account.  Intermediary accounts can useful for things
+like multi-entity governed programs where the governing members fist verify the
+intermediary buffer contents and then vote to allow an upgrade using it.
 
 ```bash
 solana progrma write-buffer <PROGRAM_FILEPATH>
@@ -203,15 +215,3 @@ solana program deploy --program-id <PROGRAM_ADDRESS> --buffer <BUFFER_ADDRESS>
 Note, the buffer's authority must match the program's upgrade authority.
 
 Buffers also support `show` and `dump` just like programs do.
-
-### Non-redeployable programs
-
-Using `solana program ...` utilizes Solana's upgradeable loader, but there is
-another way to deploy programs using the original on-chain loader.
-
-```bash
-solana deploy <PROGRAM_FILEPATH>
-```
-
-Programs deployed with `solana deploy ...` are not upgradeable and are not
-compatible with the `solana program ...` commands.
