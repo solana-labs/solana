@@ -967,12 +967,12 @@ pub fn process_accounts_package_pre(accounts_package: AccountsPackagePre) -> Acc
             &accounts_package.storages,
             accounts_package.simple_capitalization_testing,
         );
-        time.stop();
 
         assert_eq!(accounts_package.expected_capitalization, lamports);
 
         assert_eq!(expected_hash, hash);
     };
+    time.stop();
 
     datapoint_info!(
         "accounts_hash_verifier",
