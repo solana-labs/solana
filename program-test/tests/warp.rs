@@ -142,13 +142,9 @@ async fn rent_collected_from_warp() {
         .unwrap();
     assert_eq!(account.lamports, account_lamports);
 
-    // this test is a bit flaky because of the bank freezing non-deterministically,
-    // so we do a few warps and hope that one of them gets it
-
-    // go forward and see that rent has been collected
+    // Warp forward and see that rent has been collected
+    // This test was a bit flaky with one warp, but two warps always works
     context.warp_to_slot(DEFAULT_DEV_SLOTS_PER_EPOCH).unwrap();
-
-    // go forward and see that rent has been collected
     context
         .warp_to_slot(DEFAULT_DEV_SLOTS_PER_EPOCH * 2)
         .unwrap();
