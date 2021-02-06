@@ -7,4 +7,4 @@
 /module.flow.js
 /.eslintrc.js
 /test/.eslintrc.js
-/jest-environment.js
+/test/dist

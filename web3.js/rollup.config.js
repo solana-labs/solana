@@ -19,7 +19,11 @@ function generateConfig(configType, format) {
     plugins: [
       flow(),
       commonjs(),
-      nodeResolve({browser, preferBuiltins: !browser, dedupe: ['bn.js']}),
+      nodeResolve({
+        browser,
+        preferBuiltins: !browser,
+        dedupe: ['bn.js', 'buffer'],
+      }),
       babel({
         exclude: '**/node_modules/**',
         babelHelpers: bundle ? 'bundled' : 'runtime',
