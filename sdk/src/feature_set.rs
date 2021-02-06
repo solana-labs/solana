@@ -278,6 +278,10 @@ pub mod track_writable_deescalation {
     solana_sdk::declare_id!("HVPSxqskEtRLRT2ZeEMmkmt9FWqoFX4vrN6f5VaadLED");
 }
 
+pub mod require_custodian_for_locked_stake_authorize {
+    solana_sdk::declare_id!("D4jsDcXaqdW8tDAWn8H4R25Cdns2YwLneujSL1zvjW6R");
+}
+
 pub mod spl_token_v2_self_transfer_fix {
     solana_sdk::declare_id!("BL99GYhdjjcv6ys22C9wPgn2aTVERDbPHHo4NbS3hgp7");
 }
@@ -325,6 +329,7 @@ lazy_static! {
         (turbine_retransmit_peers_patch::id(), "turbine retransmit peers patch #14631"),
         (prevent_upgrade_and_invoke::id(), "prevent upgrade and invoke in same tx batch"),
         (track_writable_deescalation::id(), "track account writable deescalation"),
+        (require_custodian_for_locked_stake_authorize::id(), "require custodian to authorize withdrawer change for locked stake"),
         (spl_token_v2_self_transfer_fix::id(), "spl-token self-transfer fix"),
         (matching_buffer_upgrade_authorities::id(), "Upgradeable buffer and program authorities must match"),
         (full_inflation::candidate_example::vote::id(), "Community vote allowing candidate_example to enable full inflation"),
