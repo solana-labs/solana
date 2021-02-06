@@ -1717,9 +1717,9 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "0.13.5"
+version = "0.13.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96816e1d921eca64d208a85aab4f7798455a8e34229ee5a88c935bdee1b78b14"
+checksum = "8a6f157065790a3ed2f88679250419b5cdd96e714a0d65f7797fd337186e96bb"
 dependencies = [
  "bytes 0.5.4",
  "futures-channel",
@@ -1729,21 +1729,21 @@ dependencies = [
  "http",
  "http-body 0.3.1",
  "httparse",
+ "httpdate",
  "itoa",
- "log 0.4.11",
- "net2",
- "pin-project 0.4.23",
- "time 0.1.43",
+ "pin-project 1.0.1",
+ "socket2",
  "tokio 0.2.22",
  "tower-service",
+ "tracing",
  "want",
 ]
 
 [[package]]
 name = "hyper"
-version = "0.14.2"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12219dc884514cb4a6a03737f4413c0e01c23a1b059b0156004b23f1e19dccbe"
+checksum = "5ee5fc98172988e4394a3094002a75125e8fb864a88318732e8b613ec5adbda3"
 dependencies = [
  "bytes 1.0.1",
  "futures-channel",
@@ -1755,7 +1755,7 @@ dependencies = [
  "httparse",
  "httpdate",
  "itoa",
- "pin-project 1.0.1",
+ "pin-project-lite 0.2.4",
  "socket2",
  "tokio 1.1.1",
  "tower-service",
@@ -1771,7 +1771,7 @@ checksum = "37743cc83e8ee85eacfce90f2f4102030d9ff0a95244098d781e9bee4a90abb6"
 dependencies = [
  "bytes 0.5.4",
  "futures-util",
- "hyper 0.13.5",
+ "hyper 0.13.10",
  "log 0.4.11",
  "rustls 0.18.0",
  "tokio 0.2.22",
@@ -1786,7 +1786,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6183ddfa99b85da61a140bea0efc93fdf56ceaa041b37d553518030827f9905"
 dependencies = [
  "bytes 1.0.1",
- "hyper 0.14.2",
+ "hyper 0.14.3",
  "native-tls",
  "tokio 1.1.1",
  "tokio-native-tls",
@@ -2004,7 +2004,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eff2303c4f0562afcbd2dae75e3e21815095f8994749a80fbcd365877e44ed64"
 dependencies = [
  "futures 0.3.8",
- "hyper 0.13.5",
+ "hyper 0.13.10",
  "jsonrpc-core",
  "jsonrpc-server-utils",
  "log 0.4.11",
@@ -3339,7 +3339,7 @@ dependencies = [
  "futures-util",
  "http",
  "http-body 0.3.1",
- "hyper 0.13.5",
+ "hyper 0.13.10",
  "hyper-rustls",
  "ipnet",
  "js-sys",
@@ -3376,7 +3376,7 @@ dependencies = [
  "futures-util",
  "http",
  "http-body 0.4.0",
- "hyper 0.14.2",
+ "hyper 0.14.3",
  "hyper-tls",
  "ipnet",
  "js-sys",
@@ -6314,7 +6314,7 @@ dependencies = [
  "h2 0.3.0",
  "http",
  "http-body 0.4.0",
- "hyper 0.14.2",
+ "hyper 0.14.3",
  "percent-encoding 2.1.0",
  "pin-project 1.0.1",
  "prost",
