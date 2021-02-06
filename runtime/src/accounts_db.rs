@@ -37,7 +37,6 @@ use log::*;
 use rand::{prelude::SliceRandom, thread_rng, Rng};
 use rayon::{prelude::*, ThreadPool};
 use serde::{Deserialize, Serialize};
-use std::fs::File;
 use solana_measure::measure::Measure;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
@@ -3862,6 +3861,7 @@ impl AccountsDB {
     pub fn test() {
         let d = std::fs::read("accounts_by_bin.bytes").unwrap();
         //let serialized = serde_json::to_string(&data_sections_by_pubkey);
+        error!("len: {}", d.len());
         let arr = bincode::deserialize::<Vec<Vec<CalculateHashIntermediate>>>(&d).unwrap();
       panic!("got it: {}, {:?}", arr.len(), arr[0].len());
     }
