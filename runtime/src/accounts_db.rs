@@ -5430,7 +5430,7 @@ pub mod tests {
                     let (hashes2, lamports2) = AccountsDB::de_dup_accounts_in_parallel(slice, 1);
                     let (hashes3, lamports3) = AccountsDB::de_dup_accounts_in_parallel(slice, 2);
                     let (hashes4, _, lamports4) =
-                        AccountsDB::de_dup_and_eliminate_zeros(slice.to_vec());
+                        AccountsDB::de_dup_and_eliminate_zeros(vec![slice.to_vec()]);
 
                     assert_eq!(
                         hashes2.iter().flatten().collect::<Vec<_>>(),
@@ -5438,7 +5438,7 @@ pub mod tests {
                     );
                     assert_eq!(
                         hashes2.iter().flatten().collect::<Vec<_>>(),
-                        hashes4.iter().flatten().collect::<Vec<_>>()
+                        hashes4.iter().flatten().into_iter().flatten().collect::<Vec<_>>()
                     );
                     assert_eq!(lamports2, lamports3);
                     assert_eq!(lamports2, lamports4);
@@ -5509,13 +5509,13 @@ pub mod tests {
             .collect();
         let expected = hashes.clone();
 
-        assert_eq!(AccountsDB::flatten_hashes(vec![hashes.clone()]).0, expected);
+        assert_eq!(AccountsDB::flatten_hashes(vec![vec![hashes.clone()]]).0, expected);
         for in_first in 1..COUNT - 1 {
             assert_eq!(
-                AccountsDB::flatten_hashes(vec![
+                AccountsDB::flatten_hashes(vec![vec![
                     hashes.clone()[0..in_first].to_vec(),
                     hashes.clone()[in_first..COUNT].to_vec()
-                ])
+                ]])
                 .0,
                 expected
             );
@@ -5540,14 +5540,14 @@ pub mod tests {
         let list = vec![val.clone(), val2.clone()];
         let mut list_bkup = list.clone();
         list_bkup.sort_by(AccountsDB::compare_two_hash_entries);
-        let (list, _) = AccountsDB::sort_hash_intermediate(list);
-        assert_eq!(list, list_bkup);
+        let (list, _) = AccountsDB::sort_hash_intermediate(vec![list]);
+        assert_eq!(list, vec![list_bkup]);
 
         let list = vec![val2, val.clone()]; // reverse args
         let mut list_bkup = list.clone();
         list_bkup.sort_by(AccountsDB::compare_two_hash_entries);
-        let (list, _) = AccountsDB::sort_hash_intermediate(list);
-        assert_eq!(list, list_bkup);
+        let (list, _) = AccountsDB::sort_hash_intermediate(vec![list]);
+        assert_eq!(list, vec![list_bkup]);
 
         // slot same, vers =
         let hash3 = Hash::new_unique();
@@ -5667,24 +5667,25 @@ pub mod tests {
     #[test]
     fn test_accountsdb_flatten_hash_intermediate() {
         solana_logger::setup();
-        let test = vec![vec![CalculateHashIntermediate::new(
+        let test = vec![vec![vec![CalculateHashIntermediate::new(
             1,
             Hash::new_unique(),
             2,
             3,
             Pubkey::new_unique(),
-        )]];
-        let (result, _, len) = AccountsDB::flatten_hash_intermediate(test.clone());
+        )]]];
+        const BINS:usize = 1;
+        let (result, _, len) = AccountsDB::flatten_hash_intermediate(test.clone(), BINS);
         assert_eq!(result, test[0]);
         assert_eq!(len, 1);
 
         let (result, _, len) = AccountsDB::flatten_hash_intermediate(vec![
-            vec![CalculateHashIntermediate::default(); 0],
-        ]);
+            vec![vec![CalculateHashIntermediate::default(); 0]]
+        ], BINS);
         assert_eq!(result.len(), 0);
         assert_eq!(len, 0);
 
-        let test = vec![
+        let test = vec![vec![
             vec![
                 CalculateHashIntermediate::new(1, Hash::new_unique(), 2, 3, Pubkey::new_unique()),
                 CalculateHashIntermediate::new(8, Hash::new_unique(), 9, 10, Pubkey::new_unique()),
@@ -5695,9 +5696,9 @@ pub mod tests {
                 5,
                 6,
                 Pubkey::new_unique(),
-            )],
+            )]]
         ];
-        let (result, _, len) = AccountsDB::flatten_hash_intermediate(test.clone());
+        let (result, _, len) = AccountsDB::flatten_hash_intermediate(test.clone(), BINS);
         let expected = test.into_iter().flatten().collect::<Vec<_>>();
         assert_eq!(result, expected);
         assert_eq!(len, expected.len());
