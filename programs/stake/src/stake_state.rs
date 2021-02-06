@@ -478,6 +478,7 @@ impl Authorized {
         signers: &HashSet<Pubkey>,
         new_authorized: &Pubkey,
         stake_authorize: StakeAuthorize,
+        lockup_custodian_args: Option<(&Lockup, &Clock, Option<&Pubkey>)>,
     ) -> Result<(), InstructionError> {
         match stake_authorize {
             StakeAuthorize::Staker => {
@@ -488,6 +489,24 @@ impl Authorized {
                 self.staker = *new_authorized
             }
             StakeAuthorize::Withdrawer => {
+                if let Some((lockup, clock, custodian)) = lockup_custodian_args {
+                    if lockup.is_in_force(&clock, None) {
+                        match custodian {
+                            None => {
+                                return Err(StakeError::CustodianMissing.into());
+                            }
+                            Some(custodian) => {
+                                if !signers.contains(custodian) {
+                                    return Err(StakeError::CustodianSignatureMissing.into());
+                                }
+
+                                if lockup.is_in_force(&clock, Some(custodian)) {
+                                    return Err(StakeError::LockupInForce.into());
+                                }
+                            }
+                        }
+                    }
+                }
                 self.check(signers, stake_authorize)?;
                 self.withdrawer = *new_authorized
             }
@@ -771,6 +790,9 @@ pub trait StakeAccount {
         signers: &HashSet<Pubkey>,
         new_authority: &Pubkey,
         stake_authorize: StakeAuthorize,
+        require_custodian_for_locked_stake_authorize: bool,
+        clock: &Clock,
+        custodian: Option<&Pubkey>,
     ) -> Result<(), InstructionError>;
     fn authorize_with_seed(
         &self,
@@ -779,6 +801,9 @@ pub trait StakeAccount {
         authority_owner: &Pubkey,
         new_authority: &Pubkey,
         stake_authorize: StakeAuthorize,
+        require_custodian_for_locked_stake_authorize: bool,
+        clock: &Clock,
+        custodian: Option<&Pubkey>,
     ) -> Result<(), InstructionError>;
     fn delegate(
         &self,
@@ -854,16 +879,35 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         signers: &HashSet<Pubkey>,
         new_authority: &Pubkey,
         stake_authorize: StakeAuthorize,
+        require_custodian_for_locked_stake_authorize: bool,
+        clock: &Clock,
+        custodian: Option<&Pubkey>,
     ) -> Result<(), InstructionError> {
         match self.state()? {
             StakeState::Stake(mut meta, stake) => {
-                meta.authorized
-                    .authorize(signers, new_authority, stake_authorize)?;
+                meta.authorized.authorize(
+                    signers,
+                    new_authority,
+                    stake_authorize,
+                    if require_custodian_for_locked_stake_authorize {
+                        Some((&meta.lockup, clock, custodian))
+                    } else {
+                        None
+                    },
+                )?;
                 self.set_state(&StakeState::Stake(meta, stake))
             }
             StakeState::Initialized(mut meta) => {
-                meta.authorized
-                    .authorize(signers, new_authority, stake_authorize)?;
+                meta.authorized.authorize(
+                    signers,
+                    new_authority,
+                    stake_authorize,
+                    if require_custodian_for_locked_stake_authorize {
+                        Some((&meta.lockup, clock, custodian))
+                    } else {
+                        None
+                    },
+                )?;
                 self.set_state(&StakeState::Initialized(meta))
             }
             _ => Err(InstructionError::InvalidAccountData),
@@ -876,6 +920,9 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         authority_owner: &Pubkey,
         new_authority: &Pubkey,
         stake_authorize: StakeAuthorize,
+        require_custodian_for_locked_stake_authorize: bool,
+        clock: &Clock,
+        custodian: Option<&Pubkey>,
     ) -> Result<(), InstructionError> {
         let mut signers = HashSet::default();
         if let Some(base_pubkey) = authority_base.signer_key() {
@@ -885,7 +932,14 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 authority_owner,
             )?);
         }
-        self.authorize(&signers, &new_authority, stake_authorize)
+        self.authorize(
+            &signers,
+            &new_authority,
+            stake_authorize,
+            require_custodian_for_locked_stake_authorize,
+            clock,
+            custodian,
+        )
     }
     fn delegate(
         &self,
@@ -1637,12 +1691,134 @@ mod tests {
         let mut authorized = Authorized::auto(&staker);
         let mut signers = HashSet::new();
         assert_eq!(
-            authorized.authorize(&signers, &staker, StakeAuthorize::Staker),
+            authorized.authorize(&signers, &staker, StakeAuthorize::Staker, None),
             Err(InstructionError::MissingRequiredSignature)
         );
         signers.insert(staker);
         assert_eq!(
-            authorized.authorize(&signers, &staker, StakeAuthorize::Staker),
+            authorized.authorize(&signers, &staker, StakeAuthorize::Staker, None),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn test_authorized_authorize_with_custodian() {
+        let staker = solana_sdk::pubkey::new_rand();
+        let custodian = solana_sdk::pubkey::new_rand();
+        let invalid_custodian = solana_sdk::pubkey::new_rand();
+        let mut authorized = Authorized::auto(&staker);
+        let mut signers = HashSet::new();
+        signers.insert(staker);
+
+        let lockup = Lockup {
+            epoch: 1,
+            unix_timestamp: 1,
+            custodian,
+        };
+        let clock = Clock {
+            epoch: 0,
+            unix_timestamp: 0,
+            ..Clock::default()
+        };
+
+        // Legacy behaviour when the `require_custodian_for_locked_stake_authorize` feature is
+        // inactive
+        assert_eq!(
+            authorized.authorize(&signers, &staker, StakeAuthorize::Withdrawer, None),
+            Ok(())
+        );
+
+        // No lockup, no custodian
+        assert_eq!(
+            authorized.authorize(
+                &signers,
+                &staker,
+                StakeAuthorize::Withdrawer,
+                Some((&Lockup::default(), &clock, None))
+            ),
+            Ok(())
+        );
+
+        // No lockup, invalid custodian not a signer
+        assert_eq!(
+            authorized.authorize(
+                &signers,
+                &staker,
+                StakeAuthorize::Withdrawer,
+                Some((&Lockup::default(), &clock, Some(&invalid_custodian)))
+            ),
+            Ok(()) // <== invalid custodian doesn't matter, there's no lockup
+        );
+
+        // Lockup active, invalid custodian not a signer
+        assert_eq!(
+            authorized.authorize(
+                &signers,
+                &staker,
+                StakeAuthorize::Withdrawer,
+                Some((&lockup, &clock, Some(&invalid_custodian)))
+            ),
+            Err(StakeError::CustodianSignatureMissing.into()),
+        );
+
+        signers.insert(invalid_custodian);
+
+        // No lockup, invalid custodian is a signer
+        assert_eq!(
+            authorized.authorize(
+                &signers,
+                &staker,
+                StakeAuthorize::Withdrawer,
+                Some((&Lockup::default(), &clock, Some(&invalid_custodian)))
+            ),
+            Ok(()) // <== invalid custodian doesn't matter, there's no lockup
+        );
+
+        // Lockup active, invalid custodian is a signer
+        signers.insert(invalid_custodian);
+        assert_eq!(
+            authorized.authorize(
+                &signers,
+                &staker,
+                StakeAuthorize::Withdrawer,
+                Some((&lockup, &clock, Some(&invalid_custodian)))
+            ),
+            Err(StakeError::LockupInForce.into()), // <== invalid custodian rejected
+        );
+
+        signers.remove(&invalid_custodian);
+
+        // Lockup active, no custodian
+        assert_eq!(
+            authorized.authorize(
+                &signers,
+                &staker,
+                StakeAuthorize::Withdrawer,
+                Some((&lockup, &clock, None))
+            ),
+            Err(StakeError::CustodianMissing.into()),
+        );
+
+        // Lockup active, custodian not a signer
+        assert_eq!(
+            authorized.authorize(
+                &signers,
+                &staker,
+                StakeAuthorize::Withdrawer,
+                Some((&lockup, &clock, Some(&custodian)))
+            ),
+            Err(StakeError::CustodianSignatureMissing.into()),
+        );
+
+        // Lockup active, custodian is a signer
+        signers.insert(custodian);
+        assert_eq!(
+            authorized.authorize(
+                &signers,
+                &staker,
+                StakeAuthorize::Withdrawer,
+                Some((&lockup, &clock, Some(&custodian)))
+            ),
             Ok(())
         );
     }
@@ -3561,7 +3737,14 @@ mod tests {
         let stake_keyed_account = KeyedAccount::new(&new_authority, true, &stake_account);
         let signers = vec![new_authority].into_iter().collect();
         assert_eq!(
-            stake_keyed_account.authorize(&signers, &new_authority, StakeAuthorize::Staker),
+            stake_keyed_account.authorize(
+                &signers,
+                &new_authority,
+                StakeAuthorize::Staker,
+                false,
+                &Clock::default(),
+                None
+            ),
             Err(InstructionError::InvalidAccountData)
         );
     }
@@ -3588,11 +3771,25 @@ mod tests {
         let stake_pubkey0 = solana_sdk::pubkey::new_rand();
         let signers = vec![stake_authority].into_iter().collect();
         assert_eq!(
-            stake_keyed_account.authorize(&signers, &stake_pubkey0, StakeAuthorize::Staker),
+            stake_keyed_account.authorize(
+                &signers,
+                &stake_pubkey0,
+                StakeAuthorize::Staker,
+                false,
+                &Clock::default(),
+                None
+            ),
             Ok(())
         );
         assert_eq!(
-            stake_keyed_account.authorize(&signers, &stake_pubkey0, StakeAuthorize::Withdrawer),
+            stake_keyed_account.authorize(
+                &signers,
+                &stake_pubkey0,
+                StakeAuthorize::Withdrawer,
+                false,
+                &Clock::default(),
+                None
+            ),
             Ok(())
         );
         if let StakeState::Initialized(Meta { authorized, .. }) =
@@ -3607,7 +3804,14 @@ mod tests {
         // A second authorization signed by the stake_keyed_account should fail
         let stake_pubkey1 = solana_sdk::pubkey::new_rand();
         assert_eq!(
-            stake_keyed_account.authorize(&signers, &stake_pubkey1, StakeAuthorize::Staker),
+            stake_keyed_account.authorize(
+                &signers,
+                &stake_pubkey1,
+                StakeAuthorize::Staker,
+                false,
+                &Clock::default(),
+                None
+            ),
             Err(InstructionError::MissingRequiredSignature)
         );
 
@@ -3616,7 +3820,14 @@ mod tests {
         // Test a second authorization by the newly authorized pubkey
         let stake_pubkey2 = solana_sdk::pubkey::new_rand();
         assert_eq!(
-            stake_keyed_account.authorize(&signers0, &stake_pubkey2, StakeAuthorize::Staker),
+            stake_keyed_account.authorize(
+                &signers0,
+                &stake_pubkey2,
+                StakeAuthorize::Staker,
+                false,
+                &Clock::default(),
+                None
+            ),
             Ok(())
         );
         if let StakeState::Initialized(Meta { authorized, .. }) =
@@ -3626,7 +3837,14 @@ mod tests {
         }
 
         assert_eq!(
-            stake_keyed_account.authorize(&signers0, &stake_pubkey2, StakeAuthorize::Withdrawer),
+            stake_keyed_account.authorize(
+                &signers0,
+                &stake_pubkey2,
+                StakeAuthorize::Withdrawer,
+                false,
+                &Clock::default(),
+                None
+            ),
             Ok(())
         );
         if let StakeState::Initialized(Meta { authorized, .. }) =
@@ -3695,6 +3913,9 @@ mod tests {
                 &id(),
                 &new_authority,
                 StakeAuthorize::Staker,
+                false,
+                &Clock::default(),
+                None,
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -3707,6 +3928,9 @@ mod tests {
                 &id(),
                 &new_authority,
                 StakeAuthorize::Staker,
+                false,
+                &Clock::default(),
+                None,
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -3719,6 +3943,9 @@ mod tests {
                 &id(),
                 &new_authority,
                 StakeAuthorize::Staker,
+                false,
+                &Clock::default(),
+                None,
             ),
             Ok(())
         );
@@ -3731,6 +3958,9 @@ mod tests {
                 &id(),
                 &new_authority,
                 StakeAuthorize::Withdrawer,
+                false,
+                &Clock::default(),
+                None,
             ),
             Ok(())
         );
@@ -3743,6 +3973,9 @@ mod tests {
                 &id(),
                 &new_authority,
                 StakeAuthorize::Withdrawer,
+                false,
+                &Clock::default(),
+                None,
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
@@ -3766,7 +3999,14 @@ mod tests {
         let new_authority = solana_sdk::pubkey::new_rand();
         let signers = vec![withdrawer_pubkey].into_iter().collect();
         assert_eq!(
-            stake_keyed_account.authorize(&signers, &new_authority, StakeAuthorize::Staker),
+            stake_keyed_account.authorize(
+                &signers,
+                &new_authority,
+                StakeAuthorize::Staker,
+                false,
+                &Clock::default(),
+                None
+            ),
             Ok(())
         );
 
@@ -3774,28 +4014,56 @@ mod tests {
         let mallory_pubkey = solana_sdk::pubkey::new_rand();
         let signers = vec![new_authority].into_iter().collect();
         assert_eq!(
-            stake_keyed_account.authorize(&signers, &mallory_pubkey, StakeAuthorize::Staker),
+            stake_keyed_account.authorize(
+                &signers,
+                &mallory_pubkey,
+                StakeAuthorize::Staker,
+                false,
+                &Clock::default(),
+                None
+            ),
             Ok(())
         );
 
         // Verify the original staker no longer has access.
         let new_stake_pubkey = solana_sdk::pubkey::new_rand();
         assert_eq!(
-            stake_keyed_account.authorize(&signers, &new_stake_pubkey, StakeAuthorize::Staker),
+            stake_keyed_account.authorize(
+                &signers,
+                &new_stake_pubkey,
+                StakeAuthorize::Staker,
+                false,
+                &Clock::default(),
+                None
+            ),
             Err(InstructionError::MissingRequiredSignature)
         );
 
         // Verify the withdrawer (pulled from cold storage) can save the day.
         let signers = vec![withdrawer_pubkey].into_iter().collect();
         assert_eq!(
-            stake_keyed_account.authorize(&signers, &new_stake_pubkey, StakeAuthorize::Withdrawer),
+            stake_keyed_account.authorize(
+                &signers,
+                &new_stake_pubkey,
+                StakeAuthorize::Withdrawer,
+                false,
+                &Clock::default(),
+                None
+            ),
             Ok(())
         );
 
         // Attack! Verify the staker cannot be used to authorize a withdraw.
         let signers = vec![new_stake_pubkey].into_iter().collect();
         assert_eq!(
-            stake_keyed_account.authorize(&signers, &mallory_pubkey, StakeAuthorize::Withdrawer),
+            stake_keyed_account.authorize(
+                &signers,
+                &mallory_pubkey,
+                StakeAuthorize::Withdrawer,
+                false,
+                &Clock::default(),
+                None
+            ),
             Ok(())
         );
     }
@@ -5509,7 +5777,14 @@ mod tests {
 
         let new_staker_pubkey = solana_sdk::pubkey::new_rand();
         assert_eq!(
-            stake_keyed_account.authorize(&signers, &new_staker_pubkey, StakeAuthorize::Staker),
+            stake_keyed_account.authorize(
+                &signers,
+                &new_staker_pubkey,
+                StakeAuthorize::Staker,
+                false,
+                &Clock::default(),
+                None
+            ),
             Ok(())
         );
         let authorized =
