@@ -1009,6 +1009,7 @@ fn main() {
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
             .arg(&bpf_jit_arg)
+            .arg(&allow_dead_slots_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(
                 Arg::with_name("skip_poh_verify")
@@ -1644,6 +1645,7 @@ fn main() {
                 poh_verify: !arg_matches.is_present("skip_poh_verify"),
                 bpf_jit: arg_matches.is_present("bpf_jit"),
                 accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),
+                allow_dead_slots: arg_matches.is_present("allow_dead_slots"),
                 ..ProcessOptions::default()
             };
             let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
