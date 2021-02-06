@@ -3748,7 +3748,7 @@ impl AccountsDB {
             Self::calculate_accounts_hash_without_index(
                 &combined_maps,
                 simple_capitalization_enabled,
-                &self.thread_pool_clean,
+                Some(&self.thread_pool_clean),
             )
         } else {
             self.calculate_accounts_hash(slot, ancestors, false, simple_capitalization_enabled)
@@ -3852,13 +3852,18 @@ impl AccountsDB {
     pub fn calculate_accounts_hash_without_index(
         storages: &[SnapshotStorage],
         simple_capitalization_enabled: bool,
-        thread_pool: &ThreadPool,
+        thread_pool: Option<&ThreadPool>,
     ) -> (Hash, u64) {
-        thread_pool.install(|| {
+        let scan_and_hash = || {
             let result = Self::scan_snapshot_stores(storages, simple_capitalization_enabled);
 
             Self::rest_of_hash_calculation(result)
-        })
+        };
+        if let Some(thread_pool) = thread_pool {
+            thread_pool.install(scan_and_hash)
+        } else {
+            scan_and_hash()
+        }
     }
 
     pub fn verify_bank_hash_and_lamports(
@@ -5184,11 +5189,7 @@ pub mod tests {
         solana_logger::setup();
 
         let (storages, _size, _slot_expected) = sample_storage();
-        let result = AccountsDB::calculate_accounts_hash_without_index(
-            &storages,
-            true,
-            &make_min_priority_thread_pool(),
-        );
+        let result = AccountsDB::calculate_accounts_hash_without_index(&storages, true, None);
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
         assert_eq!(result, (expected_hash, 0));
     }
