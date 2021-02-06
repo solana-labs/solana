@@ -1,88 +1,82 @@
 // @flow
 
-import {keccak_256} from 'js-sha3';
-import secp256k1 from 'secp256k1';
-import {randomBytes} from 'crypto';
+import {Buffer} from 'buffer';
+import createKeccakHash from 'keccak';
+import {privateKeyVerify, ecdsaSign, publicKeyCreate} from 'secp256k1';
 
-import {Secp256k1Program} from '../src/secp256k1-program';
-import {mockRpcEnabled} from './__mocks__/node-fetch';
-import {url} from './url';
 import {
   Connection,
   Account,
   sendAndConfirmTransaction,
   LAMPORTS_PER_SOL,
   Transaction,
+  Secp256k1Program,
 } from '../src';
+import {url} from './url';
+import {helpers} from './mocks/rpc-http';
 
-const {privateKeyVerify, ecdsaSign, publicKeyCreate} = secp256k1;
+const randomPrivateKey = () => {
+  let privateKey;
+  do {
+    privateKey = new Account().secretKey.slice(0, 32);
+  } while (!privateKeyVerify(privateKey));
+  return privateKey;
+};
 
-if (!mockRpcEnabled) {
-  jest.setTimeout(20000);
+if (process.env.TEST_LIVE) {
+  describe('secp256k1', () => {
+    it('create secp256k1 instruction with public key', async () => {
+      const privateKey = randomPrivateKey();
+      const publicKey = publicKeyCreate(privateKey, false);
+      const message = Buffer.from('This is a message');
+      const messageHash = createKeccakHash('keccak256')
+        .update(message)
+        .digest();
+      const {signature, recid: recoveryId} = ecdsaSign(messageHash, privateKey);
+      const connection = new Connection(url, 'singleGossip');
+
+      const from = new Account();
+      await connection.confirmTransaction(
+        await connection.requestAirdrop(from.publicKey, 2 * LAMPORTS_PER_SOL),
+        'singleGossip',
+      );
+
+      const transaction = new Transaction().add(
+        Secp256k1Program.createInstructionWithPublicKey({
+          publicKey,
+          message,
+          signature,
+          recoveryId,
+        }),
+      );
+
+      await sendAndConfirmTransaction(connection, transaction, [from], {
+        commitment: 'singleGossip',
+        preflightCommitment: 'singleGossip',
+      });
+    });
+
+    it('create secp256k1 instruction with private key', async () => {
+      const privateKey = randomPrivateKey();
+      const connection = new Connection(url, 'singleGossip');
+
+      const from = new Account();
+      await connection.confirmTransaction(
+        await connection.requestAirdrop(from.publicKey, 2 * LAMPORTS_PER_SOL),
+        'singleGossip',
+      );
+
+      const transaction = new Transaction().add(
+        Secp256k1Program.createInstructionWithPrivateKey({
+          privateKey,
+          message: Buffer.from('Test 123'),
+        }),
+      );
+
+      await sendAndConfirmTransaction(connection, transaction, [from], {
+        commitment: 'singleGossip',
+        preflightCommitment: 'singleGossip',
+      });
+    });
+  });
 }
-
-test('live create secp256k1 instruction with public key', async () => {
-  if (mockRpcEnabled) {
-    console.log('non-live test skipped');
-    return;
-  }
-
-  const message = Buffer.from('This is a message');
-
-  let privateKey;
-  do {
-    privateKey = randomBytes(32);
-  } while (!privateKeyVerify(privateKey));
-
-  const publicKey = publicKeyCreate(privateKey, false);
-  const messageHash = Buffer.from(keccak_256.update(message).digest());
-  const {signature, recid: recoveryId} = ecdsaSign(messageHash, privateKey);
-
-  const instruction = Secp256k1Program.createInstructionWithPublicKey({
-    publicKey,
-    message,
-    signature,
-    recoveryId,
-  });
-
-  const transaction = new Transaction();
-  transaction.add(instruction);
-
-  const connection = new Connection(url, 'recent');
-  const from = new Account();
-  await connection.requestAirdrop(from.publicKey, 2 * LAMPORTS_PER_SOL);
-
-  await sendAndConfirmTransaction(connection, transaction, [from], {
-    commitment: 'single',
-    skipPreflight: true,
-  });
-});
-
-test('live create secp256k1 instruction with private key', async () => {
-  if (mockRpcEnabled) {
-    console.log('non-live test skipped');
-    return;
-  }
-
-  let privateKey;
-  do {
-    privateKey = randomBytes(32);
-  } while (!privateKeyVerify(privateKey));
-
-  const instruction = Secp256k1Program.createInstructionWithPrivateKey({
-    privateKey,
-    message: Buffer.from('Test 123'),
-  });
-
-  const transaction = new Transaction();
-  transaction.add(instruction);
-
-  const connection = new Connection(url, 'recent');
-  const from = new Account();
-  await connection.requestAirdrop(from.publicKey, 2 * LAMPORTS_PER_SOL);
-
-  await sendAndConfirmTransaction(connection, transaction, [from], {
-    commitment: 'single',
-    skipPreflight: true,
-  });
-});
