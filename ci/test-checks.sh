@@ -84,6 +84,9 @@ cargo_audit_ignores=(
   # Blocked on predicates v1.0.6 removing its dependency on `difference`
   --ignore RUSTSEC-2020-0095
 
+  # hyper is upgraded on master/v1.6 but not for v1.5
+  --ignore RUSTSEC-2021-0020
+
 )
 _ scripts/cargo-for-all-lock-files.sh +"$rust_stable" audit "${cargo_audit_ignores[@]}"
 
