@@ -5020,6 +5020,7 @@ dependencies = [
  "regex",
  "rustc_version",
  "serde",
+ "serde_bytes",
  "serde_derive",
  "solana-config-program",
  "solana-frozen-abi 1.6.0",
