@@ -2,6 +2,7 @@ use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, App,
     AppSettings, Arg, ArgMatches, SubCommand,
 };
+use fd_lock::FdLock;
 use log::*;
 use rand::{seq::SliceRandom, thread_rng, Rng};
 use solana_clap_utils::{
@@ -41,7 +42,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use solana_validator::redirect_stderr_to_file;
+use solana_validator::{dashboard::Dashboard, record_start, redirect_stderr_to_file};
 use std::{
     collections::HashSet,
     env,
@@ -61,6 +62,7 @@ use std::{
 #[derive(Debug, PartialEq)]
 enum Operation {
     Initialize,
+    Monitor,
     Run,
 }
 
@@ -793,6 +795,7 @@ pub fn main() {
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
         .setting(AppSettings::VersionlessSubcommands)
+        .setting(AppSettings::InferSubcommands)
         .arg(
             Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
                 .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
@@ -1446,11 +1449,16 @@ pub fn main() {
              SubCommand::with_name("run")
              .about("Run the validator")
          )
+        .subcommand(
+             SubCommand::with_name("monitor")
+             .about("Monitor the validator")
+         )
         .get_matches();
 
     let operation = match matches.subcommand().0 {
         "" | "run" => Operation::Run,
         "init" => Operation::Initialize,
+        "monitor" => Operation::Monitor,
         _ => unreachable!(),
     };
 
@@ -1794,6 +1802,36 @@ pub fn main() {
             exit(1);
         })
     });
+
+    if operation == Operation::Monitor {
+        let dashboard = Dashboard::new(&ledger_path, None).unwrap_or_else(|err| {
+            println!(
+                "Error: Unable to connect to validator at {}: {:?}",
+                ledger_path.display(),
+                err,
+            );
+            exit(1);
+        });
+        dashboard.run();
+    }
+
+    let mut ledger_fd_lock = FdLock::new(fs::File::open(&ledger_path).unwrap());
+    let _ledger_lock = ledger_fd_lock.try_lock().unwrap_or_else(|_| {
+        println!(
+            "Error: Unable to lock {} directory. Check if another validator is running",
+            ledger_path.display()
+        );
+        exit(1);
+    });
+
+    record_start(
+        &ledger_path,
+        validator_config
+            .rpc_addrs
+            .as_ref()
+            .map(|(rpc_addr, _)| rpc_addr),
+    )
+    .unwrap_or_else(|err| println!("Error: failed to record validator start: {}", err));
 
     let logfile = {
         let logfile = matches
