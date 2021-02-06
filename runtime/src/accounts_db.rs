@@ -3651,34 +3651,39 @@ impl AccountsDB {
     fn scan_account_storage_no_bank<F, B>(
         snapshot_storages: &[SnapshotStorage],
         scan_func: F,
-    ) -> Vec<B>
+    ) -> (Vec<B>, Measure)
     where
         F: Fn(LoadedAccount, &mut B, Slot) + Send + Sync,
         B: Send + Default,
     {
+        let mut time = Measure::start("flatten");
         let items: Vec<_> = snapshot_storages.iter().flatten().collect();
+        time.stop();
 
         // Without chunks, we end up with 1 output vec for each outer snapshot storage.
         // This results in too many vectors to be efficient.
         const MAX_ITEMS_PER_CHUNK: usize = 5_000;
-        items
-            .par_chunks(MAX_ITEMS_PER_CHUNK)
-            .map(|storages: &[&Arc<AccountStorageEntry>]| {
-                let mut retval = B::default();
+        (
+            items
+                .par_chunks(MAX_ITEMS_PER_CHUNK)
+                .map(|storages: &[&Arc<AccountStorageEntry>]| {
+                    let mut retval = B::default();
 
-                for storage in storages {
-                    let accounts = storage.accounts.accounts(0);
-                    accounts.into_iter().for_each(|stored_account| {
-                        scan_func(
-                            LoadedAccount::Stored(stored_account),
-                            &mut retval,
-                            storage.slot(),
-                        )
-                    });
-                }
-                retval
-            })
-            .collect()
+                    for storage in storages {
+                        let accounts = storage.accounts.accounts(0);
+                        accounts.into_iter().for_each(|stored_account| {
+                            scan_func(
+                                LoadedAccount::Stored(stored_account),
+                                &mut retval,
+                                storage.slot(),
+                            )
+                        });
+                    }
+                    retval
+                })
+                .collect(),
+            time,
+        )
     }
 
     fn flatten_hash_intermediate(
@@ -3829,9 +3834,10 @@ impl AccountsDB {
     //     vec: [..] - items which fin in the containing bin, unordered within this vec
     // so, assumption is middle vec is bins sorted by pubkey
     fn rest_of_hash_calculation(
-        accounts: (Vec<Vec<CalculateHashIntermediate>>, Measure),
+        accounts: (Vec<Vec<CalculateHashIntermediate>>, Measure, usize, Measure),
     ) -> (Hash, u64) {
-        let (data_sections_by_pubkey, time_scan) = accounts;
+        let (data_sections_by_pubkey, time_scan, num_snapshot_storage, time_pre_scan_flatten) =
+            accounts;
 
         let (outer, flatten_time, raw_len) =
             Self::flatten_hash_intermediate(data_sections_by_pubkey);
@@ -3859,6 +3865,12 @@ impl AccountsDB {
             ("flatten", flatten_time.as_us(), i64),
             ("flatten_after_zeros", flat2_time.as_us(), i64),
             ("unreduced_entries", raw_len as i64, i64),
+            ("num_snapshot_storage", num_snapshot_storage as i64, i64),
+            (
+                "pre_scan_flatten",
+                time_pre_scan_flatten.as_us() as i64,
+                i64
+            ),
         );
 
         (hash, total_lamports)
@@ -3920,41 +3932,43 @@ impl AccountsDB {
     fn scan_snapshot_stores(
         storage: &[SnapshotStorage],
         simple_capitalization_enabled: bool,
-    ) -> (Vec<Vec<CalculateHashIntermediate>>, Measure) {
+    ) -> (Vec<Vec<CalculateHashIntermediate>>, Measure, usize, Measure) {
         let mut time = Measure::start("scan all accounts");
-        let result: Vec<Vec<CalculateHashIntermediate>> = Self::scan_account_storage_no_bank(
-            &storage,
-            |loaded_account: LoadedAccount,
-             accum: &mut Vec<CalculateHashIntermediate>,
-             slot: Slot| {
-                let version = loaded_account.write_version();
-                let raw_lamports = loaded_account.lamports();
-                let zero_raw_lamports = raw_lamports == 0;
-                let balance = if zero_raw_lamports {
-                    ZERO_RAW_LAMPORTS_SENTINEL
-                } else {
-                    Self::account_balance_for_capitalization(
-                        raw_lamports,
-                        loaded_account.owner(),
-                        loaded_account.executable(),
-                        simple_capitalization_enabled,
-                    )
-                };
+        let num_snapshot_storage = storage.len();
+        let result: (Vec<Vec<CalculateHashIntermediate>>, Measure) =
+            Self::scan_account_storage_no_bank(
+                &storage,
+                |loaded_account: LoadedAccount,
+                 accum: &mut Vec<CalculateHashIntermediate>,
+                 slot: Slot| {
+                    let version = loaded_account.write_version();
+                    let raw_lamports = loaded_account.lamports();
+                    let zero_raw_lamports = raw_lamports == 0;
+                    let balance = if zero_raw_lamports {
+                        ZERO_RAW_LAMPORTS_SENTINEL
+                    } else {
+                        Self::account_balance_for_capitalization(
+                            raw_lamports,
+                            loaded_account.owner(),
+                            loaded_account.executable(),
+                            simple_capitalization_enabled,
+                        )
+                    };
 
-                let pubkey = *loaded_account.pubkey();
-                let source_item = CalculateHashIntermediate::new(
-                    version,
-                    *loaded_account.loaded_hash(),
-                    balance,
-                    slot,
-                    pubkey,
-                );
-                accum.push(source_item);
-            },
-        );
+                    let pubkey = *loaded_account.pubkey();
+                    let source_item = CalculateHashIntermediate::new(
+                        version,
+                        *loaded_account.loaded_hash(),
+                        balance,
+                        slot,
+                        pubkey,
+                    );
+                    accum.push(source_item);
+                },
+            );
         time.stop();
 
-        (result, time)
+        (result.0, time, num_snapshot_storage, result.1)
     }
 
     // modeled after get_accounts_delta_hash
@@ -5224,8 +5238,12 @@ pub mod tests {
         );
         account_maps.push(val);
 
-        let result =
-            AccountsDB::rest_of_hash_calculation((vec![account_maps.clone()], Measure::start("")));
+        let result = AccountsDB::rest_of_hash_calculation((
+            vec![account_maps.clone()],
+            Measure::start(""),
+            0,
+            Measure::start(""),
+        ));
         let expected_hash = Hash::from_str("8j9ARGFv4W2GfML7d3sVJK2MePwrikqYnu6yqer28cCa").unwrap();
         assert_eq!(result, (expected_hash, 88));
 
@@ -5235,8 +5253,12 @@ pub mod tests {
         let val = CalculateHashIntermediate::new(0, hash, 20, Slot::default(), key);
         account_maps.push(val);
 
-        let result =
-            AccountsDB::rest_of_hash_calculation((vec![account_maps.clone()], Measure::start("")));
+        let result = AccountsDB::rest_of_hash_calculation((
+            vec![account_maps.clone()],
+            Measure::start(""),
+            0,
+            Measure::start(""),
+        ));
         let expected_hash = Hash::from_str("EHv9C5vX7xQjjMpsJMzudnDTzoTSRwYkqLzY8tVMihGj").unwrap();
         assert_eq!(result, (expected_hash, 108));
 
@@ -5246,7 +5268,12 @@ pub mod tests {
         let val = CalculateHashIntermediate::new(0, hash, 30, Slot::default() + 1, key);
         account_maps.push(val);
 
-        let result = AccountsDB::rest_of_hash_calculation((vec![account_maps], Measure::start("")));
+        let result = AccountsDB::rest_of_hash_calculation((
+            vec![account_maps],
+            Measure::start(""),
+            0,
+            Measure::start(""),
+        ));
         let expected_hash = Hash::from_str("7NNPg5A8Xsg1uv4UFm6KZNwsipyyUnmgCrznP6MBWoBZ").unwrap();
         assert_eq!(result, (expected_hash, 118));
     }
@@ -5567,7 +5594,7 @@ pub mod tests {
             },
         );
         assert_eq!(calls.load(Ordering::Relaxed), 1);
-        assert_eq!(result, vec![vec![expected]]);
+        assert_eq!(result.0, vec![vec![expected]]);
     }
 
     #[test]
