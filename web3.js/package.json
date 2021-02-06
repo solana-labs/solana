@@ -23,6 +23,11 @@
   "main": "lib/index.cjs.js",
   "module": "lib/index.esm.js",
   "types": "lib/index.d.ts",
+  "browserslist": [
+    "defaults",
+    "not IE 11",
+    "maintained node versions"
+  ],
   "bin": {
     "solana-bpf-sdk-install": "bin/bpf-sdk-install.sh",
     "solana-localnet": "bin/localnet.sh"
